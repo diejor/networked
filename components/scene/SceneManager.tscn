@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://d3ag2052swfwd"]
 
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/components/scene/scene_manager.gd" id="1_mer5l"]
-[ext_resource type="Texture2D" uid="uid://cm2g07mnst7ig" path="res://source/scenes/DialogueStuff/blueskything.jpg" id="2_ifkpp"]
+[ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="2_ifkpp"]
 
 [sub_resource type="Animation" id="Animation_x8vg6"]
 length = 0.001
