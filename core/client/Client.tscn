@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://bsscrhcky6uyk"]
+
+[ext_resource type="Script" uid="uid://toxomgon6bbi" path="res://addons/networked/core/client/client.gd" id="1_8fau1"]
+[ext_resource type="Script" uid="uid://buo380mj8eweh" path="res://addons/networked/core/client/webrtc_loopback_backend.gd" id="2_d2rqx"]
+
+[sub_resource type="Resource" id="Resource_uprj0"]
+script = ExtResource("2_d2rqx")
+metadata/_custom_type_script = "uid://buo380mj8eweh"
+
+[node name="Client" type="Node" unique_id=1489051217]
+script = ExtResource("1_8fau1")
+backend = SubResource("Resource_uprj0")
+metadata/_custom_type_script = "uid://toxomgon6bbi"

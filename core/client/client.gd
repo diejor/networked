@@ -1,0 +1,86 @@
+class_name GameClient
+extends Node
+
+
+signal connected_to_server()
+signal peer_connected(peer_id: int)
+signal peer_disconnected(peer_id: int)
+
+
+const SCENE_MANAGER: PackedScene = preload("uid://d3ag2052swfwd")
+@onready var scene_manager: LobbyManager = SCENE_MANAGER.instantiate()
+
+
+var multiplayer_api: SceneMultiplayer:
+	get: return backend.multiplayer_api
+var multiplayer_peer: MultiplayerPeer:
+	get: return backend.multiplayer_peer
+var uid: int:
+	get: return multiplayer_api.get_unique_id()
+	set(value): push_warning("Client UID should not be set directly.")
+
+@export var backend: MultiplayerClientBackend
+
+var username: String = "":
+	get:
+		if username.is_empty():
+			var candidate := OS.get_environment("USERNAME")
+			if candidate.is_empty():
+				return "player"
+			return candidate
+		else:
+			return username
+
+
+func _ready() -> void:
+	# Connect multiplayer signals.
+	multiplayer_api.peer_connected.connect(on_peer_connected)
+	multiplayer_api.peer_disconnected.connect(on_peer_disconnected)
+	multiplayer_api.connected_to_server.connect(on_connected_to_server)
+	
+	var client_err: Error = await connect_client("localhost", username)
+	if client_err != OK:
+		push_warning(
+			"Local client failed: %s" % error_string(client_err))
+
+
+func connect_client(server_address: String, _username: String) -> Error:
+	var code: Error = init(server_address, _username)
+	print("Client initialized with code: ", error_string(code))
+	await connected_to_server
+	return code
+
+
+func init(server_address: String, _username: String) -> Error:
+	username = _username
+	backend.peer_reset_state()
+
+	var connection_code: Error = backend.create_connection(
+		server_address, _username)
+	if connection_code == OK:
+		config_api()
+
+	return connection_code
+
+
+func config_api() -> void:
+	add_child(scene_manager)
+	backend.configure_tree(get_tree(), scene_manager.get_path())
+
+
+func on_peer_connected(peer_id: int) -> void:
+	peer_connected.emit(peer_id)
+
+func on_peer_disconnected(peer_id: int) -> void:
+	peer_disconnected.emit(peer_id)
+
+
+func on_connected_to_server() -> void:
+	print("Client (%d) connected to server." % multiplayer_api.get_unique_id())
+	set_multiplayer_authority(multiplayer_api.get_unique_id(), false)
+	connected_to_server.emit()
+
+
+func _process(dt: float) -> void:
+	if backend:
+		backend.poll(dt)

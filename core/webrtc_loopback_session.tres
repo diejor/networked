@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="WebRTCLoopbackSession" format=3 uid="uid://d2u1yyaikw2sh"]
+
+[ext_resource type="Script" uid="uid://66lgl1n1pfua" path="res://addons/networked/core/webrtc_loopback_session.gd" id="1_b7u6i"]
+
+[resource]
+script = ExtResource("1_b7u6i")
+metadata/_custom_type_script = "uid://66lgl1n1pfua"

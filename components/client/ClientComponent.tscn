@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://8dmbjqnbp0rn"]
+
+[ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_qa662"]
+[ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/components/client/ConnectServerUI.tscn" id="2_umyft"]
+
+[node name="ClientComponent" type="Node" unique_id=465459924 groups=["clients"]]
+script = ExtResource("1_qa662")
+
+[node name="ConnectServerUI" parent="." unique_id=657711922 instance=ExtResource("2_umyft")]
+unique_name_in_owner = true
+visible = false
+
+[connection signal="player_joined" from="." to="." method="_on_player_joined"]
