@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://1ir31esioska"]
 
 [ext_resource type="Script" uid="uid://c003d65ahq74f" path="res://addons/networked/core/server/server.gd" id="1_5s3h4"]
-[ext_resource type="Script" uid="uid://b4x6usceefd6p" path="res://addons/networked/core/server/webrtc_loopback_backend.gd" id="2_jpr67"]
+[ext_resource type="Script" uid="uid://b4x6usceefd6p" path="res://addons/networked/core/server/backends/webrtc_loopback_backend.gd" id="2_jpr67"]
 
 [sub_resource type="Resource" id="Resource_nyw07"]
 script = ExtResource("2_jpr67")
