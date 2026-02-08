@@ -1,44 +1,42 @@
 class_name LobbyManager
 extends MultiplayerSpawner
 
-@export_file("*.tscn") var lobbies: Array[String]
-@export_file("*.tscn") var world_server_path: String
-@export_file("*.tscn") var world_client_path: String
+@export_file("*.tscn") var levels: Array[String]
+@export_file("*.tscn") var server_lobby_path: String
+@export_file("*.tscn") var client_lobby_path: String
 
-var active_lobbies: Dictionary[StringName, Node]
+var active_lobbies: Dictionary[StringName, Lobby]
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
 	spawn_lobbies.call_deferred()
+	assert(not levels.is_empty(), "No levels to replicate. Add levels to\
+`{node}`.".format({node=name}))
 
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for lobby_path: String in lobbies:
-			spawn(lobby_path)
+		for level_path: String in levels:
+			spawn(level_path)
 
 
-func spawn_lobby(lobby_file_path: String) -> Node:
-	var lobby_scene: PackedScene = load(lobby_file_path)
-	var lobby: Node = lobby_scene.instantiate()
+func spawn_lobby(level_file_path: String) -> Node:
+	var level_scene: PackedScene = load(level_file_path)
+	var level: Node = level_scene.instantiate()
 	
-	var world_path: String
-	if multiplayer.is_server():
-		world_path = world_server_path
-	else:
-		world_path = world_client_path
-	var world_scene: PackedScene = load(world_path)
-	var world: Node = world_scene.instantiate()
+	var lobby_scene: PackedScene = load(
+		server_lobby_path if multiplayer.is_server() else client_lobby_path
+	)
 	
-	var scene_spawner: MultiplayerSpawner = world.get_node("%SceneSpawner")
-	scene_spawner.spawn_path = "../" + lobby.name
+	var lobby: Lobby = lobby_scene.instantiate()
 	
-	world.name = lobby.name + world.name
-	world.add_child(lobby)
-	lobby.owner = world
-	active_lobbies[lobby.name] = lobby
+	var scene_spawner: MultiplayerSpawner = lobby.scene_spawner
+	scene_spawner.spawn_path = "../" + level.name
 	
-	return world
+	lobby.level = level
+	active_lobbies[level.name] = lobby
+	
+	return lobby
 
 
 @rpc("any_peer", "call_remote", "reliable")

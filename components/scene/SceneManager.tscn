@@ -1,96 +1,10 @@
 [gd_scene format=3 uid="uid://d3ag2052swfwd"]
 
-[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/components/scene/scene_manager.gd" id="1_mer5l"]
-[ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="2_ifkpp"]
-
-[sub_resource type="Animation" id="Animation_x8vg6"]
-length = 0.001
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("TPCanvasLayer/TransitionProgress:value")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [0.0]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("TPCanvasLayer/TransitionProgress:modulate")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [Color(1, 1, 1, 1)]
-}
-
-[sub_resource type="Animation" id="Animation_ifkpp"]
-resource_name = "tp"
-length = 1.5
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("TPCanvasLayer/TransitionProgress:value")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [0.0, 100.0]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("TPCanvasLayer/TransitionProgress:modulate")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0, 1),
-"transitions": PackedFloat32Array(1, 1),
-"update": 0,
-"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
-}
-
-[sub_resource type="AnimationLibrary" id="AnimationLibrary_oxlvd"]
-_data = {
-&"RESET": SubResource("Animation_x8vg6"),
-&"tp": SubResource("Animation_ifkpp")
-}
+[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/components/scene/scene_manager.gd" id="1_ie3uy"]
 
 [node name="SceneManager" type="MultiplayerSpawner" unique_id=370221204]
 spawn_path = NodePath(".")
-script = ExtResource("1_mer5l")
-lobbies = Array[String](["uid://xkil2cmplfcd", "uid://dta1ona6odgmr"])
-world_server_path = "uid://dga0loylsa26i"
-world_client_path = "uid://cr2k17cu45app"
-
-[node name="TPCanvasLayer" type="CanvasLayer" parent="." unique_id=1564331588]
-unique_name_in_owner = true
-layer = 9999
-
-[node name="TransitionProgress" type="TextureProgressBar" parent="TPCanvasLayer" unique_id=722676284]
-unique_name_in_owner = true
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-mouse_filter = 2
-fill_mode = 8
-nine_patch_stretch = true
-texture_progress = ExtResource("2_ifkpp")
-
-[node name="TransitionAnim" type="AnimationPlayer" parent="TPCanvasLayer" unique_id=1041843804]
-unique_name_in_owner = true
-root_node = NodePath("../..")
-libraries/ = SubResource("AnimationLibrary_oxlvd")
-blend_times = [&"tp", &"tp", 1.0]
+script = ExtResource("1_ie3uy")
+levels = Array[String](["uid://xkil2cmplfcd", "uid://dta1ona6odgmr"])
+server_lobby_path = "uid://dga0loylsa26i"
+client_lobby_path = "uid://cr2k17cu45app"

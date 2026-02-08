@@ -86,35 +86,33 @@ func request_teleport(
 	username: String, 
 	from_scene_name: String, 
 	tp_path: String) -> void:
-	var from_scene: Node = Server.scene_manager.active_lobbies[from_scene_name]
-	var from_scene_sync: SceneSynchronizer = from_scene.owner.get_node("%SceneSynchronizer")
+	var from_lobby: Lobby = lobby_manager.active_lobbies[from_scene_name]
 	
-	var player: Node2D = from_scene.get_node(username)
+	var player: Node2D = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	
 	var state: StateSynchronizer = player.get_node_or_null("%StateSynchronizer")
 	if state: # TODO: add a timeout for the case the client never synchronizes
 		await state.delta_synchronized # Make sure the player has been updated
-
-	var to_scene: Node = Server.scene_manager.active_lobbies[tp_component.current_scene_name]
-	var to_scene_sync: SceneSynchronizer = to_scene.owner.get_node("%SceneSynchronizer")
+	multiplayer
+	var to_lobby: Lobby = lobby_manager.active_lobbies[tp_component.current_scene_name]
 	
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
 		event.connect(to.bind(player))
 		if event == player.tree_exiting:
 			player.request_ready()
-			tp_component.teleported(to_scene, tp_path)
+			tp_component.teleported(to_lobby.level, tp_path)
 	
-	var from_spawn := from_scene_sync._on_spawned
-	var to_spawn := to_scene_sync._on_spawned
-	var from_despawn := from_scene_sync._on_despawned
-	var to_despawn := to_scene_sync._on_despawned
+	var from_spawn := from_lobby.scene_sync._on_spawned
+	var to_spawn := to_lobby.scene_sync._on_spawned
+	var from_despawn := from_lobby.scene_sync._on_despawned
+	var to_despawn := to_lobby.scene_sync._on_despawned
 	
 	flip.call(player.tree_entered, from_spawn, to_spawn)
 	
 	player.tree_entered.connect(flip.bind(player.tree_exiting, from_despawn, to_despawn))
-	player.reparent(to_scene)
+	player.reparent(to_lobby.level)
 	player.tree_entered.disconnect(flip)
 
 func teleported(scene: Node, _tp_path: String) -> void:
@@ -124,12 +122,11 @@ func teleported(scene: Node, _tp_path: String) -> void:
 			owner2d.global_position = tp_node.global_position
 
 
-func spawn(_caller: Node) -> void:
+func spawn(lobby_mgr: LobbyManager) -> void:
 	if current_scene.is_empty():
 		push_error("`TPComponent` doesnt have a scene to tp into.")
 		return
 	
-	var level: Node = Server.scene_manager.active_lobbies[current_scene_name]
-	var scene_sync: SceneSynchronizer = level.owner.get_node("%SceneSynchronizer")
-	scene_sync.track_player(owner)
-	level.add_child(owner)
+	var lobby: Lobby = lobby_mgr.active_lobbies[current_scene_name]
+	lobby.scene_sync.track_player(owner)
+	lobby.level.add_child(owner)

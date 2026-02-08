@@ -7,9 +7,7 @@ signal peer_disconnected(peer_id: int)
 
 
 @export var backend: MultiplayerServerBackend
-
-const SCENE_MANAGER: PackedScene = preload("uid://d3ag2052swfwd")
-@onready var scene_manager: LobbyManager = SCENE_MANAGER.instantiate()
+@export var scene_manager: LobbyManager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -36,7 +34,6 @@ func init() -> Error:
 	if err != OK:
 		return err
 
-	add_child(scene_manager)
 	config_api()
 	return OK
 

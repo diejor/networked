@@ -6,14 +6,18 @@ signal instantiated
 signal loaded
 signal state_changed(caller: Node)
 
+static var registered_components: Array[SaveComponent] = []
+static var shutting_down: bool:
+	set(value):
+		if not shutting_down and value:
+			shutting_down = value
+			_handle_shutdown()
 
 @export_dir var save_dir: String
 @export var save_extension: String = ".tdict"
 @export var save_container: SaveContainer
 
-var _save_synchronizer: SaveSynchronizer:
-	get:
-		return get_child(0)
+@export var _save_synchronizer: SaveSynchronizer
 
 @onready var save_path: String:
 	get:
@@ -38,14 +42,15 @@ func _ready() -> void:
 	assert(save_container)
 	assert(_save_synchronizer)
 	assert(_save_synchronizer.save_container == save_container)
+
 	
-	if SaveManager:
-		SaveManager.register(self)
+	get_tree().set_auto_accept_quit(false)
+	SaveComponent.register(self)
 
 
 func _exit_tree() -> void:
 	if SaveManager:
-		SaveManager.unregister(self)
+		SaveComponent.unregister(self)
 
 
 func _prepare_save_dir() -> void:
@@ -144,3 +149,30 @@ func spawn(caller: Node) -> void:
 		push_warning("Loading data from spawner.")
 		var spawner_save: SaveComponent = caller.get_node("%SaveComponent")
 		deserialize_scene(spawner_save.serialize_scene())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		shutting_down = true
+
+
+static func register(component: SaveComponent) -> void:
+	if not registered_components.has(component):
+		registered_components.append(component)
+
+
+static func unregister(component: SaveComponent) -> void:
+	registered_components.erase(component)
+
+
+static func _handle_shutdown() -> void:
+	print("Beginning graceful shutdown...")
+	
+	for component in registered_components:
+		component.pull_from_scene()
+		var err := component.save_state()
+		if err != OK:
+			push_error("Failed to save component: ", component.owner.name)
+
+	print("All states saved. Quitting.")
+	(Engine.get_main_loop() as SceneTree).quit()

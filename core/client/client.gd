@@ -7,8 +7,8 @@ signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 
 
-const SCENE_MANAGER: PackedScene = preload("uid://d3ag2052swfwd")
-@onready var scene_manager: LobbyManager = SCENE_MANAGER.instantiate()
+@export var backend: MultiplayerClientBackend
+@export var scene_manager: LobbyManager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -18,8 +18,6 @@ var multiplayer_peer: MultiplayerPeer:
 var uid: int:
 	get: return multiplayer_api.get_unique_id()
 	set(value): push_warning("Client UID should not be set directly.")
-
-@export var backend: MultiplayerClientBackend
 
 var username: String = "":
 	get:
@@ -64,7 +62,6 @@ func init(server_address: String, _username: String) -> Error:
 
 
 func config_api() -> void:
-	add_child(scene_manager)
 	backend.configure_tree(get_tree(), scene_manager.get_path())
 
 

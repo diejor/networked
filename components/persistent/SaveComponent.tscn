@@ -11,11 +11,12 @@ metadata/_custom_type_script = "uid://d1mnum02gn0c0"
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_sxgn8"]
 
-[node name="SaveComponent" type="Node" unique_id=1253281669 groups=["persistent"]]
+[node name="SaveComponent" type="Node" unique_id=1253281669 node_paths=PackedStringArray("_save_synchronizer") groups=["persistent"]]
 script = ExtResource("1_4ru00")
 save_dir = "res://saves/players"
 save_extension = ".tres"
 save_container = SubResource("Resource_tkyel")
+_save_synchronizer = NodePath("SaveSynchronizer")
 
 [node name="SaveSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1178612767]
 unique_name_in_owner = true

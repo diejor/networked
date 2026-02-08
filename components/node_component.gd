@@ -3,6 +3,8 @@ extends Node
 
 @onready var state_sync: StateSynchronizer = %StateSynchronizer
 
+var lobby_manager: LobbyManager:
+	get: return get_node((multiplayer as SceneMultiplayer).root_path)
 
 func assert_replicated() -> bool:
 	var property_list := get_property_list()
@@ -23,7 +25,6 @@ Add it through the editor by configuring `%s` replication config.\
 			" %[self.name, prop_path, state_sync.name, state_sync.name])
 	
 	return true
-
 
 
 func _ready() -> void:

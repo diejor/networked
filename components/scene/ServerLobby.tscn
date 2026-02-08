@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://dga0loylsa26i"]
+
+[ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/components/scene/lobby.gd" id="1_b4l3b"]
+[ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/components/scene/SceneSynchronizer.tscn" id="1_p8duo"]
+[ext_resource type="PackedScene" uid="uid://cpkq68rwbg6aw" path="res://addons/networked/components/scene/SceneSpawner.tscn" id="2_b4l3b"]
+
+[sub_resource type="GDScript" id="GDScript_hbugg"]
+resource_name = "world_server_fixer"
+script/source = "extends Node
+
+@export var world: SubViewport
+
+func _ready() -> void:
+	if not multiplayer.is_server():
+		world.world_2d = get_tree().root.world_2d
+"
+
+[node name="World" type="SubViewport" unique_id=1753885499 node_paths=PackedStringArray("scene_sync", "scene_spawner")]
+disable_3d = true
+anisotropic_filtering_level = 0
+positional_shadow_atlas_quad_0 = 0
+positional_shadow_atlas_quad_1 = 0
+positional_shadow_atlas_quad_2 = 0
+positional_shadow_atlas_quad_3 = 0
+oversampling = false
+render_target_clear_mode = 1
+render_target_update_mode = 0
+script = ExtResource("1_b4l3b")
+scene_sync = NodePath("SceneSynchronizer")
+scene_spawner = NodePath("SceneSpawner")
+
+[node name="WorldServerFixer" type="Node" parent="." unique_id=654426371 node_paths=PackedStringArray("world")]
+script = SubResource("GDScript_hbugg")
+world = NodePath("..")
+
+[node name="SceneSynchronizer" parent="." unique_id=719015563 instance=ExtResource("1_p8duo")]
+unique_name_in_owner = true
+root_path = NodePath("..")
+
+[node name="SceneSpawner" parent="." unique_id=364125075 instance=ExtResource("2_b4l3b")]
+unique_name_in_owner = true

@@ -60,14 +60,13 @@ func _on_player_joined(client_data: Dictionary) -> void:
 	client.username = client_data.username
 	
 	
-	var level: Node = owner.owner
+	var lobby: Lobby = owner.owner.owner
 	@warning_ignore("untyped_declaration")
 	var tp_component = player.get_node_or_null("%TPComponent")
 	if tp_component:
 		@warning_ignore("unsafe_method_access")
-		tp_component.spawn(owner)
+		tp_component.spawn(lobby_manager)
 	else:
-		var scene_sync: SceneSynchronizer = level.owner.get_node("%SceneSynchronizer")
-		scene_sync.track_player(player)
-		level.add_child(player)
+		lobby.scene_sync.track_player(player)
+		lobby.level.add_child(player)
 	

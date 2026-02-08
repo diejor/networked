@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://cr2k17cu45app"]
+
+[ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/components/scene/lobby.gd" id="1_4dcnm"]
+[ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/components/scene/SceneSynchronizer.tscn" id="2_ooybb"]
+[ext_resource type="PackedScene" uid="uid://cpkq68rwbg6aw" path="res://addons/networked/components/scene/SceneSpawner.tscn" id="3_v3bv0"]
+
+[node name="Lobby" type="Node2D" unique_id=46516096 node_paths=PackedStringArray("scene_sync", "scene_spawner")]
+script = ExtResource("1_4dcnm")
+scene_sync = NodePath("SceneSynchronizer")
+scene_spawner = NodePath("SceneSpawner")
+
+[node name="SceneSynchronizer" parent="." unique_id=1201164589 instance=ExtResource("2_ooybb")]
+unique_name_in_owner = true
+root_path = NodePath("..")
+
+[node name="SceneSpawner" parent="." unique_id=280327472 instance=ExtResource("3_v3bv0")]
+unique_name_in_owner = true
