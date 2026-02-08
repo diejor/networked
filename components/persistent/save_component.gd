@@ -49,8 +49,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	if SaveManager:
-		SaveComponent.unregister(self)
+	SaveComponent.unregister(self)
 
 
 func _prepare_save_dir() -> void:
