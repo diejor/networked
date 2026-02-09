@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d3ag2052swfwd" path="res://addons/networked/components/scene/SceneManager.tscn" id="3_3hdv7"]
 [ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="4_mpvoh"]
 
-[sub_resource type="Resource" id="Resource_uprj0"]
+[sub_resource type="Resource" id="Resource_mpvoh"]
 script = ExtResource("2_d2rqx")
 metadata/_custom_type_script = "uid://buo380mj8eweh"
 
@@ -72,8 +72,8 @@ _data = {
 
 [node name="Client" type="Node" unique_id=1489051217 node_paths=PackedStringArray("scene_manager")]
 script = ExtResource("1_8fau1")
+backend = SubResource("Resource_mpvoh")
 scene_manager = NodePath("SceneManager")
-backend = SubResource("Resource_uprj0")
 metadata/_custom_type_script = "uid://toxomgon6bbi"
 
 [node name="SceneManager" parent="." unique_id=370221204 instance=ExtResource("3_3hdv7")]

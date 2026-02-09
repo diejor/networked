@@ -3,12 +3,12 @@
 [ext_resource type="Script" uid="uid://c0infq5y7doka" path="res://addons/networked/components/state_synchronizer.gd" id="1_4qh70"]
 [ext_resource type="Script" uid="uid://dto01lioh1gb3" path="res://addons/networked/components/spawn_synchronizer.gd" id="2_4qh70"]
 
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_x8h0r"]
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1hg0c"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_4qh70"]
 
 [node name="StateSynchronizer" type="MultiplayerSynchronizer" unique_id=1699265580]
-replication_config = SubResource("SceneReplicationConfig_x8h0r")
+replication_config = SubResource("SceneReplicationConfig_1hg0c")
 visibility_update_mode = 2
 script = ExtResource("1_4qh70")
 

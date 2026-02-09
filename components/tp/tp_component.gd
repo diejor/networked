@@ -1,8 +1,10 @@
 class_name TPComponent
 extends NodeComponent
 
-@onready var animation_player: AnimationPlayer = SceneManager.transition_anim
-@onready var transition_progress: TextureProgressBar = SceneManager.transition_progress
+var animation_player: AnimationPlayer:
+	get: return lobby_manager.get_node("%TransitionAnim")
+var transition_progress: TextureProgressBar:
+	get: return lobby_manager.get_node("%TransitionProgress")
 
 var owner2d: Node2D:
 	get: return owner as Node2D

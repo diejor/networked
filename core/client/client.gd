@@ -12,49 +12,29 @@ signal peer_disconnected(peer_id: int)
 
 
 var multiplayer_api: SceneMultiplayer:
-	get: return backend.multiplayer_api
+	get: return backend.api
 var multiplayer_peer: MultiplayerPeer:
-	get: return backend.multiplayer_peer
+	get: return backend.api.multiplayer_peer
 var uid: int:
 	get: return multiplayer_api.get_unique_id()
 	set(value): push_warning("Client UID should not be set directly.")
 
-var username: String = "":
-	get:
-		if username.is_empty():
-			var candidate := OS.get_environment("USERNAME")
-			if candidate.is_empty():
-				return "player"
-			return candidate
-		else:
-			return username
-
 
 func _ready() -> void:
-	# Connect multiplayer signals.
 	multiplayer_api.peer_connected.connect(on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(on_peer_disconnected)
 	multiplayer_api.connected_to_server.connect(on_connected_to_server)
-	
-	var client_err: Error = await connect_client("localhost", username)
-	if client_err != OK:
-		push_warning(
-			"Local client failed: %s" % error_string(client_err))
 
 
 func connect_client(server_address: String, _username: String) -> Error:
 	var code: Error = init(server_address, _username)
-	print("Client initialized with code: ", error_string(code))
 	await connected_to_server
 	return code
 
 
 func init(server_address: String, _username: String) -> Error:
-	username = _username
 	backend.peer_reset_state()
-
-	var connection_code: Error = backend.create_connection(
-		server_address, _username)
+	var connection_code: Error = backend.create_connection(server_address, _username)
 	if connection_code == OK:
 		config_api()
 

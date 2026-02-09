@@ -3,8 +3,9 @@ class_name MultiplayerServerBackend
 
 ## Base class for server-side transports.
 
-var multiplayer_api := SceneMultiplayer.new()
-var multiplayer_peer: MultiplayerPeer
+signal tree_configured()
+
+var api := SceneMultiplayer.new()
 
 func create_server() -> Error:
 	push_error(
@@ -13,14 +14,19 @@ func create_server() -> Error:
 	return ERR_UNAVAILABLE
 
 func configure_tree(tree: SceneTree, root_path: NodePath) -> void:
-	multiplayer_api.multiplayer_peer = multiplayer_peer
-	multiplayer_api.root_path = root_path
-	tree.set_multiplayer(multiplayer_api, root_path)
+	api.root_path = root_path
+	tree.set_multiplayer(api, root_path)
 
 func poll(_dt: float) -> void:
-	if multiplayer_api and multiplayer_api.has_multiplayer_peer():
-		multiplayer_api.poll()
+	assert(api)
+	assert(api.has_multiplayer_peer())
+	
+	api.poll()
 
 func peer_reset_state() -> void:
-	multiplayer_peer = null
-	multiplayer_api.multiplayer_peer = null
+	assert(api.has_multiplayer_peer())
+	
+	if api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		api.multiplayer_peer.close()
+
+	api.multiplayer_peer = OfflineMultiplayerPeer.new()

@@ -38,7 +38,8 @@ func _on_player_joined(client_data: Dictionary) -> void:
 	assert(client_data.scene_path)
 	assert(client_data.username)
 	
-	if client_data.scene_path != owner.scene_file_path:
+	if (ResourceUID.ensure_path(client_data.scene_path) 
+		!= ResourceUID.ensure_path(owner.scene_file_path)):
 		return
 	
 	var player_scene: PackedScene = load(client_data.scene_path as String)

@@ -23,6 +23,7 @@ unique_name_in_owner = true
 replication_interval = 5.0
 delta_interval = 5.0
 replication_config = SubResource("SceneReplicationConfig_sxgn8")
+visibility_update_mode = 2
 public_visibility = false
 script = ExtResource("3_xtakf")
 metadata/_custom_type_script = "uid://n73txgkicr1m"

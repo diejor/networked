@@ -9,9 +9,14 @@ var active_lobbies: Dictionary[StringName, Lobby]
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
-	spawn_lobbies.call_deferred()
 	assert(not levels.is_empty(), "No levels to replicate. Add levels to\
 `{node}`.".format({node=name}))
+	
+	if owner is GameServer:
+		var server: GameServer = owner
+		if not server.multiplayer_peer is OfflineMultiplayerPeer:
+			spawn_lobbies.call_deferred()
+		server.configured.connect(spawn_lobbies)
 
 
 func spawn_lobbies() -> void:
