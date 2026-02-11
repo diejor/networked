@@ -3,8 +3,13 @@ extends Node
 
 @onready var state_sync: StateSynchronizer = %StateSynchronizer
 
+var api: SceneMultiplayer:
+	get: return multiplayer as SceneMultiplayer
 var lobby_manager: LobbyManager:
 	get: return get_node((multiplayer as SceneMultiplayer).root_path)
+
+var lobby: Lobby:
+	get: return owner.owner.owner
 
 func assert_replicated() -> bool:
 	var property_list := get_property_list()

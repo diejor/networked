@@ -8,7 +8,6 @@
 script = ExtResource("1_1al0i")
 client = NodePath("Client")
 server = NodePath("Server")
-player_scene = "uid://bxpx2n4hugojx"
 
 [node name="Client" parent="." unique_id=1489051217 instance=ExtResource("1_spi8r")]
 unique_name_in_owner = true

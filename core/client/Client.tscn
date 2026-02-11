@@ -1,40 +1,21 @@
 [gd_scene format=3 uid="uid://bsscrhcky6uyk"]
 
 [ext_resource type="Script" uid="uid://toxomgon6bbi" path="res://addons/networked/core/client/client.gd" id="1_8fau1"]
-[ext_resource type="Script" uid="uid://buo380mj8eweh" path="res://addons/networked/core/client/backends/webrtc_loopback_backend.gd" id="2_d2rqx"]
+[ext_resource type="Script" uid="uid://dwihbc0yyvhgr" path="res://addons/networked/core/client/backends/websocket_backend.gd" id="2_mpvoh"]
 [ext_resource type="PackedScene" uid="uid://d3ag2052swfwd" path="res://addons/networked/components/scene/SceneManager.tscn" id="3_3hdv7"]
 [ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="4_mpvoh"]
 
-[sub_resource type="Resource" id="Resource_mpvoh"]
-script = ExtResource("2_d2rqx")
-metadata/_custom_type_script = "uid://buo380mj8eweh"
+[sub_resource type="Resource" id="Resource_33snq"]
+script = ExtResource("2_mpvoh")
+metadata/_custom_type_script = "uid://dwihbc0yyvhgr"
 
-[sub_resource type="Animation" id="Animation_x8vg6"]
-length = 0.001
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("TPCanvasLayer/TransitionProgress:value")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [0.0]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath("TPCanvasLayer/TransitionProgress:modulate")
-tracks/1/interp = 1
-tracks/1/loop_wrap = true
-tracks/1/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [Color(1, 1, 1, 1)]
-}
+[sub_resource type="GDScript" id="GDScript_mpvoh"]
+script/source = "extends TextureProgressBar
+
+func _ready() -> void:
+	value = 100.
+	modulate = Color.WHITE
+"
 
 [sub_resource type="Animation" id="Animation_ifkpp"]
 resource_name = "tp"
@@ -66,13 +47,12 @@ tracks/1/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_33snq"]
 _data = {
-&"RESET": SubResource("Animation_x8vg6"),
 &"tp": SubResource("Animation_ifkpp")
 }
 
 [node name="Client" type="Node" unique_id=1489051217 node_paths=PackedStringArray("scene_manager")]
 script = ExtResource("1_8fau1")
-backend = SubResource("Resource_mpvoh")
+backend = SubResource("Resource_33snq")
 scene_manager = NodePath("SceneManager")
 metadata/_custom_type_script = "uid://toxomgon6bbi"
 
@@ -84,6 +64,7 @@ layer = 9999
 
 [node name="TransitionProgress" type="TextureProgressBar" parent="SceneManager/TPCanvasLayer" unique_id=349861779]
 unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -92,9 +73,11 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 mouse_filter = 2
+value = 100.0
 fill_mode = 8
 nine_patch_stretch = true
 texture_progress = ExtResource("4_mpvoh")
+script = SubResource("GDScript_mpvoh")
 metadata/_edit_use_anchors_ = true
 
 [node name="TransitionAnim" type="AnimationPlayer" parent="SceneManager/TPCanvasLayer" unique_id=251231645]
