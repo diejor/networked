@@ -5,7 +5,7 @@ extends Node
 @export var server: GameServer
 
 ### 
-@export var init_client_data: LLbClientData
+@export var init_client_data: ClientData
 
 func _ready() -> void:
 	get_tree().scene_changed.connect(ensure_configured)
@@ -16,18 +16,17 @@ func _ready() -> void:
 		configure(init_client_data)
 		get_tree().change_scene_to_node.call_deferred(self)
 
-
 func ensure_configured() -> void:
 	assert(get_tree().scene_changed.is_connected(connect_player), "`%s` \
 should be called before changing to `%s`." % [configure.get_method(), name])
 
 
-func configure(client_data: LLbClientData) -> void:
+func configure(client_data: ClientData) -> void:
 	var scene_tree := Engine.get_main_loop() as SceneTree
 	scene_tree.scene_changed.connect(connect_player.bind(client_data))
 
 
-func connect_player(client_data: LLbClientData) -> void:
+func connect_player(client_data: ClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
 	assert(client_data.scene_path)

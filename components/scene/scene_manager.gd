@@ -50,7 +50,7 @@ func spawn_lobby(level_file_path: String) -> Node:
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(
 	client_data_bytes: PackedByteArray) -> void:
-	var client_data: LLbClientData = LLbClientData.new()
+	var client_data: ClientData = ClientData.new()
 	client_data.deserialize(client_data_bytes)
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)

@@ -1,4 +1,4 @@
-class_name LLbClientData
+class_name ClientData
 extends Serde
 
 @export var username: StringName
