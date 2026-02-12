@@ -3,10 +3,14 @@ extends Node
 
 @export var client: GameClient
 @export var server: GameServer
+@export var init_client_data: Dictionary
 
 func _ready() -> void:
 	get_tree().scene_changed.connect(ensure_configured)
 	owner.remove_child.call_deferred(self)
+	if init_client_data:
+		configure(init_client_data)
+		get_tree().change_scene_to_node.call_deferred(self)
 
 
 func ensure_configured() -> void:

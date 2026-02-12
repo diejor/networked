@@ -8,23 +8,28 @@ signal player_joined(client_data: Dictionary)
 var username: String = "":
 	set(user):
 		username = user
-		username_label.text = user
+		if username_label:
+			username_label.text = user
 
 var username_label: RichTextLabel:
-	get: return %ClientHUD/%UsernameLabel
+	get:
+		var label := get_node_or_null("%ClientHUD/%UsernameLabel")
+		return label
 
 func _ready() -> void:
 	super._ready()
 	if "Spawner" in owner.name:
 		if not multiplayer.is_server():
 			owner.queue_free()
-	
+	unique_name_in_owner = true
 	assert(owner.tree_entered.is_connected(_on_owner_tree_entered),
 		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise, \
 the authority will not be set correctly." % [owner.name, _on_owner_tree_entered])
 
 	api.peer_disconnected.connect(_on_peer_disconnected)
-
+	
+	if is_multiplayer_authority() and not multiplayer.is_server():
+		transition_player.teleport_in_animation()
 
 func _on_owner_tree_entered() -> void:
 	assert(owner.name != "|")

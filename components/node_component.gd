@@ -8,8 +8,25 @@ var api: SceneMultiplayer:
 var lobby_manager: LobbyManager:
 	get: return get_node((multiplayer as SceneMultiplayer).root_path)
 
+var transition_player: TransitionPlayer:
+	get:
+		if not multiplayer.is_server():
+			return lobby_manager.get_node("%TransitionAnim")
+		return null
+
+var transition_progress: TextureProgressBar:
+	get: 
+		if not multiplayer.is_server():
+			return lobby_manager.get_node("%TransitionProgress")
+		return null
+
+
 var lobby: Lobby:
-	get: return owner.owner.owner
+	get:
+		if owner and owner.owner:
+			return owner.owner.owner
+		return null
+
 
 func assert_replicated() -> bool:
 	var property_list := get_property_list()

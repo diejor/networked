@@ -8,6 +8,7 @@ extends MultiplayerSynchronizer
 func _ready() -> void:
 	# Fixes weird behavior where `replication_config` is shared between scene
 	# instances
+	unique_name_in_owner = true
 	if Engine.is_editor_hint():
 		replication_config = replication_config.duplicate(true)
 		return
