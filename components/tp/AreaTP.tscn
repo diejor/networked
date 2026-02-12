@@ -46,8 +46,8 @@ shape = SubResource("RectangleShape2D_qeccu")
 position = Vector2(21, 32)
 
 [node name="DebugLabel" parent="." unique_id=131477118 instance=ExtResource("3_7oqul")]
-text = "from: 
-			to: "
+text = "scene: 
+			tp_id: "
 script = SubResource("GDScript_7oqul")
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]

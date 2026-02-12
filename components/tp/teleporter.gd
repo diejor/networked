@@ -17,4 +17,4 @@ func _on_body_entered(body: Node2D) -> void:
 	if tp == null or multiplayer.is_server() or not tp.is_multiplayer_authority():
 		return
 		
-	tp.teleport(target_tp_id, scene_path)
+	tp.teleport.call_deferred(target_tp_id, scene_path)
