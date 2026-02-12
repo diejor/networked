@@ -7,7 +7,7 @@ extends MultiplayerSpawner
 var active_lobbies: Dictionary[StringName, Lobby]
 
 func get_levels() -> Array[String]:
-	return Networked.get_config().levels
+	return Networked.config.levels
 
 
 func _ready() -> void:
@@ -49,6 +49,8 @@ func spawn_lobby(level_file_path: String) -> Node:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(
-	client_data: Dictionary) -> void:
+	client_data_bytes: PackedByteArray) -> void:
+	var client_data: LLbClientData = LLbClientData.new()
+	client_data.deserialize(client_data_bytes)
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)

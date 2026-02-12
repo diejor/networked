@@ -2,7 +2,7 @@ class_name ClientComponent
 extends NodeComponent
 
 @warning_ignore("unused_signal")
-signal player_joined(client_data: Dictionary)
+signal player_joined(client_data: LLbClientData)
 
 @export_custom(PROPERTY_HINT_NONE, "replicated") 
 var username: String = "":
@@ -16,12 +16,17 @@ var username_label: RichTextLabel:
 		var label := get_node_or_null("%ClientHUD/%UsernameLabel")
 		return label
 
+
+func _init() -> void:
+	unique_name_in_owner = true
+
+
 func _ready() -> void:
 	super._ready()
 	if "Spawner" in owner.name:
 		if not multiplayer.is_server():
 			owner.queue_free()
-	unique_name_in_owner = true
+	
 	assert(owner.tree_entered.is_connected(_on_owner_tree_entered),
 		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise, \
 the authority will not be set correctly." % [owner.name, _on_owner_tree_entered])
@@ -40,7 +45,7 @@ func _on_owner_tree_entered() -> void:
 		owner.set_multiplayer_authority(authority)
 
 
-func _on_player_joined(client_data: Dictionary) -> void:
+func _on_player_joined(client_data: LLbClientData) -> void:
 	assert(client_data.peer_id)
 	assert(client_data.scene_path)
 	assert(client_data.username)

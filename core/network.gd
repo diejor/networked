@@ -3,12 +3,16 @@ extends Node
 
 @export var client: GameClient
 @export var server: GameServer
-@export var init_client_data: Dictionary
+
+### 
+@export var init_client_data: LLbClientData
 
 func _ready() -> void:
 	get_tree().scene_changed.connect(ensure_configured)
 	owner.remove_child.call_deferred(self)
 	if init_client_data:
+		var error_str = init_client_data.is_valid_scene()
+		assert(error_str.is_empty(), error_str)
 		configure(init_client_data)
 		get_tree().change_scene_to_node.call_deferred(self)
 
@@ -18,12 +22,12 @@ func ensure_configured() -> void:
 should be called before changing to `%s`." % [configure.get_method(), name])
 
 
-func configure(client_data: Dictionary) -> void:
+func configure(client_data: LLbClientData) -> void:
 	var scene_tree := Engine.get_main_loop() as SceneTree
 	scene_tree.scene_changed.connect(connect_player.bind(client_data))
 
 
-func connect_player(client_data: Dictionary) -> void:
+func connect_player(client_data: LLbClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
 	assert(client_data.scene_path)
@@ -40,5 +44,5 @@ func connect_player(client_data: Dictionary) -> void:
 	client_data.peer_id = client.uid
 	client.scene_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
-		client_data
+		client_data.serialize()
 	)

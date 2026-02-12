@@ -1,11 +1,7 @@
 @tool
 @abstract
 class_name SaveContainer
-extends Resource
-
-
-@abstract func serialize() -> PackedByteArray
-@abstract func deserialize(bytes: PackedByteArray) -> void
+extends Serde
 
 @abstract func set_value(property: StringName, value: Variant) -> void
 @abstract func get_value(property: StringName, default: Variant = null) -> Variant

@@ -5,10 +5,15 @@ extends MultiplayerSynchronizer
 @onready var spawn_sync: SpawnSynchronizer:
 	get: return $SpawnSynchronizer
 
+
+func _init() -> void:
+	unique_name_in_owner = true
+
+
 func _ready() -> void:
 	# Fixes weird behavior where `replication_config` is shared between scene
 	# instances
-	unique_name_in_owner = true
+	
 	if Engine.is_editor_hint():
 		replication_config = replication_config.duplicate(true)
 		return
@@ -33,8 +38,6 @@ func update(peer_id: int = 0) -> void:
 
 
 func scene_visibility_filter(peer_id: int) -> bool:
-	if "Spawner" in owner.name:
-		return false
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
 		

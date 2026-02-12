@@ -47,7 +47,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func is_down(action: StringName) -> bool:
-	assert(InputMap.has_action(action))
+	assert(InputMap.has_action(action), "Input action `%s` doen't exist in \
+`InputMap`." % action)
 	return state.get(action, false)
 
 
