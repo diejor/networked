@@ -7,7 +7,7 @@ signal peer_disconnected(peer_id: int)
 
 signal configured
 
-@export var backend: MultiplayerServerBackend
+var backend: MultiplayerServerBackend = Networked.get_config().server_backend
 @export var scene_manager: LobbyManager
 
 

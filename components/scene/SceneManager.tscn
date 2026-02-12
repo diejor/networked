@@ -5,6 +5,5 @@
 [node name="SceneManager" type="MultiplayerSpawner" unique_id=370221204]
 spawn_path = NodePath(".")
 script = ExtResource("1_ie3uy")
-levels = Array[String](["uid://xkil2cmplfcd", "uid://dta1ona6odgmr"])
 server_lobby_path = "uid://dga0loylsa26i"
 client_lobby_path = "uid://cr2k17cu45app"

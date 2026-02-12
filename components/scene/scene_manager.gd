@@ -1,15 +1,18 @@
 class_name LobbyManager
 extends MultiplayerSpawner
 
-@export_file("*.tscn") var levels: Array[String]
 @export_file("*.tscn") var server_lobby_path: String
 @export_file("*.tscn") var client_lobby_path: String
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
+func get_levels() -> Array[String]:
+	return Networked.get_config().levels
+
+
 func _ready() -> void:
 	spawn_function = spawn_lobby
-	assert(not levels.is_empty(), "No levels to replicate. Add levels to\
+	assert(not get_levels().is_empty(), "No levels to replicate. Add levels to\
 `{node}`.".format({node=name}))
 	
 	if owner is GameServer:
@@ -21,7 +24,7 @@ func _ready() -> void:
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for level_path: String in levels:
+		for level_path: String in get_levels():
 			spawn(level_path)
 
 
