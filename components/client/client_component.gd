@@ -23,9 +23,8 @@ func _init() -> void:
 
 func _ready() -> void:
 	super._ready()
-	if "Spawner" in owner.name:
-		if not multiplayer.is_server():
-			owner.queue_free()
+	if username.is_empty() and not multiplayer.is_server():
+		owner.queue_free()
 	
 	assert(owner.tree_entered.is_connected(_on_owner_tree_entered),
 		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise, \
