@@ -15,7 +15,7 @@ func _ready() -> void:
 		world.world_2d = get_tree().root.world_2d
 "
 
-[node name="World" type="SubViewport" unique_id=1753885499 node_paths=PackedStringArray("scene_sync", "scene_spawner")]
+[node name="Lobby" type="SubViewport" unique_id=1753885499 node_paths=PackedStringArray("scene_sync", "scene_spawner")]
 disable_3d = true
 anisotropic_filtering_level = 0
 positional_shadow_atlas_quad_0 = 0
@@ -29,7 +29,7 @@ script = ExtResource("1_b4l3b")
 scene_sync = NodePath("SceneSynchronizer")
 scene_spawner = NodePath("SceneSpawner")
 
-[node name="WorldServerFixer" type="Node" parent="." unique_id=654426371 node_paths=PackedStringArray("world")]
+[node name="SubviewportWorldFixer" type="Node" parent="." unique_id=654426371 node_paths=PackedStringArray("world")]
 script = SubResource("GDScript_hbugg")
 world = NodePath("..")
 

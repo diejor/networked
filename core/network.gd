@@ -39,7 +39,7 @@ func connect_player(client_data: ClientData) -> void:
 	if client_err != OK:
 		push_warning("Failed: %s" % error_string(client_err))
 		return
-	
+
 	client_data.peer_id = client.uid
 	client.scene_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 

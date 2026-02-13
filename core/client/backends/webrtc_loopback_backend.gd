@@ -3,9 +3,6 @@ class_name WebRTCLoopbackClientBackend
 
 var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
 
-func _init() -> void:
-	api.multiplayer_peer = OfflineMultiplayerPeer.new()
-
 func create_connection(_server_address: String, _username: String) -> Error:
 	api.multiplayer_peer =  session.get_client_peer()
 

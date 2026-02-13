@@ -1,8 +1,9 @@
 [gd_scene format=3 uid="uid://dfdmdo8f0q07p"]
 
 [ext_resource type="Script" uid="uid://dpokufhqiu4rj" path="res://addons/networked/components/tp/teleporter.gd" id="1_y0507"]
-[ext_resource type="Texture2D" uid="uid://cklptawmhtnp0" path="res://source/scenes/areas/assets/seasonal sample (winter).png" id="2_1afat"]
-[ext_resource type="PackedScene" uid="uid://dd2cj3087mq3y" path="res://source/components/debug/ui/DebugLabel.tscn" id="3_7oqul"]
+[ext_resource type="Texture2D" uid="uid://dl0701ikiyhue" path="res://icon.svg" id="2_1afat"]
+[ext_resource type="PackedScene" path="res://source/components/debug/ui/DebugLabel.tscn" id="3_7oqul"]
+
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_jx8rj"]
 atlas = ExtResource("2_1afat")

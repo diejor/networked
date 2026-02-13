@@ -17,8 +17,7 @@ var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer
 var root: String: 
 	get: return multiplayer_api.root_path
-
-
+	
 func _ready() -> void:
 	multiplayer_api.peer_connected.connect(on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(on_peer_disconnected)
