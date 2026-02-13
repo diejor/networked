@@ -1,13 +1,7 @@
 [gd_scene format=3 uid="uid://dfdmdo8f0q07p"]
 
 [ext_resource type="Script" uid="uid://dpokufhqiu4rj" path="res://addons/networked/components/tp/teleporter.gd" id="1_y0507"]
-[ext_resource type="Texture2D" uid="uid://dl0701ikiyhue" path="res://icon.svg" id="2_1afat"]
-[ext_resource type="PackedScene" path="res://source/components/debug/ui/DebugLabel.tscn" id="3_7oqul"]
-
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_jx8rj"]
-atlas = ExtResource("2_1afat")
-region = Rect2(176, 112, 80, 80)
+[ext_resource type="PackedScene" uid="uid://dd2cj3087mq3y" path="res://addons/networked/components/debug/ui/DebugLabel.tscn" id="3_7oqul"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_qeccu"]
 size = Vector2(32, 32)
@@ -33,12 +27,6 @@ unique_name_in_owner = true
 y_sort_enabled = true
 script = ExtResource("1_y0507")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=59335217]
-y_sort_enabled = true
-position = Vector2(8, -40)
-texture = SubResource("AtlasTexture_jx8rj")
-offset = Vector2(-8, 40)
-
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=645305378]
 position = Vector2(0, 8)
 shape = SubResource("RectangleShape2D_qeccu")
@@ -47,8 +35,9 @@ shape = SubResource("RectangleShape2D_qeccu")
 position = Vector2(21, 32)
 
 [node name="DebugLabel" parent="." unique_id=131477118 instance=ExtResource("3_7oqul")]
+z_index = 1
 text = "scene: 
-			tp_id: "
+tp_id: "
 script = SubResource("GDScript_7oqul")
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]

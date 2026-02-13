@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://dd2cj3087mq3y"]
+
+[ext_resource type="Script" uid="uid://dhjjyyacsq0l6" path="res://addons/networked/components/debug/ui/debug_label.gd" id="2_pn7ft"]
+[ext_resource type="Script" uid="uid://rii3cabxkdhf" path="res://addons/networked/components/debug/debug_feature.gd" id="3_mstb0"]
+
+[node name="DebugLabel" type="Label" unique_id=131477118]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -16.5
+offset_top = -6.5
+offset_right = 16.5
+offset_bottom = 6.5
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(0.5, 0.5)
+pivot_offset_ratio = Vector2(0.5, 0.5)
+size_flags_horizontal = 4
+text = "target"
+script = ExtResource("2_pn7ft")
+
+[node name="DebugFeature" type="Node" parent="." unique_id=1016976890]
+script = ExtResource("3_mstb0")
+metadata/_custom_type_script = "uid://rii3cabxkdhf"
