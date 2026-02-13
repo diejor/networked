@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://d22m36luwr2a"]
+
+[ext_resource type="Script" uid="uid://xwxgwpe3rp8c" path="res://addons/networked/core/network/network.gd" id="1_1al0i"]
+[ext_resource type="PackedScene" uid="uid://bsscrhcky6uyk" path="res://addons/networked/core/peer/client/Client.tscn" id="1_spi8r"]
+[ext_resource type="PackedScene" uid="uid://1ir31esioska" path="res://addons/networked/core/peer/Server.tscn" id="2_a68il"]
+
+[node name="Network" type="Node" unique_id=1214160271 node_paths=PackedStringArray("client", "server")]
+script = ExtResource("1_1al0i")
+client = NodePath("Client")
+server = NodePath("Server")
+
+[node name="Client" parent="." unique_id=1489051217 node_paths=PackedStringArray("network") instance=ExtResource("1_spi8r")]
+unique_name_in_owner = true
+network = NodePath("..")
+
+[node name="Server" parent="." unique_id=879474811 node_paths=PackedStringArray("network") instance=ExtResource("2_a68il")]
+unique_name_in_owner = true
+network = NodePath("..")

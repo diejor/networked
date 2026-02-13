@@ -4,25 +4,29 @@ extends MultiplayerSpawner
 @export_file("*.tscn") var server_lobby_path: String
 @export_file("*.tscn") var client_lobby_path: String
 
-var active_lobbies: Dictionary[StringName, Lobby]
+var network: MultiplayerNetwork:
+	get: return get_parent().get_parent()
 
-func get_levels() -> Array[String]:
-	return Networked.config.levels
+var levels: Array[String]:
+	get: return network.config.levels
+		
+
+var active_lobbies: Dictionary[StringName, Lobby]
 
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
-	assert(not get_levels().is_empty(), "No levels to replicate. Add levels to\
+	assert(not levels.is_empty(), "No levels to replicate. Add levels to\
 `{node}`.".format({node=name}))
 	
-	if owner is MultiplayerServer:
-		var server: MultiplayerServer = owner
-		server.configured.connect(spawn_lobbies)
+	var peer: MultiplayerTree = owner
+	if peer.is_server:
+		peer.configured.connect(spawn_lobbies)
 
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for level_path: String in get_levels():
+		for level_path: String in levels:
 			spawn(level_path)
 
 

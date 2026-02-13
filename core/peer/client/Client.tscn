@@ -1,9 +1,14 @@
 [gd_scene format=3 uid="uid://bsscrhcky6uyk"]
 
-[ext_resource type="Script" uid="uid://toxomgon6bbi" path="res://addons/networked/core/client/client.gd" id="1_8fau1"]
+[ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/core/peer/multiplayer_tree.gd" id="1_33snq"]
+[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/core/peer/backends/websocket.gd" id="2_8gbkq"]
 [ext_resource type="PackedScene" uid="uid://d3ag2052swfwd" path="res://addons/networked/components/scene/SceneManager.tscn" id="3_3hdv7"]
-[ext_resource type="Script" uid="uid://cu3ournr7q7se" path="res://addons/networked/core/client/transition_anim.gd" id="4_33snq"]
+[ext_resource type="Script" uid="uid://cu3ournr7q7se" path="res://addons/networked/core/peer/client/transition_anim.gd" id="4_33snq"]
 [ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="4_mpvoh"]
+
+[sub_resource type="Resource" id="Resource_uigkd"]
+script = ExtResource("2_8gbkq")
+metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="GDScript" id="GDScript_mpvoh"]
 script/source = "extends TextureProgressBar
@@ -46,10 +51,11 @@ _data = {
 &"tp": SubResource("Animation_ifkpp")
 }
 
-[node name="Client" type="Node" unique_id=1489051217 node_paths=PackedStringArray("scene_manager")]
-script = ExtResource("1_8fau1")
+[node name="Client" type="Node" unique_id=1840543800 node_paths=PackedStringArray("scene_manager")]
+script = ExtResource("1_33snq")
+backend = SubResource("Resource_uigkd")
 scene_manager = NodePath("SceneManager")
-metadata/_custom_type_script = "uid://toxomgon6bbi"
+metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="SceneManager" parent="." unique_id=370221204 instance=ExtResource("3_3hdv7")]
 
