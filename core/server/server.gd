@@ -1,4 +1,4 @@
-class_name GameServer
+class_name MultiplayerServer
 extends Node
 
 signal peer_impl_changed()
@@ -7,8 +7,8 @@ signal peer_disconnected(peer_id: int)
 
 signal configured
 
-var backend: MultiplayerServerBackend = Networked.get_config().server_backend
-@export var scene_manager: LobbyManager
+var backend := Networked.config.server_backend
+@export var scene_manager: MultiplayerLobbyManager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -17,8 +17,13 @@ var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer
 var root: String: 
 	get: return multiplayer_api.root_path
-	
+
+
 func _ready() -> void:
+	configured.connect(_on_configured)
+
+
+func _on_configured() -> void:
 	multiplayer_api.peer_connected.connect(on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(on_peer_disconnected)
 

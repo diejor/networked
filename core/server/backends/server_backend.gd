@@ -1,5 +1,6 @@
-extends Resource
 class_name MultiplayerServerBackend
+extends Resource
+
 
 ## Base class for server-side transports.
 

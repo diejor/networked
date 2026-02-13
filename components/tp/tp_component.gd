@@ -95,7 +95,7 @@ func teleported(scene: Node, _tp_path: String) -> void:
 			owner2d.global_position = tp_node.global_position
 
 
-func spawn(lobby_mgr: LobbyManager) -> void:
+func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
 	if current_scene.is_empty():
 		push_error("`TPComponent` doesnt have a scene to tp into.")
 		return

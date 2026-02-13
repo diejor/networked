@@ -1,4 +1,4 @@
-class_name GameClient
+class_name MultiplayerClient
 extends Node
 
 
@@ -7,9 +7,10 @@ signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 
 
-var backend: MultiplayerClientBackend = Networked.get_config().client_backend
-@export var scene_manager: LobbyManager
+var backend := Networked.config.client_backend
+@export var scene_manager: MultiplayerLobbyManager
 
+signal configured
 
 var multiplayer_api: SceneMultiplayer:
 	get: return backend.api
@@ -21,6 +22,10 @@ var uid: int:
 
 
 func _ready() -> void:
+	configured.connect(_on_configured)
+
+
+func _on_configured() -> void:
 	multiplayer_api.peer_connected.connect(on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(on_peer_disconnected)
 	multiplayer_api.connected_to_server.connect(on_connected_to_server)
@@ -43,6 +48,7 @@ func init(server_address: String, _username: String) -> Error:
 
 func config_api() -> void:
 	backend.configure_tree(get_tree(), scene_manager.get_path())
+	configured.emit()
 
 
 func on_peer_connected(peer_id: int) -> void:

@@ -1,16 +1,10 @@
 [gd_scene format=3 uid="uid://1ir31esioska"]
 
 [ext_resource type="Script" uid="uid://c003d65ahq74f" path="res://addons/networked/core/server/server.gd" id="1_5s3h4"]
-[ext_resource type="Script" uid="uid://bi1iqs0c4ouvh" path="res://addons/networked/core/server/backends/websocket_backend.gd" id="2_4ngsq"]
 [ext_resource type="PackedScene" uid="uid://d3ag2052swfwd" path="res://addons/networked/components/scene/SceneManager.tscn" id="3_4ngsq"]
-
-[sub_resource type="Resource" id="Resource_bx0uh"]
-script = ExtResource("2_4ngsq")
-metadata/_custom_type_script = "uid://bi1iqs0c4ouvh"
 
 [node name="Server" type="Node" unique_id=879474811 node_paths=PackedStringArray("scene_manager")]
 script = ExtResource("1_5s3h4")
-backend = SubResource("Resource_bx0uh")
 scene_manager = NodePath("SceneManager")
 metadata/_custom_type_script = "uid://c003d65ahq74f"
 

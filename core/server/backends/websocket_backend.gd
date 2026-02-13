@@ -1,5 +1,6 @@
-extends MultiplayerServerBackend
 class_name WebSocketServerBackend
+extends MultiplayerServerBackend
+
 
 @export var port: int = 21253
 

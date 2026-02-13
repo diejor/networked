@@ -1,4 +1,4 @@
-class_name LobbyManager
+class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
 @export_file("*.tscn") var server_lobby_path: String
@@ -15,10 +15,8 @@ func _ready() -> void:
 	assert(not get_levels().is_empty(), "No levels to replicate. Add levels to\
 `{node}`.".format({node=name}))
 	
-	if owner is GameServer:
-		var server: GameServer = owner
-		if not server.multiplayer_peer is OfflineMultiplayerPeer:
-			spawn_lobbies.call_deferred()
+	if owner is MultiplayerServer:
+		var server: MultiplayerServer = owner
 		server.configured.connect(spawn_lobbies)
 
 
@@ -50,7 +48,7 @@ func spawn_lobby(level_file_path: String) -> Node:
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(
 	client_data_bytes: PackedByteArray) -> void:
-	var client_data: ClientData = ClientData.new()
+	var client_data: MultiplayerClientData = MultiplayerClientData.new()
 	client_data.deserialize(client_data_bytes)
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)

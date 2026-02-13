@@ -1,4 +1,4 @@
-class_name ClientData
+class_name MultiplayerClientData
 extends Serde
 
 @export var username: StringName

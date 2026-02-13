@@ -5,7 +5,7 @@ extends Node
 
 var api: SceneMultiplayer:
 	get: return multiplayer as SceneMultiplayer
-var lobby_manager: LobbyManager:
+var lobby_manager: MultiplayerLobbyManager:
 	get: return get_node((multiplayer as SceneMultiplayer).root_path)
 
 var transition_player: TransitionPlayer:

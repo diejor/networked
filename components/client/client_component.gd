@@ -2,7 +2,7 @@ class_name ClientComponent
 extends NodeComponent
 
 @warning_ignore("unused_signal")
-signal player_joined(client_data: ClientData)
+signal player_joined(client_data: MultiplayerClientData)
 
 @export_custom(PROPERTY_HINT_NONE, "replicated") 
 var username: String = "":
@@ -44,7 +44,7 @@ func _on_owner_tree_entered() -> void:
 		owner.set_multiplayer_authority(authority)
 
 
-func _on_player_joined(client_data: ClientData) -> void:
+func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	assert(client_data.peer_id)
 	assert(client_data.scene_path)
 	assert(client_data.username)

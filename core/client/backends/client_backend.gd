@@ -1,5 +1,6 @@
-extends Resource
 class_name MultiplayerClientBackend
+extends Resource
+
 
 ## Base class for client-side transports (WebSocket, WebRTC, Offline, etc.)
 

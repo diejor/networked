@@ -1,5 +1,6 @@
-extends MultiplayerClientBackend
 class_name WebSocketClientBackend
+extends MultiplayerClientBackend
+
 
 @export var port: int = 21253
 @export var public_host: String = "ws.diejor.tech"
