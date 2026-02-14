@@ -43,13 +43,13 @@ func configure(client_data: MultiplayerClientData) -> void:
 
 
 func validate_client_data(client_data: MultiplayerClientData) -> void:
-	var scene_err_str = is_valid_client_scene(init_client_data.scene_path)
+	var scene_err_str = is_valid_client_scene(client_data.scene_path)
 	assert(scene_err_str.is_empty(), scene_err_str)
 
 func validate_web() -> void:
 	if OS.has_feature("web"):
-		client.backend = WebRTCLoopbackBackend.new()
-		server.backend = WebRTCLoopbackBackend.new()
+		client.backend = LocalLoopbackBackend.new()
+		server.backend = LocalLoopbackBackend.new()
 
 func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data)
