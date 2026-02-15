@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://8dmbjqnbp0rn"]
+
+[ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_qa662"]
+
+[node name="ClientComponent" type="Node" unique_id=465459924 groups=["clients"]]
+script = ExtResource("1_qa662")
+
+[connection signal="player_joined" from="." to="." method="_on_player_joined"]

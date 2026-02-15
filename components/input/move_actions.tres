@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="PlayerActions" format=3 uid="uid://bueemf6fbwhei"]
+
+[ext_resource type="Script" uid="uid://4h3ugcl8pu1c" path="res://addons/networked/components/input/move_actions.gd" id="1_fcymq"]
+
+[resource]
+script = ExtResource("1_fcymq")
+move_left = &"move_left"
+move_right = &"move_right"
+move_up = &"move_up"
+move_down = &"move_down"
+sprint = &"sprint"
+metadata/_custom_type_script = "uid://4h3ugcl8pu1c"

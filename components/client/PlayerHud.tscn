@@ -1,0 +1,90 @@
+[gd_scene format=3 uid="uid://s3msqppyuw2j"]
+
+[ext_resource type="StyleBox" uid="uid://bvpi6xar6fmbg" path="res://addons/networked/components/client/player_label_style_box.tres" id="2_y0iwm"]
+
+[node name="PlayerHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_top = -37.0
+offset_bottom = -37.0
+scale = Vector2(0.15, 0.15)
+metadata/_edit_group_ = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -94.0
+offset_top = -47.0
+offset_right = 94.0
+offset_bottom = 47.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 32
+alignment = 2
+
+[node name="Handle" type="Control" parent="VBoxContainer"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Handle"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -28.5
+offset_top = -22.5
+offset_right = 28.5
+offset_bottom = 22.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = ExtResource("2_y0iwm")
+
+[node name="UIDLabel" type="RichTextLabel" parent="VBoxContainer/Handle/PanelContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 32
+bbcode_enabled = true
+text = "[color=gray]UID[/color]
+"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+
+[node name="Handle2" type="Control" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer/Handle2"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -41.5
+offset_top = -22.5
+offset_right = 41.5
+offset_bottom = 22.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = ExtResource("2_y0iwm")
+
+[node name="UsernameLabel" type="RichTextLabel" parent="VBoxContainer/Handle2/PanelContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/normal_font_size = 32
+bbcode_enabled = true
+text = "Username"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1

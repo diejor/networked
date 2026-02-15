@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://d3ag2052swfwd"]
+
+[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/components/lobby/lobby_manager.gd" id="1_ie3uy"]
+
+[node name="LobbyManager" type="MultiplayerSpawner" unique_id=370221204]
+spawn_path = NodePath(".")
+script = ExtResource("1_ie3uy")
