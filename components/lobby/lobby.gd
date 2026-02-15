@@ -1,8 +1,8 @@
 class_name Lobby
 extends Node
 
-@export var scene_sync: SceneSynchronizer
-@export var scene_spawner: MultiplayerSpawner
+@export var synchronizer: MultiplayerLobbySynchronizer
+@export var spawner: MultiplayerLobbySpawner
 
 var level: Node:
 	set(value):

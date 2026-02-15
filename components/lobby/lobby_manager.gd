@@ -1,32 +1,25 @@
 class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
-@export_file("*.tscn") var server_lobby_path: String
-@export_file("*.tscn") var client_lobby_path: String
+const SERVER_LOBBY = preload("uid://dga0loylsa26i")
+const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
 
-var network: MultiplayerNetwork:
-	get: return get_parent().get_parent()
-
-var levels: Array[String]:
-	get: return network.config.levels
-		
+const TP_CANVAS_LAYER = preload("uid://bs4ebh48fcoxt")
+var tp_canvas: CanvasLayer
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
+var _config: NetworkConfig
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
-	assert(not levels.is_empty(), "No levels to replicate. Add levels to\
-`{node}`.".format({node=name}))
+	spawn_path = "."
 	
-	var peer: MultiplayerTree = owner
-	if peer.is_server:
-		peer.configured.connect(spawn_lobbies)
 
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for level_path: String in levels:
+		for level_path: String in _config.levels:
 			spawn(level_path)
 
 
@@ -34,14 +27,12 @@ func spawn_lobby(level_file_path: String) -> Node:
 	var level_scene: PackedScene = load(level_file_path)
 	var level: Node = level_scene.instantiate()
 	
-	var lobby_scene: PackedScene = load(
-		server_lobby_path if multiplayer.is_server() else client_lobby_path
-	)
+	var lobby_scene: PackedScene = SERVER_LOBBY if multiplayer.is_server() else CLIENT_LOBBY
 	
 	var lobby: Lobby = lobby_scene.instantiate()
 	
-	var scene_spawner: MultiplayerSpawner = lobby.scene_spawner
-	scene_spawner.spawn_path = "../" + level.name
+	lobby.spawner.spawn_path = "../" + level.name
+	lobby.spawner.clients = _config.clients
 	
 	lobby.level = level
 	active_lobbies[level.name] = lobby
@@ -56,3 +47,14 @@ func request_join_player(
 	client_data.deserialize(client_data_bytes)
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)
+
+
+func _on_configured(config: NetworkConfig) -> void:
+	_config = config
+	var peer: MultiplayerTree = get_parent()
+	if peer.is_server:
+		spawn_lobbies()
+	else:
+		tp_canvas = TP_CANVAS_LAYER.instantiate()
+		add_child(tp_canvas)
+	pass

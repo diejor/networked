@@ -1,16 +1,17 @@
 class_name MultiplayerTree
 extends Node
 
-signal configured()
+signal configured(config: NetworkConfig)
 signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 signal connected_to_server()
 
-@export var network: MultiplayerNetwork
-@export var scene_manager: MultiplayerLobbyManager
+@onready var network: MultiplayerNetwork = get_parent()
 @export var is_server: bool
 
 @onready var backend: BackendPeer = network.config.backend.duplicate()
+
+var lobby_manager: MultiplayerLobbyManager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -23,11 +24,11 @@ var uid: int:
 	get: return multiplayer_api.get_unique_id() if multiplayer_api else 0
 
 
-func _ready() -> void:
+func _init() -> void:
 	configured.connect(_on_configured)
 
 
-func _on_configured() -> void:
+func _on_configured(_config: NetworkConfig) -> void:
 	# These fire for both host and clients
 	multiplayer_api.peer_connected.connect(_on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
@@ -58,9 +59,13 @@ func join(server_address: String, username: String) -> Error:
 
 
 func _config_api() -> void:
-	assert(is_instance_valid(scene_manager), "Scene manager missing before configuration.")
-	backend.configure_tree(get_tree(), scene_manager.get_path())
-	configured.emit()
+	lobby_manager = MultiplayerLobbyManager.new()
+	lobby_manager.name = "LobbyManager"
+	configured.connect(lobby_manager._on_configured)
+	add_child(lobby_manager)
+
+	backend.configure_tree(get_tree(), lobby_manager.get_path())
+	configured.emit(network.config)
 
 
 func _on_peer_connected(peer_id: int) -> void:

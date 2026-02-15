@@ -47,9 +47,8 @@ func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == 0:
 		return false
 	
-	var world: Node = owner.get_parent().get_parent()
-	var scene_sync: SceneSynchronizer = world.get_node("%SceneSynchronizer")
-	var res: bool = peer_id in scene_sync.connected_clients
+	var lobby: Lobby = owner.get_parent().get_parent()
+	var res: bool = peer_id in lobby.synchronizer.connected_clients
 	return res
 
 

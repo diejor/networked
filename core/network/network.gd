@@ -2,9 +2,6 @@ class_name MultiplayerNetwork
 extends Node
 
 
-signal configured
-
-
 @export var client: MultiplayerTree
 @export var server: MultiplayerTree
 
@@ -21,11 +18,23 @@ func is_valid_client_scene(scene_path: String) -> String:
 
 func _ready() -> void:
 	get_tree().scene_changed.connect(ensure_configured)
-	owner.remove_child.call_deferred(self)
+	if not client:
+		client = MultiplayerTree.new()
+		client.name = "Client"
+		add_child(client)
+	if not server:
+		server = MultiplayerTree.new()
+		server.name = "Server"
+		server.is_server = true
+		add_child(server)
+		
+	if owner:
+		owner.remove_child.call_deferred(self)
 	
 	if init_client_data:
 		configure(init_client_data)
-		get_tree().change_scene_to_node.call_deferred(self)
+		if owner:
+			get_tree().change_scene_to_node.call_deferred(self)
 
 func ensure_configured() -> void:
 	assert(get_tree().scene_changed.is_connected(connect_player), "`%s` \
@@ -37,9 +46,10 @@ func configure(client_data: MultiplayerClientData) -> void:
 	validate_web()
 	
 	var scene_tree := Engine.get_main_loop() as SceneTree
-	scene_tree.scene_changed.connect(connect_player.bind(client_data))
-	
-	configured.emit()
+	if owner:
+		scene_tree.scene_changed.connect(connect_player.bind(client_data))
+	else:
+		connect_player(client_data)
 
 
 func validate_client_data(client_data: MultiplayerClientData) -> void:
@@ -70,7 +80,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		return
 
 	client_data.peer_id = client.uid
-	client.scene_manager.request_join_player.rpc_id(
+	client.lobby_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()
 	)

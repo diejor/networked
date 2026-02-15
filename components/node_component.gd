@@ -11,7 +11,7 @@ var lobby_manager: MultiplayerLobbyManager:
 var transition_player: TransitionPlayer:
 	get:
 		if not multiplayer.is_server():
-			return lobby_manager.get_node("%TransitionAnim")
+			return lobby_manager.tp_canvas.get_node("%TransitionAnim")
 		return null
 
 var transition_progress: TextureProgressBar:

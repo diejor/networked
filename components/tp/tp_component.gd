@@ -77,10 +77,10 @@ func request_teleport(
 			player.request_ready()
 			tp_component.teleported(to_lobby.level, tp_path)
 	
-	var from_spawn := from_lobby.scene_sync._on_spawned
-	var to_spawn := to_lobby.scene_sync._on_spawned
-	var from_despawn := from_lobby.scene_sync._on_despawned
-	var to_despawn := to_lobby.scene_sync._on_despawned
+	var from_spawn := from_lobby.synchronizer._on_spawned
+	var to_spawn := to_lobby.synchronizer._on_spawned
+	var from_despawn := from_lobby.synchronizer._on_despawned
+	var to_despawn := to_lobby.synchronizer._on_despawned
 	
 	flip.call(player.tree_entered, from_spawn, to_spawn)
 	

@@ -74,7 +74,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if tp_component:
 		tp_component.spawn(lobby_manager)
 	else:
-		lobby.scene_sync.track_player(player)
+		lobby.synchronizer.track_player(player)
 		lobby.level.add_child(player)
 		player.owner = lobby.level
 
