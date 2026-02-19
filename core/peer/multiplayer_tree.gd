@@ -1,17 +1,16 @@
 class_name MultiplayerTree
 extends Node
 
-signal configured(config: NetworkConfig)
+signal configured()
 signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 signal connected_to_server()
 
-@onready var network: MultiplayerNetwork = get_parent()
 @export var is_server: bool
 
-@onready var backend: BackendPeer = network.config.backend.duplicate()
+@export var backend: BackendPeer
 
-var lobby_manager: MultiplayerLobbyManager
+@export var lobby_manager: MultiplayerLobbyManager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -27,8 +26,12 @@ var uid: int:
 func _init() -> void:
 	configured.connect(_on_configured)
 
+func _ready() -> void:
+	configured.connect(lobby_manager._on_configured)
+	
 
-func _on_configured(_config: NetworkConfig) -> void:
+
+func _on_configured() -> void:
 	# These fire for both host and clients
 	multiplayer_api.peer_connected.connect(_on_peer_connected)
 	multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
@@ -59,13 +62,8 @@ func join(server_address: String, username: String) -> Error:
 
 
 func _config_api() -> void:
-	lobby_manager = MultiplayerLobbyManager.new()
-	lobby_manager.name = "LobbyManager"
-	configured.connect(lobby_manager._on_configured)
-	add_child(lobby_manager)
-
 	backend.configure_tree(get_tree(), lobby_manager.get_path())
-	configured.emit(network.config)
+	configured.emit()
 
 
 func _on_peer_connected(peer_id: int) -> void:

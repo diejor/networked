@@ -1,8 +1,6 @@
 class_name MultiplayerLobbySynchronizer
 extends MultiplayerSynchronizer
 
-@onready var lobby_spawner: MultiplayerSpawner = %LobbySpawner
-
 @export var connected_clients: Dictionary[int, bool]:
 	get:
 		return connected_clients
@@ -14,8 +12,6 @@ var tracked_nodes: Dictionary[Node, bool]
 
 func _ready() -> void:
 	delta_synchronized.connect(update_clients)
-	lobby_spawner.spawned.connect(_on_spawned)
-	lobby_spawner.despawned.connect(_on_despawned)
 
 
 func track_player(player: Node) -> void:

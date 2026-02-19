@@ -101,6 +101,6 @@ func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
 		return
 	
 	var lobby: Lobby = lobby_mgr.active_lobbies[current_scene_name]
-	lobby.scene_sync.track_player(owner)
+	lobby.synchronizer.track_player(owner)
 	lobby.level.add_child(owner)
 	owner.owner = lobby.level

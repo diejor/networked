@@ -9,7 +9,7 @@ var tp_canvas: CanvasLayer
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
-var _config: NetworkConfig
+@export_file var lobbies: Array[String]
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
@@ -19,7 +19,7 @@ func _ready() -> void:
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for level_path: String in _config.levels:
+		for level_path: String in lobbies:
 			spawn(level_path)
 
 
@@ -30,9 +30,6 @@ func spawn_lobby(level_file_path: String) -> Node:
 	var lobby_scene: PackedScene = SERVER_LOBBY if multiplayer.is_server() else CLIENT_LOBBY
 	
 	var lobby: Lobby = lobby_scene.instantiate()
-	
-	lobby.spawner.spawn_path = "../" + level.name
-	lobby.spawner.clients = _config.clients
 	
 	lobby.level = level
 	active_lobbies[level.name] = lobby
@@ -49,8 +46,7 @@ func request_join_player(
 		client.player_joined.emit(client_data)
 
 
-func _on_configured(config: NetworkConfig) -> void:
-	_config = config
+func _on_configured() -> void:
 	var peer: MultiplayerTree = get_parent()
 	if peer.is_server:
 		spawn_lobbies()
