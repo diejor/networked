@@ -3,19 +3,26 @@ extends MultiplayerSpawner
 
 const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
-
+const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 const TP_CANVAS_LAYER = preload("uid://bs4ebh48fcoxt")
+
 var tp_canvas: CanvasLayer
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
-@export_file var lobbies: Array[String]
+var lobbies: Array[String]:
+	get:
+		if lobbies.is_empty():
+			assert(get_spawnable_scene_count() > 0, "Add lobbies to the spawn list.")
+			for scene_idx in get_spawnable_scene_count():
+				lobbies.append(get_spawnable_scene(scene_idx))
+			clear_spawnable_scenes()
+		return lobbies
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
 	spawn_path = "."
-	
-
+	add_to_group("lobby_managers")
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
@@ -47,8 +54,12 @@ func request_join_player(
 
 
 func _on_configured() -> void:
-	var peer: MultiplayerTree = get_parent()
-	if peer.is_server:
+	if multiplayer.is_server():
+		var debug_viewports: ViewportDebug = VIEWPORTS_DEBUG.instantiate()
+		child_entered_tree.connect(debug_viewports._on_node_entered)
+		child_exiting_tree.connect(debug_viewports._on_node_exited)
+		add_child(debug_viewports)
+		
 		spawn_lobbies()
 	else:
 		tp_canvas = TP_CANVAS_LAYER.instantiate()

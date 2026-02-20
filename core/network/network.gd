@@ -4,18 +4,21 @@ extends Node
 
 @export var client: MultiplayerTree
 
-### 
+##
+@export_group("Debug")
 @export var init_client_data: MultiplayerClientData
+@export_group("", "")
+
+func is_current_scene() -> bool:
+	return (Engine.get_main_loop() as SceneTree).current_scene == self
 
 func _ready() -> void:
-	get_tree().scene_changed.connect(ensure_configured)
-		
-	if owner:
+	if not is_current_scene():
 		owner.remove_child.call_deferred(self)
 	
 	if init_client_data:
 		configure(init_client_data)
-		if owner:
+		if not is_current_scene():
 			get_tree().change_scene_to_node.call_deferred(self)
 
 func ensure_configured() -> void:
@@ -27,7 +30,7 @@ func configure(client_data: MultiplayerClientData) -> void:
 	validate_web()
 	
 	var scene_tree := Engine.get_main_loop() as SceneTree
-	if owner:
+	if not is_current_scene():
 		scene_tree.scene_changed.connect(connect_player.bind(client_data))
 	else:
 		connect_player(client_data)

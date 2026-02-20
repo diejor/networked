@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://xu4dh3epglir"]
+
+[ext_resource type="Script" uid="uid://br7dtsmkvkyos" path="res://addons/networked/components/debug/server_viewports.gd" id="1_dhf34"]
+[ext_resource type="Script" uid="uid://rii3cabxkdhf" path="res://addons/networked/components/debug/debug_feature.gd" id="2_kcrrk"]
+
+[node name="ViewportDebugLayer" type="CanvasLayer" unique_id=431738108]
+script = ExtResource("1_dhf34")
+
+[node name="FoldableContainer" type="FoldableContainer" parent="." unique_id=1891502867]
+offset_left = 17.0
+offset_top = 17.0
+offset_right = 126.0
+offset_bottom = 87.0
+size_flags_horizontal = 3
+folded = true
+title = "Lobbies"
+
+[node name="LobbiesTab" type="TabBar" parent="FoldableContainer" unique_id=1250652699]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+current_tab = 0
+clip_tabs = false
+tab_count = 1
+tab_0/title = "Client"
+
+[node name="DebugFeature" type="Node" parent="." unique_id=1881345341]
+script = ExtResource("2_kcrrk")
+metadata/_custom_type_script = "uid://rii3cabxkdhf"
+
+[connection signal="tab_changed" from="FoldableContainer/LobbiesTab" to="." method="_on_tab_changed"]
