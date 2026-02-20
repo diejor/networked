@@ -2,10 +2,10 @@ class_name TransitionPlayer
 extends AnimationPlayer
 
 func teleport_animation(animation: Callable) -> void:
-	owner.process_mode = Node.PROCESS_MODE_DISABLED
+	owner.owner.process_mode = Node.PROCESS_MODE_DISABLED
 	animation.call()
 	await animation_finished
-	owner.process_mode = Node.PROCESS_MODE_INHERIT
+	owner.owner.process_mode = Node.PROCESS_MODE_INHERIT
 
 func teleport_in_animation() -> void:
 	var anim: Callable = play_backwards.bind("tp")

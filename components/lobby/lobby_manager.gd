@@ -53,4 +53,5 @@ func _on_configured() -> void:
 	else:
 		tp_canvas = TP_CANVAS_LAYER.instantiate()
 		add_child(tp_canvas)
+		tp_canvas.owner = self
 	pass

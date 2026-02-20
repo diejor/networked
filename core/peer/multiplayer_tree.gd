@@ -6,9 +6,11 @@ signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 signal connected_to_server()
 
-@export var is_server: bool
+var is_server: bool
 
-@export var backend: BackendPeer
+@export var backend: BackendPeer:
+	set(value):
+		backend = value.duplicate()
 
 @export var lobby_manager: MultiplayerLobbyManager
 

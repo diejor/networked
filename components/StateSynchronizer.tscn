@@ -8,12 +8,11 @@
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_4qh70"]
 
 [node name="StateSynchronizer" type="MultiplayerSynchronizer" unique_id=1699265580]
+unique_name_in_owner = true
 replication_config = SubResource("SceneReplicationConfig_1hg0c")
-visibility_update_mode = 2
 script = ExtResource("1_4qh70")
 
 [node name="SpawnSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=484223566]
 root_path = NodePath("../..")
 replication_config = SubResource("SceneReplicationConfig_4qh70")
-visibility_update_mode = 2
 script = ExtResource("2_4qh70")

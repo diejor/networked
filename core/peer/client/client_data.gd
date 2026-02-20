@@ -3,6 +3,7 @@ extends Serde
 
 @export var username: StringName
 @export_file var scene_path: String
+@export var url: String
 var peer_id: int
 
 func serialize() -> PackedByteArray:

@@ -21,6 +21,11 @@ func _ready() -> void:
 	assert(root_path == get_path_to(owner))
 	add_visibility_filter(scene_visibility_filter)
 	spawn_sync.add_visibility_filter(scene_visibility_filter)
+	
+	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
+	if client.username.is_empty():
+		only_server()
+	
 	update_visibility()
 
 

@@ -3,7 +3,6 @@ extends Node
 
 
 @export var client: MultiplayerTree
-@export var server: MultiplayerTree
 
 ### 
 @export var init_client_data: MultiplayerClientData
@@ -37,13 +36,13 @@ func configure(client_data: MultiplayerClientData) -> void:
 func validate_web() -> void:
 	if OS.has_feature("web"):
 		client.backend = LocalLoopbackBackend.new()
-		server.backend = LocalLoopbackBackend.new()
 
-func connect_player(client_data: MultiplayerClientData) -> void:
-	assert(client_data)
-	assert(client_data.username)
-	assert(client_data.scene_path)
 
+func host_server() -> void:
+	var server: MultiplayerTree = client.duplicate()
+	server.is_server = true
+	server.name = "Server"
+	add_child(server)
 	
 	var server_err := server.host()
 	var in_use := server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE
@@ -51,6 +50,15 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		"Dedicated server failed to start: %s" % error_string(server_err))
 	if in_use:
 		server.queue_free.call_deferred()
+
+
+func connect_player(client_data: MultiplayerClientData) -> void:
+	assert(client_data)
+	assert(client_data.username)
+	assert(client_data.scene_path)
+
+	if client_data.url.is_empty():
+		host_server()
 		
 	var client_err: Error = await client.join("localhost", client_data.username)
 	if client_err != OK:
