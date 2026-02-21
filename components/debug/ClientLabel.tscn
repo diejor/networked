@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://dui4l6oylk8ju"]
+
+[ext_resource type="Script" uid="uid://cjux6i215jhw7" path="res://addons/networked/components/debug/client_label.gd" id="1_5fcsk"]
+[ext_resource type="Script" uid="uid://rii3cabxkdhf" path="res://addons/networked/components/debug/debug_feature.gd" id="1_a5a7j"]
+
+[node name="DebugClient" type="Node2D" unique_id=679663261]
+script = ExtResource("1_5fcsk")
+
+[node name="Label" type="Label" parent="." unique_id=508483752]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -11.5
+offset_right = 20.0
+offset_bottom = 11.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "asd
+123"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DebugFeature" type="Node" parent="." unique_id=602961585]
+script = ExtResource("1_a5a7j")
+metadata/_custom_type_script = "uid://rii3cabxkdhf"

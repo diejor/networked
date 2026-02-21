@@ -1,8 +1,12 @@
 [gd_scene format=3 uid="uid://8dmbjqnbp0rn"]
 
 [ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_qa662"]
+[ext_resource type="PackedScene" uid="uid://dui4l6oylk8ju" path="res://addons/networked/components/debug/ClientLabel.tscn" id="2_fvt7m"]
 
 [node name="ClientComponent" type="Node" unique_id=465459924 groups=["clients"]]
 script = ExtResource("1_qa662")
+
+[node name="DebugClientLabel" parent="." unique_id=530562393 node_paths=PackedStringArray("client") instance=ExtResource("2_fvt7m")]
+client = NodePath("..")
 
 [connection signal="player_joined" from="." to="." method="_on_player_joined"]
