@@ -12,8 +12,8 @@ func host() -> Error:
 		api.multiplayer_peer = peer
 		print("ENet server ready on port %d" % port)
 	else:
-		push_warning("Failed to create ENet server: %s" % error_string(err))
-		
+		push_warning("Failed to create ENet server: %s." % error_string(err))
+	
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:

@@ -1,18 +1,12 @@
-[gd_scene format=3 uid="uid://dui4l6oylk8ju"]
+[gd_scene format=3 uid="uid://s3msqppyuw2j"]
 
-[ext_resource type="Script" uid="uid://rii3cabxkdhf" path="res://addons/networked/components/debug/debug_feature.gd" id="1_a5a7j"]
-[ext_resource type="Script" uid="uid://d2p5bpcw6ym63" path="res://addons/networked/components/debug/debug_client.gd" id="1_ntds5"]
-[ext_resource type="StyleBox" uid="uid://bvpi6xar6fmbg" path="res://addons/networked/components/client/player_label_style_box.tres" id="2_tqbfj"]
+[ext_resource type="StyleBox" uid="uid://bvpi6xar6fmbg" path="res://addons/networked/components/client/player_label_style_box.tres" id="1_qsfa6"]
 
-[node name="DebugClientHUD" type="Control" unique_id=647806448]
+[node name="ClientHUD" type="Control" unique_id=647806448]
 layout_mode = 3
 anchors_preset = 0
-script = ExtResource("1_ntds5")
+scale = Vector2(0.15, 0.15)
 metadata/_edit_group_ = true
-
-[node name="DebugFeature" type="Node" parent="." unique_id=602961585]
-script = ExtResource("1_a5a7j")
-metadata/_custom_type_script = "uid://rii3cabxkdhf"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=106050822]
 layout_mode = 1
@@ -48,7 +42,7 @@ offset_right = 28.5
 offset_bottom = 22.5
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = ExtResource("2_tqbfj")
+theme_override_styles/panel = ExtResource("1_qsfa6")
 
 [node name="UIDLabel" type="RichTextLabel" parent="VBoxContainer/Handle/PanelContainer" unique_id=1503307464]
 unique_name_in_owner = true
@@ -79,7 +73,7 @@ offset_right = 41.5
 offset_bottom = 22.5
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = ExtResource("2_tqbfj")
+theme_override_styles/panel = ExtResource("1_qsfa6")
 
 [node name="UsernameLabel" type="RichTextLabel" parent="VBoxContainer/Handle2/PanelContainer" unique_id=1915785924]
 unique_name_in_owner = true

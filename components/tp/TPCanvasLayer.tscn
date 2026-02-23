@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bs4ebh48fcoxt"]
 
+[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://addons/networked/components/tp/canvas_layer.gd" id="1_jetau"]
 [ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="1_tc7ab"]
-[ext_resource type="Script" uid="uid://cu3ournr7q7se" path="res://addons/networked/core/peer/client/transition_anim.gd" id="2_jetau"]
 
 [sub_resource type="GDScript" id="GDScript_mpvoh"]
 script/source = "extends TextureProgressBar
@@ -44,8 +44,11 @@ _data = {
 &"tp": SubResource("Animation_ifkpp")
 }
 
-[node name="TPCanvasLayer" type="CanvasLayer" unique_id=1002194750]
+[node name="TPCanvasLayer" type="CanvasLayer" unique_id=1002194750 node_paths=PackedStringArray("transition_progress", "transition_anim")]
 layer = 9999
+script = ExtResource("1_jetau")
+transition_progress = NodePath("TransitionProgress")
+transition_anim = NodePath("TransitionAnim")
 
 [node name="TransitionProgress" type="TextureProgressBar" parent="." unique_id=367840752]
 unique_name_in_owner = true
@@ -70,4 +73,3 @@ process_mode = 3
 root_node = NodePath("../..")
 libraries/ = SubResource("AnimationLibrary_33snq")
 blend_times = [&"tp", &"tp", 1.0]
-script = ExtResource("2_jetau")

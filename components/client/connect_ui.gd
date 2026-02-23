@@ -2,27 +2,21 @@ extends CanvasLayer
 
 @onready var server_ip_edit: TextEdit = %ServerIpEdit
 @onready var username_edit: TextEdit = %UsernameEdit
-var _hide_on_connect := false
+
 
 @export_file var menu_file: String
 
-func _ready() -> void:
-	if "--server" in OS.get_cmdline_args():
-		visible = false
 
+func _on_join_button_pressed() -> void:	
+	var username := username_edit.text
+	var scene_path := owner.owner.scene_file_path
+	var url := server_ip_edit.text
+	
+	var client_data := MultiplayerClientData.new()
+	client_data.username = username
+	client_data.scene_path = scene_path
+	client_data.url = url
 
-func on_connected_to_server() -> void:
-	if _hide_on_connect:
-		visible = false
-
-
-func _on_join_button_pressed() -> void:
-	var server_address := server_ip_edit.text
-	#var username := username_edit.text
-	#_hide_on_connect = true
-	#Server.backend.peer_reset_state()
-	#var err: Error = await Client.connect_client(server_address, username)
-	#if err != OK:
-		#push_warning("Connection failed: %s" % error_string(err))
-		#_hide_on_connect = false
-	#get_tree().change_scene_to_file(menu_file)
+	assert(get_tree().current_scene is MultiplayerNetwork)
+	var network: MultiplayerNetwork = get_tree().current_scene
+	network.configure(client_data)

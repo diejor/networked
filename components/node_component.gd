@@ -4,20 +4,14 @@ extends Node
 @onready var state_sync: StateSynchronizer = %StateSynchronizer
 
 var api: SceneMultiplayer:
-	get: return multiplayer as SceneMultiplayer
+	get: return multiplayer
 var lobby_manager: MultiplayerLobbyManager:
-	get: return get_node((multiplayer as SceneMultiplayer).root_path)
+	get: return get_node(api.root_path)
 
-var transition_player: TransitionPlayer:
+var tp_layer: TPLayer:
 	get:
 		if not multiplayer.is_server():
-			return lobby_manager.tp_canvas.get_node("%TransitionAnim")
-		return null
-
-var transition_progress: TextureProgressBar:
-	get: 
-		if not multiplayer.is_server():
-			return lobby_manager.get_node("%TransitionProgress")
+			return lobby_manager.tp_layer
 		return null
 
 

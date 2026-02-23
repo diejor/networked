@@ -1,12 +1,16 @@
 class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
+signal configured
+
 const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
-const TP_CANVAS_LAYER = preload("uid://bs4ebh48fcoxt")
 
-var tp_canvas: CanvasLayer
+@export var tp_layer: TPLayer:
+	set(layer):
+		configured.connect(layer.configured.emit)
+		tp_layer = layer
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
@@ -19,10 +23,26 @@ var lobbies: Array[String]:
 			clear_spawnable_scenes()
 		return lobbies
 
+
+func _init() -> void:
+	configured.connect(_on_configured)
+
+
 func _ready() -> void:
 	spawn_function = spawn_lobby
 	spawn_path = "."
 	add_to_group("lobby_managers")
+
+
+func _on_lobby_spawned(node: Node) -> void:
+	var lobby := node as Lobby
+	active_lobbies[lobby.level.name] = lobby
+
+
+func _on_lobby_despawned(node: Node) -> void:
+	var lobby := node as Lobby
+	active_lobbies.erase(lobby.level.name)
+
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
@@ -39,7 +59,8 @@ func spawn_lobby(level_file_path: String) -> Node:
 	var lobby: Lobby = lobby_scene.instantiate()
 	
 	lobby.level = level
-	active_lobbies[level.name] = lobby
+	lobby.tree_entered.connect(_on_lobby_spawned.bind(lobby))
+	lobby.tree_exiting.connect(_on_lobby_despawned.bind(lobby))
 	
 	return lobby
 
@@ -53,7 +74,15 @@ func request_join_player(
 		client.player_joined.emit(client_data)
 
 
+func _on_server_disconnected() -> void:
+	for lobby: Lobby in active_lobbies.values():
+		lobby.get_parent().remove_child(lobby)
+
+
 func _on_configured() -> void:
+	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
+		multiplayer.server_disconnected.connect(_on_server_disconnected)
+	
 	if multiplayer.is_server():
 		var debug_viewports: ViewportDebug = VIEWPORTS_DEBUG.instantiate()
 		child_entered_tree.connect(debug_viewports._on_node_entered)
@@ -61,8 +90,3 @@ func _on_configured() -> void:
 		add_child(debug_viewports)
 		
 		spawn_lobbies()
-	else:
-		tp_canvas = TP_CANVAS_LAYER.instantiate()
-		add_child(tp_canvas)
-		tp_canvas.owner = self
-	pass

@@ -2,24 +2,38 @@ class_name MultiplayerNetwork
 extends Node
 
 
-@export var client: MultiplayerTree
+@export var client: MultiplayerTree:
+	set(peer):
+		peer.multiplayer_api.server_disconnected.connect(close_server)
+		client = peer
 
 ##
 @export_group("Debug")
 @export var init_client_data: MultiplayerClientData
 @export_group("", "")
 
+var server: MultiplayerTree
+
+
 func is_current_scene() -> bool:
 	return (Engine.get_main_loop() as SceneTree).current_scene == self
 
+
 func _ready() -> void:
+	# detatch node because is probably meant to be configured before calling
+	# `change_scene_to_node`
 	if not is_current_scene():
 		owner.remove_child.call_deferred(self)
 	
+	# immediately start if `init_client_data` is provided, should only be used in 
+	# debug casess.
 	if init_client_data:
+		push_warning("Starting `MultiplayerNetwork` with debug `init_client_data`.")
 		configure(init_client_data)
 		if not is_current_scene():
+			owner.remove_child.call_deferred(self)
 			get_tree().change_scene_to_node.call_deferred(self)
+
 
 func ensure_configured() -> void:
 	assert(get_tree().scene_changed.is_connected(connect_player), "`%s` \
@@ -27,6 +41,7 @@ should be called before changing to `%s`." % [configure.get_method(), name])
 
 
 func configure(client_data: MultiplayerClientData) -> void:
+	await disconnect_player()
 	validate_web()
 	
 	var scene_tree := Engine.get_main_loop() as SceneTree
@@ -41,8 +56,13 @@ func validate_web() -> void:
 		client.backend = LocalLoopbackBackend.new()
 
 
+func close_server() -> void:
+	if server:
+		remove_child(server)
+
+
 func host_server() -> void:
-	var server: MultiplayerTree = client.duplicate()
+	server = client.duplicate()
 	server.is_server = true
 	server.name = "Server"
 	add_child(server)
@@ -59,8 +79,9 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
 	assert(client_data.scene_path)
-
-	if client_data.url.is_empty():
+	
+	var url := client_data.url
+	if url.is_empty() or "localhost" in url or "127.0.0.1" in url:
 		host_server()
 		
 	var client_err: Error = await client.join("localhost", client_data.username)
@@ -73,3 +94,10 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()
 	)
+
+
+func disconnect_player() -> void:
+	if client.multiplayer_api.has_multiplayer_peer():
+		SaveComponent.save_game()
+		client.multiplayer_peer.close()
+		await client.multiplayer_api.server_disconnected

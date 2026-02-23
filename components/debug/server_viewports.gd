@@ -8,6 +8,12 @@ var lobbies: Dictionary[StringName, World2D]
 var client_lobbies: Array:
 	get:
 		for managers in get_tree().get_nodes_in_group("lobby_managers"):
+			if not is_instance_valid(managers.multiplayer) or not managers.multiplayer.has_multiplayer_peer():
+				continue
+			
+			if managers.multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
+				continue
+				
 			if not managers.multiplayer.is_server():
 				return managers.get_children()
 		return []
@@ -49,6 +55,9 @@ func _on_node_exited(node: Node) -> void:
 
 
 func _on_tab_changed(tab: int) -> void:
+	if tab < 0:
+		return
+		
 	var lobby_name := lobbies_tab.get_tab_title(tab)
 	if not lobby_name == "Client":
 		for child in client_lobbies:

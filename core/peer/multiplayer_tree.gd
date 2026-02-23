@@ -12,7 +12,10 @@ var is_server: bool
 	set(value):
 		backend = value.duplicate()
 
-@export var lobby_manager: MultiplayerLobbyManager
+@export var lobby_manager: MultiplayerLobbyManager:
+	set(manager):
+		configured.connect(manager.configured.emit)
+		lobby_manager = manager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -22,24 +25,31 @@ var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend else null
 
 var uid: int:
-	get: return multiplayer_api.get_unique_id() if multiplayer_api else 0
+	get:
+		if is_instance_valid(multiplayer):
+			return multiplayer_api.get_unique_id()
+		return 0
 
 
 func _init() -> void:
 	configured.connect(_on_configured)
+	tree_exiting.connect(_on_exiting)
 
-func _ready() -> void:
-	configured.connect(lobby_manager._on_configured)
-	
+func _on_exiting() -> void:
+	backend.peer_reset_state()
 
 
 func _on_configured() -> void:
 	# These fire for both host and clients
-	multiplayer_api.peer_connected.connect(_on_peer_connected)
-	multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
+	if not multiplayer_api.peer_connected.is_connected(_on_peer_connected):
+		multiplayer_api.peer_connected.connect(_on_peer_connected)
+	
+	if not multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
+		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
 	
 	# This only fires on clients. It's safe to connect on the host; it just won't trigger.
-	multiplayer_api.connected_to_server.connect(_on_connected_to_server)
+	if not multiplayer_api.connected_to_server.is_connected(_on_connected_to_server):
+		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
 
 
 func host() -> Error:
