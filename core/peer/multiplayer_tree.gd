@@ -68,7 +68,10 @@ func join(server_address: String, username: String) -> Error:
 	
 	if connection_code == OK:
 		_config_api()
-		await connected_to_server
+		
+		var timer := get_tree().create_timer(1.)
+		if await Async.timeout(connected_to_server, timer):
+			return Error.ERR_CANT_CONNECT
 		
 	return connection_code
 
@@ -96,3 +99,6 @@ func _on_connected_to_server() -> void:
 func _process(dt: float) -> void:
 	if backend:
 		backend.poll(dt)
+
+func is_online() -> bool:
+	return not multiplayer_peer is OfflineMultiplayerPeer and multiplayer_api.has_multiplayer_peer()

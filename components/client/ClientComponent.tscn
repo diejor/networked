@@ -21,6 +21,7 @@ grow_horizontal = 2
 grow_vertical = 2
 client = NodePath("..")
 
-[node name="ConnectServerUI" parent="." unique_id=685856177 instance=ExtResource("3_npy7m")]
+[node name="ConnectServerUI" parent="." unique_id=685856177 node_paths=PackedStringArray("client") instance=ExtResource("3_npy7m")]
+client = NodePath("..")
 
 [connection signal="player_joined" from="." to="." method="_on_player_joined"]

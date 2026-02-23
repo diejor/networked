@@ -65,9 +65,11 @@ func request_teleport(
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	
 	var state: StateSynchronizer = player.get_node_or_null("%StateSynchronizer")
-	if state: # TODO: add a timeout for the case the client never synchronizes
-		await state.delta_synchronized # Make sure the player has been updated
-	multiplayer
+	if state:
+		var timer := get_tree().create_timer(3.0)
+		if await Async.timeout(state.delta_synchronized, timer):
+			push_error("Client couldn't synchronize while teleporting.")
+	
 	var to_lobby: Lobby = lobby_manager.active_lobbies[tp_component.current_scene_name]
 	
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:

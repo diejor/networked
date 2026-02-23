@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://buvcsv4w31hx"]
 
-[ext_resource type="Script" uid="uid://b0jcwdftlpqke" path="res://addons/networked/components/client/connect_ui.gd" id="1_0nyt2"]
+[ext_resource type="Script" uid="uid://djoja7uwpos57" path="res://addons/networked/components/client/connect_server_ui.gd" id="1_uhn4w"]
+[ext_resource type="PackedScene" uid="uid://4rqj7gr6xifw" path="res://addons/networked/core/peer/client/ConnectToServer.tscn" id="2_uhn4w"]
 
 [node name="ConnectServerUI" type="CanvasLayer" unique_id=99213129]
-script = ExtResource("1_0nyt2")
-menu_file = "uid://dfvoo60p3ut6n"
+script = ExtResource("1_uhn4w")
 
 [node name="TabContainer" type="TabContainer" parent="." unique_id=927752352]
 offset_left = 15.0
@@ -17,57 +17,7 @@ current_tab = 0
 layout_mode = 2
 metadata/_tab_index = 0
 
-[node name="Connect To Server" type="MarginContainer" parent="TabContainer" unique_id=638931775]
+[node name="Connect To Server" parent="TabContainer" unique_id=628941669 instance=ExtResource("2_uhn4w")]
+unique_name_in_owner = true
 visible = false
-clip_contents = true
 layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 16
-metadata/_tab_index = 1
-
-[node name="VBox" type="VBoxContainer" parent="TabContainer/Connect To Server" unique_id=2031782191]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 16
-
-[node name="HBox2" type="HBoxContainer" parent="TabContainer/Connect To Server/VBox" unique_id=636526851]
-layout_mode = 2
-theme_override_constants/separation = 39
-
-[node name="UsernameEdit" type="TextEdit" parent="TabContainer/Connect To Server/VBox/HBox2" unique_id=1254392028]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 32)
-layout_mode = 2
-focus_next = NodePath("../../HBox/ServerIpEdit")
-placeholder_text = "Username"
-tab_input_mode = false
-
-[node name="HBox" type="HBoxContainer" parent="TabContainer/Connect To Server/VBox" unique_id=730487991]
-layout_mode = 2
-theme_override_constants/separation = 39
-
-[node name="ServerIpEdit" type="TextEdit" parent="TabContainer/Connect To Server/VBox/HBox" unique_id=1493793581]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_next = NodePath("../JoinButton")
-placeholder_text = "Enter server IP"
-tab_input_mode = false
-
-[node name="JoinButton" type="Button" parent="TabContainer/Connect To Server/VBox/HBox" unique_id=408239121]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 0.25
-text = "Join"
-
-[node name="RichTextLabel" type="RichTextLabel" parent="TabContainer/Connect To Server/VBox" unique_id=1893494439]
-layout_mode = 2
-bbcode_enabled = true
-text = "Servers
-	[color=gray]ws.diejor.tech[/color]"
-fit_content = true
-
-[connection signal="pressed" from="TabContainer/Connect To Server/VBox/HBox/JoinButton" to="." method="_on_join_button_pressed"]

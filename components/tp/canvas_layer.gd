@@ -17,9 +17,6 @@ func _init() -> void:
 	configured.connect(_on_multiplayer_configured)
 
 
-func _ready() -> void:
-	transition_progress.value = 0.0
-
 func _on_multiplayer_configured() -> void:
 	if multiplayer.is_server():
 		queue_free()
