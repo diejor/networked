@@ -1,8 +1,7 @@
 class_name TPComponent
 extends NodeComponent
 
-var owner2d: Node2D:
-	get: return owner as Node2D
+signal teleport_committed
 
 @export_file var starting_scene_path: String
 
@@ -16,6 +15,12 @@ var current_scene: String = "":
 var current_scene_name: String:
 	get: 
 		return get_scene_name(current_scene)
+
+var owner2d: Node2D:
+	get: return owner as Node2D
+
+
+var _tp_mutex := AsyncMutex.new()
 
 
 static func get_scene_name(path_or_uid: String) -> String:
@@ -34,25 +39,36 @@ func _enter_tree() -> void:
 	if current_scene.is_empty():
 		current_scene = starting_scene_path
 
+
 func teleport(tp_id: String, new_scene: String) -> void:
-	var previous_scene_name: String = current_scene_name
+	await _tp_mutex.lock()
+
+	var from_scene := current_scene_name
 	current_scene = new_scene
-	var tp_path: String = "%" + tp_id + "/Marker2D"
-	
+	var tp_path := "%" + tp_id + "/Marker2D"
+
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
-	
-	await tp_layer.teleport_out_animation()
-	
+
+	await tp_layer.teleport_out()
+
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,
-		previous_scene_name,
+		from_scene,
 		tp_path
 	)
-	
-	state_sync.only_server()
+
+	var timer := get_tree().create_timer(5.0)
+	if await Async.timeout(teleport_committed, timer):
+		await tp_layer.teleport_in_animation()
+		_tp_mutex.unlock()
+		push_error("Teleport commit timed out.")
+		return
+
+	_tp_mutex.unlock()
+
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(
@@ -78,6 +94,7 @@ func request_teleport(
 		if event == player.tree_exiting:
 			player.request_ready()
 			tp_component.teleported(to_lobby.level, tp_path)
+			
 	
 	var from_spawn := from_lobby.synchronizer._on_spawned
 	var to_spawn := to_lobby.synchronizer._on_spawned
@@ -90,11 +107,22 @@ func request_teleport(
 	player.reparent(to_lobby.level)
 	player.tree_entered.disconnect(flip)
 
+
 func teleported(scene: Node, _tp_path: String) -> void:
 	if scene:
 		var tp_node: Marker2D = scene.get_node_or_null(_tp_path)
 		if tp_node:
 			owner2d.global_position = tp_node.global_position
+	
+	var teleport_success := func() -> void:
+		assert(is_inside_tree(), "`teleported` was called when `is_inside_tree = false`.")
+		_rpc_teleport_committed.rpc_id(owner.get_multiplayer_authority())
+	
+	teleport_success.call_deferred()
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_teleport_committed() -> void:
+	teleport_committed.emit()
 
 
 func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:

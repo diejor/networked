@@ -6,12 +6,9 @@ extends Node
 var api: SceneMultiplayer:
 	get: return multiplayer
 var lobby_manager: MultiplayerLobbyManager:
-	get: return get_node(api.root_path)
-
-var tp_layer: TPLayer:
 	get:
-		if not multiplayer.is_server():
-			return lobby_manager.tp_layer
+		if multiplayer:
+			return get_node(api.root_path)
 		return null
 
 
@@ -19,6 +16,14 @@ var lobby: Lobby:
 	get:
 		if owner and owner.owner:
 			return owner.owner.owner
+		return null
+
+var tp_layer: TPLayerAPI:
+	get:
+		if not is_inside_tree():
+			return null
+		if not multiplayer.is_server():
+			return lobby_manager.tp_layer
 		return null
 
 

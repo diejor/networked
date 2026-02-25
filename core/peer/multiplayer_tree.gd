@@ -11,6 +11,9 @@ var is_server: bool
 @export var backend: BackendPeer:
 	set(value):
 		backend = value.duplicate()
+		multiplayer_api.peer_connected.connect(_on_peer_connected)
+		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
+		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
 
 @export var lobby_manager: MultiplayerLobbyManager:
 	set(manager):
@@ -32,24 +35,10 @@ var uid: int:
 
 
 func _init() -> void:
-	configured.connect(_on_configured)
 	tree_exiting.connect(_on_exiting)
 
 func _on_exiting() -> void:
 	backend.peer_reset_state()
-
-
-func _on_configured() -> void:
-	# These fire for both host and clients
-	if not multiplayer_api.peer_connected.is_connected(_on_peer_connected):
-		multiplayer_api.peer_connected.connect(_on_peer_connected)
-	
-	if not multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
-		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
-	
-	# This only fires on clients. It's safe to connect on the host; it just won't trigger.
-	if not multiplayer_api.connected_to_server.is_connected(_on_connected_to_server):
-		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
 
 
 func host() -> Error:
@@ -100,5 +89,7 @@ func _process(dt: float) -> void:
 	if backend:
 		backend.poll(dt)
 
+
 func is_online() -> bool:
-	return not multiplayer_peer is OfflineMultiplayerPeer and multiplayer_api.has_multiplayer_peer()
+	return (not multiplayer_peer is OfflineMultiplayerPeer 
+		and multiplayer_api.has_multiplayer_peer())

@@ -21,3 +21,5 @@ metadata/_tab_index = 0
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+
+[connection signal="connect_player" from="TabContainer/Connect To Server" to="." method="_on_connect_player"]

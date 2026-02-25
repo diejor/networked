@@ -3,11 +3,14 @@ extends MultiplayerSpawner
 
 signal configured
 
+signal lobby_spawned(lobby: Lobby)
+signal lobby_despawned(lobby: Lobby)
+
 const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 
-@export var tp_layer: TPLayer:
+@export var tp_layer: TPLayerAPI:
 	set(layer):
 		configured.connect(layer.configured.emit)
 		tp_layer = layer
@@ -26,6 +29,8 @@ var lobbies: Array[String]:
 
 func _init() -> void:
 	configured.connect(_on_configured)
+	lobby_spawned.connect(_on_lobby_spawned)
+	lobby_despawned.connect(_on_lobby_despawned)
 
 
 func _ready() -> void:
@@ -59,8 +64,8 @@ func spawn_lobby(level_file_path: String) -> Node:
 	var lobby: Lobby = lobby_scene.instantiate()
 	
 	lobby.level = level
-	lobby.tree_entered.connect(_on_lobby_spawned.bind(lobby))
-	lobby.tree_exiting.connect(_on_lobby_despawned.bind(lobby))
+	lobby.tree_entered.connect(lobby_spawned.emit.bind(lobby))
+	lobby.tree_exited.connect(lobby_despawned.emit.bind(lobby))
 	
 	return lobby
 
