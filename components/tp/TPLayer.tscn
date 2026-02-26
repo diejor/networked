@@ -1,23 +1,20 @@
 [gd_scene format=3 uid="uid://bs4ebh48fcoxt"]
 
 [ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://addons/networked/components/tp/tp_layer.gd" id="1_jetau"]
-[ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="1_tc7ab"]
+
+[sub_resource type="Gradient" id="Gradient_uei8g"]
+colors = PackedColorArray(0.9019608, 0.9019608, 0.9019608, 1, 0.50980395, 0.7058824, 0.87058824, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_uei8g"]
+frequency = 0.0008
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_fir41"]
+noise = SubResource("FastNoiseLite_uei8g")
+color_ramp = SubResource("Gradient_uei8g")
 
 [sub_resource type="Animation" id="Animation_fir41"]
 resource_name = "RESET"
 length = 0.001
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("TPLayer/TransitionProgress:value")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 0,
-"values": [100.0]
-}
 
 [sub_resource type="Animation" id="Animation_ifkpp"]
 resource_name = "tp"
@@ -73,7 +70,7 @@ mouse_filter = 2
 value = 100.0
 fill_mode = 8
 nine_patch_stretch = true
-texture_progress = ExtResource("1_tc7ab")
+texture_progress = SubResource("NoiseTexture2D_fir41")
 metadata/_edit_use_anchors_ = true
 
 [node name="TransitionAnim" type="AnimationPlayer" parent="." unique_id=765122609]

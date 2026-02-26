@@ -81,7 +81,9 @@ func request_join_player(
 
 func _on_server_disconnected() -> void:
 	for lobby: Lobby in active_lobbies.values():
-		lobby.get_parent().remove_child(lobby)
+		if lobby.is_inside_tree():
+			lobby.get_parent().remove_child(lobby)
+		lobby.queue_free()
 
 
 func _on_configured() -> void:

@@ -5,6 +5,7 @@ signal configured()
 signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 signal connected_to_server()
+signal server_disconnected()
 
 var is_server: bool
 
@@ -14,6 +15,7 @@ var is_server: bool
 		multiplayer_api.peer_connected.connect(_on_peer_connected)
 		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
 		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
+		multiplayer_api.server_disconnected.connect(_on_server_disconnected)
 
 @export var lobby_manager: MultiplayerLobbyManager:
 	set(manager):
@@ -58,7 +60,7 @@ func join(server_address: String, username: String) -> Error:
 	if connection_code == OK:
 		_config_api()
 		
-		var timer := get_tree().create_timer(1.)
+		var timer := get_tree().create_timer(2.)
 		if await Async.timeout(connected_to_server, timer):
 			return Error.ERR_CANT_CONNECT
 		
@@ -84,6 +86,9 @@ func _on_connected_to_server() -> void:
 	set_multiplayer_authority(uid, false) 
 	connected_to_server.emit()
 
+
+func _on_server_disconnected() -> void:
+	server_disconnected.emit()
 
 func _process(dt: float) -> void:
 	if backend:

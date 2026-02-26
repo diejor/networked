@@ -7,6 +7,7 @@
 [node name="DebugClientHUD" type="Control" unique_id=647806448]
 layout_mode = 3
 anchors_preset = 0
+pivot_offset_ratio = Vector2(0.5, 0.5)
 script = ExtResource("1_ntds5")
 metadata/_edit_group_ = true
 
@@ -27,6 +28,7 @@ offset_right = 94.0
 offset_bottom = 47.0
 grow_horizontal = 2
 grow_vertical = 2
+pivot_offset_ratio = Vector2(0.5, 0.5)
 theme_override_constants/separation = 32
 alignment = 2
 

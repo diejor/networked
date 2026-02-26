@@ -5,7 +5,7 @@ extends Node
 @export var client: MultiplayerTree:
 	set(peer):
 		client = peer
-		client.multiplayer_api.server_disconnected.connect(close_server)
+		client.server_disconnected.connect(close_server)
 		
 		if DisplayServer.get_name() == "headless":
 			client.queue_free()
@@ -36,6 +36,8 @@ func _ready() -> void:
 func close_server() -> void:
 	if server:
 		server.get_parent().remove_child(server)
+		server.queue_free()
+		server = null
 
 
 func host_server() -> void:
@@ -98,12 +100,14 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		client_data.serialize()
 	)
 
-
 func disconnect_player() -> void:
-	if client.is_online():
-		SaveComponent.save_game()
-		client.multiplayer_peer.close()
-		
-		var timer := get_tree().create_timer(3.0)
-		if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
-			push_error("Couldn't disconnect from server.")
+	if not client.is_online():
+		return
+
+	SaveComponent.save_game()
+	
+	client.multiplayer_peer.close()
+	
+	var timer := get_tree().create_timer(3.0)
+	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
+		push_error("Couldn't disconnect from server.")
