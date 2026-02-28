@@ -94,7 +94,6 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		push_warning("Failed: %s" % error_string(client_err))
 		return
 	
-	client_data.peer_id = client.uid
 	client.lobby_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()

@@ -1,0 +1,84 @@
+[gd_scene format=3 uid="uid://bcw2ew76icygp"]
+
+[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://addons/networked/components/tp/tp_layer.gd" id="1_jetau"]
+
+[sub_resource type="Gradient" id="Gradient_37typ"]
+colors = PackedColorArray(0.23921569, 0.30980393, 0.5176471, 1, 0.7529412, 0.84705883, 1, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_tc7ab"]
+frequency = 0.0003
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_jetau"]
+noise = SubResource("FastNoiseLite_tc7ab")
+color_ramp = SubResource("Gradient_37typ")
+
+[sub_resource type="GDScript" id="GDScript_mpvoh"]
+script/source = "extends TextureProgressBar
+"
+
+[sub_resource type="Animation" id="Animation_tc7ab"]
+resource_name = "RESET"
+
+[sub_resource type="Animation" id="Animation_ifkpp"]
+resource_name = "tp"
+length = 1.5
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("TPCanvasLayer/TransitionProgress:value")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 100.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("TPCanvasLayer/TransitionProgress:modulate")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_33snq"]
+_data = {
+&"RESET": SubResource("Animation_tc7ab"),
+&"tp": SubResource("Animation_ifkpp")
+}
+
+[node name="TPCanvasLayer" type="CanvasLayer" unique_id=1002194750 node_paths=PackedStringArray("transition_progress", "transition_anim")]
+layer = 9999
+script = ExtResource("1_jetau")
+transition_progress = NodePath("TransitionProgress")
+transition_anim = NodePath("TransitionAnim")
+
+[node name="TransitionProgress" type="TextureProgressBar" parent="." unique_id=367840752]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+fill_mode = 8
+nine_patch_stretch = true
+texture_progress = SubResource("NoiseTexture2D_jetau")
+script = SubResource("GDScript_mpvoh")
+metadata/_edit_use_anchors_ = true
+
+[node name="TransitionAnim" type="AnimationPlayer" parent="." unique_id=765122609]
+unique_name_in_owner = true
+process_mode = 3
+root_node = NodePath("../..")
+libraries/ = SubResource("AnimationLibrary_33snq")
+blend_times = [&"tp", &"tp", 0.5]

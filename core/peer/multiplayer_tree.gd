@@ -29,12 +29,6 @@ var multiplayer_api: SceneMultiplayer:
 var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend else null
 
-var uid: int:
-	get:
-		if is_instance_valid(multiplayer):
-			return multiplayer_api.get_unique_id()
-		return 0
-
 
 func _init() -> void:
 	tree_exiting.connect(_on_exiting)
@@ -81,9 +75,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	print("Peer (%d) connected to server." % uid)
+	var peer_id := multiplayer_peer.get_unique_id()
+	print("Peer (%d) connected to server." % peer_id)
 
-	set_multiplayer_authority(uid, false) 
+	set_multiplayer_authority(peer_id, false) 
 	connected_to_server.emit()
 
 

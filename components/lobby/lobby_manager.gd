@@ -75,6 +75,7 @@ func request_join_player(
 	client_data_bytes: PackedByteArray) -> void:
 	var client_data: MultiplayerClientData = MultiplayerClientData.new()
 	client_data.deserialize(client_data_bytes)
+	client_data.peer_id = multiplayer.get_remote_sender_id()
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)
 
