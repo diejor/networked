@@ -1,9 +1,7 @@
-@tool
 class_name StateSynchronizer
 extends MultiplayerSynchronizer
 
-@onready var spawn_sync: SpawnSynchronizer:
-	get: return $SpawnSynchronizer
+@export var spawn_sync: SpawnSynchronizer
 
 
 func _init() -> void:
@@ -11,13 +9,6 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	# Fixes weird behavior where `replication_config` is shared between scene
-	# instances
-	
-	if Engine.is_editor_hint():
-		replication_config = replication_config.duplicate(true)
-		return
-	
 	assert(root_path == get_path_to(owner))
 	add_visibility_filter(scene_visibility_filter)
 	spawn_sync.add_visibility_filter(scene_visibility_filter)

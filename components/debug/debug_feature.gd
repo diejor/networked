@@ -1,14 +1,15 @@
 class_name DebugFeature
-extends Node
+extends Object
 
-func _enter_tree() -> void:
+static func free_if_debug(node: Node) -> void:
 	if Engine.is_editor_hint():
 		return
 	
 	if not OS.is_debug_build():
-		owner.queue_free()
+		node.queue_free()
 		return
 	
-	if not get_tree().debug_collisions_hint:
-		owner.queue_free()
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if not scene_tree.debug_collisions_hint:
+		node.queue_free()
 		return

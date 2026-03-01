@@ -3,6 +3,8 @@ extends CanvasLayer
 @export var client: ClientComponent
 @onready var connect_to_server: ConnectToServerUI = %"Connect To Server"
 
+func _init() -> void:
+	DebugFeature.free_if_debug(self)
 
 func _ready() -> void:
 	connect_to_server.player_scene = client.owner.scene_file_path

@@ -17,7 +17,11 @@ var client_lobbies: Array:
 			if not managers.multiplayer.is_server():
 				return managers.get_children()
 		return []
-	
+
+
+func _init() -> void:
+	DebugFeature.free_if_debug(self)
+
 
 func _ready() -> void:
 	add_lobby("Client", get_tree().root.world_2d)

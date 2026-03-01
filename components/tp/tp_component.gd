@@ -52,7 +52,9 @@ func teleport(tp_id: String, new_scene: String) -> void:
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
 	await tp_layer.teleport_out()
-
+	
+	state_sync.only_server()
+	
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,

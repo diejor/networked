@@ -19,7 +19,6 @@ func track_player(player: Node) -> void:
 	player.tree_exiting.connect(_on_despawned.bind(player))
 
 
-
 func update_clients() -> void:
 	for client: Node in tracked_nodes.keys():
 		update_client(client)
@@ -36,6 +35,7 @@ func connect_client(peer_id: int) -> void:
 	set_visibility_for(peer_id, true)
 	connected_clients[peer_id] = true
 	update_clients()
+
 
 func disconnect_client(peer_id: int) -> void:
 	connected_clients.erase(peer_id)

@@ -7,6 +7,9 @@ extends Control
 
 var original_pos: Vector2
 
+func _init() -> void:
+	DebugFeature.free_if_debug(self)
+
 func _enter_tree() -> void:
 	original_pos = position
 

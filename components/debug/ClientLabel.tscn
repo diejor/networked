@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://dui4l6oylk8ju"]
 
-[ext_resource type="Script" uid="uid://rii3cabxkdhf" path="res://addons/networked/components/debug/debug_feature.gd" id="1_a5a7j"]
 [ext_resource type="Script" uid="uid://d2p5bpcw6ym63" path="res://addons/networked/components/debug/debug_client.gd" id="1_ntds5"]
 [ext_resource type="StyleBox" uid="uid://bvpi6xar6fmbg" path="res://addons/networked/components/client/player_label_style_box.tres" id="2_tqbfj"]
 
@@ -10,10 +9,6 @@ anchors_preset = 0
 pivot_offset_ratio = Vector2(0.5, 0.5)
 script = ExtResource("1_ntds5")
 metadata/_edit_group_ = true
-
-[node name="DebugFeature" type="Node" parent="." unique_id=602961585]
-script = ExtResource("1_a5a7j")
-metadata/_custom_type_script = "uid://rii3cabxkdhf"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=106050822]
 layout_mode = 1
