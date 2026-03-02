@@ -1,4 +1,4 @@
-class_name MultiplayerLobbySynchronizer
+class_name LobbySynchronizer
 extends MultiplayerSynchronizer
 
 @export var connected_clients: Dictionary[int, bool]:
@@ -23,9 +23,9 @@ func update_clients() -> void:
 	for client: Node in tracked_nodes.keys():
 		update_client(client)
 
-func update_client(client: Node) -> void:
-	var state: StateSynchronizer = client.get_node("%StateSynchronizer")
-	state.update()
+func update_client(node: Node) -> void:
+	var client := ClientComponent.unwrap(node)
+	client.update_synchronizers()
 
 
 # Very important the order in which the client visibility is handled:
@@ -47,8 +47,32 @@ func disconnect_client(peer_id: int) -> void:
 
 func _on_spawned(node: Node) -> void:
 	tracked_nodes[node] = true
+	var syncs := get_synchronizers(node)
+	for sync in syncs:
+		sync.add_visibility_filter(scene_visibility_filter)
 	connect_client(node.get_multiplayer_authority())
 
 func _on_despawned(node: Node) -> void:
 	tracked_nodes.erase(node)
+	var syncs := get_synchronizers(node)
+	for sync in syncs:
+		sync.remove_visibility_filter(scene_visibility_filter)
 	disconnect_client(node.get_multiplayer_authority())
+
+func get_synchronizers(node: Node) -> Array[MultiplayerSynchronizer]:
+	var synchronizers: Array[MultiplayerSynchronizer] = []
+	synchronizers.assign(node.find_children("*", "MultiplayerSynchronizer"))
+	return synchronizers
+
+func scene_visibility_filter(peer_id: int) -> bool:
+	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return true
+		
+	# Not sure why we need to set to false when `peer_id` equals `0`, my guess is that
+	# setting it to true would mean that all `peer_id`s have `true` visibility,
+	# therefore, the filter would not be called for specific peer ids.
+	if peer_id == 0:
+		return false
+	
+	var res: bool = peer_id in connected_clients
+	return res

@@ -1,7 +1,6 @@
 class_name ClientComponent
 extends NodeComponent
 
-@warning_ignore("unused_signal")
 signal player_joined(client_data: MultiplayerClientData)
 
 @export_custom(PROPERTY_HINT_NONE, "replicated") 
@@ -87,3 +86,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()
+
+
+static func unwrap(node: Node) -> ClientComponent:
+	return node.get_node("%ClientComponent")

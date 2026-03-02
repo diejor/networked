@@ -10,43 +10,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	assert(root_path == get_path_to(owner))
-	add_visibility_filter(scene_visibility_filter)
-	spawn_sync.add_visibility_filter(scene_visibility_filter)
 	
 	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
 	if client.username.is_empty():
-		only_server()
-	
-	update_visibility()
-
-
-func only_server() -> void:
-	set_visibility_for(0, false)
-	spawn_sync.set_visibility_for(0, false)
-	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
-	spawn_sync.set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
-	update_visibility()
-
-
-func update(peer_id: int = 0) -> void:
-	update_visibility(peer_id)
-	spawn_sync.update_visibility(peer_id)
-
-
-func scene_visibility_filter(peer_id: int) -> bool:
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-		
-	# Not sure why we need to set to false when `peer_id` equals `0`, my guess is that
-	# setting it to true would mean that all peer ids have `true` visibility,
-	# therefore, the filter would not be called for specific peer ids.
-	if peer_id == 0:
-		return false
-	
-	var lobby: Lobby = owner.get_parent().get_parent()
-	var res: bool = peer_id in lobby.synchronizer.connected_clients
-	return res
-
-
-func _on_teleport() -> void:
-	only_server()
+		client.sync_only_server()

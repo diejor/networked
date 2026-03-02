@@ -53,7 +53,7 @@ func teleport(tp_id: String, new_scene: String) -> void:
 
 	await tp_layer.teleport_out()
 	
-	state_sync.only_server()
+	sync_only_server()
 	
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -85,7 +85,7 @@ func request_teleport(
 	var state: StateSynchronizer = player.get_node_or_null("%StateSynchronizer")
 	if state:
 		var timer := get_tree().create_timer(3.0)
-		if await Async.timeout(state.delta_synchronized, timer):
+		if await Async.timeout(tp_component.client_synchronized, timer):
 			push_error("Client couldn't synchronize while teleporting.")
 	
 	var to_lobby: Lobby = lobby_manager.active_lobbies[tp_component.current_scene_name]

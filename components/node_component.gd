@@ -1,6 +1,8 @@
 class_name NodeComponent
 extends Node
 
+signal client_synchronized
+
 @onready var state_sync: StateSynchronizer = %StateSynchronizer
 
 var api: SceneMultiplayer:
@@ -50,3 +52,31 @@ Add it through the editor by configuring `%s` replication config.\
 
 func _ready() -> void:
 	assert(assert_replicated())
+	var client_sync: MultiplayerSynchronizer = get_client_synchronizer()
+	if client_sync:
+		client_sync.delta_synchronized.connect(client_synchronized.emit)
+
+
+func update_synchronizers() -> void:
+	for sync in get_synchronizers():
+		sync.update_visibility()
+
+
+func sync_only_server() -> void:
+	for sync in get_synchronizers():
+		sync.set_visibility_for(0, false)
+		sync.set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
+		sync.update_visibility()
+
+
+func get_client_synchronizer() -> MultiplayerSynchronizer:
+	for sync in get_synchronizers():
+		if sync.get_multiplayer_authority() != MultiplayerPeer.TARGET_PEER_SERVER:
+			return sync
+	return null
+
+
+func get_synchronizers() -> Array[MultiplayerSynchronizer]:
+	var synchronizers: Array[MultiplayerSynchronizer] = []
+	synchronizers.assign(owner.find_children("*", "MultiplayerSynchronizer"))
+	return synchronizers

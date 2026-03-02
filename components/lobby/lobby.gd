@@ -1,7 +1,7 @@
 class_name Lobby
 extends Node
 
-@export var synchronizer: MultiplayerLobbySynchronizer
+@export var synchronizer: LobbySynchronizer
 
 var level: Node:
 	set(value):
@@ -23,6 +23,6 @@ func hook_spawn_signals(level: Node) -> void:
 		spawner.despawned.connect(synchronizer._on_despawned)
 
 func get_spawners(node: Node) -> Array[MultiplayerSpawner]:
-	var typed_spawners: Array[MultiplayerSpawner] = []
-	typed_spawners.assign(node.find_children("*", "MultiplayerSpawner"))
-	return typed_spawners
+	var spawners: Array[MultiplayerSpawner] = []
+	spawners.assign(node.find_children("*", "MultiplayerSpawner"))
+	return spawners
