@@ -2,16 +2,11 @@
 
 [ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/components/lobby/lobby.gd" id="1_4dcnm"]
 [ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/components/lobby/LobbySynchronizer.tscn" id="2_ooybb"]
-[ext_resource type="PackedScene" uid="uid://cpkq68rwbg6aw" path="res://addons/networked/components/lobby/LobbySpawner.tscn" id="3_v3bv0"]
 
-[node name="Lobby" type="Node2D" unique_id=46516096 node_paths=PackedStringArray("synchronizer", "spawner")]
+[node name="Lobby" type="Node2D" unique_id=46516096 node_paths=PackedStringArray("synchronizer")]
 script = ExtResource("1_4dcnm")
 synchronizer = NodePath("LobbySynchronizer")
-spawner = NodePath("LobbySpawner")
 
 [node name="LobbySynchronizer" parent="." unique_id=1201164589 instance=ExtResource("2_ooybb")]
 unique_name_in_owner = true
 root_path = NodePath("..")
-
-[node name="LobbySpawner" parent="." unique_id=280327472 instance=ExtResource("3_v3bv0")]
-unique_name_in_owner = true

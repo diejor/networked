@@ -32,8 +32,10 @@ the authority will not be set correctly." % [owner.name, _on_owner_tree_entered]
 
 	api.peer_disconnected.connect(_on_peer_disconnected)
 	
-	if is_multiplayer_authority() and not multiplayer.is_server():
-		transition_player.teleport_in_animation()
+	if not multiplayer.is_server() and is_multiplayer_authority():
+		tp_layer.teleport_in()
+
+
 
 func _on_owner_tree_entered() -> void:
 	assert(owner.name != "|")
@@ -80,7 +82,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	if multiplayer.is_server() and get_multiplayer_authority() == peer_id:
+	if multiplayer and multiplayer.is_server() and get_multiplayer_authority() == peer_id:
 		state_sync.only_server()
 		
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)

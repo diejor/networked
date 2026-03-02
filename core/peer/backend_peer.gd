@@ -27,7 +27,7 @@ func poll(_dt: float) -> void:
 		api.poll()
 
 func peer_reset_state() -> void:
-	if api.has_multiplayer_peer() and api.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+	if api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
-
-	api.multiplayer_peer = OfflineMultiplayerPeer.new()
+	
+	api.multiplayer_peer = null

@@ -7,6 +7,9 @@ var client_peer: WebRTCMultiplayerPeer
 var pc_server: WebRTCPeerConnection
 var pc_client: WebRTCPeerConnection
 
+func has_live_server() -> bool:
+	return server_peer and server_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED
+
 func init_server_side() -> void:
 	if server_peer: return
 
@@ -75,6 +78,15 @@ func poll() -> void:
 		client_peer.poll()
 
 func reset() -> void:
+	if server_peer:
+		server_peer.close()
+	if client_peer:
+		client_peer.close()
+	if pc_server:
+		pc_server.close()
+	if pc_client:
+		pc_client.close()
+
 	server_peer = null
 	client_peer = null
 	pc_server = null

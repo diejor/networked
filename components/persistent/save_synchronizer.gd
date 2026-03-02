@@ -3,14 +3,17 @@ extends MultiplayerSynchronizer
 
 signal state_changed
 
+var save_component: SaveComponent:
+	get:
+		return get_parent()
 
 var save_container: SaveContainer:
 	get:
-		@warning_ignore("unsafe_property_access")
-		return get_parent().save_container
+		return save_component.save_container
+
 
 var scene_owner: Node:
-	get: return get_parent().get_parent().owner
+	get: return save_component.owner
 
 var _base_sync: MultiplayerSynchronizer:
 	get: return owner.get_node("%StateSynchronizer")

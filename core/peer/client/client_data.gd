@@ -3,23 +3,24 @@ extends Serde
 
 @export var username: StringName
 @export_file var scene_path: String
+@export var url: String
 var peer_id: int
 
 func serialize() -> PackedByteArray:
-	assert(not username.is_empty())
-	assert(not scene_path.is_empty())
 	return var_to_bytes({
 		username=username, 
-		scene_path=scene_path, 
+		scene_path=scene_path,
+		url=url,
 		peer_id=peer_id
 	})
 
 func deserialize(bytes: PackedByteArray) -> void:
 	var data := bytes_to_var(bytes)
 	assert(data)
+	
 	username = data.username
 	scene_path = data.scene_path
-	peer_id = data.peer_id
-	assert(not username.is_empty())
-	assert(not scene_path.is_empty())
-	assert(peer_id != 0)
+	if "url" in data:
+		data.url = url
+	if "peer_id" in data:
+		data.peer_id = peer_id

@@ -1,25 +1,57 @@
 class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
+signal configured
+
+signal lobby_spawned(lobby: Lobby)
+signal lobby_despawned(lobby: Lobby)
+
 const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
+const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 
-const TP_CANVAS_LAYER = preload("uid://bs4ebh48fcoxt")
-var tp_canvas: CanvasLayer
+@export var tp_layer: TPLayerAPI:
+	set(layer):
+		configured.connect(layer.configured.emit)
+		tp_layer = layer
 
 var active_lobbies: Dictionary[StringName, Lobby]
 
-var _config: NetworkConfig
+var lobbies: Array[String]:
+	get:
+		if lobbies.is_empty():
+			assert(get_spawnable_scene_count() > 0, "Add lobbies to the spawn list.")
+			for scene_idx in get_spawnable_scene_count():
+				lobbies.append(get_spawnable_scene(scene_idx))
+			clear_spawnable_scenes()
+		return lobbies
+
+
+func _init() -> void:
+	configured.connect(_on_configured)
+	lobby_spawned.connect(_on_lobby_spawned)
+	lobby_despawned.connect(_on_lobby_despawned)
+
 
 func _ready() -> void:
 	spawn_function = spawn_lobby
 	spawn_path = "."
-	
+	add_to_group("lobby_managers")
+
+
+func _on_lobby_spawned(node: Node) -> void:
+	var lobby := node as Lobby
+	active_lobbies[lobby.level.name] = lobby
+
+
+func _on_lobby_despawned(node: Node) -> void:
+	var lobby := node as Lobby
+	active_lobbies.erase(lobby.level.name)
 
 
 func spawn_lobbies() -> void:
 	if multiplayer.is_server():
-		for level_path: String in _config.levels:
+		for level_path: String in lobbies:
 			spawn(level_path)
 
 
@@ -31,11 +63,9 @@ func spawn_lobby(level_file_path: String) -> Node:
 	
 	var lobby: Lobby = lobby_scene.instantiate()
 	
-	lobby.spawner.spawn_path = "../" + level.name
-	lobby.spawner.clients = _config.clients
-	
 	lobby.level = level
-	active_lobbies[level.name] = lobby
+	lobby.tree_entered.connect(lobby_spawned.emit.bind(lobby))
+	lobby.tree_exited.connect(lobby_despawned.emit.bind(lobby))
 	
 	return lobby
 
@@ -45,16 +75,26 @@ func request_join_player(
 	client_data_bytes: PackedByteArray) -> void:
 	var client_data: MultiplayerClientData = MultiplayerClientData.new()
 	client_data.deserialize(client_data_bytes)
+	client_data.peer_id = multiplayer.get_remote_sender_id()
 	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
 		client.player_joined.emit(client_data)
 
 
-func _on_configured(config: NetworkConfig) -> void:
-	_config = config
-	var peer: MultiplayerTree = get_parent()
-	if peer.is_server:
+func _on_server_disconnected() -> void:
+	for lobby: Lobby in active_lobbies.values():
+		if lobby.is_inside_tree():
+			lobby.get_parent().remove_child(lobby)
+		lobby.queue_free()
+
+
+func _on_configured() -> void:
+	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
+		multiplayer.server_disconnected.connect(_on_server_disconnected)
+	
+	if multiplayer.is_server():
+		var debug_viewports: ViewportDebug = VIEWPORTS_DEBUG.instantiate()
+		child_entered_tree.connect(debug_viewports._on_node_entered)
+		child_exiting_tree.connect(debug_viewports._on_node_exited)
+		add_child(debug_viewports)
+		
 		spawn_lobbies()
-	else:
-		tp_canvas = TP_CANVAS_LAYER.instantiate()
-		add_child(tp_canvas)
-	pass

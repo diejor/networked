@@ -1,15 +1,23 @@
-[gd_scene format=3 uid="uid://bs4ebh48fcoxt"]
+[gd_scene format=3 uid="uid://bcw2ew76icygp"]
 
-[ext_resource type="Texture2D" uid="uid://dvwn83dxmpbk3" path="res://addons/networked/assets/blueskything.jpg" id="1_tc7ab"]
-[ext_resource type="Script" uid="uid://cu3ournr7q7se" path="res://addons/networked/core/peer/client/transition_anim.gd" id="2_jetau"]
+[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://addons/networked/components/tp/tp_layer.gd" id="1_jetau"]
+
+[sub_resource type="Gradient" id="Gradient_37typ"]
+colors = PackedColorArray(0.23921569, 0.30980393, 0.5176471, 1, 0.7529412, 0.84705883, 1, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_tc7ab"]
+frequency = 0.0003
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_jetau"]
+noise = SubResource("FastNoiseLite_tc7ab")
+color_ramp = SubResource("Gradient_37typ")
 
 [sub_resource type="GDScript" id="GDScript_mpvoh"]
 script/source = "extends TextureProgressBar
-
-func _ready() -> void:
-	value = 100.
-	modulate = Color.WHITE
 "
+
+[sub_resource type="Animation" id="Animation_tc7ab"]
+resource_name = "RESET"
 
 [sub_resource type="Animation" id="Animation_ifkpp"]
 resource_name = "tp"
@@ -41,11 +49,15 @@ tracks/1/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_33snq"]
 _data = {
+&"RESET": SubResource("Animation_tc7ab"),
 &"tp": SubResource("Animation_ifkpp")
 }
 
-[node name="TPCanvasLayer" type="CanvasLayer" unique_id=1002194750]
+[node name="TPCanvasLayer" type="CanvasLayer" unique_id=1002194750 node_paths=PackedStringArray("transition_progress", "transition_anim")]
 layer = 9999
+script = ExtResource("1_jetau")
+transition_progress = NodePath("TransitionProgress")
+transition_anim = NodePath("TransitionAnim")
 
 [node name="TransitionProgress" type="TextureProgressBar" parent="." unique_id=367840752]
 unique_name_in_owner = true
@@ -60,7 +72,7 @@ size_flags_vertical = 3
 mouse_filter = 2
 fill_mode = 8
 nine_patch_stretch = true
-texture_progress = ExtResource("1_tc7ab")
+texture_progress = SubResource("NoiseTexture2D_jetau")
 script = SubResource("GDScript_mpvoh")
 metadata/_edit_use_anchors_ = true
 
@@ -69,5 +81,4 @@ unique_name_in_owner = true
 process_mode = 3
 root_node = NodePath("../..")
 libraries/ = SubResource("AnimationLibrary_33snq")
-blend_times = [&"tp", &"tp", 1.0]
-script = ExtResource("2_jetau")
+blend_times = [&"tp", &"tp", 0.5]

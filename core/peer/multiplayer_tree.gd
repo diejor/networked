@@ -1,17 +1,26 @@
 class_name MultiplayerTree
 extends Node
 
-signal configured(config: NetworkConfig)
+signal configured()
 signal peer_connected(peer_id: int)
 signal peer_disconnected(peer_id: int)
 signal connected_to_server()
+signal server_disconnected()
 
-@onready var network: MultiplayerNetwork = get_parent()
-@export var is_server: bool
+var is_server: bool
 
-@onready var backend: BackendPeer = network.config.backend.duplicate()
+@export var backend: BackendPeer:
+	set(value):
+		backend = value.duplicate()
+		multiplayer_api.peer_connected.connect(_on_peer_connected)
+		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
+		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
+		multiplayer_api.server_disconnected.connect(_on_server_disconnected)
 
-var lobby_manager: MultiplayerLobbyManager
+@export var lobby_manager: MultiplayerLobbyManager:
+	set(manager):
+		configured.connect(manager.configured.emit)
+		lobby_manager = manager
 
 
 var multiplayer_api: SceneMultiplayer:
@@ -20,21 +29,12 @@ var multiplayer_api: SceneMultiplayer:
 var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend else null
 
-var uid: int:
-	get: return multiplayer_api.get_unique_id() if multiplayer_api else 0
-
 
 func _init() -> void:
-	configured.connect(_on_configured)
+	tree_exiting.connect(_on_exiting)
 
-
-func _on_configured(_config: NetworkConfig) -> void:
-	# These fire for both host and clients
-	multiplayer_api.peer_connected.connect(_on_peer_connected)
-	multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
-	
-	# This only fires on clients. It's safe to connect on the host; it just won't trigger.
-	multiplayer_api.connected_to_server.connect(_on_connected_to_server)
+func _on_exiting() -> void:
+	backend.peer_reset_state()
 
 
 func host() -> Error:
@@ -53,19 +53,17 @@ func join(server_address: String, username: String) -> Error:
 	
 	if connection_code == OK:
 		_config_api()
-		await connected_to_server
+		
+		var timer := get_tree().create_timer(2.)
+		if await Async.timeout(connected_to_server, timer):
+			return Error.ERR_CANT_CONNECT
 		
 	return connection_code
 
 
 func _config_api() -> void:
-	lobby_manager = MultiplayerLobbyManager.new()
-	lobby_manager.name = "LobbyManager"
-	configured.connect(lobby_manager._on_configured)
-	add_child(lobby_manager)
-
 	backend.configure_tree(get_tree(), lobby_manager.get_path())
-	configured.emit(network.config)
+	configured.emit()
 
 
 func _on_peer_connected(peer_id: int) -> void:
@@ -77,12 +75,21 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	print("Peer (%d) connected to server." % uid)
+	var peer_id := multiplayer_peer.get_unique_id()
+	print("Peer (%d) connected to server." % peer_id)
 
-	set_multiplayer_authority(uid, false) 
+	set_multiplayer_authority(peer_id, false) 
 	connected_to_server.emit()
 
+
+func _on_server_disconnected() -> void:
+	server_disconnected.emit()
 
 func _process(dt: float) -> void:
 	if backend:
 		backend.poll(dt)
+
+
+func is_online() -> bool:
+	return (not multiplayer_peer is OfflineMultiplayerPeer 
+		and multiplayer_api.has_multiplayer_peer())

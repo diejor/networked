@@ -1,0 +1,57 @@
+[gd_scene format=3 uid="uid://4rqj7gr6xifw"]
+
+[ext_resource type="Script" uid="uid://ftgc1ndrdxfb" path="res://addons/networked/core/peer/client/connect_to_server.gd" id="1_nxquo"]
+
+[node name="Connect To Server" type="MarginContainer" unique_id=628941669]
+clip_contents = true
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 16
+script = ExtResource("1_nxquo")
+metadata/_tab_index = 1
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=33303967]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="HBox2" type="HBoxContainer" parent="VBox" unique_id=105957974]
+layout_mode = 2
+theme_override_constants/separation = 39
+
+[node name="UsernameEdit" type="TextEdit" parent="VBox/HBox2" unique_id=171723979]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 32)
+layout_mode = 2
+focus_next = NodePath("../../HBox/ServerIpEdit")
+placeholder_text = "Username"
+tab_input_mode = false
+
+[node name="HBox" type="HBoxContainer" parent="VBox" unique_id=623309947]
+layout_mode = 2
+theme_override_constants/separation = 39
+
+[node name="ServerIpEdit" type="TextEdit" parent="VBox/HBox" unique_id=1969894275]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_next = NodePath("../JoinButton")
+placeholder_text = "Enter server IP"
+tab_input_mode = false
+
+[node name="JoinButton" type="Button" parent="VBox/HBox" unique_id=1874997670]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.25
+text = "Join"
+
+[node name="RichTextLabel" type="RichTextLabel" parent="VBox" unique_id=452592]
+layout_mode = 2
+bbcode_enabled = true
+text = "Servers
+	[color=gray]ws.diesjor.com[/color]"
+fit_content = true
+
+[connection signal="pressed" from="VBox/HBox/JoinButton" to="." method="_on_join_button_pressed"]

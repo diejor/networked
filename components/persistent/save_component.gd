@@ -169,11 +169,21 @@ static func unregister(component: SaveComponent) -> void:
 	registered_components.erase(component)
 
 
+static func save_game() -> void:
+	for component in registered_components:
+		if not component.is_multiplayer_authority():
+			continue
+		
+		if component.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER:
+			component.save_state()
+		else:
+			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+
+
 static func _handle_shutdown() -> void:
 	print("Beginning graceful shutdown...")
 	
-	for component in registered_components:
-		component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+	save_game()
 
 	print("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

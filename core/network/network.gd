@@ -2,85 +2,111 @@ class_name MultiplayerNetwork
 extends Node
 
 
-@export var client: MultiplayerTree
-@export var server: MultiplayerTree
+@export var client: MultiplayerTree:
+	set(peer):
+		client = peer
+		client.server_disconnected.connect(close_server)
+		
+		if DisplayServer.get_name() == "headless":
+			client.queue_free()
 
-@export var config: NetworkConfig
 
-### 
+@export_group("Debug")
+## Immediately connects the player with `init_client_data`.
 @export var init_client_data: MultiplayerClientData
+@export_group("", "")
 
-func is_valid_client_scene(scene_path: String) -> String:
-	if scene_path in config.clients:
-		return ""
-	return	"Provided `scene_path: %s` is not tracked by `%s`." % [
-	scene_path, 'config.clients']
+
+var server: MultiplayerTree
+
+
+func is_current_scene() -> bool:
+	return get_tree().current_scene == self
+
 
 func _ready() -> void:
-	get_tree().scene_changed.connect(ensure_configured)
-	if not client:
-		client = MultiplayerTree.new()
-		client.name = "Client"
-		add_child(client)
-	if not server:
-		server = MultiplayerTree.new()
-		server.name = "Server"
-		server.is_server = true
-		add_child(server)
-		
-	if owner:
-		owner.remove_child.call_deferred(self)
-	
 	if init_client_data:
-		configure(init_client_data)
-		if owner:
-			get_tree().change_scene_to_node.call_deferred(self)
-
-func ensure_configured() -> void:
-	assert(get_tree().scene_changed.is_connected(connect_player), "`%s` \
-should be called before changing to `%s`." % [configure.get_method(), name])
-
-
-func configure(client_data: MultiplayerClientData) -> void:
-	validate_client_data(client_data)
-	validate_web()
+		push_warning("Connecting with debug `init_client_data`.")
+		connect_player(init_client_data)
 	
-	var scene_tree := Engine.get_main_loop() as SceneTree
-	if owner:
-		scene_tree.scene_changed.connect(connect_player.bind(client_data))
-	else:
-		connect_player(client_data)
+	if DisplayServer.get_name() == "headless":
+		host_server()
 
 
-func validate_client_data(client_data: MultiplayerClientData) -> void:
-	var scene_err_str = is_valid_client_scene(client_data.scene_path)
-	assert(scene_err_str.is_empty(), scene_err_str)
+func close_server() -> void:
+	if server:
+		server.get_parent().remove_child(server)
+		server.queue_free()
+		server = null
 
-func validate_web() -> void:
+
+func host_server() -> void:
 	if OS.has_feature("web"):
 		client.backend = LocalLoopbackBackend.new()
-		server.backend = LocalLoopbackBackend.new()
+	
+	server = client.duplicate()
+	server.is_server = true
+	server.name = "Server"
+	add_child(server)
+	
+	var server_err := server.host()
+	
+	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
+	assert(server_err == OK or in_use,
+		"Dedicated server failed to start: %s" % error_string(server_err))
+	
+	if in_use:
+		server.queue_free.call_deferred()
+
+
+## Validate the active (connected to a server) `MultiplayerNetwork` is only valid 
+## when running as the `current_scene` of the `SceneTree`.
+func validate_current_scene() -> void:
+	if not is_current_scene():
+		var tree := get_tree()
+		owner.remove_child(self)
+		tree.change_scene_to_node.call_deferred(self)
+		await tree.scene_changed
+
+
+func is_singleplayer(url: String) -> bool:
+	return url.is_empty() or "localhost" in url or "127.0.0.1" in url
+
 
 func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
 	assert(client_data.scene_path)
-
 	
-	var server_err := server.host()
-	var in_use := server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE
-	assert(server_err == OK or in_use,
-		"Dedicated server failed to start: %s" % error_string(server_err))
-	if in_use:
-		server.queue_free.call_deferred()
-		
-	var client_err: Error = await client.join("localhost", client_data.username)
+	await disconnect_player()
+	await validate_current_scene()
+	
+	var url := client_data.url
+	if is_singleplayer(url):
+		url = "localhost"
+		host_server()
+	else:
+		if OS.has_feature("web"):
+			client.backend = WebSocketBackend.new()
+	
+	var client_err: Error = await client.join(url, client_data.username)
 	if client_err != OK:
 		push_warning("Failed: %s" % error_string(client_err))
 		return
-
-	client_data.peer_id = client.uid
+	
 	client.lobby_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()
 	)
+
+func disconnect_player() -> void:
+	if not client.is_online():
+		return
+
+	SaveComponent.save_game()
+	
+	client.multiplayer_peer.close()
+	
+	var timer := get_tree().create_timer(3.0)
+	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
+		push_error("Couldn't disconnect from server.")
