@@ -3,12 +3,8 @@ extends MultiplayerSynchronizer
 
 @export var state_sync: StateSynchronizer
 
-func _init() -> void:
-	unique_name_in_owner = true
-
 
 func _enter_tree() -> void:
-	root_path = get_path_to(state_sync.owner)
 	_config_spawn_properties(state_sync.replication_config)
 	set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 

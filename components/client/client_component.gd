@@ -67,7 +67,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if save_component:
 		save_component.spawn(owner)
 
-	# TODO: SaveComponent might override some values from a spawner, that are tracked
+	# TODO: SaveComponent might override some values from a spawner that are tracked
 	# but we dont really want to override.
 	client.username = client_data.username
 	
@@ -82,8 +82,6 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer and multiplayer.is_server() and get_multiplayer_authority() == peer_id:
-		state_sync.only_server()
-		
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()
 

@@ -67,12 +67,6 @@ func get_synchronizers(node: Node) -> Array[MultiplayerSynchronizer]:
 func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
-		
-	# Not sure why we need to set to false when `peer_id` equals `0`, my guess is that
-	# setting it to true would mean that all `peer_id`s have `true` visibility,
-	# therefore, the filter would not be called for specific peer ids.
-	if peer_id == 0:
-		return false
 	
 	var res: bool = peer_id in connected_clients
 	return res
