@@ -18,12 +18,16 @@ var username_label: RichTextLabel:
 
 func _init() -> void:
 	unique_name_in_owner = true
+	
 
 
 func _ready() -> void:
 	super._ready()
-	if username.is_empty() and not multiplayer.is_server():
-		owner.queue_free()
+	if username.is_empty():
+		if not multiplayer.is_server():
+			owner.queue_free()
+		sync_only_server()
+	
 	
 	assert(owner.tree_entered.is_connected(_on_owner_tree_entered),
 		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise, \

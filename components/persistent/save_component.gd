@@ -130,8 +130,7 @@ func push_to(peer_id: int) -> void:
 func on_state_changed() -> void:
 	save_state()
 	state_changed.emit()
-	state_sync.delta_synchronized.emit()
-	state_sync.synchronized.emit()
+	client_synchronized.emit()
 
 
 func instantiate() -> void:

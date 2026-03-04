@@ -3,8 +3,6 @@ extends Node
 
 signal client_synchronized
 
-@onready var state_sync: StateSynchronizer = %StateSynchronizer
-
 var api: SceneMultiplayer:
 	get: return multiplayer
 var lobby_manager: MultiplayerLobbyManager:
@@ -12,7 +10,6 @@ var lobby_manager: MultiplayerLobbyManager:
 		if multiplayer:
 			return get_node(api.root_path)
 		return null
-
 
 var lobby: Lobby:
 	get:
@@ -37,15 +34,22 @@ func assert_replicated() -> bool:
 			return true
 		return false)
 	
-	var config := state_sync.replication_config
+	var synchronizers := get_synchronizers()
 	var current_path: NodePath = owner.get_path_to(self)
+	
 	for replicated: Dictionary in replicated_properties:
 		var prop_path: NodePath = String(current_path) + ":" + replicated.name
+		var is_replicated := false
 		
-		assert(config.has_property(prop_path), 
-			"Component `%s` depends on property `%s` to be replicated by `%s`. \
-Add it through the editor by configuring `%s` replication config.\
-			" %[self.name, prop_path, state_sync.name, state_sync.name])
+		for sync in synchronizers:
+			if sync.replication_config and sync.replication_config.has_property(prop_path):
+				is_replicated = true
+				break
+				
+		assert(is_replicated,
+			"`%s` depends on property `%s` to be replicated. \
+Add it through the editor by configuring a MultiplayerSynchronizer's replication config.\
+			" % [self.name, prop_path])
 	
 	return true
 
