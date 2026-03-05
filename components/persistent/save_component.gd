@@ -14,10 +14,11 @@ static var shutting_down: bool:
 			_handle_shutdown()
 
 @export_dir var save_dir: String
-@export var save_extension: String = ".tdict"
+@export_enum(".tres", ".res", ".tdict", ".dict") var save_extension: String = ".tres"
 @export var save_container: SaveContainer
 
-@export var _save_synchronizer: SaveSynchronizer
+var save_synchronizer: SaveSynchronizer:
+	get: return %SaveSynchronizer
 
 @onready var save_path: String:
 	get:
@@ -43,8 +44,8 @@ static var shutting_down: bool:
 
 func _ready() -> void:
 	assert(save_container)
-	assert(_save_synchronizer)
-	assert(_save_synchronizer.save_container == save_container)
+	assert(save_synchronizer)
+	assert(save_synchronizer.save_container == save_container)
 
 	
 	get_tree().set_auto_accept_quit(false)
@@ -105,7 +106,7 @@ func serialize_scene() -> PackedByteArray:
 
 
 func push_to_scene() -> Error:
-	var push_err: Error = _save_synchronizer.push_to_scene()
+	var push_err: Error = save_synchronizer.push_to_scene()
 	match push_err:
 		ERR_UNCONFIGURED:
 			push_error("Removing unconfigured save at `%s`." % save_path)
@@ -120,11 +121,11 @@ func push_to_scene() -> Error:
 
 
 func pull_from_scene() -> void:
-	_save_synchronizer.pull_from_scene()
+	save_synchronizer.pull_from_scene()
 
 
 func push_to(peer_id: int) -> void:
-	_save_synchronizer.push_to(peer_id)
+	save_synchronizer.push_to(peer_id)
 	
 
 func on_state_changed() -> void:
@@ -134,8 +135,8 @@ func on_state_changed() -> void:
 
 
 func instantiate() -> void:
-	_save_synchronizer.setup()
-	assert(_save_synchronizer._initialized)
+	save_synchronizer.setup()
+	assert(save_synchronizer._initialized)
 	instantiated.emit()
 
 

@@ -24,8 +24,9 @@ func update_clients() -> void:
 		update_client(client)
 
 func update_client(node: Node) -> void:
-	var client := ClientComponent.unwrap(node)
-	client.update_synchronizers()
+	var syncs := get_synchronizers(node)
+	for sync in syncs:
+		sync.update_visibility()
 
 
 # Very important the order in which the client visibility is handled:
@@ -47,26 +48,35 @@ func disconnect_client(peer_id: int) -> void:
 
 func _on_spawned(node: Node) -> void:
 	tracked_nodes[node] = true
-	var syncs := get_synchronizers(node)
-	for sync in syncs:
+	
+	for sync in get_synchronizers(node):
 		sync.add_visibility_filter(scene_visibility_filter)
+	
 	connect_client(node.get_multiplayer_authority())
 
 func _on_despawned(node: Node) -> void:
 	tracked_nodes.erase(node)
-	var syncs := get_synchronizers(node)
-	for sync in syncs:
+	
+	for sync in get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
+	
 	disconnect_client(node.get_multiplayer_authority())
+
 
 func get_synchronizers(node: Node) -> Array[MultiplayerSynchronizer]:
 	var synchronizers: Array[MultiplayerSynchronizer] = []
 	synchronizers.assign(node.find_children("*", "MultiplayerSynchronizer"))
-	return synchronizers
+	return synchronizers.filter(func(sync: MultiplayerSynchronizer):
+		return sync.get_node(sync.root_path) == node
+	)
+
 
 func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
+	
+	if peer_id == 0:
+		return false
 	
 	var res: bool = peer_id in connected_clients
 	return res

@@ -1,3 +1,4 @@
+@tool
 class_name TPComponent
 extends NodeComponent
 
@@ -5,7 +6,7 @@ signal teleport_committed
 
 @export_file var starting_scene_path: String
 
-@export_custom(PROPERTY_HINT_NONE, "replicated") 
+@export_custom(PROPERTY_HINT_NONE, "replicated:on_change") 
 var current_scene: String = "":
 	get: return ResourceUID.ensure_path(current_scene)
 	set(value):
@@ -36,6 +37,9 @@ static func get_scene_name(path_or_uid: String) -> String:
 
 
 func _enter_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	
 	if current_scene.is_empty():
 		current_scene = starting_scene_path
 
@@ -82,11 +86,9 @@ func request_teleport(
 	var player: Node2D = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	
-	var state: StateSynchronizer = player.get_node_or_null("%StateSynchronizer")
-	if state:
-		var timer := get_tree().create_timer(3.0)
-		if await Async.timeout(tp_component.client_synchronized, timer):
-			push_error("Client couldn't synchronize while teleporting.")
+	var timer := get_tree().create_timer(5.0)
+	if await Async.timeout(tp_component.client_synchronized, timer):
+		push_error("Client couldn't synchronize while teleporting.")
 	
 	var to_lobby: Lobby = lobby_manager.active_lobbies[tp_component.current_scene_name]
 	

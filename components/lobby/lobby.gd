@@ -15,9 +15,6 @@ var level: Node:
 
 func hook_spawn_signals(level: Node) -> void:
 	var spawners := get_spawners(level)
-	var is_direct_spawner := func(spawner: MultiplayerSpawner) -> bool:
-		return spawner.get_path_to(level) == spawner.spawn_path
-	spawners = spawners.filter(is_direct_spawner)
 	for spawner in spawners:
 		spawner.spawned.connect(synchronizer._on_spawned)
 		spawner.despawned.connect(synchronizer._on_despawned)
@@ -25,4 +22,6 @@ func hook_spawn_signals(level: Node) -> void:
 func get_spawners(node: Node) -> Array[MultiplayerSpawner]:
 	var spawners: Array[MultiplayerSpawner] = []
 	spawners.assign(node.find_children("*", "MultiplayerSpawner"))
-	return spawners
+	return spawners.filter(func(spawner: MultiplayerSpawner) -> bool:
+		return spawner.get_path_to(level) == spawner.spawn_path
+	)
