@@ -8,6 +8,7 @@ signal client_synchronized
 	set(value):
 		if Engine.is_editor_hint():
 			_auto_configure_replication()
+			update_configuration_warnings()
 
 var api: SceneMultiplayer:
 	get: return multiplayer
@@ -33,9 +34,17 @@ var tp_layer: TPLayerAPI:
 		return null
 
 
+func _get_configuration_warnings() -> PackedStringArray:
+	var warnings := PackedStringArray()
+	if owner and get_client_synchronizers().is_empty():
+		warnings.append("Requires at least one MultiplayerSynchronizer in the scene with root_path pointing to the owner.")
+	return warnings
+
+
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		call_deferred("_auto_configure_replication")
+		call_deferred("update_configuration_warnings")
 		return
 		
 	assert(get_client_synchronizers().size() > 0, 
@@ -74,7 +83,7 @@ func get_synchronizers() -> Array[MultiplayerSynchronizer]:
 
 
 func _assert_replicated_properties() -> void:
-	var synchronizers := get_synchronizers()
+	var synchronizers := get_client_synchronizers()
 	var current_path: NodePath = owner.get_path_to(self)
 	
 	for property in _get_replicated_properties():
@@ -104,7 +113,7 @@ func _auto_configure_replication() -> void:
 	if not owner:
 		return
 		
-	var synchronizers := get_synchronizers()
+	var synchronizers := get_client_synchronizers()
 	if synchronizers.is_empty():
 		return
 		

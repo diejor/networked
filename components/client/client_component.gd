@@ -42,7 +42,7 @@ the authority will not be set correctly." % [owner.name, _on_owner_tree_entered]
 
 	api.peer_disconnected.connect(_on_peer_disconnected)
 	
-	if not multiplayer.is_server() and is_multiplayer_authority():
+	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
 		tp_layer.teleport_in()
 
 
@@ -103,7 +103,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func config_spawn_properties(base: NodeComponent) -> SceneReplicationConfig:
 	var new_config := SceneReplicationConfig.new()
-	var syncs := base.get_synchronizers()
+	var syncs := base.get_client_synchronizers()
 	
 	for sync: MultiplayerSynchronizer in syncs:
 		if sync == spawn_sync or not sync.replication_config:

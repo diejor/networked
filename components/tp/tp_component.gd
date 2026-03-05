@@ -54,8 +54,9 @@ func teleport(tp_id: String, new_scene: String) -> void:
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
-
-	await tp_layer.teleport_out()
+	
+	if tp_layer:
+		await tp_layer.teleport_out()
 	
 	sync_only_server()
 	
@@ -68,7 +69,8 @@ func teleport(tp_id: String, new_scene: String) -> void:
 
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(teleport_committed, timer):
-		await tp_layer.teleport_in()
+		if tp_layer:
+			await tp_layer.teleport_in()
 		_tp_mutex.unlock()
 		push_error("Teleport commit timed out.")
 		return
