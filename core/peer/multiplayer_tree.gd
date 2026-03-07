@@ -35,8 +35,14 @@ var is_server: bool
 			else:
 				backend = null
 		else:
+			if backend and backend.changed.is_connected(update_configuration_warnings):
+				backend.changed.disconnect(update_configuration_warnings)
+				
 			backend = value
 			
+			if backend and not backend.changed.is_connected(update_configuration_warnings):
+				backend.changed.connect(update_configuration_warnings)
+				
 		update_configuration_warnings()
 
 ## The manager responsible for handling player lobbies, spawning, and game state.
@@ -70,7 +76,9 @@ func _get_configuration_warnings() -> PackedStringArray:
 	if not backend:
 		warnings.append("A BackendPeer resource must be assigned to the 'backend' property.")
 	elif backend.get_script() != null and backend.get_script().get_global_name() == "BackendPeer":
-		warnings.append("The assigned backend is the abstract 'BackendPeer' class. Please assign a functional derived class (e.g., ENetBackend or WebSocketBackend).")
+		warnings.append("The assigned backend is the abstract 'BackendPeer' class. Please assign a functional derived class.")
+	elif backend:
+		warnings.append_array(backend._get_backend_warnings(self))
 		
 	if not lobby_manager:
 		warnings.append("A MultiplayerLobbyManager must be assigned to the 'lobby_manager' property.")
@@ -94,6 +102,12 @@ func _process(dt: float) -> void:
 ## Initializes the network backend as a host/server and configures the multiplayer API.
 func host() -> Error:
 	backend.peer_reset_state()
+	
+	if backend.has_method("setup"):
+		var setup_err: Error = backend.setup(self)
+		if setup_err != OK:
+			return setup_err
+	
 	var connection_code: Error = backend.host()
 	
 	if connection_code == OK:
@@ -108,14 +122,20 @@ func host() -> Error:
 ## if the server does not respond within the timeout window.
 func join(server_address: String, username: String) -> Error:
 	backend.peer_reset_state()
+	
+	if backend.has_method("setup"):
+		var setup_err: Error = backend.setup(self)
+		if setup_err != OK:
+			return setup_err
+	
 	var connection_code: Error = backend.join(server_address, username)
+	
+	var timer := get_tree().create_timer(5.0)
+	if await Async.timeout(connected_to_server, timer):
+		return ERR_CANT_CONNECT
 	
 	if connection_code == OK:
 		_config_api()
-		
-		var timer := get_tree().create_timer(2.0)
-		if await Async.timeout(connected_to_server, timer):
-			return ERR_CANT_CONNECT
 		
 	return connection_code
 

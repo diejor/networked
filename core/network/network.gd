@@ -2,19 +2,6 @@
 class_name MultiplayerNetwork
 extends Node
 
-## Manages the active multiplayer session and network state.
-##
-## This node handles hosting, joining, and disconnecting from server sessions.
-## To start networking, you should exclusively use the [method connect_player] function.
-
-
-## The primary network manager for the local player.
-##
-## You must assign a [MultiplayerTree] node to this property in the inspector for the network to function. 
-## It is responsible for joining external servers and sending/receiving RPCs.
-## [br][br]
-## [b]Important:[/b] If the game is running as a dedicated server (headless mode), this node is automatically 
-## destroyed to save resources, and the network operates entirely through the [member server] variable instead.
 @export var client: MultiplayerTree:
 	set(peer):
 		client = peer
@@ -31,31 +18,11 @@ extends Node
 
 
 @export_group("Debug")
-## Optional data used to automatically connect when the scene loads.
-##
-## If you assign a [MultiplayerClientData] resource here in the inspector, 
-## the game will automatically attempt to host or join using this data as 
-## soon as the node is ready. 
-## [br][br]
-## [b]Note:[/b] This is strictly for testing and debugging. Leave this empty 
-## in your final production builds.
 @export var init_client_data: MultiplayerClientData
 @export_group("", "")
 
-
-## The dedicated server instance, created dynamically when hosting.
-##
-## [br][br]
-## [b]Note:[/b] This variable will remain [code]null[/code] if the instance is strictly running as a connected 
-## client. You should never assign this manually.
 var server: MultiplayerTree
 
-
-## Initiates a multiplayer connection or hosts a local singleplayer session.
-##
-## This is the primary entry point for using the `MultiplayerNetwork`. Provide it with 
-## a valid [MultiplayerClientData] object containing the target URL, username, and scene path.
-## If the URL is empty or points to localhost, a server will be hosted automatically.
 func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
@@ -66,14 +33,14 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	
 	var url := client_data.url
 	if _is_singleplayer(url):
-		url = "localhost"
-		_host_server()
+		url = await _host_server()
 	elif OS.has_feature("web"):
-		client.backend = WebSocketBackend.new()
+		if url.begins_with("ws"):
+			client.backend = WebSocketBackend.new()
 	
 	var client_err: Error = await client.join(url, client_data.username)
 	if client_err != OK:
-		push_warning("Failed: %s" % error_string(client_err))
+		push_error("Failed: %s" % error_string(client_err))
 		return
 	
 	client.lobby_manager.request_join_player.rpc_id(
@@ -81,8 +48,6 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		client_data.serialize()
 	)
 
-
-## Saves the game state and safely closes the connection to the active multiplayer server.
 func disconnect_player() -> void:
 	if not client.is_online():
 		return
@@ -94,31 +59,24 @@ func disconnect_player() -> void:
 	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
 		push_error("Couldn't disconnect from server.")
 
-
-
-
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	if not client:
 		warnings.append("A MultiplayerTree must be assigned to the 'client' property for the network to function.")
 	return warnings
 
-
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 		
 	if init_client_data:
-		push_warning("Connecting with debug `init_client_data`.")
 		connect_player(init_client_data)
 	
 	if DisplayServer.get_name() == "headless":
 		_host_server()
 
-
 func _is_current_scene() -> bool:
 	return get_tree().current_scene == self
-
 
 func _close_server() -> void:
 	if server:
@@ -126,9 +84,15 @@ func _close_server() -> void:
 		server.queue_free()
 		server = null
 
+func is_webrtc() -> bool:
+	var script: Script = client.backend.get_script()
+	var n := script.get_global_name().to_lower()
+	var is_rtc := "rtc" in n or "tube" in n
+	print(script.get_global_name())
+	return is_rtc
 
-func _host_server() -> void:
-	if OS.has_feature("web"):
+func _host_server() -> String:
+	if OS.has_feature("web") and not is_webrtc():
 		client.backend = LocalLoopbackBackend.new()
 	
 	server = client.duplicate()
@@ -143,7 +107,15 @@ func _host_server() -> void:
 	
 	if in_use:
 		server.queue_free.call_deferred()
+		return "localhost"
+		
+	return _resolve_server_address()
 
+func _resolve_server_address() -> String:
+	if not server or not server.backend:
+		return "localhost"
+		
+	return server.backend.get_join_address()
 
 func _validate_current_scene() -> void:
 	if not _is_current_scene():
@@ -151,7 +123,6 @@ func _validate_current_scene() -> void:
 		owner.remove_child(self)
 		tree.change_scene_to_node.call_deferred(self)
 		await tree.scene_changed
-
 
 func _is_singleplayer(url: String) -> bool:
 	return url.is_empty() or "localhost" in url or "127.0.0.1" in url

@@ -1,7 +1,11 @@
+@tool
 class_name WebRTCLoopbackBackend
 extends BackendPeer
 
 var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
+
+func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
+	return []
 
 func host() -> Error:
 	if not session.has_live_server():

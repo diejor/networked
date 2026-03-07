@@ -1,7 +1,9 @@
+@tool
 class_name LocalLoopbackBackend
 extends BackendPeer
 
 var session: LocalLoopbackSession = LocalLoopbackSession.get_shared_session()
+
 
 func host() -> Error:
 	if not session.has_live_server():
@@ -19,3 +21,7 @@ func poll(dt: float) -> void:
 	if session:
 		session.poll()
 	super.poll(dt)
+
+
+func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
+	return []
