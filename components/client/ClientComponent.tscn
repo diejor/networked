@@ -4,8 +4,16 @@
 [ext_resource type="PackedScene" uid="uid://dui4l6oylk8ju" path="res://addons/networked/components/debug/ClientLabel.tscn" id="2_fvt7m"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/components/client/ConnectServerUI.tscn" id="3_npy7m"]
 
-[node name="ClientComponent" type="Node2D" unique_id=1993716894 groups=["clients"]]
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_npy7m"]
+
+[node name="ClientComponent" type="Node2D" unique_id=1278092247 groups=["clients"]]
+unique_name_in_owner = true
 script = ExtResource("1_qa662")
+
+[node name="SpawnSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1706126730]
+unique_name_in_owner = true
+replication_config = SubResource("SceneReplicationConfig_npy7m")
+visibility_update_mode = 2
 
 [node name="DebugClientLabel" parent="." unique_id=530562393 node_paths=PackedStringArray("client") instance=ExtResource("2_fvt7m")]
 anchors_preset = 8

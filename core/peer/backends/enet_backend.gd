@@ -1,8 +1,10 @@
+@tool
 class_name ENetBackend
 extends BackendPeer
 
 @export var port: int = 21253
 @export var max_clients: int = 32
+
 
 func host() -> Error:
 	var peer := ENetMultiplayerPeer.new()
@@ -32,3 +34,7 @@ func join(server_address: String, _username: String = "") -> Error:
 		push_warning("Failed to create ENet client: %s" % error_string(err))
 		
 	return err
+
+
+func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
+	return []

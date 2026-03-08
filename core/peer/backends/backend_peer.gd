@@ -1,3 +1,5 @@
+@tool
+@abstract
 class_name BackendPeer
 extends Resource
 
@@ -6,17 +8,14 @@ extends Resource
 
 var api := SceneMultiplayer.new()
 
-# Virtual method for creating a server
-func host() -> Error:
-	push_error("`%s` not implemented in base `BackendPeer`. \
-Please use one implementation instead." % [host.get_method()])
-	return ERR_UNAVAILABLE
+@abstract
+func host() -> Error
 
-# Virtual method for connecting as a client
-func join(_server_address: String, _username: String = "") -> Error:
-	push_error("`%s` not implemented in base `BackendPeer`. \
-Please use one implementation instead." % [join.get_method()])
-	return ERR_UNAVAILABLE
+@abstract
+func join(_server_address: String, _username: String = "") -> Error
+
+@abstract
+func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray
 
 func configure_tree(tree: SceneTree, root_path: NodePath) -> void:
 	api.root_path = root_path
@@ -27,7 +26,13 @@ func poll(_dt: float) -> void:
 		api.poll()
 
 func peer_reset_state() -> void:
+	if not api:
+		return
+	
 	if api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
 	
 	api.multiplayer_peer = null
+
+func get_join_address() -> String:
+	return "localhost"

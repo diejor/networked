@@ -11,12 +11,9 @@ var save_container: SaveContainer:
 	get:
 		return save_component.save_container
 
-
 var scene_owner: Node:
 	get: return save_component.owner
 
-var _base_sync: MultiplayerSynchronizer:
-	get: return owner.get_node("%StateSynchronizer")
 var _property_paths: Dictionary[StringName, NodePath] = { }
 var _initialized: bool = false
 var _state_changed: bool = false
@@ -36,14 +33,12 @@ func setup() -> void:
 	_initialized = true
 
 	assert(save_container)
-	assert(_base_sync)
-	assert(_base_sync.replication_config)
 	assert(
 		save_container.resource_local_to_scene,
 		"`%s` is not local to scene." % save_container,
 	)
 
-	_virtualize_replication_config(_base_sync.replication_config)
+	_virtualize_replication_configs()
 	notify_property_list_changed()
 
 # ------------------------
@@ -51,57 +46,62 @@ func setup() -> void:
 # ------------------------
 
 
-func _virtualize_replication_config(source_config: SceneReplicationConfig) -> void:
+func _virtualize_replication_configs() -> void:
 	var new_config := SceneReplicationConfig.new()
 	_property_paths.clear()
+	
+	for sync: MultiplayerSynchronizer in save_component.get_synchronizers():
+		if sync == self or not sync.replication_config:
+			continue
 
-	for real_path: NodePath in source_config.get_properties():
-		var mode := source_config.property_get_replication_mode(real_path)
-		var spawn := source_config.property_get_spawn(real_path)
-		var sync_flag := source_config.property_get_sync(real_path)
-		var watch := source_config.property_get_watch(real_path)
-
-		var node_res: Array = scene_owner.get_node_and_resource(real_path)
-		assert(node_res[0],
-			"Trying to synchronize '%s' which is not a valid property path. \
+		var source_config: SceneReplicationConfig = sync.replication_config
+		
+		for real_path: NodePath in source_config.get_properties():
+			var node_res: Array = scene_owner.get_node_and_resource(real_path)
+			assert(node_res[0],
+				"Trying to synchronize '%s' which is not a valid property path. \
 Check source_config." % real_path)
 
-		var node: Node = node_res[0]
-		var prop_path: NodePath = node_res[2]
+			var node: Node = node_res[0]
+			var prop_path: NodePath = node_res[2]
 
-		var is_root := node == scene_owner
-		var node_label := "" if is_root else String(node.name)
+			var is_root := node == scene_owner
+			var node_label := "" if is_root else String(node.name)
 
-		var leaf: String
-		if prop_path.get_subname_count() > 0:
-			leaf = prop_path.get_subname(prop_path.get_subname_count() - 1)
-		else:
-			leaf = String(prop_path).trim_prefix(":")
+			var leaf: String
+			if prop_path.get_subname_count() > 0:
+				leaf = prop_path.get_subname(prop_path.get_subname_count() - 1)
+			else:
+				leaf = String(prop_path).trim_prefix(":")
 
-		var virtual_name: String
-		if is_root:
-			virtual_name = leaf # "property"
-		else:
-			virtual_name = node_label + "/" + leaf # "Node/property"
+			var virtual_name: String
+			if is_root:
+				virtual_name = leaf # "property"
+			else:
+				virtual_name = node_label + "/" + leaf # "Node/property"
 
-		var vname_sn := StringName(virtual_name)
-		assert(not _property_paths.has(vname_sn),
-			"Virtual property name '%s' from '%s' is duplicated. \
-Use unique node names or adjust mapping." % [virtual_name, String(real_path)])
+			var vname_sn := StringName(virtual_name)
+			
+			if _property_paths.has(vname_sn):
+				continue
 
-		_property_paths[vname_sn] = real_path
+			_property_paths[vname_sn] = real_path
+			var virtual_path := NodePath(":" + virtual_name)
 
-		var virtual_path := NodePath(":" + virtual_name)
+			var mode := source_config.property_get_replication_mode(real_path)
+			var spawn := source_config.property_get_spawn(real_path)
+			var sync_flag := source_config.property_get_sync(real_path)
+			var watch := source_config.property_get_watch(real_path)
 
-		new_config.add_property(virtual_path)
-		new_config.property_set_replication_mode(virtual_path, mode)
-		new_config.property_set_spawn(virtual_path, spawn)
-		new_config.property_set_sync(virtual_path, sync_flag)
-		new_config.property_set_watch(virtual_path, watch)
+			new_config.add_property(virtual_path)
+			new_config.property_set_replication_mode(virtual_path, mode)
+			new_config.property_set_spawn(virtual_path, spawn)
+			new_config.property_set_sync(virtual_path, sync_flag)
+			new_config.property_set_watch(virtual_path, watch)
 
-		if not save_container.has_value(vname_sn):
-			var value: Variant = node.get_indexed(prop_path)
-			save_container.set_value(vname_sn, value)
+			if not save_container.has_value(vname_sn):
+				var value: Variant = node.get_indexed(prop_path)
+				save_container.set_value(vname_sn, value)
 
 	root_path = NodePath(".")
 	replication_config = new_config
@@ -135,7 +135,7 @@ func has_state_property(property: StringName) -> bool:
 func _get_scene_value(property_name: StringName) -> Variant:
 	var real_path: NodePath = _property_paths[property_name]
 	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0], 
+	assert(node_res[0],
 		"Invalid real property path for get_scene_value: %s" % String(real_path))
 	var node: Node = node_res[0]
 	var prop_path: NodePath = node_res[2]
@@ -145,7 +145,7 @@ func _get_scene_value(property_name: StringName) -> Variant:
 func _set_scene_value(property_name: StringName, value: Variant) -> void:
 	var real_path: NodePath = _property_paths[property_name]
 	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0], 
+	assert(node_res[0],
 		"Invalid real property path for set_scene_value: %s" % String(real_path))
 	var node: Node = node_res[0]
 	var prop_path: NodePath = node_res[2]
@@ -170,6 +170,7 @@ func _set(property: StringName, value: Variant) -> bool:
 		return true
 
 	return false
+
 
 func save_once() -> void:
 	if _state_changed:
@@ -205,7 +206,7 @@ the `SaveSynchronizer`." % property_name)
 		if value == null:
 			push_error(
 				"Trying to push but save doesn't have property \
-'%s' that is tracked by the `aveSynchronizer`." % property_name,
+'%s' that is tracked by the `SaveSynchronizer`." % property_name,
 			)
 			return Error.ERR_UNCONFIGURED
 
@@ -214,11 +215,11 @@ the `SaveSynchronizer`." % property_name)
 	return Error.OK
 
 
-
 func push_to(peer_id: int) -> void:
 	pull_from_scene()
 	state_changed.emit()
 	request_push.rpc_id(peer_id, save_container.serialize())
+
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_push(bytes: PackedByteArray) -> void:

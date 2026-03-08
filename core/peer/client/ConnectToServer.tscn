@@ -47,11 +47,4 @@ size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.25
 text = "Join"
 
-[node name="RichTextLabel" type="RichTextLabel" parent="VBox" unique_id=452592]
-layout_mode = 2
-bbcode_enabled = true
-text = "Servers
-	[color=gray]ws.diesjor.com[/color]"
-fit_content = true
-
 [connection signal="pressed" from="VBox/HBox/JoinButton" to="." method="_on_join_button_pressed"]
