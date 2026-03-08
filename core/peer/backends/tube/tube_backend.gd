@@ -2,23 +2,23 @@
 class_name TubeBackend
 extends BackendPeer
 
-## Path to the TubeClient node relative to the MultiplayerTree.
-@export_node_path("TubeClient") var tube_client_path: NodePath
+@export_node_path("Node") var tube_client_path: NodePath
 
-var tube: TubeClient
+var tube: TubeWrapper
 
 func setup(tree: MultiplayerTree) -> Error:
 	if tube_client_path.is_empty():
 		push_error("TubeBackend: TubeClient path is empty.")
 		return ERR_UNCONFIGURED
 		
-	if not tree.has_node(tube_client_path):
-		push_error("TubeBackend: Cannot find TubeClient at path: ", tube_client_path)
-		return ERR_DOES_NOT_EXIST
-		
-	tube = tree.get_node(tube_client_path) as TubeClient
-	if not tube:
-		push_error("TubeBackend: Node at path is not a TubeClient.")
+	var node = tree.get_node_or_null(tube_client_path)
+	tube = TubeWrapper.new(node)
+	
+	if not tube.is_valid():
+		push_error("TubeBackend: Assigned node is not a valid TubeClient. \
+TubeClient depends on Tube addon. You can find more info at: \
+`https://github.com/koopmyers/tube`.")
+		tube = null
 		return ERR_INVALID_DATA
 	
 	tube.multiplayer_root_node = tree
@@ -29,10 +29,11 @@ func setup(tree: MultiplayerTree) -> Error:
 	return OK
 
 func host() -> Error:
-	assert(tube, "Backend needs to `setup()` first.")
+	assert(tube != null, "Backend needs to `setup()` first.")
 		
 	tube.create_session()
-	if tube.state == TubeClient.State.CREATING_SESSION or tube.state == TubeClient.State.SESSION_CREATED:
+	
+	if tube.state == TubeWrapper.State.CREATING_SESSION or tube.state == TubeWrapper.State.SESSION_CREATED:
 		print("Tube session ready at `%s` (saved to clipboard). " % tube.session_id)
 		DisplayServer.clipboard_set(tube.session_id)
 		return OK
@@ -40,22 +41,22 @@ func host() -> Error:
 	return ERR_CANT_CREATE
 
 func join(server_address: String, _username: String = "") -> Error:
-	assert(tube, "Backend needs to `setup()` first.")
+	assert(tube != null, "Backend needs to `setup()` first.")
 		
 	tube.join_session(server_address)
-	if tube.state == TubeClient.State.JOINING_SESSION or tube.state == TubeClient.State.SESSION_JOINED:
+	
+	if tube.state == TubeWrapper.State.JOINING_SESSION or tube.state == TubeWrapper.State.SESSION_JOINED:
 		return OK
 		
 	return ERR_CANT_CONNECT
 
-
 func peer_reset_state() -> void:
-	if is_instance_valid(tube) and tube.state != TubeClient.State.IDLE:
+	if tube != null and tube.state != TubeWrapper.State.IDLE:
 		tube.leave_session()
 	super.peer_reset_state()
 
 func get_join_address() -> String:
-	if is_instance_valid(tube) and not tube.session_id.is_empty():
+	if tube != null and not tube.session_id.is_empty():
 		return tube.session_id
 		
 	return super.get_join_address()
@@ -63,11 +64,53 @@ func get_join_address() -> String:
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	var warnings := PackedStringArray()
 	
-	var tube: TubeClient = tree.get_node_or_null(tube_client_path)
 	if tube_client_path.is_empty():
 		warnings.append("TubeClient path is empty. Please assign a TubeClient node.")
-	elif not tree.is_ancestor_of(tube):
-		warnings.append("`%s` node is not a child of `%s`.\
-		" % [tube.name, tree.name])
+		return warnings
+		
+	var node = tree.get_node_or_null(tube_client_path)
+	if node == null:
+		return warnings
+		
+	var wrapper = TubeWrapper.new(node)
+	if not wrapper.is_valid():
+		warnings.append("Node assigned is not a valid TubeClient.")
+		
+	if not tree.is_ancestor_of(node):
+		warnings.append("`%s` node is not a child of `%s`." % [node.name, tree.name])
 
 	return warnings
+
+
+class TubeWrapper:
+	enum State { IDLE, CREATING_SESSION, SESSION_CREATED, JOINING_SESSION, SESSION_JOINED }
+	
+	var _node: Variant 
+	
+	func _init(target_node: Node) -> void:
+		_node = target_node
+		
+	var state: int:
+		get: return _node.state
+		
+	var session_id: String:
+		get: return _node.session_id
+		
+	var multiplayer_root_node: Node:
+		get: return _node.multiplayer_root_node
+		set(value): _node.multiplayer_root_node = value
+			
+	var multiplayer_api: MultiplayerAPI:
+		get: return _node.multiplayer_api
+		
+	func is_valid() -> bool:
+		return _node != null and _node.has_method("create_session") and "multiplayer_root_node" in _node
+		
+	func create_session() -> void:
+		_node.create_session()
+		
+	func join_session(address: String) -> void:
+		_node.join_session(address)
+		
+	func leave_session() -> void:
+		_node.leave_session()
