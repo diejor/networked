@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dga0loylsa26i"]
 
-[ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/components/lobby/lobby.gd" id="1_b4l3b"]
-[ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/components/lobby/LobbySynchronizer.tscn" id="1_p8duo"]
+[ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/core/lobby/lobby.gd" id="1_b4l3b"]
+[ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/core/lobby/LobbySynchronizer.tscn" id="1_p8duo"]
 
 [sub_resource type="GDScript" id="GDScript_hbugg"]
 resource_name = "world_server_fixer"

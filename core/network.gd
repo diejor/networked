@@ -26,7 +26,12 @@ var server: MultiplayerTree
 func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data)
 	assert(client_data.username)
-	assert(client_data.scene_path)
+	assert(client_data.scene_path, "The server must know what player scene to \
+connect. Set `scene_path` of `client_data` with a scene tracked by a `MultiplayerSpawner` \
+in at least one lobby. If you don't have any lobbies, create a scene with a \
+`MultiplayerSpawner` to `%s` spawn list, attach a `ClientComponent` \
+scene to the player scene, finally, add the player scene to the spawn list \
+of the lobby's `MultiplayerSpawner`." % client.lobby_manager.name)
 	
 	await disconnect_player()
 	await _validate_current_scene()

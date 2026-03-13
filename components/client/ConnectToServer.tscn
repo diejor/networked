@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://4rqj7gr6xifw"]
 
-[ext_resource type="Script" uid="uid://ftgc1ndrdxfb" path="res://addons/networked/core/peer/client/connect_to_server.gd" id="1_nxquo"]
+[ext_resource type="Script" uid="uid://ftgc1ndrdxfb" path="res://addons/networked/components/client/connect_to_server.gd" id="1_nxquo"]
 
 [node name="Connect To Server" type="MarginContainer" unique_id=628941669]
 clip_contents = true

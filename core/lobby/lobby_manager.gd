@@ -118,13 +118,37 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	client_data.deserialize(client_data_bytes)
 	client_data.peer_id = multiplayer.get_remote_sender_id()
 	
-	for client: ClientComponent in get_tree().get_nodes_in_group("clients"):
-		client.player_joined.emit(client_data)
+	assert(_get_same_scene_clients(client_data.scene_path).size() == 1, 
+		"Only one client can handle the `join_player` request.")
+	
+	var all_clients := get_tree().get_nodes_in_group("clients")
+	var client_idx := all_clients.find_custom(func(client: ClientComponent):
+		var is_same_scene := (ResourceUID.ensure_path(client_data.scene_path) 
+			== ResourceUID.ensure_path(client.owner.scene_file_path))
+		return is_same_scene
+	)
+	
+	assert(client_idx != -1, "No client can spawn `scene_path = %s`.\
+		" % ResourceUID.ensure_path(client_data.scene_path))
+	
+	all_clients[client_idx].player_joined.emit(client_data)
 
 
 # ------------------------------------------------------------------------------
 # Internal Helpers & Callbacks
 # ------------------------------------------------------------------------------
+
+func _is_same_scene(scene_path: String, node: Node) -> bool:
+	var is_same_scene := (ResourceUID.ensure_path(scene_path) 
+		== ResourceUID.ensure_path(node.scene_file_path))
+	return is_same_scene
+
+func _get_same_scene_clients(scene_path: String) -> Array:
+	var all_clients := get_tree().get_nodes_in_group("clients")
+	var same_scene_clients := all_clients.filter(func(client: ClientComponent):
+		return _is_same_scene(scene_path, client.owner)
+	)
+	return same_scene_clients
 
 func _on_lobby_spawned(node: Node) -> void:
 	var lobby := node as Lobby

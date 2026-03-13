@@ -95,6 +95,13 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		player.owner = lobby.level
 
 
+func _on_connect_player(client_data: MultiplayerClientData) -> void:
+	assert(get_tree().current_scene is MultiplayerNetwork)
+	var network: MultiplayerNetwork = get_tree().current_scene
+	client_data.scene_path = owner.scene_file_path
+	network.connect_player(client_data)
+
+
 func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer and multiplayer.is_server() and get_multiplayer_authority() == peer_id:
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
