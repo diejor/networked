@@ -123,8 +123,7 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	
 	var all_clients := get_tree().get_nodes_in_group("clients")
 	var client_idx := all_clients.find_custom(func(client: ClientComponent):
-		var is_same_scene := (ResourceUID.ensure_path(client_data.scene_path) 
-			== ResourceUID.ensure_path(client.owner.scene_file_path))
+		var is_same_scene := _is_same_scene(client_data.scene_path, client.owner)
 		return is_same_scene
 	)
 	
@@ -140,7 +139,8 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 
 func _is_same_scene(scene_path: String, node: Node) -> bool:
 	var is_same_scene := (ResourceUID.ensure_path(scene_path) 
-		== ResourceUID.ensure_path(node.scene_file_path))
+		== ResourceUID.ensure_path(node.scene_file_path) and 
+		node.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER)
 	return is_same_scene
 
 func _get_same_scene_clients(scene_path: String) -> Array:

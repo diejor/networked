@@ -1,10 +1,12 @@
+@abstract
 class_name InputComponent
 extends Node
 
 signal action_changed(action: StringName, pressed: bool)
 
-@export var _actions: ActionsResource
 @onready var state: Dictionary[StringName, bool] = build_state_dict_from_actions()
+
+@abstract func get_inputs() -> Array
 
 
 func _enter_tree() -> void:
@@ -21,7 +23,7 @@ func _ready() -> void:
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
 	var _state: Dictionary[StringName, bool]
 	
-	for action in _actions.get_actions():
+	for action in get_inputs():
 		_state[action] = false
 	
 	assert(not _state.is_empty(),
