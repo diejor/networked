@@ -15,7 +15,7 @@ unique_name_in_owner = true
 replication_config = SubResource("SceneReplicationConfig_npy7m")
 visibility_update_mode = 2
 
-[node name="DebugClientLabel" parent="." unique_id=530562393 node_paths=PackedStringArray("client") instance=ExtResource("2_fvt7m")]
+[node name="DebugClientLabel" parent="." unique_id=530562393 instance=ExtResource("2_fvt7m")]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -27,7 +27,6 @@ offset_right = 14.0
 offset_bottom = 24.5
 grow_horizontal = 2
 grow_vertical = 2
-client = NodePath("..")
 
 [node name="ConnectServerUI" parent="." unique_id=685856177 instance=ExtResource("3_npy7m")]
 

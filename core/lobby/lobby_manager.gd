@@ -8,10 +8,12 @@ extends MultiplayerSpawner
 ## game instances. It extends [MultiplayerSpawner] to natively manage and 
 ## replicate the scenes added to its spawn list.
 
-## Emitted when the manager has been successfully initialized by the [MultiplayerTree].
+## Emitted when the manager has been successfully initialized by the 
+## [MultiplayerTree].
 signal configured()
 
-## Emitted when a new lobby scene has been fully instantiated and entered the tree.
+## Emitted when a new lobby scene has been fully instantiated and entered the 
+## tree.
 signal lobby_spawned(lobby: Lobby)
 
 ## Emitted when a lobby scene is removed from the tree and despawned.
@@ -33,23 +35,45 @@ const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 				
 			tp_layer = layer
 			
-			if tp_layer and not configured.is_connected(tp_layer.configured.emit):
+			if tp_layer and not configured.is_connected(
+				tp_layer.configured.emit):
 				configured.connect(tp_layer.configured.emit)
 		else:
 			tp_layer = layer
 			
 		update_configuration_warnings()
 
+@export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
+var add_to_spawn_list: SceneNodePath:
+	set(value):
+		if Engine.is_editor_hint() and value != null:
+			var path: String = value.scene_path 
+			
+			if not path.is_empty():
+				if not _has_spawnable_scene_path(path):
+					add_spawnable_scene(path)
+					notify_property_list_changed()
+		
+		add_to_spawn_list = null
+
 var active_lobbies: Dictionary[StringName, Lobby]
 
 var lobbies: Array[String]:
 	get:
 		if lobbies.is_empty():
-			assert(get_spawnable_scene_count() > 0, "Add lobbies to the spawn list.")
+			assert(get_spawnable_scene_count() > 0, 
+				"Add lobbies to the spawn list.")
 			for scene_idx in get_spawnable_scene_count():
 				lobbies.append(get_spawnable_scene(scene_idx))
 			clear_spawnable_scenes()
 		return lobbies
+
+
+func _has_spawnable_scene_path(target_path: String) -> bool:
+	for i in get_spawnable_scene_count():
+		if get_spawnable_scene(i) == target_path:
+			return true
+	return false
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -90,7 +114,8 @@ func spawn_lobbies() -> void:
 			spawn(level_path)
 
 
-## Custom spawn function that wraps the level scene inside a dedicated Lobby node.
+## Custom spawn function that wraps the level scene inside a dedicated Lobby 
+## node.
 ##
 ## Instantiates the appropriate server or client lobby wrapper, assigns the 
 ## instantiated level to it, and hooks up the despawn signals.
@@ -98,7 +123,8 @@ func spawn_lobby(level_file_path: String) -> Node:
 	var level_scene: PackedScene = load(level_file_path)
 	var level: Node = level_scene.instantiate()
 	
-	var lobby_scene: PackedScene = SERVER_LOBBY if multiplayer.is_server() else CLIENT_LOBBY
+	var lobby_scene: PackedScene = (SERVER_LOBBY 
+		if multiplayer.is_server() else CLIENT_LOBBY)
 	var lobby: Lobby = lobby_scene.instantiate()
 	
 	lobby.level = level
@@ -118,37 +144,16 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	client_data.deserialize(client_data_bytes)
 	client_data.peer_id = multiplayer.get_remote_sender_id()
 	
-	assert(_get_same_scene_clients(client_data.scene_path).size() == 1, 
-		"Only one client can handle the `join_player` request.")
+	var lobby := active_lobbies[client_data.spawner_path.get_scene_name()]
+	var spawner_client: ClientComponent = (
+		lobby.level.get_node(client_data.spawner_path.node_path))
 	
-	var all_clients := get_tree().get_nodes_in_group("clients")
-	var client_idx := all_clients.find_custom(func(client: ClientComponent):
-		var is_same_scene := _is_same_scene(client_data.scene_path, client.owner)
-		return is_same_scene
-	)
-	
-	assert(client_idx != -1, "No client can spawn `scene_path = %s`.\
-		" % ResourceUID.ensure_path(client_data.scene_path))
-	
-	all_clients[client_idx].player_joined.emit(client_data)
+	spawner_client.player_joined.emit(client_data)
 
 
 # ------------------------------------------------------------------------------
 # Internal Helpers & Callbacks
 # ------------------------------------------------------------------------------
-
-func _is_same_scene(scene_path: String, node: Node) -> bool:
-	var is_same_scene := (ResourceUID.ensure_path(scene_path) 
-		== ResourceUID.ensure_path(node.scene_file_path) and 
-		node.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER)
-	return is_same_scene
-
-func _get_same_scene_clients(scene_path: String) -> Array:
-	var all_clients := get_tree().get_nodes_in_group("clients")
-	var same_scene_clients := all_clients.filter(func(client: ClientComponent):
-		return _is_same_scene(scene_path, client.owner)
-	)
-	return same_scene_clients
 
 func _on_lobby_spawned(node: Node) -> void:
 	var lobby := node as Lobby

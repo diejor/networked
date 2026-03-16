@@ -7,7 +7,8 @@ var inspector_plugin: EditorInspectorPlugin
 var context_menu_plugin: SceneNodeContextMenu
 
 func _enter_tree() -> void:
-	add_inspector_plugin(InspectorPlugin.new())
+	inspector_plugin = InspectorPlugin.new()
+	add_inspector_plugin(inspector_plugin)
 	
 	context_menu_plugin = SceneNodeContextMenu.new()
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, context_menu_plugin)

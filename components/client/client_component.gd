@@ -65,14 +65,10 @@ func _on_owner_tree_entered() -> void:
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	assert(client_data.peer_id)
-	assert(client_data.scene_path)
+	assert(client_data.spawner_path)
 	assert(client_data.username)
 	
-	var is_valid_scene: bool = ResourceUID.ensure_path(client_data.scene_path) == ResourceUID.ensure_path(owner.scene_file_path)
-	if not is_valid_scene or get_multiplayer_authority() != MultiplayerPeer.TARGET_PEER_SERVER:
-		return
-	
-	var player_scene: PackedScene = load(client_data.scene_path as String)
+	var player_scene: PackedScene = load(owner.scene_file_path)
 	var player: Node2D = player_scene.instantiate()
 	var peer_id: int = client_data.peer_id
 	var client: ClientComponent = player.get_node("%ClientComponent")
@@ -90,6 +86,8 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if tp_component and save_component:
 		tp_component.spawn(lobby_manager)
 	else:
+		var lobby: Lobby = lobby_manager.active_lobbies[
+			client_data.spawner_path.get_scene_name()]
 		lobby.synchronizer.track_player(player)
 		lobby.level.add_child(player)
 		player.owner = lobby.level
@@ -98,7 +96,6 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
 	assert(get_tree().current_scene is MultiplayerNetwork)
 	var network: MultiplayerNetwork = get_tree().current_scene
-	client_data.scene_path = owner.scene_file_path
 	network.connect_player(client_data)
 
 

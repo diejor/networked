@@ -1,9 +1,6 @@
 @tool
 extends ConfirmationDialog
 
-## A reusable code-only dialog for selecting a specific node path from a PackedScene.
-## Parses the scene, builds a filterable tree, and highlights allowed node types.
-
 signal path_selected(scene_path: String, node_path: String)
 
 var forced_allowed_class: String = "Node"
@@ -91,7 +88,6 @@ func _build_ui() -> void:
 func _ready() -> void:
 	search_box.right_icon = get_theme_icon("Search", "EditorIcons")
 
-## Configures the dialog state before opening it.
 func setup_and_open(scene_path: String, target_class: String, is_builtin: bool, custom_script: Script, icon: Texture2D) -> void:
 	forced_allowed_class = target_class
 	is_builtin_class = is_builtin
@@ -168,7 +164,7 @@ func _add_node_to_tree(node: Node, parent_item: TreeItem, filter: String, show_a
 	var item: TreeItem = node_tree.create_item(parent_item)
 	item.set_text(0, node.name)
 	
-	var final_path: String = "%" + node.name if node.unique_name_in_owner else str(temp_scene_instance.get_path_to(node))
+	var final_path: String = _get_robust_path_string(temp_scene_instance, node)
 	item.set_metadata(0, {"path": final_path})
 	item.set_icon(0, _get_class_icon(node.get_class()))
 		
@@ -201,3 +197,25 @@ func _get_class_icon(class_name_str: String) -> Texture2D:
 	if custom_icon:
 		return custom_icon
 	return get_theme_icon("Node", "EditorIcons")
+
+func _get_robust_path_string(root: Node, target: Node) -> String:
+	if root == target:
+		return "."
+
+	var path := ""
+	var current: Node = target
+
+	while current != root and current != null:
+		if current.unique_name_in_owner:
+			if current.owner == root:
+				path = "%" + current.name + (("/" + path) if not path.is_empty() else "")
+				break
+			elif current.owner != null:
+				path = "%" + current.name + (("/" + path) if not path.is_empty() else "")
+				current = current.owner
+				continue
+
+		path = current.name + (("/" + path) if not path.is_empty() else "")
+		current = current.get_parent()
+
+	return path

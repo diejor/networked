@@ -2,14 +2,14 @@ class_name MultiplayerClientData
 extends Serde
 
 @export var username: StringName
-@export_file var scene_path: String
+@export var spawner_path: SceneNodePath
 @export var url: String
 var peer_id: int
 
 func serialize() -> PackedByteArray:
 	return var_to_bytes({
 		username=username, 
-		scene_path=scene_path,
+		spawner_path=spawner_path.as_uid(),
 		url=url,
 		peer_id=peer_id
 	})
@@ -19,8 +19,6 @@ func deserialize(bytes: PackedByteArray) -> void:
 	assert(data)
 	
 	username = data.username
-	scene_path = data.scene_path
-	if "url" in data:
-		data.url = url
-	if "peer_id" in data:
-		data.peer_id = peer_id
+	spawner_path = SceneNodePath.new(data.spawner_path)
+	url = data.url
+	peer_id = data.peer_id

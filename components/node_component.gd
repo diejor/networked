@@ -19,10 +19,10 @@ var lobby_manager: MultiplayerLobbyManager:
 			return get_node(api.root_path)
 		return null
 
-var lobby: Lobby:
+var current_lobby: Lobby:
 	get:
-		if owner and owner.owner:
-			return owner.owner.owner
+		if lobby_manager and lobby_manager.active_lobbies.size() == 1:
+			return lobby_manager.active_lobbies.values()[0]
 		return null
 
 var tp_layer: TPLayerAPI:

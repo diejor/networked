@@ -103,6 +103,19 @@ func as_uid() -> String:
 			uid_scene = ResourceUID.id_to_text(id)
 	return "%s::%s" % [uid_scene, node_path]
 
+## Returns the name of the referenced scene file (e.g., returns "Winter" for "res://scenes/Winter.tscn").
+func get_scene_name() -> String:
+	if scene_path.is_empty():
+		return ""
+		
+	var real_path: String = scene_path
+	if real_path.begins_with("uid://"):
+		var id: int = ResourceUID.text_to_id(real_path)
+		if ResourceUID.has_id(id):
+			real_path = ResourceUID.get_id_path(id)
+			
+	return real_path.get_file().get_basename()
+
 ## Overrides the default [method Object._to_string] behavior for cleaner debugging.
 func _to_string() -> String:
 	if scene_path.is_empty() and node_path.is_empty():
@@ -114,6 +127,7 @@ static func load_and_unwrap_into(tres_path: String, parent: Node) -> Node:
 	var res = load(tres_path) as SceneNodePath
 	assert(res, "SceneNodePath: Resource at %s is invalid or missing." % tres_path)
 	return res.unwrap_into(parent)
+
 
 # ==========================================
 # Private Helpers

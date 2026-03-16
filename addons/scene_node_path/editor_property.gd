@@ -1,8 +1,6 @@
 @tool
 extends EditorProperty
 
-## Custom inspector UI for assigning a scene file and selecting a node path within it.
-
 const PickerScript = preload("uid://bi68kvs2if4hr")
 
 static var global_class_cache: Dictionary = {}
@@ -95,7 +93,6 @@ func _update_property() -> void:
 		return
 
 	var real_path: String = _get_actual_scene_path(res.scene_path)
-	
 	var scene_name: String = real_path.get_file().get_basename()
 	
 	if res.node_path.is_empty():
@@ -104,7 +101,6 @@ func _update_property() -> void:
 
 	var current_mod_time: int = FileAccess.get_modified_time(real_path)
 	if _is_cache_valid(res, current_mod_time):
-		# Format the custom string here
 		var display_text: String = "%s::%s" % [scene_name, res.node_path]
 		if _cached_is_broken:
 			display_text += " (Broken!)"
@@ -181,7 +177,6 @@ func _on_main_button_pressed() -> void:
 func _on_path_selected(scene_path: String, node_path: String) -> void:
 	var res: Variant = _get_or_create_resource()
 	
-	# Enforce UID constraint when assigned via the Inspector
 	var final_scene_path: String = scene_path
 	if final_scene_path.begins_with("res://") and ResourceLoader.exists(final_scene_path):
 		var uid: int = ResourceLoader.get_resource_uid(final_scene_path)
@@ -195,8 +190,8 @@ func _on_path_selected(scene_path: String, node_path: String) -> void:
 func _on_menu_id_pressed(id: int) -> void:
 	match id:
 		0: picker_dialog.file_dialog.popup_file_dialog()
-		1: _copy_to_clipboard(false)
-		2: _copy_to_clipboard(true)
+		1: _copy_to_clipboard(true)
+		2: _copy_to_clipboard(false)
 		4: emit_changed(get_edited_property(), null)
 
 func _copy_to_clipboard(use_uid: bool) -> void:
