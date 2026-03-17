@@ -1,3 +1,4 @@
+@tool
 class_name SceneNodePath
 extends Resource
 
@@ -42,6 +43,10 @@ extends Resource
 
 ## The internal path to the target node within the referenced scene.
 @export var node_path: String
+
+## Internal variable updated by the Inspector plugin to store validation errors.
+## Useful for forwarding warnings to a Node's _get_configuration_warnings().
+var _editor_property_warnings: String = ""
 
 ## Constructs a new [SceneNodePath]. Optionally accepts a formatted 
 ## [String] (e.g., [code]"scene_path::node_path"[/code]).
@@ -115,6 +120,30 @@ func get_scene_name() -> String:
 			real_path = ResourceUID.get_id_path(id)
 			
 	return real_path.get_file().get_basename()
+
+## Returns the name of the referenced node. 
+## [param parent_offset] dictates how far up the path to go: 0 is the target 
+## node, 1 is its parent, 2 is its grandparent, etc.
+func get_node_name(parent_offset: int = 0) -> String:
+	if node_path.is_empty() or parent_offset < 0:
+		return ""
+		
+	var path := NodePath(node_path)
+	var name_count := path.get_name_count()
+	
+	if name_count == 0 or parent_offset >= name_count:
+		return ""
+		
+	# Invert the index
+	var target_idx: int = (name_count - 1) - parent_offset
+	
+	var target_name := String(path.get_name(target_idx))
+	
+	# Clean up the name if it's a Scene Unique Node
+	if target_name.begins_with("%"):
+		target_name = target_name.trim_prefix("%")
+		
+	return target_name
 
 ## Overrides the default [method Object._to_string] behavior for cleaner debugging.
 func _to_string() -> String:

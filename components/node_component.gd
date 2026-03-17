@@ -37,7 +37,8 @@ var tp_layer: TPLayerAPI:
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	if owner and get_client_synchronizers().is_empty():
-		warnings.append("Requires at least one MultiplayerSynchronizer in the scene with root_path pointing to the owner.")
+		warnings.append("Requires at least one MultiplayerSynchronizer in the \
+scene with root_path pointing to the owner.")
 	return warnings
 
 
@@ -106,7 +107,9 @@ func _assert_replicated_properties() -> void:
 				if is_valid:
 					break
 					
-		assert(is_valid, "`%s` property `%s` lacks proper replication config. Reload the scene in the editor to auto-configure." % [self.name, prop_path])
+		assert(is_valid, "`%s` property `%s` lacks proper replication config. \
+Reload `%s` scene in the editor to auto-configure. \
+			" % [self.name, prop_path, owner.scene_file_path])
 
 
 func _auto_configure_replication() -> void:

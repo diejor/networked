@@ -89,6 +89,8 @@ func _update_property() -> void:
 	main_btn.remove_theme_color_override("font_color")
 	
 	if not res or res.scene_path.is_empty():
+		if res and "_editor_property_warnings" in res:
+			res._editor_property_warnings = "Scene path is not assigned."
 		_apply_ui_state(false, false, "Assign Scene...", "Node")
 		return
 
@@ -96,6 +98,8 @@ func _update_property() -> void:
 	var scene_name: String = real_path.get_file().get_basename()
 	
 	if res.node_path.is_empty():
+		if "_editor_property_warnings" in res:
+			res._editor_property_warnings = "Node path is not assigned."
 		_apply_ui_state(true, false, "%s::(Missing Node!)" % scene_name, "Node")
 		return
 
@@ -116,8 +120,11 @@ func _is_cache_valid(res: Variant, current_mod_time: int) -> bool:
 func _update_cache_and_validate(real_path: String, res: Variant, current_mod_time: int) -> void:
 	var is_broken: bool = true
 	var dynamic_class: String = forced_allowed_class
+	var warning_msg: String = ""
 
-	if ResourceLoader.exists(real_path):
+	if not ResourceLoader.exists(real_path):
+		warning_msg = "Scene file does not exist at path: %s" % real_path
+	else:
 		var packed: PackedScene = load(real_path)
 		if packed:
 			var temp_instance: Node = packed.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
@@ -126,7 +133,15 @@ func _update_cache_and_validate(real_path: String, res: Variant, current_mod_tim
 				if target_node:
 					is_broken = false
 					dynamic_class = target_node.get_class()
+					warning_msg = ""
+				else:
+					warning_msg = "Node '%s' does not exist in the referenced scene." % res.node_path
 				temp_instance.free()
+		else:
+			warning_msg = "Failed to load PackedScene."
+
+	if "_editor_property_warnings" in res:
+		res._editor_property_warnings = warning_msg
 
 	_cached_scene_path = res.scene_path
 	_cached_node_path = res.node_path
