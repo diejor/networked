@@ -6,7 +6,7 @@
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_npy7m"]
 
-[node name="ClientComponent" type="Node2D" unique_id=1278092247 groups=["clients"]]
+[node name="ClientComponent" type="Node2D" unique_id=1278092247]
 unique_name_in_owner = true
 script = ExtResource("1_qa662")
 
