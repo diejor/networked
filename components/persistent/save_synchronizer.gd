@@ -1,20 +1,21 @@
 class_name SaveSynchronizer
 extends MultiplayerSynchronizer
 
+## Virtualizes the replication configurations of all other synchronizers on the entity,
+## dynamically packing their tracked properties into a single SaveContainer for disk serialization and network transfer.
+
 signal state_changed
 
 var save_component: SaveComponent:
-	get:
-		return get_parent()
+	get: return get_parent() as SaveComponent
 
 var save_container: SaveContainer:
-	get:
-		return save_component.save_container
+	get: return save_component.save_container
 
 var scene_owner: Node:
 	get: return save_component.owner
 
-var _property_paths: Dictionary[StringName, NodePath] = { }
+var _property_paths: Dictionary[StringName, NodePath] = {}
 var _initialized: bool = false
 var _state_changed: bool = false
 
@@ -26,6 +27,7 @@ func _ready() -> void:
 	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
 
 
+## Initializes the virtualized replication config based on the owner's attached synchronizers.
 func setup() -> void:
 	if _initialized:
 		push_warning("Initializing once again.")
@@ -41,16 +43,13 @@ func setup() -> void:
 	_virtualize_replication_configs()
 	notify_property_list_changed()
 
-# ------------------------
-# Virtualization helpers
-# ------------------------
-
 
 func _virtualize_replication_configs() -> void:
 	var new_config := SceneReplicationConfig.new()
 	_property_paths.clear()
 	
-	for sync: MultiplayerSynchronizer in save_component.get_synchronizers():
+	# Safely fetch the synchronizers using our global cache instead of a NodeComponent!
+	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(scene_owner):
 		if sync == self or not sync.replication_config:
 			continue
 
@@ -59,8 +58,7 @@ func _virtualize_replication_configs() -> void:
 		for real_path: NodePath in source_config.get_properties():
 			var node_res: Array = scene_owner.get_node_and_resource(real_path)
 			assert(node_res[0],
-				"Trying to synchronize '%s' which is not a valid property path. \
-Check source_config." % real_path)
+				"Trying to synchronize '%s' which is not a valid property path. Check source_config." % real_path)
 
 			var node: Node = node_res[0]
 			var prop_path: NodePath = node_res[2]
@@ -76,9 +74,9 @@ Check source_config." % real_path)
 
 			var virtual_name: String
 			if is_root:
-				virtual_name = leaf # "property"
+				virtual_name = leaf
 			else:
-				virtual_name = node_label + "/" + leaf # "Node/property"
+				virtual_name = node_label + "/" + leaf
 
 			var vname_sn := StringName(virtual_name)
 			
@@ -106,10 +104,6 @@ Check source_config." % real_path)
 	root_path = NodePath(".")
 	replication_config = new_config
 
-# ------------------------
-# Virtual property interface
-# ------------------------
-
 
 func _get_tracked_property_names() -> Array[StringName]:
 	return _property_paths.keys()
@@ -119,12 +113,10 @@ func _get_property_list() -> Array[Dictionary]:
 	var properties: Array[Dictionary] = []
 	for property_name: StringName in _get_tracked_property_names():
 		var value: Variant = save_container.get_value(property_name, null)
-		properties.append(
-			{
-				"name": property_name,
-				"type": typeof(value),
-			},
-		)
+		properties.append({
+			"name": property_name,
+			"type": typeof(value),
+		})
 	return properties
 
 
@@ -135,8 +127,8 @@ func has_state_property(property: StringName) -> bool:
 func _get_scene_value(property_name: StringName) -> Variant:
 	var real_path: NodePath = _property_paths[property_name]
 	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0],
-		"Invalid real property path for get_scene_value: %s" % String(real_path))
+	assert(node_res[0], "Invalid real property path for get_scene_value: %s" % String(real_path))
+	
 	var node: Node = node_res[0]
 	var prop_path: NodePath = node_res[2]
 	return node.get_indexed(prop_path)
@@ -145,8 +137,8 @@ func _get_scene_value(property_name: StringName) -> Variant:
 func _set_scene_value(property_name: StringName, value: Variant) -> void:
 	var real_path: NodePath = _property_paths[property_name]
 	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0],
-		"Invalid real property path for set_scene_value: %s" % String(real_path))
+	assert(node_res[0], "Invalid real property path for set_scene_value: %s" % String(real_path))
+	
 	var node: Node = node_res[0]
 	var prop_path: NodePath = node_res[2]
 	node.set_indexed(prop_path, value)
@@ -155,7 +147,6 @@ func _set_scene_value(property_name: StringName, value: Variant) -> void:
 func _get(property: StringName) -> Variant:
 	if has_state_property(property):
 		return _get_scene_value(property)
-
 	return null
 
 
@@ -163,7 +154,7 @@ func _set(property: StringName, value: Variant) -> bool:
 	if has_state_property(property):
 		save_container.set_value(property, value)
 
-		# Collect changes into a single frame
+		# Collect changes into a single frame to avoid spamming saves/signals
 		_state_changed = true
 		save_once.call_deferred()
 
@@ -178,36 +169,28 @@ func save_once() -> void:
 		_state_changed = false
 
 
-# ------------------------
-# Scene <-> SaveContainer sync
-# ------------------------
-
-
+## Pulls the latest live values from the scene nodes into the virtualized save container.
 func pull_from_scene() -> void:
-	assert(_initialized, "Scynchronizer not initialized.")
+	assert(_initialized, "Synchronizer not initialized.")
 	for property_name: StringName in _get_tracked_property_names():
 		var value: Variant = _get_scene_value(property_name)
 		save_container.set_value(property_name, value)
 
 
+## Pushes the loaded virtual container values into the actual live scene nodes.
 func push_to_scene() -> Error:
-	assert(_initialized, "Scynchronizer not initialized.")
+	assert(_initialized, "Synchronizer not initialized.")
 	assert(save_container)
 
 	for property_name in save_container:
 		var pname := StringName(property_name)
 		if not has_state_property(pname):
-			push_error(
-				"Trying to push a save with property '%s' that is not tracked by \
-the `SaveSynchronizer`." % property_name)
+			push_error("Trying to push a save with property '%s' that is not tracked by the `SaveSynchronizer`." % property_name)
 			return Error.ERR_UNCONFIGURED
 
 		var value: Variant = save_container.get_value(pname)
 		if value == null:
-			push_error(
-				"Trying to push but save doesn't have property \
-'%s' that is tracked by the `SaveSynchronizer`." % property_name,
-			)
+			push_error("Trying to push but save doesn't have property '%s' that is tracked by the `SaveSynchronizer`." % property_name)
 			return Error.ERR_UNCONFIGURED
 
 		_set_scene_value(pname, value)
@@ -215,6 +198,7 @@ the `SaveSynchronizer`." % property_name)
 	return Error.OK
 
 
+## Packages the current scene state and sends it over the network to the specified peer.
 func push_to(peer_id: int) -> void:
 	pull_from_scene()
 	state_changed.emit()

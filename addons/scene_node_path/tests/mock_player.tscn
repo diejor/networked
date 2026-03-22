@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://cskn5w06l6wjy"]
+
+[node name="Player" type="Node2D" unique_id=1693715072 groups=["entities"]]
+visible = false
+
+[node name="Hitbox" type="Area2D" parent="." unique_id=1290553935]
+monitoring = false
+
+[connection signal="tree_entered" from="Hitbox" to="." method="hide"]

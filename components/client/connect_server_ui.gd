@@ -1,16 +1,15 @@
 extends CanvasLayer
 
-@export var client: ClientComponent
-@onready var connect_to_server: ConnectToServerUI = %"Connect To Server"
+signal connect_player(client_data: MultiplayerClientData)
 
-func _init() -> void:
-	DebugFeature.free_if_debug(self)
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:ClientComponent")
+var spawner_node: SceneNodePath
 
 func _ready() -> void:
-	connect_to_server.player_scene = client.owner.scene_file_path
-
+	if not spawner_node:
+		queue_free()
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
-	assert(get_tree().current_scene is MultiplayerNetwork)
-	var network: MultiplayerNetwork = get_tree().current_scene
-	network.connect_player(client_data)
+	assert(spawner_node.is_valid(), "Spawner must be valid to connect.")
+	client_data.spawner_path = spawner_node
+	connect_player.emit(client_data)

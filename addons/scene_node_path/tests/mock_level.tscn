@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cx70mn2ywq126"]
+
+[ext_resource type="PackedScene" uid="uid://cskn5w06l6wjy" path="res://addons/networked/addons/scene_node_path/tests/mock_player.tscn" id="1_o0jtm"]
+
+[node name="Level" type="Node2D" unique_id=1222905443]
+
+[node name="Player" parent="." unique_id=1693715072 instance=ExtResource("1_o0jtm")]
+
+[node name="DeepSecret" type="Node" parent="Player/Hitbox" parent_id_path=PackedInt32Array(1693715072, 1290553935) index="0" unique_id=1026417595]
+
+[editable path="Player"]

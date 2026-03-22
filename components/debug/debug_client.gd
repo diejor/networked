@@ -1,7 +1,7 @@
 class_name DebugClient
 extends Control
 
-@export var client: ClientComponent
+@onready var client: ClientComponent = owner if owner is ClientComponent else null
 @onready var uid_label: RichTextLabel = %UIDLabel
 @onready var username_label: RichTextLabel = %UsernameLabel
 
@@ -14,6 +14,10 @@ func _enter_tree() -> void:
 	original_pos = position
 
 func _ready() -> void:
+	if not is_instance_valid(client):
+		queue_free()
+		return
+	
 	var username := client.username if not client.username.is_empty() else "Spawner"
 	var uid := owner.get_multiplayer_authority()
 	
