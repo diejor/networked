@@ -1,30 +1,76 @@
 # SceneNodePath for Godot 4
+[![CI](https://github.com/diejor/scene_node_path/actions/workflows/parity_ci.yml/badge.svg)](https://github.com/diejor/scene_node_path/actions/workflows/parity_ci.yml)
+[![Godot v4.x](https://img.shields.io/badge/Godot-v4.x-blue?logo=godot-engine&logoColor=white)](https://godotengine.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**SceneNodePath** is a powerful custom Resource and Editor UI plugin for Godot 4. It solves a common architectural problem: safely referencing and instantiating a specific Node inside an *external* PackedScene.
+**SceneNodePath** provides a bulletproof way to reference and instantiate specific Nodes residing within external `PackedScene` files.
 
-Instead of exporting a `PackedScene`, instantiating it in code, and blindly using `get_node("Path/To/Node")` (which breaks if the scene changes), `SceneNodePath` gives you a dedicated Inspector UI to browse the external scene, pick the exact node you want, and safely load it at runtime.
+![SceneNodePath Picker UI](./assets/scene_node_path.gif)
+*The custom Inspector UI allows you to browse and filter any external scene's hierarchy.*
 
-## Features
-* **Custom Node Picker UI:** Browse a filterable tree of the remote scene directly from the Inspector.
-* **UID Support:** Paths are automatically saved as `uid://` strings. If you move your scene files in the FileSystem dock, your references won't break.
-* **Type-Safe Filtering:** Restrict the Inspector to only allow selecting specific node types (e.g., only `Area3D` or your custom `class_name`).
-* **Editor Context Menus:** Native right-click integration in the Scene Tree dock allows you to instantly copy any node as a `SceneNodePath` string for your code.
-* **Bulletproof API:** A heavily optimized, minimal runtime API designed to instantiate the scene and hand you the exact node you requested.
+### The Problem
+Standard Godot development often requires referencing a node inside a separate scene (e.g., a "Spawn Point" inside a "Level" scene). Usually, you export a `PackedScene`, instantiate it, and then call `get_node("Path/To/Node")`. This is **brittle**: if you rename or move the node inside the source scene, your code breaks silently at runtime.
 
----
+### The Solution
+`SceneNodePath` is a custom Resource that stores a **UID-based reference** to both the scene file and the specific node path. It provides a dedicated Inspector UI to browse the external scene and pick your target node safely.
 
-## Installation
-
-1. Download the repository and extract the `addons/scene_node_path` folder.
-2. Move the `scene_node_path` folder into your Godot project's `res://addons/` directory.
-3. Open your project, go to **Project -> Project Settings -> Plugins**.
-4. Check the **Enable** box next to "SceneNodePath".
+## Key Features
+- **Visual Node Picker:** Browse the hierarchy of any scene file directly from the Inspector.
+- **Reference Stability:** Uses UIDs for both files and nodes. References survive file moves and renames.
+- **Type-Filtered Exports:** Restrict the picker to specific Node types (e.g., only allow selecting `Area3D`).
+- **Language Parity:** Fully featured API for both **GDScript** and **C#** (`SceneNodePathCS`).
 
 ---
 
 ## Quick Start
 
-Simply export the resource in your script. The Inspector will present an "Assign Scene" button.
+### 1. Basic Usage
+Assign the path in the Inspector, then instantiate it at runtime.
 
 ```gdscript
-@export var spawn_point: SceneNodePath
+@export var portal_exit: SceneNodePath
+
+func setup():
+    var result = portal_exit.instantiate()
+    if result:
+        add_child(result.root) # The entire scene hierarchy
+        var target = result.node # The specific node you picked
+```
+
+### 2. Isolated Extraction
+If you only want the specific node and don't care about its original scene context:
+
+```gdscript
+# Instantiates, isolates the node, and frees the rest of the scene automatically.
+var boss = boss_path.extract()
+add_child(boss)
+```
+
+### 3. Type Filtering
+Enforce strict type safety in the Inspector using Godot's `@export_custom` annotation.
+
+```gdscript
+# Only allow selecting 'Camera3D' nodes within the target scene.
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:Camera3D")
+var cutscene_camera: SceneNodePath
+```
+
+---
+
+## Deep Inspection
+Godot's `SceneState` API is powerful but notoriously difficult to use, requiring manual index management. `SceneNodePath` provides a **StateInspector** wrapper that allows you to query the target node's data without instantiating it into the scene tree.
+
+```gdscript
+var inspector = portal_path.peek()
+if inspector.is_valid():
+    print("Node Type: ", inspector.get_node_type())
+    print("Groups: ", inspector.get_groups())
+    print("Properties: ", inspector.get_properties())
+```
+*Useful for verifying "locked" doors, checking team alignments, or reading dialogue triggers directly from the scene file.*
+
+---
+
+## Installation
+1. Move the `addons/scene_node_path` folder into your project's `res://addons/` directory.
+2. Enable the plugin in **Project Settings -> Plugins**.

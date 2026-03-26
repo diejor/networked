@@ -1,3 +1,4 @@
+@icon("uid://ntsmds3f8a11")
 @tool
 class_name SceneNodePath
 extends Resource
@@ -12,11 +13,11 @@ extends Resource
 ## @export var portal_destination: SceneNodePath
 ##
 ## func setup_level() -> void:
-##     # 1. Instantiates and adds the scene root to 'self', returning the target.
-##     var portal = portal_destination.unwrap_into(self)
-##
-##     # To safely delete the ENTIRE spawned scene later:
-##     SceneNodePath.get_scene_root(portal).queue_free()
+##     # 1. Instantiates the scene. Returns a Result object with handles to the root and target.
+##     var result = portal_destination.instantiate()
+##     if result:
+##         add_child(result.root)
+##         var portal = result.node
 ##
 ##     # 2. Pulls the node out and deletes the rest of the scene automatically.
 ##     var isolated_boss = SceneNodePath.new("uid://b4x8...::%Boss").extract()
@@ -50,11 +51,6 @@ extends Resource
 ## Useful for forwarding warnings to a Node's _get_configuration_warnings().
 var _editor_property_warnings: String = ""
 
-## Safely retrieves the absolute root of a scene spawned via [method unwrap_into].
-## Use this to safely [method Node.queue_free] the entire scene later.
-static func get_scene_root(spawned_node: Node) -> Node:
-	if not spawned_node: return null
-	return spawned_node.get_meta("snp_root", null)
 
 static func _get_orphan_root(node: Node) -> Node:
 	if not node: return null
@@ -63,21 +59,26 @@ static func _get_orphan_root(node: Node) -> Node:
 		current = current.get_parent()
 	return current
 
-## Constructs a new [SceneNodePath]. Optionally accepts a formatted
-## [String] (e.g., [code]"scene_path::node_path"[/code]).
 func _init(formatted_path: String = "") -> void:
-	if formatted_path.is_empty():
-		return
+	if not formatted_path.is_empty():
+		parse(formatted_path)
 
+## Parses a formatted string (e.g., [code]scene_path::node_path[/code]) and assigns the values.
+func parse(formatted_path: String) -> void:
 	assert(formatted_path.contains("::"), "SceneNodePath: Invalid string format.")
 	var parts := formatted_path.split("::", true, 1)
 
 	node_path = parts[1]
-
 	var raw_scene: String = parts[0]
-	if raw_scene.begins_with("res://") and ResourceLoader.exists(raw_scene):
-		var uid: int = ResourceLoader.get_resource_uid(raw_scene)
-		scene_path = ResourceUID.id_to_text(uid) if uid != ResourceUID.INVALID_ID else raw_scene
+
+	if raw_scene.begins_with("res://"):
+		if ResourceLoader.exists(raw_scene):
+			var uid: int = ResourceLoader.get_resource_uid(raw_scene)
+			scene_path = ResourceUID.id_to_text(uid) if uid != ResourceUID.INVALID_ID else raw_scene
+		else:
+			scene_path = raw_scene
+	elif raw_scene.begins_with("uid://"):
+		scene_path = raw_scene
 	else:
 		scene_path = raw_scene
 
@@ -94,36 +95,38 @@ func is_valid() -> bool:
 	return not real_path.is_empty() and ResourceLoader.exists(real_path)
 
 
-## Instantiates the entire scene referenced by [member scene_path], adds its 
-## root as a child of [param parent], 
-## and returns the specific target [Node] at [member node_path].
+## Instantiates the entire scene referenced by [member scene_path] and returns a
+## [SceneNodePath.Result] containing the scene root and the specific target [Node].
 ##
-## [br][br][b]Important Memory Management Note:[/b]
-## Because the entire scene is instantiated, calling [method Node.queue_free] 
-## on the returned node will [i]only[/i] delete that specific child, leaving the 
-## rest of the instantiated scene in the tree. 
-## To safely delete the entire spawned scene, you must free its root node. 
-## You can access the root using the [method get_scene_root] static method on 
-## the returned node.
-func unwrap_into(parent: Node) -> Node:
-	var target_node := _instantiate_and_get()
-	var root := _get_orphan_root(target_node)
-	
-	target_node.set_meta("snp_root", root)
-	parent.add_child(root)
-	
-	return target_node
+## [br][br][b]Note:[/b] This method does [i]not[/i] add the nodes to the [SceneTree].
+## You are responsible for adding [member Result.root] to the tree and managing its lifecycle.
+func instantiate(edit_state: PackedScene.GenEditState = 0) -> Result:
+	var target_node := _instantiate_and_get(edit_state)
+	if not target_node: return null
+
+	return Result.new(_get_orphan_root(target_node), target_node)
 
 
-## Identical to [method unwrap_into], but safely returns [code]null[/code] on 
+## Identical to [method instantiate], but safely returns [code]null[/code] on
 ## failure without asserting.
-func unwrap_into_or_null(parent: Node) -> Node:
-	var target_node := _instantiate_and_get_or_null()
-	if target_node:
-		var root := _get_orphan_root(target_node)
-		target_node.set_meta("snp_root", root)
-		parent.add_child(root)
-	return target_node
+func instantiate_or_null(edit_state: PackedScene.GenEditState = 0) -> Result:
+	var target_node := _instantiate_and_get_or_null(edit_state)
+	if not target_node: return null
+
+	return Result.new(_get_orphan_root(target_node), target_node)
+
+
+## A container for the results of a [method SceneNodePath.instantiate] call.
+class Result extends RefCounted:
+	## The root node of the newly instantiated scene hierarchy.
+	## Use this to add the scene to the [SceneTree] or to free it later.
+	var root: Node
+	## The specific node referenced by the [member SceneNodePath.node_path].
+	var node: Node
+
+	func _init(p_root: Node, p_node: Node) -> void:
+		root = p_root
+		node = p_node
 
 
 ## Instantiates the entire scene referenced by [member scene_path], isolates the target [Node] 
@@ -131,14 +134,15 @@ func unwrap_into_or_null(parent: Node) -> Node:
 ## [br][br]
 ## [b]Warning:[/b] The extracted node is surgically removed from its scene tree via [method Node.remove_child]. 
 ## It loses its original siblings and parent context.
-func extract() -> Node:
-	return _perform_extraction(_instantiate_and_get())
+func extract(edit_state: PackedScene.GenEditState = 0) -> Node:
+	return _perform_extraction(_instantiate_and_get(edit_state))
 
 
 ## Identical to [method extract], but safely returns [code]null[/code] on failure.
-func extract_or_null() -> Node:
-	var target := _instantiate_and_get_or_null()
+func extract_or_null(edit_state: PackedScene.GenEditState = 0) -> Node:
+	var target := _instantiate_and_get_or_null(edit_state)
 	return _perform_extraction(target) if target else null
+
 
 
 ## Returns the absolute file path and node path combined (e.g., [code]"res://scene.tscn::Node"[/code]).
@@ -211,13 +215,7 @@ func _to_string() -> String:
 	return "<SceneNodePath: %s>" % as_path()
 
 
-## Loads a [SceneNodePath] from disk, instantiates its scene, and returns the target [Node].
-static func load_instantiate_and_get(tres_path: String) -> Node:
-	var res = load(tres_path) as SceneNodePath
-	assert(res, "SceneNodePath: Resource at %s is invalid or missing." % tres_path)
-	return res.instantiate_and_get()
-
-func _instantiate_and_get() -> Node:
+func _instantiate_and_get(edit_state: PackedScene.GenEditState = 0) -> Node:
 	assert(not scene_path.is_empty(), "SceneNodePath: scene_path is empty.")
 	assert(not node_path.is_empty(), "SceneNodePath: node_path is empty.")
 
@@ -227,7 +225,7 @@ func _instantiate_and_get() -> Node:
 	var packed_scene: PackedScene = load(real_path)
 	assert(packed_scene, "SceneNodePath: Failed to load scene at %s" % real_path)
 
-	var scene_instance: Node = packed_scene.instantiate()
+	var scene_instance: Node = packed_scene.instantiate(edit_state)
 	var target_path := NodePath(node_path)
 	var target_node: Node
 	
@@ -244,7 +242,7 @@ func _instantiate_and_get() -> Node:
 	return target_node
 
 
-func _instantiate_and_get_or_null() -> Node:
+func _instantiate_and_get_or_null(edit_state: PackedScene.GenEditState = 0) -> Node:
 	if not is_valid():
 		return null
 
@@ -256,7 +254,7 @@ func _instantiate_and_get_or_null() -> Node:
 	if not packed_scene:
 		return null
 
-	var scene_instance: Node = packed_scene.instantiate()
+	var scene_instance: Node = packed_scene.instantiate(edit_state)
 	var target_path := NodePath(node_path)
 	var target_node: Node
 	
