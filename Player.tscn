@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://bo5hexvshy77x"]
+
+[ext_resource type="Script" uid="uid://d3hydnehhflk" path="res://player.gd" id="1_kne1u"]
+[ext_resource type="PackedScene" uid="uid://8dmbjqnbp0rn" path="res://addons/networked/components/client/ClientComponent.tscn" id="2_kne1u"]
+[ext_resource type="Texture2D" uid="uid://dbb6gk33m6anl" path="res://icon.svg" id="2_kpjcp"]
+[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="4_e80uo"]
+[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kpjcp"]
+properties/0/path = NodePath("ClientComponent:username")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:position")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath("TPComponent:current_scene_path")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kpjcp"]
+radius = 63.66
+
+[sub_resource type="Resource" id="Resource_tdg3f"]
+script = ExtResource("5_cxr5p")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "MultiplayerSpawner"
+
+[node name="Player" type="CharacterBody2D" unique_id=551400704]
+script = ExtResource("1_kne1u")
+speed = 128.0
+
+[node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
+texture = ExtResource("2_kpjcp")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1221696035]
+replication_config = SubResource("SceneReplicationConfig_kpjcp")
+
+[node name="ClientComponent" parent="." unique_id=1278092247 instance=ExtResource("2_kne1u")]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
+shape = SubResource("CircleShape2D_kpjcp")
+
+[node name="TPComponent" type="Node" parent="." unique_id=872836282]
+unique_name_in_owner = true
+script = ExtResource("4_e80uo")
+starting_scene_path = SubResource("Resource_tdg3f")
+metadata/_custom_type_script = "uid://c4gt8tvkmcals"
+
+[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

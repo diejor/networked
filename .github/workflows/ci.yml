@@ -1,0 +1,46 @@
+name: CI - GdUnit4 Tests
+run-name: ${{ github.head_ref || github.ref_name }} - CI Test Run
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-tests-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  unit-test:
+    name: "Run Unit & Integration Tests"
+    runs-on: 'ubuntu-22.04'
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      checks: write
+      contents: write
+      pull-requests: write
+      statuses: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Run GdUnit4 Tests
+        uses: MikeSchulze/gdUnit4-action@v1.0.2
+        with:
+          godot-version: '4.6'
+          paths: |
+            res://tests/
+          timeout: 10
+          report-name: test_report.xml

@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://bi445hl7e416b"]
+
+[ext_resource type="Script" uid="uid://xwxgwpe3rp8c" path="res://addons/networked/core/network.gd" id="1_uu6xs"]
+[ext_resource type="Script" uid="uid://tbhnhps2h4nm" path="res://addons/networked/core/client_data.gd" id="2_3dxm6"]
+[ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/core/multiplayer_tree.gd" id="2_r0du0"]
+[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/core/backends/websocket_backend.gd" id="3_cm0pq"]
+[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
+[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/core/lobby/lobby_manager.gd" id="4_fos0i"]
+
+[sub_resource type="Resource" id="Resource_trn2v"]
+script = ExtResource("3_lgr22")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "Player/%ClientComponent"
+
+[sub_resource type="Resource" id="Resource_03owx"]
+script = ExtResource("2_3dxm6")
+username = &"diego"
+spawner_path = SubResource("Resource_trn2v")
+metadata/_custom_type_script = "uid://tbhnhps2h4nm"
+
+[sub_resource type="Resource" id="Resource_3dxm6"]
+script = ExtResource("3_cm0pq")
+metadata/_custom_type_script = "uid://cgyucu72xh732"
+
+[node name="Main" type="Node2D" unique_id=1724093845]
+
+[node name="MultiplayerNetwork" type="Node" parent="." unique_id=978542826 node_paths=PackedStringArray("client")]
+script = ExtResource("1_uu6xs")
+client = NodePath("Client")
+init_client_data = SubResource("Resource_03owx")
+metadata/_custom_type_script = "uid://xwxgwpe3rp8c"
+
+[node name="Client" type="Node" parent="MultiplayerNetwork" unique_id=185172770 node_paths=PackedStringArray("lobby_manager")]
+script = ExtResource("2_r0du0")
+backend = SubResource("Resource_3dxm6")
+lobby_manager = NodePath("MultiplayerLobbyManager")
+metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
+
+[node name="MultiplayerLobbyManager" type="MultiplayerSpawner" parent="MultiplayerNetwork/Client" unique_id=36558886]
+_spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
+spawn_path = NodePath(".")
+script = ExtResource("4_fos0i")
+metadata/_custom_type_script = "uid://lb7h272e5fhb"

@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://cdwjyscwvd3k2"]
+
+[ext_resource type="PackedScene" uid="uid://c5tj2gqmrl0mg" path="res://tests/helpers/TestPlayerFull.tscn" id="1_player"]
+
+[node name="TestLevel2" type="Node2D" unique_id=622297586]
+
+[node name="TestPlayerFull" parent="." unique_id=824845852 instance=ExtResource("1_player")]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=719426298]
+_spawnable_scenes = PackedStringArray("uid://c5tj2gqmrl0mg", "uid://bpnpmprpg6p6b")
+spawn_path = NodePath("..")
+
+[node name="TPTarget" type="Marker2D" parent="." unique_id=161984043]
+position = Vector2(100, 100)
