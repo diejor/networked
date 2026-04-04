@@ -17,9 +17,6 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
-
 
 func test_server_is_online_after_connect() -> void:
 	await harness.connect_all()

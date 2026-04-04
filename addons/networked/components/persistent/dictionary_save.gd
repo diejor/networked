@@ -5,6 +5,10 @@ extends SaveContainer
 
 @export var data: Dictionary[StringName, Variant] = {}
 
+func _init() -> void:
+	if data == null:
+		data = {}
+
 
 func serialize() -> PackedByteArray:
 	return var_to_bytes(data)

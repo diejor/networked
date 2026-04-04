@@ -1,17 +1,18 @@
 class_name SaveComponent
-extends Node
+extends NetComponent
 
 signal instantiated
 signal loaded
 signal state_changed(caller: Node)
 signal client_synchronized
 
-static var registered_components: Array[SaveComponent] = []
-static var shutting_down: bool:
-	set(value):
-		if not shutting_down and value:
-			shutting_down = value
-			_handle_shutdown()
+
+## Per-peer storage bucket for [SaveComponent].
+## All instances belonging to the same peer share one bucket via [PeerContext].
+class Bucket extends RefCounted:
+	var registered: Array[SaveComponent] = []
+	var shutting_down: bool = false
+
 
 @export_dir var save_dir: String
 @export var save_extension: String = ".tres"
@@ -25,10 +26,10 @@ func _ready() -> void:
 	assert(save_container)
 	assert(save_synchronizer)
 	assert(save_synchronizer.save_container == save_container)
-	
+
 	get_tree().set_auto_accept_quit(false)
-	SaveComponent.register(self)
-	
+	_register()
+
 	if not Engine.is_editor_hint():
 		for sync in SynchronizersCache.get_client_synchronizers(owner):
 			if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -36,7 +37,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	SaveComponent.unregister(self)
+	_unregister()
 
 
 func _prepare_save_dir() -> void:
@@ -50,21 +51,21 @@ func _prepare_save_dir() -> void:
 func get_save_path() -> String:
 	_prepare_save_dir()
 	assert(save_extension.begins_with("."), "Save extension should begin with a dot.")
-		
+
 	if not owner:
 		return ""
-		
+
 	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
 	var base: String
-	
+
 	if client and not client.username.is_empty():
 		base = client.username
 	else:
 		base = owner.name
-		
+
 	var save_path: String = save_dir.path_join(base + save_extension)
 	assert(save_path.is_absolute_path(), "Invalid save to a not valid file path. " + save_path)
-	
+
 	return save_path
 
 
@@ -72,7 +73,7 @@ func get_save_path() -> String:
 func save_state() -> Error:
 	var save_path := get_save_path()
 	var err: Error = ResourceSaver.save(save_container, save_path)
-	
+
 	assert(err == OK, "Failed to save `%s`. Error: %s" % [save_path, error_string(err)])
 	return err
 
@@ -81,12 +82,11 @@ func save_state() -> Error:
 func load_state() -> Error:
 	var save_path := get_save_path()
 	if not ResourceLoader.exists(save_path):
-		#push_warning("No file found at path: %s" % save_path)
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
-	
+
 	var saved_container := ResourceLoader.load(save_path, "SaveContainer", ResourceLoader.CACHE_MODE_REPLACE)
-	
+
 	if not is_instance_valid(saved_container) or not saved_container is SaveContainer:
 		push_error("Save located at `%s` is invalid." % save_path)
 		return ERR_CANT_OPEN
@@ -94,7 +94,7 @@ func load_state() -> Error:
 	save_container = saved_container
 	push_to_scene()
 	loaded.emit()
-	
+
 	return OK
 
 
@@ -102,7 +102,7 @@ func load_state() -> Error:
 func deserialize_scene(bytes: PackedByteArray) -> void:
 	save_container.deserialize(bytes)
 	push_to_scene()
-	
+
 
 ## Pulls the latest data from the scene and serializes it into a network-ready byte array.
 func serialize_scene() -> PackedByteArray:
@@ -113,7 +113,7 @@ func serialize_scene() -> PackedByteArray:
 ## Pushes the loaded container data into the active scene nodes.
 func push_to_scene() -> Error:
 	var push_err: Error = save_synchronizer.push_to_scene()
-	
+
 	match push_err:
 		ERR_UNCONFIGURED:
 			var save_path := get_save_path()
@@ -154,48 +154,65 @@ func instantiate() -> void:
 ## Bootstraps the entity by loading from disk, or falling back to the caller's data if a save doesn't exist.
 func spawn(caller: Node) -> void:
 	instantiate()
-	
+
 	var load_err: Error = load_state()
-	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND, 
+	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND,
 		"Something failed while trying to load player. Error: %s." % error_string(load_err))
-	
+
 	if load_err == ERR_FILE_NOT_FOUND:
 		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
 		if spawner_save and spawner_save.save_synchronizer._initialized:
-			#push_warning("Loading data from spawner.")
 			deserialize_scene(spawner_save.serialize_scene())
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		shutting_down = true
+		var bucket := _get_bucket()
+		if bucket and not bucket.shutting_down:
+			bucket.shutting_down = true
+			_handle_shutdown()
 
 
-## Registers this component to be saved automatically during a graceful shutdown.
-static func register(component: SaveComponent) -> void:
-	if not registered_components.has(component):
-		registered_components.append(component)
+## Saves all components in this peer's bucket where the local peer is authority.
+func save_game() -> void:
+	SaveComponent.save_all_in(get_peer_context())
 
 
-## Removes this component from the automatic shutdown save list.
-static func unregister(component: SaveComponent) -> void:
-	registered_components.erase(component)
-
-
-## Triggers a state save for all registered components where the local peer is the authority.
-static func save_game() -> void:
-	for component in registered_components:
+## Static entry point: saves all components registered in [param ctx].
+## Use this when no [SaveComponent] instance is available (e.g. [MultiplayerNetwork]).
+static func save_all_in(ctx: PeerContext) -> void:
+	if not ctx:
+		return
+	var bucket := ctx.get_bucket(Bucket) as Bucket
+	if not bucket:
+		return
+	for component in bucket.registered:
 		if not component.is_multiplayer_authority():
 			continue
-		
 		if component.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER:
 			component.save_state()
 		else:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
-static func _handle_shutdown() -> void:
+func _get_bucket() -> Bucket:
+	return get_bucket(Bucket) as Bucket
+
+
+func _register() -> void:
+	var bucket := _get_bucket()
+	if bucket and not bucket.registered.has(self):
+		bucket.registered.append(self)
+
+
+func _unregister() -> void:
+	var bucket := _get_bucket()
+	if bucket:
+		bucket.registered.erase(self)
+
+
+func _handle_shutdown() -> void:
 	print("Beginning graceful shutdown...")
-	save_game()
+	SaveComponent.save_all_in(get_peer_context())
 	print("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

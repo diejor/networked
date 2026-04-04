@@ -25,9 +25,6 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
-
 
 func test_server_spawns_lobby_after_host() -> void:
 	# spawn_lobbies() already ran synchronously inside host()

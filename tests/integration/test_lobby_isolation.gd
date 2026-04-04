@@ -31,9 +31,6 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
-
 
 func test_connected_clients_empty_initially() -> void:
 	assert_that(lobby.synchronizer.connected_clients).is_empty()

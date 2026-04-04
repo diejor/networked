@@ -31,6 +31,7 @@ var is_server: bool
 			
 			if value:
 				backend = value.duplicate()
+				backend._copy_from(value)
 				_connect_backend_signals()
 			else:
 				backend = null
@@ -68,6 +69,16 @@ var multiplayer_api: SceneMultiplayer:
 ## Direct access to the active [MultiplayerPeer] connection state.
 var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend and backend.api else null
+
+## Per-peer storage. Keyed by peer ID; erased automatically on [signal peer_disconnected].
+var _peer_contexts: Dictionary[int, PeerContext] = {}
+
+
+## Returns the [PeerContext] for [param peer_id], creating one on first access.
+func get_peer_context(peer_id: int) -> PeerContext:
+	if peer_id not in _peer_contexts:
+		_peer_contexts[peer_id] = PeerContext.new()
+	return _peer_contexts[peer_id]
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -155,6 +166,7 @@ func is_online() -> bool:
 func _config_api() -> void:
 	var multiplayer_root := lobby_manager.get_path() if lobby_manager else get_path()
 	backend.configure_tree(get_tree(), multiplayer_root)
+	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	configured.emit()
 
 
@@ -181,6 +193,9 @@ func _disconnect_backend_signals() -> void:
 
 
 func _on_exiting() -> void:
+	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
+		multiplayer_api.remove_meta(&"_multiplayer_tree")
+	_peer_contexts.clear()
 	if backend:
 		backend.peer_reset_state()
 
@@ -190,6 +205,7 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	_peer_contexts.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 

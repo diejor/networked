@@ -36,3 +36,10 @@ func peer_reset_state() -> void:
 
 func get_join_address() -> String:
 	return "localhost"
+
+
+## Called after this backend is duplicated by MultiplayerTree's backend setter.
+## Override in subclasses to preserve shared references that duplicate() would
+## otherwise reset to their field initializer defaults (e.g. LocalLoopbackSession).
+func _copy_from(_source: BackendPeer) -> void:
+	pass

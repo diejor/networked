@@ -17,6 +17,11 @@ extends Node
 			client.queue_free()
 
 
+## When false, connect_player() will not promote this node to the scene root and
+## will not auto-start a local server for localhost URLs. Set to false when
+## MultiplayerNetwork is embedded as a child node (e.g. in test harnesses).
+@export var manage_scene: bool = true
+
 @export_group("Debug")
 @export var init_client_data: MultiplayerClientData
 @export_group("", "")
@@ -29,10 +34,12 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	assert(client_data.spawner_path)
 	
 	await disconnect_player()
-	await _validate_current_scene()
-	
+
+	if manage_scene:
+		await _validate_current_scene()
+
 	var url := client_data.url
-	if _is_singleplayer(url):
+	if manage_scene and _is_singleplayer(url):
 		url = await _host_server()
 	elif OS.has_feature("web"):
 		if url.begins_with("ws"):
@@ -48,11 +55,28 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		client_data.serialize()
 	)
 
+## Hosts this MultiplayerNetwork as a dedicated server. Use this instead of
+## connect_player() when this instance should be the server in an
+## N-MultiplayerNetwork setup (e.g. test harnesses). The embedded client tree
+## is reconfigured as the server in-place; no separate server node is created.
+func host() -> Error:
+	client.is_server = true
+	var err: Error = client.host()
+	if err != OK:
+		push_error("Failed to host server: %s" % error_string(err))
+	return err
+
+
+## Returns the address that clients should connect to after host() succeeds.
+func get_host_address() -> String:
+	return _resolve_server_address()
+
+
 func disconnect_player() -> void:
 	if not client.is_online():
 		return
 
-	SaveComponent.save_game()
+	SaveComponent.save_all_in(client.get_peer_context(client.multiplayer_api.get_unique_id()))
 	client.multiplayer_peer.close()
 	
 	var timer := get_tree().create_timer(3.0)
@@ -112,10 +136,10 @@ func _host_server() -> String:
 	return _resolve_server_address()
 
 func _resolve_server_address() -> String:
-	if not server or not server.backend:
+	var tree := server if server else client
+	if not tree or not tree.backend:
 		return "localhost"
-		
-	return server.backend.get_join_address()
+	return tree.backend.get_join_address()
 
 func _validate_current_scene() -> void:
 	if not _is_current_scene():

@@ -166,10 +166,8 @@ func _setup_server() -> void:
 	add_child(_server)
 
 	var backend := LocalLoopbackBackend.new()
+	backend.session = _session
 	_server.backend = backend
-	# Re-inject our fresh session — the backend setter duplicates the resource,
-	# causing the var initializer to re-point session at the shared singleton.
-	_server.backend.session = _session
 
 	if _lobby_manager_scene:
 		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()
@@ -184,8 +182,8 @@ func _setup_client(index: int) -> void:
 	add_child(client)
 
 	var backend := LocalLoopbackBackend.new()
+	backend.session = _session
 	client.backend = backend
-	client.backend.session = _session
 
 	if _lobby_manager_scene:
 		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()

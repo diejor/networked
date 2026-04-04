@@ -187,11 +187,11 @@ func push_to_scene() -> Error:
 
 	for property_name in save_container:
 		var pname := StringName(property_name)
-		var real_path: NodePath = _property_paths[property_name]
 		if not has_state_property(pname):
 			push_error("Trying to push a save with property '%s' that is not tracked by the `SaveSynchronizer`." % property_name)
 			return Error.ERR_UNCONFIGURED
 
+		var real_path: NodePath = _property_paths[pname]
 		var value: Variant = save_container.get_value(pname)
 		if value == null:
 			push_error("Trying to push but save doesn't have property '%s' that is tracked by the `SaveSynchronizer`." % property_name)

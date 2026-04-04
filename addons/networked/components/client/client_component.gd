@@ -1,6 +1,6 @@
 @tool
 class_name ClientComponent
-extends Node
+extends NetComponent
 ## Manages client-specific multiplayer data, spawning logic, and player instantiation.
 ##
 ## Acts as the bridge between connecting peers and their physical representation in the game world,
@@ -60,7 +60,7 @@ the authority will not be set correctly." % [owner.name, _on_owner_tree_entered]
 
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
-	var tp_layer := NetworkedAPI.get_tp_layer(self)
+	var tp_layer := get_tp_layer()
 	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
 		tp_layer.teleport_in()
 
@@ -144,7 +144,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if save_component:
 		save_component.spawn(owner)
 
-	var lobby_manager := NetworkedAPI.get_lobby_manager(self)
+	var lobby_manager := get_lobby_manager()
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
 
 	if tp_component and save_component and lobby_manager:

@@ -28,9 +28,6 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
-
 
 func test_spawned_player_is_in_lobby() -> void:
 	var player := harness.spawn_player(0, TEST_PLAYER_SCENE)

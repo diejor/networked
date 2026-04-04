@@ -23,5 +23,9 @@ func poll(dt: float) -> void:
 	super.poll(dt)
 
 
+func _copy_from(source: BackendPeer) -> void:
+	session = (source as LocalLoopbackBackend).session
+
+
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []

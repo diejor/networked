@@ -15,9 +15,12 @@ const TEST_LEVEL_2_SCENE := preload("res://tests/helpers/TestLevel2.tscn")
 const SPAWNER_PATH := "TestPlayerFull/ClientComponent"
 
 var harness: NetworkTestHarness
+var save_dir: String
 
 
 func before_test() -> void:
+	save_dir = create_temp_dir("tp_flow_test")
+
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
 	await harness.setup(1, LOBBY_MANAGER_SCENE)
@@ -33,18 +36,17 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
 
-	var dir := DirAccess.open("res://tests/tmp_saves")
-	if dir:
-		dir.list_dir_begin()
-		var file := dir.get_next()
-		while not file.is_empty():
-			if not dir.current_is_dir():
-				dir.remove(file)
-			file = dir.get_next()
-		dir.list_dir_end()
+## Helper: joins a player via the real RPC chain and overrides its save_dir.
+func _spawn_tp_player(scene_path: String) -> Node2D:
+	var player := await harness.join_player(
+		0, scene_path, SPAWNER_PATH) as Node2D
+	
+	var save_comp: SaveComponent = player.get_node("%SaveComponent")
+	if save_comp:
+		save_comp.save_dir = save_dir
+	
+	return player
 
 
 func test_two_lobbies_spawned() -> void:
@@ -53,8 +55,7 @@ func test_two_lobbies_spawned() -> void:
 
 
 func test_tp_spawn_places_in_correct_lobby() -> void:
-	var player := await harness.join_player(
-		0, TEST_LEVEL_SCENE.resource_path, SPAWNER_PATH)
+	var player := await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
 
 	var server_mgr: MultiplayerLobbyManager = harness.get_server().lobby_manager
 	var lobby: Lobby = server_mgr.active_lobbies.get(&"TestLevel")
@@ -62,9 +63,13 @@ func test_tp_spawn_places_in_correct_lobby() -> void:
 
 
 func test_reparent_moves_player_between_lobbies() -> void:
-	var server_player := await harness.join_player(
-		0, TEST_LEVEL_SCENE.resource_path, SPAWNER_PATH) as Node2D
+	var server_player := await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
 	var client_player := await harness.wait_for_client_player_spawn(0, &"TestLevel") as Node2D
+
+	# Override client save_dir as well
+	var client_save: SaveComponent = client_player.get_node("%SaveComponent")
+	if client_save:
+		client_save.save_dir = save_dir
 
 	var server_mgr: MultiplayerLobbyManager = harness.get_server().lobby_manager
 	var lobby2: Lobby = server_mgr.active_lobbies.get(&"TestLevel2")
@@ -80,8 +85,13 @@ func test_reparent_moves_player_between_lobbies() -> void:
 
 
 func test_teleported_snaps_to_marker() -> void:
-	await harness.join_player(0, TEST_LEVEL_SCENE.resource_path, SPAWNER_PATH)
+	await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
 	var client_player := await harness.wait_for_client_player_spawn(0, &"TestLevel") as Node2D
+
+	# Override client save_dir as well
+	var client_save: SaveComponent = client_player.get_node("%SaveComponent")
+	if client_save:
+		client_save.save_dir = save_dir
 
 	var tp_target := SceneNodePath.new()
 	tp_target.scene_path = TEST_LEVEL_2_SCENE.resource_path

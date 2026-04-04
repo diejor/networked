@@ -1,6 +1,6 @@
 @tool
 class_name TPComponent
-extends Node
+extends NetComponent
 
 ## Manages entity teleportation across multiplayer lobbies and scene transitions.
 ##
@@ -34,9 +34,16 @@ var owner2d: Node2D:
 
 var _tp_mutex := AsyncMutex.new()
 
-## Keyed by peer ID. Bridges the old client instance (which fires the RPC) to the
-## TeleportPromise the caller holds, surviving a delete+respawn cycle.
-static var _pending: Dictionary[int, TeleportPromise] = {}
+
+## Per-peer storage bucket for [TPComponent].
+## Bridges the old client instance (which stores the promise) to the new instance
+## (which resolves it) across the delete+respawn cycle caused by server reparenting.
+class Bucket extends RefCounted:
+	var pending: Dictionary[int, TeleportPromise] = {}
+
+
+func _get_bucket() -> Bucket:
+	return get_bucket(Bucket) as Bucket
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -96,7 +103,7 @@ func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 
 func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	await _tp_mutex.lock()
-	TPComponent._pending[multiplayer.get_unique_id()] = promise
+	_get_bucket().pending[multiplayer.get_unique_id()] = promise
 
 	var from_scene := current_scene_name
 	current_scene_path = target_tp.scene_path
@@ -105,7 +112,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	if save_component:
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
-	var tp_layer := NetworkedAPI.get_tp_layer(self)
+	var tp_layer := get_tp_layer()
 	if tp_layer:
 		await tp_layer.teleport_out()
 
@@ -120,7 +127,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(username: String, from_scene_name: String, tp_path: String) -> void:
-	var lobby_manager := NetworkedAPI.get_lobby_manager(self)
+	var lobby_manager := get_lobby_manager()
 	if not lobby_manager:
 		push_error("TPComponent: Cannot teleport, lobby manager not found.")
 		return
@@ -178,15 +185,16 @@ func _rpc_teleport_committed(snap_pos: Vector2) -> void:
 	_tp_mutex.unlock()
 	owner2d.global_position = snap_pos
 
-	var tp_layer := NetworkedAPI.get_tp_layer(self)
+	var tp_layer := get_tp_layer()
 	if tp_layer:
 		await tp_layer.teleport_in()
 
 	var peer_id := multiplayer.get_unique_id()
-	var promise: TeleportPromise = TPComponent._pending.get(peer_id)
+	var bucket := _get_bucket()
+	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
 	if promise:
 		promise.completed.emit()
-		TPComponent._pending.erase(peer_id)
+		bucket.pending.erase(peer_id)
 
 
 ## Registers the entity with the specified lobby manager and spawns it into the active scene level.

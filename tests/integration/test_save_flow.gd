@@ -13,17 +13,16 @@ extends GdUnitTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
-const SAVE_DIR := "res://tests/tmp_saves"
 
 ## Node path from level root to the ClientComponent spawner.
 const SPAWNER_PATH := "TestPlayerWithSave/ClientComponent"
 
 var harness: NetworkTestHarness
+var save_dir: String
 
 
 func before_test() -> void:
-	if not DirAccess.dir_exists_absolute(SAVE_DIR):
-		DirAccess.make_dir_recursive_absolute(SAVE_DIR)
+	save_dir = create_temp_dir("save_flow_test")
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
@@ -39,28 +38,18 @@ func after_test() -> void:
 		harness.teardown()
 		await get_tree().process_frame
 
-	_clean_save_dir()
-	SaveComponent.registered_components.clear()
-	TPComponent._pending.clear()
-
-
-func _clean_save_dir() -> void:
-	var dir := DirAccess.open(SAVE_DIR)
-	if dir:
-		dir.list_dir_begin()
-		var file := dir.get_next()
-		while not file.is_empty():
-			if not dir.current_is_dir():
-				dir.remove(file)
-			file = dir.get_next()
-		dir.list_dir_end()
-
 
 ## Helper: joins a player via the real RPC chain, which triggers
 ## _on_player_joined → save_component.spawn(owner) automatically.
 func _spawn_save_player() -> Node2D:
-	return await harness.join_player(
+	var player := await harness.join_player(
 		0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH) as Node2D
+	
+	# Override the save_dir from the scene with our unique temp dir
+	var save_comp: SaveComponent = player.get_node("%SaveComponent")
+	save_comp.save_dir = save_dir
+	
+	return player
 
 
 # ---------------------------------------------------------------------------
