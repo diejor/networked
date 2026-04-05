@@ -12,12 +12,12 @@ func before_test() -> void:
 	harness = NetworkTestHarness.new()
 	add_child(harness)
 	auto_free(harness)
-	await harness.setup(1, LOBBY_MANAGER_SCENE)
+	await harness.setup(LOBBY_MANAGER_SCENE)
 	server_mgr = harness.get_server().lobby_manager
-	# Scenes must be registered before connect_all() because spawn_lobbies()
+	# Scenes must be registered before add_client() because spawn_lobbies()
 	# runs synchronously inside host() during _on_configured().
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
-	await harness.connect_all()
+	await harness.add_client()
 
 
 func after_test() -> void:
@@ -47,9 +47,10 @@ func test_two_clients_both_connect_to_server_with_lobby() -> void:
 	harness = NetworkTestHarness.new()
 	add_child(harness)
 	auto_free(harness)
-	await harness.setup(2, LOBBY_MANAGER_SCENE)
+	await harness.setup(LOBBY_MANAGER_SCENE)
 	harness.get_server().lobby_manager.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
-	await harness.connect_all()
+	await harness.add_client()
+	await harness.add_client()
 
 	for client in harness.get_all_clients():
 		assert_that(client.is_online()).is_true()

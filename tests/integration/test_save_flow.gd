@@ -18,6 +18,7 @@ const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
 const SPAWNER_PATH := "TestPlayerWithSave/ClientComponent"
 
 var harness: NetworkTestHarness
+var client0: MultiplayerTree
 var save_dir: String
 
 
@@ -26,11 +27,12 @@ func before_test() -> void:
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(1, LOBBY_MANAGER_SCENE)
+	await harness.setup(LOBBY_MANAGER_SCENE)
 
 	var server_mgr: MultiplayerLobbyManager = harness.get_server().lobby_manager
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
-	await harness.connect_all()
+
+	client0 = await harness.add_client()
 
 
 func after_test() -> void:
@@ -43,12 +45,12 @@ func after_test() -> void:
 ## _on_player_joined → save_component.spawn(owner) automatically.
 func _spawn_save_player() -> Node2D:
 	var player := await harness.join_player(
-		0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH) as Node2D
-	
+		client0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH) as Node2D
+
 	# Override the save_dir from the scene with our unique temp dir
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.save_dir = save_dir
-	
+
 	return player
 
 

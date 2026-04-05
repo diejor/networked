@@ -9,7 +9,8 @@ func before_test() -> void:
 	add_child(harness)
 	auto_free(harness)
 	# No lobby manager — this suite only tests the connection layer.
-	await harness.setup(2, null)
+	# Tests add clients themselves so signal handlers can be connected first.
+	await harness.setup(null)
 
 
 func after_test() -> void:
@@ -19,25 +20,29 @@ func after_test() -> void:
 
 
 func test_server_is_online_after_connect() -> void:
-	await harness.connect_all()
+	await harness.add_client()
+	await harness.add_client()
 	assert_that(harness.get_server().is_online()).is_true()
 
 
 func test_all_clients_online_after_connect() -> void:
-	await harness.connect_all()
+	await harness.add_client()
+	await harness.add_client()
 	for client in harness.get_all_clients():
 		assert_that(client.is_online()).is_true()
 
 
 func test_clients_have_distinct_peer_ids() -> void:
-	await harness.connect_all()
-	var id0 := harness.get_client(0).multiplayer_peer.get_unique_id()
-	var id1 := harness.get_client(1).multiplayer_peer.get_unique_id()
+	var client0 := await harness.add_client()
+	var client1 := await harness.add_client()
+	var id0 := client0.multiplayer_peer.get_unique_id()
+	var id1 := client1.multiplayer_peer.get_unique_id()
 	assert_that(id0).is_not_equal(id1)
 
 
 func test_client_peer_ids_are_not_server_id() -> void:
-	await harness.connect_all()
+	await harness.add_client()
+	await harness.add_client()
 	for client in harness.get_all_clients():
 		assert_that(client.multiplayer_peer.get_unique_id()).is_not_equal(1)
 
@@ -47,19 +52,20 @@ func test_server_emits_peer_connected_for_each_client() -> void:
 	harness.get_server().peer_connected.connect(func(id: int) -> void:
 		connected_ids.append(id)
 	)
-	await harness.connect_all()
-	await await_millis(200)
+	await harness.add_client()
+	await harness.add_client()
 	assert_that(connected_ids.size()).is_equal(2)
 
 
 func test_three_clients_all_online() -> void:
-	# Re-setup with 3 clients
 	harness.queue_free()
 	harness = NetworkTestHarness.new()
 	add_child(harness)
 	auto_free(harness)
-	await harness.setup(3, null)
-	await harness.connect_all()
+	await harness.setup(null)
+	await harness.add_client()
+	await harness.add_client()
+	await harness.add_client()
 
 	for client in harness.get_all_clients():
 		assert_that(client.is_online()).is_true()
