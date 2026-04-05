@@ -1,2 +1,9 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# Exclude everything from `git archive` by default.
+* export-ignore
+
+# Keep the `addons/networked` directory in archives.
+/addons/networked/ -export-ignore
+/addons/networked/** -export-ignore

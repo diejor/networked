@@ -27,7 +27,6 @@ using Godot;
 /// </code>
 /// </summary>
 [Tool]
-[GlobalClass]
 public partial class SceneNodePathCS : Resource
 {
 	/// <summary>

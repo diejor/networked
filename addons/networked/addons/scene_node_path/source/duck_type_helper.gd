@@ -29,6 +29,7 @@ static func call_duck(obj: Object, method: String, args: Array = []) -> Variant:
 
 static func create_resource(is_csharp_mode: bool) -> Variant:
 	if is_csharp_mode and ClassDB.class_exists("CSharpScript"):
-		var cs_script = load("uid://bj2k7avaeljdf")
+		var base_path := load("uid://2ydebdu4do8m").resource_path.get_base_dir()
+		var cs_script = load(base_path.path_join("SceneNodePathCS.cs"))
 		if cs_script: return cs_script.new()
 	return SceneNodePath.new()

@@ -6,6 +6,7 @@ var session: LocalLoopbackSession = LocalLoopbackSession.get_shared_session()
 
 
 func host() -> Error:
+	NetLog.trace("LocalLoopbackBackend: host called.")
 	if not session.has_live_server():
 		session.reset()
 	api.multiplayer_peer = session.get_server_peer()
@@ -13,6 +14,7 @@ func host() -> Error:
 	return OK
 
 func join(_server_address: String, _username: String = "") -> Error:
+	NetLog.trace("LocalLoopbackBackend: join called.")
 	api.multiplayer_peer = session.create_client_peer()
 	NetLog.info("Local loopback client ready.")
 	return OK

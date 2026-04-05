@@ -15,6 +15,7 @@ var ws_peer: WebSocketMultiplayerPeer:
 
 
 func host() -> Error:
+	NetLog.trace("WebSocketBackend: host called.")
 	var peer := WebSocketMultiplayerPeer.new()
 	var err := peer.create_server(port)
 	
@@ -22,16 +23,19 @@ func host() -> Error:
 		ws_peer = peer
 		NetLog.info("WebSocket server ready on *:%d" % port)
 		return OK
-		
+	
+	NetLog.error("Failed to create WebSocket server: %s" % error_string(err))
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
+	NetLog.trace("WebSocketBackend: join called at %s" % server_address)
 	var peer := WebSocketMultiplayerPeer.new()
 	var url := build_url(server_address)
+	NetLog.debug("WebSocket connecting to URL: %s" % url)
 
 	var err := peer.create_client(url)
 	if err != OK:
-		push_warning("Can't create client (%s) to %s" % [error_string(err), url])
+		NetLog.error("Can't create client (%s) to %s" % [error_string(err), url])
 		return err
 	
 	ws_peer = peer

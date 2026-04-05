@@ -10,12 +10,14 @@ signal action_changed(action: StringName, pressed: bool)
 
 
 func _enter_tree() -> void:
+	NetLog.trace("InputComponent: _enter_tree for %s" % owner.name)
 	if not is_multiplayer_authority():
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 
 
 func _ready() -> void:
+	NetLog.trace("InputComponent: _ready for %s" % owner.name)
 	if not is_multiplayer_authority():
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
@@ -41,10 +43,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(action):
 			if state[action] != true:
 				state[action] = true
+				NetLog.trace("InputComponent: Action %s Pressed" % action)
 				action_changed.emit(action, true)
 		elif event.is_action_released(action):
 			if state[action] != false:
 				state[action] = false
+				NetLog.trace("InputComponent: Action %s Released" % action)
 				action_changed.emit(action, false)
 
 

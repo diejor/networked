@@ -29,6 +29,7 @@ extends Node
 var server: MultiplayerTree
 
 func connect_player(client_data: MultiplayerClientData) -> void:
+	NetLog.trace("NetworkSession: connect_player called.")
 	assert(client_data)
 	assert(client_data.username)
 	assert(client_data.spawner_path)
@@ -39,6 +40,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		await _validate_current_scene()
 
 	var url := client_data.url
+	NetLog.info("Connecting player %s to %s" % [client_data.username, url])
 	if manage_scene and _is_singleplayer(url):
 		url = await _host_server()
 	elif OS.has_feature("web"):
@@ -47,7 +49,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	
 	var client_err: Error = await client.join(url, client_data.username)
 	if client_err != OK:
-		push_error("Failed: %s" % error_string(client_err))
+		NetLog.error("Failed to join: %s" % error_string(client_err))
 		return
 	
 	client.lobby_manager.request_join_player.rpc_id(
@@ -60,10 +62,13 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 ## N-NetworkSession setup (e.g. test harnesses). The embedded client tree
 ## is reconfigured as the server in-place; no separate server node is created.
 func host() -> Error:
+	NetLog.trace("NetworkSession: host called.")
 	client.is_server = true
 	var err: Error = client.host()
 	if err != OK:
-		push_error("Failed to host server: %s" % error_string(err))
+		NetLog.error("Failed to host server: %s" % error_string(err))
+	else:
+		NetLog.info("Server hosted successfully.")
 	return err
 
 
@@ -75,13 +80,15 @@ func get_host_address() -> String:
 func disconnect_player() -> void:
 	if not client.is_online():
 		return
-
+	
+	NetLog.trace("NetworkSession: disconnect_player called.")
+	NetLog.info("Disconnecting player.")
 	SaveComponent.save_all_in(client.get_peer_context(client.multiplayer_api.get_unique_id()))
 	client.multiplayer_peer.close()
 	
 	var timer := get_tree().create_timer(3.0)
 	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
-		push_error("Couldn't disconnect from server.")
+		NetLog.error("Couldn't disconnect from server.")
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
@@ -103,6 +110,7 @@ func _is_current_scene() -> bool:
 	return get_tree().current_scene == self
 
 func _close_server() -> void:
+	NetLog.info("Closing embedded server.")
 	if server:
 		server.get_parent().remove_child(server)
 		server.queue_free()
@@ -112,10 +120,11 @@ func is_webrtc() -> bool:
 	var script: Script = client.backend.get_script()
 	var n := script.get_global_name().to_lower()
 	var is_rtc := "rtc" in n or "tube" in n
-	NetLog.debug("Backend class name: %s" % script.get_global_name())
+	NetLog.debug("Backend check: class=%s is_webrtc=%s" % [script.get_global_name(), is_rtc])
 	return is_rtc
 
 func _host_server() -> String:
+	NetLog.trace("NetworkSession: _host_server called.")
 	if OS.has_feature("web") and not is_webrtc():
 		client.backend = LocalLoopbackBackend.new()
 	
@@ -124,16 +133,20 @@ func _host_server() -> String:
 	server.name = "Server"
 	add_child(server)
 	
+	NetLog.info("Starting embedded server...")
 	var server_err := server.host()
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
 	assert(server_err == OK or in_use, "Dedicated server failed to start: %s" % error_string(server_err))
 	
 	if in_use:
+		NetLog.info("Server address already in use, using localhost.")
 		server.queue_free.call_deferred()
 		return "localhost"
 		
-	return _resolve_server_address()
+	var addr := _resolve_server_address()
+	NetLog.info("Embedded server started at: %s" % addr)
+	return addr
 
 func _resolve_server_address() -> String:
 	var tree := server if server else client

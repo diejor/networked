@@ -112,6 +112,7 @@ func _process(dt: float) -> void:
 
 ## Initializes the network backend as a host/server and configures the multiplayer API.
 func host() -> Error:
+	NetLog.trace("MultiplayerTree: Hosting session.")
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
@@ -132,6 +133,7 @@ func host() -> Error:
 ## Returns an error if the connection fails immediately, or [code]ERR_CANT_CONNECT[/code] 
 ## if the server does not respond within the timeout window.
 func join(server_address: String, username: String) -> Error:
+	NetLog.trace("MultiplayerTree: Joining session at %s with username %s." % [server_address, username])
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
@@ -164,7 +166,9 @@ func is_online() -> bool:
 # ------------------------------------------------------------------------------
 
 func _config_api() -> void:
+	NetLog.trace("MultiplayerTree: Configuring multiplayer API.")
 	var multiplayer_root := lobby_manager.get_path() if lobby_manager else get_path()
+	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	configured.emit()
@@ -193,6 +197,7 @@ func _disconnect_backend_signals() -> void:
 
 
 func _on_exiting() -> void:
+	NetLog.trace("MultiplayerTree: Exiting.")
 	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
 		multiplayer_api.remove_meta(&"_multiplayer_tree")
 	_peer_contexts.clear()
@@ -201,21 +206,24 @@ func _on_exiting() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	NetLog.info("Peer connected: %d" % peer_id)
 	peer_connected.emit(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	NetLog.info("Peer disconnected: %d" % peer_id)
 	_peer_contexts.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
 func _on_connected_to_server() -> void:
 	var peer_id := multiplayer_peer.get_unique_id()
-	NetLog.info("Peer (%d) connected to server." % peer_id)
+	NetLog.info("Connected to server as peer %d." % peer_id)
 
 	set_multiplayer_authority(peer_id, false) 
 	connected_to_server.emit()
 
 
 func _on_server_disconnected() -> void:
+	NetLog.info("Disconnected from server.")
 	server_disconnected.emit()

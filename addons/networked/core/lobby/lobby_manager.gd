@@ -114,11 +114,14 @@ func _exit_tree() -> void:
 ##
 ## This function only executes if the active peer is the server.
 func spawn_lobbies() -> void:
+	NetLog.trace("MultiplayerLobbyManager: spawn_lobbies called.")
 	if multiplayer.is_server():
 		if get_spawnable_scene_count() == 0:
-			push_warning("MultiplayerLobbyManager: No lobby scenes are registered. \
-Add scenes via the spawn list in the Inspector or call add_spawnable_scene() before hosting.")
+			NetLog.warn("MultiplayerLobbyManager: No lobby scenes are registered.")
 			return
+		
+		NetLog.info("Spawning %d lobbies." % lobbies.size())
+		NetLog.debug("Lobbies to spawn: %s" % str(lobbies))
 		for level_path: String in lobbies:
 			spawn(level_path)
 
@@ -129,6 +132,7 @@ Add scenes via the spawn list in the Inspector or call add_spawnable_scene() bef
 ## Instantiates the appropriate server or client lobby wrapper, assigns the 
 ## instantiated level to it, and hooks up the despawn signals.
 func spawn_lobby(level_file_path: String) -> Node:
+	NetLog.info("Spawning lobby for level: %s" % level_file_path)
 	var level_scene: PackedScene = load(level_file_path)
 	var level: Node = level_scene.instantiate()
 	
@@ -149,11 +153,21 @@ func spawn_lobby(level_file_path: String) -> Node:
 ## the new player connection.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(client_data_bytes: PackedByteArray) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	NetLog.info("Received join request from peer %d." % peer_id)
+	
 	var client_data: MultiplayerClientData = MultiplayerClientData.new()
 	client_data.deserialize(client_data_bytes)
-	client_data.peer_id = multiplayer.get_remote_sender_id()
+	client_data.peer_id = peer_id
 	
-	var lobby := active_lobbies[client_data.spawner_path.get_scene_name()]
+	NetLog.debug("Join request data: username=%s spawner=%s" % [client_data.username, client_data.spawner_path.node_path])
+	
+	var lobby_name := client_data.spawner_path.get_scene_name()
+	if not active_lobbies.has(lobby_name):
+		NetLog.error("Join request failed: Lobby '%s' not found." % lobby_name)
+		return
+		
+	var lobby := active_lobbies[lobby_name]
 	var spawner_client: ClientComponent = (
 		lobby.level.get_node(client_data.spawner_path.node_path))
 	
@@ -166,15 +180,18 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 
 func _on_lobby_spawned(node: Node) -> void:
 	var lobby := node as Lobby
+	NetLog.info("Lobby spawned: %s" % lobby.level.name)
 	active_lobbies[lobby.level.name] = lobby
 
 
 func _on_lobby_despawned(node: Node) -> void:
 	var lobby := node as Lobby
+	NetLog.info("Lobby despawned: %s" % lobby.level.name)
 	active_lobbies.erase(lobby.level.name)
 
 
 func _on_server_disconnected() -> void:
+	NetLog.info("Server disconnected. Cleaning up lobbies.")
 	for lobby: Lobby in active_lobbies.values():
 		if lobby.is_inside_tree():
 			lobby.get_parent().remove_child(lobby)
@@ -182,6 +199,7 @@ func _on_server_disconnected() -> void:
 
 
 func _on_configured() -> void:
+	NetLog.trace("MultiplayerLobbyManager: _on_configured called.")
 	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
 		multiplayer.server_disconnected.connect(_on_server_disconnected)
 	

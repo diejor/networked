@@ -37,6 +37,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	NetLog.trace("ClientComponent: _ready for %s" % owner.name)
 	if EditorTooling.validate_and_halt(self, _validate_editor):
 		return
 
@@ -46,7 +47,7 @@ func _ready() -> void:
 
 	if username.is_empty():
 		if not multiplayer.is_server():
-			#push_warning("ClientComponent: username is empty for %s during _ready, freeing." % owner.name)
+			NetLog.trace("ClientComponent: username is empty for %s during _ready, freeing." % owner.name)
 			owner.queue_free()
 
 		# Spawners only sync with the server
@@ -62,6 +63,7 @@ the authority will not be set correctly." % [owner.name, _on_owner_tree_entered]
 
 	var tp_layer := get_tp_layer()
 	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
+		NetLog.info("Local player %s ready. Playing teleport transition." % username)
 		tp_layer.teleport_in()
 
 
@@ -72,6 +74,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 ## Generates a new replication config for the spawn synchronizer by aggregating properties
 ## from all other client synchronizers attached to the target node.
 func config_spawn_properties(target_node: Node) -> SceneReplicationConfig:
+	NetLog.trace("ClientComponent: Configuring spawn properties for %s" % target_node.name)
 	var new_config := SceneReplicationConfig.new()
 	var syncs := SynchronizersCache.get_client_synchronizers(target_node.owner if target_node is ClientComponent else target_node)
 
@@ -106,6 +109,7 @@ func _on_owner_tree_entered() -> void:
 
 	var authority := parse_authority(owner.name)
 	if authority != 0:
+		NetLog.debug("Setting authority for %s to %d" % [owner.name, authority])
 		owner.set_multiplayer_authority(authority)
 
 	spawn_sync.root_path = spawn_sync.get_path_to(owner)
@@ -121,6 +125,7 @@ func _get_player_scene() -> PackedScene:
 
 ## Instantiates a player node from the player scene and configures its identity.
 func _instantiate_player(client_data: MultiplayerClientData) -> Node:
+	NetLog.trace("ClientComponent: Instantiating player for %s (ID: %d)" % [client_data.username, client_data.peer_id])
 	var player := _get_player_scene().instantiate()
 	var client: ClientComponent = player.get_node("%ClientComponent")
 	client.username = client_data.username
@@ -130,10 +135,12 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 ## Places a player node into a lobby, registering it for visibility tracking.
 func _place_in_lobby(player: Node, lobby: Lobby) -> void:
+	NetLog.info("Placing player %s into lobby %s" % [player.name, lobby.name])
 	lobby.add_player(player)
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
+	NetLog.info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
 	assert(client_data.peer_id)
 	assert(client_data.spawner_path)
 	assert(client_data.username)
@@ -142,12 +149,14 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 	var save_component: SaveComponent = player.get_node_or_null("%SaveComponent")
 	if save_component:
+		NetLog.debug("Spawning SaveComponent for player %s" % client_data.username)
 		save_component.spawn(owner)
 
 	var lobby_manager := get_lobby_manager()
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
 
 	if tp_component and save_component and lobby_manager:
+		NetLog.debug("Spawning TPComponent for player %s" % client_data.username)
 		tp_component.spawn(lobby_manager)
 	elif lobby_manager:
 		var scene_name := client_data.spawner_path.get_scene_name()
@@ -156,10 +165,11 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		if lobby:
 			_place_in_lobby(player, lobby)
 		else:
-			push_error("ClientComponent: Could not find active lobby for scene %s" % scene_name)
+			NetLog.error("ClientComponent: Could not find active lobby for scene %s" % scene_name)
 
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
+	NetLog.trace("ClientComponent: Connecting player %s" % client_data.username)
 	assert(get_tree().current_scene is NetworkSession)
 	var network: NetworkSession = get_tree().current_scene
 	network.connect_player(client_data)
@@ -167,5 +177,6 @@ func _on_connect_player(client_data: MultiplayerClientData) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if multiplayer and multiplayer.is_server() and get_multiplayer_authority() == peer_id:
+		NetLog.info("Peer %d disconnected. Freeing owned player %s." % [peer_id, owner.name])
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()

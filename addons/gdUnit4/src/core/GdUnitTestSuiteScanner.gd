@@ -13,6 +13,7 @@ func test_${func_name}() -> void:
 const exclude_scan_directories = [
 	"res://addons/gdUnit4/bin",
 	"res://addons/gdUnit4/src",
+	"res://addons/networked/addons/scene_node_path/source",
 	"res://reports"]
 
 

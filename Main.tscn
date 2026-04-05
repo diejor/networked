@@ -11,8 +11,6 @@
 script/source = "extends Node2D
 
 func _ready()-> void:
-	NetLog.initialize()
-	# You can still manually override here if needed
 	NetLog.error(\"Hola!\")
 "
 

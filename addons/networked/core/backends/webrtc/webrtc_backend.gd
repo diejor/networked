@@ -17,9 +17,6 @@ signal room_created(room_id: String)
 	{ "urls": ["stun:stun.l.google.com:19302"] },
 	{ "urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject" }
 ]
-@export_group("Debug")
-@export var debug_mode: bool = false
-@export_group("Debug")
 
 var webrtc_peer: WebRTCMultiplayerPeer:
 	get: return api.multiplayer_peer as WebRTCMultiplayerPeer
@@ -37,24 +34,20 @@ var _peer_map := {}
 var _local_godot_id := 0
 var _announce_timer := 0.0
 
-func _log(msg: String) -> void:
-	if debug_mode:
-		var prefix = "[HOST]" if _is_server else "[CLIENT]"
-		print("%s %s" % [prefix, msg])
-
 func host() -> Error:
+	NetLog.trace("WebRTCBackend: host called.")
 	_is_server = true
 	_local_godot_id = 1
 	_local_peer_id = _generate_peer_id(_local_godot_id)
 	_info_hash = _generate_hash() 
 	_reset_state_vars()
 	
-	_log("Starting Host. Local WebTorrent ID: " + _local_peer_id.substr(0, 6) + "...")
+	NetLog.debug("Starting Host. Local WebTorrent ID: %s... Hash: %s" % [_local_peer_id.substr(0, 6), _info_hash])
 	
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_server()
 	if err != OK:
-		push_error("Failed to create WebRTC server: ", error_string(err))
+		NetLog.error("Failed to create WebRTC server: %s" % error_string(err))
 		return err
 		
 	_bind_webrtc_signals(peer)
@@ -67,6 +60,7 @@ func host() -> Error:
 	return _connect_trackers()
 
 func join(server_address: String, _username: String = "") -> Error:
+	NetLog.trace("WebRTCBackend: join called at %s" % server_address)
 	_is_server = false
 	_local_godot_id = randi() % 1000000 + 2
 	_local_peer_id = _generate_peer_id(_local_godot_id)
@@ -78,18 +72,17 @@ func join(server_address: String, _username: String = "") -> Error:
 		
 	_reset_state_vars()
 	
-	_log("Starting Client. Local Godot ID: " + str(_local_godot_id))
-	_log("Joining Room Hash: " + _info_hash)
+	NetLog.debug("Starting Client. Local Godot ID: %d, Room Hash: %s" % [_local_godot_id, _info_hash])
 	
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_client(_local_godot_id)
 	if err != OK:
-		push_error("Failed to create WebRTC client: ", error_string(err))
+		NetLog.error("Failed to create WebRTC client: %s" % error_string(err))
 		return err
 		
 	_bind_webrtc_signals(peer)
 	webrtc_peer = peer
-	_log("Client Peer Created. Generating initial WebRTC Connection to Server...")
+	NetLog.trace("Client Peer Created. Generating initial WebRTC Connection to Server...")
 	_create_peer_connection(1, "") 
 	
 	return _connect_trackers()
@@ -108,16 +101,16 @@ func _bind_webrtc_signals(peer: WebRTCMultiplayerPeer) -> void:
 		peer.peer_disconnected.connect(_on_webrtc_peer_disconnected)
 
 func _on_webrtc_peer_connected(id: int) -> void:
-	_log(">>> SUCCESS! WebRTC Native Connection Established with Godot ID: " + str(id) + " <<<")
+	NetLog.info("WebRTC Native Connection Established with Godot ID: %d" % id)
 	if not _is_server and id == 1:
-		_log("WebRTC active. Closing signaling trackers.")
+		NetLog.trace("WebRTC active. Closing signaling trackers.")
 		for ws in _sockets:
 			ws.close()
 		_sockets.clear()
 		signaling_disconnected.emit()
 
 func _on_webrtc_peer_disconnected(id: int) -> void:
-	_log(">>> WebRTC Native Connection Lost with Godot ID: " + str(id) + " <<<")
+	NetLog.info("WebRTC Native Connection Lost with Godot ID: %d" % id)
 
 func get_join_address() -> String:
 	if not _info_hash.is_empty():
@@ -126,7 +119,7 @@ func get_join_address() -> String:
 
 func peer_reset_state() -> void:
 	super.peer_reset_state()
-	_log("Resetting Peer State.")
+	NetLog.trace("WebRTCBackend: Resetting Peer State.")
 	for ws in _sockets:
 		ws.close()
 	_sockets.clear()
@@ -163,14 +156,14 @@ func _connect_trackers() -> Error:
 	var connected_count := 0
 	
 	for url in trackers:
-		_log("Connecting to Tracker: " + url)
+		NetLog.trace("Connecting to Tracker: %s" % url)
 		var ws := WebSocketPeer.new()
 		if ws.connect_to_url(url) == OK:
 			_sockets.append(ws)
 			ws.set_meta("url", url)
 			connected_count += 1
 		else:
-			_log("Failed to connect to Tracker: " + url)
+			NetLog.warn("Failed to connect to Tracker: %s" % url)
 			
 	if connected_count == 0:
 		return ERR_CANT_CONNECT
@@ -194,9 +187,9 @@ func _poll_trackers(dt: float) -> void:
 			any_open = true
 			if not ws.has_meta("announced") or should_reannounce:
 				if not ws.has_meta("announced"):
-					_log("Tracker Connected: " + ws.get_meta("url", "Unknown"))
+					NetLog.debug("Tracker Connected: %s" % ws.get_meta("url", "Unknown"))
 				elif should_reannounce:
-					_log("Re-announcing Client Offer to find Host...")
+					NetLog.trace("Re-announcing Client Offer to find Host...")
 					
 				_announce_to_tracker(ws)
 				
@@ -208,7 +201,7 @@ func _poll_trackers(dt: float) -> void:
 				_parse_packet(ws.get_packet())
 				
 	if not any_open and not _sockets.is_empty() and _sockets.all(func(w): return w.get_ready_state() == WebSocketPeer.STATE_CLOSED):
-		_log("All trackers closed. Signaling Disconnected.")
+		NetLog.info("All trackers closed. Signaling Disconnected.")
 		signaling_disconnected.emit()
 
 func _announce_to_tracker(ws: WebSocketPeer) -> void:
@@ -221,9 +214,9 @@ func _announce_to_tracker(ws: WebSocketPeer) -> void:
 			"offer": { "type": "offer", "sdp": _client_offer_sdp },
 			"offer_id": _client_offer_id
 		})
-		_log("Announcing to tracker WITH Client Offer.")
+		NetLog.trace("Announcing to tracker WITH Client Offer.")
 	else:
-		_log("Announcing to tracker without offer.")
+		NetLog.trace("Announcing to tracker without offer.")
 
 	var announce_msg := {
 		"action": "announce",
@@ -243,7 +236,7 @@ func _parse_packet(packet: PackedByteArray) -> void:
 	var data: Dictionary = parsed
 	
 	if data.has("warning") or data.has("failure reason"):
-		_log("TRACKER ERROR: " + json_string)
+		NetLog.warn("TRACKER ERROR: %s" % json_string)
 		return
 		
 	if data.get("info_hash", "") != _info_hash:
@@ -258,11 +251,11 @@ func _parse_packet(packet: PackedByteArray) -> void:
 		
 	if not _is_server and _server_wt_id.is_empty():
 		_server_wt_id = remote_peer_id
-		_log("Client found Server WT_ID: " + _server_wt_id.substr(0, 6) + "...")
+		NetLog.debug("Client found Server WT_ID: %s..." % _server_wt_id.substr(0, 6))
 		_flush_candidates()
 		
 	if not webrtc_peer.has_peer(godot_id):
-		_log("Discovered New Peer! WT_ID: " + remote_peer_id.substr(0, 6) + "... Godot ID: " + str(godot_id))
+		NetLog.info("Discovered New Peer! WT_ID: %s... Godot ID: %d" % [remote_peer_id.substr(0, 6), godot_id])
 		_create_peer_connection(godot_id, remote_peer_id)
 
 	if data.has("offer_id"):
@@ -271,23 +264,23 @@ func _parse_packet(packet: PackedByteArray) -> void:
 	if data.has("offer"):
 		var payload: Dictionary = data.get("offer")
 		if payload.get("type") == "candidate":
-			_log("Received Tunneled [CANDIDATE] from Godot ID: " + str(godot_id))
+			NetLog.debug("Received Tunneled [CANDIDATE] from Godot ID: %d" % godot_id)
 			_handle_candidate(godot_id, payload)
 		else:
-			_log("Received [OFFER] from Godot ID: " + str(godot_id))
+			NetLog.debug("Received [OFFER] from Godot ID: %d" % godot_id)
 			_handle_offer(godot_id, payload)
 			
 	elif data.has("answer"):
 		var payload: Dictionary = data.get("answer")
 		if payload.get("type") == "candidate":
-			_log("Received Tunneled [CANDIDATE] from Godot ID: " + str(godot_id))
+			NetLog.debug("Received Tunneled [CANDIDATE] from Godot ID: %d" % godot_id)
 			_handle_candidate(godot_id, payload)
 		else:
-			_log("Received [ANSWER] from Godot ID: " + str(godot_id))
+			NetLog.debug("Received [ANSWER] from Godot ID: %d" % godot_id)
 			_handle_answer(godot_id, payload)
 
 func _create_peer_connection(godot_id: int, remote_peer_id: String) -> void:
-	_log("Initializing WebRTCPeerConnection for Godot ID: " + str(godot_id))
+	NetLog.trace("Initializing WebRTCPeerConnection for Godot ID: %d" % godot_id)
 	var peer_connection := WebRTCPeerConnection.new()
 	peer_connection.initialize({ "iceServers": ice_servers })
 	
@@ -297,18 +290,18 @@ func _create_peer_connection(godot_id: int, remote_peer_id: String) -> void:
 	webrtc_peer.add_peer(peer_connection, godot_id) 
 	
 	if not _is_server and godot_id == 1:
-		_log("Client calling create_offer() for Godot ID 1")
+		NetLog.trace("Client calling create_offer() for Godot ID 1")
 		peer_connection.create_offer()
 
 func _handle_offer(godot_id: int, offer_data: Dictionary) -> void:
 	if webrtc_peer.has_peer(godot_id):
-		_log("Setting Remote Description (OFFER) for Godot ID: " + str(godot_id))
+		NetLog.debug("Setting Remote Description (OFFER) for Godot ID: %d" % godot_id)
 		var connection: WebRTCPeerConnection = webrtc_peer.get_peer(godot_id).get("connection")
 		connection.set_remote_description("offer", offer_data.get("sdp", ""))
 
 func _handle_answer(godot_id: int, answer_data: Dictionary) -> void:
 	if webrtc_peer.has_peer(godot_id):
-		_log("Setting Remote Description (ANSWER) for Godot ID: " + str(godot_id))
+		NetLog.debug("Setting Remote Description (ANSWER) for Godot ID: %d" % godot_id)
 		var connection: WebRTCPeerConnection = webrtc_peer.get_peer(godot_id).get("connection")
 		connection.set_remote_description("answer", answer_data.get("sdp", ""))
 
@@ -322,7 +315,7 @@ func _handle_candidate(godot_id: int, candidate_data: Dictionary) -> void:
 		)
 
 func _on_session_description_created(type: String, sdp: String, godot_id: int, remote_peer_id: String) -> void:
-	_log("Local SDP Created: [" + type.to_upper() + "] for Godot ID: " + str(godot_id))
+	NetLog.debug("Local SDP Created: [%s] for Godot ID: %d" % [type.to_upper(), godot_id])
 	var connection: WebRTCPeerConnection = webrtc_peer.get_peer(godot_id).get("connection")
 	connection.set_local_description(type, sdp)
 	
@@ -331,7 +324,7 @@ func _on_session_description_created(type: String, sdp: String, godot_id: int, r
 		var pushed_early := false
 		for ws in _sockets:
 			if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-				_log("Tracker already open. Pushing Client Offer immediately!")
+				NetLog.trace("Tracker already open. Pushing Client Offer immediately!")
 				_announce_to_tracker(ws)
 				ws.set_meta("announced", true)
 				pushed_early = true
@@ -352,7 +345,7 @@ func _on_session_description_created(type: String, sdp: String, godot_id: int, r
 	if type == "answer" and _peer_map.has(remote_peer_id + "_offer_id"):
 		msg["offer_id"] = _peer_map[remote_peer_id + "_offer_id"]
 	
-	_log("Sending [" + type.to_upper() + "] payload to tracker.")
+	NetLog.trace("Sending [%s] payload to tracker." % type.to_upper())
 	_broadcast(msg)
 
 func _on_ice_candidate_created(media: String, index: int, name: String, remote_peer_id: String) -> void:
@@ -389,12 +382,12 @@ func _on_ice_candidate_created(media: String, index: int, name: String, remote_p
 		msg["offer"] = payload
 		msg["offer_id"] = _generate_hash()
 		
-	_log("Sending Tunneled [CANDIDATE] to Tracker.")
+	NetLog.trace("Sending Tunneled [CANDIDATE] to Tracker.")
 	_broadcast(msg)
 
 func _flush_candidates() -> void:
 	if _client_candidate_queue.size() > 0:
-		_log("Flushing " + str(_client_candidate_queue.size()) + " queued candidates to Server.")
+		NetLog.debug("Flushing %d queued candidates to Server." % _client_candidate_queue.size())
 		
 	for c in _client_candidate_queue:
 		var msg := {

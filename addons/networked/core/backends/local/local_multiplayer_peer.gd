@@ -28,7 +28,7 @@ func create_server() -> Error:
 	_unique_id = 1
 	_is_server_peer = true
 	_connection_status = CONNECTION_CONNECTED
-	NetLog.debug("Initialized as Server.")
+	NetLog.info("LocalMultiplayerPeer initialized as Server (ID: %d)" % _unique_id)
 	return OK
 
 func create_client(client_id: int) -> Error:
@@ -36,7 +36,7 @@ func create_client(client_id: int) -> Error:
 	_unique_id = client_id
 	_is_server_peer = false
 	_connection_status = CONNECTION_CONNECTING
-	NetLog.debug("Initialized as Client.")
+	NetLog.info("LocalMultiplayerPeer initialized as Client (ID: %d)" % _unique_id)
 	return OK
 
 func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> void:
