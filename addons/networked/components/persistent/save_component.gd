@@ -179,7 +179,7 @@ func save_game() -> void:
 
 
 ## Static entry point: saves all components registered in [param ctx].
-## Use this when no [SaveComponent] instance is available (e.g. [MultiplayerNetwork]).
+## Use this when no [SaveComponent] instance is available (e.g. [NetworkSession]).
 static func save_all_in(ctx: PeerContext) -> void:
 	if not ctx:
 		return

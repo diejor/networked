@@ -1,13 +1,13 @@
-## Integration tests for MultiplayerNetwork.connect_player().
+## Integration tests for NetworkSession.connect_player().
 ##
 ## These cover the production entry-point addon users call directly.
 ## Setup is intentionally explicit (no NetworkTestHarness) so the test doubles
-## as documentation for what MultiplayerNetwork requires to function.
+## as documentation for what NetworkSession requires to function.
 ##
 ## The server is a plain MultiplayerTree — matching the production dedicated-server
-## model — while the client side goes through MultiplayerNetwork.connect_player()
+## model — while the client side goes through NetworkSession.connect_player()
 ## with manage_scene = false so scene management is skipped.
-class_name TestMultiplayerNetworkConnect
+class_name TestNetworkSessionConnect
 extends GdUnitTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
@@ -18,7 +18,7 @@ const SPAWNER_PATH := "TestPlayerFull/ClientComponent"
 
 var session: LocalLoopbackSession
 var server: MultiplayerTree
-var network: MultiplayerNetwork
+var network: NetworkSession
 
 
 func before_test() -> void:
@@ -109,7 +109,7 @@ func _setup_server() -> void:
 
 
 func _setup_network() -> void:
-	network = MultiplayerNetwork.new()
+	network = NetworkSession.new()
 	network.manage_scene = false
 	add_child(network)
 	auto_free(network)
@@ -127,7 +127,7 @@ func _setup_network() -> void:
 	client_tree.add_child(mgr)
 	client_tree.lobby_manager = mgr
 
-	# Assigning client triggers signal wiring inside MultiplayerNetwork.
+	# Assigning client triggers signal wiring inside NetworkSession.
 	network.client = client_tree
 
 

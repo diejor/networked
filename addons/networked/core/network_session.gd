@@ -1,5 +1,5 @@
 @tool
-class_name MultiplayerNetwork
+class_name NetworkSession
 extends Node
 
 @export var client: MultiplayerTree:
@@ -19,7 +19,7 @@ extends Node
 
 ## When false, connect_player() will not promote this node to the scene root and
 ## will not auto-start a local server for localhost URLs. Set to false when
-## MultiplayerNetwork is embedded as a child node (e.g. in test harnesses).
+## NetworkSession is embedded as a child node (e.g. in test harnesses).
 @export var manage_scene: bool = true
 
 @export_group("Debug")
@@ -55,9 +55,9 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		client_data.serialize()
 	)
 
-## Hosts this MultiplayerNetwork as a dedicated server. Use this instead of
+## Hosts this NetworkSession as a dedicated server. Use this instead of
 ## connect_player() when this instance should be the server in an
-## N-MultiplayerNetwork setup (e.g. test harnesses). The embedded client tree
+## N-NetworkSession setup (e.g. test harnesses). The embedded client tree
 ## is reconfigured as the server in-place; no separate server node is created.
 func host() -> Error:
 	client.is_server = true

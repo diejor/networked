@@ -35,7 +35,7 @@ func join(server_address: String, _username: String = "") -> Error:
 		return err
 	
 	ws_peer = peer
-	NetLog.info("Client connecting to ", url)
+	NetLog.info("Client connecting to %s" % url)
 	return OK
 
 

@@ -49,6 +49,10 @@ move_right={
 ]
 }
 
+[networked]
+
+logging/active_profile="uid://dd2xtj1kbwpm7"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

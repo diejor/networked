@@ -1,9 +1,6 @@
 class_name LocalMultiplayerPeer
 extends MultiplayerPeerExtension
 
-@export var debug_mode: bool = false
-
-
 var linked_peers: Dictionary = {}
 
 var _unique_id: int = 0
@@ -25,19 +22,13 @@ var _peers_to_emit_disconnected: Array[int] = []
 var _closing: bool = false
 var _closed: bool = false
 
-func _log(message: String) -> void:
-	if not debug_mode:
-		return
-	var role: String = "Server" if _is_server_peer else "Client %d" % _unique_id
-	NetLog.debug("[%s] %s" % [role, message])
-
 
 func create_server() -> Error:
 	_reset_state()
 	_unique_id = 1
 	_is_server_peer = true
 	_connection_status = CONNECTION_CONNECTED
-	_log("Initialized as Server.")
+	NetLog.debug("Initialized as Server.")
 	return OK
 
 func create_client(client_id: int) -> Error:
@@ -45,7 +36,7 @@ func create_client(client_id: int) -> Error:
 	_unique_id = client_id
 	_is_server_peer = false
 	_connection_status = CONNECTION_CONNECTING
-	_log("Initialized as Client.")
+	NetLog.debug("Initialized as Client.")
 	return OK
 
 func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> void:
@@ -53,28 +44,28 @@ func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> v
 		return
 
 	linked_peers[peer_id] = peer_reference
-	_log("Linked internally to peer %d." % peer_id)
+	NetLog.trace("Linked internally to peer %d." % peer_id)
 
 	if _is_server_peer:
 		_peers_to_emit_connected.append(peer_id)
-		_log("Queued peer_connected for Client %d." % peer_id)
+		NetLog.trace("Queued peer_connected for Client %d." % peer_id)
 
 
 func _poll() -> void:
 	if (not _is_server_peer) and _connection_status == CONNECTION_CONNECTING:
 		_connection_status = CONNECTION_CONNECTED
 		_peers_to_emit_connected.append(1)
-		_log("Connection finalized. Added Server (1) to event queue.")
+		NetLog.trace("Connection finalized. Added Server (1) to event queue.")
 
 	while not _peers_to_emit_connected.is_empty():
 		var p_id := _peers_to_emit_connected.pop_front()
 		peer_connected.emit(p_id)
-		_log("Emitted peer_connected for %d." % p_id)
+		NetLog.trace("Emitted peer_connected for %d." % p_id)
 
 	while not _peers_to_emit_disconnected.is_empty():
 		var p_id := _peers_to_emit_disconnected.pop_front()
 		peer_disconnected.emit(p_id)
-		_log("Emitted peer_disconnected for %d." % p_id)
+		NetLog.trace("Emitted peer_disconnected for %d." % p_id)
 
 	if _closing:
 		_finalize_close()
@@ -83,7 +74,7 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 	if _closed or _closing:
 		return ERR_UNAVAILABLE
 
-	_log("Putting packet of %d bytes. Target: %d" % [p_buffer.size(), _target_peer])
+	NetLog.trace("Putting packet of %d bytes. Target: %d" % [p_buffer.size(), _target_peer])
 
 	if _target_peer == 0:
 		for peer_id in linked_peers.keys():
@@ -98,7 +89,7 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 
 	# If we are a client and the target is not the server, we must route through the server for relaying.
 	if not _is_server_peer and _target_peer != 1:
-		_log("Routing packet through server for relaying to %d." % _target_peer)
+		NetLog.trace("Routing packet through server for relaying to %d." % _target_peer)
 		return _send_to_peer(1, p_buffer)
 
 	return _send_to_peer(_target_peer, p_buffer)
@@ -108,16 +99,16 @@ func _send_to_peer(peer_id: int, p_buffer: PackedByteArray) -> Error:
 		return ERR_UNAVAILABLE
 
 	if not linked_peers.has(peer_id):
-		_log("Failed to send to %d: Not linked." % peer_id)
+		NetLog.trace("Failed to send to %d: Not linked." % peer_id)
 		return ERR_UNAVAILABLE
 
 	var target: LocalMultiplayerPeer = linked_peers[peer_id]
 	if target == null or target._closed or target._closing:
 		linked_peers.erase(peer_id)
-		_log("Failed to send to %d: Target closed." % peer_id)
+		NetLog.trace("Failed to send to %d: Target closed." % peer_id)
 		return ERR_UNAVAILABLE
 
-	_log("Routing packet directly to %d's memory." % peer_id)
+	NetLog.trace("Routing packet directly to %d's memory." % peer_id)
 	target._receive_packet(p_buffer, _unique_id, _transfer_channel, _transfer_mode)
 	return OK
 
@@ -131,7 +122,7 @@ func _receive_packet(p_buffer: PackedByteArray, p_sender: int, p_channel: int, p
 		"channel": p_channel,
 		"mode": p_mode
 	})
-	_log("Received packet from %d (Size: %d). Queue length: %d" %
+	NetLog.trace("Received packet from %d (Size: %d). Queue length: %d" %
 		[p_sender, p_buffer.size(), _packet_queue.size()])
 
 func _get_packet_script() -> PackedByteArray:
@@ -140,7 +131,7 @@ func _get_packet_script() -> PackedByteArray:
 
 	_current_packet = _packet_queue.pop_front()
 	var data: PackedByteArray = _current_packet.get("data", PackedByteArray())
-	_log("Popped packet from %d (Size: %d). Queue left: %d" %
+	NetLog.trace("Popped packet from %d (Size: %d). Queue left: %d" %
 		[_current_packet.get("peer", 0), data.size(), _packet_queue.size()])
 	return data
 
@@ -167,7 +158,7 @@ func _close() -> void:
 	if _closed or _closing:
 		return
 
-	_log("Closing peer (scheduled).")
+	NetLog.trace("Closing peer (scheduled).")
 	_closing = true
 
 	_connection_status = CONNECTION_DISCONNECTED
@@ -201,10 +192,10 @@ func _finalize_close() -> void:
 	_transfer_mode = TRANSFER_MODE_RELIABLE
 	_is_server_peer = false
 
-	_log("Peer fully closed.")
+	NetLog.trace("Peer fully closed.")
 
 func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
-	_log("Disconnecting peer %d (scheduled)." % p_peer)
+	NetLog.trace("Disconnecting peer %d (scheduled)." % p_peer)
 
 	linked_peers.erase(p_peer)
 	_purge_packets_from(p_peer)

@@ -160,8 +160,8 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
-	assert(get_tree().current_scene is MultiplayerNetwork)
-	var network: MultiplayerNetwork = get_tree().current_scene
+	assert(get_tree().current_scene is NetworkSession)
+	var network: NetworkSession = get_tree().current_scene
 	network.connect_player(client_data)
 
 
