@@ -8,7 +8,7 @@
 ## model — while the client side goes through NetworkSession.connect_player()
 ## with manage_scene = false so scene management is skipped.
 class_name TestNetworkSessionConnect
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
@@ -45,17 +45,20 @@ func after_test() -> void:
 # ---------------------------------------------------------------------------
 
 func test_client_is_online_after_connect_player() -> void:
-	await network.connect_player(_client_data("alice"))
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
 	assert_that(network.client.is_online()).is_true()
 
 
 func test_client_peer_id_is_not_server_id() -> void:
-	await network.connect_player(_client_data("alice"))
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
 	assert_that(network.client.multiplayer_peer.get_unique_id()).is_not_equal(1)
 
 
 func test_server_registers_peer_after_connect() -> void:
-	await network.connect_player(_client_data("alice"))
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
 	assert_that(server.multiplayer_api.get_peers().size()).is_equal(1)
 
 
@@ -63,27 +66,38 @@ func test_server_emits_peer_connected_on_connect() -> void:
 	var connected_ids: Array[int] = []
 	server.peer_connected.connect(func(id: int) -> void: connected_ids.append(id))
 
-	await network.connect_player(_client_data("alice"))
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
 
 	assert_that(connected_ids.size()).is_equal(1)
 
 
 func test_player_spawns_in_server_lobby_after_connect() -> void:
-	await network.connect_player(_client_data("alice"))
-	await get_tree().process_frame  # RPC needs one frame to arrive and be processed
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
+	
+	var peer_id := network.client.multiplayer_api.get_unique_id()
+	await wait_until(func():
+		var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+		return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
+	)
 
 	var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
-	var peer_id := network.client.multiplayer_peer.get_unique_id()
 	var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
 	assert_that(player).is_not_null()
 
 
 func test_spawned_player_has_correct_multiplayer_authority() -> void:
-	await network.connect_player(_client_data("alice"))
-	await get_tree().process_frame
+	network.connect_player(_client_data("alice"))
+	await timeout_await(network.client.connected_to_server)
+	
+	var peer_id := network.client.multiplayer_api.get_unique_id()
+	await wait_until(func():
+		var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+		return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
+	)
 
 	var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
-	var peer_id := network.client.multiplayer_peer.get_unique_id()
 	var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
 	assert_that(player.get_multiplayer_authority()).is_equal(peer_id)
 

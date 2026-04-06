@@ -4,7 +4,7 @@
 ## path resolution, registration, and disk I/O without triggering _ready()
 ## which calls set_visibility_for() on the SaveSynchronizer.
 class_name TestSaveComponent
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var save_dir: String
 

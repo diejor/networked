@@ -5,7 +5,7 @@
 ## root node names so SceneNodePath.get_scene_name() resolves to the active_lobbies key.
 ## Each level instances test_player_full.tscn as the spawner template.
 class_name TestTPFlow
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
@@ -81,7 +81,7 @@ func test_reparent_moves_player_between_lobbies() -> void:
 	tp_target.node_path = "TPTarget"
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await client_tp.teleport(tp_target).completed
+	await timeout_await(client_tp.teleport(tp_target).completed)
 
 	assert_that(server_player.get_parent()).is_equal(lobby2.level)
 
@@ -100,7 +100,7 @@ func test_teleported_snaps_to_marker() -> void:
 	tp_target.node_path = "TPTarget"
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await client_tp.teleport(tp_target).completed
+	await timeout_await(client_tp.teleport(tp_target).completed)
 
 	var client_player2 := await harness.wait_for_client_player_spawn(client0, &"TestLevel2") as Node2D
 	assert_that(client_player2.global_position).is_equal(Vector2(100, 100))

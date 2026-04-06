@@ -4,7 +4,7 @@
 ## Players are spawned via harness.spawn_player() which bypasses the RPC chain
 ## and directly calls lobby.add_player(), testing the server-side spawn path.
 class_name TestPlayerSpawn
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")

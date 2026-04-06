@@ -1,5 +1,5 @@
 class_name TestClientComponent
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 
 # ---------------------------------------------------------------------------

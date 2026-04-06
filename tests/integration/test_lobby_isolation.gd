@@ -1,5 +1,5 @@
 class_name TestLobbyIsolation
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
@@ -69,7 +69,7 @@ func test_server_always_visible_regardless_of_registered_clients() -> void:
 # engine's replication interface. Calling them without a real connection
 # produces ERR_INVALID_PARAMETER from _update_sync_visibility().
 
-func test_connect_client_adds_to_connected_clients() -> void:
+func test_disconnect_client_adds_to_connected_clients() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	lobby.synchronizer.connect_client(client_id)
 	assert_that(lobby.synchronizer.connected_clients.has(client_id)).is_true()
@@ -79,7 +79,7 @@ func test_disconnect_client_removes_from_connected_clients() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	lobby.synchronizer.connect_client(client_id)
 	lobby.synchronizer.disconnect_client(client_id)
-	await await_idle_frame()  # let call_deferred(set_visibility_for, false) settle
+	await wait_until(func(): return not lobby.synchronizer.connected_clients.has(client_id))
 	assert_that(lobby.synchronizer.connected_clients.has(client_id)).is_false()
 
 
@@ -87,5 +87,6 @@ func test_disconnect_client_removes_visibility() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	lobby.synchronizer.connect_client(client_id)
 	lobby.synchronizer.disconnect_client(client_id)
-	await await_idle_frame()  # let call_deferred(set_visibility_for, false) settle
+	await wait_until(func(): return not lobby.synchronizer.scene_visibility_filter(client_id))
 	assert_that(lobby.synchronizer.scene_visibility_filter(client_id)).is_false()
+

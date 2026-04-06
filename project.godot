@@ -22,9 +22,11 @@ enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/netwo
 [gdunit4]
 
 report/godot/push_error=true
-report/hooks={
-"res://addons/networked/utils/net_log_session_hook.gd": true
-}
+hooks/session_hooks=Dictionary[String, bool]({
+"res://addons/gdUnit4/src/core/hooks/GdUnitHtmlReporterTestSessionHook.gd": true,
+"res://addons/gdUnit4/src/core/hooks/GdUnitXMLReporterTestSessionHook.gd": true,
+"res://tests/helpers/net_log_session_hook.gd": true
+})
 
 [input]
 

@@ -1,5 +1,5 @@
 class_name TestClientDataSerde
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 
 func test_round_trip_preserves_username() -> void:

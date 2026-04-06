@@ -1,5 +1,5 @@
 class_name TestLocalLoopbackSession
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var session: LocalLoopbackSession
 

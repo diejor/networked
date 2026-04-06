@@ -12,6 +12,8 @@ var _lobby_manager_scene: PackedScene
 
 var _silent_log := NetLogSettings.new()
 
+const DEFAULT_TIMEOUT := 1.0
+
 
 func _init() -> void:
 	_silent_log.global_level = NetLog.Level.NONE
@@ -21,6 +23,13 @@ func _init() -> void:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+## Helper to await a signal with the harness's default timeout.
+## Returns true if it timed out, false otherwise.
+func wait_for(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> bool:
+	var timer := get_tree().create_timer(timeout)
+	return await Async.timeout(target_signal, timer)
+
 
 ## Creates a fresh session and a server node. Does NOT host yet — register
 ## spawnable scenes on get_server().lobby_manager before calling add_client().
@@ -66,8 +75,13 @@ func add_client() -> MultiplayerTree:
 	# Wait for server to register this peer
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var server_api := _server.multiplayer_api
+	
+	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
 	while not peer_id in server_api.get_peers():
 		await get_tree().process_frame
+		if timeout_timer.time_left <= 0:
+			assert(false, "Timed out waiting for server to register peer %d" % peer_id)
+			
 	await get_tree().process_frame
 
 	return client
@@ -176,8 +190,11 @@ func _setup_server() -> void:
 
 
 func wait_for_client_lobby_spawn(client: MultiplayerTree, lobby_name: StringName) -> Lobby:
+	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
 	while not client.lobby_manager.active_lobbies.has(lobby_name):
 		await get_tree().process_frame
+		if timeout_timer.time_left <= 0:
+			assert(false, "Timed out waiting for lobby '%s' to spawn on client." % lobby_name)
 	return client.lobby_manager.active_lobbies.get(lobby_name)
 
 
@@ -185,4 +202,8 @@ func wait_for_client_player_spawn(client: MultiplayerTree, lobby_name: StringNam
 	var lobby := await wait_for_client_lobby_spawn(client, lobby_name)
 	if lobby.synchronizer.tracked_nodes.size() > 0:
 		return lobby.synchronizer.tracked_nodes.keys()[0]
-	return await lobby.synchronizer.spawned
+	
+	if await wait_for(lobby.synchronizer.spawned):
+		assert(false, "Timed out waiting for player to spawn in lobby '%s'." % lobby_name)
+		
+	return lobby.synchronizer.tracked_nodes.keys()[0]

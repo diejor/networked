@@ -4,7 +4,7 @@
 ## real input events, since GDUnit4 runs headless without an InputMap by default.
 ## We register temporary actions in before()/after() to satisfy the InputMap asserts.
 class_name TestInputComponent
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const ACTIONS := [&"move_left", &"move_right", &"move_up", &"move_down", &"sprint"]
 

@@ -9,7 +9,7 @@
 ## The SaveSynchronizer._ready() calls set_visibility_for() which requires real
 ## peers — hence these must be integration tests using NetworkTestHarness.
 class_name TestSaveFlow
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")

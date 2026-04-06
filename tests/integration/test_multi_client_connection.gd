@@ -1,5 +1,5 @@
 class_name TestMultiClientConnection
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var harness: NetworkTestHarness
 

@@ -4,7 +4,7 @@
 ## itself (request_teleport, _reparent_to_lobby) requires real peers and belongs
 ## in integration tests.
 class_name TestTPComponent
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const TEST_LEVEL := "res://tests/helpers/TestLevel.tscn"
 

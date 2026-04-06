@@ -6,7 +6,7 @@
 ##   2. Disconnect cleanup — the server erases a peer's context when that peer
 ##      disconnects, preventing stale state from leaking across sessions.
 class_name TestPeerContextLifecycle
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
@@ -50,9 +50,7 @@ func test_context_erased_on_peer_disconnect() -> void:
 	assert_that(server._peer_contexts.has(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
-	# Two frames: one for the close to propagate, one for the server to poll it.
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await wait_until(func(): return not server._peer_contexts.has(client_peer_id))
 
 	assert_that(server._peer_contexts.has(client_peer_id)).is_false()
 

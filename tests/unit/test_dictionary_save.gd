@@ -1,5 +1,5 @@
 class_name TestDictionarySave
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var save: DictionarySave
 
