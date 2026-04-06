@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://bqi7mvxdnvgch"]
+
+[ext_resource type="PackedScene" uid="uid://bo5hexvshy77x" path="res://Player.tscn" id="1_kyxg0"]
+[ext_resource type="PackedScene" uid="uid://cakl64wxtsgth" path="res://Teleporter.tscn" id="2_mc20k"]
+[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_cove1"]
+[ext_resource type="Texture2D" uid="uid://ntsmds3f8a11" path="res://addons/networked/addons/scene_node_path/icon.svg" id="4_dwyiq"]
+
+[sub_resource type="Resource" id="Resource_dwyiq"]
+script = ExtResource("3_cove1")
+scene_path = "uid://cthf7wjwb4n77"
+node_path = "%Teleporter/Marker2D"
+
+[node name="Level1" type="Node2D" unique_id=1896658975]
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=1246569886]
+_spawnable_scenes = PackedStringArray("uid://bo5hexvshy77x")
+spawn_path = NodePath("..")
+
+[node name="Player" parent="." unique_id=1681601538 instance=ExtResource("1_kyxg0")]
+
+[node name="Teleporter" parent="." unique_id=1470871843 instance=ExtResource("2_mc20k")]
+position = Vector2(171, 70)
+target_tp = SubResource("Resource_dwyiq")
+
+[node name="Icon" type="Sprite2D" parent="." unique_id=1404891340]
+position = Vector2(108, 267)
+texture = ExtResource("4_dwyiq")

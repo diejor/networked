@@ -1,0 +1,74 @@
+[gd_scene format=3 uid="uid://b5gj8b5qtiard"]
+
+[ext_resource type="Script" uid="uid://bi68kvs2if4hr" path="res://addons/scene_node_path/source/ui/dialog_picker.gd" id="1_qgkv8"]
+[ext_resource type="Script" uid="uid://bqremx8ar772t" path="res://addons/scene_node_path/source/ui/smart_node_tree.gd" id="2_seb2a"]
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_qgkv8"]
+
+[node name="NodePickerDialog" type="ConfirmationDialog" unique_id=415121117]
+oversampling_override = 1.0
+title = "Select Scene Node Path"
+position = Vector2i(0, 36)
+size = Vector2i(450, 600)
+visible = true
+script = ExtResource("1_qgkv8")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=618798882]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 442.0
+offset_bottom = 551.0
+
+[node name="SceneHeader" type="HBoxContainer" parent="VBoxContainer" unique_id=1178600623]
+layout_mode = 2
+
+[node name="ChangeSceneBtn" type="Button" parent="VBoxContainer/SceneHeader" unique_id=1248579951]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Change Scene"
+
+[node name="CurrentSceneLbl" type="LineEdit" parent="VBoxContainer/SceneHeader" unique_id=1252688840]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+editable = false
+
+[node name="AllowedHeader" type="HBoxContainer" parent="VBoxContainer" unique_id=60491809]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/AllowedHeader" unique_id=712761407]
+layout_mode = 2
+text = "Allowed:"
+
+[node name="AllowedIcon" type="TextureRect" parent="VBoxContainer/AllowedHeader" unique_id=2067875293]
+unique_name_in_owner = true
+layout_mode = 2
+texture = SubResource("PlaceholderTexture2D_qgkv8")
+stretch_mode = 3
+
+[node name="AllowedClassLbl" type="Label" parent="VBoxContainer/AllowedHeader" unique_id=853625621]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SearchHeader" type="HBoxContainer" parent="VBoxContainer" unique_id=1400726276]
+layout_mode = 2
+
+[node name="SearchBox" type="LineEdit" parent="VBoxContainer/SearchHeader" unique_id=690486301]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Filter Nodes..."
+clear_button_enabled = true
+
+[node name="ShowAllBtn" type="CheckButton" parent="VBoxContainer/SearchHeader" unique_id=1599463285]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Show All"
+
+[node name="NodeTree" type="Tree" parent="VBoxContainer" unique_id=205188829]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_seb2a")

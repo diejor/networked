@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="120"
+   height="120"
+   viewBox="0 0 120 120"
+   version="1.1"
+   id="svg1"
+   xml:space="preserve"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   sodipodi:docname="scene_node_path.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:zoom="2.2774731"
+     inkscape:cx="-32.931234"
+     inkscape:cy="59.05668"
+     inkscape:window-width="1920"
+     inkscape:window-height="991"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" /><defs
+     id="defs1" /><g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"><path
+       style="stroke-width:8.58455;fill:#e0e0e0;fill-opacity:1"
+       d="M 34.24635,68.58455 81.461375,21.369525 60,-0.09184994 h 60.09185 V 60 L 98.630475,38.538625 51.41545,85.75365 Z"
+       id="path1-4" /><path
+       id="path1"
+       style="stroke-width:8.43115;fill:#e0e0e0;fill-opacity:1"
+       d="M 64.798828 14.035156 L 69.173828 24.207031 L 72.072266 21.308594 L 64.798828 14.035156 z M 47.576172 15.255859 L 30.900391 17.701172 L 37.796875 33.736328 L 54.482422 31.291016 L 47.576172 15.255859 z M 14.214844 20.128906 L -0.23632812 22.236328 L 2.2011719 38.921875 L 21.119141 36.15625 L 14.214844 20.128906 z M 2.2011719 47.353516 L 2.2011719 97.939453 A 16.8623 16.8623 0 0 0 19.0625 114.80273 L 120.23633 114.80273 L 120.23633 66.583984 A 6.6669264 6.6669264 0 0 1 115.41406 64.652344 L 98.666016 47.904297 L 56.166016 90.404297 A 6.6669264 6.6669264 0 0 1 46.740234 90.40625 L 29.570312 73.238281 A 6.6669264 6.6669264 0 0 1 29.570312 63.810547 L 46.027344 47.353516 L 2.2011719 47.353516 z " /></g></svg>

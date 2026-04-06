@@ -1,0 +1,101 @@
+[gd_scene format=3 uid="uid://dey3omtjsnn3s"]
+
+[ext_resource type="Script" uid="uid://b3spjbhtkmp0y" path="res://addons/scene_node_path/source/ui/picker_menu_button.gd" id="1_mn2ph"]
+[ext_resource type="Script" uid="uid://d0rcttrmf25oq" path="res://addons/scene_node_path/source/ui/property_picker_ui.gd" id="1_wcu7g"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_mn2ph"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_wcu7g"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_jcvjv"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_4iuxv"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_ujrqn"]
+
+[sub_resource type="DPITexture" id="DPITexture_mn2ph"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#e0e0e0\" d=\"M8 0a2 2 0 0 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 0 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 0 0 0 4 2 2 0 0 0 0-4z\"/></svg>
+"
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(0.83, 0.78, 0.62, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_wcu7g"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#e0e0e0\" d=\"M3 2a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9c1.105 0 1.818-.91 2-2l1-6a1 1 0 0 0-1-1H6c-.552 0-.909.455-1 1l-1 6c-.091.545-.448 1-1 1a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1 1 1 0 0 0 1 1h5a1 1 0 0 0-1-1H7a2 2 0 0 0-2-2H3z\"/></svg>
+"
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(0.83, 0.78, 0.62, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_jcvjv"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" xml:space=\"preserve\" width=\"16\" height=\"12\"><path fill=\"#41ec80\" d=\"M 5,10 V 4 H 3 V 8 C 2.4477153,8 2,7.5522847 2,7 V 4 H 0 v 3 c 0,1.6568542 1.3431458,3 3,3 z\" transform=\"translate(1)\"/><path fill=\"#41ec80\" d=\"m 6.9999479,2 v 2 h 2 V 2 Z m 7.0000001,0 v 2 h -1 c -3.9999981,0 -3.9999981,6 0,6 h 3 V 2 Z M 6.9999479,6 v 4 h 2 V 6 Z m 6.0000001,0 h 1 v 2 h -1 c -1.333333,0 -1.333333,-2 0,-2 z\"/></svg>
+"
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(0.83, 0.78, 0.62, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_ujrqn"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"12\"><path fill=\"#417aec\" d=\"M0 2v8h2V8a3 3 0 0 0 0-6zm6 0v5a3 3 0 0 0 3 3h1V8H9a1 1 0 0 1-1-1V6h2V4H8V2zm5 0v8h2V6a1 1 0 0 1 1 1v3h2V7a3 3 0 0 0-3-3V2zM2 4a1 1 0 0 1 0 2z\"/></svg>
+"
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(0.83, 0.78, 0.62, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_4iuxv"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#e0e0e0\" d=\"m8 1a1 1 0 0 0 -1 1v5h-2c-1.108 0-2 .892-2 2v1h10v-1c0-1.108-.892-2-2-2h-2v-5a1 1 0 0 0 -1-1zm-5 10v4l10-1v-3z\"/></svg>
+"
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(0.83, 0.78, 0.62, 1)
+}
+
+[node name="PropertyPickerUI" type="HBoxContainer" unique_id=1917521670]
+offset_right = 144.0
+offset_bottom = 24.0
+script = ExtResource("1_wcu7g")
+
+[node name="MainBtn" type="Button" parent="." unique_id=1211288338]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("StyleBoxEmpty_mn2ph")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_wcu7g")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_jcvjv")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_4iuxv")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_ujrqn")
+clip_text = true
+
+[node name="MenuBtn" type="MenuButton" parent="." unique_id=662564396]
+unique_name_in_owner = true
+layout_mode = 2
+icon = SubResource("DPITexture_mn2ph")
+item_count = 5
+popup/item_0/text = "Change Scene"
+popup/item_0/icon = SubResource("DPITexture_wcu7g")
+popup/item_0/id = 0
+popup/item_1/text = "Copy as UID"
+popup/item_1/icon = SubResource("DPITexture_jcvjv")
+popup/item_1/id = 1
+popup/item_2/text = "Copy as Path"
+popup/item_2/icon = SubResource("DPITexture_ujrqn")
+popup/item_2/id = 2
+popup/item_3/id = -1
+popup/item_3/separator = true
+popup/item_4/text = "Clear"
+popup/item_4/icon = SubResource("DPITexture_4iuxv")
+popup/item_4/id = 4
+script = ExtResource("1_mn2ph")

@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://c5tj2gqmrl0mg"]
+
+[ext_resource type="PackedScene" uid="uid://8dmbjqnbp0rn" path="res://addons/networked/components/client/ClientComponent.tscn" id="1_client"]
+[ext_resource type="PackedScene" uid="uid://b25ufiuigcd5" path="res://addons/networked/components/persistent/SaveComponent.tscn" id="2_save"]
+[ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_s5wog"]
+[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="3_tp"]
+[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
+
+[sub_resource type="Resource" id="Resource_s5wog"]
+resource_local_to_scene = true
+script = ExtResource("3_s5wog")
+metadata/_custom_type_script = "uid://d1mnum02gn0c0"
+
+[sub_resource type="Resource" id="Resource_7io2v"]
+script = ExtResource("5_1efga")
+scene_path = "uid://bhif5a1uatdsl"
+node_path = "PlayerSpawner"
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
+properties/0/path = NodePath("ClientComponent:username")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:position")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("TPComponent:current_scene_path")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+
+[node name="TestPlayerFull" type="Node2D" unique_id=754678470]
+
+[node name="ClientComponent" parent="." unique_id=1968555134 instance=ExtResource("1_client")]
+
+[node name="SaveComponent" parent="." unique_id=1774314061 instance=ExtResource("2_save")]
+save_dir = "res://tests/tmp_saves"
+save_container = SubResource("Resource_s5wog")
+
+[node name="TPComponent" type="Node" parent="." unique_id=401292753]
+unique_name_in_owner = true
+script = ExtResource("3_tp")
+starting_scene_path = SubResource("Resource_7io2v")
+
+[node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=639682812]
+replication_config = SubResource("SceneReplicationConfig_1")
+
+[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

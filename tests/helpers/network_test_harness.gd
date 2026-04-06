@@ -1,0 +1,183 @@
+class_name NetworkTestHarness
+extends Node
+
+## Test helper that spins up 1 server + N clients in-process using a fresh
+## LocalLoopbackSession (never the shared singleton, so tests are isolated).
+
+var _session: LocalLoopbackSession
+var _server: MultiplayerTree
+var _clients: Array[MultiplayerTree] = []
+var _lobby_manager_scene: PackedScene
+
+
+func _init() -> void:
+	NetLog.current_level = NetLog.Level.NONE
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+## Creates a fresh session and a server node. Does NOT host yet — register
+## spawnable scenes on get_server().lobby_manager before calling add_client().
+## Must be awaited — waits one frame for _ready() to fire before returning.
+func setup(lobby_manager_scene: PackedScene = null) -> void:
+	_lobby_manager_scene = lobby_manager_scene
+	_session = LocalLoopbackSession.new()
+	_setup_server()
+	await get_tree().process_frame
+
+
+## Creates a new client, connects it to the server, and returns it.
+## Hosts the server automatically on the first call (after setup() returns,
+## giving tests a chance to register spawnable scenes first).
+func add_client() -> MultiplayerTree:
+	if not _server.is_online():
+		var host_err: Error = _server.host()
+		assert(host_err == OK, "Server host() failed: %s" % error_string(host_err))
+
+	var index := _clients.size()
+	var username := "test_player_%d" % index
+
+	var client := MultiplayerTree.new()
+	client.name = "HarnessClient%d" % index
+	client.is_server = false
+	client.set_meta(&"_harness_username", username)
+	add_child(client)
+
+	var backend := LocalLoopbackBackend.new()
+	backend.session = _session
+	client.backend = backend
+
+	if _lobby_manager_scene:
+		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()
+		client.add_child(mgr)
+		client.lobby_manager = mgr
+
+	_clients.append(client)
+
+	var join_err: Error = await client.join("localhost", username)
+	assert(join_err == OK, "Client %d join() failed: %s" % [index, error_string(join_err)])
+
+	# Wait for server to register this peer
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	var server_api := _server.multiplayer_api
+	while not peer_id in server_api.get_peers():
+		await get_tree().process_frame
+	await get_tree().process_frame
+
+	return client
+
+
+## Cleans up all server/client instances and removes nodes from the tree.
+## Should be called in after_test().
+func teardown() -> void:
+	if is_instance_valid(_server):
+		_server.queue_free()
+
+	for client in _clients:
+		if is_instance_valid(client):
+			client.queue_free()
+
+	_clients.clear()
+	_server = null
+
+	if is_inside_tree():
+		get_parent().remove_child(self)
+	queue_free()
+
+
+func get_server() -> MultiplayerTree:
+	return _server
+
+
+func get_all_clients() -> Array[MultiplayerTree]:
+	return _clients
+
+
+## Returns a lobby from the server's lobby manager by name,
+## or the first lobby if name is empty.
+func get_server_lobby(lobby_name: StringName = "") -> Lobby:
+	var server_mgr: MultiplayerLobbyManager = _server.lobby_manager
+	if lobby_name.is_empty():
+		return server_mgr.active_lobbies.values()[0]
+	return server_mgr.active_lobbies.get(lobby_name)
+
+
+## Sends the real request_join_player RPC from a client to the server,
+## triggering the full _on_player_joined production chain.
+## level_scene_path must be a registered spawnable scene whose filename (no extension)
+## matches the level root node name (e.g. "TestLevel.tscn" → root "TestLevel").
+## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/ClientComponent").
+## Returns the spawned player node from the server lobby after one process frame.
+func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
+	var username: String = client.get_meta(&"_harness_username")
+
+	var spawner_path := SceneNodePath.new()
+	spawner_path.scene_path = level_scene_path
+	spawner_path.node_path = spawner_node_path
+
+	var client_data := MultiplayerClientData.new()
+	client_data.username = username
+	client_data.spawner_path = spawner_path
+
+	client.lobby_manager.request_join_player.rpc_id(
+		MultiplayerPeer.TARGET_PEER_SERVER,
+		client_data.serialize()
+	)
+
+	await get_tree().process_frame
+
+	var lobby_name: StringName = spawner_path.get_scene_name()
+	var lobby := get_server_lobby(lobby_name)
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	return lobby.level.get_node_or_null("%s|%d" % [username, peer_id])
+
+
+## Spawns a player into a server lobby, bypassing the RPC chain.
+## Returns the spawned player node.
+func spawn_player(client: MultiplayerTree, player_scene: PackedScene, lobby_name: StringName = "") -> Node:
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	var username: String = client.get_meta(&"_harness_username")
+
+	var player := player_scene.instantiate()
+	player.name = "%s|%d" % [username, peer_id]
+	var client_comp: ClientComponent = player.get_node("%ClientComponent")
+	client_comp.username = username
+
+	var lobby := get_server_lobby(lobby_name)
+	lobby.add_player(player)
+	return player
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+func _setup_server() -> void:
+	_server = MultiplayerTree.new()
+	_server.name = "HarnessServer"
+	_server.is_server = true
+	add_child(_server)
+
+	var backend := LocalLoopbackBackend.new()
+	backend.session = _session
+	_server.backend = backend
+
+	if _lobby_manager_scene:
+		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()
+		_server.add_child(mgr)
+		_server.lobby_manager = mgr
+
+
+func wait_for_client_lobby_spawn(client: MultiplayerTree, lobby_name: StringName) -> Lobby:
+	while not client.lobby_manager.active_lobbies.has(lobby_name):
+		await get_tree().process_frame
+	return client.lobby_manager.active_lobbies.get(lobby_name)
+
+
+func wait_for_client_player_spawn(client: MultiplayerTree, lobby_name: StringName) -> Node:
+	var lobby := await wait_for_client_lobby_spawn(client, lobby_name)
+	if lobby.synchronizer.tracked_nodes.size() > 0:
+		return lobby.synchronizer.tracked_nodes.keys()[0]
+	return await lobby.synchronizer.spawned
