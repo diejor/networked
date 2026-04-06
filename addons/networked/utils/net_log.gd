@@ -1,30 +1,38 @@
+## Static logging utility for the networked addon with per-module level overrides.
+##
+## Log calls resolve a per-module level by walking the dot-separated module hierarchy.
+## At runtime the first log call lazily detects the addon root and loads the active
+## [NetLogSettings] profile from [code]ProjectSettings[/code].
+## [codeblock]
+## NetLog.info("Player spawned: %s" % username)
+## NetLog.warn("Connection attempt failed, retrying...")
+## NetLog.error("Critical: lobby '%s' not found." % lobby_name)
+## [/codeblock]
 class_name NetLog
 extends Object
 
+## Ordered severity levels for filtering log output.
 enum Level { TRACE, DEBUG, INFO, WARN, ERROR, NONE }
 
+## Global minimum log level applied when no per-module override matches.
 static var current_level: int = Level.INFO
-static var module_levels: Dictionary = {}  # String -> int
 
-# Precomputed minimum across current_level and all module_levels.
-# Allows TRACE/DEBUG calls to bail out before get_stack() when nothing is listening.
+## Per-module level overrides keyed by dot-separated module path (e.g. [code]"core.network_session"[/code]).
+static var module_levels: Dictionary = {}
+
 static var _min_active_level: int = Level.INFO
-
-# Test isolation stack.
+static var _effective_min_level: int = Level.INFO
 static var _settings_stack: Array = []
-
-# Addon root path relative to res:// (e.g. "addons/networked"), set by plugin.gd.
-# When set, module paths for scripts inside the addon are stored without this prefix
-# so that saved overrides survive the addon directory being moved.
 static var _addon_root: String = ""
-
-# Guards lazy runtime initialization so it only runs once per game session.
 static var _runtime_initialized: bool = false
 
 const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 
-## Called explicitly by plugin.gd (editor) or any runtime entry point.
-## Pass addon_root (e.g. "res://addons/networked") so module paths are addon-relative.
+## Initializes the logging system and loads the active profile from [code]ProjectSettings[/code].
+##
+## Call this explicitly from [code]plugin.gd[/code] (editor) or a runtime entry point.
+## [param addon_root] — path such as [code]"res://addons/networked"[/code] — makes module
+## paths relative to the addon root so saved overrides survive directory renames.
 static func initialize(addon_root: String = "") -> void:
 	_addon_root = addon_root.replace("res://", "").trim_suffix("/")
 	_runtime_initialized = true
@@ -33,7 +41,6 @@ static func initialize(addon_root: String = "") -> void:
 	_load_active_profile()
 	_recompute_min_level()
 
-## Loads the active profile from ProjectSettings into the live module_levels table.
 static func _load_active_profile() -> void:
 	if not ProjectSettings.has_setting(SETTING_ACTIVE_PROFILE):
 		return
@@ -63,7 +70,7 @@ static func _load_active_profile() -> void:
 			% [path, SETTING_ACTIVE_PROFILE]
 		)
 
-## Fixes a double-prefix written by an earlier version of the editor panel (uid://uid://...).
+## Fixes a double-prefix written by an earlier version of the editor panel ([code]uid://uid://...[/code]).
 static func _fix_profile_path(path: String) -> String:
 	if path.begins_with("uid://uid://"):
 		return path.substr("uid://".length())
@@ -74,18 +81,35 @@ static func _recompute_min_level() -> void:
 	for l: int in module_levels.values():
 		if l < _min_active_level:
 			_min_active_level = l
+	_effective_min_level = _stack_min_level() if not _settings_stack.is_empty() else _min_active_level
 
-## Push a settings resource onto the isolation stack. Used by test hooks.
+static func _stack_min_level() -> int:
+	var top: NetLogSettings = _settings_stack.back()
+	var m: int = top.global_level
+	for l: int in top.module_overrides.values():
+		if l < m:
+			m = l
+	return m
+
+## Pushes a [NetLogSettings] resource onto the isolation stack.
+##
+## While the stack is non-empty it fully replaces the base settings.
+## Used by [NetLogSessionHook] to silence output during tests.
 static func push_settings(settings: NetLogSettings) -> void:
 	_settings_stack.push_back(settings)
+	_effective_min_level = _stack_min_level()
 
-## Pop the topmost settings from the isolation stack.
+## Pops the topmost [NetLogSettings] from the isolation stack.
 static func pop_settings() -> void:
 	if not _settings_stack.is_empty():
 		_settings_stack.pop_back()
+	_effective_min_level = _stack_min_level() if not _settings_stack.is_empty() else _min_active_level
 
-## Returns the effective minimum log level for the given module path,
-## walking up the dot-separated hierarchy until a match is found.
+## Returns the effective log level for [param module_path].
+##
+## Walks up the dot-separated hierarchy (e.g. [code]"core.lobby.manager"[/code] →
+## [code]"core.lobby"[/code] → [code]"core"[/code]) until a matching override is found.
+## Falls back to [member current_level] if no override matches.
 static func get_effective_level(module_path: String) -> int:
 	if not _settings_stack.is_empty():
 		var top: NetLogSettings = _settings_stack.back()
@@ -107,43 +131,48 @@ static func get_effective_level(module_path: String) -> int:
 
 	return current_level
 
+## Logs a [code]TRACE[/code]-level message. Accepts optional [param args] for [code]%[/code]-style formatting.
 static func trace(msg: Variant, args: Array = []) -> void:
-	if Level.TRACE < _min_active_level and _settings_stack.is_empty(): return
+	if Level.TRACE < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.TRACE >= get_effective_level(ctx.module):
 		_print("[TRACE]", msg, args, Level.TRACE, ctx.module, ctx.site)
 
+## Logs a [code]DEBUG[/code]-level message. Accepts optional [param args] for [code]%[/code]-style formatting.
 static func debug(msg: Variant, args: Array = []) -> void:
-	if Level.DEBUG < _min_active_level and _settings_stack.is_empty(): return
+	if Level.DEBUG < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.DEBUG >= get_effective_level(ctx.module):
 		_print("[DEBUG]", msg, args, Level.DEBUG, ctx.module, ctx.site)
 
+## Logs an [code]INFO[/code]-level message. Accepts optional [param args] for [code]%[/code]-style formatting.
 static func info(msg: Variant, args: Array = []) -> void:
-	if Level.INFO < _min_active_level and _settings_stack.is_empty(): return
+	if Level.INFO < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.INFO >= get_effective_level(ctx.module):
 		_print("[INFO]", msg, args, Level.INFO, ctx.module, ctx.site)
 
+## Logs a [code]WARN[/code]-level message and calls [code]push_warning[/code].
+## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func warn(msg: Variant, args: Array = []) -> void:
-	if Level.WARN < _min_active_level and _settings_stack.is_empty(): return
+	if Level.WARN < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.WARN >= get_effective_level(ctx.module):
 		_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site)
 
+## Logs an [code]ERROR[/code]-level message and calls [code]push_error[/code].
+## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func error(msg: Variant, args: Array = []) -> void:
-	if Level.ERROR < _min_active_level and _settings_stack.is_empty(): return
+	if Level.ERROR < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.ERROR >= get_effective_level(ctx.module):
 		_print("[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site)
 
-# --- Internals ---
-
 static func _get_context() -> Dictionary:
 	var stack := get_stack()
 
-	# Lazy initialization for game runtime: plugin.gd is editor-only, so the
-	# first log call detects the addon root and loads the active profile.
+	# plugin.gd is editor-only; the first runtime log call detects the addon
+	# root from the call stack and loads the active profile.
 	if not _runtime_initialized:
 		_runtime_initialized = true
 		for frame: Dictionary in stack:

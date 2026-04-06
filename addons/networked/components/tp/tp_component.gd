@@ -2,21 +2,32 @@
 class_name TPComponent
 extends NetComponent
 
-## Manages entity teleportation across multiplayer lobbies and scene transitions.
+## Manages cross-lobby teleportation for a player entity in a multiplayer session.
 ##
-## Coordinates the complex handoff between the client and server, handling state saving,
-## visual transitions, lobby reparenting, and synchronizer rebinding.
+## Coordinates a multi-step handshake: the client requests a teleport via [method teleport],
+## the server reparents the player to the destination lobby, and then confirms with [method _rpc_teleport_committed].
+## Requires a [TPLayerAPI] in the scene for visual transition animations.
+## [codeblock]
+## # From a client-owned node:
+## var tp := %TPComponent.teleport(target_node_path)
+## await tp.completed
+## print("Teleport finished!")
+## [/codeblock]
 
 ## Internal signal emitted when the server confirms reparent. Do not connect from outside scripts —
 ## use the [TeleportPromise] returned by [method teleport] instead.
 signal _teleport_committed
+## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
 signal client_synchronized
 
 ## The default scene path assigned when the component enters the tree if no scene is currently set.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
 var starting_scene_path: SceneNodePath
 
-## The UID or file path of the scene the entity currently resides in. Automatically resolves to a valid path.
+## The UID or file path of the scene the entity currently resides in.
+##
+## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
+## Replicated on change so clients can track which lobby their entity is in.
 @export_custom(PROPERTY_HINT_NONE, "replicated:on_change")
 var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
@@ -28,7 +39,7 @@ var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
 
-## Strongly typed reference to the owner.
+## Strongly typed reference to the owner as a [Node2D].
 var owner2d: Node2D:
 	get: return owner as Node2D
 
@@ -49,17 +60,19 @@ func _get_bucket() -> Bucket:
 func _get_configuration_warnings() -> PackedStringArray:
 	return ReplicationValidator.get_configuration_warnings(self)
 
+
 func _validate_editor() -> void:
 	ReplicationValidator.verify_and_configure(self)
 
+
 func _init() -> void:
 	unique_name_in_owner = true
+
 
 func _ready() -> void:
 	if EditorTooling.validate_and_halt(self, _validate_editor):
 		return
 
-	# Wire up the synchronization signal for the client
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
 			sync.delta_synchronized.connect(client_synchronized.emit)
@@ -102,6 +115,7 @@ func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	_do_teleport(target_tp, promise)
 	return promise
 
+
 func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	NetLog.trace("TPComponent: _do_teleport called.")
 	await _tp_mutex.lock()
@@ -131,6 +145,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		from_scene,
 		target_tp.node_path
 	)
+
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(username: String, from_scene_name: String, tp_path: String) -> void:
@@ -180,6 +195,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 
 	player.reparent(to_lobby.level)
 	player.tree_entered.disconnect(flip)
+
 
 ## Server-side callback invoked after the entity safely enters the destination lobby.
 ## Sets position on the server and forwards the snap coordinates to the client.

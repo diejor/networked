@@ -1,10 +1,12 @@
+## Validates and auto-configures [code]replicated[/code]-hinted properties on a component.
+##
+## In the editor, missing [MultiplayerSynchronizer] configurations are created automatically.
+## At runtime, strict assertions prevent silent multiplayer failures.
 @tool
 class_name ReplicationValidator
 extends RefCounted
-## Verifies that all properties with a `replicated` hint string are correctly configured.
-## In the editor, it silently auto-configures missing properties.
-## In the game, it strictly asserts to prevent silent multiplayer failures.
 
+## Verifies and, in the editor, auto-configures all [code]replicated[/code]-hinted properties on [param component].
 static func verify_and_configure(component: Node) -> void:
 	if not component.owner:
 		return
@@ -15,8 +17,9 @@ static func verify_and_configure(component: Node) -> void:
 		_assert_replicated_properties(component)
 
 
-## Analyzes the component and returns configuration warnings for the Godot editor.
-## Only warns if the foundational MultiplayerSynchronizer node is completely missing.
+## Returns editor configuration warnings for [param component].
+##
+## Only warns when no [MultiplayerSynchronizer] with a matching [code]root_path[/code] is found.
 static func get_configuration_warnings(component: Node) -> PackedStringArray:
 	var warnings := PackedStringArray()
 
@@ -41,7 +44,6 @@ static func _assert_replicated_properties(component: Node) -> void:
 		assert(is_valid, "`%s` property `%s` lacks proper replication config in MultiplayerSynchronizer." % [component.name, prop_path])
 
 
-## Evaluates a single property path against all cached synchronizers to see if its replication mode matches its hint.
 static func _is_property_valid(prop_path: NodePath, hint: String, synchronizers: Array[MultiplayerSynchronizer]) -> bool:
 	for sync in synchronizers:
 		var config := sync.replication_config

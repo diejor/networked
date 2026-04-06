@@ -1,21 +1,35 @@
+## Handles saving, loading, and network synchronization of a player's persistent state.
+##
+## Attach this node (with unique name [code]%SaveComponent[/code]) to your player scene alongside
+## a [SaveContainer] and a [SaveSynchronizer]. On spawn, [method spawn] will load the player's
+## last saved state from disk, falling back to the spawner's current state on first play.
+## All registered components are saved automatically on graceful shutdown.
 class_name SaveComponent
 extends NetComponent
 
+## Emitted after [method instantiate] completes and the synchronizer is ready.
 signal instantiated
+## Emitted after a save file is loaded (even if the file was not found).
 signal loaded
+## Emitted when the state is saved or pushed over the network.
 signal state_changed(caller: Node)
+## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
 signal client_synchronized
 
 
 ## Per-peer storage bucket for [SaveComponent].
+##
 ## All instances belonging to the same peer share one bucket via [PeerContext].
 class Bucket extends RefCounted:
 	var registered: Array[SaveComponent] = []
 	var shutting_down: bool = false
 
 
+## Directory where save files are written. Automatically redirected to [code]user://[/code] in exported builds.
 @export_dir var save_dir: String
+## File extension for save files, including the leading dot (e.g. [code]".tres"[/code]).
 @export var save_extension: String = ".tres"
+## The [SaveContainer] resource that holds the serializable state for this entity.
 @export var save_container: SaveContainer
 
 var save_synchronizer: SaveSynchronizer:
@@ -26,10 +40,10 @@ func _ready() -> void:
 	assert(save_container)
 	assert(save_synchronizer)
 	assert(save_synchronizer.save_container == save_container)
-
+	
 	get_tree().set_auto_accept_quit(false)
 	_register()
-
+	
 	if not Engine.is_editor_hint():
 		for sync in SynchronizersCache.get_client_synchronizers(owner):
 			if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -47,25 +61,27 @@ func _prepare_save_dir() -> void:
 		DirAccess.make_dir_recursive_absolute(save_dir)
 
 
-## Resolves and returns the absolute file path for this entity's save file.
+## Returns the absolute file path where this entity's save file should be written.
+##
+## Uses [member ClientComponent.username] as the filename if available, otherwise falls back to [member Node.name].
 func get_save_path() -> String:
 	_prepare_save_dir()
 	assert(save_extension.begins_with("."), "Save extension should begin with a dot.")
-
+		
 	if not owner:
 		return ""
-
+		
 	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
 	var base: String
-
+	
 	if client and not client.username.is_empty():
 		base = client.username
 	else:
 		base = owner.name
-
+		
 	var save_path: String = save_dir.path_join(base + save_extension)
 	assert(save_path.is_absolute_path(), "Invalid save to a not valid file path. " + save_path)
-
+	
 	return save_path
 
 
@@ -74,7 +90,7 @@ func save_state() -> Error:
 	var save_path := get_save_path()
 	NetLog.trace("SaveComponent: Saving state to %s" % save_path)
 	var err: Error = ResourceSaver.save(save_container, save_path)
-
+	
 	assert(err == OK, "Failed to save `%s`. Error: %s" % [save_path, error_string(err)])
 	if err == OK:
 		NetLog.info("State saved successfully to %s" % save_path)
@@ -89,9 +105,9 @@ func load_state() -> Error:
 		NetLog.debug("No save file found at %s" % save_path)
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
-
+	
 	var saved_container := ResourceLoader.load(save_path, "SaveContainer", ResourceLoader.CACHE_MODE_REPLACE)
-
+	
 	if not is_instance_valid(saved_container) or not saved_container is SaveContainer:
 		NetLog.error("Save located at `%s` is invalid." % save_path)
 		return ERR_CANT_OPEN
@@ -100,7 +116,7 @@ func load_state() -> Error:
 	push_to_scene()
 	NetLog.info("State loaded successfully from %s" % save_path)
 	loaded.emit()
-
+	
 	return OK
 
 
@@ -109,7 +125,7 @@ func deserialize_scene(bytes: PackedByteArray) -> void:
 	NetLog.trace("SaveComponent: Deserializing scene (Size: %d)" % bytes.size())
 	save_container.deserialize(bytes)
 	push_to_scene()
-
+	
 
 ## Pulls the latest data from the scene and serializes it into a network-ready byte array.
 func serialize_scene() -> PackedByteArray:
@@ -122,7 +138,7 @@ func serialize_scene() -> PackedByteArray:
 func push_to_scene() -> Error:
 	NetLog.trace("SaveComponent: Pushing container to scene.")
 	var push_err: Error = save_synchronizer.push_to_scene()
-
+	
 	match push_err:
 		ERR_UNCONFIGURED:
 			var save_path := get_save_path()
@@ -160,17 +176,21 @@ func instantiate() -> void:
 	instantiated.emit()
 
 
-## Bootstraps the entity by loading from disk, or falling back to the caller's data if a save doesn't exist.
+## Initializes the synchronizer and loads saved state from disk.
+##
+## If no save file is found, copies the state from [param caller]'s [SaveComponent] instead.
+## [param caller] is typically the spawner node.
 func spawn(caller: Node) -> void:
 	instantiate()
-
+	
 	var load_err: Error = load_state()
-	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND,
+	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND, 
 		"Something failed while trying to load player. Error: %s." % error_string(load_err))
-
+	
 	if load_err == ERR_FILE_NOT_FOUND:
 		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
 		if spawner_save and spawner_save.save_synchronizer._initialized:
+			NetLog.debug("Loading data from spawner.")
 			deserialize_scene(spawner_save.serialize_scene())
 
 
@@ -180,11 +200,6 @@ func _notification(what: int) -> void:
 		if bucket and not bucket.shutting_down:
 			bucket.shutting_down = true
 			_handle_shutdown()
-
-
-## Saves all components in this peer's bucket where the local peer is authority.
-func save_game() -> void:
-	SaveComponent.save_all_in(get_peer_context())
 
 
 ## Static entry point: saves all components registered in [param ctx].

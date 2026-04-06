@@ -1,14 +1,19 @@
+## Manages per-lobby synchronization visibility so each peer only receives data for their lobby.
+##
+## Attach this synchronizer to a [Lobby] node. Call [method track_player] for each player node
+## to register it; the synchronizer will then restrict replication so only peers inside this
+## lobby receive updates. Peer membership is tracked in [member connected_clients].
 class_name LobbySynchronizer
 extends MultiplayerSynchronizer
 
-## Manages multiplayer visibility and synchronization state for a specific lobby.
-##
-## Tracks nodes (like players) that enter the lobby and dynamically updates 
-## their visibility filters so that data is only synchronized to peers currently in the same lobby.
-
+## Emitted when a tracked node enters the lobby scene tree.
 signal spawned(client: Node)
+## Emitted when a tracked node exits the lobby scene tree.
 signal despawned(client: Node)
 
+## Dictionary of peer IDs currently connected to this lobby, mapped to [code]true[/code].
+##
+## Writing to this property defers a [method update_clients] call.
 @export var connected_clients: Dictionary[int, bool]:
 	get:
 		return connected_clients
@@ -16,6 +21,7 @@ signal despawned(client: Node)
 		connected_clients = clients
 		update_clients.call_deferred()
 
+## Map of all nodes currently tracked by this synchronizer.
 var tracked_nodes: Dictionary[Node, bool]
 
 
@@ -49,6 +55,9 @@ func connect_client(peer_id: int) -> void:
 
 
 ## Unregisters a peer from this lobby and safely detaches their visibility.
+##
+## The deferred call order is intentional — see
+## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_client(peer_id: int) -> void:
 	connected_clients.erase(peer_id)
 	update_clients()
@@ -78,7 +87,9 @@ func _on_despawned(node: Node) -> void:
 	despawned.emit(node)
 
 
-## Determines if a specific peer is allowed to receive synchronization data for this lobby's nodes.
+## Visibility filter callback passed to each tracked node's synchronizers.
+##
+## Returns [code]true[/code] for the server and any peer present in [member connected_clients].
 func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true

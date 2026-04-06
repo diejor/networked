@@ -1,3 +1,4 @@
+## Concrete [TPLayerAPI] that drives an [AnimationPlayer] "tp" clip and pauses the lobby during transitions.
 extends TPLayerAPI
 
 

@@ -1,15 +1,14 @@
-class_name NetComponent
-extends Node
-
 ## Base class for all networked addon components.
 ##
 ## Provides ergonomic instance-method access to the session's [MultiplayerTree],
 ## [MultiplayerLobbyManager], [TPLayerAPI], and [PeerContext] buckets — replacing
-## the old [NetworkedAPI] static helper.
+## the old [code]NetworkedAPI[/code] static helper.
 ##
 ## The lookup chain is: [code]node.multiplayer[/code] (session-scoped [SceneMultiplayer])
 ## → metadata key [code]_multiplayer_tree[/code] → [MultiplayerTree] instance.
 ## This is path-independent and safe across node renames.
+class_name NetComponent
+extends Node
 
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
@@ -44,7 +43,8 @@ func get_peer_context(peer_id: int = multiplayer.get_unique_id()) -> PeerContext
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.
-## Shorthand for [code]get_peer_context().get_bucket(BucketType)[/code].
+## Shorthand for [code]get_peer_context().get_bucket(bucket_type)[/code].
 func get_bucket(bucket_type) -> RefCounted:
 	var ctx := get_peer_context()
 	return ctx.get_bucket(bucket_type) if ctx else null
+

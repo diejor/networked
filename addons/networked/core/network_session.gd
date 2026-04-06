@@ -1,7 +1,22 @@
+## Top-level scene node that orchestrates the full client/server multiplayer lifecycle.
+##
+## Place this node as your main scene root. Assign a [MultiplayerTree] to [member client],
+## then call [method connect_player] to connect. On headless builds the server is started automatically.
+## [codeblock]
+## # Minimal usage — assign via the inspector or at runtime:
+## var data := MultiplayerClientData.new()
+## data.username = "Alice"
+## data.spawner_path = spawner_node_path
+## data.url = "192.168.1.5"
+## await network.connect_player(data)
+## [/codeblock]
 @tool
 class_name NetworkSession
 extends Node
 
+## The [MultiplayerTree] representing the local client connection.
+##
+## On headless (dedicated server) builds the client tree is freed automatically.
 @export var client: MultiplayerTree:
 	set(peer):
 		client = peer
@@ -17,17 +32,22 @@ extends Node
 			client.queue_free()
 
 
-## When false, connect_player() will not promote this node to the scene root and
-## will not auto-start a local server for localhost URLs. Set to false when
-## NetworkSession is embedded as a child node (e.g. in test harnesses).
+## When [code]false[/code], [method connect_player] will not promote this node to the scene root
+## and will not auto-start a local server for localhost URLs.
 @export var manage_scene: bool = true
 
 @export_group("Debug")
+## When set, [method connect_player] is called automatically on [code]_ready[/code] with this data.
 @export var init_client_data: MultiplayerClientData
 @export_group("", "")
 
+## The server-side [MultiplayerTree], created dynamically when hosting a local session.
 var server: MultiplayerTree
 
+## Disconnects any existing session, then connects using [param client_data].
+##
+## Automatically spins up a local server when [member MultiplayerClientData.url] is empty or localhost.
+## On web builds, falls back to [LocalLoopbackBackend] for singleplayer when not using WebRTC.
 func connect_player(client_data: MultiplayerClientData) -> void:
 	NetLog.trace("NetworkSession: connect_player called.")
 	assert(client_data)
@@ -57,10 +77,9 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		client_data.serialize()
 	)
 
-## Hosts this NetworkSession as a dedicated server. Use this instead of
-## connect_player() when this instance should be the server in an
-## N-NetworkSession setup (e.g. test harnesses). The embedded client tree
-## is reconfigured as the server in-place; no separate server node is created.
+## Starts this session as a dedicated server without creating a separate server node.
+##
+## Returns the error code from [method MultiplayerTree.host].
 func host() -> Error:
 	NetLog.trace("NetworkSession: host called.")
 	client.is_server = true
@@ -72,11 +91,12 @@ func host() -> Error:
 	return err
 
 
-## Returns the address that clients should connect to after host() succeeds.
+## Returns the address clients should use to connect after [method host] succeeds.
 func get_host_address() -> String:
 	return _resolve_server_address()
 
 
+## Saves game state, closes the multiplayer peer, and waits for the server to acknowledge disconnection.
 func disconnect_player() -> void:
 	if not client.is_online():
 		return
@@ -116,6 +136,7 @@ func _close_server() -> void:
 		server.queue_free()
 		server = null
 
+## Returns [code]true[/code] if the client's current [member MultiplayerTree.backend] is WebRTC-based.
 func is_webrtc() -> bool:
 	var script: Script = client.backend.get_script()
 	var n := script.get_global_name().to_lower()

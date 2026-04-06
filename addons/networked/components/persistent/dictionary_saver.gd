@@ -1,7 +1,9 @@
+## [ResourceFormatSaver] that writes [DictionarySave] resources to custom file formats.
+##
+## Supports two extensions:
+## - [code].tdict[/code] — human-readable JSON text (uses [method JSON.from_native] to preserve Godot types).
+## - [code].dict[/code] — compact binary [code]store_var()[/code] format.
 @tool
-## ResourceFormatSaver for DictionarySave.
-## - .tdict: JSON text with String keys.
-## - .dict:  binary store_var() of the dictionary.
 class_name DictionarySaveFormatSaver
 extends ResourceFormatSaver
 
@@ -51,7 +53,6 @@ func _save_as_json(dict_res: DictionarySave, path: String) -> Error:
 	if file == null:
 		return FileAccess.get_open_error()
 
-	# Use Godot's native JSON encoding to preserve types (Vector2, etc.).
 	var wrapper: Variant = JSON.from_native(dict_res.data, false)
 	var json_text: String = JSON.stringify(wrapper, "  ")
 

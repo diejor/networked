@@ -1,7 +1,9 @@
+## [ResourceFormatLoader] that reads [DictionarySave] resources from custom file formats.
+##
+## Supports two extensions:
+## - [code].tdict[/code] — JSON text, loaded with [method JSON.parse].
+## - [code].dict[/code] — binary [code]store_var()[/code] dictionary.
 @tool
-## ResourceFormatLoader for DictionarySave.
-## - .tdict: loads JSON into DictionarySave.
-## - .dict:  loads store_var() binary into DictionarySave.
 class_name DictionarySaveFormatLoader
 extends ResourceFormatLoader
 

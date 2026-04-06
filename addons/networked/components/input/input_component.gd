@@ -1,11 +1,28 @@
+## Abstract base component for multiplayer-aware input handling.
+##
+## Subclass this and implement [method get_inputs] to return the list of action names your
+## component tracks. Processing is automatically disabled on non-authoritative peers.
+## [codeblock]
+## class_name MoveInputComponent
+## extends InputComponent
+##
+## @export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+## var move_left: StringName = "move_left"
+##
+## func get_inputs() -> Array:
+##     return [move_left, ...]
+## [/codeblock]
 @abstract
 class_name InputComponent
 extends Node
 
+## Emitted when a tracked action's pressed state changes.
 signal action_changed(action: StringName, pressed: bool)
 
+## Current pressed state for each tracked action, keyed by action name.
 @onready var state: Dictionary[StringName, bool] = build_state_dict_from_actions()
 
+## Returns the list of action name strings this component should track.
 @abstract func get_inputs() -> Array
 
 
@@ -22,6 +39,7 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 
+## Builds the initial [member state] dictionary from [method get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
 	var _state: Dictionary[StringName, bool]
 	
@@ -52,18 +70,21 @@ func _unhandled_input(event: InputEvent) -> void:
 				action_changed.emit(action, false)
 
 
+## Returns [code]true[/code] if [param action] is currently held down.
 func is_down(action: StringName) -> bool:
 	assert(InputMap.has_action(action), "Input action `%s` doen't exist in \
 `InputMap`." % action)
 	return state.get(action, false)
 
 
+## Returns a [-1, 1] float from two opposing actions: [param negative_action] and [param positive_action].
 func get_axis(negative_action: StringName, positive_action: StringName) -> float:
 	var p_action := 1.0 if is_down(positive_action) else 0.0
 	var n_action := 1.0 if is_down(negative_action) else 0.0
 	return p_action - n_action
 
 
+## Returns a normalized [Vector2] from four directional actions, or [code]Vector2.ZERO[/code] when idle.
 func get_vector2(
 		left: StringName,
 		right: StringName,

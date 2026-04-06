@@ -1,10 +1,15 @@
+## Cached lookup helpers for [MultiplayerSynchronizer] nodes.
+##
+## Tree traversals are expensive; results are stored on the target node's metadata
+## under [code]"cached_synchronizers"[/code] and reused until explicitly invalidated.
 class_name SynchronizersCache
 extends RefCounted
 
 const META_KEY := &"cached_synchronizers"
 
-## Retrieves all MultiplayerSynchronizers whose root_path points exactly to the target node.
-## Caches the result during gameplay to avoid expensive tree traversals.
+## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code] points to [param target_node].
+##
+## Result is cached in metadata during gameplay.  The editor always performs a live search.
 static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
 	var synchronizers: Array[MultiplayerSynchronizer] = []
 	if not target_node:
@@ -36,14 +41,14 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 	return filtered_syncs
 
 
-## Retrieves only the synchronizers that are explicitly owned by the target node in the scene tree.
+## Returns only the [MultiplayerSynchronizer] nodes that are owned by [param target_node] in the scene tree.
 static func get_client_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
 	return get_synchronizers(target_node).filter(func(sync: MultiplayerSynchronizer):
 		return sync.owner == target_node
 	)
 
 
-## Forces all synchronizers targeting the given node to only synchronize data to the server peer.
+## Restricts all synchronizers on [param target_node] to only send data to the server peer.
 static func sync_only_server(target_node: Node) -> void:
 	for sync in get_synchronizers(target_node):
 		sync.set_visibility_for(0, false)
@@ -51,7 +56,7 @@ static func sync_only_server(target_node: Node) -> void:
 		sync.update_visibility()
 
 
-## Clears the synchronizer cache from the target node's metadata.
+## Removes the cached synchronizer list from [param target_node]'s metadata.
 static func clear_cache(target_node: Node) -> void:
 	if target_node and target_node.has_meta(META_KEY):
 		target_node.remove_meta(META_KEY)

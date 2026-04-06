@@ -1,18 +1,27 @@
+## [BackendPeer] implementation that uses WebRTC for peer-to-peer NAT traversal.
+##
+## Peers discover each other through WebTorrent-compatible tracker servers using a
+## shared [code]info_hash[/code] room ID. On [method host] the hash is copied to the
+## clipboard; clients pass that hash to [method join].
 @tool
 class_name WebRTCBackend
 extends BackendPeer
 
+## Emitted when at least one tracker WebSocket connection opens.
 signal signaling_connected
+## Emitted when all tracker connections close.
 signal signaling_disconnected
+## Emitted on the host when the room hash is ready to share. [param room_id] is the 20-character hex hash.
 signal room_created(room_id: String)
 
-
+## WebTorrent-compatible tracker URLs used for signaling.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.files.fm:7073/announce",
 	"wss://tracker.webtorrent.dev"
 ]
 
+## ICE server definitions passed to each [WebRTCPeerConnection].
 @export var ice_servers: Array[Dictionary] = [
 	{ "urls": ["stun:stun.l.google.com:19302"] },
 	{ "urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject" }
@@ -34,6 +43,7 @@ var _peer_map := {}
 var _local_godot_id := 0
 var _announce_timer := 0.0
 
+## Creates a WebRTC server peer, connects to trackers, and emits [signal room_created] with the room hash.
 func host() -> Error:
 	NetLog.trace("WebRTCBackend: host called.")
 	_is_server = true
@@ -59,6 +69,7 @@ func host() -> Error:
 	
 	return _connect_trackers()
 
+## Connects to the room identified by [param server_address] (the 20-char hash or any string that hashes to one).
 func join(server_address: String, _username: String = "") -> Error:
 	NetLog.trace("WebRTCBackend: join called at %s" % server_address)
 	_is_server = false

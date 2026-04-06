@@ -1,20 +1,16 @@
 @tool
 extends Control
 
-# UI nodes
 var _tree: Tree
 var _picker: EditorResourcePicker
 var _settings: NetLogSettings
 
-# Filesystem cache — built once per editor session, invalidated by Refresh.
-var _module_cache: Array = []  # Array of _Entry dicts (see _scan_dir)
+var _module_cache: Array = []
 var _cache_valid: bool = false
 
 const LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "NONE", "INHERIT"]
 const ROOT_PATH = "res://"
 const IGNORE_DIRS = [".godot", ".git", ".jj"]
-
-# --- Setup ---
 
 func _enter_tree() -> void:
 	if not _tree:
@@ -24,7 +20,6 @@ func _enter_tree() -> void:
 	if active_path.is_empty():
 		return
 
-	# Sanitize before touching ResourceLoader — a malformed path causes a C++ error.
 	active_path = NetLog._fix_profile_path(active_path)
 
 	if not ResourceLoader.exists(active_path):
@@ -52,7 +47,6 @@ func _build_ui() -> void:
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(vb)
 
-	# Top bar: profile picker + refresh
 	var hb := HBoxContainer.new()
 	vb.add_child(hb)
 
@@ -73,7 +67,6 @@ func _build_ui() -> void:
 	refresh_btn.pressed.connect(_on_refresh_pressed)
 	hb.add_child(refresh_btn)
 
-	# Module tree
 	_tree = Tree.new()
 	_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -110,8 +103,6 @@ func _on_refresh_pressed() -> void:
 	_cache_valid = false
 	_refresh_tree()
 
-# --- Tree population ---
-
 func _refresh_tree() -> void:
 	if not _settings:
 		return
@@ -124,12 +115,10 @@ func _refresh_tree() -> void:
 	var profile_label := _settings.resource_path if not _settings.resource_path.is_empty() else "Unsaved"
 	root.set_text(0, "Profile: %s" % profile_label)
 
-	# Global level row
 	var global_item := _tree.create_item(root)
 	global_item.set_text(0, "Global Level")
 	_setup_level_cell(global_item, _settings.global_level, false)
 
-	# Module tree
 	var project_root := _tree.create_item(root)
 	project_root.set_text(0, "res://")
 	project_root.set_selectable(0, false)
@@ -166,7 +155,6 @@ func _on_item_edited() -> void:
 	var val := int(item.get_range(1))
 	var level_name: String = LEVELS[val]
 
-	# Global level item is the first child of root
 	if item.get_parent() == _tree.get_root() and item.get_index() == 0:
 		_settings.global_level = val
 		NetLog.current_level = val
@@ -184,8 +172,6 @@ func _on_item_edited() -> void:
 
 	if not _settings.resource_path.is_empty():
 		ResourceSaver.save(_settings, _settings.resource_path)
-
-# --- Filesystem cache ---
 
 func _get_module_cache() -> Array:
 	if not _cache_valid:

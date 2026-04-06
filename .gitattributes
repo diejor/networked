@@ -5,5 +5,6 @@
 * export-ignore
 
 # Keep the `addons/networked` directory in archives.
-/addons/networked/ -export-ignore
-/addons/networked/** -export-ignore
+addons/ -export-ignore
+addons/networked/ -export-ignore
+addons/networked/** -export-ignore

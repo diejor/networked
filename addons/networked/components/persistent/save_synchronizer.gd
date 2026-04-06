@@ -1,9 +1,12 @@
+## Virtualizes sibling [MultiplayerSynchronizer] configs into a single [SaveContainer].
+##
+## On [method setup], scans all synchronizers whose [code]root_path[/code] points to the same
+## owner and builds a virtual [SceneReplicationConfig] whose properties map to flat names in
+## the container. Changes received over the network are written back to the live scene nodes.
 class_name SaveSynchronizer
 extends MultiplayerSynchronizer
 
-## Virtualizes the replication configurations of all other synchronizers on the entity,
-## dynamically packing their tracked properties into a single SaveContainer for disk serialization and network transfer.
-
+## Emitted when any tracked property changes value (coalesced per-frame by [method save_once]).
 signal state_changed
 
 var save_component: SaveComponent:
@@ -48,7 +51,6 @@ func _virtualize_replication_configs() -> void:
 	var new_config := SceneReplicationConfig.new()
 	_property_paths.clear()
 	
-	# Safely fetch the synchronizers using our global cache instead of a NodeComponent!
 	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(scene_owner):
 		if sync == self or not sync.replication_config:
 			continue 
@@ -123,6 +125,7 @@ func _get_property_list() -> Array[Dictionary]:
 	return properties
 
 
+## Returns [code]true[/code] if [param property] is tracked by the virtual replication config.
 func has_state_property(property: StringName) -> bool:
 	return _property_paths.has(property)
 
@@ -157,7 +160,6 @@ func _set(property: StringName, value: Variant) -> bool:
 	if has_state_property(property):
 		save_container.set_value(property, value)
 
-		# Collect changes into a single frame to avoid spamming saves/signals
 		_state_changed = true
 		save_once.call_deferred()
 
@@ -166,6 +168,9 @@ func _set(property: StringName, value: Variant) -> bool:
 	return false
 
 
+## Emits [signal state_changed] if any property was mutated this frame, then resets the dirty flag.
+##
+## Called via [method Object.call_deferred] to coalesce multiple within-frame writes into one signal.
 func save_once() -> void:
 	if _state_changed:
 		state_changed.emit()
@@ -209,6 +214,9 @@ func push_to(peer_id: int) -> void:
 	request_push.rpc_id(peer_id, save_container.serialize())
 
 
+## RPC called by a client to push its serialized save state to this peer.
+##
+## Deserializes [param bytes] into the container and applies the result to the live scene.
 @rpc("any_peer", "call_remote", "reliable")
 func request_push(bytes: PackedByteArray) -> void:
 	save_container.deserialize(bytes)

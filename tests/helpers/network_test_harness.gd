@@ -10,8 +10,12 @@ var _clients: Array[MultiplayerTree] = []
 var _lobby_manager_scene: PackedScene
 
 
+var _silent_log := NetLogSettings.new()
+
+
 func _init() -> void:
-	NetLog.current_level = NetLog.Level.NONE
+	_silent_log.global_level = NetLog.Level.NONE
+	NetLog.push_settings(_silent_log)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +76,7 @@ func add_client() -> MultiplayerTree:
 ## Cleans up all server/client instances and removes nodes from the tree.
 ## Should be called in after_test().
 func teardown() -> void:
+	NetLog.pop_settings()
 	if is_instance_valid(_server):
 		_server.queue_free()
 

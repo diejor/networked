@@ -2,31 +2,32 @@
 class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
-## Manages multiplayer lobbies, player spawning, and scene transitions.
+## Central authority that spawns and manages multiplayer lobbies for all connected players.
 ##
-## This node acts as the central authority for routing players into the correct 
-## game instances. It extends [MultiplayerSpawner] to natively manage and 
-## replicate the scenes added to its spawn list.
+## Extends [MultiplayerSpawner] to replicate lobby scenes to clients automatically.
+## Add level scenes to the spawn list via the [member add_to_spawn_list] helper property in the inspector,
+## then the manager will instantiate a [Lobby] wrapper around each scene on the server.
+## [codeblock]
+## # Listen for lobbies becoming available:
+## lobby_manager.lobby_spawned.connect(func(lobby): print("Lobby ready: ", lobby.level.name))
+## [/codeblock]
 
-## Emitted when the manager has been successfully initialized by the 
-## [MultiplayerTree].
+## Emitted when the manager has been successfully initialized by the [MultiplayerTree].
 signal configured()
 
-## Emitted when a new lobby scene has been fully instantiated and entered the 
-## tree.
+## Emitted when a new [Lobby] has been instantiated and entered the tree.
 signal lobby_spawned(lobby: Lobby)
 
-## Emitted when a lobby scene is removed from the tree and despawned.
+## Emitted when a [Lobby] is removed from the tree.
 signal lobby_despawned(lobby: Lobby)
 
 const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 
-## The system responsible for handling visual screen transitions.
+## [b]Optional.[/b] The [TPLayerAPI] used for visual screen transitions during teleportation.
 ##
-## [b]Optional:[/b] If left empty, players will still be moved between lobbies, 
-## but visual transitions (like fade-ins/fade-outs) will not work.
+## If unassigned, players are still moved between lobbies but no fade animation plays.
 @export var tp_layer: TPLayerAPI:
 	set(layer):
 		if not Engine.is_editor_hint():
@@ -43,6 +44,7 @@ const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 			
 		update_configuration_warnings()
 
+## Helper property to add level scenes to the spawn list via the inspector.
 @export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
 var add_to_spawn_list: SceneNodePath:
 	set(value):
@@ -56,8 +58,10 @@ var add_to_spawn_list: SceneNodePath:
 		
 		add_to_spawn_list = null
 
+## All currently active [Lobby] instances, keyed by their level's [member Node.name].
 var active_lobbies: Dictionary[StringName, Lobby]
 
+## Lazily populated list of level scene file paths from the spawnable scene list.
 var lobbies: Array[String]:
 	get:
 		if lobbies.is_empty():
@@ -110,9 +114,9 @@ func _exit_tree() -> void:
 		active_lobbies.clear()
 
 
-## Spawns all lobbies configured in the Auto Spawn List.
+## Instantiates a [Lobby] for every scene path in [member lobbies].
 ##
-## This function only executes if the active peer is the server.
+## Only runs on the server. Called automatically after [signal configured] is received.
 func spawn_lobbies() -> void:
 	NetLog.trace("MultiplayerLobbyManager: spawn_lobbies called.")
 	if multiplayer.is_server():
@@ -126,11 +130,10 @@ func spawn_lobbies() -> void:
 			spawn(level_path)
 
 
-## Custom spawn function that wraps the level scene inside a dedicated Lobby 
-## node.
+## Spawn function used by [MultiplayerSpawner] to wrap a level scene in a [Lobby] container.
 ##
-## Instantiates the appropriate server or client lobby wrapper, assigns the 
-## instantiated level to it, and hooks up the despawn signals.
+## Selects the server or client [Lobby] variant based on the current peer role and
+## connects lobby lifecycle signals.
 func spawn_lobby(level_file_path: String) -> Node:
 	NetLog.info("Spawning lobby for level: %s" % level_file_path)
 	var level_scene: PackedScene = load(level_file_path)
@@ -147,10 +150,10 @@ func spawn_lobby(level_file_path: String) -> Node:
 	return lobby
 
 
-## Called remotely by a client to request entry into a lobby or session.
+## RPC called by the client to request entry into a lobby after connecting.
 ##
-## Deserializes the client data and notifies all local client components of 
-## the new player connection.
+## Deserializes [param client_data_bytes] into a [MultiplayerClientData], then emits
+## [signal ClientComponent.player_joined] on the appropriate [ClientComponent].
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
@@ -173,10 +176,6 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	
 	spawner_client.player_joined.emit(client_data)
 
-
-# ------------------------------------------------------------------------------
-# Internal Helpers & Callbacks
-# ------------------------------------------------------------------------------
 
 func _on_lobby_spawned(node: Node) -> void:
 	var lobby := node as Lobby

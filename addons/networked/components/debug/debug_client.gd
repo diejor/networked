@@ -1,3 +1,6 @@
+## Debug overlay that displays the peer UID and username for a [ClientComponent] owner.
+##
+## Automatically freed in non-debug builds by [DebugFeature]. Attach inside the player scene.
 class_name DebugClient
 extends Control
 

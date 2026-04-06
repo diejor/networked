@@ -22,7 +22,9 @@ var network: NetworkSession
 
 
 func before_test() -> void:
-	NetLog.current_level = NetLog.Level.NONE
+	var silent := NetLogSettings.new()
+	silent.global_level = NetLog.Level.NONE
+	NetLog.push_settings(silent)
 	session = LocalLoopbackSession.new()
 
 	_setup_server()
@@ -34,6 +36,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	NetLog.pop_settings()
 	session = null
 
 

@@ -1,7 +1,8 @@
+## GdUnit4 session hook that silences [NetLog] output during the entire test run.
+##
+## Register this in your [code]GdUnitRunner.cfg[/code] to suppress log noise globally.
 class_name NetLogSessionHook
 extends GdUnitTestSessionHook
-
-## A GdUnit4 session hook that silences the NetLog during test execution.
 
 func _init() -> void:
 	super("NetLogSilencer", "Silences the NetLog to reduce output noise during tests.")

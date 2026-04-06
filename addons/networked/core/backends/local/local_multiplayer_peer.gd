@@ -1,6 +1,11 @@
+## Low-level in-process [MultiplayerPeerExtension] used by [LocalLoopbackSession].
+##
+## All packet routing is done via direct memory references — no real sockets are created.
+## Peer IDs, connection status, and packet queues mirror the real [ENetMultiplayerPeer] API.
 class_name LocalMultiplayerPeer
 extends MultiplayerPeerExtension
 
+## All currently linked remote peers keyed by their peer ID.
 var linked_peers: Dictionary = {}
 
 var _unique_id: int = 0
@@ -10,19 +15,17 @@ var _transfer_mode: TransferMode = TRANSFER_MODE_RELIABLE
 var _is_server_peer: bool = false
 var _connection_status: ConnectionStatus = CONNECTION_DISCONNECTED
 
+var _closed: bool = false
+var _closing: bool = false
+
+var _peers_to_emit_connected: Array[int] = []
+var _peers_to_emit_disconnected: Array[int] = []
 
 var _packet_queue: Array[Dictionary] = []
 var _current_packet: Dictionary = {}
 
 
-var _peers_to_emit_connected: Array[int] = []
-var _peers_to_emit_disconnected: Array[int] = []
-
-
-var _closing: bool = false
-var _closed: bool = false
-
-
+## Initializes this peer as the server (unique ID [code]1[/code]).
 func create_server() -> Error:
 	_reset_state()
 	_unique_id = 1
@@ -31,6 +34,7 @@ func create_server() -> Error:
 	NetLog.info("LocalMultiplayerPeer initialized as Server (ID: %d)" % _unique_id)
 	return OK
 
+## Initializes this peer as a client with [param client_id].
 func create_client(client_id: int) -> Error:
 	_reset_state()
 	_unique_id = client_id
@@ -39,6 +43,9 @@ func create_client(client_id: int) -> Error:
 	NetLog.info("LocalMultiplayerPeer initialized as Client (ID: %d)" % _unique_id)
 	return OK
 
+## Links [param peer_reference] as a known remote peer with ID [param peer_id].
+##
+## On the server side, also queues a [code]peer_connected[/code] event.
 func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> void:
 	if _closed or _closing:
 		return

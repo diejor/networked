@@ -1,3 +1,6 @@
+## Debug [CanvasLayer] that renders a tab bar allowing in-editor switching between server lobby viewports.
+##
+## Only shown in debug builds with collision hints enabled (see [DebugFeature]).
 class_name ViewportDebug
 extends CanvasLayer
 

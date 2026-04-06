@@ -2,10 +2,19 @@
 class_name MultiplayerTree
 extends Node
 
-## The core networking wrapper that manages the multiplayer API and backend.
+## Core networking node that bridges a [BackendPeer] transport with Godot's [SceneMultiplayer] API.
 ##
-## This node bridges a specific [BackendPeer] (like ENet or WebSocket) with Godot's 
-## native [SceneMultiplayer] API. It handles hosting, joining, and connection state.
+## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a [MultiplayerLobbyManager],
+## then call [method host] or [method join] to start a session.
+## [codeblock]
+## # Server
+## await multiplayer_tree.host()
+##
+## # Client
+## var err = await multiplayer_tree.join("192.168.1.5", "PlayerOne")
+## if err != OK:
+##     push_error("Join failed: %s" % error_string(err))
+## [/codeblock]
 
 ## Emitted when the multiplayer API and lobby manager have been successfully configured.
 signal configured()
@@ -18,11 +27,12 @@ signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
 
-## Indicates whether this specific tree instance is running as the server.
+## Set to [code]true[/code] to configure this instance as the authoritative server.
 var is_server: bool
 
-## The underlying network implementation (e.g., ENet, WebSocket, WebRTC).
-## Duplicates the assigned resource at runtime to ensure isolated states.
+## The transport implementation used for this session (e.g. [ENetBackend], [WebSocketBackend], [WebRTCBackend]).
+##
+## The resource is automatically duplicated at runtime to ensure each session gets an isolated state.
 @export var backend: BackendPeer:
 	set(value):
 		if not Engine.is_editor_hint():
@@ -46,7 +56,7 @@ var is_server: bool
 				
 		update_configuration_warnings()
 
-## The manager responsible for handling player lobbies, spawning, and game state.
+## The [MultiplayerLobbyManager] responsible for handling player lobbies, spawning, and scene transitions.
 @export var lobby_manager: MultiplayerLobbyManager:
 	set(manager):
 		if not Engine.is_editor_hint():
@@ -62,15 +72,14 @@ var is_server: bool
 			
 		update_configuration_warnings()
 
-## Direct access to the active [SceneMultiplayer] instance.
+## The active [SceneMultiplayer] instance provided by the current [member backend].
 var multiplayer_api: SceneMultiplayer:
 	get: return backend.api if backend else null
 
-## Direct access to the active [MultiplayerPeer] connection state.
+## The active [MultiplayerPeer] connection managed by the current [member backend].
 var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend and backend.api else null
 
-## Per-peer storage. Keyed by peer ID; erased automatically on [signal peer_disconnected].
 var _peer_contexts: Dictionary[int, PeerContext] = {}
 
 
@@ -110,7 +119,10 @@ func _process(dt: float) -> void:
 		backend.poll(dt)
 
 
-## Initializes the network backend as a host/server and configures the multiplayer API.
+## Starts this instance as a network host and configures the [SceneMultiplayer] API.
+##
+## Calls [code]setup()[/code] on the backend if available, then [code]host()[/code].
+## Returns [code]OK[/code] on success or a non-zero [enum Error] code on failure.
 func host() -> Error:
 	NetLog.trace("MultiplayerTree: Hosting session.")
 	backend.peer_reset_state()
@@ -128,10 +140,11 @@ func host() -> Error:
 	return connection_code
 
 
-## Attempts to join an active server at the given [param server_address].
-## 
-## Returns an error if the connection fails immediately, or [code]ERR_CANT_CONNECT[/code] 
-## if the server does not respond within the timeout window.
+## Connects to an active server at [param server_address] using the given [param username].
+##
+## Awaits [signal connected_to_server] with a 5-second timeout.
+## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time, or another
+## [enum Error] code if the backend rejects the connection immediately.
 func join(server_address: String, username: String) -> Error:
 	NetLog.trace("MultiplayerTree: Joining session at %s with username %s." % [server_address, username])
 	backend.peer_reset_state()
@@ -153,17 +166,13 @@ func join(server_address: String, username: String) -> Error:
 	return connection_code
 
 
-## Returns [code]true[/code] if the peer is initialized and actively connected to a session.
+## Returns [code]true[/code] if the multiplayer peer is initialized and in an active connection.
 func is_online() -> bool:
 	return (multiplayer_peer != null 
 		and not multiplayer_peer is OfflineMultiplayerPeer 
 		and multiplayer_api != null 
 		and multiplayer_api.has_multiplayer_peer())
 
-
-# ------------------------------------------------------------------------------
-# Internal Helpers & Callbacks
-# ------------------------------------------------------------------------------
 
 func _config_api() -> void:
 	NetLog.trace("MultiplayerTree: Configuring multiplayer API.")
