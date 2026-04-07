@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://dbb6gk33m6anl" path="res://icon.svg" id="2_kpjcp"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
+[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="6_tdg3f"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kpjcp"]
 properties/0/path = NodePath("ClientComponent:username")
@@ -16,6 +17,11 @@ properties/1/replication_mode = 2
 properties/2/path = NodePath("TPComponent:current_scene_path")
 properties/2/spawn = true
 properties/2/replication_mode = 2
+
+[sub_resource type="Resource" id="Resource_cxr5p"]
+script = ExtResource("5_cxr5p")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "Player/%ClientComponent"
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_kpjcp"]
 radius = 63.66
@@ -33,9 +39,14 @@ speed = 128.0
 texture = ExtResource("2_kpjcp")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1221696035]
+replication_interval = 0.25
+delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_kpjcp")
 
 [node name="ClientComponent" parent="." unique_id=1278092247 instance=ExtResource("2_kne1u")]
+
+[node name="ConnectServerUI" parent="ClientComponent" index="2" unique_id=685856177]
+spawner_node = SubResource("Resource_cxr5p")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
 shape = SubResource("CircleShape2D_kpjcp")
@@ -46,4 +57,11 @@ script = ExtResource("4_e80uo")
 starting_scene_path = SubResource("Resource_tdg3f")
 metadata/_custom_type_script = "uid://c4gt8tvkmcals"
 
+[node name="TickInterpolator" type="Node" parent="." unique_id=425087653]
+script = ExtResource("6_tdg3f")
+properties = Array[StringName]([&"position"])
+metadata/_custom_type_script = "uid://b21bbqt166ive"
+
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
+
+[editable path="ClientComponent"]

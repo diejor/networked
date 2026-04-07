@@ -78,6 +78,7 @@ func test_player_spawns_in_server_lobby_after_connect() -> void:
 	
 	var peer_id := network.client.multiplayer_api.get_unique_id()
 	await wait_until(func():
+		@warning_ignore("confusable_local_declaration")
 		var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
 		return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
 	)
@@ -93,6 +94,7 @@ func test_spawned_player_has_correct_multiplayer_authority() -> void:
 	
 	var peer_id := network.client.multiplayer_api.get_unique_id()
 	await wait_until(func():
+		@warning_ignore("confusable_local_declaration")
 		var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
 		return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
 	)

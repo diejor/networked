@@ -72,6 +72,20 @@ var is_server: bool
 			
 		update_configuration_warnings()
 
+## Optional [NetworkClock] child node. When assigned, the clock's [method NetworkClock._on_tree_configured]
+## is automatically connected to [signal configured] so it can register itself on the multiplayer API.
+@export var clock: NetworkClock:
+	set(c):
+		if not Engine.is_editor_hint():
+			if clock and configured.is_connected(clock.configured.emit):
+				configured.disconnect(clock.configured.emit)
+			clock = c
+			if clock and not configured.is_connected(clock.configured.emit):
+				configured.connect(clock.configured.emit)
+		else:
+			clock = c
+		update_configuration_warnings()
+
 ## The active [SceneMultiplayer] instance provided by the current [member backend].
 var multiplayer_api: SceneMultiplayer:
 	get: return backend.api if backend else null
@@ -176,7 +190,7 @@ func is_online() -> bool:
 
 func _config_api() -> void:
 	NetLog.trace("MultiplayerTree: Configuring multiplayer API.")
-	var multiplayer_root := lobby_manager.get_path() if lobby_manager else get_path()
+	var multiplayer_root := get_path()
 	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)

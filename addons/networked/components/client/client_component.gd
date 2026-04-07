@@ -19,6 +19,16 @@ signal player_joined(client_data: MultiplayerClientData)
 ## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
 signal client_synchronized
 
+## Controls how multiplayer authority is assigned to the owning player node.
+##
+## [b]CLIENT[/b]: The node's authority is set to the player's peer ID (default — use for
+## client-authoritative movement).
+## [b]SERVER_AUTHORITATIVE[/b]: The node stays at authority 1; the peer ID embedded in the
+## node name is only used for routing. Use when the server drives all simulation.
+enum AuthorityMode { CLIENT, SERVER_AUTHORITATIVE }
+
+@export var authority_mode: AuthorityMode = AuthorityMode.CLIENT
+
 ## The username of the player associated with this component.
 @export_custom(PROPERTY_HINT_NONE, "replicated:never")
 var username: String = "":
@@ -121,9 +131,10 @@ func _on_owner_tree_entered() -> void:
         assert(owner.name != "|")
 
         var authority := parse_authority(owner.name)
-        if authority != 0:
+        if authority != 0 and authority_mode == AuthorityMode.CLIENT:
                 NetLog.debug("Setting authority for %s to %d" % [owner.name, authority])
                 owner.set_multiplayer_authority(authority)
+        # SERVER_AUTHORITATIVE: node stays at peer 1; peer_id in name is for routing only.
 
         spawn_sync.root_path = spawn_sync.get_path_to(owner)
         spawn_sync.replication_config = config_spawn_properties(self)

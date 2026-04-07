@@ -19,6 +19,14 @@ extends Node
 ## Emitted when a tracked action's pressed state changes.
 signal action_changed(action: StringName, pressed: bool)
 
+## Emitted once per simulation tick (when [member tick_mode] is [code]true[/code] and this peer
+## is the multiplayer authority). Carries the tick number and a snapshot of the current state.
+signal tick_snapshot(tick: int, state: Dictionary)
+
+## When [code]true[/code], connects to [NetworkClock.on_tick] and emits [signal tick_snapshot]
+## each tick. Requires a [NetworkClock] registered on this node's multiplayer API.
+@export var tick_mode: bool = false
+
 ## Current pressed state for each tracked action, keyed by action name.
 @onready var state: Dictionary[StringName, bool] = build_state_dict_from_actions()
 
@@ -27,17 +35,21 @@ signal action_changed(action: StringName, pressed: bool)
 
 
 func _enter_tree() -> void:
-	NetLog.trace("InputComponent: _enter_tree for %s" % owner.name)
 	if not is_multiplayer_authority():
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 
 
 func _ready() -> void:
-	NetLog.trace("InputComponent: _ready for %s" % owner.name)
 	if not is_multiplayer_authority():
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
+	if tick_mode:
+		var clock := NetworkClock.for_node(self)
+		if clock:
+			clock.on_tick.connect(_on_tick)
+		else:
+			push_warning("InputComponent: tick_mode=true but no NetworkClock found on this node's multiplayer API.")
 
 ## Builds the initial [member state] dictionary from [method get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
@@ -68,6 +80,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				state[action] = false
 				NetLog.trace("InputComponent: Action %s Released" % action)
 				action_changed.emit(action, false)
+
+
+func _on_tick(_delta: float, t: int) -> void:
+	tick_snapshot.emit(t, state.duplicate())
 
 
 ## Returns [code]true[/code] if [param action] is currently held down.

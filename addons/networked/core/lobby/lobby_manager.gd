@@ -208,4 +208,4 @@ func _on_configured() -> void:
 		child_exiting_tree.connect(debug_viewports._on_node_exited)
 		add_child(debug_viewports)
 		
-		spawn_lobbies()
+		spawn_lobbies.call_deferred()
