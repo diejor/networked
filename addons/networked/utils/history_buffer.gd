@@ -1,8 +1,7 @@
 ## Pre-allocated ring buffer that stores values keyed by tick number.
 ##
-## Uses parallel arrays (_slots and _ticks) with head/tail pointer arithmetic for O(1)
-## insert and eviction. Designed for use by TickInterpolator, RollbackSynchronizer, and
-## NetworkInputSynchronizer.
+## Uses power-of-two capacity for fast bitwise indexing and optimized 
+## searching to minimize GDScript overhead in hot loops.
 class_name HistoryBuffer
 extends RefCounted
 
@@ -11,95 +10,84 @@ var _ticks: PackedInt32Array
 var _head: int = 0
 var _count: int = 0
 var _capacity: int
+var _mask: int
 
 
-func _init(capacity: int) -> void:
-	_capacity = capacity
-	_slots.resize(capacity)
-	_ticks.resize(capacity)
+func _init(capacity: int = 16) -> void:
+	# Force power-of-two for bitwise optimization
+	_capacity = 1
+	while _capacity < capacity:
+		_capacity <<= 1
+		
+	_mask = _capacity - 1
+	_slots.resize(_capacity)
+	_ticks.resize(_capacity)
 	_ticks.fill(-1)
 
 
-## Records [param value] at [param tick], evicting the oldest entry when full.
+## Records a value at the given tick.
 func record(tick: int, value: Variant) -> void:
 	var idx: int
 	if _count < _capacity:
-		idx = (_head + _count) % _capacity
+		idx = (_head + _count) & _mask
 		_count += 1
 	else:
 		idx = _head
-		_head = (_head + 1) % _capacity
+		_head = (_head + 1) & _mask
+		
 	_slots[idx] = value
 	_ticks[idx] = tick
 
 
-## Returns the value recorded at exactly [param tick], or [code]null[/code] if not found.
+## Returns the value at exactly [param tick].
 func get_at(tick: int) -> Variant:
 	for i in _count:
-		var idx := (_head + i) % _capacity
+		var idx := (_head + i) & _mask
 		if _ticks[idx] == tick:
 			return _slots[idx]
 	return null
 
 
-## Returns the value at the highest tick <= [param tick], or [code]null[/code] if none exists.
-func get_latest_at_or_before(tick: int) -> Variant:
-	var best_tick := -1
-	var best_value: Variant = null
+## Optimized search that populates [param out_pair] with [prev_tick, next_tick].
+## This avoids array allocation in the interpolation loop.
+func find_bracketing_ticks(tick: int, hint_tick: int, out_pair: PackedInt32Array) -> void:
+	var prev_tick := -1
+	var next_tick := -1
+	
+	# Since ticks are recorded chronologically, we scan forward from head
 	for i in _count:
-		var idx := (_head + i) % _capacity
+		var idx := (_head + i) & _mask
 		var t := _ticks[idx]
-		if t <= tick and t > best_tick:
-			best_tick = t
-			best_value = _slots[idx]
-	return best_value
+		
+		if t <= tick:
+			if t > prev_tick:
+				prev_tick = t
+		elif t > tick:
+			if next_tick == -1 or t < next_tick:
+				next_tick = t
+				break # Found the first tick strictly greater
+				
+	out_pair[0] = prev_tick
+	out_pair[1] = next_tick
 
 
-## Returns the tick of the highest entry <= [param tick], or [code]-1[/code] if none exists.
-func get_latest_tick_at_or_before(tick: int) -> int:
-	var best_tick := -1
-	for i in _count:
-		var idx := (_head + i) % _capacity
-		var t := _ticks[idx]
-		if t <= tick and t > best_tick:
-			best_tick = t
-	return best_tick
+## Returns [code]true[/code] if there is at least one entry recorded strictly after [param tick].
+func has_tick_after(tick: int) -> bool:
+	# Optimization: Since ticks are chronological, we only need to check the newest one.
+	return newest_tick() > tick
 
 
-## Returns the tick of the earliest entry strictly after [param tick], or [code]-1[/code] if none exists.
-func get_earliest_tick_after(tick: int) -> int:
-	var best_tick := -1
-	for i in _count:
-		var idx := (_head + i) % _capacity
-		var t := _ticks[idx]
-		if t > tick and (best_tick == -1 or t < best_tick):
-			best_tick = t
-	return best_tick
-
-
-## Returns the tick of the oldest stored entry, or [code]-1[/code] if the buffer is empty.
 func oldest_tick() -> int:
-	if _count == 0:
-		return -1
-	return _ticks[_head]
+	return _ticks[_head] if _count > 0 else -1
 
 
-## Returns the tick of the newest stored entry, or [code]-1[/code] if the buffer is empty.
 func newest_tick() -> int:
-	if _count == 0:
-		return -1
-	return _ticks[(_head + _count - 1) % _capacity]
+	return _ticks[(_head + _count - 1) & _mask] if _count > 0 else -1
 
 
-## Removes all entries with a tick strictly less than [param tick].
-func trim_before(tick: int) -> void:
-	while _count > 0 and _ticks[_head] < tick:
-		_ticks[_head] = -1
-		_slots[_head] = null
-		_head = (_head + 1) % _capacity
-		_count -= 1
+func size() -> int:
+	return _count
 
 
-## Returns [code]true[/code] if the buffer contains no entries.
 func is_empty() -> bool:
 	return _count == 0

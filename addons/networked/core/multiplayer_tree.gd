@@ -94,6 +94,15 @@ var multiplayer_api: SceneMultiplayer:
 var multiplayer_peer: MultiplayerPeer:
 	get: return backend.api.multiplayer_peer if backend and backend.api else null
 
+
+## Locates the [MultiplayerTree] registered on the [param node]'s [SceneMultiplayer] instance.
+static func for_node(node: Node) -> MultiplayerTree:
+	var api := node.multiplayer as SceneMultiplayer
+	if not api or not api.has_meta(&"_multiplayer_tree"):
+		return null
+	return api.get_meta(&"_multiplayer_tree") as MultiplayerTree
+
+
 var _peer_contexts: Dictionary[int, PeerContext] = {}
 
 

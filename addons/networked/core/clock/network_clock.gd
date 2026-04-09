@@ -1,142 +1,181 @@
-## Tick-based network clock with RTT measurement and server-clock calibration.
+## Synchronises simulation time between server and clients with drift and stall protection.
 ##
-## Add as a child of [MultiplayerTree] and assign it to [member MultiplayerTree.clock].
-## The tree will call [method _on_tree_configured] after the multiplayer API is ready,
-## which registers this clock so [method for_node] can locate it from anywhere in the subtree.
+## The [NetworkClock] provides a stable, tick-based time source required for deterministic 
+## simulation and smooth visual interpolation. It handles RTT smoothing, clock drift 
+## correction, and frame stall detection to prevent "spiral of death" scenarios.
+## [br][br]
+## [b]Usage:[/b]
+## [codeblock]
+## # The clock registers itself automatically on the MultiplayerTree.
+## # Access it from any node via:
+## var clock = NetworkClock.for_node(self)
 ##
-## [b]Tick loop[/b]: each physics frame the accumulator drains [member ticktime]-sized slices.
-## For each slice the signals [signal before_tick] → [signal on_tick] → [signal after_tick]
-## fire in order, then [member tick] increments. After the loop [member tick_factor] holds the
-## fractional position within the current tick (useful for interpolation).
-##
-## [b]Clock synchronisation[/b]: clients ping the host after the tickrate handshake and then
-## every [constant PING_INTERVAL] seconds. RTT samples are averaged over a rolling window to
-## derive stable [member rtt_avg], [member rtt_jitter], and [member recommended_display_offset].
+## # Connect to the simulation loop:
+## clock.on_tick.connect(func(delta, tick):
+##     _simulate_physics(tick)
+## )
+## [/codeblock]
+@tool
 class_name NetworkClock
 extends Node
 
 
 #region ── Signals ─────────────────────────────────────────────────────────────
 
-## Fires at the start of each tick, before game logic.
+## Fires at the start of each simulation tick, before game logic.
 signal before_tick(delta: float, tick: int)
-## Fires during each tick — connect game logic here.
+
+## Fires during each simulation tick. Primary simulation logic should connect here.
 signal on_tick(delta: float, tick: int)
-## Fires at the end of each tick, after game logic.
+
+## Fires at the end of each simulation tick, after game logic.
 signal after_tick(delta: float, tick: int)
-## Fires before the tick loop each physics frame.
+
+## Fires once before the tick loop runs each physics frame.
 signal before_tick_loop()
-## Fires after the tick loop each physics frame.
+
+## Fires once after the tick loop finishes each physics frame.
 signal after_tick_loop()
-## Fires once when the multiplayer API and clock are configured.
+
+## Fires when the multiplayer API and clock registration are complete.
 signal configured
-## Fires once when the client successfully synchronises its clock to the server.
+
+## Fires when the client successfully synchronises its clock with the server.
 signal clock_synchronized()
-## Fires when a connecting peer's tickrate does not match ours.
-## Only emitted when [member tickrate_mismatch_action] is [code]2[/code] (Signal).
+
+## Fires when a connecting peer's tickrate does not match the local tickrate.
 signal tickrate_mismatch(peer_id: int, their_tickrate: int)
-## Fires when [member recommended_display_offset] exceeds [member display_offset] after
-## synchronisation. Re-fires if conditions worsen after previously recovering.
-## [codeblock]
-## clock.display_offset_insufficient.connect(func(rec):
-##     push_warning("display_offset too low — recommended: %d" % rec)
-## )
-## [/codeblock]
+
+## Fires when the current [member display_offset] is lower than [member recommended_display_offset].
 signal display_offset_insufficient(recommended: int)
+
+## Fires when the network stability status changes based on jitter.
+signal stability_changed(is_stable: bool)
 
 #endregion
 
 
 #region ── Configuration ───────────────────────────────────────────────────────
 
-## How many ticks per second the simulation runs.
+@export_group("Simulation")
+## How many simulation ticks to run per second.
 @export var tickrate: int = 30
 
-## How many ticks behind the server tick the local display lags, used by [TickInterpolator].
-## [br][br]Set to [code]0[/code] if you are not using [TickInterpolator].
-## At runtime, check [member recommended_display_offset] to verify this value is adequate
-## for current network conditions.
-@export var display_offset: int = 2
-
-## Clock calibration strategy when local and server ticks diverge.
-## [b]Snap[/b]: jump immediately. [b]Stretch[/b]: nudge the accumulator gradually.
-@export_enum("Snap", "Stretch") var sync_mode: int = 0
-
-## Safety cap on ticks per frame to prevent spiral-of-death on slow frames.
+## Maximum simulation ticks allowed to run in a single physics frame.
 @export var max_ticks_per_frame: int = 8
 
-## What to do when a connecting peer's tickrate differs from ours.
+## Frame delta threshold (seconds) before resetting the accumulator.
+@export var stall_threshold: float = 1.0
+
+## Uses Godot 4.3+ physics interpolation fraction for sub-frame visual smoothness.
+@export var use_physics_interpolation: bool = true
+
+
+@export_group("Calibration")
+## The strategy used to align the local clock with the server.
+@export_enum("Snap", "Stretch") var sync_mode: int = 0
+
+## The maximum allowed divergence (ticks) before a hard Snap is forced.
+@export var panic_snap_threshold: int = 20
+
+## Multiplier for drift correction speed in [b]Stretch[/b] mode.
+@export_range(0.01, 0.5) var stretch_nudge_factor: float = 0.05
+
+
+@export_group("Network Buffering")
+## The number of ticks the visual display lags behind the simulation.
+@export var display_offset: int = 2
+
+## Scales jitter impact on the [member recommended_display_offset].
+@export var jitter_multiplier: float = 2.0
+
+## The threshold (seconds) below which the connection is considered stable.
+@export var jitter_stability_threshold: float = 0.05
+
+
+@export_group("Compatibility")
+## Action to take when a connecting peer has a different tickrate.
 @export_enum("Warn", "Disconnect", "Signal") var tickrate_mismatch_action: int = 0
+
+
+@export_group("Debug & Tools")
+## [b]Runtime Only:[/b] Runs a 5-second test to determine optimal [member display_offset].
+@export var auto_configure_offset: bool:
+	set(v):
+		if v and is_inside_tree() and not Engine.is_editor_hint():
+			_run_auto_config()
+
+## Logs average clock drift over 60-second windows to the console.
+@export var enable_drift_logging: bool = false
 
 #endregion
 
 
 #region ── Public API ──────────────────────────────────────────────────────────
 
-## Current server-calibrated simulation tick.
+## The current server-calibrated simulation tick.
 var tick: int = 0
 
-## Duration of one tick in seconds.
+## The duration of a single simulation tick in seconds.
 var ticktime: float:
 	get: return 1.0 / float(tickrate)
 
-## Fractional position within the current tick [0, 1). Used by [TickInterpolator].
+## The fractional position [0, 1) within the current tick.
 var tick_factor: float = 0.0
 
-## Tick used for display; lags [member tick] by [member display_offset].
+## The tick index used for visual display: [code]tick - display_offset[/code].
 var display_tick: int:
 	get: return maxi(0, tick - display_offset)
 
-## Latest single-sample round-trip time in seconds.
-var rtt: float = 0.0
+## Latest Round Trip Time measurement in seconds.
+var rtt: float:
+	get: return _stats.rtt
 
-## Smoothed RTT averaged over the last [constant PING_INTERVAL] × [constant _RTT_SAMPLE_WINDOW]
-## seconds. More stable than [member rtt] for making calibration decisions.
-var rtt_avg: float = 0.0
+## Averaged Round Trip Time in seconds.
+var rtt_avg: float:
+	get: return _stats.avg
 
-## Mean absolute deviation of RTT samples. Higher values indicate a less stable connection.
-var rtt_jitter: float = 0.0
+## Mean absolute deviation of RTT samples (jitter) in seconds.
+var rtt_jitter: float:
+	get: return _stats.jitter
 
-## Estimated one-way network latency in seconds, derived from [member rtt_avg].
+## Estimated one-way network latency in seconds.
 var one_way_latency: float:
-	get: return rtt_avg * 0.5
+	get: return _stats.avg * 0.5
 
-## Minimum [member display_offset] recommended for the current network conditions,
-## based on [member one_way_latency] and [member rtt_jitter].
-## Returns [member display_offset] until the clock is synchronised.
-## [br][br]Listen to [signal display_offset_insufficient] to react when this exceeds
-## [member display_offset] at runtime.
+## The [member display_offset] recommended for the current network conditions.
 var recommended_display_offset: int:
 	get:
-		if not is_synchronized:
-			return display_offset
-		return ceili((one_way_latency + rtt_jitter) * tickrate)
+		if not is_synchronized: return display_offset
+		return ceili((one_way_latency + rtt_jitter * jitter_multiplier) * tickrate)
 
-## [code]true[/code] after the first successful clock calibration from the server.
+## Returns [code]true[/code] if the client has calibrated with the server.
 var is_synchronized: bool = false
 
+## Returns [code]true[/code] if jitter is below [member jitter_stability_threshold].
+var is_stable: bool:
+	get: return _stats.is_stable
 
-## Returns the [NetworkClock] registered on [param node]'s [SceneMultiplayer] API,
-## or [code]null[/code] if none is registered.
+
+## Locates the [NetworkClock] registered on the node's multiplayer API.
 static func for_node(node: Node) -> NetworkClock:
 	var api := node.multiplayer as SceneMultiplayer
-	if not api or not api.has_meta(&"_network_clock"):
-		return null
-	return api.get_meta(&"_network_clock") as NetworkClock
+	return api.get_meta(&"_network_clock", null) if api else null
 
 #endregion
 
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
-## Seconds between client ping RPCs for clock drift correction.
 const PING_INTERVAL: float = 1.0
-const _RTT_SAMPLE_WINDOW := 8
+const _DRIFT_LOG_INTERVAL := 60.0
 
 var _tick_accumulator: float = 0.0
 var _ping_timer: float = 0.0
-var _rtt_samples: Array[float] = []
+var _stats := _NetworkStats.new()
 var _display_offset_insufficient: bool = false
+var _drift_samples: Array[int] = []
+var _drift_timer: float = 0.0
 
 #endregion
 
@@ -148,10 +187,12 @@ func _init() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or not multiplayer or not multiplayer.has_multiplayer_peer():
 		return
-	if not multiplayer or not multiplayer.has_multiplayer_peer():
-		return
+
+	if delta > stall_threshold:
+		_tick_accumulator = 0.0
+		if not multiplayer.is_server(): _request_handshake.rpc_id(1)
 
 	tick_factor = 0.0
 	before_tick_loop.emit()
@@ -166,7 +207,11 @@ func _physics_process(delta: float) -> void:
 		tick += 1
 		ticks_this_frame += 1
 
-	tick_factor = _tick_accumulator / ticktime
+	if use_physics_interpolation and Engine.has_method(&"get_physics_interpolation_fraction"):
+		tick_factor = Engine.get_physics_interpolation_fraction()
+	else:
+		tick_factor = _tick_accumulator / ticktime
+		
 	after_tick_loop.emit()
 
 	if not multiplayer.is_server() and is_synchronized:
@@ -174,21 +219,21 @@ func _physics_process(delta: float) -> void:
 		if _ping_timer >= PING_INTERVAL:
 			_ping_timer = 0.0
 			_ping.rpc_id(1, Time.get_ticks_usec())
+		
+		if enable_drift_logging:
+			_drift_timer += delta
+			if _drift_timer >= _DRIFT_LOG_INTERVAL: _log_drift()
 
 
 func _on_tree_configured() -> void:
 	var api := multiplayer as SceneMultiplayer
-	assert(api, "NetworkClock._on_tree_configured: multiplayer is not SceneMultiplayer. " +
-		"Ensure MultiplayerTree._config_api uses get_path() as the multiplayer root.")
-	api.set_meta(&"_network_clock", self)
-
-	if not multiplayer.is_server():
-		_request_handshake.rpc_id(1)
+	if api: api.set_meta(&"_network_clock", self)
+	if not multiplayer.is_server(): _request_handshake.rpc_id(1)
 
 #endregion
 
 
-#region ── Tickrate handshake ──────────────────────────────────────────────────
+#region ── Messaging ───────────────────────────────────────────────────────────
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_handshake() -> void:
@@ -200,16 +245,10 @@ func _respond_handshake(server_tickrate: int) -> void:
 	if server_tickrate != tickrate:
 		match tickrate_mismatch_action:
 			0: push_warning("NetworkClock: tickrate mismatch — local=%d server=%d" % [tickrate, server_tickrate])
-			1:
-				multiplayer.multiplayer_peer.close()
-				return
+			1: multiplayer.multiplayer_peer.close()
 			2: tickrate_mismatch.emit(multiplayer.get_remote_sender_id(), server_tickrate)
 	_ping.rpc_id(1, Time.get_ticks_usec())
 
-#endregion
-
-
-#region ── RTT ping / pong ─────────────────────────────────────────────────────
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _ping(client_usec: int) -> void:
@@ -218,43 +257,36 @@ func _ping(client_usec: int) -> void:
 
 @rpc("authority", "call_remote", "unreliable")
 func _pong(client_usec: int, server_tick_at_pong: int) -> void:
-	rtt = (Time.get_ticks_usec() - client_usec) / 1_000_000.0
-	_record_rtt_sample(rtt)
-	var half_rtt_ticks := int(ceil(rtt_avg * 0.5 / ticktime))
+	var sample := (Time.get_ticks_usec() - client_usec) / 1_000_000.0
+	var old_stable := _stats.is_stable
+	
+	_stats.record_sample(sample, jitter_stability_threshold)
+	
+	if _stats.is_stable != old_stable:
+		stability_changed.emit(_stats.is_stable)
+		
+	var half_rtt_ticks := int(ceil(_stats.avg * 0.5 / ticktime))
 	_calibrate(server_tick_at_pong + half_rtt_ticks)
 	_notify_display_offset()
 
 #endregion
 
 
-#region ── Clock calibration ───────────────────────────────────────────────────
+#region ── Internal Logic ──────────────────────────────────────────────────────
 
 func _calibrate(target_tick: int) -> void:
 	var diff := target_tick - tick
-	if abs(diff) > 3 or sync_mode == 0:
+	
+	if enable_drift_logging: _drift_samples.append(diff)
+	
+	if abs(diff) > panic_snap_threshold or sync_mode == 0:
 		tick = target_tick
 	else:
-		_tick_accumulator += diff * ticktime * 0.1
+		_tick_accumulator += diff * ticktime * stretch_nudge_factor
 
 	if not is_synchronized:
 		is_synchronized = true
 		clock_synchronized.emit()
-
-
-func _record_rtt_sample(sample: float) -> void:
-	_rtt_samples.append(sample)
-	if _rtt_samples.size() > _RTT_SAMPLE_WINDOW:
-		_rtt_samples.pop_front()
-
-	var sum := 0.0
-	for s in _rtt_samples:
-		sum += s
-	rtt_avg = sum / _rtt_samples.size()
-
-	var deviation := 0.0
-	for s in _rtt_samples:
-		deviation += abs(s - rtt_avg)
-	rtt_jitter = deviation / _rtt_samples.size()
 
 
 func _notify_display_offset() -> void:
@@ -264,5 +296,56 @@ func _notify_display_offset() -> void:
 		display_offset_insufficient.emit(recommended_display_offset)
 	elif not insufficient and _display_offset_insufficient:
 		_display_offset_insufficient = false
+
+
+func _log_drift() -> void:
+	if _drift_samples.is_empty(): return
+	var sum := 0
+	for s in _drift_samples: sum += s
+	NetLog.info("NetworkClock: 60s average drift = %.2f ticks" % (float(sum) / _drift_samples.size()))
+	_drift_samples.clear()
+	_drift_timer = 0.0
+
+
+func _run_auto_config() -> void:
+	if multiplayer.is_server(): return
+	NetLog.info("NetworkClock: Starting 5s auto-config test...")
+	var max_rec := 0
+	for i in range(50):
+		await get_tree().create_timer(0.1).timeout
+		if not is_instance_valid(self): return
+		max_rec = maxi(max_rec, recommended_display_offset)
+	display_offset = max_rec
+	NetLog.info("NetworkClock: Auto-config complete. display_offset = %d" % max_rec)
+
+#endregion
+
+
+#region ── Inner Classes ───────────────────────────────────────────────────────
+
+class _NetworkStats:
+	const WINDOW_SIZE := 8
+	
+	var rtt: float = 0.0
+	var avg: float = 0.0
+	var jitter: float = 0.0
+	var is_stable: bool = true
+	
+	var _samples: Array[float] = []
+
+	func record_sample(sample: float, stability_threshold: float) -> void:
+		rtt = sample
+		_samples.append(sample)
+		if _samples.size() > WINDOW_SIZE:
+			_samples.pop_front()
+
+		var sum := 0.0
+		for s in _samples: sum += s
+		avg = sum / _samples.size()
+
+		var deviation := 0.0
+		for s in _samples: deviation += abs(s - avg)
+		jitter = deviation / _samples.size()
+		is_stable = jitter < stability_threshold
 
 #endregion

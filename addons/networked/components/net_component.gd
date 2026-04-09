@@ -36,6 +36,12 @@ func get_tp_layer() -> TPLayerAPI:
 	return manager.tp_layer if manager else null
 
 
+## Returns the [NetworkClock] for this session.
+func get_network_clock() -> NetworkClock:
+	var tree := get_multiplayer_tree()
+	return tree.clock if tree else null
+
+
 ## Returns the [PeerContext] for [param peer_id], defaulting to the local peer.
 func get_peer_context(peer_id: int = multiplayer.get_unique_id()) -> PeerContext:
 	var tree := get_multiplayer_tree()
@@ -47,4 +53,3 @@ func get_peer_context(peer_id: int = multiplayer.get_unique_id()) -> PeerContext
 func get_bucket(bucket_type) -> RefCounted:
 	var ctx := get_peer_context()
 	return ctx.get_bucket(bucket_type) if ctx else null
-

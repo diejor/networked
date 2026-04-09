@@ -128,11 +128,12 @@ func test_calibrate_stretch_nudges_accumulator_forward() -> void:
 
 
 func test_calibrate_stretch_snaps_when_diff_exceeds_threshold() -> void:
-	# diff > 3 triggers snap even in Stretch mode.
+	# diff > panic_snap_threshold (default 20) triggers snap even in Stretch mode.
 	var clock := _make_clock()
 	clock.sync_mode = 1
 	clock.tick = 10
-	clock._calibrate(20)  # diff = 10 > 3 → snap
+	clock.panic_snap_threshold = 5
+	clock._calibrate(20)  # diff = 10 > 5 → snap
 	assert_that(clock.tick).is_equal(20)
 
 
@@ -233,6 +234,7 @@ func test_tick_does_not_advance_on_partial_delta() -> void:
 func test_tick_factor_is_zero_at_start_of_tick() -> void:
 	var clock := NetworkClock.new()
 	clock.tickrate = 10
+	clock.use_physics_interpolation = false
 	add_child(clock)
 	auto_free(clock)
 
@@ -244,6 +246,7 @@ func test_tick_factor_is_zero_at_start_of_tick() -> void:
 func test_tick_factor_reflects_partial_accumulation() -> void:
 	var clock := NetworkClock.new()
 	clock.tickrate = 10  # ticktime = 0.1 s
+	clock.use_physics_interpolation = false
 	add_child(clock)
 	auto_free(clock)
 

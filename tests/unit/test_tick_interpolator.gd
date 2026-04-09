@@ -63,7 +63,7 @@ func before_test() -> void:
 
 	# Interpolator — get_parent() resolves to _player at runtime, no owner needed.
 	_interpolator = TickInterpolator.new()
-	_interpolator.properties = [&"position"]
+	_interpolator.property_modes = {&"position": TickInterpolator.Mode.LERP}
 	_interpolator.enable_smart_dilation = false
 	_player.add_child(_interpolator)
 	_interpolator.set_process(false)  # manually driven

@@ -59,7 +59,10 @@ metadata/_custom_type_script = "uid://c4gt8tvkmcals"
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=425087653]
 script = ExtResource("6_tdg3f")
-properties = Array[StringName]([&"position"])
+property_modes = Dictionary[StringName, int]({
+&"position": 1
+})
+max_lerp_distance = 100.0
 metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

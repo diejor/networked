@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/core/backends/websocket_backend.gd" id="3_trn2v"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/core/lobby/lobby_manager.gd" id="4_fos0i"]
+[ext_resource type="Script" uid="uid://b8q1627t07asf" path="res://addons/networked/components/debug/ui/network_graph.gd" id="6_trn2v"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/core/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/components/client/ConnectServerUI.tscn" id="7_lgr22"]
 
@@ -41,7 +42,22 @@ spawn_path = NodePath(".")
 script = ExtResource("4_fos0i")
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
+[node name="CanvasLayer" type="CanvasLayer" parent="NetworkSession/Client" unique_id=996987432]
+
+[node name="NetworkGraph" type="Control" parent="NetworkSession/Client/CanvasLayer" unique_id=925442772 node_paths=PackedStringArray("clock")]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -244.82764
+offset_bottom = 100.0
+grow_horizontal = 0
+script = ExtResource("6_trn2v")
+clock = NodePath("../../NetworkClock")
+
 [node name="ConnectServerUI" parent="." unique_id=99213129 instance=ExtResource("7_lgr22")]
 spawner_node = SubResource("Resource_wkp8b")
 
+[connection signal="configured" from="NetworkSession/Client" to="NetworkSession/Client/CanvasLayer/NetworkGraph" method="_on_configured"]
 [connection signal="connect_player" from="ConnectServerUI" to="NetworkSession" method="connect_player"]
