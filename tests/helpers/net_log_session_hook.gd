@@ -8,9 +8,7 @@ func _init() -> void:
 	super("NetLogSilencer", "Silences the NetLog to reduce output noise during tests.")
 
 func startup(_session: GdUnitTestSession) -> GdUnitResult:
-	var silent := NetLogSettings.new()
-	silent.global_level = NetLog.Level.NONE
-	NetLog.push_settings(silent)
+	#NetLog.push_setting_str("none")
 	return GdUnitResult.success()
 
 func shutdown(_session: GdUnitTestSession) -> GdUnitResult:

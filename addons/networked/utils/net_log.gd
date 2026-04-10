@@ -93,6 +93,20 @@ static func _stack_min_level() -> int:
 				m = l
 	return m
 
+static func is_level_active_for_module(level: int, module_path: String) -> bool:
+	if level < _effective_min_level: 
+		return false
+	return level >= get_effective_level(module_path)
+
+## Fast check to see if a level is active for a specific script path.
+## Allows components to early-out before doing expensive string formatting.
+static func is_level_active(level: int, script_path: String) -> bool:
+	if level < _effective_min_level: 
+		return false
+	
+	var module := _module_from_path(script_path)
+	return level >= get_effective_level(module)
+
 ## Pushes a [NetLogSettings] resource onto the isolation stack.
 ##
 ## Settings pushed onto the stack cascade: queries check the top of the stack first,

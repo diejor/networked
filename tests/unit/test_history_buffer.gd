@@ -6,28 +6,30 @@
 ## Coverage areas:
 ## [ul]
 ## [li]Basic record and retrieval ([method HistoryBuffer.get_at])[/li]
-## [li]Fuzzy lookup ([method HistoryBuffer.get_latest_at_or_before])[/li]
+## [li]Bracketing search ([method HistoryBuffer.find_bracketing_ticks])[/li]
 ## [li]Ring-buffer eviction when the buffer is full[/li]
 ## [li]Oldest/newest tick queries[/li]
-## [li]History trimming ([method HistoryBuffer.trim_before])[/li]
+## [li]Capacity power-of-two normalization[/li]
 ## [/ul]
 class_name TestHistoryBuffer
 extends NetworkedTestSuite
 
 
 # ---------------------------------------------------------------------------
-# is_empty
+# is_empty / size
 # ---------------------------------------------------------------------------
 
 func test_is_empty_true_on_new_buffer() -> void:
 	var buf := HistoryBuffer.new(4)
 	assert_that(buf.is_empty()).is_true()
+	assert_that(buf.size()).is_equal(0)
 
 
 func test_is_empty_false_after_record() -> void:
 	var buf := HistoryBuffer.new(4)
 	buf.record(0, "x")
 	assert_that(buf.is_empty()).is_false()
+	assert_that(buf.size()).is_equal(1)
 
 
 # ---------------------------------------------------------------------------
@@ -68,39 +70,69 @@ func test_get_at_distinguishes_multiple_ticks() -> void:
 
 
 # ---------------------------------------------------------------------------
-# get_latest_at_or_before — fuzzy lookup
+# find_bracketing_ticks
 # ---------------------------------------------------------------------------
 
-func test_get_latest_at_or_before_exact_match() -> void:
+func test_find_bracketing_ticks_exact_match() -> void:
 	var buf := HistoryBuffer.new(4)
-	buf.record(5, "five")
-	assert_that(buf.get_latest_at_or_before(5)).is_equal("five")
+	buf.record(10, "a")
+	buf.record(20, "b")
+	
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(10, 0, out)
+	assert_that(out[0]).is_equal(10)
+	assert_that(out[1]).is_equal(20)
 
 
-func test_get_latest_at_or_before_returns_older_entry() -> void:
+func test_find_bracketing_ticks_between_values() -> void:
 	var buf := HistoryBuffer.new(4)
-	buf.record(3, "three")
-	# No entry at tick 7, so returns the one at tick 3.
-	assert_that(buf.get_latest_at_or_before(7)).is_equal("three")
+	buf.record(10, "a")
+	buf.record(20, "b")
+	
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(15, 0, out)
+	assert_that(out[0]).is_equal(10)
+	assert_that(out[1]).is_equal(20)
 
 
-func test_get_latest_at_or_before_returns_closest_older_entry() -> void:
-	var buf := HistoryBuffer.new(8)
-	buf.record(2, "two")
-	buf.record(4, "four")
-	buf.record(6, "six")
-	assert_that(buf.get_latest_at_or_before(5)).is_equal("four")
-
-
-func test_get_latest_at_or_before_returns_null_when_all_newer() -> void:
+func test_find_bracketing_ticks_before_all() -> void:
 	var buf := HistoryBuffer.new(4)
-	buf.record(10, "ten")
-	assert_that(buf.get_latest_at_or_before(5)).is_null()
+	buf.record(10, "a")
+	
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(5, 0, out)
+	assert_that(out[0]).is_equal(-1)
+	assert_that(out[1]).is_equal(10)
 
 
-func test_get_latest_at_or_before_empty_returns_null() -> void:
+func test_find_bracketing_ticks_after_all() -> void:
 	var buf := HistoryBuffer.new(4)
-	assert_that(buf.get_latest_at_or_before(0)).is_null()
+	buf.record(10, "a")
+	
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(15, 0, out)
+	assert_that(out[0]).is_equal(10)
+	assert_that(out[1]).is_equal(-1)
+
+
+func test_find_bracketing_ticks_empty() -> void:
+	var buf := HistoryBuffer.new(4)
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(10, 0, out)
+	assert_that(out[0]).is_equal(-1)
+	assert_that(out[1]).is_equal(-1)
+
+
+# ---------------------------------------------------------------------------
+# has_tick_after
+# ---------------------------------------------------------------------------
+
+func test_has_tick_after() -> void:
+	var buf := HistoryBuffer.new(4)
+	buf.record(10, "a")
+	assert_that(buf.has_tick_after(5)).is_true()
+	assert_that(buf.has_tick_after(10)).is_false()
+	assert_that(buf.has_tick_after(15)).is_false()
 
 
 # ---------------------------------------------------------------------------
@@ -132,30 +164,34 @@ func test_newest_tick_returns_last_recorded() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Ring-buffer eviction
+# Ring-buffer eviction & Power-of-two Capacity
 # ---------------------------------------------------------------------------
 
-func test_eviction_drops_oldest_when_full() -> void:
-	# Capacity 3: record ticks 1, 2, 3, then 4 evicts tick 1.
+func test_capacity_is_normalized_to_power_of_two() -> void:
 	var buf := HistoryBuffer.new(3)
-	buf.record(1, "one")
-	buf.record(2, "two")
-	buf.record(3, "three")
-	buf.record(4, "four")  # tick 1 is evicted
-
-	assert_that(buf.get_at(1)).is_null()
-	assert_that(buf.get_at(4)).is_equal("four")
-
-
-func test_eviction_preserves_remaining_entries() -> void:
-	var buf := HistoryBuffer.new(3)
+	# Internal capacity should be 4
 	buf.record(1, "one")
 	buf.record(2, "two")
 	buf.record(3, "three")
 	buf.record(4, "four")
+	
+	assert_that(buf.size()).is_equal(4)
+	assert_that(buf.get_at(1)).is_equal("one")
+	
+	buf.record(5, "five") # Now it should evict tick 1
+	assert_that(buf.get_at(1)).is_null()
+	assert_that(buf.size()).is_equal(4)
 
-	assert_that(buf.get_at(2)).is_equal("two")
+
+func test_eviction_drops_oldest_when_full() -> void:
+	var buf := HistoryBuffer.new(2) # Capacity 2 is already power of two
+	buf.record(1, "one")
+	buf.record(2, "two")
+	buf.record(3, "three")  # tick 1 is evicted
+
+	assert_that(buf.get_at(1)).is_null()
 	assert_that(buf.get_at(3)).is_equal("three")
+	assert_that(buf.size()).is_equal(2)
 
 
 func test_oldest_tick_updates_after_eviction() -> void:
@@ -168,7 +204,6 @@ func test_oldest_tick_updates_after_eviction() -> void:
 
 
 func test_full_wrap_around_all_slots() -> void:
-	# Record capacity * 2 entries; only the last `capacity` should survive.
 	var cap := 4
 	var buf := HistoryBuffer.new(cap)
 	for i in cap * 2:
@@ -178,52 +213,3 @@ func test_full_wrap_around_all_slots() -> void:
 		assert_that(buf.get_at(i)).is_null()  # evicted
 	for i in range(cap, cap * 2):
 		assert_that(buf.get_at(i)).is_equal(i * 10)
-
-
-# ---------------------------------------------------------------------------
-# trim_before
-# ---------------------------------------------------------------------------
-
-func test_trim_before_removes_entries_strictly_before_tick() -> void:
-	var buf := HistoryBuffer.new(8)
-	buf.record(1, "one")
-	buf.record(2, "two")
-	buf.record(5, "five")
-	buf.trim_before(3)  # removes ticks 1 and 2
-
-	assert_that(buf.get_at(1)).is_null()
-	assert_that(buf.get_at(2)).is_null()
-	assert_that(buf.get_at(5)).is_equal("five")
-
-
-func test_trim_before_keeps_entry_at_exact_boundary() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(3, "three")
-	buf.trim_before(3)  # trim strictly before 3, so tick 3 survives
-
-	assert_that(buf.get_at(3)).is_equal("three")
-
-
-func test_trim_before_on_empty_buffer_is_safe() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.trim_before(100)  # must not crash
-	assert_that(buf.is_empty()).is_true()
-
-
-func test_trim_before_leaves_buffer_empty_when_all_old() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(1, "a")
-	buf.record(2, "b")
-	buf.trim_before(10)
-
-	assert_that(buf.is_empty()).is_true()
-
-
-func test_oldest_tick_updates_after_trim() -> void:
-	var buf := HistoryBuffer.new(8)
-	buf.record(1, "a")
-	buf.record(3, "b")
-	buf.record(5, "c")
-	buf.trim_before(4)  # removes ticks 1 and 3
-
-	assert_that(buf.oldest_tick()).is_equal(5)

@@ -10,14 +10,7 @@ var _clients: Array[MultiplayerTree] = []
 var _lobby_manager_scene: PackedScene
 
 
-var _silent_log := NetLogSettings.new()
-
 const DEFAULT_TIMEOUT := 1.0
-
-
-func _init() -> void:
-	_silent_log.global_level = NetLog.Level.NONE
-	NetLog.push_settings(_silent_log)
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +105,10 @@ func get_server() -> MultiplayerTree:
 
 func get_all_clients() -> Array[MultiplayerTree]:
 	return _clients
+
+
+func get_session() -> LocalLoopbackSession:
+	return _session
 
 
 ## Returns a lobby from the server's lobby manager by name,

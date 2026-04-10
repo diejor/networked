@@ -25,6 +25,7 @@ const P1 := Vector2(100.0, 0.0)
 
 var _player: Node2D
 var _clock: NetworkClock
+var _tree: MultiplayerTree
 var _interpolator: TickInterpolator
 
 
@@ -41,8 +42,15 @@ func before_test() -> void:
 	auto_free(_clock)
 	_clock.set_physics_process(false)
 
+	# Tree — required for NetComponent bucket lookups.
+	_tree = MultiplayerTree.new()
+	_tree.clock = _clock
+	add_child(_tree)
+	auto_free(_tree)
+
 	var api := _clock.multiplayer as SceneMultiplayer
 	assert(api != null, "test requires SceneMultiplayer")
+	api.set_meta(&"_multiplayer_tree", _tree)
 	api.set_meta(&"_network_clock", _clock)
 
 	# Remote player — authority 999 ≠ local peer 1, so is_multiplayer_authority() = false.
@@ -73,8 +81,11 @@ func before_test() -> void:
 
 func after_test() -> void:
 	var api := _clock.multiplayer as SceneMultiplayer
-	if api and api.has_meta(&"_network_clock"):
-		api.remove_meta(&"_network_clock")
+	if api:
+		if api.has_meta(&"_network_clock"):
+			api.remove_meta(&"_network_clock")
+		if api.has_meta(&"_multiplayer_tree"):
+			api.remove_meta(&"_multiplayer_tree")
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +163,7 @@ func test_buffer_records_network_value_not_interpolated_value() -> void:
 	_network_update(P1)
 	_tick()  # buf should record P1 at tick 2, NOT whatever _process last wrote
 
-	var buf: HistoryBuffer = _interpolator._buffers[&"position"]
+	var buf: HistoryBuffer = _interpolator.get_buffer(&"position")
 	assert_that(buf.get_at(2)).is_equal(P1)
 
 

@@ -124,7 +124,7 @@ func _build_client_node() -> Node2D:
 
 	var interp := TickInterpolator.new()
 	interp.name = "TickInterpolator"
-	interp.properties = [&"position"]
+	interp.property_modes = {&"position": TickInterpolator.Mode.LERP}
 	player.add_child(interp)
 
 	return player

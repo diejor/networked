@@ -23,8 +23,8 @@ script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "Player/%ClientComponent"
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_kpjcp"]
-radius = 63.66
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
+size = Vector2(84, 20)
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
@@ -32,6 +32,7 @@ scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
+motion_mode = 1
 script = ExtResource("1_kne1u")
 speed = 128.0
 
@@ -49,7 +50,8 @@ replication_config = SubResource("SceneReplicationConfig_kpjcp")
 spawner_node = SubResource("Resource_cxr5p")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
-shape = SubResource("CircleShape2D_kpjcp")
+position = Vector2(2, 60)
+shape = SubResource("RectangleShape2D_tdg3f")
 
 [node name="TPComponent" type="Node" parent="." unique_id=872836282]
 unique_name_in_owner = true
@@ -62,7 +64,7 @@ script = ExtResource("6_tdg3f")
 property_modes = Dictionary[StringName, int]({
 &"position": 1
 })
-max_lerp_distance = 100.0
+max_lerp_distance = 50.0
 metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
