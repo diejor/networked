@@ -12,7 +12,7 @@ class_name NetLog
 extends Object
 
 ## Ordered severity levels for filtering log output.
-enum Level { TRACE, DEBUG, INFO, WARN, ERROR, NONE }
+enum Level { INHERIT = -1, TRACE = 0, DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4, NONE = 5 }
 
 ## Global minimum log level applied when no per-module override matches.
 static var current_level: int = Level.INFO
@@ -22,7 +22,7 @@ static var module_levels: Dictionary = {}
 
 static var _min_active_level: int = Level.INFO
 static var _effective_min_level: int = Level.INFO
-static var _settings_stack: Array = []
+static var _settings_stack: Array[NetLogSettings] = []
 static var _addon_root: String = ""
 static var _runtime_initialized: bool = false
 
@@ -79,22 +79,25 @@ static func _fix_profile_path(path: String) -> String:
 static func _recompute_min_level() -> void:
 	_min_active_level = current_level
 	for l: int in module_levels.values():
-		if l < _min_active_level:
+		if l != Level.INHERIT and l < _min_active_level:
 			_min_active_level = l
 	_effective_min_level = _stack_min_level() if not _settings_stack.is_empty() else _min_active_level
 
 static func _stack_min_level() -> int:
-	var top: NetLogSettings = _settings_stack.back()
-	var m: int = top.global_level
-	for l: int in top.module_overrides.values():
-		if l < m:
-			m = l
+	var m: int = _min_active_level
+	for top: NetLogSettings in _settings_stack:
+		if top.global_level != Level.INHERIT and top.global_level < m:
+			m = top.global_level
+		for l: int in top.module_overrides.values():
+			if l != Level.INHERIT and l < m:
+				m = l
 	return m
 
 ## Pushes a [NetLogSettings] resource onto the isolation stack.
 ##
-## While the stack is non-empty it fully replaces the base settings.
-## Used by [NetLogSessionHook] to silence output during tests.
+## Settings pushed onto the stack cascade: queries check the top of the stack first,
+## and if no explicit override (or INHERIT) is found, fall back down the stack until
+## reaching the base profile settings.
 static func push_settings(settings: NetLogSettings) -> void:
 	_settings_stack.push_back(settings)
 	_effective_min_level = _stack_min_level()
@@ -109,27 +112,131 @@ static func pop_settings() -> void:
 ##
 ## Walks up the dot-separated hierarchy (e.g. [code]"core.lobby.manager"[/code] →
 ## [code]"core.lobby"[/code] → [code]"core"[/code]) until a matching override is found.
-## Falls back to [member current_level] if no override matches.
+## Cascades through pushed settings before falling back to the base profile.
 static func get_effective_level(module_path: String) -> int:
-	if not _settings_stack.is_empty():
-		var top: NetLogSettings = _settings_stack.back()
-		var parts := module_path.split(".")
-		while parts.size() > 0:
-			var path := ".".join(parts)
+	var parts := module_path.split(".")
+	
+	for i in range(_settings_stack.size() - 1, -1, -1):
+		var top: NetLogSettings = _settings_stack[i]
+		
+		var temp_parts := parts.duplicate()
+		while temp_parts.size() > 0:
+			var path := ".".join(temp_parts)
 			if top.module_overrides.has(path):
-				return top.module_overrides[path]
-			parts.remove_at(parts.size() - 1)
-		return top.global_level
+				var lvl: int = top.module_overrides[path]
+				if lvl != Level.INHERIT:
+					return lvl
+			temp_parts.remove_at(temp_parts.size() - 1)
+			
+		if top.global_level != Level.INHERIT:
+			return top.global_level
 
 	if not module_path.is_empty():
-		var parts := module_path.split(".")
-		while parts.size() > 0:
-			var path := ".".join(parts)
+		var temp_parts_base := parts.duplicate()
+		while temp_parts_base.size() > 0:
+			var path := ".".join(temp_parts_base)
 			if module_levels.has(path):
-				return module_levels[path]
-			parts.remove_at(parts.size() - 1)
+				var lvl: int = module_levels[path]
+				if lvl != Level.INHERIT:
+					return lvl
+			temp_parts_base.remove_at(temp_parts_base.size() - 1)
 
 	return current_level
+
+## Pushes a new configuration onto the stack using the LOGL string syntax.
+## Example: [code]NetLog.push_setting_str("info,core.network=trace,components=none")[/code]
+static func push_setting_str(logl_str: String) -> void:
+	push_settings(parse_logl(logl_str))
+
+## Parses a LOGL string into a [NetLogSettings] resource.
+static func parse_logl(logl_str: String) -> NetLogSettings:
+	var res := NetLogSettings.new()
+	res.global_level = Level.INHERIT
+	
+	if logl_str.strip_edges().is_empty():
+		return res
+		
+	var directives := logl_str.split(",", false)
+	for d in directives:
+		var d_str := d.strip_edges()
+		if d_str.is_empty():
+			continue
+		
+		var parts := d_str.split("=", false, 1)
+		if parts.size() == 1:
+			var lvl_str := parts[0].strip_edges().to_upper()
+			if _string_to_level(lvl_str) != Level.INHERIT:
+				res.global_level = _string_to_level(lvl_str)
+		elif parts.size() == 2:
+			var mod_path := parts[0].strip_edges()
+			var lvl_str := parts[1].strip_edges().to_upper()
+			res.module_overrides[mod_path] = _string_to_level(lvl_str)
+			
+	return res
+
+## Serializes a [NetLogSettings] resource into a LOGL string.
+static func to_logl(settings: NetLogSettings) -> String:
+	var parts: Array = []
+	if settings.global_level != Level.INHERIT:
+		parts.append(_level_to_string(settings.global_level).to_lower())
+		
+	for mod_path: String in settings.module_overrides.keys():
+		var lvl: int = settings.module_overrides[mod_path]
+		if lvl != Level.INHERIT:
+			parts.append("%s=%s" % [mod_path, _level_to_string(lvl).to_lower()])
+			
+	return ",".join(parts)
+
+static func _string_to_level(s: String) -> int:
+	match s:
+		"TRACE": return Level.TRACE
+		"DEBUG": return Level.DEBUG
+		"INFO": return Level.INFO
+		"WARN": return Level.WARN
+		"ERROR": return Level.ERROR
+		"NONE": return Level.NONE
+		"INHERIT": return Level.INHERIT
+		_: return Level.INHERIT
+
+static func _level_to_string(l: int) -> String:
+	match l:
+		Level.TRACE: return "TRACE"
+		Level.DEBUG: return "DEBUG"
+		Level.INFO: return "INFO"
+		Level.WARN: return "WARN"
+		Level.ERROR: return "ERROR"
+		Level.NONE: return "NONE"
+		_: return "INHERIT"
+
+## Dumps the current configuration state to the console.
+static func dump_settings() -> void:
+	print_rich("[color=cyan][b]--- NetLog Configuration Dump ---[/b][/color]")
+	print_rich("[color=gray]Addon Root:[/color] %s" % (_addon_root if not _addon_root.is_empty() else "(empty)"))
+	
+	var base_settings := NetLogSettings.new()
+	base_settings.global_level = current_level
+	base_settings.module_overrides = module_levels.duplicate()
+	var base_logl := to_logl(base_settings)
+	print_rich("[color=gray]Base LOGL:[/color] [color=yellow]%s[/color] [color=gray](copied to clipboard)[/color]" % base_logl)
+	DisplayServer.clipboard_set(base_logl)
+	print_rich("[color=gray]Global Level:[/color] %s" % _level_to_string(current_level))
+	
+	if module_levels.is_empty():
+		print_rich("[color=gray]Module Overrides: (none)[/color]")
+	else:
+		print_rich("[color=gray]Module Overrides:[/color]")
+		for mod in module_levels:
+			print_rich("  [color=yellow]%s[/color] = %s" % [mod, _level_to_string(module_levels[mod])])
+			
+	if not _settings_stack.is_empty():
+		print_rich("[color=gray]Settings Stack (%d layers):[/color]" % _settings_stack.size())
+		for i in range(_settings_stack.size() - 1, -1, -1):
+			var settings: NetLogSettings = _settings_stack[i]
+			print_rich("  [Layer %d] %s" % [i, to_logl(settings)])
+			
+	print_rich("[color=gray]Effective Min Level:[/color] %s" % _level_to_string(_effective_min_level))
+	print_rich("[color=cyan][b]---------------------------------[/b][/color]")
+
 
 ## Logs a [code]TRACE[/code]-level message. Accepts optional [param args] for [code]%[/code]-style formatting.
 static func trace(msg: Variant, args: Array = []) -> void:
@@ -187,7 +294,7 @@ static func _get_context() -> Dictionary:
 	for i in range(1, stack.size()):
 		var frame: Dictionary = stack[i]
 		var source: String = frame.source
-		if source.ends_with("net_log.gd"):
+		if source.ends_with("net_log.gd") or source.ends_with("net_component.gd") or source.ends_with("tp_layer_api.gd"):
 			continue
 		return {
 			"module": _module_from_path(source),

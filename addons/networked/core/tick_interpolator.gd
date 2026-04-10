@@ -131,7 +131,7 @@ func _ready() -> void:
 	_cache_sync_intervals()
 	
 	display_lag = _calculate_min_lag()
-	NetLog.info("Ready: target=%s, props=%d" % [_target.name, _states.size()])
+	log_info("Ready: target=%s, props=%d" % [_target.name, _states.size()])
 
 
 func _exit_tree() -> void:
@@ -197,6 +197,7 @@ func _refresh_property_states() -> void:
 		if property_modes[prop] == Mode.NONE: continue
 		
 		var state := _PropertyState.new()
+		state.interpolator = self
 		state.name = prop
 		state.mode = property_modes[prop]
 		
@@ -326,6 +327,7 @@ class _Batcher extends RefCounted:
 
 
 class _PropertyState:
+	var interpolator: TickInterpolator
 	var name: StringName
 	var mode: Mode
 	var history := HistoryBuffer.new(16)
@@ -399,7 +401,7 @@ class _PropertyState:
 		last_written = result
 		
 		if trace:
-			NetLog.trace("Interp %s: dt=%d lag=%.2f val=%s" % [name, dt, lag, result])
+			interpolator.log_trace("Interp %s: dt=%d lag=%.2f val=%s" % [name, dt, lag, result])
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
 		if typeof(v1) != typeof(v2): return true

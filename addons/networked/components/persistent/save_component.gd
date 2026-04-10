@@ -88,33 +88,33 @@ func get_save_path() -> String:
 ## Writes the current state of the container to the disk.
 func save_state() -> Error:
 	var save_path := get_save_path()
-	NetLog.trace("SaveComponent: Saving state to %s" % save_path)
+	log_trace("SaveComponent: Saving state to %s" % save_path)
 	var err: Error = ResourceSaver.save(save_container, save_path)
 	
 	assert(err == OK, "Failed to save `%s`. Error: %s" % [save_path, error_string(err)])
 	if err == OK:
-		NetLog.info("State saved successfully to %s" % save_path)
+		log_info("State saved successfully to %s" % save_path)
 	return err
 
 
 ## Loads the saved state from the disk and immediately pushes it to the scene.
 func load_state() -> Error:
 	var save_path := get_save_path()
-	NetLog.trace("SaveComponent: Loading state from %s" % save_path)
+	log_trace("SaveComponent: Loading state from %s" % save_path)
 	if not ResourceLoader.exists(save_path):
-		NetLog.debug("No save file found at %s" % save_path)
+		log_debug("No save file found at %s" % save_path)
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 	
 	var saved_container := ResourceLoader.load(save_path, "SaveContainer", ResourceLoader.CACHE_MODE_REPLACE)
 	
 	if not is_instance_valid(saved_container) or not saved_container is SaveContainer:
-		NetLog.error("Save located at `%s` is invalid." % save_path)
+		log_error("Save located at `%s` is invalid." % save_path)
 		return ERR_CANT_OPEN
 
 	save_container = saved_container
 	push_to_scene()
-	NetLog.info("State loaded successfully from %s" % save_path)
+	log_info("State loaded successfully from %s" % save_path)
 	loaded.emit()
 	
 	return OK
@@ -122,33 +122,33 @@ func load_state() -> Error:
 
 ## Deserializes a network byte array into the container and pushes the result to the scene.
 func deserialize_scene(bytes: PackedByteArray) -> void:
-	NetLog.trace("SaveComponent: Deserializing scene (Size: %d)" % bytes.size())
+	log_trace("SaveComponent: Deserializing scene (Size: %d)" % bytes.size())
 	save_container.deserialize(bytes)
 	push_to_scene()
 	
 
 ## Pulls the latest data from the scene and serializes it into a network-ready byte array.
 func serialize_scene() -> PackedByteArray:
-	NetLog.trace("SaveComponent: Serializing scene.")
+	log_trace("SaveComponent: Serializing scene.")
 	pull_from_scene()
 	return save_container.serialize()
 
 
 ## Pushes the loaded container data into the active scene nodes.
 func push_to_scene() -> Error:
-	NetLog.trace("SaveComponent: Pushing container to scene.")
+	log_trace("SaveComponent: Pushing container to scene.")
 	var push_err: Error = save_synchronizer.push_to_scene()
 	
 	match push_err:
 		ERR_UNCONFIGURED:
 			var save_path := get_save_path()
-			NetLog.error("Removing unconfigured save at `%s`." % save_path)
+			log_error("Removing unconfigured save at `%s`." % save_path)
 			DirAccess.remove_absolute(save_path)
 			return push_err
 		OK:
 			return push_err
 		_:
-			NetLog.error("Unexpected error during push: %s." % error_string(push_err))
+			log_error("Unexpected error during push: %s." % error_string(push_err))
 			return push_err
 
 
@@ -190,7 +190,7 @@ func spawn(caller: Node) -> void:
 	if load_err == ERR_FILE_NOT_FOUND:
 		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
 		if spawner_save and spawner_save.save_synchronizer._initialized:
-			NetLog.debug("Loading data from spawner.")
+			log_debug("Loading data from spawner.")
 			deserialize_scene(spawner_save.serialize_scene())
 
 
@@ -236,7 +236,7 @@ func _unregister() -> void:
 
 
 func _handle_shutdown() -> void:
-	NetLog.info("Beginning graceful shutdown...")
+	log_info("Beginning graceful shutdown...")
 	SaveComponent.save_all_in(get_peer_context())
-	NetLog.info("All states saved. Quitting.")
+	log_info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

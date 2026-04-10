@@ -31,13 +31,13 @@ func teleport_out() -> void:
 
 
 func _on_anim_started(name: StringName) -> void:
-	NetLog.debug("[ANIM START] %s layer_id=%d player_id=%d speed_scale=%f playing_speed=%f pos=%f" % [
+	log_debug("[ANIM START] %s layer_id=%d player_id=%d speed_scale=%f playing_speed=%f pos=%f" % [
 		name, get_instance_id(), transition_anim.get_instance_id(),
 		transition_anim.speed_scale, transition_anim.get_playing_speed(),
 		transition_anim.current_animation_position])
 
 func _on_anim_finished(name: StringName) -> void:
-	NetLog.debug("[ANIM FINISH] %s speed_scale=%f playing_speed=%f pos=%f" % [
+	log_debug("[ANIM FINISH] %s speed_scale=%f playing_speed=%f pos=%f" % [
 		name, transition_anim.speed_scale,
 		transition_anim.get_playing_speed(),
 		transition_anim.current_animation_position])

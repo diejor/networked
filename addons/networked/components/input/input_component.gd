@@ -14,7 +14,7 @@
 ## [/codeblock]
 @abstract
 class_name InputComponent
-extends Node
+extends NetComponent
 
 ## Emitted when a tracked action's pressed state changes.
 signal action_changed(action: StringName, pressed: bool)
@@ -73,12 +73,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(action):
 			if state[action] != true:
 				state[action] = true
-				NetLog.trace("InputComponent: Action %s Pressed" % action)
+				log_trace("InputComponent: Action %s Pressed" % action)
 				action_changed.emit(action, true)
 		elif event.is_action_released(action):
 			if state[action] != false:
 				state[action] = false
-				NetLog.trace("InputComponent: Action %s Released" % action)
+				log_trace("InputComponent: Action %s Released" % action)
 				action_changed.emit(action, false)
 
 

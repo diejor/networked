@@ -6,5 +6,5 @@
 script = ExtResource("1_gsje6")
 global_level = 0
 module_overrides = {
-"addons.networked.core.tick_interpolator": 5
+"core.tick_interpolator": 5
 }

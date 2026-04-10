@@ -110,35 +110,35 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## once the server confirms the reparent and the visual transition completes.
 ## Safe to await even if this node is destroyed and respawned during the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
-	NetLog.info("Initiating teleport to %s" % target_tp.scene_path)
+	log_info("Initiating teleport to %s" % target_tp.scene_path)
 	var promise := TeleportPromise.new()
 	_do_teleport(target_tp, promise)
 	return promise
 
 
 func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
-	NetLog.trace("TPComponent: _do_teleport called.")
+	log_trace("TPComponent: _do_teleport called.")
 	await _tp_mutex.lock()
 	var peer_id := multiplayer.get_unique_id()
 	_get_bucket().pending[peer_id] = promise
 
 	var from_scene := current_scene_name
 	current_scene_path = target_tp.scene_path
-	NetLog.debug("Teleporting from %s to %s (Peer: %d)" % [from_scene, current_scene_name, peer_id])
+	log_debug("Teleporting from %s to %s (Peer: %d)" % [from_scene, current_scene_name, peer_id])
 
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
-		NetLog.debug("Pushing save state before teleport.")
+		log_debug("Pushing save state before teleport.")
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
-		NetLog.trace("Playing teleport_out transition.")
+		log_trace("Playing teleport_out transition.")
 		await tp_layer.teleport_out()
 
 	SynchronizersCache.sync_only_server(owner)
 
-	NetLog.trace("Sending request_teleport RPC to server.")
+	log_trace("Sending request_teleport RPC to server.")
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,
@@ -150,25 +150,25 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(username: String, from_scene_name: String, tp_path: String) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
-	NetLog.info("Server received teleport request from %s (Peer: %d)" % [username, sender_id])
+	log_info("Server received teleport request from %s (Peer: %d)" % [username, sender_id])
 	
 	var lobby_manager := get_lobby_manager()
 	if not lobby_manager:
-		NetLog.error("TPComponent: Cannot teleport, lobby manager not found.")
+		log_error("TPComponent: Cannot teleport, lobby manager not found.")
 		return
 
 	var from_lobby: Lobby = lobby_manager.active_lobbies.get(from_scene_name)
 	if not from_lobby:
-		NetLog.error("TPComponent: Source lobby '%s' not found." % from_scene_name)
+		log_error("TPComponent: Source lobby '%s' not found." % from_scene_name)
 		return
 		
 	var player: Node2D = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 
-	NetLog.trace("Waiting for client synchronization...")
+	log_trace("Waiting for client synchronization...")
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(tp_component.client_synchronized, timer):
-		NetLog.error("TPComponent: Client couldn't synchronize while teleporting.")
+		log_error("TPComponent: Client couldn't synchronize while teleporting.")
 
 	var to_lobby_name := tp_component.current_scene_name
 	var to_lobby: Lobby = lobby_manager.active_lobbies.get(to_lobby_name)
@@ -176,7 +176,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 	"`%s` not found, probably not tracked by the \
 `%s`." % [to_lobby_name, lobby_manager.name])
 
-	NetLog.info("Reparenting player %s to lobby %s" % [username, to_lobby_name])
+	log_info("Reparenting player %s to lobby %s" % [username, to_lobby_name])
 
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
@@ -200,7 +200,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 ## Server-side callback invoked after the entity safely enters the destination lobby.
 ## Sets position on the server and forwards the snap coordinates to the client.
 func teleported(scene: Node, _tp_path: String) -> void:
-	NetLog.trace("TPComponent: teleported callback on server.")
+	log_trace("TPComponent: teleported callback on server.")
 	var teleport_success := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `teleported` was called when `is_inside_tree = false`.")
 		var snap_pos := Vector2.ZERO
@@ -209,7 +209,7 @@ func teleported(scene: Node, _tp_path: String) -> void:
 			if tp_node:
 				snap_pos = tp_node.global_position
 		
-		NetLog.debug("Teleport server-side complete. Snapping to %s" % str(snap_pos))
+		log_debug("Teleport server-side complete. Snapping to %s" % str(snap_pos))
 		owner2d.global_position = snap_pos
 		_rpc_teleport_committed.rpc_id(owner.get_multiplayer_authority(), snap_pos)
 
@@ -218,35 +218,35 @@ func teleported(scene: Node, _tp_path: String) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_teleport_committed(snap_pos: Vector2) -> void:
-	NetLog.info("Teleport committed. Snapping local player to %s" % str(snap_pos))
+	log_info("Teleport committed. Snapping local player to %s" % str(snap_pos))
 	_teleport_committed.emit()
 	_tp_mutex.unlock()
 	owner2d.global_position = snap_pos
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
-		NetLog.trace("Playing teleport_in transition.")
+		log_trace("Playing teleport_in transition.")
 		await tp_layer.teleport_in()
 
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
 	if promise:
-		NetLog.debug("Resolving teleport promise for peer %d" % peer_id)
+		log_debug("Resolving teleport promise for peer %d" % peer_id)
 		promise.completed.emit()
 		bucket.pending.erase(peer_id)
 
 
 ## Registers the entity with the specified lobby manager and spawns it into the active scene level.
 func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
-	NetLog.trace("TPComponent: spawn called.")
+	log_trace("TPComponent: spawn called.")
 	if current_scene_path.is_empty():
-		NetLog.error("TPComponent: Does not have a scene to tp into.")
+		log_error("TPComponent: Does not have a scene to tp into.")
 		return
 
 	var lobby: Lobby = lobby_mgr.active_lobbies.get(current_scene_name)
 	if lobby:
-		NetLog.info("Spawning player into lobby %s" % current_scene_name)
+		log_info("Spawning player into lobby %s" % current_scene_name)
 		lobby.synchronizer.track_player(owner)
 		lobby.level.add_child(owner)
 		owner.owner = lobby.level
