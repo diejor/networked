@@ -1,6 +1,6 @@
 ## Low-level in-process [MultiplayerPeerExtension] used by [LocalLoopbackSession].
 ##
-## All packet routing is done via direct memory references — no real sockets are created.
+## All packet routing is done via direct memory references, no real sockets are created.
 ## Peer IDs, connection status, and packet queues mirror the real [ENetMultiplayerPeer] API.
 class_name LocalMultiplayerPeer
 extends MultiplayerPeerExtension

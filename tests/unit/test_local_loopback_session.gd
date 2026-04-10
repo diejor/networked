@@ -7,11 +7,6 @@ var session: LocalLoopbackSession
 var _silent_log := NetLogSettings.new()
 
 
-func before():
-	_silent_log.global_level = NetLog.Level.NONE
-	NetLog.push_settings(_silent_log)
-
-
 func after():
 	NetLog.pop_settings()
 

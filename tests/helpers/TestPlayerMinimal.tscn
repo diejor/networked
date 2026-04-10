@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bpnpmprpg6p6b"]
 
-[ext_resource type="PackedScene" uid="uid://8dmbjqnbp0rn" path="res://addons/networked/components/client/ClientComponent.tscn" id="1_client"]
+[ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_6f1h7"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath("ClientComponent:username")
@@ -9,9 +9,10 @@ properties/0/replication_mode = 0
 
 [node name="TestPlayerMinimal" type="Node2D" unique_id=1890415094]
 
-[node name="ClientComponent" parent="." unique_id=468297197 instance=ExtResource("1_client")]
+[node name="ClientComponent" type="Node" parent="." unique_id=1744312890]
+unique_name_in_owner = true
+script = ExtResource("1_6f1h7")
+metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1398009418]
 replication_config = SubResource("SceneReplicationConfig_1")
-
-[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

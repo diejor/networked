@@ -104,7 +104,7 @@ func test_config_spawn_properties_skips_spawn_sync() -> void:
 	client.add_child(spawn_sync)
 	spawn_sync.owner = root
 
-	# No other syncs — result should be empty since spawn_sync is excluded
+	# No other syncs, result should be empty since spawn_sync is excluded
 	var result := client.config_spawn_properties(client)
 	assert_that(result.has_property(NodePath(":visible"))).is_false()
 

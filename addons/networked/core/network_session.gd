@@ -83,6 +83,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 func host() -> Error:
 	NetLog.trace("NetworkSession: host called.")
 	client.is_server = true
+	client.name = "Server"
 	var err: Error = client.host()
 	if err != OK:
 		NetLog.error("Failed to host server: %s" % error_string(err))
@@ -158,7 +159,7 @@ func _host_server() -> String:
 	var server_err := server.host()
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
-	assert(server_err == OK or in_use, "Dedicated server failed to start: %s" % error_string(server_err))
+	assert(server_err == OK or in_use, "Server failed to start: %s" % error_string(server_err))
 	
 	if in_use:
 		NetLog.info("Server address already in use, using localhost.")

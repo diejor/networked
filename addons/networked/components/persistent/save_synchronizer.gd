@@ -9,11 +9,9 @@ extends MultiplayerSynchronizer
 ## Emitted when any tracked property changes value (coalesced per-frame by [method save_once]).
 signal state_changed
 
-var save_component: SaveComponent:
-	get: return get_parent() as SaveComponent
+var save_component: SaveComponent
 
-var save_container: SaveContainer:
-	get: return save_component.save_container
+var save_container: SaveContainer
 
 var scene_owner: Node:
 	get: return save_component.owner
@@ -22,6 +20,21 @@ var _property_paths: Dictionary[StringName, NodePath] = {}
 var _initialized: bool = false
 var _state_changed: bool = false
 
+func _init(scomponent: SaveComponent) -> void:
+	save_component = scomponent
+	scomponent.save_container.resource_local_to_scene = true
+	save_container = scomponent.save_container
+	
+	state_changed.connect(scomponent.on_state_changed)
+	
+	set_multiplayer_authority(scomponent.get_multiplayer_authority())
+	
+	delta_interval = 5.0
+	replication_interval = 5.0
+	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
+	public_visibility = false
+	name = "SaveSynchronizer"
+	unique_name_in_owner = true
 
 func _ready() -> void:
 	if not _initialized:

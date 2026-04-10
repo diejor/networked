@@ -42,6 +42,9 @@ enum Mode {
 ## The maximum number of extra ticks the interpolator can dilate beyond its floor.
 @export var max_extra_dilation: float = 4.0
 
+## If greater than [code]0[/code], the interpolator will log its internal state every N frames.
+@export var trace_interval: int = 30
+
 #endregion
 
 
@@ -58,7 +61,52 @@ var starvation_ticks: int = 0
 
 #region ── Public API ──────────────────────────────────────────────────────────
 
-## Clears all history buffers and resets internal state.
+## Instantly snaps [param property] to [param value], bypassing interpolation.
+## [codeblock]
+## # Snap a base property
+## interpolator.snap_property(&"position", Vector2(200, 100))
+## 
+## # Snap a nested child property (must match the exact key in property_modes)
+## interpolator.snap_property(&"Sprite2D:position", Vector2.ZERO)
+## [/codeblock]
+func snap_property(property: StringName, value: Variant) -> void:
+	for state in _states:
+		if state.name == property:
+			state.target_obj.set(state.target_prop, value)
+			state.history.clear()
+			state.last_written = value
+			state.pending_snapshot = value
+			state.last_recorded = value
+			state._has_recorded = false
+			state.cached_prev_tick = -1
+			return
+
+
+## Instantly accepts the target node's current physical state as the absolute truth.
+## [codeblock]
+## # 1. Update the node's properties manually
+## player.position = spawn_point
+## player.rotation = spawn_rotation
+## 
+## # 2. Tell the interpolator to anchor to this new reality
+## interpolator.teleport()
+## [/codeblock]
+func teleport() -> void:
+	display_lag = 0.0
+	starvation_ticks = 0
+	
+	for state in _states:
+		state.history.clear()
+		var current = state.target_obj.get(state.target_prop)
+		state.last_written = current
+		state.pending_snapshot = current
+		state.last_recorded = current
+		state._has_recorded = false
+		state.cached_prev_tick = -1
+		state.is_sleeping = false
+
+
+## Clears all history buffers and resets internal state to match the target's current values.
 func reset() -> void:
 	display_lag = 0.0
 	starvation_ticks = 0
@@ -90,7 +138,6 @@ func disable_for(duration: float) -> SceneTreeTimer:
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
-const _TRACE_EVERY_N_FRAMES := 30
 const _CATCHUP_SPEED := 1.1
 const _DILATION_STRENGTH := 0.95
 const _STARVATION_GRACE_FRAMES := 3
@@ -139,9 +186,9 @@ func _exit_tree() -> void:
 		_peer_batcher.unregister(self)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _peer_batcher:
-		_peer_batcher.update_all(get_process_delta_time())
+		_peer_batcher.update_all(delta)
 
 #endregion
 
@@ -149,11 +196,19 @@ func _process(_delta: float) -> void:
 #region ── Internal Logic ──────────────────────────────────────────────────────
 
 func _update_instance(global_dt: int, global_factor: float, frame_ticks: float, smooth_weight: float) -> void:
+	if _target.is_multiplayer_authority():
+		return
+	
 	for state in _states:
 		state.update_snapshot()
 	
+	var should_trace := false
+	if trace_interval > 0:
+		_trace_frame = (_trace_frame + 1) % trace_interval
+		should_trace = _trace_frame == 0
+
 	if enable_smart_dilation:
-		_perform_dilation(global_dt, frame_ticks)
+		_perform_dilation(global_dt, frame_ticks, should_trace)
 	else:
 		display_lag = 0.0
 
@@ -161,24 +216,32 @@ func _update_instance(global_dt: int, global_factor: float, frame_ticks: float, 
 	var dt := int(floor(effective_time))
 	var factor := effective_time - float(dt)
 
-	_trace_frame = (_trace_frame + 1) % _TRACE_EVERY_N_FRAMES
-	var should_trace := _trace_frame == 0
-
 	for state in _states:
 		state.apply(dt, factor, max_lerp_distance, should_trace, display_lag, smooth_weight)
 
 
-func _perform_dilation(global_dt: int, frame_ticks: float) -> void:
+func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 	var effective_dt := int(floor(float(global_dt) - display_lag))
 	var is_starving := false
+	var debug_newest := -1
+	var debug_window := 0
 
 	for state in _states:
 		if not state.history.has_tick_after(effective_dt):
 			var newest := state.history.newest_tick()
-			if newest != -1 and effective_dt - newest < _expected_interval_ticks:
+			debug_newest = newest
+			
+			var max_starvation_window := _expected_interval_ticks + _STARVATION_GRACE_FRAMES
+			debug_window = max_starvation_window
+			if newest != -1 and (effective_dt - newest) <= max_starvation_window:
 				is_starving = true
 				break
-
+	
+	if trace:
+		log_trace("[Dilation] eff_dt: %d | newest: %d | gap: %d | window: %d | starving: %s | ticks: %d | lag: %.2f" % [
+			effective_dt, debug_newest, (effective_dt - debug_newest), debug_window, str(is_starving), starvation_ticks, display_lag
+		])
+	
 	var current_floor := _calculate_min_lag()
 	if is_starving:
 		starvation_ticks += 1
@@ -213,6 +276,7 @@ func _refresh_property_states() -> void:
 			state.last_written = initial_val
 			state.pending_snapshot = initial_val
 			state.last_recorded = initial_val
+			state._has_recorded = false
 			_states.append(state)
 
 
@@ -309,7 +373,7 @@ class _Batcher extends RefCounted:
 
 	func update_all(delta: float) -> void:
 		var frame := Engine.get_frames_drawn()
-		if frame == _last_update_frame: return
+		if delta > 0.0 and frame == _last_update_frame: return
 		_last_update_frame = frame
 		
 		if not clock: return
@@ -340,6 +404,7 @@ class _PropertyState:
 	
 	var cached_prev_tick: int = -1
 	var is_sleeping: bool = false
+	var _has_recorded: bool = false
 	var _search_results := PackedInt32Array([-1, -1])
 
 	func reset() -> void:
@@ -347,6 +412,7 @@ class _PropertyState:
 		last_written = current
 		pending_snapshot = current
 		last_recorded = current
+		_has_recorded = false
 		cached_prev_tick = -1
 		is_sleeping = false
 
@@ -357,13 +423,15 @@ class _PropertyState:
 			is_sleeping = false
 
 	func record_tick(tick: int) -> void:
-		if pending_snapshot != last_recorded:
+		if not _has_recorded or pending_snapshot != last_recorded:
 			history.record(tick, pending_snapshot)
 			last_recorded = pending_snapshot
+			_has_recorded = true
 			is_sleeping = false
 
 	func apply(dt: int, factor: float, snap_dist: float, trace: bool, lag: float, weight: float) -> void:
-		if is_sleeping: return
+		if is_sleeping:
+			return
 		
 		history.find_bracketing_ticks(dt, cached_prev_tick, _search_results)
 		var prev_tick := _search_results[0]
@@ -401,7 +469,7 @@ class _PropertyState:
 		last_written = result
 		
 		if trace:
-			interpolator.log_trace("Interp %s: dt=%d lag=%.2f val=%s" % [name, dt, lag, result])
+			interpolator.log_trace("Interp %s: dt=%d lag=%.2f val=%s", [name, dt, lag, result])
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
 		if typeof(v1) != typeof(v2): return true

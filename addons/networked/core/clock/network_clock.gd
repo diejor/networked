@@ -160,7 +160,9 @@ var is_stable: bool:
 ## Locates the [NetworkClock] registered on the node's multiplayer API.
 static func for_node(node: Node) -> NetworkClock:
 	var api := node.multiplayer as SceneMultiplayer
-	return api.get_meta(&"_network_clock", null) if api else null
+	if api and api.has_meta(&"_network_clock"):
+		return api.get_meta(&"_network_clock")
+	return null
 
 #endregion
 

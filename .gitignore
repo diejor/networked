@@ -4,5 +4,14 @@
 /reports
 
 addons/gdUnit4/GdUnitRunner.cfg
+
 tmp_saves
 tmp_save
+saves
+save
+
+# Ignore temporary files starting with a tilde (like your ~libwebrtc...dll)
+~*
+
+# Optional: Ignore backup/temp files ending with a tilde (common in many editors)
+*~

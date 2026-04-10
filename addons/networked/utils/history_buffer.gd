@@ -84,6 +84,9 @@ func oldest_tick() -> int:
 func newest_tick() -> int:
 	return _ticks[(_head + _count - 1) & _mask] if _count > 0 else -1
 
+func clear() -> void:
+	_count = 0
+	_head = 0
 
 func size() -> int:
 	return _count

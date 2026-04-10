@@ -33,7 +33,12 @@ class Bucket extends RefCounted:
 @export var save_container: SaveContainer
 
 var save_synchronizer: SaveSynchronizer:
-	get: return %SaveSynchronizer
+	get: 
+		if not save_synchronizer:
+			save_synchronizer = SaveSynchronizer.new(self)
+			add_child(save_synchronizer)
+			save_synchronizer.owner = self
+		return save_synchronizer
 
 
 func _ready() -> void:

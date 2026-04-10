@@ -10,6 +10,7 @@
 class_name NetComponent
 extends Node
 
+var _cached_module_path: String = ""
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
 ## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
@@ -59,6 +60,13 @@ func get_bucket(bucket_type) -> RefCounted:
 
 #region ── Logging Proxy ──────────────────────────────────────────────────────
 
+## Lazily resolves and caches the LOGL module path for this script.
+func _get_cached_module_path() -> String:
+	if _cached_module_path.is_empty():
+		_cached_module_path = NetLog._module_from_path(get_script().resource_path)
+	
+	return _cached_module_path
+
 ## Logs a [code]TRACE[/code] message with rich multiplayer context.
 func log_trace(msg: Variant, args: Array = []) -> void:
 	_log_proxy(NetLog.Level.TRACE, msg, args)
@@ -85,12 +93,21 @@ func log_error(msg: Variant, args: Array = []) -> void:
 
 
 func _log_proxy(level: int, msg: Variant, args: Array) -> void:
+	if not NetLog.is_level_active_for_module(level, _get_cached_module_path()):
+		return
+
+	var resolved_msg: String
+	if typeof(msg) == TYPE_CALLABLE:
+		resolved_msg = str(msg.call())
+	else:
+		resolved_msg = str(msg)
+
 	var tree := get_multiplayer_tree()
 	var has_mp := is_inside_tree() and multiplayer
 	
 	var full_msg: String
 	if not tree and not has_mp:
-		full_msg = str(msg)
+		full_msg = resolved_msg
 	else:
 		var tree_id := "MT:" + tree.name if tree else "null"
 		var side_label := "?"
@@ -108,7 +125,8 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 		var context := "[%s*]" % side_label if is_local_auth else "[%s:%s]" % [side_label, auth_label]
 		var display_name := owner.name.split("|")[0] if owner else ""
 		var player_label := ("{%s}" % display_name) if not display_name.is_empty() else ""
-		full_msg = "%s[%s]%s %s" % [context, tree_id, player_label, str(msg)]
+		
+		full_msg = "%s[%s]%s %s" % [context, tree_id, player_label, resolved_msg]
 	
 	match level:
 		NetLog.Level.TRACE: NetLog.trace(full_msg, args)

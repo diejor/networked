@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://bmwo8mmp1gejs"]
 
-[ext_resource type="PackedScene" uid="uid://8dmbjqnbp0rn" path="res://addons/networked/components/client/ClientComponent.tscn" id="1_client"]
-[ext_resource type="PackedScene" uid="uid://b25ufiuigcd5" path="res://addons/networked/components/persistent/SaveComponent.tscn" id="2_save"]
+[ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_v07vo"]
+[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_vpj8e"]
 [ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_v07vo"]
 
-[sub_resource type="Resource" id="Resource_vpj8e"]
+[sub_resource type="Resource" id="Resource_q1h0n"]
 resource_local_to_scene = true
 script = ExtResource("3_v07vo")
 metadata/_custom_type_script = "uid://d1mnum02gn0c0"
@@ -19,11 +19,16 @@ properties/1/replication_mode = 1
 
 [node name="TestPlayerWithSave" type="Node2D" unique_id=659081648]
 
-[node name="ClientComponent" parent="." unique_id=1432269310 instance=ExtResource("1_client")]
+[node name="ClientComponent" type="Node" parent="." unique_id=202690495]
+unique_name_in_owner = true
+script = ExtResource("1_v07vo")
+metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
-[node name="SaveComponent" parent="." unique_id=716418857 instance=ExtResource("2_save")]
+[node name="SaveComponent" type="Node" parent="." unique_id=716418857 groups=["persistent"]]
+unique_name_in_owner = true
+script = ExtResource("2_vpj8e")
 save_dir = "res://tests/tmp_saves"
-save_container = SubResource("Resource_vpj8e")
+save_container = SubResource("Resource_q1h0n")
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1837042624]
 replication_config = SubResource("SceneReplicationConfig_1")

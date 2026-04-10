@@ -10,14 +10,7 @@ var _clients: Array[MultiplayerTree] = []
 var _lobby_manager_scene: PackedScene
 
 
-var _silent_log := NetLogSettings.new()
-
 const DEFAULT_TIMEOUT := 1.0
-
-
-func _init() -> void:
-	_silent_log.global_level = NetLog.Level.NONE
-	NetLog.push_settings(_silent_log)
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +107,10 @@ func get_all_clients() -> Array[MultiplayerTree]:
 	return _clients
 
 
+func get_session() -> LocalLoopbackSession:
+	return _session
+
+
 ## Returns a lobby from the server's lobby manager by name,
 ## or the first lobby if name is empty.
 func get_server_lobby(lobby_name: StringName = "") -> Lobby:
@@ -194,7 +191,7 @@ func wait_for_client_lobby_spawn(client: MultiplayerTree, lobby_name: StringName
 	while not client.lobby_manager.active_lobbies.has(lobby_name):
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
-			assert(false, "Timed out waiting for lobby '%s' to spawn on client." % lobby_name)
+			assert(false, "Timed out waiting for lobby '%s' to spawn on client." % [lobby_name])
 	return client.lobby_manager.active_lobbies.get(lobby_name)
 
 

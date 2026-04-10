@@ -24,6 +24,7 @@ var _max_jitter: float = 0.05
 var _max_offset: float = 10.0
 
 func _ready() -> void:
+	DebugFeature.free_if_debug(self)
 	if not clock:
 		clock = NetworkClock.for_node(self)
 	custom_minimum_size = Vector2(200, 100)
