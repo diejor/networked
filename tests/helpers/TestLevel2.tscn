@@ -4,7 +4,7 @@
 
 [node name="TestLevel2" type="Node2D" unique_id=622297586]
 
-[node name="TestPlayerFull" parent="." unique_id=824845852 instance=ExtResource("1_player")]
+[node name="TestPlayerFull" parent="." unique_id=754678470 instance=ExtResource("1_player")]
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=719426298]
 _spawnable_scenes = PackedStringArray("uid://c5tj2gqmrl0mg", "uid://bpnpmprpg6p6b")

@@ -40,6 +40,10 @@ var save_synchronizer: SaveSynchronizer:
 			save_synchronizer.owner = self
 		return save_synchronizer
 
+func _init() -> void:
+	## TODO: move name conventions to NetComponent
+	name = "SpawnComponent"
+	unique_name_in_owner = true
 
 func _ready() -> void:
 	assert(save_container)

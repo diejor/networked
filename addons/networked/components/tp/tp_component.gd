@@ -2,11 +2,13 @@
 class_name TPComponent
 extends NetComponent
 
-## Manages cross-lobby teleportation for a player entity in a multiplayer session.
+## Manages cross-lobby teleportation for a player in a multiplayer session.
 ##
-## Coordinates a multi-step handshake: the client requests a teleport via [method teleport],
-## the server reparents the player to the destination lobby, and then confirms with [method _rpc_teleport_committed].
-## Requires a [TPLayerAPI] in the scene for visual transition animations.
+## Coordinates a multi-step handshake: the client requests a teleport via 
+## [method teleport], the server reparents the player to the destination lobby, 
+## and then confirms with [signal TeleportPromise.completed]. Requires a 
+## [TPLayerAPI] in the scene for visual transition animations.
+## 
 ## [codeblock]
 ## # From a client-owned node:
 ## var tp := %TPComponent.teleport(target_node_path)
@@ -14,27 +16,30 @@ extends NetComponent
 ## print("Teleport finished!")
 ## [/codeblock]
 
-## Internal signal emitted when the server confirms reparent. Do not connect from outside scripts —
-## use the [TeleportPromise] returned by [method teleport] instead.
 signal _teleport_committed
+
 ## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
+##
+## TODO: move to NetComponent
 signal client_synchronized
 
-## The default scene path assigned when the component enters the tree if no scene is currently set.
+## The default scene path assigned when the component enters the tree if no scene 
+## is currently set.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
 var starting_scene_path: SceneNodePath
 
-## The UID or file path of the scene the entity currently resides in.
+## The UID or file path of the scene the player currently resides in.
 ##
 ## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
-## Replicated on change so clients can track which lobby their entity is in.
+## Replicated on change so clients can track which lobby their player  is in.
 @export_custom(PROPERTY_HINT_NONE, "replicated:on_change")
 var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
 
-## The root node name of the [member current_scene_path], used to look up the active lobby.
+## The root node name of the [member current_scene_path], used to look up the 
+## active lobby.
 var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
@@ -52,9 +57,15 @@ var _tp_mutex := AsyncMutex.new()
 class Bucket extends RefCounted:
 	var pending: Dictionary[int, TeleportPromise] = {}
 
-
 func _get_bucket() -> Bucket:
 	return get_bucket(Bucket) as Bucket
+
+class TeleportPromise extends RefCounted:
+	## Returned by [method TPComponent.teleport] to observe the completion of a teleport.
+	##
+	## Survives the client node's lifetime — safe to await even when the client player
+	## is destroyed and respawned during the teleport handshake.
+	signal completed
 
 
 func _get_configuration_warnings() -> PackedStringArray:
@@ -66,6 +77,8 @@ func _validate_editor() -> void:
 
 
 func _init() -> void:
+	## TODO: move name conventions to NetComponent
+	name = "TPComponent"
 	unique_name_in_owner = true
 
 
@@ -93,22 +106,23 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 
 	var path: String = ResourceUID.ensure_path(path_or_uid)
 	if not ResourceLoader.exists(path):
-		push_error("TPComponent: Unable to find scene at path %s." % path)
+		push_error("Unable to find scene at path %s." % path)
 		return ""
 
 	var scene: PackedScene = load(path)
 
 	if not is_instance_valid(scene):
-		push_error("TPComponent: Unable to find scene at path %s." % path)
+		push_error("Unable to find scene at path %s." % path)
 		return ""
 
 	var scene_state: SceneState = scene.get_state()
 	return scene_state.get_node_name(0)
 
 
-## Initiates a teleport sequence from the client. Returns a [TeleportPromise] that resolves
-## once the server confirms the reparent and the visual transition completes.
-## Safe to await even if this node is destroyed and respawned during the handshake.
+## Initiates a teleport sequence from the client. Returns a [TeleportPromise] 
+##  that resolves once the server confirms the reparent and the visual transition 
+## completes. Safe to [operator await] even if this node is destroyed and respawned during 
+## the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	log_info("Initiating teleport to %s" % target_tp.scene_path)
 	var promise := TeleportPromise.new()

@@ -89,4 +89,3 @@ func test_disconnect_client_removes_visibility() -> void:
 	lobby.synchronizer.disconnect_client(client_id)
 	await wait_until(func(): return not lobby.synchronizer.scene_visibility_filter(client_id))
 	assert_that(lobby.synchronizer.scene_visibility_filter(client_id)).is_false()
-

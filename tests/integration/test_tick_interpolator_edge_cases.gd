@@ -14,7 +14,7 @@ func before_test() -> void:
 	await _harness.setup(_runner)
 	_env = await _harness.create_environment(&"EdgeCasePlayer")
 	
-	_harness.set_time_factor(3.0)
+	_harness.set_time_factor(2.0)
 
 func after_test() -> void:
 	if is_instance_valid(_harness):

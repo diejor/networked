@@ -49,6 +49,7 @@ func update_client(node: Node) -> void:
 
 ## Registers a peer as connected to this lobby and updates visibility states.
 func connect_client(peer_id: int) -> void:
+	NetLog.debug("client `peer_id=%s` connected to lobby.", [peer_id])
 	set_visibility_for(peer_id, true)
 	connected_clients[peer_id] = true
 	update_clients()
@@ -59,6 +60,7 @@ func connect_client(peer_id: int) -> void:
 ## The deferred call order is intentional — see
 ## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_client(peer_id: int) -> void:
+	NetLog.debug("client `peer_id=%s` disconnected from lobby." % [peer_id])
 	connected_clients.erase(peer_id)
 	update_clients()
 	
@@ -68,22 +70,35 @@ func disconnect_client(peer_id: int) -> void:
 
 
 func _on_spawned(node: Node) -> void:
+	NetLog.debug("%s spawned." % node.name)
+	
 	tracked_nodes[node] = true
 	
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.add_visibility_filter(scene_visibility_filter)
 	
-	connect_client(node.get_multiplayer_authority())
+	var authority := node.get_multiplayer_authority()
+	if ClientComponent.parse_authority(node.name) != authority:
+		NetLog.error("`%s` authority wasn't properly configured on spawn. \
+Player won't replicate to the correct peer." % node.name)
+	
+	connect_client(authority)
 	spawned.emit(node)
 
 
 func _on_despawned(node: Node) -> void:
+	NetLog.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
 	
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
 	
-	disconnect_client(node.get_multiplayer_authority())
+	var authority := node.get_multiplayer_authority()
+	if ClientComponent.parse_authority(node.name) != authority:
+		NetLog.error("`%s` authority wasn't properly configured on spawn. \
+Player won't despawn from the correct peer." % node.name)
+	disconnect_client(authority)
+	
 	despawned.emit(node)
 
 

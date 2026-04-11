@@ -11,6 +11,7 @@ extends SaveContainer
 @export var data: Dictionary[StringName, Variant] = {}
 
 func _init() -> void:
+	resource_local_to_scene = true
 	if data == null:
 		data = {}
 

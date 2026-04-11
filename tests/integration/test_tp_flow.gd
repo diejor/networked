@@ -34,6 +34,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	clean_temp_dir()
 	if is_instance_valid(harness):
 		harness.teardown()
 		await get_tree().process_frame

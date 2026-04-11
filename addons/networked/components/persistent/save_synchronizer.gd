@@ -11,7 +11,8 @@ signal state_changed
 
 var save_component: SaveComponent
 
-var save_container: SaveContainer
+var save_container: SaveContainer:
+	get: return save_component.save_container
 
 var scene_owner: Node:
 	get: return save_component.owner
@@ -22,8 +23,6 @@ var _state_changed: bool = false
 
 func _init(scomponent: SaveComponent) -> void:
 	save_component = scomponent
-	scomponent.save_container.resource_local_to_scene = true
-	save_container = scomponent.save_container
 	
 	state_changed.connect(scomponent.on_state_changed)
 	

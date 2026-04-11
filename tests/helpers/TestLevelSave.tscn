@@ -1,10 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://bksjlpquqkkni"]
+[gd_scene format=3 uid="uid://bksjlpquqkkni"]
 
 [ext_resource type="PackedScene" uid="uid://bmwo8mmp1gejs" path="res://tests/helpers/TestPlayerWithSave.tscn" id="1_player"]
 
 [node name="TestLevelSave" type="Node2D" unique_id=774614429]
 
-[node name="TestPlayerWithSave" parent="." unique_id=1066926260 instance=ExtResource("1_player")]
+[node name="TestPlayerWithSave" parent="." unique_id=659081648 instance=ExtResource("1_player")]
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=1391119834]
 _spawnable_scenes = PackedStringArray("uid://bpnpmprpg6p6b", "uid://bmwo8mmp1gejs", "uid://c5tj2gqmrl0mg")

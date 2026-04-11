@@ -46,3 +46,5 @@ starting_scene_path = SubResource("Resource_7io2v")
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=639682812]
 replication_config = SubResource("SceneReplicationConfig_1")
+
+[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
