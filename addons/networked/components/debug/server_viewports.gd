@@ -6,7 +6,9 @@ extends CanvasLayer
 
 @onready var lobbies_tab: TabBar = %LobbiesTab
 
-var lobbies: Dictionary[StringName, World2D]
+## Stores world references per lobby name.
+## Each value is a Dictionary with keys [code]world_2d[/code] and [code]world_3d[/code].
+var lobbies: Dictionary[StringName, Dictionary]
 
 var client_lobbies: Array:
 	get:
@@ -27,11 +29,11 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	add_lobby("Client", get_tree().root.world_2d)
+	add_lobby("Client", get_tree().root.world_2d, get_tree().root.world_3d)
 
 
-func add_lobby(lobby_name: StringName, lobby: World2D) -> void:
-	lobbies[lobby_name] = lobby
+func add_lobby(lobby_name: StringName, world_2d: World2D, world_3d: World3D) -> void:
+	lobbies[lobby_name] = {world_2d = world_2d, world_3d = world_3d}
 	update_tab()
 
 func remove_lobby(lobby_name: StringName) -> void:
@@ -49,7 +51,7 @@ func _on_node_entered(node: Node) -> void:
 	
 	var viewport: SubViewport = node as SubViewport
 	if not viewport.name in lobbies:
-		add_lobby(viewport.name, viewport.world_2d)
+		add_lobby(viewport.name, viewport.world_2d, viewport.world_3d)
 
 
 func _on_node_exited(node: Node) -> void:
@@ -69,10 +71,18 @@ func _on_tab_changed(tab: int) -> void:
 	if not lobby_name == "Client":
 		for child in client_lobbies:
 			child.process_mode = Node.PROCESS_MODE_DISABLED
-			child.visible = false
+			var lobby := child as Lobby
+			if lobby and is_instance_valid(lobby.level):
+				lobby.level.set("visible", false)
 	else:
 		for child in client_lobbies:
 			child.process_mode = Node.PROCESS_MODE_INHERIT
-			child.visible = true
-	get_tree().root.world_2d = lobbies[lobby_name]
+			var lobby := child as Lobby
+			if lobby and is_instance_valid(lobby.level):
+				lobby.level.set("visible", true)
+
+	var entry: Dictionary = lobbies[lobby_name]
+	get_tree().root.world_2d = entry.world_2d
+	if entry.world_3d != null:
+		get_tree().root.world_3d = entry.world_3d
 	

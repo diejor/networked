@@ -44,10 +44,6 @@ var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
 
-## Strongly typed reference to the owner as a [Node2D].
-var owner2d: Node2D:
-	get: return owner as Node2D
-
 var _tp_mutex := AsyncMutex.new()
 
 
@@ -176,7 +172,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 		log_error("TPComponent: Source lobby '%s' not found." % from_scene_name)
 		return
 		
-	var player: Node2D = from_lobby.level.get_node(username)
+	var player: Node = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 
 	log_trace("Waiting for client synchronization...")
@@ -217,25 +213,25 @@ func teleported(scene: Node, _tp_path: String) -> void:
 	log_trace("TPComponent: teleported callback on server.")
 	var teleport_success := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `teleported` was called when `is_inside_tree = false`.")
-		var snap_pos := Vector2.ZERO
+		var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
 		if scene:
-			var tp_node: Marker2D = scene.get_node_or_null(_tp_path)
+			var tp_node: Node = scene.get_node_or_null(_tp_path)
 			if tp_node:
-				snap_pos = tp_node.global_position
-		
+				snap_pos = tp_node.get("global_position")
+
 		log_debug("Teleport server-side complete. Snapping to %s" % str(snap_pos))
-		owner2d.global_position = snap_pos
+		owner.set("global_position", snap_pos)
 		_rpc_teleport_committed.rpc_id(owner.get_multiplayer_authority(), snap_pos)
 
 	teleport_success.call_deferred()
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_teleport_committed(snap_pos: Vector2) -> void:
+func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	log_info("Teleport committed. Snapping local player to %s" % str(snap_pos))
 	_teleport_committed.emit()
 	_tp_mutex.unlock()
-	owner2d.global_position = snap_pos
+	owner.set("global_position", snap_pos)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
