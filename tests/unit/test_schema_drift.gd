@@ -79,11 +79,11 @@ func test_diff_record_detects_unknown_columns() -> void:
 
 func test_diff_record_emits_schema_mismatch_signal() -> void:
 	var db := _make_db(NetworkedDatabase.SchemaMismatchPolicy.FAIL)
-	var signal_fired := false
-	db.schema_mismatch.connect(func(_t, _id, _m, _u): signal_fired = true)
+	var signal_fired := [false]
+	db.schema_mismatch.connect(func(_t, _id, _m, _u): signal_fired[0] = true)
 
 	db.diff_record(&"rocks", &"r1", {&"gold": 5})
-	assert_that(signal_fired).is_true()
+	assert_that(signal_fired[0]).is_true()
 
 
 # ---------------------------------------------------------------------------

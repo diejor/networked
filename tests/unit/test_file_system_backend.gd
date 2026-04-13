@@ -16,6 +16,10 @@ func before_test() -> void:
 	backend._initialize({&"rocks": [&"health"], &"players": [&"position"]})
 
 
+func after_test() -> void:
+	clean_temp_dir()
+
+
 # ---------------------------------------------------------------------------
 # _initialize
 # ---------------------------------------------------------------------------

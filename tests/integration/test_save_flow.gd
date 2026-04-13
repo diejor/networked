@@ -49,6 +49,9 @@ func _spawn_save_player() -> Node2D:
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.database = db
 	save_comp.table_name = &"players"
+	# Re-run instantiate so the injected database gets the schema registered.
+	save_comp.instantiate()
+	await get_tree().process_frame  # let deferred _initialize_backend run
 
 	return player
 

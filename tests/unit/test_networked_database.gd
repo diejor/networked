@@ -83,17 +83,17 @@ func test_register_schema_stores_columns() -> void:
 
 func test_register_schema_emits_signal() -> void:
 	var db := _make_db()
-	var emitted := false
-	db.schema_registered.connect(func(_t, _c): emitted = true)
+	var emitted := [false]
+	db.schema_registered.connect(func(_t, _c): emitted[0] = true)
 	db.register_schema(&"rocks", [&"health"])
-	assert_that(emitted).is_true()
+	assert_that(emitted[0]).is_true()
 
 
 func test_register_schema_merges_columns_on_second_call() -> void:
 	var db := _make_db()
 	db.register_schema(&"rocks", [&"health"])
 	var captured_columns: Array[StringName] = []
-	db.schema_registered.connect(func(_t, cols: Array[StringName]): captured_columns = cols)
+	db.schema_registered.connect(func(_t, cols: Array[StringName]): captured_columns.assign(cols))
 	db.register_schema(&"rocks", [&"position"])
 	assert_that(captured_columns.has(&"health")).is_true()
 	assert_that(captured_columns.has(&"position")).is_true()
@@ -160,12 +160,12 @@ func test_transaction_emits_committed_signal_on_success() -> void:
 	db.register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var committed := false
-	db.transaction_committed.connect(func(_tc, _rc): committed = true)
+	var committed := [false]
+	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
 	db.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
 	)
-	assert_that(committed).is_true()
+	assert_that(committed[0]).is_true()
 
 
 func test_transaction_does_not_emit_committed_on_failure() -> void:
@@ -174,12 +174,12 @@ func test_transaction_does_not_emit_committed_on_failure() -> void:
 	db.register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var committed := false
-	db.transaction_committed.connect(func(_tc, _rc): committed = true)
+	var committed := [false]
+	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
 	db.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
 	)
-	assert_that(committed).is_false()
+	assert_that(committed[0]).is_false()
 
 
 # ---------------------------------------------------------------------------
@@ -208,10 +208,10 @@ func test_find_by_id_emits_loaded_signal_with_hit_true() -> void:
 		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
 	)
 
-	var hit_value: bool = false
-	db.record_loaded.connect(func(_t, _id, hit: bool): hit_value = hit)
+	var hit_value := [false]
+	db.record_loaded.connect(func(_t, _id, hit: bool): hit_value[0] = hit)
 	db.find_by_id(&"rocks", &"r1")
-	assert_that(hit_value).is_true()
+	assert_that(hit_value[0]).is_true()
 
 
 func test_find_by_id_emits_loaded_signal_with_hit_false_on_miss() -> void:
@@ -219,10 +219,10 @@ func test_find_by_id_emits_loaded_signal_with_hit_false_on_miss() -> void:
 	db.register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var hit_value: bool = true
-	db.record_loaded.connect(func(_t, _id, hit: bool): hit_value = hit)
+	var hit_value := [true]
+	db.record_loaded.connect(func(_t, _id, hit: bool): hit_value[0] = hit)
 	db.find_by_id(&"rocks", &"nonexistent")
-	assert_that(hit_value).is_false()
+	assert_that(hit_value[0]).is_false()
 
 
 # ---------------------------------------------------------------------------
@@ -271,13 +271,13 @@ func test_upsert_emits_record_upserted_signal() -> void:
 	db.register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var upserted_id: StringName = &""
-	db.record_upserted.connect(func(_t, id: StringName): upserted_id = id)
+	var upserted_id: Array[StringName] = [&""]
+	db.record_upserted.connect(func(_t, id: StringName): upserted_id[0] = id)
 
 	# record_upserted is emitted by callers (SaveComponent) not by the DB itself;
 	# emit it manually here to verify the signal wire-up works.
 	db.record_upserted.emit(&"rocks", &"r1")
-	assert_that(upserted_id).is_equal(&"r1")
+	assert_that(upserted_id[0]).is_equal(&"r1")
 
 
 func test_schema_mismatch_emits_signal_with_column_lists() -> void:
@@ -288,8 +288,8 @@ func test_schema_mismatch_emits_signal_with_column_lists() -> void:
 	var captured_unknown: Array = []
 	var captured_missing: Array = []
 	db.schema_mismatch.connect(func(_t, _id, missing: Array[StringName], unknown: Array[StringName]):
-		captured_unknown = unknown
-		captured_missing = missing
+		captured_unknown.assign(unknown)
+		captured_missing.assign(missing)
 	)
 
 	# 'gold' is unknown; 'health' is present so nothing is missing.

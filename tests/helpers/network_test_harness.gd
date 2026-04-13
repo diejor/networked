@@ -142,12 +142,19 @@ func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node
 		client_data.serialize()
 	)
 
-	await get_tree().process_frame
-
 	var lobby_name: StringName = spawner_path.get_scene_name()
 	var lobby := get_server_lobby(lobby_name)
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	return lobby.level.get_node_or_null("%s|%d" % [username, peer_id])
+	var player_name := "%s|%d" % [username, peer_id]
+
+	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
+	while lobby.level.get_node_or_null(player_name) == null:
+		await get_tree().process_frame
+		if timeout_timer.time_left <= 0:
+			assert(false, "Timed out waiting for player '%s' to spawn in lobby '%s'." % [player_name, lobby_name])
+			return null
+
+	return lobby.level.get_node_or_null(player_name)
 
 
 ## Spawns a player into a server lobby, bypassing the RPC chain.

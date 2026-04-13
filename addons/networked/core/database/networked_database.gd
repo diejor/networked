@@ -107,7 +107,7 @@ func _initialize_backend() -> void:
 ## - [code]unknown[/code] ([Array][StringName]): record columns not in the schema (triggers policy).
 ## - [code]ok[/code] ([bool]): [code]true[/code] when both arrays are empty.
 func diff_record(table: StringName, id: StringName, record: Dictionary) -> Dictionary:
-	var schema_cols: Array[StringName] = _schema.get(table, [])
+	var schema_cols: Array[StringName] = _schema.get(table, [] as Array[StringName])
 	var missing: Array[StringName] = []
 	var unknown: Array[StringName] = []
 
@@ -158,7 +158,7 @@ func apply_mismatch_policy(
 			return {}
 
 		SchemaMismatchPolicy.LOAD_PARTIAL:
-			var schema_cols: Array[StringName] = _schema.get(table, [])
+			var schema_cols: Array[StringName] = _schema.get(table, [] as Array[StringName])
 			var filtered: Dictionary = {}
 			for col in schema_cols:
 				if record.has(col):

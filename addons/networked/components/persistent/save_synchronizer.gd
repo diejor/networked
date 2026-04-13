@@ -199,7 +199,9 @@ func pull_from_scene() -> void:
 
 ## Pushes the loaded virtual container values into the actual live scene nodes.
 func push_to_scene() -> Error:
-	assert(_initialized, "Synchronizer not initialized.")
+	if not _initialized:
+		push_error("SaveSynchronizer: push_to_scene called before setup().")
+		return ERR_UNCONFIGURED
 	assert(save_container)
 
 	for property_name in save_container:

@@ -81,7 +81,6 @@ metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [node name="SaveComponent" type="Node" parent="." unique_id=1352524284]
 script = ExtResource("7_hp6x6")
-save_dir = "res://saves"
 save_container = SubResource("Resource_d6rpx")
 database = SubResource("Resource_jatw7")
 table_name = &"player"
