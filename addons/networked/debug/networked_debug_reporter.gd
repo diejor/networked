@@ -1,13 +1,10 @@
 ## Game-side debug telemetry reporter for the Networked debugger plugin.
 ##
-## One instance is owned by each [MultiplayerTree], added as a child during
-## [method MultiplayerTree._config_api]. Every outgoing message is tagged with
-## the parent tree's name so the editor can distinguish multiple coexisting
-## trees (e.g. [LocalLoopbackBackend] sessions).
+## This is a singleton (Autoload) node that collects telemetry from all active
+## [MultiplayerTree] instances in the process and forwards them to the editor.
 ##
 ## All operations are guarded by [method _should_report] — zero overhead in
 ## exported builds or headless/test runs.
-class_name NetworkedDebugReporter
 extends Node
 
 ## Slow-poll interval for component heartbeats and lobby snapshots.
@@ -17,119 +14,144 @@ const HEARTBEAT_INTERVAL := 0.5  # 2 Hz
 static var _reporting_enabled: bool = false
 static var _reporting_checked: bool = false
 
-# All active reporters across all MultiplayerTree instances.
-# Used to route incoming editor→game messages.
-static var _all_reporters: Array[NetworkedDebugReporter] = []
-
 # Tracks whether the EngineDebugger capture has been registered for this process.
-# Cannot use _all_reporters.is_empty() for this: reporters are removed in _exit_tree,
-# making the array empty again between tests, which would trigger a second registration
-# and a "Capture already registered" crash.
 static var _capture_registered: bool = false
 
-var _mt: MultiplayerTree
+var _trees: Array[MultiplayerTree] = []
 var _message_queue: Array = []
 var _flush_pending: bool = false
 var _heartbeat_timer: float = 0.0
 
-# NodePath → Array of {sync, callable} for demand-driven replication watch.
+# Tree Name -> NodePath -> Array of {sync, callable} for demand-driven replication watch.
 var _watched: Dictionary = {}
-
-
-func _init(mt: MultiplayerTree) -> void:
-	_mt = mt
 
 
 func _enter_tree() -> void:
 	if not _should_report():
 		return
 
-	# Register the global message capture exactly once, no matter how many trees exist.
+	# Register the global message capture exactly once.
 	if not _capture_registered:
 		_capture_registered = true
 		EngineDebugger.register_message_capture(
 			"networked",
 			func(message: String, data: Array) -> bool:
-				for r: NetworkedDebugReporter in _all_reporters:
-					r._on_editor_message(message, data)
+				_on_editor_message(message, data)
 				return true
 		)
 
-	_all_reporters.append(self)
-
-	_mt.peer_connected.connect(_on_peer_connected)
-	_mt.peer_disconnected.connect(_on_peer_disconnected)
-	_mt.configured.connect(_on_configured)
-
-	var backend_class := ""
-	if _mt.backend and _mt.backend.get_script():
-		backend_class = _mt.backend.get_script().get_global_name()
-
-	_queue("networked:session_registered", {
-		"tree_name": _mt.name,
-		"is_server": _mt.is_server,
-		"backend_class": backend_class,
-	})
-
 
 func _exit_tree() -> void:
-	_all_reporters.erase(self)
 	if not _should_report():
 		return
-	_queue("networked:session_unregistered", {"tree_name": _mt.name})
+	for mt in _trees:
+		_queue("networked:session_unregistered", {"tree_name": mt.name})
 	_flush_now()
 
 
 func _physics_process(delta: float) -> void:
-	if not _should_report():
+	if not _should_report() or _trees.is_empty():
 		return
+
 	_heartbeat_timer += delta
 	if _heartbeat_timer >= HEARTBEAT_INTERVAL:
 		_heartbeat_timer = 0.0
-		_send_lobby_snapshot()
-		_send_component_heartbeats()
+		for mt in _trees:
+			_send_lobby_snapshot(mt)
+			_send_component_heartbeats(mt)
+
+
+## Registers a [MultiplayerTree] for debug reporting.
+func register_tree(mt: MultiplayerTree) -> void:
+	if not _should_report():
+		return
+	if mt in _trees:
+		return
+
+	_trees.append(mt)
+
+	mt.peer_connected.connect(_on_peer_connected.bind(mt))
+	mt.peer_disconnected.connect(_on_peer_disconnected.bind(mt))
+	mt.configured.connect(_on_configured.bind(mt))
+
+	var backend_class := ""
+	if mt.backend and mt.backend.get_script():
+		backend_class = mt.backend.get_script().get_global_name()
+
+	_queue("networked:session_registered", {
+		"tree_name": mt.name,
+		"is_server": mt.is_server,
+		"backend_class": backend_class,
+	})
+
+
+## Unregisters a [MultiplayerTree] from debug reporting.
+func unregister_tree(mt: MultiplayerTree) -> void:
+	if mt not in _trees:
+		return
+
+	_trees.erase(mt)
+
+	if mt.peer_connected.is_connected(_on_peer_connected):
+		mt.peer_connected.disconnect(_on_peer_connected)
+	if mt.peer_disconnected.is_connected(_on_peer_disconnected):
+		mt.peer_disconnected.disconnect(_on_peer_disconnected)
+	if mt.configured.is_connected(_on_configured):
+		mt.configured.disconnect(_on_configured)
+
+	if mt.clock and mt.clock.pong_received.is_connected(_on_clock_pong):
+		mt.clock.pong_received.disconnect(_on_clock_pong)
+	if mt.lobby_manager:
+		if mt.lobby_manager.lobby_spawned.is_connected(_on_lobby_spawned):
+			mt.lobby_manager.lobby_spawned.disconnect(_on_lobby_spawned)
+		if mt.lobby_manager.lobby_despawned.is_connected(_on_lobby_despawned):
+			mt.lobby_manager.lobby_despawned.disconnect(_on_lobby_despawned)
+
+	_watched.erase(mt.name)
+	_queue("networked:session_unregistered", {"tree_name": mt.name})
+	_flush_now()
 
 
 # ─── Signal Handlers ──────────────────────────────────────────────────────────
 
-func _on_configured() -> void:
+func _on_configured(mt: MultiplayerTree) -> void:
 	if not _should_report():
 		return
-	if _mt.clock:
-		_mt.clock.pong_received.connect(_on_clock_pong)
-	if _mt.lobby_manager:
-		_mt.lobby_manager.lobby_spawned.connect(_on_lobby_spawned)
-		_mt.lobby_manager.lobby_despawned.connect(_on_lobby_despawned)
+	if mt.clock:
+		mt.clock.pong_received.connect(_on_clock_pong.bind(mt))
+	if mt.lobby_manager:
+		mt.lobby_manager.lobby_spawned.connect(_on_lobby_spawned.bind(mt))
+		mt.lobby_manager.lobby_despawned.connect(_on_lobby_despawned.bind(mt))
 
 
-func _on_clock_pong(data: Dictionary) -> void:
-	data["tree_name"] = _mt.name
+func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
+	data["tree_name"] = mt.name
 	_queue("networked:clock_sample", data)
 
 
-func _on_peer_connected(peer_id: int) -> void:
-	_queue("networked:peer_connected", {"tree_name": _mt.name, "peer_id": peer_id})
+func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
+	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
 
 
-func _on_peer_disconnected(peer_id: int) -> void:
-	_queue("networked:peer_disconnected", {"tree_name": _mt.name, "peer_id": peer_id})
+func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
+	_queue("networked:peer_disconnected", {"tree_name": mt.name, "peer_id": peer_id})
 
 
-func _on_lobby_spawned(lobby: Lobby) -> void:
+func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 		return
 	_queue("networked:lobby_event", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"event": "spawned",
 		"lobby_name": str(lobby.level.name),
 	})
 
 
-func _on_lobby_despawned(lobby: Lobby) -> void:
+func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 		return
 	_queue("networked:lobby_event", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"event": "despawned",
 		"lobby_name": str(lobby.level.name),
 	})
@@ -137,12 +159,12 @@ func _on_lobby_despawned(lobby: Lobby) -> void:
 
 # ─── Slow-Poll (2 Hz) ─────────────────────────────────────────────────────────
 
-func _send_lobby_snapshot() -> void:
-	if not _mt.lobby_manager:
+func _send_lobby_snapshot(mt: MultiplayerTree) -> void:
+	if not mt.lobby_manager:
 		return
 	var lobbies_data: Array = []
-	for lobby_name: StringName in _mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = _mt.lobby_manager.active_lobbies[lobby_name]
+	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
+		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
 		var peers: Array[int] = []
@@ -155,24 +177,24 @@ func _send_lobby_snapshot() -> void:
 			"process_mode": int(lobby.level.process_mode),
 		})
 	_queue("networked:lobby_snapshot", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"lobbies": lobbies_data,
 	})
 
 
-func _send_component_heartbeats() -> void:
-	if not _mt.lobby_manager:
+func _send_component_heartbeats(mt: MultiplayerTree) -> void:
+	if not mt.lobby_manager:
 		return
-	for lobby_name: StringName in _mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = _mt.lobby_manager.active_lobbies[lobby_name]
+	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
+		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
 		for player: Node in lobby.synchronizer.tracked_nodes.keys():
 			if is_instance_valid(player):
-				_send_player_heartbeat(player)
+				_send_player_heartbeat(player, mt)
 
 
-func _send_player_heartbeat(player: Node) -> void:
+func _send_player_heartbeat(player: Node, mt: MultiplayerTree) -> void:
 	var components: Dictionary = {}
 
 	var client: ClientComponent = player.get_node_or_null("%ClientComponent")
@@ -210,7 +232,7 @@ func _send_player_heartbeat(player: Node) -> void:
 		return
 
 	_queue("networked:component_heartbeat", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"player_name": player.name,
 		"components": components,
 	})
@@ -219,31 +241,50 @@ func _send_player_heartbeat(player: Node) -> void:
 # ─── Demand-Driven Replication Watch ──────────────────────────────────────────
 
 func _handle_watch_node(d: Dictionary) -> void:
-	if d.get("tree_name", "") != _mt.name:
+	var tree_name: String = d.get("tree_name", "")
+	var mt: MultiplayerTree = null
+	for t in _trees:
+		if t.name == tree_name:
+			mt = t
+			break
+	if not mt:
 		return
+
 	var np := NodePath(d.get("node_path", ""))
-	if np.is_empty() or np in _watched:
+	if np.is_empty():
 		return
+
+	var tree_watched: Dictionary = _watched.get(tree_name, {})
+	if np in tree_watched:
+		return
+
 	var node: Node = get_tree().root.get_node_or_null(np)
 	if not is_instance_valid(node):
 		return
+
 	var hooked: Array = []
 	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(node):
-		var cb := func() -> void: _send_replication_snapshot(node, sync)
+		var cb := func() -> void: _send_replication_snapshot(node, sync, mt)
 		sync.delta_synchronized.connect(cb)
 		sync.synchronized.connect(cb)
 		hooked.append({"sync": sync, "cb": cb})
-	_watched[np] = hooked
-	_send_full_replication_snapshot(node)
+
+	tree_watched[np] = hooked
+	_watched[tree_name] = tree_watched
+	_send_full_replication_snapshot(node, mt)
 
 
 func _handle_unwatch_node(d: Dictionary) -> void:
-	if d.get("tree_name", "") != _mt.name:
+	var tree_name: String = d.get("tree_name", "")
+	if tree_name not in _watched:
 		return
+
 	var np := NodePath(d.get("node_path", ""))
-	if np not in _watched:
+	var tree_watched: Dictionary = _watched[tree_name]
+	if np not in tree_watched:
 		return
-	for entry in _watched[np]:
+
+	for entry in tree_watched[np]:
 		var sync: MultiplayerSynchronizer = entry["sync"]
 		var cb: Callable = entry["cb"]
 		if is_instance_valid(sync):
@@ -251,20 +292,23 @@ func _handle_unwatch_node(d: Dictionary) -> void:
 				sync.delta_synchronized.disconnect(cb)
 			if sync.synchronized.is_connected(cb):
 				sync.synchronized.disconnect(cb)
-	_watched.erase(np)
+
+	tree_watched.erase(np)
+	if tree_watched.is_empty():
+		_watched.erase(tree_name)
 
 
-func _send_replication_snapshot(node: Node, sync: MultiplayerSynchronizer) -> void:
+func _send_replication_snapshot(node: Node, sync: MultiplayerSynchronizer, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(node) or not is_instance_valid(sync):
 		return
 	_queue("networked:replication_snapshot", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"node_path": str(node.get_path()),
 		"properties": _collect_properties(node, sync),
 	})
 
 
-func _send_full_replication_snapshot(node: Node) -> void:
+func _send_full_replication_snapshot(node: Node, mt: MultiplayerTree) -> void:
 	var all_props: Dictionary = {}
 	var inventory: Array = []
 	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(node):
@@ -275,7 +319,7 @@ func _send_full_replication_snapshot(node: Node) -> void:
 			"root_path": str(sync.root_path),
 		})
 	_queue("networked:replication_snapshot", {
-		"tree_name": _mt.name,
+		"tree_name": mt.name,
 		"node_path": str(node.get_path()),
 		"properties": all_props,
 		"inventory": inventory,

@@ -2,7 +2,7 @@
 ##
 ## Displays a [Tree] with player nodes as top-level items and one row per
 ## component type. Data is sourced from the 2 Hz slow-pull heartbeat sent
-## by [NetworkedDebugReporter].
+## by [NetworkedDebugger].
 ##
 ## Color coding: white = normal, yellow = warning, red = problem.
 @tool

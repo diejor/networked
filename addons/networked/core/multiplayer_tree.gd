@@ -203,8 +203,12 @@ func _config_api() -> void:
 	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
-	var reporter := NetworkedDebugReporter.new(self)
-	add_child(reporter)
+	
+	if Engine.has_singleton("NetworkedDebugger"):
+		Engine.get_singleton("NetworkedDebugger").register_tree(self)
+	elif get_tree().root.has_node("NetworkedDebugger"):
+		get_tree().root.get_node("NetworkedDebugger").register_tree(self)
+
 	configured.emit()
 
 
@@ -232,6 +236,12 @@ func _disconnect_backend_signals() -> void:
 
 func _on_exiting() -> void:
 	NetLog.trace("MultiplayerTree: Exiting.")
+	
+	if Engine.has_singleton("NetworkedDebugger"):
+		Engine.get_singleton("NetworkedDebugger").unregister_tree(self)
+	elif get_tree().root.has_node("NetworkedDebugger"):
+		get_tree().root.get_node("NetworkedDebugger").unregister_tree(self)
+
 	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
 		multiplayer_api.remove_meta(&"_multiplayer_tree")
 	_peer_contexts.clear()

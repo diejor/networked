@@ -12,6 +12,8 @@ func _enter_tree() -> void:
 	# This makes saved overrides stable even if the addon directory is moved.
 	NetLog.initialize(get_script().get_path().get_base_dir())
 
+	add_autoload_singleton("NetworkedDebugger", "res://addons/networked/debug/networked_debug_reporter.gd")
+
 	scene_node_path_plugin = SceneNodePathPlugin.new()
 	add_child(scene_node_path_plugin)
 
@@ -23,6 +25,8 @@ func _enter_tree() -> void:
 	add_debugger_plugin(_debugger_plugin)
 
 func _exit_tree() -> void:
+	remove_autoload_singleton("NetworkedDebugger")
+
 	if is_instance_valid(scene_node_path_plugin):
 		scene_node_path_plugin.queue_free()
 
