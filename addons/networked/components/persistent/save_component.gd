@@ -17,6 +17,9 @@ signal state_changed(caller: Node)
 signal client_synchronized
 
 
+var _save_cid: StringName = &""
+
+
 ## Per-peer storage bucket for [SaveComponent].
 ##
 ## All instances belonging to the same peer share one bucket via [PeerContext].
@@ -97,12 +100,14 @@ func get_save_path() -> String:
 ## Writes the current state of the container to the disk.
 func save_state() -> Error:
 	var save_path := get_save_path()
+	_emit_debug_event(&"save.save_begin", {save_path = save_path})
 	log_trace("SaveComponent: Saving state to %s" % save_path)
 	var err: Error = ResourceSaver.save(save_container, save_path)
-	
+
 	assert(err == OK, "Failed to save `%s`. Error: %s" % [save_path, error_string(err)])
 	if err == OK:
 		log_info("State saved successfully to %s" % save_path)
+		_emit_debug_event(&"save.saved", {save_path = save_path})
 	return err
 
 
@@ -168,6 +173,7 @@ func pull_from_scene() -> void:
 
 ## Sends the current save state over the network to a specific peer.
 func push_to(peer_id: int) -> void:
+	_emit_debug_event(&"save.push_to", {peer_id = peer_id})
 	save_synchronizer.push_to(peer_id)
 
 
@@ -190,12 +196,16 @@ func instantiate() -> void:
 ## If no save file is found, copies the state from [param caller]'s [SaveComponent] instead.
 ## [param caller] is typically the spawner node.
 func spawn(caller: Node) -> void:
+	_save_cid = StringName("save_%d" % Time.get_ticks_usec())
+	_emit_debug_event(&"save.spawn_begin", {save_path = get_save_path()}, _save_cid)
 	instantiate()
-	
+	_emit_debug_event(&"save.instantiated", {save_path = get_save_path()}, _save_cid)
+
 	var load_err: Error = load_state()
-	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND, 
+	_emit_debug_event(&"save.loaded", {found = (load_err == OK), save_path = get_save_path()}, _save_cid)
+	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND,
 		"Something failed while trying to load player. Error: %s." % error_string(load_err))
-	
+
 	if load_err == ERR_FILE_NOT_FOUND:
 		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
 		if spawner_save and spawner_save.save_synchronizer._initialized:

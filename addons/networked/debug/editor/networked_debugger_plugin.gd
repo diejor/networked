@@ -29,6 +29,14 @@ func _setup_session(session_id: int) -> void:
 	_uis[session_id] = ui
 
 
+func _discard_session(session_id: int) -> void:
+	if session_id in _uis:
+		var ui: NetworkedDebuggerUI = _uis[session_id]
+		if is_instance_valid(ui):
+			ui.reset_session()
+		_uis.erase(session_id)
+
+
 ## Sends a message from the editor to the running game via the given session.
 func send_to_game(session_id: int, message: String, data: Array) -> void:
 	var s := get_session(session_id)

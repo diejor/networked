@@ -265,14 +265,100 @@ func _matches_selected(tree_name: String) -> bool:
 
 # ─── Export State ─────────────────────────────────────────────────────────────
 
+func reset_session() -> void:
+	_trees.clear()
+	_clock_samples.clear()
+	_lobby_snapshots.clear()
+	_component_heartbeats.clear()
+	_component_events.clear()
+	_selected_tree = ""
+	_tree_selector.clear()
+	_lamp.color = Color.GRAY
+	_status_label.text = "offline"
+	_panel_clock.clear()
+	_panel_components.clear()
+	_panel_log.clear()
+	_panel_matrices.clear()
+
+
 func _on_export_state() -> void:
-	var state := {
-		"trees": _trees,
-		"selected_tree": _selected_tree,
-		"clock_samples": _clock_samples,
-		"lobby_snapshots": _lobby_snapshots,
-		"component_heartbeats": _component_heartbeats,
-		"component_events": _component_events,
-	}
-	DisplayServer.clipboard_set(JSON.stringify(state, "\t"))
+	DisplayServer.clipboard_set(JSON.stringify(_build_export_summary(), "\t"))
 	print("[Networked Debugger] State exported to clipboard.")
+
+
+func _build_export_summary() -> Dictionary:
+	# Clock: collapse ring buffers into min/max/avg per tree.
+	var clock_out: Dictionary = {}
+	for tn: String in _clock_samples:
+		var samples: Array = _clock_samples[tn]
+		if samples.is_empty():
+			continue
+		clock_out[tn] = {
+			"n": samples.size(),
+			"rtt_ms":    _stats_ms(samples, "rtt_avg"),
+			"jitter_ms": _stats_ms(samples, "rtt_jitter"),
+			"diff_ticks": _stats_int(samples, "diff"),
+			"last": samples[-1],
+		}
+
+	# Events: group by correlation_id into operation summaries.
+	var ops: Dictionary = {}
+	var standalone: Array = []
+	for ev: Dictionary in _component_events:
+		var cid: String = ev.get("correlation_id", "")
+		if cid.is_empty():
+			standalone.append({
+				"type":   ev.get("event_type", "?"),
+				"tree":   ev.get("tree_name", "?"),
+				"player": ev.get("player_name", ""),
+			})
+		else:
+			if not cid in ops:
+				ops[cid] = {
+					"cid":        cid,
+					"steps":      [],
+					"start_usec": ev.get("timestamp_usec", 0),
+					"player":     ev.get("player_name", ""),
+					"tree":       ev.get("tree_name", "?"),
+					"duration_ms": 0.0,
+				}
+			ops[cid]["steps"].append(ev.get("event_type", "?"))
+			ops[cid]["duration_ms"] = (ev.get("timestamp_usec", 0) - ops[cid]["start_usec"]) / 1000.0
+
+	var op_list: Array = ops.values()
+	if op_list.size() > 20:
+		op_list = op_list.slice(op_list.size() - 20)
+
+	return {
+		"selected_tree":    _selected_tree,
+		"trees":            _trees,
+		"clock":            clock_out,
+		"lobbies":          _lobby_snapshots,
+		"components":       _component_heartbeats,
+		"operations":       op_list,
+		"standalone_events": standalone,
+	}
+
+
+func _stats_ms(samples: Array, key: String) -> Dictionary:
+	var mn := INF; var mx := -INF; var total := 0.0
+	for s: Dictionary in samples:
+		var v: float = s.get(key, 0.0) * 1000.0
+		if v < mn: mn = v
+		if v > mx: mx = v
+		total += v
+	return {
+		"min": snappedf(mn if mn != INF else 0.0, 0.01),
+		"max": snappedf(mx if mx != -INF else 0.0, 0.01),
+		"avg": snappedf(total / samples.size(), 0.01),
+	}
+
+
+func _stats_int(samples: Array, key: String) -> Dictionary:
+	var mn := 999999; var mx := -999999; var total := 0
+	for s: Dictionary in samples:
+		var v: int = int(s.get(key, 0))
+		if v < mn: mn = v
+		if v > mx: mx = v
+		total += v
+	return {"min": mn, "max": mx, "avg": total / samples.size()}

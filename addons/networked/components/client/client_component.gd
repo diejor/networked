@@ -164,6 +164,7 @@ func _on_owner_tree_entered() -> void:
 	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
 		log_debug("Setting authority for %s to %d" % [owner.name, authority])
 		owner.set_multiplayer_authority(authority)
+		_emit_debug_event(&"client.authority_set", {peer_id = authority, authority_mode = authority_mode})
 	# SERVER_AUTHORITATIVE: node stays at peer 1; peer_id in name is for routing only.
 
 	_setup_spawn_sync(spawn_sync)
@@ -188,6 +189,11 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
+	_emit_debug_event(&"client.player_joined", {
+		username = client_data.username,
+		peer_id = client_data.peer_id,
+		authority_mode = authority_mode,
+	})
 	log_info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
 	assert(client_data.peer_id)
 	assert(client_data.spawner_path)
@@ -226,9 +232,10 @@ func _on_connect_player(client_data: MultiplayerClientData) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	if (multiplayer and multiplayer.is_server() 
+	if (multiplayer and multiplayer.is_server()
 		and get_multiplayer_authority() == peer_id):
+		_emit_debug_event(&"client.peer_disconnected", {peer_id = peer_id, username = username})
 		log_info("Peer %d disconnected. Freeing owned player %s.\
-" % [peer_id, owner.name])      
+" % [peer_id, owner.name])
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()

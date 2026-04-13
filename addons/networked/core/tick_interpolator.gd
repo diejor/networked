@@ -151,6 +151,7 @@ var _expected_interval_ticks: int = 1
 var _has_explicit_sync_interval: bool = false
 
 var _peer_batcher: _Batcher
+var _was_starving: bool = false
 
 #endregion
 
