@@ -25,7 +25,13 @@ func _setup_session(session_id: int) -> void:
 	ui.name = "Networked"
 	ui.plugin = self
 	ui.session_id = session_id
-	get_session(session_id).add_session_tab(ui)
+	var session := get_session(session_id)
+	# Reset immediately when the game stops — covers both graceful and crash shutdown.
+	session.stopped.connect(func() -> void:
+		if is_instance_valid(ui):
+			ui.reset_session()
+	)
+	session.add_session_tab(ui)
 	_uis[session_id] = ui
 
 

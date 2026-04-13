@@ -21,6 +21,12 @@ static var _reporting_checked: bool = false
 # Used to route incoming editor→game messages.
 static var _all_reporters: Array[NetworkedDebugReporter] = []
 
+# Tracks whether the EngineDebugger capture has been registered for this process.
+# Cannot use _all_reporters.is_empty() for this: reporters are removed in _exit_tree,
+# making the array empty again between tests, which would trigger a second registration
+# and a "Capture already registered" crash.
+static var _capture_registered: bool = false
+
 var _mt: MultiplayerTree
 var _message_queue: Array = []
 var _flush_pending: bool = false
@@ -39,7 +45,8 @@ func _enter_tree() -> void:
 		return
 
 	# Register the global message capture exactly once, no matter how many trees exist.
-	if _all_reporters.is_empty():
+	if not _capture_registered:
+		_capture_registered = true
 		EngineDebugger.register_message_capture(
 			"networked",
 			func(message: String, data: Array) -> bool:
@@ -186,7 +193,8 @@ func _send_player_heartbeat(player: Node) -> void:
 	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
 	if save:
 		components["SaveComponent"] = {
-			"save_dir": save.save_dir,
+			"database": save.database.resource_path if save.database else "null",
+			"table_name": save.table_name,
 		}
 
 	var tis := player.find_children("*", "TickInterpolator", true, false)

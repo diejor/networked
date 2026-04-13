@@ -1,73 +1,85 @@
 ## Tests SaveComponent logic that doesn't require multiplayer or scene tree entry.
-##
-## These tests build manual node trees (never added to the scene tree) to test
-## path resolution, registration, and disk I/O without triggering _ready()
-## which calls set_visibility_for() on the SaveSynchronizer.
 class_name TestSaveComponent
 extends NetworkedTestSuite
 
-var save_dir: String
+var test_dir: String
+var backend: FileSystemBackend
+var db: NetworkedDatabase
 
 
 func before_test() -> void:
-	save_dir = create_temp_dir("save_component_test")
+	test_dir = create_temp_dir("save_component_test")
+	backend = auto_free(FileSystemBackend.new())
+	backend.base_dir = test_dir
+	db = auto_free(NetworkedDatabase.new())
+	db.backend = backend
 
 
 # ---------------------------------------------------------------------------
-# get_save_path()
+# Entity ID / Record ID
 # ---------------------------------------------------------------------------
 
-func test_get_save_path_uses_username_when_client_present() -> void:
+func test_get_entity_id_uses_username_when_client_present() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
-	var save_comp := SaveComponent.new()
-	save_comp.save_dir = save_dir
-	save_comp.save_extension = ".tres"
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
 	save_comp.save_container = DictionarySave.new()
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	var client := ClientComponent.new()
+	var client: ClientComponent = auto_free(ClientComponent.new())
 	client.name = "ClientComponent"
 	client.unique_name_in_owner = true
 	client.username = "alice"
 	root.add_child(client)
 	client.owner = root
 
-	var path := save_comp.get_save_path()
-	assert_that(path.ends_with("alice.tres")).is_true()
+	assert_that(save_comp._get_entity_id()).is_equal(&"alice")
 
 
-func test_get_save_path_uses_node_name_without_client() -> void:
+func test_get_entity_id_uses_node_name_without_client() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "MyPlayer"
 
-	var save_comp := SaveComponent.new()
-	save_comp.save_dir = save_dir
-	save_comp.save_extension = ".tres"
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
 	save_comp.save_container = DictionarySave.new()
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	var path := save_comp.get_save_path()
-	assert_that(path.ends_with("MyPlayer.tres")).is_true()
+	assert_that(save_comp._get_entity_id()).is_equal(&"MyPlayer")
 
 
 # ---------------------------------------------------------------------------
-# Disk save/load
+# Database save/load
 # ---------------------------------------------------------------------------
 
-func test_save_and_load_round_trip_to_disk() -> void:
-	var save := DictionarySave.new()
-	save.set_value(&"health", 100)
-	save.set_value(&"pos", Vector2(10, 20))
+func test_save_and_load_round_trip_via_database() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Alice"
 
-	var path := save_dir.path_join("round_trip_test.tres")
-	var err := ResourceSaver.save(save, path)
+	var container: DictionarySave = auto_free(DictionarySave.new())
+	container.set_value(&"health", 100)
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	save_comp.save_container = container
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	# Must register schema before saving.
+	db.register_schema(&"players", [&"health"])
+
+	var err: Error = save_comp.save_state()
 	assert_that(err).is_equal(OK)
 
-	var loaded := ResourceLoader.load(path, "DictionarySave", ResourceLoader.CACHE_MODE_REPLACE)
-	assert_that(loaded is DictionarySave).is_true()
-	assert_that(loaded.get_value(&"health")).is_equal(100)
-	assert_that(loaded.get_value(&"pos")).is_equal(Vector2(10, 20))
+	# Verify record exists in backend.
+	var raw: Dictionary = backend._find_by_id(&"players", &"Alice")
+	assert_that(raw.get(&"health")).is_equal(100)
+
+	# Clear container and reload.
+	container.set_value(&"health", 0)
+	var load_err: Error = save_comp.load_state()
+	assert_that(load_err).is_equal(OK)
+	assert_that(container.get_value(&"health")).is_equal(100)

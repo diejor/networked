@@ -101,8 +101,9 @@ func _fill_tp(row: TreeItem, d: Dictionary) -> void:
 
 
 func _fill_save(row: TreeItem, d: Dictionary) -> void:
-	var save_dir: String = d.get("save_dir", "?")
-	row.set_text(1, save_dir if not save_dir.is_empty() else "—")
+	var db: String = d.get("database", "?")
+	var table: String = d.get("table_name", "?")
+	row.set_text(1, "db=%s  table=%s" % [db.get_file(), table])
 	row.set_text(2, "ok")
 	row.set_custom_color(2, C_NORMAL)
 

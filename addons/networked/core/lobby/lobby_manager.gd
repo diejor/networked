@@ -66,6 +66,9 @@ enum EmptyAction {
 		update_configuration_warnings()
 
 ## Helper property to add level scenes to the spawn list via the inspector.
+##
+## TODO: Verify that the target MultiplayerSpawner has `spawn_path` set to the root,
+## assert or make editor warning to warn the user that the system will not work as expected.
 @export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
 var add_to_spawn_list: SceneNodePath:
 	set(value):
@@ -78,6 +81,26 @@ var add_to_spawn_list: SceneNodePath:
 					notify_property_list_changed()
 
 		add_to_spawn_list = null
+
+## Optional. If set, delegates level instantiation to this callable instead of the
+## default path-based loading. Called on both server and clients during spawn.
+## [br][br]
+## Signature: [code]func(data: Variant) -> Node[/code]
+## [br][br]
+## The returned node's [member Node.name] MUST be deterministic and match the lobby name
+## used in [method activate_lobby] and the scene basename clients embed in their SpawnerPath —
+## it becomes the key in [member active_lobbies].
+## [br][br]
+## When set, automatic ON_STARTUP spawning via [method spawn_lobbies] is not supported.
+## Call [method spawn] manually in [signal configured] for lobbies that should exist at startup.
+var level_spawn_function: Callable
+
+## Per-lobby spawn data used by [method activate_lobby] when [member level_spawn_function] is set.
+## [br][br]
+## Keys are lobby names ([StringName]). Values are the [code]data[/code] argument passed to
+## [member level_spawn_function] and replicated to clients via [MultiplayerSpawner].
+## If a lobby name has no entry here, the name itself is passed as data.
+var lobby_spawn_data: Dictionary[StringName, Variant] = {}
 
 ## All currently active [Lobby] instances, keyed by their level's [member Node.name].
 var active_lobbies: Dictionary[StringName, Lobby]
@@ -226,7 +249,7 @@ func preload_lobby(name: StringName) -> void:
 	NetLog.info("Lobby '%s' preloaded." % name)
 
 
-## Instantiates and adds [param name] to the scene tree, then applies its [enum EmptyAction] if no players are present.
+## Instantiates and adds [param name] to the scene tree.
 ##
 ## Does nothing if the lobby is already active. Callers that need to guarantee the lobby
 ## is processing should use [method activate_lobby] instead.
@@ -239,7 +262,6 @@ func spawn_lobby(name: StringName) -> void:
 		return
 	NetLog.info("Spawning lobby '%s'." % name)
 	spawn(path)
-	_apply_empty_action_if_needed(name)
 
 
 ## Ensures [param name] is spawned and forces its level's process mode to [constant Node.PROCESS_MODE_INHERIT].

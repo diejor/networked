@@ -7,11 +7,18 @@ extends Serde
 
 ## The player's display name, used as the spawned node name prefix.
 @export var username: StringName
+
 ## Path to the [ClientComponent] spawner node the player should enter.
+##
+## TODO: somehow assert or show warnings if the target ClientComponnet lives in
+## a scene that doesnt track owner scene (somehow check this at the moment of
+## spawning).
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:ClientComponent")
 var spawner_path: SceneNodePath
+
 ## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a local session.
 @export var url: String
+
 ## Assigned by the server after receiving the connection request. Not set by the client.
 var peer_id: int
 

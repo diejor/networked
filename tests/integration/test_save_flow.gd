@@ -1,13 +1,4 @@
 ## Integration tests for SaveComponent + SaveSynchronizer with real multiplayer.
-##
-## Uses the full request_join_player RPC join chain so _on_player_joined
-## calls save_component.spawn(owner) automatically — no manual instantiate() needed.
-##
-## TestLevelSave.tscn has a CamelCase filename matching its root node name
-## and instances test_player_with_save.tscn as the spawner template.
-##
-## The SaveSynchronizer._ready() calls set_visibility_for() which requires real
-## peers — hence these must be integration tests using NetworkTestHarness.
 class_name TestSaveFlow
 extends NetworkedTestSuite
 
@@ -19,11 +10,17 @@ const SPAWNER_PATH := "TestPlayerWithSave/ClientComponent"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
-var save_dir: String
+var test_dir: String
+var backend: FileSystemBackend
+var db: NetworkedDatabase
 
 
 func before_test() -> void:
-	save_dir = create_temp_dir("save_flow_test")
+	test_dir = create_temp_dir("save_flow_test")
+	backend = auto_free(FileSystemBackend.new())
+	backend.base_dir = test_dir
+	db = auto_free(NetworkedDatabase.new())
+	db.backend = backend
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
@@ -48,9 +45,10 @@ func _spawn_save_player() -> Node2D:
 	var player := await harness.join_player(
 		client0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH) as Node2D
 
-	# Override the save_dir from the scene with our unique temp dir
+	# Inject our unique database and backend configuration.
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.save_dir = save_dir
+	save_comp.database = db
+	save_comp.table_name = &"players"
 
 	return player
 
@@ -115,22 +113,25 @@ func test_pull_then_push_round_trips() -> void:
 
 
 # ---------------------------------------------------------------------------
-# save_state() / load_state() — disk persistence
+# save_state() / load_state() — database persistence
 # ---------------------------------------------------------------------------
 
-func test_save_state_creates_file() -> void:
+func test_save_state_to_database() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(10, 20)
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.pull_from_scene()
-	var err := save_comp.save_state()
+	var err: Error = save_comp.save_state()
 	assert_that(err).is_equal(OK)
 
-	assert_that(ResourceLoader.exists(save_comp.get_save_path())).is_true()
+	# Verify record exists in backend.
+	var entity_id := save_comp._get_entity_id()
+	var raw: Dictionary = backend._find_by_id(&"players", entity_id)
+	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 
-func test_load_state_restores_from_disk() -> void:
+func test_load_state_restores_from_database() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(10, 20)
 
@@ -141,7 +142,7 @@ func test_load_state_restores_from_disk() -> void:
 	player.position = Vector2.ZERO
 	save_comp.save_container.set_value(&"position", Vector2.ZERO)
 
-	var err := save_comp.load_state()
+	var err: Error = save_comp.load_state()
 	assert_that(err).is_equal(OK)
 	assert_that(player.position).is_equal(Vector2(10, 20))
 

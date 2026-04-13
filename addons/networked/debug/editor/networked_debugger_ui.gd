@@ -287,57 +287,125 @@ func _on_export_state() -> void:
 
 
 func _build_export_summary() -> Dictionary:
-	# Clock: collapse ring buffers into min/max/avg per tree.
+	# ── Clock ──────────────────────────────────────────────────────────────────
 	var clock_out: Dictionary = {}
 	for tn: String in _clock_samples:
 		var samples: Array = _clock_samples[tn]
 		if samples.is_empty():
 			continue
 		clock_out[tn] = {
-			"n": samples.size(),
-			"rtt_ms":    _stats_ms(samples, "rtt_avg"),
-			"jitter_ms": _stats_ms(samples, "rtt_jitter"),
+			"n":          samples.size(),
+			"rtt_ms":     _stats_ms(samples, "rtt_avg"),
+			"jitter_ms":  _stats_ms(samples, "rtt_jitter"),
 			"diff_ticks": _stats_int(samples, "diff"),
-			"last": samples[-1],
+			"last":       samples[-1],
 		}
 
-	# Events: group by correlation_id into operation summaries.
-	var ops: Dictionary = {}
-	var standalone: Array = []
+	# ── Components: cross-player baseline + per-player diffs ──────────────────
+	var comp_out: Dictionary = {}
+	for tn: String in _component_heartbeats:
+		var players: Dictionary = _component_heartbeats[tn]
+		if players.is_empty():
+			continue
+		var defaults: Dictionary = _compute_component_defaults(players.values())
+		var diffs: Dictionary = {}
+		for pname: String in players:
+			diffs[pname] = _diff_components(players[pname].get("components", {}), defaults)
+		comp_out[tn] = {"_defaults": defaults, "players": diffs}
+
+	# ── Events: group by player; ops listed, standalones counted ─────────────
+	var by_player: Dictionary = {}  # player → {ops: {cid→dict}, events: {key→dict}}
 	for ev: Dictionary in _component_events:
-		var cid: String = ev.get("correlation_id", "")
+		var player: String = ev.get("player_name", "")
+		var cid: String    = ev.get("correlation_id", "")
+		var etype: String  = ev.get("event_type", "?")
+		var tree: String   = ev.get("tree_name", "?")
+		var ts: int        = ev.get("timestamp_usec", 0)
+
+		if not player in by_player:
+			by_player[player] = {"ops": {}, "events": {}}
+
 		if cid.is_empty():
-			standalone.append({
-				"type":   ev.get("event_type", "?"),
-				"tree":   ev.get("tree_name", "?"),
-				"player": ev.get("player_name", ""),
-			})
+			# Collapse flapping: count by (tree, type), not one entry per occurrence.
+			var key: String = tree + ":" + etype
+			if not key in by_player[player]["events"]:
+				by_player[player]["events"][key] = {"type": etype, "tree": tree, "count": 0}
+			by_player[player]["events"][key]["count"] += 1
 		else:
-			if not cid in ops:
-				ops[cid] = {
-					"cid":        cid,
+			var pops: Dictionary = by_player[player]["ops"]
+			if not cid in pops:
+				pops[cid] = {
+					"cid":        cid.substr(0, 12),
 					"steps":      [],
-					"start_usec": ev.get("timestamp_usec", 0),
-					"player":     ev.get("player_name", ""),
-					"tree":       ev.get("tree_name", "?"),
+					"tree":       tree,
+					"start_usec": ts,
 					"duration_ms": 0.0,
 				}
-			ops[cid]["steps"].append(ev.get("event_type", "?"))
-			ops[cid]["duration_ms"] = (ev.get("timestamp_usec", 0) - ops[cid]["start_usec"]) / 1000.0
+			pops[cid]["steps"].append(etype)
+			pops[cid]["duration_ms"] = (ts - pops[cid]["start_usec"]) / 1000.0
 
-	var op_list: Array = ops.values()
-	if op_list.size() > 20:
-		op_list = op_list.slice(op_list.size() - 20)
+	var events_out: Dictionary = {}
+	for player: String in by_player:
+		var pd: Dictionary = by_player[player]
+		var op_list: Array = pd["ops"].values()
+		if op_list.size() > 10:
+			op_list = op_list.slice(op_list.size() - 10)
+		var ev_list: Array = pd["events"].values()
+		var entry: Dictionary = {}
+		if not op_list.is_empty():
+			entry["ops"] = op_list
+		if not ev_list.is_empty():
+			entry["events"] = ev_list
+		if not entry.is_empty():
+			events_out[player] = entry
 
 	return {
-		"selected_tree":    _selected_tree,
-		"trees":            _trees,
-		"clock":            clock_out,
-		"lobbies":          _lobby_snapshots,
-		"components":       _component_heartbeats,
-		"operations":       op_list,
-		"standalone_events": standalone,
+		"selected_tree": _selected_tree,
+		"trees":         _trees,
+		"clock":         clock_out,
+		"lobbies":       _lobby_snapshots,
+		"components":    comp_out,
+		"events":        events_out,
 	}
+
+
+## Finds fields that are identical across ALL players for each component type.
+## These become the "default template" so per-player diffs only show deviations.
+func _compute_component_defaults(player_list: Array) -> Dictionary:
+	if player_list.is_empty():
+		return {}
+	var first: Dictionary = (player_list[0] as Dictionary).get("components", {})
+	var defaults: Dictionary = {}
+	for comp_type: String in first:
+		var first_comp: Dictionary = first[comp_type] if first[comp_type] is Dictionary else {}
+		var comp_defaults: Dictionary = {}
+		for field in first_comp:
+			var val: Variant = first_comp[field]
+			var all_same := true
+			for pd: Dictionary in player_list:
+				if pd.get("components", {}).get(comp_type, {}).get(field) != val:
+					all_same = false
+					break
+			if all_same:
+				comp_defaults[field] = val
+		if not comp_defaults.is_empty():
+			defaults[comp_type] = comp_defaults
+	return defaults
+
+
+## Returns only the fields in [param components] that differ from [param defaults].
+func _diff_components(components: Dictionary, defaults: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for comp_type: String in components:
+		var comp: Dictionary = components[comp_type] if components[comp_type] is Dictionary else {}
+		var def_comp: Dictionary = defaults.get(comp_type, {})
+		var diff: Dictionary = {}
+		for field in comp:
+			if not field in def_comp or comp[field] != def_comp[field]:
+				diff[field] = comp[field]
+		if not diff.is_empty():
+			result[comp_type] = diff
+	return result
 
 
 func _stats_ms(samples: Array, key: String) -> Dictionary:

@@ -2,14 +2,14 @@
 ##
 ## Attach this node (with unique name [code]%SaveComponent[/code]) to your player scene alongside
 ## a [SaveContainer] and a [SaveSynchronizer]. On spawn, [method spawn] will load the player's
-## last saved state from disk, falling back to the spawner's current state on first play.
+## last saved state from the [member database], falling back to the spawner's current state on first play.
 ## All registered components are saved automatically on graceful shutdown.
 class_name SaveComponent
 extends NetComponent
 
 ## Emitted after [method instantiate] completes and the synchronizer is ready.
 signal instantiated
-## Emitted after a save file is loaded (even if the file was not found).
+## Emitted after a save state is loaded (even if the record was not found).
 signal loaded
 ## Emitted when the state is saved or pushed over the network.
 signal state_changed(caller: Node)
@@ -28,15 +28,19 @@ class Bucket extends RefCounted:
 	var shutting_down: bool = false
 
 
-## Directory where save files are written. Automatically redirected to [code]user://[/code] in exported builds.
-@export_dir var save_dir: String
-## File extension for save files, including the leading dot (e.g. [code]".tres"[/code]).
-@export var save_extension: String = ".tres"
 ## The [SaveContainer] resource that holds the serializable state for this entity.
 @export var save_container: SaveContainer
 
+## The [NetworkedDatabase] to read/write this entity's state.
+## The resource must be saved as a [code].tres[/code] file (not embedded) to avoid
+## resource-path conflicts across scenes.
+@export var database: NetworkedDatabase
+
+## The table name used when reading/writing to [member database].
+@export var table_name: StringName
+
 var save_synchronizer: SaveSynchronizer:
-	get: 
+	get:
 		if not save_synchronizer:
 			save_synchronizer = SaveSynchronizer.new(self)
 			add_child(save_synchronizer)
@@ -52,10 +56,10 @@ func _ready() -> void:
 	assert(save_container)
 	assert(save_synchronizer)
 	assert(save_synchronizer.save_container == save_container)
-	
+
 	get_tree().set_auto_accept_quit(false)
 	_register()
-	
+
 	if not Engine.is_editor_hint():
 		for sync in SynchronizersCache.get_client_synchronizers(owner):
 			if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -66,71 +70,96 @@ func _exit_tree() -> void:
 	_unregister()
 
 
-func _prepare_save_dir() -> void:
-	if not OS.has_feature("editor"):
-		save_dir = save_dir.replace("res://", "user://")
-	if not DirAccess.dir_exists_absolute(save_dir):
-		DirAccess.make_dir_recursive_absolute(save_dir)
-
-
-## Returns the absolute file path where this entity's save file should be written.
-##
-## Uses [member ClientComponent.username] as the filename if available, otherwise falls back to [member Node.name].
-func get_save_path() -> String:
-	_prepare_save_dir()
-	assert(save_extension.begins_with("."), "Save extension should begin with a dot.")
-		
-	if not owner:
-		return ""
-		
-	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
-	var base: String
-	
-	if client and not client.username.is_empty():
-		base = client.username
+## Returns an editor warning if the database configuration is incomplete.
+func _get_configuration_warnings() -> PackedStringArray:
+	var warnings: PackedStringArray = []
+	if not database:
+		warnings.append("'database' must be assigned for persistence.")
 	else:
-		base = owner.name
-		
-	var save_path: String = save_dir.path_join(base + save_extension)
-	assert(save_path.is_absolute_path(), "Invalid save to a not valid file path. " + save_path)
-	
-	return save_path
+		if table_name.is_empty():
+			warnings.append("'table_name' must be set when 'database' is assigned.")
+		if database.resource_path.is_empty():
+			warnings.append(
+				"'database' is an embedded resource. Save it as a .tres file to avoid "
+				+ "resource-path conflicts and potential file-lock issues."
+			)
+	return warnings
 
 
-## Writes the current state of the container to the disk.
+## Returns the stable entity identifier used as the database record ID.
+##
+## Prefers [member ClientComponent.username] when a [ClientComponent] sibling is
+## present, otherwise falls back to [member Node.name] of the owner.
+func _get_entity_id() -> StringName:
+	if not owner:
+		return &""
+	var client: ClientComponent = owner.get_node_or_null("%ClientComponent")
+	if client and not client.username.is_empty():
+		return StringName(client.username)
+	return StringName(owner.name)
+
+
+## Writes the current state of the container to the [member database].
 func save_state() -> Error:
-	var save_path := get_save_path()
-	_emit_debug_event(&"save.save_begin", {save_path = save_path})
-	log_trace("SaveComponent: Saving state to %s" % save_path)
-	var err: Error = ResourceSaver.save(save_container, save_path)
+	if not database or table_name.is_empty():
+		log_warn("SaveComponent: cannot save state; database or table_name is missing.")
+		return ERR_UNCONFIGURED
 
-	assert(err == OK, "Failed to save `%s`. Error: %s" % [save_path, error_string(err)])
-	if err == OK:
-		log_info("State saved successfully to %s" % save_path)
-		_emit_debug_event(&"save.saved", {save_path = save_path})
-	return err
+	var entity_id := _get_entity_id()
+	var data := _container_to_dict()
+
+	_emit_debug_event(&"db.upsert_begin", {table = table_name, id = entity_id})
+	var db_err := database.transaction(func(tx: NetworkedDatabase.TransactionContext):
+		tx.queue_upsert(table_name, entity_id, data)
+	)
+
+	if db_err == OK:
+		log_info("SaveComponent: state saved to database (table=%s, id=%s)." % [table_name, entity_id])
+		_emit_debug_event(&"db.upserted", {table = table_name, id = entity_id})
+	else:
+		log_warn("SaveComponent: database upsert failed. Error: %s" % error_string(db_err))
+		_emit_debug_event(&"db.upsert_failed", {table = table_name, id = entity_id, error = db_err})
+
+	return db_err
 
 
-## Loads the saved state from the disk and immediately pushes it to the scene.
+## Loads the saved state from the database and immediately pushes it to the scene.
 func load_state() -> Error:
-	var save_path := get_save_path()
-	log_trace("SaveComponent: Loading state from %s" % save_path)
-	if not ResourceLoader.exists(save_path):
-		log_debug("No save file found at %s" % save_path)
+	if not database or table_name.is_empty():
+		log_warn("SaveComponent: cannot load state; database or table_name is missing.")
+		loaded.emit()
+		return ERR_UNCONFIGURED
+
+	var entity_id := _get_entity_id()
+	log_trace("SaveComponent: Loading state from database (table=%s, id=%s)" % [table_name, entity_id])
+	_emit_debug_event(&"db.load_begin", {table = table_name, id = entity_id})
+
+	var out_error: Array[int] = [OK]
+	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
+
+	if out_error[0] == ERR_FILE_NOT_FOUND:
+		# PURGE policy: DB record was deleted. Treat this as a first-play scenario.
+		_emit_debug_event(&"db.load_mismatch_purge", {table = table_name, id = entity_id})
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
-	
-	var saved_container := ResourceLoader.load(save_path, "SaveContainer", ResourceLoader.CACHE_MODE_REPLACE)
-	
-	if not is_instance_valid(saved_container) or not saved_container is SaveContainer:
-		log_error("Save located at `%s` is invalid." % save_path)
-		return ERR_CANT_OPEN
 
-	save_container = saved_container
+	if out_error[0] == ERR_UNCONFIGURED:
+		# FAIL policy: developer opted in to explicit mismatch errors.
+		_emit_debug_event(&"db.load_mismatch_fail", {table = table_name, id = entity_id})
+		loaded.emit()
+		return ERR_UNCONFIGURED
+
+	if record.is_empty():
+		log_debug("No database record found for (table=%s, id=%s)." % [table_name, entity_id])
+		_emit_debug_event(&"db.load_miss", {table = table_name, id = entity_id})
+		loaded.emit()
+		return ERR_FILE_NOT_FOUND
+
+	_emit_debug_event(&"db.loaded", {table = table_name, id = entity_id})
+	_apply_dict_to_container(record)
 	push_to_scene()
-	log_info("State loaded successfully from %s" % save_path)
+	log_info("State loaded from database (table=%s, id=%s)." % [table_name, entity_id])
 	loaded.emit()
-	
 	return OK
 
 
@@ -139,7 +168,7 @@ func deserialize_scene(bytes: PackedByteArray) -> void:
 	log_trace("SaveComponent: Deserializing scene (Size: %d)" % bytes.size())
 	save_container.deserialize(bytes)
 	push_to_scene()
-	
+
 
 ## Pulls the latest data from the scene and serializes it into a network-ready byte array.
 func serialize_scene() -> PackedByteArray:
@@ -152,12 +181,14 @@ func serialize_scene() -> PackedByteArray:
 func push_to_scene() -> Error:
 	log_trace("SaveComponent: Pushing container to scene.")
 	var push_err: Error = save_synchronizer.push_to_scene()
-	
+
 	match push_err:
 		ERR_UNCONFIGURED:
-			var save_path := get_save_path()
-			log_error("Removing unconfigured save at `%s`." % save_path)
-			DirAccess.remove_absolute(save_path)
+			# If the scene nodes don't match the container, purge the record.
+			if database and not table_name.is_empty():
+				var entity_id := _get_entity_id()
+				database.delete(table_name, entity_id)
+				_emit_debug_event(&"db.purged", {table = table_name, id = entity_id})
 			return push_err
 		OK:
 			return push_err
@@ -177,33 +208,40 @@ func push_to(peer_id: int) -> void:
 	save_synchronizer.push_to(peer_id)
 
 
-## Handles a state change event by saving to disk and emitting network sync signals.
+## Handles a state change event by saving to database and emitting network sync signals.
 func on_state_changed() -> void:
 	save_state()
 	state_changed.emit()
 	client_synchronized.emit()
 
 
-## Initializes the underlying save synchronizer.
+## Initializes the underlying save synchronizer and registers this entity's schema
+## with the database.
 func instantiate() -> void:
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)
+
+	if database and not table_name.is_empty():
+		var columns: Array[StringName] = save_synchronizer._get_tracked_property_names()
+		database.register_schema(table_name, columns)
+		_emit_debug_event(&"db.schema_registered", {table = table_name, columns = columns})
+
 	instantiated.emit()
 
 
-## Initializes the synchronizer and loads saved state from disk.
+## Initializes the synchronizer and loads saved state from the database.
 ##
-## If no save file is found, copies the state from [param caller]'s [SaveComponent] instead.
+## If no record is found, copies the state from [param caller]'s [SaveComponent] instead.
 ## [param caller] is typically the spawner node.
 func spawn(caller: Node) -> void:
 	_save_cid = StringName("save_%d" % Time.get_ticks_usec())
-	_emit_debug_event(&"save.spawn_begin", {save_path = get_save_path()}, _save_cid)
+	_emit_debug_event(&"save.spawn_begin", {}, _save_cid)
 	instantiate()
-	_emit_debug_event(&"save.instantiated", {save_path = get_save_path()}, _save_cid)
+	_emit_debug_event(&"save.instantiated", {}, _save_cid)
 
 	var load_err: Error = load_state()
-	_emit_debug_event(&"save.loaded", {found = (load_err == OK), save_path = get_save_path()}, _save_cid)
-	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND,
+	_emit_debug_event(&"save.loaded", {found = (load_err == OK)}, _save_cid)
+	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND or load_err == ERR_UNCONFIGURED,
 		"Something failed while trying to load player. Error: %s." % error_string(load_err))
 
 	if load_err == ERR_FILE_NOT_FOUND:
@@ -259,3 +297,17 @@ func _handle_shutdown() -> void:
 	SaveComponent.save_all_in(get_peer_context())
 	log_info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()
+
+
+# ── Database helpers ──────────────────────────────────────────────────────────
+
+func _container_to_dict() -> Dictionary:
+	var dict: Dictionary = {}
+	for key in save_container:
+		dict[StringName(key)] = save_container.get_value(StringName(key))
+	return dict
+
+
+func _apply_dict_to_container(data: Dictionary) -> void:
+	for key: StringName in data:
+		save_container.set_value(key, data[key])

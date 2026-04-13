@@ -1,10 +1,4 @@
 ## Integration tests for PeerContext lifecycle within a real multiplayer session.
-##
-## Covers two properties that have no unit-level equivalent:
-##   1. Loopback isolation — server and client in the same process maintain
-##      separate PeerContext instances and SaveComponent buckets never overlap.
-##   2. Disconnect cleanup — the server erases a peer's context when that peer
-##      disconnects, preventing stale state from leaking across sessions.
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
@@ -15,11 +9,17 @@ const LOBBY_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
-var save_dir: String
+var test_dir: String
+var backend: FileSystemBackend
+var db: NetworkedDatabase
 
 
 func before_test() -> void:
-	save_dir = create_temp_dir("peer_context_lifecycle")
+	test_dir = create_temp_dir("peer_context_lifecycle")
+	backend = auto_free(FileSystemBackend.new())
+	backend.base_dir = test_dir
+	db = auto_free(NetworkedDatabase.new())
+	db.backend = backend
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
@@ -64,7 +64,8 @@ func _spawn_save_player() -> void:
 		client0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH)
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.save_dir = save_dir
+	save_comp.database = db
+	save_comp.table_name = &"players"
 
 	# Wait for the replicated player to appear on the client side so both
 	# buckets are populated before any assertions run.

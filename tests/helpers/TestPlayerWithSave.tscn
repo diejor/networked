@@ -3,11 +3,22 @@
 [ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_v07vo"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_vpj8e"]
 [ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_v07vo"]
+[ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="4_q1h0n"]
+[ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="5_1enma"]
 
 [sub_resource type="Resource" id="Resource_q1h0n"]
 resource_local_to_scene = true
 script = ExtResource("3_v07vo")
 metadata/_custom_type_script = "uid://d1mnum02gn0c0"
+
+[sub_resource type="Resource" id="Resource_n4xd5"]
+script = ExtResource("4_q1h0n")
+metadata/_custom_type_script = "uid://dlsdsleg37hm1"
+
+[sub_resource type="Resource" id="Resource_kvry4"]
+script = ExtResource("5_1enma")
+backend = SubResource("Resource_n4xd5")
+metadata/_custom_type_script = "uid://icayc7hx72vn"
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath("ClientComponent:username")
@@ -29,6 +40,7 @@ unique_name_in_owner = true
 script = ExtResource("2_vpj8e")
 save_dir = "res://tests/tmp_saves"
 save_container = SubResource("Resource_q1h0n")
+database = SubResource("Resource_kvry4")
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1837042624]
 replication_config = SubResource("SceneReplicationConfig_1")
