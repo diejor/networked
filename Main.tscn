@@ -53,6 +53,10 @@ metadata/_custom_type_script = "uid://domi8t23qrsdh"
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
 spawn_path = NodePath(".")
 script = ExtResource("4_fos0i")
+lobby_config/Level1/load_mode = 1
+lobby_config/Level1/empty_action = 1
+lobby_config/Level2/load_mode = 1
+lobby_config/Level2/empty_action = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="CanvasLayer" type="CanvasLayer" parent="NetworkSession/Client" unique_id=996987432]

@@ -181,10 +181,11 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 		log_error("TPComponent: Client couldn't synchronize while teleporting.")
 
 	var to_lobby_name := tp_component.current_scene_name
-	var to_lobby: Lobby = lobby_manager.active_lobbies.get(to_lobby_name)
-	assert(to_lobby,
-	"`%s` not found, probably not tracked by the \
-`%s`." % [to_lobby_name, lobby_manager.name])
+	await lobby_manager.activate_lobby(StringName(to_lobby_name))
+	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_lobby_name))
+	if not to_lobby:
+		log_error("TPComponent: Destination lobby '%s' could not be activated." % to_lobby_name)
+		return
 
 	log_info("Reparenting player %s to lobby %s" % [username, to_lobby_name])
 
