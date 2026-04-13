@@ -45,6 +45,7 @@ var current_scene_name: String:
 		return _resolve_scene_name(current_scene_path)
 
 var _tp_mutex := AsyncMutex.new()
+var _tp_cid: StringName = &""  # correlation ID for the current teleport operation
 
 
 ## Per-peer storage bucket for [TPComponent].
@@ -120,6 +121,8 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## completes. Safe to [operator await] even if this node is destroyed and respawned during 
 ## the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
+	_tp_cid = StringName("tp_%d" % Time.get_ticks_usec())
+	_emit_debug_event(&"tp.initiate", {"scene": target_tp.scene_path}, _tp_cid)
 	log_info("Initiating teleport to %s" % target_tp.scene_path)
 	var promise := TeleportPromise.new()
 	_do_teleport(target_tp, promise)
@@ -128,27 +131,35 @@ func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 
 func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	log_trace("TPComponent: _do_teleport called.")
+	_emit_debug_event(&"tp.awaiting_mutex", {}, _tp_cid)
 	await _tp_mutex.lock()
+	_emit_debug_event(&"tp.mutex_acquired", {}, _tp_cid)
+
 	var peer_id := multiplayer.get_unique_id()
 	_get_bucket().pending[peer_id] = promise
 
 	var from_scene := current_scene_name
 	current_scene_path = target_tp.scene_path
+	_emit_debug_event(&"tp.scene_path_set", {"from": from_scene, "to": current_scene_name}, _tp_cid)
 	log_debug("Teleporting from %s to %s (Peer: %d)" % [from_scene, current_scene_name, peer_id])
 
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
 		log_debug("Pushing save state before teleport.")
 		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+		_emit_debug_event(&"tp.save_pushed", {}, _tp_cid)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
 		log_trace("Playing teleport_out transition.")
+		_emit_debug_event(&"tp.transition_out_begin", {}, _tp_cid)
 		await tp_layer.teleport_out()
+		_emit_debug_event(&"tp.transition_out_end", {}, _tp_cid)
 
 	SynchronizersCache.sync_only_server(owner)
 
 	log_trace("Sending request_teleport RPC to server.")
+	_emit_debug_event(&"tp.rpc_sent", {}, _tp_cid)
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,
@@ -160,8 +171,9 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(username: String, from_scene_name: String, tp_path: String) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
+	var srv_cid := StringName("tp_srv_%d" % Time.get_ticks_usec())
 	log_info("Server received teleport request from %s (Peer: %d)" % [username, sender_id])
-	
+
 	var lobby_manager := get_lobby_manager()
 	if not lobby_manager:
 		log_error("TPComponent: Cannot teleport, lobby manager not found.")
@@ -171,16 +183,23 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 	if not from_lobby:
 		log_error("TPComponent: Source lobby '%s' not found." % from_scene_name)
 		return
-		
+
 	var player: Node = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
+	tp_component._emit_debug_event(&"tp.server_received",
+		{"from_scene": from_scene_name, "sender": sender_id}, srv_cid)
 
 	log_trace("Waiting for client synchronization...")
+	tp_component._emit_debug_event(&"tp.awaiting_client_sync", {}, srv_cid)
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(tp_component.client_synchronized, timer):
 		log_error("TPComponent: Client couldn't synchronize while teleporting.")
+		tp_component._emit_debug_event(&"tp.sync_timeout", {}, srv_cid)
+	else:
+		tp_component._emit_debug_event(&"tp.client_synced", {}, srv_cid)
 
 	var to_lobby_name := tp_component.current_scene_name
+	tp_component._emit_debug_event(&"tp.activating_lobby", {"lobby": to_lobby_name}, srv_cid)
 	await lobby_manager.activate_lobby(StringName(to_lobby_name))
 	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_lobby_name))
 	if not to_lobby:
@@ -188,6 +207,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 		return
 
 	log_info("Reparenting player %s to lobby %s" % [username, to_lobby_name])
+	tp_component._emit_debug_event(&"tp.reparenting", {"to_lobby": to_lobby_name}, srv_cid)
 
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
@@ -230,6 +250,7 @@ func teleported(scene: Node, _tp_path: String) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	log_info("Teleport committed. Snapping local player to %s" % str(snap_pos))
+	_emit_debug_event(&"tp.committed", {"snap_pos": str(snap_pos)}, _tp_cid)
 	_teleport_committed.emit()
 	_tp_mutex.unlock()
 	owner.set("global_position", snap_pos)
@@ -237,13 +258,16 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	var tp_layer := get_tp_layer()
 	if tp_layer:
 		log_trace("Playing teleport_in transition.")
+		_emit_debug_event(&"tp.transition_in_begin", {}, _tp_cid)
 		await tp_layer.teleport_in()
+		_emit_debug_event(&"tp.transition_in_end", {}, _tp_cid)
 
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
 	if promise:
 		log_debug("Resolving teleport promise for peer %d" % peer_id)
+		_emit_debug_event(&"tp.promise_resolved", {}, _tp_cid)
 		promise.completed.emit()
 		bucket.pending.erase(peer_id)
 
