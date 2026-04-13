@@ -52,6 +52,9 @@ signal display_offset_insufficient(recommended: int)
 ## Fires when the network stability status changes based on jitter.
 signal stability_changed(is_stable: bool)
 
+## Fires after each ping/pong cycle with fresh clock metrics for the debugger.
+signal pong_received(data: Dictionary)
+
 #endregion
 
 
@@ -261,15 +264,30 @@ func _ping(client_usec: int) -> void:
 func _pong(client_usec: int, server_tick_at_pong: int) -> void:
 	var sample := (Time.get_ticks_usec() - client_usec) / 1_000_000.0
 	var old_stable := _stats.is_stable
-	
+
 	_stats.record_sample(sample, jitter_stability_threshold)
-	
+
 	if _stats.is_stable != old_stable:
 		stability_changed.emit(_stats.is_stable)
-		
+
 	var half_rtt_ticks := int(ceil(_stats.avg * 0.5 / ticktime))
-	_calibrate(server_tick_at_pong + half_rtt_ticks)
+	var target_tick := server_tick_at_pong + half_rtt_ticks
+	var pre_calibrate_diff := target_tick - tick
+
+	_calibrate(target_tick)
 	_notify_display_offset()
+
+	pong_received.emit({
+		"rtt_raw": sample,
+		"rtt_avg": _stats.avg,
+		"rtt_jitter": _stats.jitter,
+		"diff": pre_calibrate_diff,
+		"tick": tick,
+		"display_offset": display_offset,
+		"recommended_display_offset": recommended_display_offset,
+		"is_stable": _stats.is_stable,
+		"is_synchronized": is_synchronized,
+	})
 
 #endregion
 
