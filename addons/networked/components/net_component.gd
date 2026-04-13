@@ -136,3 +136,39 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 		NetLog.Level.ERROR: NetLog.error(full_msg, args)
 
 #endregion
+
+
+#region ── Debug Events ───────────────────────────────────────────────────────
+
+## Emits a structured debug event to the Networked debugger panel (if active)
+## and logs it at TRACE level via [method _log_proxy].
+##
+## [param event_type] is a dot-namespaced identifier (e.g. [code]&"tp.rpc_sent"[/code]).
+## [param data] contains serialisable key/value context for the event.
+## [param correlation_id] groups related steps of the same logical operation
+## so the Log Bridge panel can display them as a single expandable trace.
+func _emit_debug_event(
+		event_type: StringName,
+		data: Dictionary = {},
+		correlation_id: StringName = &"") -> void:
+	if EngineDebugger.is_active():
+		var tree := get_multiplayer_tree()
+		var side_label := "?"
+		var player_name := ""
+		if is_inside_tree() and multiplayer:
+			var local_id := multiplayer.get_unique_id()
+			side_label = "S" if local_id == 1 else ("C%d" % local_id)
+		if owner:
+			player_name = owner.name.split("|")[0]
+		EngineDebugger.send_message("networked:component_event", [{
+			"tree_name": tree.name if tree else "",
+			"side": side_label,
+			"player_name": player_name,
+			"event_type": str(event_type),
+			"data": data,
+			"correlation_id": str(correlation_id),
+			"timestamp_usec": Time.get_ticks_usec(),
+		}])
+	_log_proxy(NetLog.Level.TRACE, "[event:%s] %s" % [event_type, data], [])
+
+#endregion
