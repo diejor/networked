@@ -203,6 +203,8 @@ func _config_api() -> void:
 	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
+	var reporter := NetworkedDebugReporter.new(self)
+	add_child(reporter)
 	configured.emit()
 
 
