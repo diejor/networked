@@ -85,10 +85,10 @@ func _add_component_row(parent: TreeItem, comp_type: String, d: Dictionary) -> v
 
 
 func _fill_client(row: TreeItem, d: Dictionary) -> void:
-	var auth_mode := d.get("authority_mode", 0)
+	var auth_mode: int = d.get("authority_mode", 0)
 	var is_auth: bool = d.get("is_multiplayer_authority", false)
 	row.set_text(1, "%s  [mode=%d]" % [d.get("username", "?"), auth_mode])
-	var status_ok := is_auth == (auth_mode == 0)  # CLIENT mode → should be authority
+	var status_ok: bool = is_auth == (auth_mode == 0)  # CLIENT mode → should be authority
 	row.set_text(2, "✓" if status_ok else "!")
 	row.set_custom_color(2, C_NORMAL if status_ok else C_WARN)
 

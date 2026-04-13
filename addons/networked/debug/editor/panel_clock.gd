@@ -180,13 +180,13 @@ class _ClockGraph extends Control:
 
 		# Threshold lines.
 		for threshold_ms in [50.0, 100.0]:
-			var ty := y0 + lh - LANE_PADDING - (threshold_ms / max_v) * (lh - LANE_PADDING * 2)
+			var ty: float = y0 + lh - LANE_PADDING - (threshold_ms / max_v) * (lh - LANE_PADDING * 2)
 			draw_dashed_line(Vector2(0, ty), Vector2(w, ty), Color(1, 1, 1, 0.18), 1.0, 4.0)
 
 		# Raw line.
 		var raw_pts := PackedVector2Array()
 		for i in raws.size():
-			var yp := y0 + lh - LANE_PADDING - (raws[i] / max_v) * (lh - LANE_PADDING * 2)
+			var yp: float = y0 + lh - LANE_PADDING - (raws[i] / max_v) * (lh - LANE_PADDING * 2)
 			raw_pts.append(Vector2(_x(i, w), yp))
 		if raw_pts.size() >= 2:
 			draw_polyline(raw_pts, LANE_COLORS["rtt_raw"], 1.0)
@@ -209,7 +209,7 @@ class _ClockGraph extends Control:
 
 		# Threshold dashed line.
 		var thresh_ms := 50.0
-		var ty := y0 + lh - LANE_PADDING - (thresh_ms / max_v) * (lh - LANE_PADDING * 2)
+		var ty: float = y0 + lh - LANE_PADDING - (thresh_ms / max_v) * (lh - LANE_PADDING * 2)
 		draw_dashed_line(Vector2(0, ty), Vector2(w, ty), Color(1, 1, 0.2, 0.3), 1.0, 4.0)
 
 		var pts := PackedVector2Array()
@@ -233,10 +233,10 @@ class _ClockGraph extends Control:
 
 		for i in n:
 			var d := diffs[i]
-			var bar_h := (abs(d) / float(max_abs)) * (lh * 0.5 - LANE_PADDING)
+			var bar_h: float = (abs(d) / float(max_abs)) * (lh * 0.5 - LANE_PADDING)
 			var xb := _x(i, w)
 			var color := LANE_COLORS["diff_pos"] if d >= 0 else LANE_COLORS["diff_neg"]
-			var rect_y := mid_y - bar_h if d >= 0 else mid_y
+			var rect_y: float = mid_y - bar_h if d >= 0 else mid_y
 			draw_rect(Rect2(xb, rect_y, bar_w - 1.0, bar_h), color)
 
 		# Zero line.
@@ -276,7 +276,7 @@ class _ClockGraph extends Control:
 		# Recommended offset step graph.
 		var rec_pts := PackedVector2Array()
 		for i in recs.size():
-			var yp := y0 + lh - LANE_PADDING - (recs[i] / max_v) * (lh - LANE_PADDING * 2)
+			var yp: float = y0 + lh - LANE_PADDING - (recs[i] / max_v) * (lh - LANE_PADDING * 2)
 			if i > 0 and recs[i] != recs[i - 1]:
 				rec_pts.append(Vector2(_x(i, w), rec_pts[-1].y))
 			rec_pts.append(Vector2(_x(i, w), yp))

@@ -190,7 +190,7 @@ func update_replication_matrix(snapshot: Dictionary) -> void:
 		_rep_grid.add_child(_make_header("Server Value"))
 		for prop_path in properties:
 			_rep_grid.add_child(_make_label(str(prop_path), 200))
-			var val := properties[prop_path]
+			var val: Variant = properties[prop_path]
 			_rep_grid.add_child(_make_label(_format_value(val), 140))
 
 
