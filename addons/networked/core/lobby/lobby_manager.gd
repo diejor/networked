@@ -268,10 +268,17 @@ func spawn_lobby(name: StringName) -> void:
 ##
 ## Spawns the lobby on demand if not yet active, then wakes the level regardless of its
 ## configured [enum EmptyAction]. Safe to [operator await] from any context.
+## [br][br]
+## When [member level_spawn_function] is set, spawn data is looked up from
+## [member lobby_spawn_data]; if no entry exists for [param name], the name itself is passed.
 func activate_lobby(name: StringName) -> void:
 	NetLog.trace("MultiplayerLobbyManager: activate_lobby('%s') called." % name)
 	if not active_lobbies.has(name):
-		spawn_lobby(name)
+		if level_spawn_function.is_valid():
+			var data: Variant = lobby_spawn_data.get(name, name)
+			spawn(data)
+		else:
+			spawn_lobby(name)
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
 		NetLog.error("MultiplayerLobbyManager: Failed to activate lobby '%s'." % name)
@@ -310,6 +317,9 @@ func destroy_lobby(name: StringName) -> void:
 ##
 ## Lobbies configured as [constant LoadMode.ON_DEMAND] are skipped to save startup time and RAM.
 ## Called automatically after [signal configured] is received.
+## [br][br]
+## When [member level_spawn_function] is set this method is a no-op; call [method spawn]
+## manually in a [signal configured] handler for lobbies that should exist at startup.
 func spawn_lobbies() -> void:
 	NetLog.trace("MultiplayerLobbyManager: spawn_lobbies called.")
 	if not multiplayer.is_server():
@@ -326,17 +336,32 @@ func spawn_lobbies() -> void:
 
 ## Spawn function used by [MultiplayerSpawner] to wrap a level scene in a [Lobby] container.
 ##
-## Consumes a preloaded scene from [member _lobby_cache] if available; otherwise loads from disk.
+## If [member level_spawn_function] is set, delegates level instantiation to that callable so
+## the level can be initialised with arbitrary data before entering the tree. Otherwise
+## [param data] must be a [String] file path; a cached scene from [member _lobby_cache] is
+## consumed if available, otherwise the scene is loaded from disk.
 ## Selects the server or client [Lobby] variant based on the current peer role.
-func _spawn_lobby_node(level_file_path: String) -> Node:
-	NetLog.info("Instantiating lobby node for: %s" % level_file_path)
-	var level_scene: PackedScene
-	if _lobby_cache.has(level_file_path):
-		level_scene = _lobby_cache[level_file_path]
-		_lobby_cache.erase(level_file_path)
+func _spawn_lobby_node(data: Variant) -> Node:
+	var level: Node
+
+	if level_spawn_function.is_valid():
+		level = level_spawn_function.call(data)
+		if not is_instance_valid(level):
+			NetLog.error("MultiplayerLobbyManager: level_spawn_function returned null.")
+			return null
+	elif data is String:
+		var level_file_path: String = data
+		NetLog.info("Instantiating lobby node for: %s" % level_file_path)
+		var level_scene: PackedScene
+		if _lobby_cache.has(level_file_path):
+			level_scene = _lobby_cache[level_file_path]
+			_lobby_cache.erase(level_file_path)
+		else:
+			level_scene = load(level_file_path)
+		level = level_scene.instantiate()
 	else:
-		level_scene = load(level_file_path)
-	var level: Node = level_scene.instantiate()
+		NetLog.error("MultiplayerLobbyManager: invalid spawn data and no level_spawn_function set.")
+		return null
 
 	var lobby_scene: PackedScene = (SERVER_LOBBY
 		if multiplayer.is_server() else CLIENT_LOBBY)
@@ -399,6 +424,7 @@ func _on_lobby_spawned(node: Node) -> void:
 	if multiplayer.is_server():
 		lobby.synchronizer.despawned.connect(
 			_on_player_left_lobby.bind(StringName(lobby.level.name)))
+		_apply_empty_action_if_needed(StringName(lobby.level.name))
 
 
 func _on_player_left_lobby(_player: Node, lobby_name: StringName) -> void:
