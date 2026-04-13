@@ -75,11 +75,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				state[action] = true
 				log_trace("InputComponent: Action %s Pressed" % action)
 				action_changed.emit(action, true)
+				_emit_debug_event(&"input.action_changed", {action = str(action), pressed = true})
 		elif event.is_action_released(action):
 			if state[action] != false:
 				state[action] = false
 				log_trace("InputComponent: Action %s Released" % action)
 				action_changed.emit(action, false)
+				_emit_debug_event(&"input.action_changed", {action = str(action), pressed = false})
 
 
 func _on_tick(_delta: float, t: int) -> void:

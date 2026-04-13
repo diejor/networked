@@ -70,6 +70,7 @@ var starvation_ticks: int = 0
 ## interpolator.snap_property(&"Sprite2D:position", Vector2.ZERO)
 ## [/codeblock]
 func snap_property(property: StringName, value: Variant) -> void:
+	_emit_debug_event(&"tick.snap", {property = str(property)})
 	for state in _states:
 		if state.name == property:
 			state.target_obj.set(state.target_prop, value)
@@ -244,6 +245,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 		])
 	
 	var current_floor := _calculate_min_lag()
+	var prev_starvation := starvation_ticks
 	if is_starving:
 		starvation_ticks += 1
 		if starvation_ticks >= _STARVATION_GRACE_FRAMES:
@@ -251,6 +253,12 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 	else:
 		starvation_ticks = 0
 		display_lag = maxf(current_floor, display_lag - (frame_ticks * (_CATCHUP_SPEED - 1.0)))
+
+	if is_starving and not _was_starving:
+		_emit_debug_event(&"tick.starvation_start", {display_lag = display_lag})
+	elif not is_starving and _was_starving:
+		_emit_debug_event(&"tick.starvation_end", {starvation_ticks_total = prev_starvation})
+	_was_starving = is_starving
 
 
 func _refresh_property_states() -> void:
