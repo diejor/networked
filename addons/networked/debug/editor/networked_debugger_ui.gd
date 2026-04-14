@@ -33,6 +33,8 @@ var _panel_matrices: PanelMatrices
 var _panel_components: PanelComponents
 var _panel_log: PanelLogBridge
 var _panel_clock: PanelClock
+var _panel_crash_manifest: RichTextLabel
+var _copy_manifest_btn: Button
 
 # Session Bar widgets.
 var _tree_selector: OptionButton
@@ -109,6 +111,27 @@ func _build_tabs() -> void:
 	_panel_clock.name = "Clock"
 	tabs.add_child(_panel_clock)
 
+	var crash_tab := VBoxContainer.new()
+	crash_tab.name = "Crash Manifest"
+	tabs.add_child(crash_tab)
+
+	var crash_toolbar := HBoxContainer.new()
+	crash_tab.add_child(crash_toolbar)
+
+	_copy_manifest_btn = Button.new()
+	_copy_manifest_btn.text = "Copy"
+	_copy_manifest_btn.disabled = true
+	_copy_manifest_btn.pressed.connect(_on_copy_manifest)
+	crash_toolbar.add_child(_copy_manifest_btn)
+
+	_panel_crash_manifest = RichTextLabel.new()
+	_panel_crash_manifest.bbcode_enabled = true
+	_panel_crash_manifest.selection_enabled = true
+	_panel_crash_manifest.context_menu_enabled = true
+	_panel_crash_manifest.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
+	crash_tab.add_child(_panel_crash_manifest)
+
 
 # ─── Message Dispatch ─────────────────────────────────────────────────────────
 
@@ -128,6 +151,7 @@ func on_message(message: String, data: Array) -> void:
 		"networked:component_heartbeat":  _on_component_heartbeat(d)
 		"networked:component_event":      _on_component_event(d)
 		"networked:replication_snapshot": _on_replication_snapshot(d)
+		"networked:crash_manifest":       _on_crash_manifest(d)
 
 
 func _on_session_registered(d: Dictionary) -> void:
@@ -196,6 +220,62 @@ func _on_component_event(d: Dictionary) -> void:
 func _on_replication_snapshot(d: Dictionary) -> void:
 	if _matches_selected(d.get("tree_name", "")):
 		_panel_matrices.update_replication_matrix(d)
+
+
+func _on_crash_manifest(d: Dictionary) -> void:
+	if not is_instance_valid(_panel_crash_manifest):
+		return
+
+	var trigger: String = d.get("trigger", "UNKNOWN")
+	var cid: String = d.get("cid", "?")
+	var frame: int = d.get("frame", 0)
+	var ts: int = d.get("timestamp_usec", 0)
+	var player: String = d.get("player_name", "?")
+	var in_tree: bool = d.get("in_tree", false)
+	var net: Dictionary = d.get("network_state", {})
+	var syncs: Array = d.get("preflight_snapshot", [])
+
+	var lines: PackedStringArray = []
+	lines.append("[color=red][b]CRASH MANIFEST[/b][/color]")
+	lines.append("[b]Trigger:[/b] %s" % trigger)
+	lines.append("[b]CID:[/b] %s  [b]Frame:[/b] %d  [b]Time:[/b] %.3f s" % [
+		cid, frame, ts / 1_000_000.0])
+	lines.append("[b]Player:[/b] %s  [b]in_tree:[/b] %s" % [player, str(in_tree)])
+	lines.append("[b]Network:[/b] %s  peer=%d" % [
+		"server" if net.get("is_server", false) else "client",
+		net.get("peer_id", 0)])
+	lines.append("[b]Active Scene:[/b] %s" % d.get("active_scene", "?"))
+	lines.append("")
+	lines.append("[b]Preflight Snapshot (%d node(s)):[/b]" % syncs.size())
+	for s: Dictionary in syncs:
+		if s.has("type"):
+			# SERVER_SIMPLIFY_PATH_RACE format: {type, path, lobby?, public_visibility?}
+			var lobby_str := ("  lobby=%s" % s["lobby"]) if s.has("lobby") else ""
+			var vis_str := ("  pub_vis=%s" % str(s["public_visibility"])) if s.has("public_visibility") else ""
+			lines.append("  [color=red]%s[/color]  path=%s%s%s" % [
+				s.get("type", "?"), s.get("path", "?"), lobby_str, vis_str,
+			])
+		else:
+			# EMPTY_REPLICATION_CONFIG / CLIENT_EMPTY_CONFIG format: {name, parent, owner, ...}
+			var ok_color := "green" if s.get("root_path_resolves", false) else "red"
+			lines.append(
+				"  [color=%s]%s[/color] → parent=%s  owner=%s  root_path=%s  props=%d  pub_vis=%s" % [
+					ok_color,
+					s.get("name", "?"),
+					s.get("parent", "?"),
+					s.get("owner", "?"),
+					s.get("root_path", "?"),
+					s.get("prop_count", 0),
+					str(s.get("public_visibility", "?")),
+				])
+	_panel_crash_manifest.text = "\n".join(lines)
+	if is_instance_valid(_copy_manifest_btn):
+		_copy_manifest_btn.disabled = false
+
+
+func _on_copy_manifest() -> void:
+	if is_instance_valid(_panel_crash_manifest):
+		DisplayServer.clipboard_set(_panel_crash_manifest.get_parsed_text())
 
 
 # ─── Session Bar Logic ────────────────────────────────────────────────────────
@@ -279,6 +359,8 @@ func reset_session() -> void:
 	_panel_components.clear()
 	_panel_log.clear()
 	_panel_matrices.clear()
+	if is_instance_valid(_panel_crash_manifest):
+		_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
 
 
 func _on_export_state() -> void:

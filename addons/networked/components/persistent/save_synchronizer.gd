@@ -31,16 +31,105 @@ func _init(scomponent: SaveComponent) -> void:
 	delta_interval = 5.0
 	replication_interval = 5.0
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
-	
+	public_visibility = false
+
 	name = "SaveSynchronizer"
 	unique_name_in_owner = true
 	scomponent.add_child(self)
 	owner = scomponent.owner
 
+func _enter_tree() -> void:
+	# Call setup() here, NOT in _ready(), so replication_config is set before
+	# C++ MultiplayerSynchronizer processes NOTIFICATION_READY.
+	#
+	# In Godot 4, Object::notification() calls the C++ _notification() chain BEFORE
+	# GDScript _ready() runs. If replication_config is null when NOTIFICATION_READY
+	# fires (C++ side), the synchronizer is never registered in the replication cache.
+	# That is why the client produces "ID X not found in cache" errors: the client runs
+	# _ready() → setup() AFTER C++ has already processed NOTIFICATION_READY with a null
+	# config. The server avoids this because save_component.spawn() calls setup() while
+	# the player is still off-tree, before NOTIFICATION_READY is ever dispatched.
+	#
+	# This _enter_tree() approach fixes it on the client: NOTIFICATION_ENTER_TREE fires
+	# before NOTIFICATION_READY, so the config is in place when C++ does its registration.
+	if not _initialized and save_component.save_container:
+		setup()
+
+	# Emit a diagnostic regardless of outcome so the editor panel shows client-side state.
+	# SaveSynchronizer can't use _emit_debug_event (no NetComponent ancestor), so we send
+	# directly via EngineDebugger.
+	if EngineDebugger.is_active():
+		var prop_count := replication_config.get_properties().size() if replication_config else 0
+		var side := "?"
+		if is_inside_tree() and multiplayer:
+			var lid := multiplayer.get_unique_id()
+			side = "S" if lid == 1 else ("C%d" % lid)
+		EngineDebugger.send_message("networked:component_event", [{
+			"tree_name": (save_component.get_multiplayer_tree().name
+			if save_component and save_component.get_multiplayer_tree() else ""),
+			"side": side,
+			"player_name": (save_component.owner.name.split("|")[0]
+				if save_component and save_component.owner else ""),
+			"event_type": "save_sync.enter_tree",
+			"data": {
+				"initialized": _initialized,
+				"has_config": replication_config != null,
+				"prop_count": prop_count,
+				"in_tree": is_inside_tree(),
+				"root_path": str(root_path),
+			},
+			"correlation_id": "",
+			"timestamp_usec": Time.get_ticks_usec(),
+			"frame": Engine.get_process_frames(),
+		}])
+
+		# Emit crash manifest if setup() still hasn't produced any properties.
+		# This catches the case where the client's SaveSynchronizer enters the tree
+		# with zero tracked properties — the C++ registration will silently fail.
+		if prop_count == 0 and _initialized:
+			# push_warning so this appears in the console even when the process
+			# is not attached to an editor debugger (e.g. the second OS process
+			# in a two-process embedded server+client session).
+			push_warning(
+				"[CRASH MANIFEST] SaveSynchronizer '%s' on '%s' has 0 properties after setup(). " \
+				+ "C++ replication registration will silently fail. " \
+				+ "peer_id=%d is_server=%s in_tree=%s root_path=%s" % [
+					name,
+					(save_component.owner.name if save_component and save_component.owner else "?"),
+					(multiplayer.get_unique_id() if multiplayer else 0),
+					str(multiplayer.is_server() if multiplayer else false),
+					str(is_inside_tree()),
+					str(root_path),
+				])
+			EngineDebugger.send_message("networked:crash_manifest", [{
+				"cid": "",
+				"trigger": "CLIENT_EMPTY_CONFIG_ON_ENTER_TREE",
+				"frame": Engine.get_process_frames(),
+				"timestamp_usec": Time.get_ticks_usec(),
+				"active_scene": "",
+				"network_state": {
+					"is_server": multiplayer.is_server() if multiplayer else false,
+					"peer_id": multiplayer.get_unique_id() if multiplayer else 0,
+				},
+				"preflight_snapshot": [{
+					"name": name,
+					"parent": get_parent().name if get_parent() else "?",
+					"owner": owner.name if owner else "?",
+					"root_path": str(root_path),
+					"root_path_resolves": get_node_or_null(root_path) != null,
+					"public_visibility": public_visibility,
+					"prop_count": 0,
+				}],
+				"player_name": (save_component.owner.name
+					if save_component and save_component.owner else "?"),
+				"in_tree": is_inside_tree(),
+			}])
+
+
 func _ready() -> void:
 	if not _initialized:
 		setup()
-	
+
 	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
 
 

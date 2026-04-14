@@ -173,6 +173,7 @@ func _emit_debug_event(
 			"data": data,
 			"correlation_id": str(correlation_id),
 			"timestamp_usec": Time.get_ticks_usec(),
+			"frame": Engine.get_process_frames(),
 		}])
 	_log_proxy(NetLog.Level.TRACE, "[event:%s] %s" % [event_type, data], [])
 

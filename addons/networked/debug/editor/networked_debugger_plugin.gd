@@ -26,8 +26,10 @@ func _setup_session(session_id: int) -> void:
 	ui.plugin = self
 	ui.session_id = session_id
 	var session := get_session(session_id)
-	# Reset immediately when the game stops — covers both graceful and crash shutdown.
-	session.stopped.connect(func() -> void:
+	# Reset at the START of a new run so crash-time data survives for inspection.
+	# Clearing on stopped wipes the ring buffers the instant the game crashes — exactly
+	# when you need them most. _discard_session still clears when the editor closes.
+	session.started.connect(func() -> void:
 		if is_instance_valid(ui):
 			ui.reset_session()
 	)

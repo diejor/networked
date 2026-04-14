@@ -25,6 +25,12 @@ var _heartbeat_timer: float = 0.0
 # Tree Name -> NodePath -> Array of {sync, callable} for demand-driven replication watch.
 var _watched: Dictionary = {}
 
+# MultiplayerSpawner -> Callable — tracks which spawners have native confirmation hooks.
+var _hooked_spawners: Dictionary = {}
+
+# LobbySynchronizer -> Callable — tracks player-spawn race detection hooks.
+var _hooked_lobby_syncs: Dictionary = {}
+
 
 func _enter_tree() -> void:
 	if not _should_report():
@@ -131,6 +137,8 @@ func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
 
 func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
+	if mt.is_server:
+		_check_simplify_path_race_on_connect(peer_id, mt)
 
 
 func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
@@ -145,6 +153,13 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 		"event": "spawned",
 		"lobby_name": str(lobby.level.name),
 	})
+	_hook_spawners_in(lobby.level, mt)
+	_check_simplify_path_race_lobby(lobby, mt)
+	if mt.is_server and is_instance_valid(lobby.synchronizer):
+		var cb := func(player: Node) -> void:
+			_check_simplify_path_race_player_spawn(player, mt)
+		lobby.synchronizer.spawned.connect(cb)
+		_hooked_lobby_syncs[lobby.synchronizer] = cb
 
 
 func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
@@ -155,6 +170,222 @@ func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 		"event": "despawned",
 		"lobby_name": str(lobby.level.name),
 	})
+	_unhook_spawners_in(lobby.level)
+	if is_instance_valid(lobby.synchronizer) and lobby.synchronizer in _hooked_lobby_syncs:
+		var cb: Callable = _hooked_lobby_syncs[lobby.synchronizer]
+		if lobby.synchronizer.spawned.is_connected(cb):
+			lobby.synchronizer.spawned.disconnect(cb)
+		_hooked_lobby_syncs.erase(lobby.synchronizer)
+
+
+## Connects to the native [signal MultiplayerSpawner.spawned] signal on all spawners
+## found under [param root]. Fires a [code]spawner.native_confirmed[/code] component event
+## each time the C++ engine actually spawns a node — this is ground truth for whether the
+## spawn packet was received and processed. Skips spawners already hooked.
+func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
+	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
+		if spawner in _hooked_spawners:
+			continue
+		var cb := func(node: Node) -> void:
+			_queue("networked:component_event", {
+				"tree_name": mt.name,
+				"side": "S" if mt.is_server else "C",
+				"player_name": node.name if is_instance_valid(node) else "?",
+				"event_type": "spawner.native_confirmed",
+				"data": {
+					"node_name": node.name if is_instance_valid(node) else "?",
+					"spawner": spawner.name,
+				},
+				"correlation_id": "",
+				"timestamp_usec": Time.get_ticks_usec(),
+				"frame": Engine.get_process_frames(),
+			})
+		spawner.spawned.connect(cb)
+		_hooked_spawners[spawner] = cb
+
+
+## Emits a crash manifest when a lobby is spawned on the server while peers are already
+## connected. Every MultiplayerSynchronizer (public_visibility=true) and MultiplayerSpawner
+## inside the level has already sent a simplify_path packet to those peers — but the peers
+## won't receive the level's own spawn packet until the next network poll cycle, so the
+## simplify_path resolution fails with "Node not found".
+func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
+	if not mt.is_server or not mt.multiplayer_api:
+		return
+	var peers := mt.multiplayer_api.get_peers()
+	if peers.is_empty():
+		return
+
+	var races: Array = []
+	for child in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
+		races.append({"type": "MultiplayerSpawner", "path": str(child.get_path())})
+	for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
+		var sync := child as MultiplayerSynchronizer
+		if sync.public_visibility:
+			races.append({
+				"type": "MultiplayerSynchronizer",
+				"path": str(sync.get_path()),
+				"public_visibility": true,
+			})
+
+	if races.is_empty():
+		return
+
+	push_warning(
+		"[CRASH MANIFEST] simplify_path race on lobby spawn: '%s' entered server tree while " \
+		+ "%d peer(s) connected. %d node(s) sent simplify_path before level spawn packet. " \
+		+ "Clients will log 'Node not found' for these paths. Fix: defer spawn until client " \
+		+ "confirms level is loaded (Step 6 lobby-ready handshake)." % [
+			lobby.level.name, peers.size(), races.size(),
+		])
+	EngineDebugger.send_message("networked:crash_manifest", [{
+		"cid": "",
+		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": Time.get_ticks_usec(),
+		"active_scene": "",
+		"network_state": {
+			"is_server": true,
+			"peer_id": mt.multiplayer_api.get_unique_id(),
+			"connected_peers": peers,
+		},
+		"preflight_snapshot": races,
+		"player_name": lobby.level.name,
+		"in_tree": lobby.level.is_inside_tree(),
+	}])
+
+
+## Emits a crash manifest when a new peer connects to the server while nodes are already
+## registered in active lobbies.
+##
+## When [method MultiplayerTree._on_peer_connected] fires, C++ has already started sending
+## [code]simplify_path[/code] packets for every registered [MultiplayerSynchronizer] and
+## [MultiplayerSpawner] to the new peer. The client will process those packets before it
+## receives the spawn packets for the lobby and player nodes themselves, producing
+## "Node not found" errors in [code]process_simplify_path[/code].
+##
+## This covers two scenarios:
+## - ON_STARTUP lobbies: lobby was spawned before the client connected; client gets
+##   simplify_path for Level1/MultiplayerSpawner before the Level1 spawn packet.
+## - Already-spawned players: a second client connects after player A is in Level1;
+##   client B gets simplify_path for diego|A/MultiplayerSynchronizer before Level1
+##   or player spawn packets.
+func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> void:
+	if not mt.lobby_manager or not mt.multiplayer_api:
+		return
+
+	var races: Array = []
+	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
+		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
+		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+			continue
+		for spawner in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
+			races.append({
+				"type": "MultiplayerSpawner",
+				"path": str(spawner.get_path()),
+				"lobby": str(lobby_name),
+			})
+		for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
+			var sync := child as MultiplayerSynchronizer
+			if sync.public_visibility:
+				races.append({
+					"type": "MultiplayerSynchronizer",
+					"path": str(sync.get_path()),
+					"lobby": str(lobby_name),
+					"public_visibility": true,
+				})
+
+	if races.is_empty():
+		return
+
+	push_warning(
+		("[CRASH MANIFEST] simplify_path race: peer %d connected while %d node(s) are " \
+		+ "already registered in active lobbies. C++ sent simplify_path for all of them " \
+		+ "before the client receives the lobby/player spawn packets. " \
+		+ "'Node not found' errors will follow in process_simplify_path.") % [
+			peer_id, races.size(),
+		])
+	EngineDebugger.send_message("networked:crash_manifest", [{
+		"cid": "",
+		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": Time.get_ticks_usec(),
+		"active_scene": "",
+		"network_state": {
+			"is_server": true,
+			"peer_id": mt.multiplayer_api.get_unique_id(),
+			"new_peer_id": peer_id,
+		},
+		"preflight_snapshot": races,
+		"player_name": "peer_%d" % peer_id,
+		"in_tree": true,
+	}])
+
+
+## Emits a crash manifest when a player is added to a lobby on the server while peers are
+## connected.
+##
+## [signal LobbySynchronizer.spawned] fires (server-side) when [code]player.tree_entered[/code]
+## fires after [method LobbySynchronizer.track_player] is called — i.e., the moment the
+## player enters the scene tree on the server. C++ has already sent [code]simplify_path[/code]
+## for any public-visibility [MultiplayerSynchronizer] on the player to all connected peers.
+## Peers who have not yet received the level spawn packet will get "Node not found" when they
+## process those simplify_path packets.
+func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree) -> void:
+	if not is_instance_valid(player) or not mt.multiplayer_api:
+		return
+	var peers := mt.multiplayer_api.get_peers()
+	if peers.is_empty():
+		return
+
+	var races: Array = []
+	for child in player.find_children("*", "MultiplayerSynchronizer", true, false):
+		var sync := child as MultiplayerSynchronizer
+		if sync.public_visibility:
+			races.append({
+				"type": "MultiplayerSynchronizer",
+				# get_path() requires is_inside_tree(). The spawned signal can fire
+				# mid-NOTIFICATION_ENTER_TREE cascade (via spawner.spawned →
+				# child_entered_tree), so some descendants may not yet be in the tree.
+				"path": str(sync.get_path()) if sync.is_inside_tree() else sync.name,
+				"public_visibility": true,
+			})
+
+	if races.is_empty():
+		return
+
+	push_warning(
+		("[CRASH MANIFEST] simplify_path race on player spawn: '%s' entered lobby while " \
+		+ "%d peer(s) are connected. C++ sent simplify_path for %d synchronizer(s) before " \
+		+ "those peers receive the player spawn packet. Peers who haven't loaded the level " \
+		+ "yet will log 'Node not found'.") % [
+			player.name, peers.size(), races.size(),
+		])
+	EngineDebugger.send_message("networked:crash_manifest", [{
+		"cid": "",
+		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": Time.get_ticks_usec(),
+		"active_scene": "",
+		"network_state": {
+			"is_server": true,
+			"peer_id": mt.multiplayer_api.get_unique_id(),
+			"connected_peers": peers,
+		},
+		"preflight_snapshot": races,
+		"player_name": player.name,
+		"in_tree": player.is_inside_tree(),
+	}])
+
+
+func _unhook_spawners_in(root: Node) -> void:
+	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
+		if spawner not in _hooked_spawners:
+			continue
+		var cb: Callable = _hooked_spawners[spawner]
+		if spawner.spawned.is_connected(cb):
+			spawner.spawned.disconnect(cb)
+		_hooked_spawners.erase(spawner)
 
 
 # ─── Slow-Poll (2 Hz) ─────────────────────────────────────────────────────────

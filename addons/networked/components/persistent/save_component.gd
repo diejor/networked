@@ -219,8 +219,69 @@ func on_state_changed() -> void:
 ## Initializes the underlying save synchronizer and registers this entity's schema
 ## with the database.
 func instantiate() -> void:
+	# Step 3: Log SynchronizersCache state before virtualization runs.
+	# If the player is off-tree at this point, or if prop_count = 0 after setup(),
+	# that confirms Hypotheses 1 or 2 (see plan).
+	var syncs_before := SynchronizersCache.get_synchronizers(owner)
+	_emit_debug_event(&"save.preflight_scan", {
+		in_tree = is_inside_tree(),
+		sync_count = syncs_before.size(),
+		sync_names = syncs_before.map(func(s: MultiplayerSynchronizer) -> String:
+			return "%s (root_path=%s, resolves=%s)" % [
+				s.name,
+				str(s.root_path),
+				str(s.get_node_or_null(s.root_path) != null),
+			]),
+	}, _save_cid)
+
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)
+
+	# Audit B: SaveSynchronizer must have tracked at least one property after setup().
+	# prop_count = 0 means _virtualize_replication_configs() found no sibling synchronizers —
+	# likely because save_component.spawn() was called before the player entered the scene tree
+	# (so SpawnSynchronizer didn't exist yet), OR sibling synchronizers had null replication_configs.
+	var prop_count := save_synchronizer.replication_config.get_properties().size() \
+		if save_synchronizer.replication_config else 0
+	_emit_debug_event(&"save.preflight_b", {
+		prop_count = prop_count,
+		initialized = save_synchronizer._initialized,
+		has_config = save_synchronizer.replication_config != null,
+	}, _save_cid)
+
+	if prop_count == 0:
+		# Emit crash manifest before asserting so the editor panel receives it even if
+		# the game crashes immediately after.
+		if EngineDebugger.is_active():
+			var syncs_snap: Array = []
+			for s: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(owner):
+				syncs_snap.append({
+					"name": s.name,
+					"parent": s.get_parent().name if s.get_parent() else "?",
+					"owner": s.owner.name if s.owner else "?",
+					"root_path": str(s.root_path),
+					"root_path_resolves": s.get_node_or_null(s.root_path) != null,
+					"public_visibility": s.public_visibility,
+					"prop_count": s.replication_config.get_properties().size() if s.replication_config else 0,
+				})
+			EngineDebugger.send_message("networked:crash_manifest", [{
+				"cid": str(_save_cid),
+				"trigger": "EMPTY_REPLICATION_CONFIG",
+				"frame": Engine.get_process_frames(),
+				"timestamp_usec": Time.get_ticks_usec(),
+				"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
+				"network_state": {
+					"is_server": multiplayer.is_server() if multiplayer else false,
+					"peer_id": multiplayer.get_unique_id() if multiplayer else 0,
+				},
+				"preflight_snapshot": syncs_snap,
+				"player_name": owner.name,
+				"in_tree": is_inside_tree(),
+			}])
+		assert(false,
+			"[PREFLIGHT-B] SaveSynchronizer has 0 properties after setup() on '%s'. " \
+			+ "Was _virtualize_replication_configs() called before sibling synchronizers had " \
+			+ "valid replication_configs? Check the save.preflight_scan event." % owner.name)
 
 	if database and not table_name.is_empty():
 		var columns: Array[StringName] = save_synchronizer._get_tracked_property_names()
@@ -234,8 +295,8 @@ func instantiate() -> void:
 ##
 ## If no record is found, copies the state from [param caller]'s [SaveComponent] instead.
 ## [param caller] is typically the spawner node.
-func spawn(caller: Node) -> void:
-	_save_cid = StringName("save_%d" % Time.get_ticks_usec())
+func spawn(caller: Node, cid: StringName = &"") -> void:
+	_save_cid = cid if not cid.is_empty() else StringName("save_%d" % Time.get_ticks_usec())
 	_emit_debug_event(&"save.spawn_begin", {}, _save_cid)
 	instantiate()
 	_emit_debug_event(&"save.instantiated", {}, _save_cid)

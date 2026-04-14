@@ -170,6 +170,15 @@ func _on_owner_tree_entered() -> void:
 	_setup_spawn_sync(spawn_sync)
 
 func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
+	# Audit A: root_path was computed with get_path_to() in SpawnSynchronizer._init().
+	# If the player was not yet in the main scene tree at that moment, the path is empty
+	# and config_spawn_properties() will scan with a broken root, silently collecting nothing.
+	assert(spawn.root_path != NodePath(""),
+		(
+			"[PREFLIGHT-A] SpawnSynchronizer.root_path is empty on '%s'. " +
+			"get_path_to(client.owner) was likely called before the player entered the scene tree."
+		) % owner.name
+	)
 	spawn.config_spawn_properties(self)
 	spawn.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 
@@ -189,11 +198,15 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
+	# Generate a join CID that groups all events for this specific join attempt.
+	# Passed through to save_component.spawn() via _save_cid, and emitted on
+	# spawner.native_confirmed — so the log bridge can show the full join timeline.
+	var join_cid := StringName("join_%d_%d" % [client_data.peer_id, Time.get_ticks_usec()])
 	_emit_debug_event(&"client.player_joined", {
 		username = client_data.username,
 		peer_id = client_data.peer_id,
 		authority_mode = authority_mode,
-	})
+	}, join_cid)
 	log_info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
 	assert(client_data.peer_id)
 	assert(client_data.spawner_path)
@@ -205,7 +218,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if save_component:
 		log_debug("Loading player with SaveComponent for player `%s`.\
 " % client_data.username)
-		save_component.spawn(owner)
+		save_component.spawn(owner, join_cid)
 	
 	var lobby_manager := get_lobby_manager()
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
