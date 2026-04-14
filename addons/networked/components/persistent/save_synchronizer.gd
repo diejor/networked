@@ -31,9 +31,11 @@ func _init(scomponent: SaveComponent) -> void:
 	delta_interval = 5.0
 	replication_interval = 5.0
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
-	public_visibility = false
+	
 	name = "SaveSynchronizer"
 	unique_name_in_owner = true
+	scomponent.add_child(self)
+	owner = scomponent.owner
 
 func _ready() -> void:
 	if not _initialized:

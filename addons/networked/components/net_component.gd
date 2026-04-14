@@ -33,7 +33,7 @@ func get_lobby_manager() -> MultiplayerLobbyManager:
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local client.
 ## Always returns [code]null[/code] on the server.
 func get_tp_layer() -> TPLayerAPI:
-	if not is_inside_tree() or multiplayer.is_server():
+	if not is_inside_tree() or not multiplayer or multiplayer.is_server():
 		return null
 	var manager := get_lobby_manager()
 	return manager.tp_layer if manager else null
@@ -46,7 +46,12 @@ func get_network_clock() -> NetworkClock:
 
 
 ## Returns the [PeerContext] for [param peer_id], defaulting to the local peer.
-func get_peer_context(peer_id: int = multiplayer.get_unique_id()) -> PeerContext:
+func get_peer_context(peer_id: int = -1) -> PeerContext:
+	if peer_id == -1:
+		if not is_inside_tree() or not multiplayer:
+			return null
+		peer_id = multiplayer.get_unique_id()
+	
 	var tree := get_multiplayer_tree()
 	return tree.get_peer_context(peer_id) if tree else null
 

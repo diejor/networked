@@ -43,9 +43,10 @@ var save_synchronizer: SaveSynchronizer:
 	get:
 		if not save_synchronizer:
 			save_synchronizer = SaveSynchronizer.new(self)
-			add_child(save_synchronizer)
-			save_synchronizer.owner = self
 		return save_synchronizer
+
+func _enter_tree() -> void:
+	var _force_init = save_synchronizer
 
 func _init() -> void:
 	## TODO: move name conventions to NetComponent

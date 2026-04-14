@@ -43,40 +43,40 @@ func _set_spawn_fn(fn: Callable) -> void:
 # --- level_spawn_function invocation -----------------------------------------
 
 func test_level_spawn_function_called_on_spawn() -> void:
-	var called := false
+	var called := [false]
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		called = true
+		called[0] = true
 		return TEST_LEVEL_SCENE.instantiate()
 	)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
 
-	assert_that(called).is_true()
+	assert_that(called[0]).is_true()
 
 
 func test_level_spawn_function_receives_correct_data() -> void:
-	var received = null
+	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
-		received = data
+		received[0] = data
 		return TEST_LEVEL_SCENE.instantiate()
 	)
 
 	server_mgr.spawn({"round": 7})
 
-	assert_that(received).is_equal({"round": 7})
+	assert_that(received[0]).is_equal({"round": 7})
 
 
 func test_level_not_in_tree_when_spawn_function_called() -> void:
-	var in_tree_during_call := true
+	var in_tree_during_call := [true]
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		var level := TEST_LEVEL_SCENE.instantiate()
-		in_tree_during_call = level.is_inside_tree()
+		in_tree_during_call[0] = level.is_inside_tree()
 		return level
 	)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
 
-	assert_that(in_tree_during_call).is_false()
+	assert_that(in_tree_during_call[0]).is_false()
 
 
 # --- active_lobbies keying ---------------------------------------------------
@@ -107,30 +107,30 @@ func test_two_custom_spawns_register_independently() -> void:
 # --- activate_lobby with level_spawn_function --------------------------------
 
 func test_activate_lobby_uses_lobby_spawn_data() -> void:
-	var received = null
+	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
-		received = data
+		received[0] = data
 		return TEST_LEVEL_SCENE.instantiate()
 	)
 	server_mgr.lobby_spawn_data[&"TestLevel"] = {"round": 3}
 
 	server_mgr.activate_lobby(&"TestLevel")
 
-	assert_that(received).is_equal({"round": 3})
+	assert_that(received[0]).is_equal({"round": 3})
 	assert_that(server_mgr.active_lobbies.has(&"TestLevel")).is_true()
 
 
 func test_activate_lobby_falls_back_to_name_when_no_spawn_data() -> void:
-	var received = null
+	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
-		received = data
+		received[0] = data
 		return TEST_LEVEL_SCENE.instantiate()
 	)
 	# No lobby_spawn_data entry — name itself should be forwarded.
 
 	server_mgr.activate_lobby(&"TestLevel")
 
-	assert_that(received).is_equal(&"TestLevel")
+	assert_that(received[0]).is_equal(&"TestLevel")
 	assert_that(server_mgr.active_lobbies.has(&"TestLevel")).is_true()
 
 
@@ -147,9 +147,9 @@ func test_activate_lobby_wakes_level_after_custom_spawn() -> void:
 
 
 func test_activate_lobby_does_not_respawn_when_already_active() -> void:
-	var call_count := 0
+	var call_count := [0]
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		call_count += 1
+		call_count[0] += 1
 		return TEST_LEVEL_SCENE.instantiate()
 	)
 	server_mgr.lobby_spawn_data[&"TestLevel"] = &"TestLevel"
@@ -157,7 +157,7 @@ func test_activate_lobby_does_not_respawn_when_already_active() -> void:
 	server_mgr.activate_lobby(&"TestLevel")
 	server_mgr.activate_lobby(&"TestLevel")
 
-	assert_that(call_count).is_equal(1)
+	assert_that(call_count[0]).is_equal(1)
 
 
 # --- EmptyAction on custom spawn path ----------------------------------------
@@ -168,6 +168,7 @@ func test_freeze_empty_action_applied_after_custom_spawn() -> void:
 	)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	await get_tree().process_frame
 
 	var lobby := server_mgr.active_lobbies.get(&"TestLevel") as Lobby
 	assert_that(lobby.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
@@ -194,6 +195,7 @@ func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn() 
 		MultiplayerLobbyManager.EmptyAction.KEEP_ACTIVE)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	await get_tree().process_frame
 
 	var lobby := server_mgr.active_lobbies.get(&"TestLevel") as Lobby
 	assert_that(lobby.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)

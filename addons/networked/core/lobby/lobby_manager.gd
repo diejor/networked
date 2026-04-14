@@ -309,7 +309,8 @@ func destroy_lobby(name: StringName) -> void:
 		NetLog.warn("MultiplayerLobbyManager: Cannot destroy lobby '%s': not active." % name)
 		return
 	NetLog.info("Destroying lobby '%s'." % name)
-	lobby.get_parent().remove_child(lobby)
+	if lobby.get_parent():
+		lobby.get_parent().remove_child(lobby)
 	lobby.queue_free()
 
 
@@ -424,7 +425,7 @@ func _on_lobby_spawned(node: Node) -> void:
 	if multiplayer.is_server():
 		lobby.synchronizer.despawned.connect(
 			_on_player_left_lobby.bind(StringName(lobby.level.name)))
-		_apply_empty_action_if_needed(StringName(lobby.level.name))
+		_apply_empty_action_if_needed.call_deferred(StringName(lobby.level.name))
 
 
 func _on_player_left_lobby(_player: Node, lobby_name: StringName) -> void:

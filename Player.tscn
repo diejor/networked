@@ -30,18 +30,18 @@ properties/2/replication_mode = 2
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
-[sub_resource type="Resource" id="Resource_d6rpx"]
+[sub_resource type="Resource" id="Resource_hp6x6"]
 resource_local_to_scene = true
 script = ExtResource("8_3tkgg")
 metadata/_custom_type_script = "uid://d1mnum02gn0c0"
 
-[sub_resource type="Resource" id="Resource_r3kul"]
+[sub_resource type="Resource" id="Resource_3tkgg"]
 script = ExtResource("9_l6ohk")
 metadata/_custom_type_script = "uid://dlsdsleg37hm1"
 
-[sub_resource type="Resource" id="Resource_jatw7"]
+[sub_resource type="Resource" id="Resource_l6ohk"]
 script = ExtResource("10_oudfo")
-backend = SubResource("Resource_r3kul")
+backend = SubResource("Resource_3tkgg")
 metadata/_custom_type_script = "uid://icayc7hx72vn"
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
@@ -79,10 +79,10 @@ property_modes = Dictionary[StringName, int]({
 })
 metadata/_custom_type_script = "uid://b21bbqt166ive"
 
-[node name="SaveComponent" type="Node" parent="." unique_id=1352524284]
+[node name="SaveComponent" type="Node" parent="." unique_id=2072068161]
 script = ExtResource("7_hp6x6")
-save_container = SubResource("Resource_d6rpx")
-database = SubResource("Resource_jatw7")
+save_container = SubResource("Resource_hp6x6")
+database = SubResource("Resource_l6ohk")
 table_name = &"player"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
