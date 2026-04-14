@@ -51,7 +51,6 @@ func host() -> Error:
 		DisplayServer.clipboard_set(tube.session_id)
 		return OK
 		
-	NetLog.error("Tube failed to create session. State: %d" % tube.state)
 	return ERR_CANT_CREATE
 
 ## Joins the Tube session identified by [param server_address]. Returns [code]OK[/code] or an error code.
@@ -65,7 +64,6 @@ func join(server_address: String, _username: String = "") -> Error:
 	if tube.state == TubeWrapper.State.JOINING_SESSION or tube.state == TubeWrapper.State.SESSION_JOINED:
 		return OK
 		
-	NetLog.error("Tube failed to join session. State: %d" % tube.state)
 	return ERR_CANT_CONNECT
 
 func peer_reset_state() -> void:

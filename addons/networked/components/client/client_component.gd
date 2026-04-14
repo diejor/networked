@@ -124,8 +124,7 @@ func _ready() -> void:
 
 	if username.is_empty():
 		if not multiplayer.is_server():
-			log_trace("ClientComponent: username is empty for `%s` during _ready, \
-freeing." % owner.name)
+			log_trace("Freeing spawner node `%s` because we are in client." % owner.name)
 			owner.queue_free()
 
 		SynchronizersCache.sync_only_server(owner)

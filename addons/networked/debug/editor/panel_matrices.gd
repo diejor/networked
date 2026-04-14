@@ -28,6 +28,9 @@ var _last_snapshot: Dictionary = {}
 # Sorted peer IDs derived from snapshot.
 var _all_peers: Array[int] = []
 
+# lobby_name → Label node in the visibility grid (for highlight).
+var _lobby_labels: Dictionary[String, Label] = {}
+
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 6)
@@ -98,6 +101,7 @@ func clear() -> void:
 	_clear_grid(_rep_grid)
 	_last_snapshot = {}
 	_all_peers = []
+	_lobby_labels.clear()
 
 
 # ─── Visibility Matrix ────────────────────────────────────────────────────────
@@ -107,7 +111,20 @@ func update_visibility_matrix(snapshot: Dictionary) -> void:
 	_rebuild_visibility_matrix()
 
 
+func highlight_lobby(lobby_name: String) -> void:
+	_clear_lobby_highlights()
+	var lbl: Label = _lobby_labels.get(lobby_name)
+	if lbl:
+		lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
+
+
+func _clear_lobby_highlights() -> void:
+	for lbl: Label in _lobby_labels.values():
+		lbl.remove_theme_color_override("font_color")
+
+
 func _rebuild_visibility_matrix() -> void:
+	_lobby_labels.clear()
 	_clear_grid(_vis_grid)
 
 	var lobbies: Array = _last_snapshot.get("lobbies", [])
@@ -140,7 +157,9 @@ func _rebuild_visibility_matrix() -> void:
 		var process_mode: int = lobby.get("process_mode", 0)
 		var frozen: bool = process_mode == Node.PROCESS_MODE_DISABLED
 
-		_vis_grid.add_child(_make_label(lobby_name + (" ❄" if frozen else ""), 120))
+		var lobby_lbl := _make_label(lobby_name + (" ❄" if frozen else ""), 120)
+		_lobby_labels[lobby_name] = lobby_lbl
+		_vis_grid.add_child(lobby_lbl)
 
 		for pid: int in _all_peers:
 			if pid == 1:  # server always visible

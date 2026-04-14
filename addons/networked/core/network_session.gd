@@ -61,21 +61,35 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 
 	var url := client_data.url
 	NetLog.info("Connecting player %s to %s" % [client_data.username, url])
+	
 	if manage_scene and _is_singleplayer(url):
+		# First attempt: Try to join an existing server on localhost.
+		# If url is empty, we MUST probe localhost to find existing local sessions.
+		var probe_url := url if not url.is_empty() else "localhost"
+		
+		# We use a short timeout and quiet=true so we can pivot to hosting quickly without error logs.
+		var probe_err: Error = await client.join(probe_url, client_data.username, 1.0, true)
+		if probe_err == OK:
+			_request_join(client_data)
+			return
+		
+		# Second attempt: If join failed (timeout or refused), try to host the server ourselves.
 		url = await _host_server()
 	elif OS.has_feature("web"):
 		if url.begins_with("ws"):
 			client.backend = WebSocketBackend.new()
 	
 	var client_err: Error = await client.join(url, client_data.username)
-	if client_err != OK:
-		NetLog.error("Failed to join: %s" % error_string(client_err))
-		return
-	
+	if client_err == OK:
+		_request_join(client_data)
+
+
+func _request_join(client_data: MultiplayerClientData) -> void:
 	client.lobby_manager.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()
 	)
+
 
 ## Starts this session as a dedicated server without creating a separate server node.
 ##
@@ -84,12 +98,7 @@ func host() -> Error:
 	NetLog.trace("NetworkSession: host called.")
 	client.is_server = true
 	client.name = "Server"
-	var err: Error = client.host()
-	if err != OK:
-		NetLog.error("Failed to host server: %s" % error_string(err))
-	else:
-		NetLog.info("Server hosted successfully.")
-	return err
+	return client.host()
 
 
 ## Returns the address clients should use to connect after [method host] succeeds.
@@ -156,13 +165,15 @@ func _host_server() -> String:
 	add_child(server)
 	
 	NetLog.info("Starting embedded server...")
-	var server_err := server.host()
+	# We use quiet=true here because we expect ERR_ALREADY_IN_USE in multi-client scenarios.
+	var server_err := server.host(true)
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
-	assert(server_err == OK or in_use, "Server failed to start: %s" % error_string(server_err))
+	if server_err != OK and not in_use:
+		NetLog.error("Server failed to start: %s" % error_string(server_err))
 	
 	if in_use:
-		NetLog.info("Server address already in use, using localhost.")
+		NetLog.info("Server address already in use, connecting to localhost.")
 		server.queue_free.call_deferred()
 		return "localhost"
 		

@@ -16,6 +16,10 @@ var session_id: int
 # Whether the Freeze toggle is active.
 var _freeze: bool = false
 
+# Desired auto-break state. Stored here so it can be re-sent when the game
+# session becomes active (the toggle may be set before the game starts).
+var _auto_break: bool = false
+
 # Known trees: tree_name → {is_server, backend_class, online}
 var _trees: Dictionary[String, Dictionary] = {}
 
@@ -33,8 +37,11 @@ var _panel_matrices: PanelMatrices
 var _panel_components: PanelComponents
 var _panel_log: PanelLogBridge
 var _panel_clock: PanelClock
-var _panel_crash_manifest: RichTextLabel
-var _copy_manifest_btn: Button
+var _panel_crash_manifest: PanelCrashManifest
+
+# NodePath prefix (as String) → alias (e.g. "/root/.../Level1" → "[Lobby:Level1]")
+# Populated by lobby_spawned / lobby_despawned events forwarded from the reporter.
+var _alias_map: Dictionary = {}
 
 # Session Bar widgets.
 var _tree_selector: OptionButton
@@ -81,6 +88,12 @@ func _build_session_bar() -> void:
 	_freeze_btn.toggled.connect(func(v: bool) -> void: _freeze = v)
 	bar.add_child(_freeze_btn)
 
+	var break_btn := CheckButton.new()
+	break_btn.text = "Break on Manifest"
+	break_btn.tooltip_text = "Pause the game (like a breakpoint) the moment a crash manifest is generated."
+	break_btn.toggled.connect(_on_auto_break_toggled)
+	bar.add_child(break_btn)
+
 	var export_btn := Button.new()
 	export_btn.text = "Export State"
 	export_btn.pressed.connect(_on_export_state)
@@ -111,31 +124,11 @@ func _build_tabs() -> void:
 	_panel_clock.name = "Clock"
 	tabs.add_child(_panel_clock)
 
-	var crash_tab := VBoxContainer.new()
-	crash_tab.name = "Crash Manifest"
-	tabs.add_child(crash_tab)
-
-	var crash_toolbar := HBoxContainer.new()
-	crash_tab.add_child(crash_toolbar)
-
-	_copy_manifest_btn = Button.new()
-	_copy_manifest_btn.text = "Copy"
-	_copy_manifest_btn.disabled = true
-	_copy_manifest_btn.pressed.connect(_on_copy_manifest)
-	crash_toolbar.add_child(_copy_manifest_btn)
-
-	var clear_manifest_btn := Button.new()
-	clear_manifest_btn.text = "Clear"
-	clear_manifest_btn.pressed.connect(_on_clear_manifest)
-	crash_toolbar.add_child(clear_manifest_btn)
-
-	_panel_crash_manifest = RichTextLabel.new()
-	_panel_crash_manifest.bbcode_enabled = true
-	_panel_crash_manifest.selection_enabled = true
-	_panel_crash_manifest.context_menu_enabled = true
+	_panel_crash_manifest = PanelCrashManifest.new()
+	_panel_crash_manifest.name = "Crash Manifest"
 	_panel_crash_manifest.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
-	crash_tab.add_child(_panel_crash_manifest)
+	_panel_crash_manifest.on_context_selected = _on_manifest_context_selected
+	tabs.add_child(_panel_crash_manifest)
 
 
 # ─── Message Dispatch ─────────────────────────────────────────────────────────
@@ -168,6 +161,9 @@ func _on_session_registered(d: Dictionary) -> void:
 		"backend_class": d.get("backend_class", ""),
 		"online": true,
 	}
+	# Game just connected — push current toggle state so it takes effect
+	# even if the button was set before the game started.
+	_send_auto_break_state()
 	_refresh_tree_selector()
 
 
@@ -230,93 +226,36 @@ func _on_replication_snapshot(d: Dictionary) -> void:
 func _on_crash_manifest(d: Dictionary) -> void:
 	if not is_instance_valid(_panel_crash_manifest):
 		return
-
-	var trigger: String = d.get("trigger", "UNKNOWN")
-	var cid: String = d.get("cid", "?")
-	var frame: int = d.get("frame", 0)
-	var ts: int = d.get("timestamp_usec", 0)
-	var player: String = d.get("player_name", "?")
-	var in_tree: bool = d.get("in_tree", false)
-	var net: Dictionary = d.get("network_state", {})
-	var syncs: Array = d.get("preflight_snapshot", [])
-
-	var lines: PackedStringArray = []
-	
-	# If this isn't the first manifest, add a separator
-	if not _panel_crash_manifest.text.is_empty() and "[i]No crash manifest" not in _panel_crash_manifest.text:
-		lines.append("[color=gray][url=---]--------------------------------------------------------------------------------[/url][/color]")
-
-	lines.append("[color=red][b]CRASH MANIFEST[/b][/color]")
-	lines.append("[b]Trigger:[/b] %s" % trigger)
-	lines.append("[b]CID:[/b] %s  [b]Frame:[/b] %d  [b]Time:[/b] %.3f s" % [
-		cid, frame, ts / 1_000_000.0])
-	lines.append("[b]Player:[/b] %s  [b]in_tree:[/b] %s" % [player, str(in_tree)])
-	lines.append("[b]Network:[/b] %s  peer=%d" % [
-		"server" if net.get("is_server", false) else "client",
-		net.get("peer_id", 0)])
-	lines.append("[b]Active Scene:[/b] %s" % d.get("active_scene", "?"))
-	
-	var error_text: String = d.get("error_text", "")
-	if not error_text.is_empty():
-		lines.append("[b]Error Text:[/b]\n[color=orange]%s[/color]" % error_text.replace("[", "\\["))
-	
-	if not syncs.is_empty():
-		lines.append("")
-		lines.append("[b]Preflight Snapshot (%d node(s)):[/b]" % syncs.size())
-		for s: Dictionary in syncs:
-			if s.has("type"):
-				# SERVER_SIMPLIFY_PATH_RACE format: {type, path, lobby?, public_visibility?, engine_broadcast?}
-				var lobby_str := ("  lobby=%s" % s["lobby"]) if s.has("lobby") else ""
-				var vis_str := ("  pub_vis=%s" % str(s["public_visibility"])) if s.has("public_visibility") else ""
-				var broadcast: bool = s.get("engine_broadcast", false)
-				var type_color := "gray" if broadcast else "red"
-				var note := " [color=gray](engine-level broadcast)[/color]" if broadcast else ""
-				
-				lines.append("  [color=%s]%s[/color]  path=%s%s%s%s" % [
-					type_color, s.get("type", "?"), s.get("path", "?"), lobby_str, vis_str, note,
-				])
-			else:
-				# EMPTY_REPLICATION_CONFIG / CLIENT_EMPTY_CONFIG format: {name, parent, owner, ...}
-				var ok_color := "green" if s.get("root_path_resolves", false) else "red"
-				lines.append(
-					"  [color=%s]%s[/color] → parent=%s  owner=%s  root_path=%s  props=%d  pub_vis=%s" % [
-						ok_color,
-						s.get("name", "?"),
-						s.get("parent", "?"),
-						s.get("owner", "?"),
-						s.get("root_path", "?"),
-						s.get("prop_count", 0),
-						str(s.get("public_visibility", "?")),
-					])
-
-	if "[i]No crash manifest" in _panel_crash_manifest.text:
-		_panel_crash_manifest.text = "\n".join(lines)
-	else:
-		_panel_crash_manifest.text += "\n" + "\n".join(lines)
-		
-	if is_instance_valid(_copy_manifest_btn):
-		_copy_manifest_btn.disabled = false
-	
-	# Scroll to the bottom to show the newest manifest
-	call_deferred("_scroll_to_bottom")
+	var entry := ManifestFormatter.format(d, _alias_map)
+	_panel_crash_manifest.push_entry(entry)
 
 
-func _scroll_to_bottom() -> void:
-	var scroll: VScrollBar = _panel_crash_manifest.get_v_scroll_bar()
-	if scroll:
-		scroll.value = scroll.max_value
+# ─── Orchestrator Bus ─────────────────────────────────────────────────────────
+
+func _on_auto_break_toggled(enabled: bool) -> void:
+	_auto_break = enabled
+	_send_auto_break_state()
 
 
-func _on_copy_manifest() -> void:
-	if is_instance_valid(_panel_crash_manifest):
-		DisplayServer.clipboard_set(_panel_crash_manifest.get_parsed_text())
+func _send_auto_break_state() -> void:
+	if plugin:
+		plugin.send_to_game(session_id, "networked:set_auto_break", [_auto_break])
 
 
-func _on_clear_manifest() -> void:
-	if is_instance_valid(_panel_crash_manifest):
-		_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
-	if is_instance_valid(_copy_manifest_btn):
-		_copy_manifest_btn.disabled = true
+func _on_manifest_context_selected(ctx: Dictionary) -> void:
+	var cid: String = ctx.get("cid", "")
+	var player: String = ctx.get("player_name", "")
+
+	if not cid.is_empty():
+		_panel_log.highlight_cid(cid)
+	if not player.is_empty():
+		_panel_components.highlight_player(player)
+	# Lobby name can be derived from the selected tree's latest snapshot.
+	var tn: String = ctx.get("tree_name", _selected_tree)
+	if tn in _lobby_snapshots:
+		var lobbies: Array = _lobby_snapshots[tn].get("lobbies", [])
+		if not lobbies.is_empty():
+			_panel_matrices.highlight_lobby(lobbies[0].get("name", ""))
 
 
 # ─── Session Bar Logic ────────────────────────────────────────────────────────
@@ -401,7 +340,8 @@ func reset_session() -> void:
 	_panel_log.clear()
 	_panel_matrices.clear()
 	if is_instance_valid(_panel_crash_manifest):
-		_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
+		_panel_crash_manifest.clear()
+	_alias_map.clear()
 
 
 func _on_export_state() -> void:

@@ -104,8 +104,16 @@ func _enter_tree() -> void:
 					str(is_inside_tree()),
 					str(root_path),
 				])
+			var cid_timeline: Array = []
+			# Use a dynamic approach to avoid hard parse error if NetworkedDebugReporter is broken
+			var tree_root := get_tree().root if is_inside_tree() else (Engine.get_main_loop() as SceneTree).root
+			var reporter = tree_root.get_node_or_null("NetworkedDebugger")
+			if reporter:
+				cid_timeline = reporter._cid_stack.map(func(s: StringName) -> String: return str(s))
+
 			EngineDebugger.send_message("networked:crash_manifest", [{
-				"cid": "",
+				"cid": str(save_component._save_cid) if save_component and not save_component._save_cid.is_empty() else "N/A",
+				"cid_timeline": cid_timeline,
 				"trigger": "CLIENT_EMPTY_CONFIG_ON_ENTER_TREE",
 				"frame": Engine.get_process_frames(),
 				"timestamp_usec": Time.get_ticks_usec(),

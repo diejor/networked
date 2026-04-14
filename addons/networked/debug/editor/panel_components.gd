@@ -44,6 +44,24 @@ func clear() -> void:
 	_player_items.clear()
 
 
+## Highlight the row for [param player_name].
+## Called by the Orchestrator Bus when the user selects a manifest entry.
+func highlight_player(player_name: String) -> void:
+	if player_name.is_empty():
+		return
+	_clear_highlights()
+	var item: TreeItem = _player_items.get(player_name)
+	if item:
+		item.set_custom_bg_color(0, Color(0.2, 0.4, 0.2), false)
+		item.select(0)
+		_tree.scroll_to_item(item)
+
+
+func _clear_highlights() -> void:
+	for item: TreeItem in _player_items.values():
+		item.clear_custom_bg_color(0)
+
+
 func update_player(d: Dictionary) -> void:
 	var player_name: String = d.get("player_name", "?")
 	var components: Dictionary = d.get("components", {})

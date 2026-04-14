@@ -33,6 +33,21 @@ var _hooked_lobby_syncs: Dictionary = {}
 
 var _watchdog: ErrorWatchdog
 
+var _cid_stack: Array[StringName] = []
+
+# Whether to call EngineDebugger.debug() after sending a crash manifest.
+# Toggled from the editor via the "Break on Manifest" button.
+var _auto_break: bool = false
+
+# Telemetry ring buffer — records one entry per flush cycle.
+var _telemetry: NetTelemetryBuffer
+
+# Peer events and component events accumulated during the current flush cycle.
+var _cycle_peer_events: Array = []
+var _cycle_component_events: Array = []
+# Last known lobby snapshots keyed by tree_name (updated by _send_lobby_snapshot).
+var _last_lobby_snapshots: Dictionary = {}
+
 
 func _enter_tree() -> void:
 	if not _should_report():
@@ -47,6 +62,10 @@ func _enter_tree() -> void:
 				_on_editor_message(message, data)
 				return true
 		)
+
+	var capacity: int = ProjectSettings.get_setting(
+		"debug/networked/telemetry_buffer_size", 120)
+	_telemetry = NetTelemetryBuffer.new(capacity)
 
 	_watchdog = ErrorWatchdog.new()
 	add_child(_watchdog)
@@ -142,13 +161,46 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 
 	# Emit crash manifest for the watchdog event so the editor panel shows it.
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": "N/A",
+		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
+		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
 		"trigger": "C++ ERROR / LOG WATCHDOG",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": timestamp,
 		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
 		"error_text": error_text,
+		"telemetry_slice": _freeze_and_slice(),
 	}])
+	_maybe_break()
+
+
+## Pushes a new Correlation ID onto the breadcrumb stack for diagnostic timeline.
+func push_cid(cid: StringName) -> void:
+	if cid.is_empty():
+		return
+	if not _cid_stack.is_empty() and _cid_stack[0] == cid:
+		return
+	
+	_cid_stack.push_front(cid)
+	
+	var max_size: int = ProjectSettings.get_setting("debug/networked/cid_stack_size", 5)
+	if _cid_stack.size() > max_size:
+		_cid_stack.pop_back()
+
+
+func _get_rel_path(node: Node, mt: MultiplayerTree) -> String:
+	if not is_instance_valid(node) or not is_instance_valid(mt):
+		return "?"
+	var tree_root := mt.get_path()
+	var node_path := node.get_path()
+	var s_root := str(tree_root)
+	var s_node := str(node_path)
+	
+	if s_node.begins_with(s_root):
+		var rel := s_node.trim_prefix(s_root)
+		if rel.begins_with("/"):
+			rel = rel.substr(1)
+		return rel
+	return s_node
 
 
 func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
@@ -157,12 +209,16 @@ func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
 
 
 func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
+	var ev := {"tree_name": mt.name, "peer_id": peer_id, "event": "connected"}
+	_cycle_peer_events.append(ev)
 	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
 	if mt.is_server:
 		_check_simplify_path_race_on_connect(peer_id, mt)
 
 
 func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
+	var ev := {"tree_name": mt.name, "peer_id": peer_id, "event": "disconnected"}
+	_cycle_peer_events.append(ev)
 	_queue("networked:peer_disconnected", {"tree_name": mt.name, "peer_id": peer_id})
 
 
@@ -208,7 +264,7 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 		if spawner in _hooked_spawners:
 			continue
 		var cb := func(node: Node) -> void:
-			_queue("networked:component_event", {
+			var ev := {
 				"tree_name": mt.name,
 				"side": "S" if mt.is_server else "C",
 				"player_name": node.name if is_instance_valid(node) else "?",
@@ -220,7 +276,9 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 				"correlation_id": "",
 				"timestamp_usec": Time.get_ticks_usec(),
 				"frame": Engine.get_process_frames(),
-			})
+			}
+			_cycle_component_events.append(ev)
+			_queue("networked:component_event", ev)
 		spawner.spawned.connect(cb)
 		_hooked_spawners[spawner] = cb
 
@@ -242,6 +300,9 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 		races.append({
 			"type": "MultiplayerSpawner", 
 			"path": str(child.get_path()),
+			"rel_path": _get_rel_path(child, mt),
+			"auth": child.get_multiplayer_authority(),
+			"is_auth": child.is_multiplayer_authority(),
 			"engine_broadcast": true,
 		})
 	for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
@@ -250,21 +311,18 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 			races.append({
 				"type": "MultiplayerSynchronizer",
 				"path": str(sync.get_path()),
+				"rel_path": _get_rel_path(sync, mt),
+				"auth": sync.get_multiplayer_authority(),
+				"is_auth": sync.is_multiplayer_authority(),
 				"public_visibility": true,
 			})
 
 	if races.is_empty():
 		return
 
-	push_warning(
-		"[CRASH MANIFEST] simplify_path race on lobby spawn: '%s' entered server tree while " \
-		+ "%d peer(s) connected. %d node(s) sent simplify_path before level spawn packet. " \
-		+ "Clients will log 'Node not found' for these paths. Fix: defer spawn until client " \
-		+ "confirms level is loaded (Step 6 lobby-ready handshake)." % [
-			lobby.level.name, peers.size(), races.size(),
-		])
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": "",
+		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
+		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -277,7 +335,9 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 		"preflight_snapshot": races,
 		"player_name": lobby.level.name,
 		"in_tree": lobby.level.is_inside_tree(),
+		"telemetry_slice": _freeze_and_slice(),
 	}])
+	_maybe_break()
 
 
 ## Emits a crash manifest when a new peer connects to the server while nodes are already
@@ -308,6 +368,9 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 			races.append({
 				"type": "MultiplayerSpawner",
 				"path": str(spawner.get_path()),
+				"rel_path": _get_rel_path(spawner, mt),
+				"auth": spawner.get_multiplayer_authority(),
+				"is_auth": spawner.is_multiplayer_authority(),
 				"lobby": str(lobby_name),
 				"engine_broadcast": true,
 			})
@@ -317,6 +380,9 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 				races.append({
 					"type": "MultiplayerSynchronizer",
 					"path": str(sync.get_path()),
+					"rel_path": _get_rel_path(sync, mt),
+					"auth": sync.get_multiplayer_authority(),
+					"is_auth": sync.is_multiplayer_authority(),
 					"lobby": str(lobby_name),
 					"public_visibility": true,
 				})
@@ -324,15 +390,9 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 	if races.is_empty():
 		return
 
-	push_warning(
-		("[CRASH MANIFEST] simplify_path race: peer %d connected while %d node(s) are " \
-		+ "already registered in active lobbies. C++ sent simplify_path for all of them " \
-		+ "before the client receives the lobby/player spawn packets. " \
-		+ "'Node not found' errors will follow in process_simplify_path.") % [
-			peer_id, races.size(),
-		])
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": "",
+		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
+		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -345,7 +405,9 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 		"preflight_snapshot": races,
 		"player_name": "peer_%d" % peer_id,
 		"in_tree": true,
+		"telemetry_slice": _freeze_and_slice(),
 	}])
+	_maybe_break()
 
 
 ## Emits a crash manifest when a player is added to a lobby on the server while peers are
@@ -368,27 +430,27 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree) -
 	for child in player.find_children("*", "MultiplayerSynchronizer", true, false):
 		var sync := child as MultiplayerSynchronizer
 		if sync.public_visibility:
-			races.append({
+			var entry: Dictionary = {
 				"type": "MultiplayerSynchronizer",
 				# get_path() requires is_inside_tree(). The spawned signal can fire
 				# mid-NOTIFICATION_ENTER_TREE cascade (via spawner.spawned →
 				# child_entered_tree), so some descendants may not yet be in the tree.
 				"path": str(sync.get_path()) if sync.is_inside_tree() else sync.name,
+				"rel_path": _get_rel_path(sync, mt) if sync.is_inside_tree() else sync.name,
 				"public_visibility": true,
-			})
+			}
+			if sync.is_inside_tree():
+				entry["auth"] = sync.get_multiplayer_authority()
+				entry["is_auth"] = sync.is_multiplayer_authority()
+			
+			races.append(entry)
 
 	if races.is_empty():
 		return
 
-	push_warning(
-		("[CRASH MANIFEST] simplify_path race on player spawn: '%s' entered lobby while " \
-		+ "%d peer(s) are connected. C++ sent simplify_path for %d synchronizer(s) before " \
-		+ "those peers receive the player spawn packet. Peers who haven't loaded the level " \
-		+ "yet will log 'Node not found'.") % [
-			player.name, peers.size(), races.size(),
-		])
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": "",
+		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
+		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -401,7 +463,9 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree) -
 		"preflight_snapshot": races,
 		"player_name": player.name,
 		"in_tree": player.is_inside_tree(),
+		"telemetry_slice": _freeze_and_slice(),
 	}])
+	_maybe_break()
 
 
 func _unhook_spawners_in(root: Node) -> void:
@@ -433,10 +497,9 @@ func _send_lobby_snapshot(mt: MultiplayerTree) -> void:
 			"connected_clients": peers,
 			"process_mode": int(lobby.level.process_mode),
 		})
-	_queue("networked:lobby_snapshot", {
-		"tree_name": mt.name,
-		"lobbies": lobbies_data,
-	})
+	var snapshot := {"tree_name": mt.name, "lobbies": lobbies_data}
+	_last_lobby_snapshots[mt.name] = snapshot
+	_queue("networked:lobby_snapshot", snapshot)
 
 
 func _send_component_heartbeats(mt: MultiplayerTree) -> void:
@@ -612,9 +675,12 @@ func _collect_properties(node: Node, sync: MultiplayerSynchronizer) -> Dictionar
 func _on_editor_message(message: String, data: Array) -> void:
 	if data.is_empty():
 		return
+	# register_message_capture strips the "networked:" prefix before calling here,
+	# so match against the suffix only.
 	match message:
-		"networked:watch_node":   _handle_watch_node(data[0])
-		"networked:unwatch_node": _handle_unwatch_node(data[0])
+		"watch_node":     _handle_watch_node(data[0])
+		"unwatch_node":   _handle_unwatch_node(data[0])
+		"set_auto_break": _auto_break = true if data[0] else false
 
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
@@ -634,10 +700,48 @@ func _flush_queue() -> void:
 func _flush_now() -> void:
 	if not _should_report():
 		_message_queue.clear()
+		_cycle_peer_events.clear()
+		_cycle_component_events.clear()
 		return
+
+	# Snapshot cycle data into the ring buffer before dispatching.
+	if _telemetry:
+		_telemetry.record(
+			Engine.get_process_frames(),
+			_cid_stack.map(func(s: StringName) -> String: return str(s)),
+			_cycle_component_events,
+			_cycle_peer_events,
+			_last_lobby_snapshots,
+		)
+	_cycle_peer_events.clear()
+	_cycle_component_events.clear()
+
 	for entry: Array in _message_queue:
 		EngineDebugger.send_message(entry[0], [entry[1]])
 	_message_queue.clear()
+
+
+# ─── Telemetry Helpers ────────────────────────────────────────────────────────
+
+## Freezes the ring buffer and returns its snapshot as the telemetry_slice for a manifest.
+## Call this immediately before sending any crash_manifest message.
+func _freeze_and_slice() -> Array:
+	if _telemetry:
+		_telemetry.freeze()
+		return _telemetry.snapshot()
+	return []
+
+
+## Pauses the engine if "Break on Manifest" is enabled in the editor.
+## Call this immediately after sending a crash_manifest message so the editor
+## panel has already received the manifest before execution halts.
+func _maybe_break() -> void:
+	if not _auto_break:
+		return
+	if EngineDebugger.is_skipping_breakpoints():
+		push_warning("[Networked] Break on Manifest is enabled but Skip Breakpoints is active — ignoring.")
+		return
+	breakpoint
 
 
 # ─── Guard ────────────────────────────────────────────────────────────────────

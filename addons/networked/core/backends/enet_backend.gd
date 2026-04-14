@@ -18,8 +18,6 @@ func host() -> Error:
 	if err == OK:
 		api.multiplayer_peer = peer
 		NetLog.info("ENet server ready on port %d" % port)
-	else:
-		NetLog.error("Failed to create ENet server: %s." % error_string(err))
 	
 	return err
 
@@ -34,8 +32,6 @@ func join(server_address: String, _username: String = "") -> Error:
 	if err == OK:
 		api.multiplayer_peer = peer
 		NetLog.info("ENet client connecting to %s:%d" % [server_address, port])
-	else:
-		NetLog.error("Failed to create ENet client: %s" % error_string(err))
 		
 	return err
 

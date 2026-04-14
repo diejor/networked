@@ -57,7 +57,6 @@ func host() -> Error:
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_server()
 	if err != OK:
-		NetLog.error("Failed to create WebRTC server: %s" % error_string(err))
 		return err
 		
 	_bind_webrtc_signals(peer)
@@ -88,7 +87,6 @@ func join(server_address: String, _username: String = "") -> Error:
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_client(_local_godot_id)
 	if err != OK:
-		NetLog.error("Failed to create WebRTC client: %s" % error_string(err))
 		return err
 		
 	_bind_webrtc_signals(peer)

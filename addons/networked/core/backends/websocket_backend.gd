@@ -27,7 +27,6 @@ func host() -> Error:
 		NetLog.info("WebSocket server ready on *:%d" % port)
 		return OK
 	
-	NetLog.error("Failed to create WebSocket server: %s" % error_string(err))
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
@@ -37,13 +36,12 @@ func join(server_address: String, _username: String = "") -> Error:
 	NetLog.debug("WebSocket connecting to URL: %s" % url)
 
 	var err := peer.create_client(url)
-	if err != OK:
-		NetLog.error("Can't create client (%s) to %s" % [error_string(err), url])
-		return err
+	if err == OK:
+		ws_peer = peer
+		NetLog.info("Client connecting to %s" % url)
+		return OK
 	
-	ws_peer = peer
-	NetLog.info("Client connecting to %s" % url)
-	return OK
+	return err
 
 ## Builds the WebSocket URL from [param server_address].
 ##

@@ -165,6 +165,12 @@ func _emit_debug_event(
 			side_label = "S" if local_id == 1 else ("C%d" % local_id)
 		if owner:
 			player_name = owner.name.split("|")[0]
+		if correlation_id:
+			var tree_root := get_tree().root if is_inside_tree() else (Engine.get_main_loop() as SceneTree).root
+			var reporter = tree_root.get_node_or_null("NetworkedDebugger")
+			if reporter:
+				reporter.push_cid(correlation_id)
+		
 		EngineDebugger.send_message("networked:component_event", [{
 			"tree_name": tree.name if tree else "",
 			"side": side_label,

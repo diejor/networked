@@ -146,47 +146,57 @@ func _process(dt: float) -> void:
 ##
 ## Calls [code]setup()[/code] on the backend if available, then [code]host()[/code].
 ## Returns [code]OK[/code] on success or a non-zero [enum Error] code on failure.
-func host() -> Error:
+func host(quiet: bool = false) -> Error:
 	NetLog.trace("MultiplayerTree: Hosting session.")
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
+			if not quiet:
+				NetLog.error("Setup failed: %s" % error_string(setup_err))
 			return setup_err
 	
 	var connection_code: Error = backend.host()
 	
 	if connection_code == OK:
 		_config_api()
+	elif not quiet:
+		NetLog.error("Failed to host: %s" % error_string(connection_code))
 		
 	return connection_code
 
 
 ## Connects to an active server at [param server_address] using the given [param username].
 ##
-## Awaits [signal connected_to_server] with a 5-second timeout.
+## Awaits [signal connected_to_server] with the specified [param timeout] (default 5.0s).
 ## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time, or another
 ## [enum Error] code if the backend rejects the connection immediately.
-func join(server_address: String, username: String) -> Error:
+func join(server_address: String, username: String, timeout: float = 5.0, quiet: bool = false) -> Error:
 	NetLog.trace("MultiplayerTree: Joining session at %s with username %s." % [server_address, username])
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
+			if not quiet:
+				NetLog.error("Setup failed: %s" % error_string(setup_err))
 			return setup_err
 	
 	var connection_code: Error = backend.join(server_address, username)
+	if connection_code != OK:
+		if not quiet:
+			NetLog.error("Failed to join: %s" % error_string(connection_code))
+		return connection_code
 	
-	var timer := get_tree().create_timer(5.0)
+	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
+		if not quiet:
+			NetLog.error("Connection timed out.")
 		return ERR_CANT_CONNECT
 	
-	if connection_code == OK:
-		_config_api()
-		
-	return connection_code
+	_config_api()
+	return OK
 
 
 ## Returns [code]true[/code] if the multiplayer peer is initialized and in an active connection.

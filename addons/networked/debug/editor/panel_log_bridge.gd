@@ -65,6 +65,36 @@ func clear() -> void:
 	_op_start_usec.clear()
 
 
+## Scroll to and highlight the operation row matching [param cid].
+## Called by the Orchestrator Bus when the user selects a manifest entry.
+func highlight_cid(cid: String) -> void:
+	if cid.is_empty():
+		return
+	# First, clear any prior highlights.
+	_clear_highlights()
+	var target: TreeItem = _op_items.get(cid)
+	if not target:
+		# Try prefix match (manifest CID may be the full value, stored item may use it as key).
+		for k: String in _op_items:
+			if k.begins_with(cid) or cid.begins_with(k):
+				target = _op_items[k]
+				break
+	if target:
+		target.set_custom_bg_color(0, Color(0.2, 0.4, 0.2), false)
+		target.select(0)
+		_tree.scroll_to_item(target)
+
+
+func _clear_highlights() -> void:
+	var root := _tree.get_root()
+	if not root:
+		return
+	var item := root.get_first_child()
+	while item:
+		item.clear_custom_bg_color(0)
+		item = item.get_next()
+
+
 func push_event(d: Dictionary) -> void:
 	var event_type: String = d.get("event_type", "?")
 	if not _filter_text.is_empty() and not event_type.contains(_filter_text):
