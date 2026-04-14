@@ -124,6 +124,11 @@ func _build_tabs() -> void:
 	_copy_manifest_btn.pressed.connect(_on_copy_manifest)
 	crash_toolbar.add_child(_copy_manifest_btn)
 
+	var clear_manifest_btn := Button.new()
+	clear_manifest_btn.text = "Clear"
+	clear_manifest_btn.pressed.connect(_on_clear_manifest)
+	crash_toolbar.add_child(clear_manifest_btn)
+
 	_panel_crash_manifest = RichTextLabel.new()
 	_panel_crash_manifest.bbcode_enabled = true
 	_panel_crash_manifest.selection_enabled = true
@@ -236,6 +241,11 @@ func _on_crash_manifest(d: Dictionary) -> void:
 	var syncs: Array = d.get("preflight_snapshot", [])
 
 	var lines: PackedStringArray = []
+	
+	# If this isn't the first manifest, add a separator
+	if not _panel_crash_manifest.text.is_empty() and "[i]No crash manifest" not in _panel_crash_manifest.text:
+		lines.append("[color=gray][url=---]--------------------------------------------------------------------------------[/url][/color]")
+
 	lines.append("[color=red][b]CRASH MANIFEST[/b][/color]")
 	lines.append("[b]Trigger:[/b] %s" % trigger)
 	lines.append("[b]CID:[/b] %s  [b]Frame:[/b] %d  [b]Time:[/b] %.3f s" % [
@@ -245,37 +255,68 @@ func _on_crash_manifest(d: Dictionary) -> void:
 		"server" if net.get("is_server", false) else "client",
 		net.get("peer_id", 0)])
 	lines.append("[b]Active Scene:[/b] %s" % d.get("active_scene", "?"))
-	lines.append("")
-	lines.append("[b]Preflight Snapshot (%d node(s)):[/b]" % syncs.size())
-	for s: Dictionary in syncs:
-		if s.has("type"):
-			# SERVER_SIMPLIFY_PATH_RACE format: {type, path, lobby?, public_visibility?}
-			var lobby_str := ("  lobby=%s" % s["lobby"]) if s.has("lobby") else ""
-			var vis_str := ("  pub_vis=%s" % str(s["public_visibility"])) if s.has("public_visibility") else ""
-			lines.append("  [color=red]%s[/color]  path=%s%s%s" % [
-				s.get("type", "?"), s.get("path", "?"), lobby_str, vis_str,
-			])
-		else:
-			# EMPTY_REPLICATION_CONFIG / CLIENT_EMPTY_CONFIG format: {name, parent, owner, ...}
-			var ok_color := "green" if s.get("root_path_resolves", false) else "red"
-			lines.append(
-				"  [color=%s]%s[/color] → parent=%s  owner=%s  root_path=%s  props=%d  pub_vis=%s" % [
-					ok_color,
-					s.get("name", "?"),
-					s.get("parent", "?"),
-					s.get("owner", "?"),
-					s.get("root_path", "?"),
-					s.get("prop_count", 0),
-					str(s.get("public_visibility", "?")),
+	
+	var error_text: String = d.get("error_text", "")
+	if not error_text.is_empty():
+		lines.append("[b]Error Text:[/b]\n[color=orange]%s[/color]" % error_text.replace("[", "\\["))
+	
+	if not syncs.is_empty():
+		lines.append("")
+		lines.append("[b]Preflight Snapshot (%d node(s)):[/b]" % syncs.size())
+		for s: Dictionary in syncs:
+			if s.has("type"):
+				# SERVER_SIMPLIFY_PATH_RACE format: {type, path, lobby?, public_visibility?, engine_broadcast?}
+				var lobby_str := ("  lobby=%s" % s["lobby"]) if s.has("lobby") else ""
+				var vis_str := ("  pub_vis=%s" % str(s["public_visibility"])) if s.has("public_visibility") else ""
+				var broadcast: bool = s.get("engine_broadcast", false)
+				var type_color := "gray" if broadcast else "red"
+				var note := " [color=gray](engine-level broadcast)[/color]" if broadcast else ""
+				
+				lines.append("  [color=%s]%s[/color]  path=%s%s%s%s" % [
+					type_color, s.get("type", "?"), s.get("path", "?"), lobby_str, vis_str, note,
 				])
-	_panel_crash_manifest.text = "\n".join(lines)
+			else:
+				# EMPTY_REPLICATION_CONFIG / CLIENT_EMPTY_CONFIG format: {name, parent, owner, ...}
+				var ok_color := "green" if s.get("root_path_resolves", false) else "red"
+				lines.append(
+					"  [color=%s]%s[/color] → parent=%s  owner=%s  root_path=%s  props=%d  pub_vis=%s" % [
+						ok_color,
+						s.get("name", "?"),
+						s.get("parent", "?"),
+						s.get("owner", "?"),
+						s.get("root_path", "?"),
+						s.get("prop_count", 0),
+						str(s.get("public_visibility", "?")),
+					])
+
+	if "[i]No crash manifest" in _panel_crash_manifest.text:
+		_panel_crash_manifest.text = "\n".join(lines)
+	else:
+		_panel_crash_manifest.text += "\n" + "\n".join(lines)
+		
 	if is_instance_valid(_copy_manifest_btn):
 		_copy_manifest_btn.disabled = false
+	
+	# Scroll to the bottom to show the newest manifest
+	call_deferred("_scroll_to_bottom")
+
+
+func _scroll_to_bottom() -> void:
+	var scroll: VScrollBar = _panel_crash_manifest.get_v_scroll_bar()
+	if scroll:
+		scroll.value = scroll.max_value
 
 
 func _on_copy_manifest() -> void:
 	if is_instance_valid(_panel_crash_manifest):
 		DisplayServer.clipboard_set(_panel_crash_manifest.get_parsed_text())
+
+
+func _on_clear_manifest() -> void:
+	if is_instance_valid(_panel_crash_manifest):
+		_panel_crash_manifest.text = "[color=gray][i]No crash manifest received yet.[/i][/color]"
+	if is_instance_valid(_copy_manifest_btn):
+		_copy_manifest_btn.disabled = true
 
 
 # ─── Session Bar Logic ────────────────────────────────────────────────────────

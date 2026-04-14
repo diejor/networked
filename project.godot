@@ -19,6 +19,10 @@ config/icon="res://icon.svg"
 
 NetworkedDebugger="*uid://bg56gori67101"
 
+[debug]
+
+file_logging/enable_file_logging=true
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/script-ide/plugin.cfg", "res://addons/tube/plugin.cfg")

@@ -25,7 +25,6 @@ func _init(scomponent: SaveComponent) -> void:
 	save_component = scomponent
 	
 	state_changed.connect(scomponent.on_state_changed)
-	
 	set_multiplayer_authority(scomponent.get_multiplayer_authority())
 	
 	delta_interval = 5.0
@@ -35,8 +34,12 @@ func _init(scomponent: SaveComponent) -> void:
 
 	name = "SaveSynchronizer"
 	unique_name_in_owner = true
+	
 	scomponent.add_child(self)
-	owner = scomponent.owner
+	
+	owner = scomponent 
+	
+	root_path = NodePath(".")
 
 func _enter_tree() -> void:
 	# Call setup() here, NOT in _ready(), so replication_config is set before

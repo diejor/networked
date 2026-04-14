@@ -50,7 +50,7 @@ func _enter_tree() -> void:
 
 func _init() -> void:
 	## TODO: move name conventions to NetComponent
-	name = "SpawnComponent"
+	name = "SaveComponent"
 	unique_name_in_owner = true
 
 func _ready() -> void:
@@ -70,6 +70,14 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_unregister()
 
+func _on_owner_tree_entered() -> void:
+	if Engine.is_editor_hint():
+		return
+		
+	var sync := save_synchronizer
+	
+	if not sync._initialized and save_container:
+		sync.setup()
 
 ## Returns an editor warning if the database configuration is incomplete.
 func _get_configuration_warnings() -> PackedStringArray:

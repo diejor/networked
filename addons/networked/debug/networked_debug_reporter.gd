@@ -31,6 +31,8 @@ var _hooked_spawners: Dictionary = {}
 # LobbySynchronizer -> Callable — tracks player-spawn race detection hooks.
 var _hooked_lobby_syncs: Dictionary = {}
 
+var _watchdog: ErrorWatchdog
+
 
 func _enter_tree() -> void:
 	if not _should_report():
@@ -45,6 +47,10 @@ func _enter_tree() -> void:
 				_on_editor_message(message, data)
 				return true
 		)
+
+	_watchdog = ErrorWatchdog.new()
+	add_child(_watchdog)
+	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
 
 
 func _exit_tree() -> void:
@@ -128,6 +134,21 @@ func _on_configured(mt: MultiplayerTree) -> void:
 	if mt.lobby_manager:
 		mt.lobby_manager.lobby_spawned.connect(_on_lobby_spawned.bind(mt))
 		mt.lobby_manager.lobby_despawned.connect(_on_lobby_despawned.bind(mt))
+
+
+func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
+	if not _should_report():
+		return
+
+	# Emit crash manifest for the watchdog event so the editor panel shows it.
+	EngineDebugger.send_message("networked:crash_manifest", [{
+		"cid": "N/A",
+		"trigger": "C++ ERROR / LOG WATCHDOG",
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": timestamp,
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
+		"error_text": error_text,
+	}])
 
 
 func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
@@ -218,7 +239,11 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 
 	var races: Array = []
 	for child in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
-		races.append({"type": "MultiplayerSpawner", "path": str(child.get_path())})
+		races.append({
+			"type": "MultiplayerSpawner", 
+			"path": str(child.get_path()),
+			"engine_broadcast": true,
+		})
 	for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
 		var sync := child as MultiplayerSynchronizer
 		if sync.public_visibility:
@@ -284,6 +309,7 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 				"type": "MultiplayerSpawner",
 				"path": str(spawner.get_path()),
 				"lobby": str(lobby_name),
+				"engine_broadcast": true,
 			})
 		for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
 			var sync := child as MultiplayerSynchronizer
