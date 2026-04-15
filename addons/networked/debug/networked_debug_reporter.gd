@@ -31,20 +31,17 @@ var _hooked_spawners: Dictionary = {}
 # LobbySynchronizer -> Callable — tracks player-spawn race detection hooks.
 var _hooked_lobby_syncs: Dictionary = {}
 
-var _watchdog: ErrorWatchdog
-
-var _cid_stack: Array[StringName] = []
 
 # Whether to call EngineDebugger.debug() after sending a crash manifest.
 # Toggled from the editor via the "Break on Manifest" button.
 var _auto_break: bool = false
 
 # Telemetry ring buffer — records one entry per flush cycle.
+var _watchdog: ErrorWatchdog
 var _telemetry: NetTelemetryBuffer
 
-# Peer events and component events accumulated during the current flush cycle.
+# Peer events accumulated during the current flush cycle.
 var _cycle_peer_events: Array = []
-var _cycle_component_events: Array = []
 # Last known lobby snapshots keyed by tree_name (updated by _send_lobby_snapshot).
 var _last_lobby_snapshots: Dictionary = {}
 
@@ -163,16 +160,10 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		return
 
 	# Prefer the active span's ID as the CID so the error attaches to its
-	# causal context. Fall back to the legacy _cid_stack for unspanned errors.
+	# causal context.
 	var active := NetTrace.active_span()
-	var cid_val: String
-	var cid_timeline: Array
-	if active:
-		cid_val = str(active.id)
-		cid_timeline = [cid_val] + _cid_stack.map(func(s: StringName) -> String: return str(s))
-	else:
-		cid_val = str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A"
-		cid_timeline = _cid_stack.map(func(s: StringName) -> String: return str(s))
+	var cid_val := str(active.id) if active else "N/A"
+	var cid_timeline: Array = [cid_val] if active else ["N/A"]
 
 	EngineDebugger.send_message("networked:crash_manifest", [{
 		"cid": cid_val,
@@ -187,18 +178,20 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	_maybe_break()
 
 
-## Pushes a new Correlation ID onto the breadcrumb stack for diagnostic timeline.
-func push_cid(cid: StringName) -> void:
-	if cid.is_empty():
-		return
-	if not _cid_stack.is_empty() and _cid_stack[0] == cid:
-		return
-	
-	_cid_stack.push_front(cid)
-	
-	var max_size: int = ProjectSettings.get_setting("debug/networked/cid_stack_size", 5)
-	if _cid_stack.size() > max_size:
-		_cid_stack.pop_back()
+## Returns true if [param sync] has at least one property configured for delta
+## replication (ALWAYS or ON_CHANGE).
+## Spawn-only synchronizers (all NEVER) and client-authoritative synchronizers
+## do not push state to a newly connecting peer from the server, so they are
+## not a meaningful race risk and are excluded from detection.
+func _has_delta_replication(sync: MultiplayerSynchronizer) -> bool:
+	if not sync.replication_config:
+		return false
+	for prop in sync.replication_config.get_properties():
+		var mode := sync.replication_config.property_get_replication_mode(prop)
+		if mode == SceneReplicationConfig.REPLICATION_MODE_ALWAYS \
+				or mode == SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE:
+			return true
+	return false
 
 
 func _get_rel_path(node: Node, mt: MultiplayerTree) -> String:
@@ -227,7 +220,7 @@ func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 	_cycle_peer_events.append(ev)
 	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
 	if mt.is_server:
-		var span := NetTrace.begin_peer("peer_connect", [peer_id], {"tree": mt.name})
+		var span: NetSpan = NetTrace.begin_peer("peer_connect", [peer_id], {"tree": mt.name}, mt.name)
 		span.step("server_received_connect")
 		_check_simplify_path_race_on_connect(peer_id, mt, span)
 
@@ -253,20 +246,21 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 		lobby_span = NetTrace.begin_peer("lobby_spawn", mt.multiplayer_api.get_peers(), {
 			"lobby_name": str(lobby.level.name),
 			"tree": mt.name,
-		})
+		}, mt.name)
 		lobby_span.step("spawners_registering")
 	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
 
 	if mt.is_server and is_instance_valid(lobby.synchronizer):
 		var cb := func(player: Node) -> void:
-			var peers: Array[int] = mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
-			var spawn_span := NetTrace.begin_peer("player_spawn", peers, {
+			var peers: Array = Array(mt.multiplayer_api.get_peers()) if mt.multiplayer_api else []
+			var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, {
 				"player": player.name,
 				"tree": mt.name,
-			})
+			}, mt.name)
 			spawn_span.step("player_entered_tree")
 			_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 		lobby.synchronizer.spawned.connect(cb)
+
 		_hooked_lobby_syncs[lobby.synchronizer] = cb
 
 
@@ -294,22 +288,8 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
 		if spawner in _hooked_spawners:
 			continue
-		var cb := func(node: Node) -> void:
-			var ev := {
-				"tree_name": mt.name,
-				"side": "S" if mt.is_server else "C",
-				"player_name": node.name if is_instance_valid(node) else "?",
-				"event_type": "spawner.native_confirmed",
-				"data": {
-					"node_name": node.name if is_instance_valid(node) else "?",
-					"spawner": spawner.name,
-				},
-				"correlation_id": "",
-				"timestamp_usec": Time.get_ticks_usec(),
-				"frame": Engine.get_process_frames(),
-			}
-			_cycle_component_events.append(ev)
-			_queue("networked:component_event", ev)
+		var cb := func(_node: Node) -> void:
+			pass
 		spawner.spawned.connect(cb)
 		_hooked_spawners[spawner] = cb
 
@@ -327,18 +307,9 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 		return
 
 	var races: Array = []
-	for child in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
-		races.append({
-			"type": "MultiplayerSpawner",
-			"path": str(child.get_path()),
-			"rel_path": _get_rel_path(child, mt),
-			"auth": child.get_multiplayer_authority(),
-			"is_auth": child.is_multiplayer_authority(),
-			"engine_broadcast": true,
-		})
 	for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
 		var sync := child as MultiplayerSynchronizer
-		if sync.public_visibility:
+		if sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
 			races.append({
 				"type": "MultiplayerSynchronizer",
 				"path": str(sync.get_path()),
@@ -355,14 +326,12 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 		return
 
 	if span:
-		span.step("race_detected", {"node_count": races.size()})
-		span.fail("simplify_path_race", {"preflight": races})
+		span.fail("simplify_path_race", {"node_count": races.size()})
 
-	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
-	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
+	var cid_val := str(span.id) if span else "N/A"
 	EngineDebugger.send_message("networked:crash_manifest", [{
 		"cid": cid_val,
-		"cid_timeline": cid_timeline,
+		"cid_timeline": [cid_val],
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -404,19 +373,9 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
-		for spawner in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
-			races.append({
-				"type": "MultiplayerSpawner",
-				"path": str(spawner.get_path()),
-				"rel_path": _get_rel_path(spawner, mt),
-				"auth": spawner.get_multiplayer_authority(),
-				"is_auth": spawner.is_multiplayer_authority(),
-				"lobby": str(lobby_name),
-				"engine_broadcast": true,
-			})
 		for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
 			var sync := child as MultiplayerSynchronizer
-			if sync.public_visibility:
+			if sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
 				races.append({
 					"type": "MultiplayerSynchronizer",
 					"path": str(sync.get_path()),
@@ -434,14 +393,12 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 		return
 
 	if span:
-		span.step("race_detected", {"node_count": races.size()})
-		span.fail("simplify_path_race", {"preflight": races})
+		span.fail("simplify_path_race", {"node_count": races.size()})
 
-	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
-	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
+	var cid_val := str(span.id) if span else "N/A"
 	EngineDebugger.send_message("networked:crash_manifest", [{
 		"cid": cid_val,
-		"cid_timeline": cid_timeline,
+		"cid_timeline": [cid_val],
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -478,20 +435,15 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 	var races: Array = []
 	for child in player.find_children("*", "MultiplayerSynchronizer", true, false):
 		var sync := child as MultiplayerSynchronizer
-		if sync.public_visibility:
-			var entry: Dictionary = {
+		if sync.is_inside_tree() and sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
+			races.append({
 				"type": "MultiplayerSynchronizer",
-				# get_path() requires is_inside_tree(). The spawned signal can fire
-				# mid-NOTIFICATION_ENTER_TREE cascade (via spawner.spawned →
-				# child_entered_tree), so some descendants may not yet be in the tree.
-				"path": str(sync.get_path()) if sync.is_inside_tree() else sync.name,
-				"rel_path": _get_rel_path(sync, mt) if sync.is_inside_tree() else sync.name,
+				"path": str(sync.get_path()),
+				"rel_path": _get_rel_path(sync, mt),
+				"auth": sync.get_multiplayer_authority(),
+				"is_auth": true,
 				"public_visibility": true,
-			}
-			if sync.is_inside_tree():
-				entry["auth"] = sync.get_multiplayer_authority()
-				entry["is_auth"] = sync.is_multiplayer_authority()
-			races.append(entry)
+			})
 
 	if races.is_empty():
 		if span:
@@ -500,14 +452,12 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 		return
 
 	if span:
-		span.step("race_detected", {"node_count": races.size()})
-		span.fail("simplify_path_race", {"preflight": races})
+		span.fail("simplify_path_race", {"node_count": races.size()})
 
-	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
-	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
+	var cid_val := str(span.id) if span else "N/A"
 	EngineDebugger.send_message("networked:crash_manifest", [{
 		"cid": cid_val,
-		"cid_timeline": cid_timeline,
+		"cid_timeline": [cid_val],
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -727,6 +677,25 @@ func _collect_properties(node: Node, sync: MultiplayerSynchronizer) -> Dictionar
 	return props
 
 
+## Formats Godot's raw "error" debugger message into a readable string.
+## Godot 4 sends: [source_func, source_file, source_line, error_code, error_descr, is_warning, ...]
+func _format_cpp_error(data: Array) -> String:
+	var parts: PackedStringArray = []
+	var prefix := "WARNING" if data.size() > 5 and data[5] else "ERROR"
+	var code: String    = str(data[3]) if data.size() > 3 else ""
+	var descr: String   = str(data[4]) if data.size() > 4 else ""
+	var func_: String   = str(data[0]) if data.size() > 0 else ""
+	var file_: String   = str(data[1]) if data.size() > 1 else ""
+	var line_: int      = int(data[2])  if data.size() > 2 else 0
+	if not code.is_empty():
+		parts.append("%s: %s" % [prefix, code])
+	if not descr.is_empty():
+		parts.append("  %s" % descr)
+	if not func_.is_empty():
+		parts.append("  at: %s (%s:%d)" % [func_, file_, line_])
+	return "\n".join(parts) if not parts.is_empty() else str(data)
+
+
 # ─── Incoming Editor Messages ─────────────────────────────────────────────────
 
 func _on_editor_message(message: String, data: Array) -> void:
@@ -735,10 +704,10 @@ func _on_editor_message(message: String, data: Array) -> void:
 	# register_message_capture strips the "networked:" prefix before calling here,
 	# so match against the suffix only.
 	match message:
-		"watch_node":      _handle_watch_node(data[0])
-		"unwatch_node":    _handle_unwatch_node(data[0])
-		"set_auto_break":  _auto_break = true if data[0] else false
-		"set_span_watch":  NetTrace.set_watch(str(data[0]), int(data[1]) if data.size() > 1 else 0)
+		"watch_node":        _handle_watch_node(data[0])
+		"unwatch_node":      _handle_unwatch_node(data[0])
+		"set_auto_break":    _auto_break = true if data[0] else false
+		"cpp_error_caught":  _on_cpp_error_caught(Time.get_ticks_usec(), _format_cpp_error(data))
 
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
@@ -759,7 +728,6 @@ func _flush_now() -> void:
 	if not _should_report():
 		_message_queue.clear()
 		_cycle_peer_events.clear()
-		_cycle_component_events.clear()
 		return
 
 	# Snapshot cycle data into the ring buffer before dispatching.
@@ -767,20 +735,15 @@ func _flush_now() -> void:
 	# telemetry slice shows which span was in flight during this cycle.
 	if _telemetry:
 		var active_span := NetTrace.active_span()
-		var cid_trail: Array
-		if active_span:
-			cid_trail = [str(active_span.id)] + _cid_stack.map(func(s: StringName) -> String: return str(s))
-		else:
-			cid_trail = _cid_stack.map(func(s: StringName) -> String: return str(s))
+		var cid_trail: Array = [str(active_span.id)] if active_span else ["N/A"]
 		_telemetry.record(
 			Engine.get_process_frames(),
 			cid_trail,
-			_cycle_component_events,
+			[], # component events retired
 			_cycle_peer_events,
 			_last_lobby_snapshots,
 		)
 	_cycle_peer_events.clear()
-	_cycle_component_events.clear()
 
 	for entry: Array in _message_queue:
 		EngineDebugger.send_message(entry[0], [entry[1]])
@@ -794,7 +757,7 @@ func _flush_now() -> void:
 func _freeze_and_slice() -> Array:
 	if _telemetry:
 		_telemetry.freeze()
-		return _telemetry.snapshot()
+		return _telemetry.snapshot(20)
 	return []
 
 

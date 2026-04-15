@@ -17,11 +17,11 @@ func _enter_tree() -> void:
 	scene_node_path_plugin = SceneNodePathPlugin.new()
 	add_child(scene_node_path_plugin)
 
-	log_editor = preload("res://addons/networked/utils/editor/net_log_editor.gd").new()
+	log_editor = preload("uid://b2dp22x17yufo").new()
 	log_editor.custom_minimum_size.y = 200
 	add_control_to_bottom_panel(log_editor, "NetLog")
 
-	_debugger_plugin = preload("res://addons/networked/debug/editor/networked_debugger_plugin.gd").new()
+	_debugger_plugin = preload("uid://b2lc6aalf32kx").new()
 	add_debugger_plugin(_debugger_plugin)
 
 func _exit_tree() -> void:

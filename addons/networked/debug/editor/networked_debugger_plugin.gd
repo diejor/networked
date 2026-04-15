@@ -45,6 +45,18 @@ func _discard_session(session_id: int) -> void:
 		_uis.erase(session_id)
 
 
+func _breakpoint_set_in_tree(script: Script, line: int, enabled: bool) -> void:
+	for ui: NetworkedDebuggerUI in _uis.values():
+		if is_instance_valid(ui):
+			ui.on_breakpoint_changed(script.resource_path, line, enabled)
+
+
+func _breakpoints_cleared_in_tree() -> void:
+	for ui: NetworkedDebuggerUI in _uis.values():
+		if is_instance_valid(ui):
+			ui.on_breakpoints_cleared()
+
+
 ## Sends a message from the editor to the running game via the given session.
 func send_to_game(session_id: int, message: String, data: Array) -> void:
 	var s := get_session(session_id)

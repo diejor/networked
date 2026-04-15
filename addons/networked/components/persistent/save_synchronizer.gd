@@ -58,38 +58,11 @@ func _enter_tree() -> void:
 	if not _initialized and save_component.save_container:
 		setup()
 
-	# Emit a diagnostic regardless of outcome so the editor panel shows client-side state.
-	# SaveSynchronizer can't use _emit_debug_event (no NetComponent ancestor), so we send
-	# directly via EngineDebugger.
-	if EngineDebugger.is_active():
-		var prop_count := replication_config.get_properties().size() if replication_config else 0
-		var side := "?"
-		if is_inside_tree() and multiplayer:
-			var lid := multiplayer.get_unique_id()
-			side = "S" if lid == 1 else ("C%d" % lid)
-		EngineDebugger.send_message("networked:component_event", [{
-			"tree_name": (save_component.get_multiplayer_tree().name
-			if save_component and save_component.get_multiplayer_tree() else ""),
-			"side": side,
-			"player_name": (save_component.owner.name.split("|")[0]
-				if save_component and save_component.owner else ""),
-			"event_type": "save_sync.enter_tree",
-			"data": {
-				"initialized": _initialized,
-				"has_config": replication_config != null,
-				"prop_count": prop_count,
-				"in_tree": is_inside_tree(),
-				"root_path": str(root_path),
-			},
-			"correlation_id": "",
-			"timestamp_usec": Time.get_ticks_usec(),
-			"frame": Engine.get_process_frames(),
-		}])
-
-		# Emit crash manifest if setup() still hasn't produced any properties.
-		# This catches the case where the client's SaveSynchronizer enters the tree
-		# with zero tracked properties — the C++ registration will silently fail.
-		if prop_count == 0 and _initialized:
+	# Emit crash manifest if setup() still hasn't produced any properties.
+	var prop_count := replication_config.get_properties().size() if replication_config else 0
+	# This catches the case where the client's SaveSynchronizer enters the tree
+	# with zero tracked properties — the C++ registration will silently fail.
+	if prop_count == 0 and _initialized:
 			# push_warning so this appears in the console even when the process
 			# is not attached to an editor debugger (e.g. the second OS process
 			# in a two-process embedded server+client session).
@@ -104,16 +77,9 @@ func _enter_tree() -> void:
 					str(is_inside_tree()),
 					str(root_path),
 				])
-			var cid_timeline: Array = []
-			# Use a dynamic approach to avoid hard parse error if NetworkedDebugReporter is broken
-			var tree_root := get_tree().root if is_inside_tree() else (Engine.get_main_loop() as SceneTree).root
-			var reporter = tree_root.get_node_or_null("NetworkedDebugger")
-			if reporter:
-				cid_timeline = reporter._cid_stack.map(func(s: StringName) -> String: return str(s))
-
+			
 			EngineDebugger.send_message("networked:crash_manifest", [{
-				"cid": str(save_component._save_cid) if save_component and not save_component._save_cid.is_empty() else "N/A",
-				"cid_timeline": cid_timeline,
+				"span_id": str(save_component._save_span.id) if save_component and save_component._save_span else "N/A",
 				"trigger": "CLIENT_EMPTY_CONFIG_ON_ENTER_TREE",
 				"frame": Engine.get_process_frames(),
 				"timestamp_usec": Time.get_ticks_usec(),

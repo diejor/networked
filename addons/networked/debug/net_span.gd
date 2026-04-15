@@ -9,12 +9,14 @@ extends RefCounted
 
 enum State { OPEN, CLOSED, FAILED }
 
-## Unique identifier for this span. Doubles as the [code]correlation_id[/code]
-## visible in the Log Bridge panel. Empty on no-op spans (debugger inactive).
+## Unique identifier for this span. Empty on no-op spans (debugger inactive).
 var id: StringName
 
 ## Human-readable label for this span type (e.g., [code]"lobby_spawn"[/code]).
 var label: String
+
+## The name of the MultiplayerTree this span belongs to. Empty for global spans.
+var tree_name: String
 
 ## Current lifecycle state.
 var state: State = State.OPEN
@@ -26,9 +28,10 @@ var _start_usec: int
 var _steps: Array = []
 
 
-func _init(p_id: StringName, p_label: String, meta: Dictionary = {}) -> void:
+func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name: String = "") -> void:
 	id = p_id
 	label = p_label
+	tree_name = p_tree_name
 	_start_frame = Engine.get_process_frames()
 	_start_usec = Time.get_ticks_usec()
 	if id.is_empty():
@@ -36,10 +39,12 @@ func _init(p_id: StringName, p_label: String, meta: Dictionary = {}) -> void:
 	_send("networked:span_open", {
 		"id": str(id),
 		"label": label,
+		"tree_name": tree_name,
 		"frame": _start_frame,
 		"timestamp_usec": _start_usec,
 		"meta": meta,
 		"affected_peers": _get_affected_peers(),
+		"caller": _get_caller(),
 	})
 
 
@@ -56,10 +61,12 @@ func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 		"data": data,
 		"frame": Engine.get_process_frames(),
 		"usec": Time.get_ticks_usec(),
+		"caller": _get_caller(),
 	}
 	_steps.append(s)
 	_send("networked:span_step", {
 		"id": str(id),
+		"span_label": label,
 		"step": s,
 		"step_index": _steps.size() - 1,
 	})
@@ -99,12 +106,30 @@ func fail(reason: String, data: Dictionary = {}) -> void:
 		"steps": _steps,
 		"affected_peers": _get_affected_peers(),
 		"data": data,
+		"caller": _get_caller(),
 	})
 
 
 ## Returns the affected peer IDs. Empty for base [NetSpan]; overridden by [NetPeerSpan].
 func _get_affected_peers() -> Array[int]:
 	return []
+
+
+## Returns the first call-stack frame whose source is outside the networked addon.
+## This is the user's call site — the line where [NetTrace.begin] or [method step]
+## was invoked. Returns an empty dict in release builds (get_stack returns []).
+static func _get_caller() -> Dictionary:
+	for frame: Dictionary in get_stack():
+		var src := frame.get("source", "") as String
+		# Skip only the span infrastructure and the base NetComponent helper.
+		# Frames from the reporter or user code are the meaningful call site.
+		if src.contains("addons/networked/debug/net_span.gd") \
+				or src.contains("addons/networked/debug/net_peer_span.gd") \
+				or src.contains("addons/networked/debug/net_trace.gd") \
+				or src.contains("addons/networked/components/net_component.gd"):
+			continue
+		return frame
+	return {}
 
 
 func _send(msg: String, payload: Dictionary) -> void:

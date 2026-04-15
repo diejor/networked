@@ -145,42 +145,16 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 
 #region ── Debug Events ───────────────────────────────────────────────────────
 
-## Emits a structured debug event to the Networked debugger panel (if active)
-## and logs it at TRACE level via [method _log_proxy].
-##
-## [param event_type] is a dot-namespaced identifier (e.g. [code]&"tp.rpc_sent"[/code]).
-## [param data] contains serialisable key/value context for the event.
-## [param correlation_id] groups related steps of the same logical operation
-## so the Log Bridge panel can display them as a single expandable trace.
-func _emit_debug_event(
-		event_type: StringName,
-		data: Dictionary = {},
-		correlation_id: StringName = &"") -> void:
-	if EngineDebugger.is_active():
-		var tree := get_multiplayer_tree()
-		var side_label := "?"
-		var player_name := ""
-		if is_inside_tree() and multiplayer:
-			var local_id := multiplayer.get_unique_id()
-			side_label = "S" if local_id == 1 else ("C%d" % local_id)
-		if owner:
-			player_name = owner.name.split("|")[0]
-		if correlation_id:
-			var tree_root := get_tree().root if is_inside_tree() else (Engine.get_main_loop() as SceneTree).root
-			var reporter = tree_root.get_node_or_null("NetworkedDebugger")
-			if reporter:
-				reporter.push_cid(correlation_id)
-		
-		EngineDebugger.send_message("networked:component_event", [{
-			"tree_name": tree.name if tree else "",
-			"side": side_label,
-			"player_name": player_name,
-			"event_type": str(event_type),
-			"data": data,
-			"correlation_id": str(correlation_id),
-			"timestamp_usec": Time.get_ticks_usec(),
-			"frame": Engine.get_process_frames(),
-		}])
-	_log_proxy(NetLog.Level.TRACE, "[event:%s] %s" % [event_type, data], [])
+## Opens a new general-purpose span for this component.
+func _begin_span(label: String, meta: Dictionary = {}) -> NetSpan:
+	var tree := get_multiplayer_tree()
+	return NetTrace.begin(label, meta, tree.name if tree else "")
+
+
+## Opens a new peer-aware span for a multiplayer operation.
+func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}) -> NetPeerSpan:
+	var tree := get_multiplayer_tree()
+	return NetTrace.begin_peer(label, peers, meta, tree.name if tree else "")
+
 
 #endregion

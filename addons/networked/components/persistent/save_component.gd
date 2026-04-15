@@ -17,7 +17,7 @@ signal state_changed(caller: Node)
 signal client_synchronized
 
 
-var _save_cid: StringName = &""
+var _save_span: NetSpan
 
 
 ## Per-peer storage bucket for [SaveComponent].
@@ -117,17 +117,18 @@ func save_state() -> Error:
 	var entity_id := _get_entity_id()
 	var data := _container_to_dict()
 
-	_emit_debug_event(&"db.upsert_begin", {table = table_name, id = entity_id})
+	var span := _begin_span("db_upsert", {table = table_name, id = entity_id})
+	span.step("begin")
 	var db_err := database.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(table_name, entity_id, data)
 	)
 
 	if db_err == OK:
 		log_info("SaveComponent: state saved to database (table=%s, id=%s)." % [table_name, entity_id])
-		_emit_debug_event(&"db.upserted", {table = table_name, id = entity_id})
+		span.step("upserted").end()
 	else:
 		log_warn("SaveComponent: database upsert failed. Error: %s" % error_string(db_err))
-		_emit_debug_event(&"db.upsert_failed", {table = table_name, id = entity_id, error = db_err})
+		span.fail("upsert_failed", {error = db_err})
 
 	return db_err
 
@@ -141,33 +142,34 @@ func load_state() -> Error:
 
 	var entity_id := _get_entity_id()
 	log_trace("SaveComponent: Loading state from database (table=%s, id=%s)" % [table_name, entity_id])
-	_emit_debug_event(&"db.load_begin", {table = table_name, id = entity_id})
+	var span := _begin_span("db_load", {table = table_name, id = entity_id})
+	span.step("begin")
 
 	var out_error: Array[int] = [OK]
 	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
 
 	if out_error[0] == ERR_FILE_NOT_FOUND:
 		# PURGE policy: DB record was deleted. Treat this as a first-play scenario.
-		_emit_debug_event(&"db.load_mismatch_purge", {table = table_name, id = entity_id})
+		span.fail("mismatch_purge")
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 
 	if out_error[0] == ERR_UNCONFIGURED:
 		# FAIL policy: developer opted in to explicit mismatch errors.
-		_emit_debug_event(&"db.load_mismatch_fail", {table = table_name, id = entity_id})
+		span.fail("mismatch_fail")
 		loaded.emit()
 		return ERR_UNCONFIGURED
 
 	if record.is_empty():
 		log_debug("No database record found for (table=%s, id=%s)." % [table_name, entity_id])
-		_emit_debug_event(&"db.load_miss", {table = table_name, id = entity_id})
+		span.fail("load_miss")
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 
-	_emit_debug_event(&"db.loaded", {table = table_name, id = entity_id})
 	_apply_dict_to_container(record)
 	push_to_scene()
 	log_info("State loaded from database (table=%s, id=%s)." % [table_name, entity_id])
+	span.step("loaded").end()
 	loaded.emit()
 	return OK
 
@@ -197,7 +199,6 @@ func push_to_scene() -> Error:
 			if database and not table_name.is_empty():
 				var entity_id := _get_entity_id()
 				database.delete(table_name, entity_id)
-				_emit_debug_event(&"db.purged", {table = table_name, id = entity_id})
 			return push_err
 		OK:
 			return push_err
@@ -213,7 +214,6 @@ func pull_from_scene() -> void:
 
 ## Sends the current save state over the network to a specific peer.
 func push_to(peer_id: int) -> void:
-	_emit_debug_event(&"save.push_to", {peer_id = peer_id})
 	save_synchronizer.push_to(peer_id)
 
 
@@ -231,16 +231,17 @@ func instantiate() -> void:
 	# If the player is off-tree at this point, or if prop_count = 0 after setup(),
 	# that confirms Hypotheses 1 or 2 (see plan).
 	var syncs_before := SynchronizersCache.get_synchronizers(owner)
-	_emit_debug_event(&"save.preflight_scan", {
-		in_tree = is_inside_tree(),
-		sync_count = syncs_before.size(),
-		sync_names = syncs_before.map(func(s: MultiplayerSynchronizer) -> String:
-			return "%s (root_path=%s, resolves=%s)" % [
-				s.name,
-				str(s.root_path),
-				str(s.get_node_or_null(s.root_path) != null),
-			]),
-	}, _save_cid)
+	if _save_span:
+		_save_span.step("preflight_scan", {
+			in_tree = is_inside_tree(),
+			sync_count = syncs_before.size(),
+			sync_names = syncs_before.map(func(s: MultiplayerSynchronizer) -> String:
+				return "%s (root_path=%s, resolves=%s)" % [
+					s.name,
+					str(s.root_path),
+					str(s.get_node_or_null(s.root_path) != null),
+				]),
+		})
 
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)
@@ -251,11 +252,13 @@ func instantiate() -> void:
 	# (so SpawnSynchronizer didn't exist yet), OR sibling synchronizers had null replication_configs.
 	var prop_count := save_synchronizer.replication_config.get_properties().size() \
 		if save_synchronizer.replication_config else 0
-	_emit_debug_event(&"save.preflight_b", {
-		prop_count = prop_count,
-		initialized = save_synchronizer._initialized,
-		has_config = save_synchronizer.replication_config != null,
-	}, _save_cid)
+	
+	if _save_span:
+		_save_span.step("preflight_b", {
+			prop_count = prop_count,
+			initialized = save_synchronizer._initialized,
+			has_config = save_synchronizer.replication_config != null,
+		})
 
 	if prop_count == 0:
 		# Emit crash manifest before asserting so the editor panel receives it even if
@@ -273,7 +276,7 @@ func instantiate() -> void:
 					"prop_count": s.replication_config.get_properties().size() if s.replication_config else 0,
 				})
 			EngineDebugger.send_message("networked:crash_manifest", [{
-				"cid": str(_save_cid),
+				"span_id": str(_save_span.id if _save_span else ""),
 				"trigger": "EMPTY_REPLICATION_CONFIG",
 				"frame": Engine.get_process_frames(),
 				"timestamp_usec": Time.get_ticks_usec(),
@@ -294,7 +297,8 @@ func instantiate() -> void:
 	if database and not table_name.is_empty():
 		var columns: Array[StringName] = save_synchronizer._get_tracked_property_names()
 		database.register_schema(table_name, columns)
-		_emit_debug_event(&"db.schema_registered", {table = table_name, columns = columns})
+		if _save_span:
+			_save_span.step("schema_registered", {table = table_name, columns = columns})
 
 	instantiated.emit()
 
@@ -303,14 +307,19 @@ func instantiate() -> void:
 ##
 ## If no record is found, copies the state from [param caller]'s [SaveComponent] instead.
 ## [param caller] is typically the spawner node.
-func spawn(caller: Node, cid: StringName = &"") -> void:
-	_save_cid = cid if not cid.is_empty() else StringName("save_%d" % Time.get_ticks_usec())
-	_emit_debug_event(&"save.spawn_begin", {}, _save_cid)
+func spawn(caller: Node, parent_span: NetSpan = null) -> void:
+	_save_span = parent_span
+	var local_span: NetSpan = null
+	if not _save_span:
+		local_span = _begin_span("save_spawn")
+		_save_span = local_span
+	
+	_save_span.step("spawn_begin")
 	instantiate()
-	_emit_debug_event(&"save.instantiated", {}, _save_cid)
+	_save_span.step("instantiated")
 
 	var load_err: Error = load_state()
-	_emit_debug_event(&"save.loaded", {found = (load_err == OK)}, _save_cid)
+	_save_span.step("loaded", {found = (load_err == OK)})
 	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND or load_err == ERR_UNCONFIGURED,
 		"Something failed while trying to load player. Error: %s." % error_string(load_err))
 
@@ -319,6 +328,9 @@ func spawn(caller: Node, cid: StringName = &"") -> void:
 		if spawner_save and spawner_save.save_synchronizer._initialized:
 			log_debug("Loading data from spawner.")
 			deserialize_scene(spawner_save.serialize_scene())
+	
+	if local_span:
+		local_span.end()
 
 
 func _notification(what: int) -> void:

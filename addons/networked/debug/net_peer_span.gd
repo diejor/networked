@@ -18,6 +18,10 @@ extends NetSpan
 var affected_peers: Array[int] = []
 
 
+func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name: String = "") -> void:
+	super(p_id, p_label, meta, p_tree_name)
+
+
 ## Tags [param peer_id] as a peer affected by this operation.
 ## Returns [code]self[/code] for method chaining.
 func affects(peer_id: int) -> NetPeerSpan:

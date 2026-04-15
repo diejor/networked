@@ -30,7 +30,7 @@ var _selected_tree: String = ""
 var _clock_samples: Dictionary[String, Array] = {}
 var _lobby_snapshots: Dictionary[String, Dictionary] = {}
 var _component_heartbeats: Dictionary[String, Dictionary] = {}
-var _component_events: Array = []  # flat ring, last RING_SIZE
+var _span_history: Array[Dictionary] = []
 
 # Panels.
 var _panel_matrices: PanelMatrices
@@ -130,6 +130,33 @@ func _build_tabs() -> void:
 	_panel_crash_manifest.on_context_selected = _on_manifest_context_selected
 	tabs.add_child(_panel_crash_manifest)
 
+	_panel_log.toggle_breakpoint = func(source: String, line: int) -> void:
+		var script = load(source)
+		if not script is Script:
+			return
+		# Determine new state from our own tracking — avoids needing CodeEdit
+		# before the editor has switched screens.
+		var new_state: bool = not bool(_panel_log._active_breakpoints.get(
+				"%s:%d" % [source, line], false))
+		# Update the panel icon immediately.
+		_panel_log.sync_breakpoint(source, line, new_state)
+		# Navigate to the source.
+		EditorInterface.set_main_screen_editor("Script")
+		EditorInterface.edit_script(script, line)
+		# Defer the CodeEdit write: set_main_screen_editor is asynchronous, so
+		# get_current_editor() returns null if called in the same frame.
+		(func() -> void:
+			var se := EditorInterface.get_script_editor()
+			if not se:
+				return
+			var ed := se.get_current_editor()
+			if not ed:
+				return
+			var ce := ed.get_base_editor() as CodeEdit
+			if ce:
+				ce.set_line_as_breakpoint(line - 1, new_state)
+		).call_deferred()
+
 
 # ─── Message Dispatch ─────────────────────────────────────────────────────────
 
@@ -147,15 +174,23 @@ func on_message(message: String, data: Array) -> void:
 		"networked:lobby_snapshot":       _on_lobby_snapshot(d)
 		"networked:lobby_event":          _on_lobby_event(d)
 		"networked:component_heartbeat":  _on_component_heartbeat(d)
-		"networked:component_event":      _on_component_event(d)
+		"networked:component_event":      pass # Retired in favor of spans
 		"networked:replication_snapshot": _on_replication_snapshot(d)
 		"networked:crash_manifest":       _on_crash_manifest(d)
-		"networked:span_open":            _panel_log.push_span_open(d)
-		"networked:span_step":            _panel_log.push_span_step(d)
-		"networked:span_close":           _panel_log.push_span_close(d)
-		"networked:span_fail":            _panel_log.push_span_fail(d)
+		"networked:span_open":
+			_span_history.append({"type": "open", "data": d})
+			if _matches_selected(d.get("tree_name", "")):
+				_panel_log.push_span_open(d)
+		"networked:span_step":
+			_span_history.append({"type": "step", "data": d})
+			_panel_log.push_span_step(d)
+		"networked:span_close":
+			_span_history.append({"type": "close", "data": d})
+			_panel_log.push_span_close(d)
+		"networked:span_fail":
+			_span_history.append({"type": "fail", "data": d})
+			_panel_log.push_span_fail(d)
 		"networked:span_peer_tagged":     pass  # handled implicitly by span_open peers list
-		"networked:span_registered":      pass  # reserved for future watch-toggle UI
 
 
 func _on_session_registered(d: Dictionary) -> void:
@@ -216,14 +251,6 @@ func _on_component_heartbeat(d: Dictionary) -> void:
 		_panel_components.update_player(d)
 
 
-func _on_component_event(d: Dictionary) -> void:
-	_component_events.append(d)
-	if _component_events.size() > RING_SIZE:
-		_component_events.pop_front()
-	if _matches_selected(d.get("tree_name", "")):
-		_panel_log.push_event(d)
-
-
 func _on_replication_snapshot(d: Dictionary) -> void:
 	if _matches_selected(d.get("tree_name", "")):
 		_panel_matrices.update_replication_matrix(d)
@@ -246,6 +273,14 @@ func _on_auto_break_toggled(enabled: bool) -> void:
 func _send_auto_break_state() -> void:
 	if plugin:
 		plugin.send_to_game(session_id, "networked:set_auto_break", [_auto_break])
+
+
+func on_breakpoint_changed(source: String, line: int, enabled: bool) -> void:
+	_panel_log.sync_breakpoint(source, line, enabled)
+
+
+func on_breakpoints_cleared() -> void:
+	_panel_log.sync_breakpoints_cleared()
 
 
 func _on_manifest_context_selected(ctx: Dictionary) -> void:
@@ -309,6 +344,16 @@ func _repopulate_panels() -> void:
 	_panel_log.clear()
 	_panel_matrices.clear()
 
+	for entry: Dictionary in _span_history:
+		var d: Dictionary = entry.data
+		match entry.type:
+			"open":
+				if _matches_selected(d.get("tree_name", "")):
+					_panel_log.push_span_open(d)
+			"step":  _panel_log.push_span_step(d)
+			"close": _panel_log.push_span_close(d)
+			"fail":  _panel_log.push_span_fail(d)
+
 	if _selected_tree in _clock_samples:
 		for s in _clock_samples[_selected_tree]:
 			_panel_clock.push_sample(s)
@@ -319,10 +364,6 @@ func _repopulate_panels() -> void:
 	if _selected_tree in _component_heartbeats:
 		for d in _component_heartbeats[_selected_tree].values():
 			_panel_components.update_player(d)
-
-	for ev in _component_events:
-		if ev.get("tree_name", "") == _selected_tree:
-			_panel_log.push_event(ev)
 
 
 func _matches_selected(tree_name: String) -> bool:
@@ -336,7 +377,7 @@ func reset_session() -> void:
 	_clock_samples.clear()
 	_lobby_snapshots.clear()
 	_component_heartbeats.clear()
-	_component_events.clear()
+	_span_history.clear()
 	_selected_tree = ""
 	_tree_selector.clear()
 	_lamp.color = Color.GRAY
@@ -382,59 +423,12 @@ func _build_export_summary() -> Dictionary:
 			diffs[pname] = _diff_components(players[pname].get("components", {}), defaults)
 		comp_out[tn] = {"_defaults": defaults, "players": diffs}
 
-	# ── Events: group by player; ops listed, standalones counted ─────────────
-	var by_player: Dictionary = {}  # player → {ops: {cid→dict}, events: {key→dict}}
-	for ev: Dictionary in _component_events:
-		var player: String = ev.get("player_name", "")
-		var cid: String    = ev.get("correlation_id", "")
-		var etype: String  = ev.get("event_type", "?")
-		var tree: String   = ev.get("tree_name", "?")
-		var ts: int        = ev.get("timestamp_usec", 0)
-
-		if not player in by_player:
-			by_player[player] = {"ops": {}, "events": {}}
-
-		if cid.is_empty():
-			# Collapse flapping: count by (tree, type), not one entry per occurrence.
-			var key: String = tree + ":" + etype
-			if not key in by_player[player]["events"]:
-				by_player[player]["events"][key] = {"type": etype, "tree": tree, "count": 0}
-			by_player[player]["events"][key]["count"] += 1
-		else:
-			var pops: Dictionary = by_player[player]["ops"]
-			if not cid in pops:
-				pops[cid] = {
-					"cid":        cid.substr(0, 12),
-					"steps":      [],
-					"tree":       tree,
-					"start_usec": ts,
-					"duration_ms": 0.0,
-				}
-			pops[cid]["steps"].append(etype)
-			pops[cid]["duration_ms"] = (ts - pops[cid]["start_usec"]) / 1000.0
-
-	var events_out: Dictionary = {}
-	for player: String in by_player:
-		var pd: Dictionary = by_player[player]
-		var op_list: Array = pd["ops"].values()
-		if op_list.size() > 10:
-			op_list = op_list.slice(op_list.size() - 10)
-		var ev_list: Array = pd["events"].values()
-		var entry: Dictionary = {}
-		if not op_list.is_empty():
-			entry["ops"] = op_list
-		if not ev_list.is_empty():
-			entry["events"] = ev_list
-		if not entry.is_empty():
-			events_out[player] = entry
-
 	return {
 		"selected_tree": _selected_tree,
 		"trees":         _trees,
 		"clock":         clock_out,
 		"lobbies":       _lobby_snapshots,
 		"components":    comp_out,
-		"events":        events_out,
 	}
 
 
