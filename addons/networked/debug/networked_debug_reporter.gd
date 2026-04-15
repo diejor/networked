@@ -53,6 +53,9 @@ func _enter_tree() -> void:
 	if not _should_report():
 		return
 
+	# Clear any stale spans left over from a previous run.
+	NetTrace.reset()
+
 	# Register the global message capture exactly once.
 	if not _capture_registered:
 		_capture_registered = true
@@ -159,10 +162,21 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	if not _should_report():
 		return
 
-	# Emit crash manifest for the watchdog event so the editor panel shows it.
+	# Prefer the active span's ID as the CID so the error attaches to its
+	# causal context. Fall back to the legacy _cid_stack for unspanned errors.
+	var active := NetTrace.active_span()
+	var cid_val: String
+	var cid_timeline: Array
+	if active:
+		cid_val = str(active.id)
+		cid_timeline = [cid_val] + _cid_stack.map(func(s: StringName) -> String: return str(s))
+	else:
+		cid_val = str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A"
+		cid_timeline = _cid_stack.map(func(s: StringName) -> String: return str(s))
+
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
-		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
+		"cid": cid_val,
+		"cid_timeline": cid_timeline,
 		"trigger": "C++ ERROR / LOG WATCHDOG",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": timestamp,
@@ -213,7 +227,9 @@ func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 	_cycle_peer_events.append(ev)
 	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
 	if mt.is_server:
-		_check_simplify_path_race_on_connect(peer_id, mt)
+		var span := NetTrace.begin_peer("peer_connect", [peer_id], {"tree": mt.name})
+		span.step("server_received_connect")
+		_check_simplify_path_race_on_connect(peer_id, mt, span)
 
 
 func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
@@ -231,10 +247,25 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 		"lobby_name": str(lobby.level.name),
 	})
 	_hook_spawners_in(lobby.level, mt)
-	_check_simplify_path_race_lobby(lobby, mt)
+
+	var lobby_span: NetPeerSpan = null
+	if mt.is_server and mt.multiplayer_api and not mt.multiplayer_api.get_peers().is_empty():
+		lobby_span = NetTrace.begin_peer("lobby_spawn", mt.multiplayer_api.get_peers(), {
+			"lobby_name": str(lobby.level.name),
+			"tree": mt.name,
+		})
+		lobby_span.step("spawners_registering")
+	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
+
 	if mt.is_server and is_instance_valid(lobby.synchronizer):
 		var cb := func(player: Node) -> void:
-			_check_simplify_path_race_player_spawn(player, mt)
+			var peers: Array[int] = mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
+			var spawn_span := NetTrace.begin_peer("player_spawn", peers, {
+				"player": player.name,
+				"tree": mt.name,
+			})
+			spawn_span.step("player_entered_tree")
+			_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 		lobby.synchronizer.spawned.connect(cb)
 		_hooked_lobby_syncs[lobby.synchronizer] = cb
 
@@ -288,7 +319,7 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 ## inside the level has already sent a simplify_path packet to those peers — but the peers
 ## won't receive the level's own spawn packet until the next network poll cycle, so the
 ## simplify_path resolution fails with "Node not found".
-func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
+func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not mt.is_server or not mt.multiplayer_api:
 		return
 	var peers := mt.multiplayer_api.get_peers()
@@ -298,7 +329,7 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 	var races: Array = []
 	for child in lobby.level.find_children("*", "MultiplayerSpawner", true, false):
 		races.append({
-			"type": "MultiplayerSpawner", 
+			"type": "MultiplayerSpawner",
 			"path": str(child.get_path()),
 			"rel_path": _get_rel_path(child, mt),
 			"auth": child.get_multiplayer_authority(),
@@ -318,11 +349,20 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 			})
 
 	if races.is_empty():
+		if span:
+			span.step("no_race_detected")
+			span.end()
 		return
 
+	if span:
+		span.step("race_detected", {"node_count": races.size()})
+		span.fail("simplify_path_race", {"preflight": races})
+
+	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
+	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
-		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
+		"cid": cid_val,
+		"cid_timeline": cid_timeline,
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -355,7 +395,7 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree) -> void:
 ## - Already-spawned players: a second client connects after player A is in Level1;
 ##   client B gets simplify_path for diego|A/MultiplayerSynchronizer before Level1
 ##   or player spawn packets.
-func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> void:
+func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not mt.lobby_manager or not mt.multiplayer_api:
 		return
 
@@ -388,11 +428,20 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 				})
 
 	if races.is_empty():
+		if span:
+			span.step("no_race_detected")
+			span.end()
 		return
 
+	if span:
+		span.step("race_detected", {"node_count": races.size()})
+		span.fail("simplify_path_race", {"preflight": races})
+
+	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
+	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
-		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
+		"cid": cid_val,
+		"cid_timeline": cid_timeline,
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -419,7 +468,7 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree) -> 
 ## for any public-visibility [MultiplayerSynchronizer] on the player to all connected peers.
 ## Peers who have not yet received the level spawn packet will get "Node not found" when they
 ## process those simplify_path packets.
-func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree) -> void:
+func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not is_instance_valid(player) or not mt.multiplayer_api:
 		return
 	var peers := mt.multiplayer_api.get_peers()
@@ -442,15 +491,23 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree) -
 			if sync.is_inside_tree():
 				entry["auth"] = sync.get_multiplayer_authority()
 				entry["is_auth"] = sync.is_multiplayer_authority()
-			
 			races.append(entry)
 
 	if races.is_empty():
+		if span:
+			span.step("no_race_detected")
+			span.end()
 		return
 
+	if span:
+		span.step("race_detected", {"node_count": races.size()})
+		span.fail("simplify_path_race", {"preflight": races})
+
+	var cid_val := str(span.id) if span else (str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A")
+	var cid_timeline: Array = [cid_val] if span else _cid_stack.map(func(s: StringName) -> String: return str(s))
 	EngineDebugger.send_message("networked:crash_manifest", [{
-		"cid": str(_cid_stack[0]) if not _cid_stack.is_empty() else "N/A",
-		"cid_timeline": _cid_stack.map(func(s: StringName) -> String: return str(s)),
+		"cid": cid_val,
+		"cid_timeline": cid_timeline,
 		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
@@ -678,9 +735,10 @@ func _on_editor_message(message: String, data: Array) -> void:
 	# register_message_capture strips the "networked:" prefix before calling here,
 	# so match against the suffix only.
 	match message:
-		"watch_node":     _handle_watch_node(data[0])
-		"unwatch_node":   _handle_unwatch_node(data[0])
-		"set_auto_break": _auto_break = true if data[0] else false
+		"watch_node":      _handle_watch_node(data[0])
+		"unwatch_node":    _handle_unwatch_node(data[0])
+		"set_auto_break":  _auto_break = true if data[0] else false
+		"set_span_watch":  NetTrace.set_watch(str(data[0]), int(data[1]) if data.size() > 1 else 0)
 
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
@@ -705,10 +763,18 @@ func _flush_now() -> void:
 		return
 
 	# Snapshot cycle data into the ring buffer before dispatching.
+	# Include the active span's ID at the front of the CID trail so the
+	# telemetry slice shows which span was in flight during this cycle.
 	if _telemetry:
+		var active_span := NetTrace.active_span()
+		var cid_trail: Array
+		if active_span:
+			cid_trail = [str(active_span.id)] + _cid_stack.map(func(s: StringName) -> String: return str(s))
+		else:
+			cid_trail = _cid_stack.map(func(s: StringName) -> String: return str(s))
 		_telemetry.record(
 			Engine.get_process_frames(),
-			_cid_stack.map(func(s: StringName) -> String: return str(s)),
+			cid_trail,
 			_cycle_component_events,
 			_cycle_peer_events,
 			_last_lobby_snapshots,

@@ -150,6 +150,12 @@ func on_message(message: String, data: Array) -> void:
 		"networked:component_event":      _on_component_event(d)
 		"networked:replication_snapshot": _on_replication_snapshot(d)
 		"networked:crash_manifest":       _on_crash_manifest(d)
+		"networked:span_open":            _panel_log.push_span_open(d)
+		"networked:span_step":            _panel_log.push_span_step(d)
+		"networked:span_close":           _panel_log.push_span_close(d)
+		"networked:span_fail":            _panel_log.push_span_fail(d)
+		"networked:span_peer_tagged":     pass  # handled implicitly by span_open peers list
+		"networked:span_registered":      pass  # reserved for future watch-toggle UI
 
 
 func _on_session_registered(d: Dictionary) -> void:
