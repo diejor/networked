@@ -27,10 +27,6 @@ func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name
 func affects(peer_id: int) -> NetPeerSpan:
 	if peer_id not in affected_peers:
 		affected_peers.append(peer_id)
-		_send("networked:span_peer_tagged", {
-			"id": str(id),
-			"peer_id": peer_id,
-		})
 	return self
 
 

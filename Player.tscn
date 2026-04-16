@@ -11,6 +11,20 @@
 [ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="9_3tkgg"]
 [ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="10_l6ohk"]
 
+[sub_resource type="Resource" id="Resource_oudfo"]
+resource_local_to_scene = true
+script = ExtResource("8_hp6x6")
+metadata/_custom_type_script = "uid://d1mnum02gn0c0"
+
+[sub_resource type="Resource" id="Resource_d6rpx"]
+script = ExtResource("9_3tkgg")
+metadata/_custom_type_script = "uid://dlsdsleg37hm1"
+
+[sub_resource type="Resource" id="Resource_r3kul"]
+script = ExtResource("10_l6ohk")
+backend = SubResource("Resource_d6rpx")
+metadata/_custom_type_script = "uid://icayc7hx72vn"
+
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
@@ -30,24 +44,17 @@ properties/2/replication_mode = 2
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
-[sub_resource type="Resource" id="Resource_oudfo"]
-resource_local_to_scene = true
-script = ExtResource("8_hp6x6")
-metadata/_custom_type_script = "uid://d1mnum02gn0c0"
-
-[sub_resource type="Resource" id="Resource_d6rpx"]
-script = ExtResource("9_3tkgg")
-metadata/_custom_type_script = "uid://dlsdsleg37hm1"
-
-[sub_resource type="Resource" id="Resource_r3kul"]
-script = ExtResource("10_l6ohk")
-backend = SubResource("Resource_d6rpx")
-metadata/_custom_type_script = "uid://icayc7hx72vn"
-
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
 script = ExtResource("1_kne1u")
 speed = 256.0
+
+[node name="SaveComponent" type="Node" parent="." unique_id=403661277]
+script = ExtResource("7_dtqjt")
+save_container = SubResource("Resource_oudfo")
+database = SubResource("Resource_r3kul")
+table_name = &"player"
+metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
 texture = ExtResource("2_kpjcp")
@@ -79,12 +86,5 @@ property_modes = Dictionary[StringName, int]({
 })
 metadata/_custom_type_script = "uid://b21bbqt166ive"
 
-[node name="SaveComponent" type="Node" parent="." unique_id=403661277]
-script = ExtResource("7_dtqjt")
-save_container = SubResource("Resource_oudfo")
-database = SubResource("Resource_r3kul")
-table_name = &"player"
-metadata/_custom_type_script = "uid://c72wanrudisxw"
-
-[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
 [connection signal="tree_entered" from="." to="SaveComponent" method="_enter_tree"]
+[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

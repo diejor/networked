@@ -37,9 +37,9 @@ func _init(scomponent: SaveComponent) -> void:
 	
 	scomponent.add_child(self)
 	
-	owner = scomponent 
+	owner = scomponent
 	
-	root_path = NodePath(".")
+	root_path = get_path_to(scomponent.owner)
 
 func _enter_tree() -> void:
 	# Call setup() here, NOT in _ready(), so replication_config is set before

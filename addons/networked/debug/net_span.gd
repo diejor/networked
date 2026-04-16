@@ -133,5 +133,5 @@ static func _get_caller() -> Dictionary:
 
 
 func _send(msg: String, payload: Dictionary) -> void:
-	if EngineDebugger.is_active():
-		EngineDebugger.send_message(msg, [payload])
+	if NetTrace.message_delegate.is_valid():
+		NetTrace.message_delegate.call(msg, payload)

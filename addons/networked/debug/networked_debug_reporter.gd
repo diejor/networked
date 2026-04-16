@@ -7,9 +7,6 @@
 ## exported builds or headless/test runs.
 extends Node
 
-## Slow-poll interval for component heartbeats and lobby snapshots.
-const HEARTBEAT_INTERVAL := 0.5  # 2 Hz
-
 # Cached once per process: whether reporting is fundamentally allowed at all.
 static var _reporting_enabled: bool = false
 static var _reporting_checked: bool = false
@@ -20,7 +17,6 @@ static var _capture_registered: bool = false
 var _trees: Array[MultiplayerTree] = []
 var _message_queue: Array = []
 var _flush_pending: bool = false
-var _heartbeat_timer: float = 0.0
 
 # Tree Name -> NodePath -> Array of {sync, callable} for demand-driven replication watch.
 var _watched: Dictionary = {}
@@ -42,8 +38,6 @@ var _telemetry: NetTelemetryBuffer
 
 # Peer events accumulated during the current flush cycle.
 var _cycle_peer_events: Array = []
-# Last known lobby snapshots keyed by tree_name (updated by _send_lobby_snapshot).
-var _last_lobby_snapshots: Dictionary = {}
 
 
 func _enter_tree() -> void:
@@ -52,6 +46,9 @@ func _enter_tree() -> void:
 
 	# Clear any stale spans left over from a previous run.
 	NetTrace.reset()
+	# Inject the debugger implementation into the tracing system.
+	NetTrace.message_delegate = func(msg: String, payload: Dictionary) -> void:
+		EngineDebugger.send_message(msg, [payload])
 
 	# Register the global message capture exactly once.
 	if not _capture_registered:
@@ -75,21 +72,12 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if not _should_report():
 		return
+	
+	NetTrace.message_delegate = Callable()
+	
 	for mt in _trees:
 		_queue("networked:session_unregistered", {"tree_name": mt.name})
 	_flush_now()
-
-
-func _physics_process(delta: float) -> void:
-	if not _should_report() or _trees.is_empty():
-		return
-
-	_heartbeat_timer += delta
-	if _heartbeat_timer >= HEARTBEAT_INTERVAL:
-		_heartbeat_timer = 0.0
-		for mt in _trees:
-			_send_lobby_snapshot(mt)
-			_send_component_heartbeats(mt)
 
 
 ## Registers a [MultiplayerTree] for debug reporting.
@@ -485,86 +473,6 @@ func _unhook_spawners_in(root: Node) -> void:
 		_hooked_spawners.erase(spawner)
 
 
-# ─── Slow-Poll (2 Hz) ─────────────────────────────────────────────────────────
-
-func _send_lobby_snapshot(mt: MultiplayerTree) -> void:
-	if not mt.lobby_manager:
-		return
-	var lobbies_data: Array = []
-	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
-		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
-			continue
-		var peers: Array[int] = []
-		for peer_id: int in lobby.synchronizer.connected_clients:
-			peers.append(peer_id)
-		lobbies_data.append({
-			"name": str(lobby_name),
-			"peer_count": peers.size(),
-			"connected_clients": peers,
-			"process_mode": int(lobby.level.process_mode),
-		})
-	var snapshot := {"tree_name": mt.name, "lobbies": lobbies_data}
-	_last_lobby_snapshots[mt.name] = snapshot
-	_queue("networked:lobby_snapshot", snapshot)
-
-
-func _send_component_heartbeats(mt: MultiplayerTree) -> void:
-	if not mt.lobby_manager:
-		return
-	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
-		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
-			continue
-		for player: Node in lobby.synchronizer.tracked_nodes.keys():
-			if is_instance_valid(player):
-				_send_player_heartbeat(player, mt)
-
-
-func _send_player_heartbeat(player: Node, mt: MultiplayerTree) -> void:
-	var components: Dictionary = {}
-
-	var client: ClientComponent = player.get_node_or_null("%ClientComponent")
-	if client:
-		components["ClientComponent"] = {
-			"username": client.username,
-			"authority_mode": int(client.authority_mode),
-			"is_multiplayer_authority": client.is_multiplayer_authority(),
-		}
-
-	var tp: TPComponent = player.get_node_or_null("%TPComponent")
-	if tp:
-		components["TPComponent"] = {
-			"current_scene_name": tp.current_scene_name,
-			"current_scene_path": tp.current_scene_path,
-		}
-
-	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
-	if save:
-		components["SaveComponent"] = {
-			"database": save.database.resource_path if save.database else "null",
-			"table_name": save.table_name,
-		}
-
-	var tis := player.find_children("*", "TickInterpolator", true, false)
-	if not tis.is_empty():
-		var ti: TickInterpolator = tis[0]
-		components["TickInterpolator"] = {
-			"display_lag": ti.display_lag,
-			"starvation_ticks": ti.starvation_ticks,
-			"smart_dilation": ti.enable_smart_dilation,
-		}
-
-	if components.is_empty():
-		return
-
-	_queue("networked:component_heartbeat", {
-		"tree_name": mt.name,
-		"player_name": player.name,
-		"components": components,
-	})
-
-
 # ─── Demand-Driven Replication Watch ──────────────────────────────────────────
 
 func _handle_watch_node(d: Dictionary) -> void:
@@ -741,7 +649,7 @@ func _flush_now() -> void:
 			cid_trail,
 			[], # component events retired
 			_cycle_peer_events,
-			_last_lobby_snapshots,
+			{}, # lobby snapshots retired
 		)
 	_cycle_peer_events.clear()
 

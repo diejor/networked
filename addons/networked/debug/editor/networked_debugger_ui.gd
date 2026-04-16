@@ -28,13 +28,9 @@ var _selected_tree: String = ""
 
 # Ring buffers keyed by tree_name.
 var _clock_samples: Dictionary[String, Array] = {}
-var _lobby_snapshots: Dictionary[String, Dictionary] = {}
-var _component_heartbeats: Dictionary[String, Dictionary] = {}
 var _span_history: Array[Dictionary] = []
 
 # Panels.
-var _panel_matrices: PanelMatrices
-var _panel_components: PanelComponents
 var _panel_log: PanelLogBridge
 var _panel_clock: PanelClock
 var _panel_crash_manifest: PanelCrashManifest
@@ -61,27 +57,25 @@ func _build_session_bar() -> void:
 	bar.add_theme_constant_override("separation", 8)
 	add_child(bar)
 
-	var lbl := Label.new()
-	lbl.text = "Tree:"
-	bar.add_child(lbl)
-
 	_tree_selector = OptionButton.new()
 	_tree_selector.custom_minimum_size.x = 180
+	_tree_selector.tooltip_text = "Select active MultiplayerTree"
 	_tree_selector.item_selected.connect(_on_tree_selected)
 	bar.add_child(_tree_selector)
+
+	bar.add_child(VSeparator.new())
 
 	_lamp = ColorRect.new()
 	_lamp.custom_minimum_size = Vector2(12, 12)
 	_lamp.color = Color.GRAY
+	_lamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.add_child(_lamp)
 
 	_status_label = Label.new()
 	_status_label.text = "offline"
 	bar.add_child(_status_label)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(spacer)
+	bar.add_child(VSeparator.new())
 
 	_freeze_btn = CheckButton.new()
 	_freeze_btn.text = "Freeze"
@@ -90,12 +84,17 @@ func _build_session_bar() -> void:
 
 	var break_btn := CheckButton.new()
 	break_btn.text = "Break on Manifest"
-	break_btn.tooltip_text = "Pause the game (like a breakpoint) the moment a crash manifest is generated."
+	break_btn.tooltip_text = "Pause the game the moment a crash manifest is generated."
 	break_btn.toggled.connect(_on_auto_break_toggled)
 	bar.add_child(break_btn)
 
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(spacer)
+
 	var export_btn := Button.new()
-	export_btn.text = "Export State"
+	export_btn.text = "Export"
+	export_btn.tooltip_text = "Export current debugger state to clipboard."
 	export_btn.pressed.connect(_on_export_state)
 	bar.add_child(export_btn)
 
@@ -104,17 +103,6 @@ func _build_tabs() -> void:
 	var tabs := TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(tabs)
-
-	_panel_matrices = PanelMatrices.new()
-	_panel_matrices.name = "Matrices"
-	_panel_matrices.send_to_game = func(msg: String, data: Array) -> void:
-		if plugin:
-			plugin.send_to_game(session_id, msg, data)
-	tabs.add_child(_panel_matrices)
-
-	_panel_components = PanelComponents.new()
-	_panel_components.name = "Components"
-	tabs.add_child(_panel_components)
 
 	_panel_log = PanelLogBridge.new()
 	_panel_log.name = "Log Bridge"
@@ -171,11 +159,6 @@ func on_message(message: String, data: Array) -> void:
 		"networked:peer_connected":       _on_peer_event(d, true)
 		"networked:peer_disconnected":    _on_peer_event(d, false)
 		"networked:clock_sample":         _on_clock_sample(d)
-		"networked:lobby_snapshot":       _on_lobby_snapshot(d)
-		"networked:lobby_event":          _on_lobby_event(d)
-		"networked:component_heartbeat":  _on_component_heartbeat(d)
-		"networked:component_event":      pass # Retired in favor of spans
-		"networked:replication_snapshot": _on_replication_snapshot(d)
 		"networked:crash_manifest":       _on_crash_manifest(d)
 		"networked:span_open":
 			_span_history.append({"type": "open", "data": d})
@@ -190,7 +173,6 @@ func on_message(message: String, data: Array) -> void:
 		"networked:span_fail":
 			_span_history.append({"type": "fail", "data": d})
 			_panel_log.push_span_fail(d)
-		"networked:span_peer_tagged":     pass  # handled implicitly by span_open peers list
 
 
 func _on_session_registered(d: Dictionary) -> void:
@@ -231,31 +213,6 @@ func _on_clock_sample(d: Dictionary) -> void:
 		_panel_clock.push_sample(d)
 
 
-func _on_lobby_snapshot(d: Dictionary) -> void:
-	var tn: String = d.get("tree_name", "")
-	_lobby_snapshots[tn] = d
-	if _matches_selected(tn):
-		_panel_matrices.update_visibility_matrix(d)
-
-
-func _on_lobby_event(_d: Dictionary) -> void:
-	pass  # Snapshots are polled at 2 Hz; events only invalidate cache if needed.
-
-
-func _on_component_heartbeat(d: Dictionary) -> void:
-	var tn: String = d.get("tree_name", "")
-	if not tn in _component_heartbeats:
-		_component_heartbeats[tn] = {}
-	_component_heartbeats[tn][d.get("player_name", "")] = d
-	if _matches_selected(tn):
-		_panel_components.update_player(d)
-
-
-func _on_replication_snapshot(d: Dictionary) -> void:
-	if _matches_selected(d.get("tree_name", "")):
-		_panel_matrices.update_replication_matrix(d)
-
-
 func _on_crash_manifest(d: Dictionary) -> void:
 	if not is_instance_valid(_panel_crash_manifest):
 		return
@@ -285,18 +242,9 @@ func on_breakpoints_cleared() -> void:
 
 func _on_manifest_context_selected(ctx: Dictionary) -> void:
 	var cid: String = ctx.get("cid", "")
-	var player: String = ctx.get("player_name", "")
 
 	if not cid.is_empty():
 		_panel_log.highlight_cid(cid)
-	if not player.is_empty():
-		_panel_components.highlight_player(player)
-	# Lobby name can be derived from the selected tree's latest snapshot.
-	var tn: String = ctx.get("tree_name", _selected_tree)
-	if tn in _lobby_snapshots:
-		var lobbies: Array = _lobby_snapshots[tn].get("lobbies", [])
-		if not lobbies.is_empty():
-			_panel_matrices.highlight_lobby(lobbies[0].get("name", ""))
 
 
 # ─── Session Bar Logic ────────────────────────────────────────────────────────
@@ -340,9 +288,7 @@ func _update_status(tree_name: String) -> void:
 
 func _repopulate_panels() -> void:
 	_panel_clock.clear()
-	_panel_components.clear()
 	_panel_log.clear()
-	_panel_matrices.clear()
 
 	for entry: Dictionary in _span_history:
 		var d: Dictionary = entry.data
@@ -358,16 +304,9 @@ func _repopulate_panels() -> void:
 		for s in _clock_samples[_selected_tree]:
 			_panel_clock.push_sample(s)
 
-	if _selected_tree in _lobby_snapshots:
-		_panel_matrices.update_visibility_matrix(_lobby_snapshots[_selected_tree])
-
-	if _selected_tree in _component_heartbeats:
-		for d in _component_heartbeats[_selected_tree].values():
-			_panel_components.update_player(d)
-
 
 func _matches_selected(tree_name: String) -> bool:
-	return _selected_tree.is_empty() or tree_name == _selected_tree
+	return tree_name.is_empty() or _selected_tree.is_empty() or tree_name == _selected_tree
 
 
 # ─── Export State ─────────────────────────────────────────────────────────────
@@ -375,17 +314,13 @@ func _matches_selected(tree_name: String) -> bool:
 func reset_session() -> void:
 	_trees.clear()
 	_clock_samples.clear()
-	_lobby_snapshots.clear()
-	_component_heartbeats.clear()
 	_span_history.clear()
 	_selected_tree = ""
 	_tree_selector.clear()
 	_lamp.color = Color.GRAY
 	_status_label.text = "offline"
 	_panel_clock.clear()
-	_panel_components.clear()
 	_panel_log.clear()
-	_panel_matrices.clear()
 	if is_instance_valid(_panel_crash_manifest):
 		_panel_crash_manifest.clear()
 	_alias_map.clear()
@@ -411,64 +346,11 @@ func _build_export_summary() -> Dictionary:
 			"last":       samples[-1],
 		}
 
-	# ── Components: cross-player baseline + per-player diffs ──────────────────
-	var comp_out: Dictionary = {}
-	for tn: String in _component_heartbeats:
-		var players: Dictionary = _component_heartbeats[tn]
-		if players.is_empty():
-			continue
-		var defaults: Dictionary = _compute_component_defaults(players.values())
-		var diffs: Dictionary = {}
-		for pname: String in players:
-			diffs[pname] = _diff_components(players[pname].get("components", {}), defaults)
-		comp_out[tn] = {"_defaults": defaults, "players": diffs}
-
 	return {
 		"selected_tree": _selected_tree,
 		"trees":         _trees,
 		"clock":         clock_out,
-		"lobbies":       _lobby_snapshots,
-		"components":    comp_out,
 	}
-
-
-## Finds fields that are identical across ALL players for each component type.
-## These become the "default template" so per-player diffs only show deviations.
-func _compute_component_defaults(player_list: Array) -> Dictionary:
-	if player_list.is_empty():
-		return {}
-	var first: Dictionary = (player_list[0] as Dictionary).get("components", {})
-	var defaults: Dictionary = {}
-	for comp_type: String in first:
-		var first_comp: Dictionary = first[comp_type] if first[comp_type] is Dictionary else {}
-		var comp_defaults: Dictionary = {}
-		for field in first_comp:
-			var val: Variant = first_comp[field]
-			var all_same := true
-			for pd: Dictionary in player_list:
-				if pd.get("components", {}).get(comp_type, {}).get(field) != val:
-					all_same = false
-					break
-			if all_same:
-				comp_defaults[field] = val
-		if not comp_defaults.is_empty():
-			defaults[comp_type] = comp_defaults
-	return defaults
-
-
-## Returns only the fields in [param components] that differ from [param defaults].
-func _diff_components(components: Dictionary, defaults: Dictionary) -> Dictionary:
-	var result: Dictionary = {}
-	for comp_type: String in components:
-		var comp: Dictionary = components[comp_type] if components[comp_type] is Dictionary else {}
-		var def_comp: Dictionary = defaults.get(comp_type, {})
-		var diff: Dictionary = {}
-		for field in comp:
-			if not field in def_comp or comp[field] != def_comp[field]:
-				diff[field] = comp[field]
-		if not diff.is_empty():
-			result[comp_type] = diff
-	return result
 
 
 func _stats_ms(samples: Array, key: String) -> Dictionary:

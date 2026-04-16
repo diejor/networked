@@ -43,7 +43,8 @@ func update_clients() -> void:
 
 ## Forces a visibility update for a specific node's cached synchronizers.
 func update_client(node: Node) -> void:
-	for sync in SynchronizersCache.get_synchronizers(node):
+	var syncs := SynchronizersCache.get_synchronizers(node)
+	for sync in syncs:
 		sync.update_visibility()
 
 
@@ -74,7 +75,8 @@ func _on_spawned(node: Node) -> void:
 	
 	tracked_nodes[node] = true
 	
-	for sync in SynchronizersCache.get_synchronizers(node):
+	var syncs := SynchronizersCache.get_synchronizers(node)
+	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 	
 	var authority := node.get_multiplayer_authority()

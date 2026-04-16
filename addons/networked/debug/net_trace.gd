@@ -19,15 +19,20 @@
 class_name NetTrace
 extends RefCounted
 
+## Static delegate for sending telemetry messages to a debugger backend.
+## If not set, all trace operations are silent no-ops.
+static var message_delegate: Callable
+
+
 ## Active span stack. The most recently opened and still-open span is at the back.
 static var _active: Array = []  # Array[RefCounted]
 
 
 ## Opens a new general-purpose span and pushes it onto the active stack.
-## Returns a no-op [NetSpan] (empty [member NetSpan.id]) when the editor
-## debugger is not active, so consumer code needs no guards.
+## Returns a no-op [NetSpan] (empty [member NetSpan.id]) when the debugger
+## is not active, so consumer code needs no guards.
 static func begin(span_label: String, meta: Dictionary = {}, tree_name: String = "") -> NetSpan:
-	if not EngineDebugger.is_active():
+	if not message_delegate.is_valid():
 		return NetSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
 	var span := NetSpan.new(span_id, span_label, meta, tree_name)
@@ -36,9 +41,9 @@ static func begin(span_label: String, meta: Dictionary = {}, tree_name: String =
 
 
 ## Opens a new peer-aware span for a multiplayer operation affecting [param peers].
-## Returns a no-op [NetPeerSpan] when the editor debugger is not active.
+## Returns a no-op [NetPeerSpan] when the debugger is not active.
 static func begin_peer(span_label: String, peers: Array = [], meta: Dictionary = {}, tree_name: String = "") -> NetPeerSpan:
-	if not EngineDebugger.is_active():
+	if not message_delegate.is_valid():
 		return NetPeerSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
 	var span := NetPeerSpan.new(span_id, span_label, meta, tree_name)
