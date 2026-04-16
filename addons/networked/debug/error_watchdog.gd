@@ -20,8 +20,6 @@ func _ready() -> void:
 	if _log_path.is_empty():
 		_log_path = "user://logs/godot.log"
 
-	print("[ErrorWatchdog] tailing: ", ProjectSettings.globalize_path(_log_path))
-
 	_mutex = Mutex.new()
 	_thread = Thread.new()
 	_thread.start(_tail_log)
@@ -54,7 +52,6 @@ func _tail_log() -> void:
 	# Seek to current end — only watch for errors that happen after this point.
 	file.seek_end()
 	var read_pos := file.get_position()
-	print("[ErrorWatchdog] started at byte offset ", read_pos)
 
 	while not _should_quit():
 		var file_len := file.get_length()
@@ -85,7 +82,6 @@ func _tail_log() -> void:
 							file.seek(pos_before)
 							break
 						lines.append(next_line.strip_edges())
-					print("[ErrorWatchdog] caught error, emitting manifest")
 					call_deferred("_emit_cpp_error", timestamp, "\n".join(lines))
 			read_pos = file.get_position()
 		else:

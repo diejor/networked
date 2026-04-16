@@ -1,9 +1,11 @@
-## Handles saving, loading, and network synchronization of a player's persistent state.
+## Handles saving, loading, and network synchronization of a player's persistent 
+## state.
 ##
-## Attach this node (with unique name [code]%SaveComponent[/code]) to your player scene alongside
-## a [SaveContainer] and a [SaveSynchronizer]. On spawn, [method spawn] will load the player's
-## last saved state from the [member database], falling back to the spawner's current state on first play.
-## All registered components are saved automatically on graceful shutdown.
+## Attach this node (with unique name [code]%SaveComponent[/code]) to your player 
+## scene alongside a [SaveContainer] and a [SaveSynchronizer]. On spawn, [method 
+## spawn] will load the player's last saved state from the [member database], 
+## falling back to the spawner's current state on first play. All registered 
+## components are saved automatically on graceful shutdown.
 class_name SaveComponent
 extends NetComponent
 
@@ -49,7 +51,6 @@ func _enter_tree() -> void:
 	var _force_init = save_synchronizer
 
 func _init() -> void:
-	## TODO: move name conventions to NetComponent
 	name = "SaveComponent"
 	unique_name_in_owner = true
 

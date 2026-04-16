@@ -87,3 +87,4 @@ table_name = &"player"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
+[connection signal="tree_entered" from="." to="SaveComponent" method="_enter_tree"]
