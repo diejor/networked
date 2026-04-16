@@ -1,4 +1,4 @@
-## Log Bridge & Span Timeline panel.
+## Span Tracer panel (formerly "Log Bridge").
 ##
 ## Shows Span rows opened via [NetTrace] by the addon's own systems.
 ## They have an explicit lifecycle indicator: ◉ open (yellow), ✓ closed (green),
@@ -49,7 +49,7 @@ func _ready() -> void:
 	add_child(header_row)
 
 	var title := Label.new()
-	title.text = "Log Bridge"
+	title.text = "Span Tracer"
 	title.add_theme_font_size_override("font_size", 12)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_row.add_child(title)
@@ -95,6 +95,28 @@ func clear() -> void:
 	_span_start_usec.clear()
 	_caller_rows.clear()
 	# _active_breakpoints intentionally preserved — configuration survives tree switches.
+
+
+## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
+## Each entry is [code]{"type": String, "data": Dictionary}[/code] as stored by [SpanAdapter].
+func populate(buffer: Array) -> void:
+	clear()
+	for entry: Dictionary in buffer:
+		_dispatch_span_entry(entry)
+
+
+## Pushes a single new entry (called per [signal PanelDataAdapter.data_changed]).
+func on_new_entry(entry: Variant) -> void:
+	_dispatch_span_entry(entry as Dictionary)
+
+
+func _dispatch_span_entry(entry: Dictionary) -> void:
+	var d: Dictionary = entry.get("data", {})
+	match entry.get("type", ""):
+		"open":  push_span_open(d)
+		"step":  push_span_step(d)
+		"close": push_span_close(d)
+		"fail":  push_span_fail(d)
 
 
 ## Scroll to and highlight the span row matching [param cid].

@@ -87,6 +87,23 @@ func clear() -> void:
 	_graph.queue_redraw()
 
 
+## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
+func populate(buffer: Array) -> void:
+	clear()
+	for d: Dictionary in buffer:
+		_samples.append(d)
+		if _samples.size() > BUFFER_SIZE:
+			_samples.pop_front()
+	if not _samples.is_empty():
+		_update_stats(_samples[-1] as Dictionary)
+	_graph.queue_redraw()
+
+
+## Pushes a single new entry (called per [signal PanelDataAdapter.data_changed]).
+func on_new_entry(entry: Variant) -> void:
+	push_sample(entry as Dictionary)
+
+
 func _update_stats(d: Dictionary) -> void:
 	_stat_labels["rtt_raw"].text  = "%.1f ms" % (d.get("rtt_raw",  0.0) * 1000.0)
 	_stat_labels["rtt_avg"].text  = "%.1f ms" % (d.get("rtt_avg",  0.0) * 1000.0)

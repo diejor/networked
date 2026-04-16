@@ -1,12 +1,16 @@
 ## Editor-side plugin that registers the "Networked" debugger tab.
 ##
-## Handles the [EditorDebuggerPlugin] lifecycle: creates a [NetworkedDebuggerUI]
-## per session and routes incoming game messages to it.
+## Handles the [EditorDebuggerPlugin] lifecycle: creates a [DebuggerSession] and
+## [NetworkedDebuggerUI] per session. All incoming game messages are routed to
+## [DebuggerSession.receive]; the UI reacts to session signals rather than
+## handling messages directly.
 @tool
 class_name NetworkedDebuggerPlugin
 extends EditorDebuggerPlugin
 
-# session_id → NetworkedDebuggerUI
+# session_id → DebuggerSession
+var _sessions: Dictionary[int, DebuggerSession] = {}
+# session_id → NetworkedDebuggerUI  (kept separately for breakpoint routing)
 var _uis: Dictionary[int, NetworkedDebuggerUI] = {}
 
 
@@ -15,33 +19,40 @@ func _has_capture(prefix: String) -> bool:
 
 
 func _capture(message: String, data: Array, session_id: int) -> bool:
-	if session_id in _uis and is_instance_valid(_uis[session_id]):
-		_uis[session_id].on_message(message, data)
+	if session_id in _sessions and is_instance_valid(_sessions[session_id]):
+		_sessions[session_id].receive(message, data)
 	return true
 
 
 func _setup_session(session_id: int) -> void:
+	var session := DebuggerSession.new()
+	session.plugin = self
+	session.session_id = session_id
+	_sessions[session_id] = session
+
 	var ui := NetworkedDebuggerUI.new()
 	ui.name = "Networked"
-	ui.plugin = self
-	ui.session_id = session_id
-	var session := get_session(session_id)
-	# Reset at the START of a new run so crash-time data survives for inspection.
-	# Clearing on stopped wipes the ring buffers the instant the game crashes — exactly
-	# when you need them most. _discard_session still clears when the editor closes.
-	session.started.connect(func() -> void:
-		if is_instance_valid(ui):
-			ui.reset_session()
-	)
-	session.add_session_tab(ui)
+	ui.session = session
 	_uis[session_id] = ui
+
+	var godot_session := get_session(session_id)
+	# Reset at the START of a new run so crash-time data survives for inspection.
+	# Clearing on stopped wipes the ring buffers the instant the game crashes —
+	# exactly when you need them most. _discard_session still clears on editor close.
+	godot_session.started.connect(func() -> void:
+		if is_instance_valid(session):
+			session.reset()
+	)
+	godot_session.add_session_tab(ui)
 
 
 func _discard_session(session_id: int) -> void:
+	if session_id in _sessions:
+		var session: DebuggerSession = _sessions[session_id]
+		if is_instance_valid(session):
+			session.reset()
+		_sessions.erase(session_id)
 	if session_id in _uis:
-		var ui: NetworkedDebuggerUI = _uis[session_id]
-		if is_instance_valid(ui):
-			ui.reset_session()
 		_uis.erase(session_id)
 
 
@@ -58,7 +69,7 @@ func _breakpoints_cleared_in_tree() -> void:
 
 
 ## Sends a message from the editor to the running game via the given session.
-func send_to_game(session_id: int, message: String, data: Array) -> void:
-	var s := get_session(session_id)
+func send_to_game(p_session_id: int, message: String, data: Array) -> void:
+	var s := get_session(p_session_id)
 	if s and s.is_active():
 		s.send_message(message, data)

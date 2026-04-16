@@ -12,6 +12,11 @@ extends VBoxContainer
 ## ctx keys: cid, frame, player_name, tree_name, lobby_name
 var on_context_selected: Callable
 
+## Called when the Break on Manifest icon button is toggled.
+## Signature: func(enabled: bool) -> void
+## Injected by [NetworkedDebuggerUI] when building the PanelWrapper title bar.
+var on_auto_break_changed: Callable
+
 var _tree: Tree
 var _copy_btn: Button
 var _clear_btn: Button
@@ -72,6 +77,19 @@ func clear() -> void:
 	placeholder.set_selectable(1, false)
 	placeholder.set_selectable(2, false)
 	_copy_btn.disabled = true
+
+
+## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
+## Each entry is an already-formatted dict as produced by [CrashAdapter] (via [ManifestFormatter]).
+func populate(buffer: Array) -> void:
+	clear()
+	for entry: Dictionary in buffer:
+		push_entry(entry)
+
+
+## Pushes a single new entry (called per [signal PanelDataAdapter.data_changed]).
+func on_new_entry(entry: Variant) -> void:
+	push_entry(entry as Dictionary)
 
 
 ## Add a formatted manifest entry (output of [ManifestFormatter.format]).
