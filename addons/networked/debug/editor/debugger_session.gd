@@ -42,6 +42,11 @@ var _adapters: Dictionary[String, PanelDataAdapter] = {}
 ## Populated by networked:lobby_event messages; passed by reference to each CrashAdapter.
 var _alias_map: Dictionary = {}
 
+## Maps span_id → tree_name for active spans.
+## Built from span_open (which carries tree_name); used to route span_step/close/fail
+## messages that do NOT include tree_name in their payloads.
+var _span_tree_map: Dictionary[String, String] = {}
+
 ## Hue index for golden-ratio peer color assignment.
 var _color_index: int = 0
 
@@ -102,6 +107,7 @@ func reset() -> void:
 	_peers.clear()
 	_adapters.clear()
 	_alias_map.clear()
+	_span_tree_map.clear()
 	_color_index = 0
 	_peer_colors.clear()
 	session_cleared.emit()
@@ -172,7 +178,21 @@ func _on_clock_sample(d: Dictionary) -> void:
 
 
 func _on_span(d: Dictionary, msg_type: String) -> void:
+	var span_id: String = d.get("id", "")
 	var tn: String = d.get("tree_name", "")
+
+	if msg_type == "open":
+		# span_open carries tree_name — record mapping for subsequent messages.
+		if not span_id.is_empty() and not tn.is_empty():
+			_span_tree_map[span_id] = tn
+	else:
+		# span_step / span_close / span_fail do NOT carry tree_name.
+		# Resolve it from the map built at open time.
+		if tn.is_empty() and span_id in _span_tree_map:
+			tn = _span_tree_map[span_id]
+		if msg_type == "close" or msg_type == "fail":
+			_span_tree_map.erase(span_id)
+
 	var key: String = _adapter_key(tn, PanelDataAdapter.PanelType.SPAN)
 	if key not in _adapters:
 		return

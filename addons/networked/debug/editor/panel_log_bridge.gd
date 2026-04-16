@@ -37,11 +37,9 @@ var _active_breakpoints: Dictionary = {}
 var _caller_rows: Dictionary = {}
 
 # Column indices
-const COL_BP     := 0  # breakpoint gutter (narrow)
-const COL_NAME   := 1  # Operation / Step
-const COL_TREE   := 2
-const COL_PLAYER := 3
-const COL_ELAPSED := 4
+const COL_BP      := 0  # breakpoint gutter (narrow)
+const COL_NAME    := 1  # Operation / Step
+const COL_ELAPSED := 2
 
 
 func _ready() -> void:
@@ -67,22 +65,16 @@ func _ready() -> void:
 
 	_tree = Tree.new()
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tree.columns = 5
+	_tree.columns = 3
 	_tree.set_column_title(COL_BP, "")
 	_tree.set_column_title(COL_NAME, "Operation / Step")
-	_tree.set_column_title(COL_TREE, "Tree")
-	_tree.set_column_title(COL_PLAYER, "Player")
 	_tree.set_column_title(COL_ELAPSED, "Elapsed")
 	_tree.column_titles_visible = true
 	_tree.hide_root = true
 	_tree.set_column_expand(COL_BP, false)
 	_tree.set_column_expand(COL_NAME, true)
-	_tree.set_column_expand(COL_TREE, false)
-	_tree.set_column_expand(COL_PLAYER, false)
 	_tree.set_column_expand(COL_ELAPSED, false)
 	_tree.set_column_custom_minimum_width(COL_BP, 24)
-	_tree.set_column_custom_minimum_width(COL_TREE, 60)
-	_tree.set_column_custom_minimum_width(COL_PLAYER, 90)
 	_tree.set_column_custom_minimum_width(COL_ELAPSED, 70)
 	_tree.item_activated.connect(_on_item_activated)
 	_tree.button_clicked.connect(_on_bp_button_clicked)
@@ -185,8 +177,6 @@ func push_span_open(d: Dictionary) -> void:
 
 	var item := _tree.create_item(_tree.get_root())
 	item.set_text(COL_NAME, "◉ %s" % label)
-	item.set_text(COL_TREE, d.get("tree_name", ""))
-	item.set_text(COL_PLAYER, "")
 	item.set_text(COL_ELAPSED, "f%d" % d.get("frame", 0))
 	item.set_custom_color(COL_NAME, Color(1.0, 0.85, 0.2))  # yellow = open
 
