@@ -262,6 +262,7 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 			}, mt.name)
 			spawn_span.step("player_entered_tree")
 			_check_simplify_path_race_player_spawn(player, mt, spawn_span)
+			_check_player_topology(player, mt, spawn_span)
 		lobby.synchronizer.spawned.connect(cb)
 
 		_hooked_lobby_syncs[lobby.synchronizer] = cb
@@ -480,6 +481,41 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 			"connected_peers": peers,
 		},
 		"preflight_snapshot": races,
+		"player_name": player.name,
+		"in_tree": player.is_inside_tree(),
+		"telemetry_slice": _freeze_and_slice(),
+	}])
+	_maybe_break()
+
+
+## Validates the synchronizer topology of a newly spawned player.
+##
+## On failure, emits a crash manifest containing the errors found by
+## [TopologyValidator].
+func _check_player_topology(player: Node, mt: MultiplayerTree, span: NetSpan) -> void:
+	var report := TopologyValidator.validate_node(player)
+	if report.ok:
+		if span:
+			span.step("topology_validated")
+		return
+
+	if span:
+		span.fail("topology_invalid", {"errors": report.errors})
+
+	var cid_val := str(span.id) if span else "N/A"
+	EngineDebugger.send_message("networked:crash_manifest", [{
+		"cid": cid_val,
+		"cid_timeline": [cid_val],
+		"trigger": "TOPOLOGY_VALIDATION_FAILED",
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": Time.get_ticks_usec(),
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
+		"network_state": {
+			"is_server": true,
+			"tree_name": mt.name,
+			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+		},
+		"errors": report.errors,
 		"player_name": player.name,
 		"in_tree": player.is_inside_tree(),
 		"telemetry_slice": _freeze_and_slice(),

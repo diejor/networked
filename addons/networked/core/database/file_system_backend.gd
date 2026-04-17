@@ -44,8 +44,7 @@ func _initialize(schema: Dictionary) -> Error:
 	if not DirAccess.dir_exists_absolute(base_dir):
 		var err := DirAccess.make_dir_recursive_absolute(base_dir)
 		if err != OK:
-			NetLog.error(func(): push_error("FileSystemBackend: could not create base_dir '%s'. Error: %s" % [
-				base_dir, error_string(err)]))
+			NetLog.error("FileSystemBackend: could not create base_dir '%s'. Error: %s", [base_dir, error_string(err)], func(m): push_error(m))
 			return err
 
 	# Create subdirectories for all known tables.
@@ -63,12 +62,10 @@ func _initialize(schema: Dictionary) -> Error:
 			if dir.current_is_dir() and not entry.begins_with("."):
 				var sn := StringName(entry)
 				if not schema.has(sn):
-					NetLog.warn(func(): push_warning(
-						("FileSystemBackend: ghost table '%s' found at '%s'. " \
+					NetLog.warn("FileSystemBackend: ghost table '%s' found at '%s'. " \
 						+ "It is not in the current schema. Run a manual migration " \
-						+ "or delete the directory if it is no longer needed.") \
-						% [entry, base_dir.path_join(entry)]
-					))
+						+ "or delete the directory if it is no longer needed.", \
+						[entry, base_dir.path_join(entry)], func(m): push_warning(m))
 			entry = dir.get_next()
 		dir.list_dir_end()
 

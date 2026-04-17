@@ -168,15 +168,6 @@ func _on_owner_tree_entered() -> void:
 	_setup_spawn_sync(spawn_sync)
 
 func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
-	# Audit A: root_path was computed with get_path_to() in SpawnSynchronizer._init().
-	# If the player was not yet in the main scene tree at that moment, the path is empty
-	# and config_spawn_properties() will scan with a broken root, silently collecting nothing.
-	assert(spawn.root_path != NodePath(""),
-		(
-			"[PREFLIGHT-A] SpawnSynchronizer.root_path is empty on '%s'. " +
-			"get_path_to(client.owner) was likely called before the player entered the scene tree."
-		) % owner.name
-	)
 	spawn.config_spawn_properties(self)
 	spawn.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 

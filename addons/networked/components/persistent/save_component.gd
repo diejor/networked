@@ -228,9 +228,6 @@ func on_state_changed() -> void:
 ## Initializes the underlying save synchronizer and registers this entity's schema
 ## with the database.
 func instantiate() -> void:
-	# Step 3: Log SynchronizersCache state before virtualization runs.
-	# If the player is off-tree at this point, or if prop_count = 0 after setup(),
-	# that confirms Hypotheses 1 or 2 (see plan).
 	var syncs_before := SynchronizersCache.get_synchronizers(owner)
 	if _save_span:
 		var scan_data := {
@@ -246,41 +243,6 @@ func instantiate() -> void:
 
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)
-
-	# Audit B: SaveSynchronizer must have tracked at least one property after setup().
-	# prop_count = 0 means _virtualize_replication_configs() found no sibling synchronizers —
-	# likely because save_component.spawn() was called before the player entered the scene tree
-	# (so SpawnSynchronizer didn't exist yet), OR sibling synchronizers had null replication_configs.
-	var prop_count := save_synchronizer.replication_config.get_properties().size() \
-		if save_synchronizer.replication_config else 0
-	
-	if _save_span:
-		_save_span.step("preflight_b", {
-			prop_count = prop_count,
-			initialized = save_synchronizer._initialized,
-			has_config = save_synchronizer.replication_config != null,
-		})
-
-	if prop_count == 0:
-		# After P1 (SynchronizersCache provider-caching fix), the server-side path here
-		# should be unreachable. On the client it may fire if sibling synchronizers have
-		# null replication_configs at the time of setup().
-		NetLog.warn(func(): push_warning(
-			"[PREFLIGHT-B] SaveSynchronizer on '%s' has 0 properties after setup(). " \
-			+ "Check that sibling MultiplayerSynchronizers have valid replication_configs. " \
-			+ "peer_id=%d in_tree=%s" % [
-				owner.name if owner else "?",
-				multiplayer.get_unique_id() if multiplayer else 0,
-				str(is_inside_tree()),
-			]
-		))
-		if _save_span:
-			_save_span.step_warn(
-				"preflight_b_empty",
-				func(): push_warning("SaveComponent: SaveSynchronizer has 0 properties after setup()"),
-				{prop_count = 0, in_tree = is_inside_tree()}
-			)
-		return
 
 	if database and not table_name.is_empty():
 		var columns: Array[StringName] = save_synchronizer._get_tracked_property_names()

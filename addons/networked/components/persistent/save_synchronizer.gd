@@ -63,20 +63,15 @@ func _enter_tree() -> void:
 	# This catches the case where the client's SaveSynchronizer enters the tree
 	# with zero tracked properties — the C++ registration will silently fail.
 	if prop_count == 0 and _initialized:
-		# After P1 (SynchronizersCache) + P2 (watch strip) this path should be rare.
-		# push_warning appears in the console even without an editor debugger attached
-		# (e.g. two-process embedded server+client sessions).
-		NetLog.warn(func(): push_warning(
-			"[CLIENT_EMPTY_CONFIG] SaveSynchronizer '%s' on '%s' has 0 properties " \
+		NetLog.warn("[CLIENT_EMPTY_CONFIG] SaveSynchronizer '%s' on '%s' has 0 properties " \
 			+ "after entering tree. C++ replication registration will silently fail. " \
-			+ "peer_id=%d is_server=%s root_path=%s" % [
+			+ "peer_id=%d is_server=%s root_path=%s", [
 				name,
 				save_component.owner.name if save_component and save_component.owner else "?",
 				multiplayer.get_unique_id() if multiplayer else 0,
 				str(multiplayer.is_server() if multiplayer else false),
 				str(root_path),
-			]
-		))
+			], func(m): push_warning(m))
 
 
 func _ready() -> void:
@@ -89,7 +84,7 @@ func _ready() -> void:
 ## Initializes the virtualized replication config based on the owner's attached synchronizers.
 func setup() -> void:
 	if _initialized:
-		NetLog.warn(func(): push_warning("SaveSynchronizer.setup: called more than once."))
+		NetLog.warn("SaveSynchronizer.setup: called more than once.", [], func(m): push_warning(m))
 		return
 	_initialized = true
 
@@ -243,24 +238,20 @@ func pull_from_scene() -> void:
 ## Pushes the loaded virtual container values into the actual live scene nodes.
 func push_to_scene() -> Error:
 	if not _initialized:
-		NetLog.error(func(): push_error("SaveSynchronizer: push_to_scene called before setup()."))
+		NetLog.error("SaveSynchronizer: push_to_scene called before setup().", [], func(m): push_error(m))
 		return ERR_UNCONFIGURED
 	assert(save_container)
 
 	for property_name in save_container:
 		var pname := StringName(property_name)
 		if not has_state_property(pname):
-			NetLog.error(func(): push_error(
-				"SaveSynchronizer: push_to_scene — property '%s' is not tracked." % property_name
-			))
+			NetLog.error("SaveSynchronizer: push_to_scene — property '%s' is not tracked.", [property_name], func(m): push_error(m))
 			return Error.ERR_UNCONFIGURED
 
 		var real_path: NodePath = _property_paths[pname]
 		var value: Variant = save_container.get_value(pname)
 		if value == null:
-			NetLog.error(func(): push_error(
-				"SaveSynchronizer: push_to_scene — tracked property '%s' has no value in save container." % property_name
-			))
+			NetLog.error("SaveSynchronizer: push_to_scene — tracked property '%s' has no value in save container.", [property_name], func(m): push_error(m))
 			return Error.ERR_UNCONFIGURED
 
 		_set_scene_value(pname, value)

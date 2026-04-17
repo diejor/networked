@@ -104,13 +104,13 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 
 	var path: String = ResourceUID.ensure_path(path_or_uid)
 	if not ResourceLoader.exists(path):
-		NetLog.error(func(): push_error("Unable to find scene at path %s." % path))
+		NetLog.error("Unable to find scene at path %s.", [path], func(m): push_error(m))
 		return ""
 
 	var scene: PackedScene = load(path)
 
 	if not is_instance_valid(scene):
-		NetLog.error(func(): push_error("Unable to find scene at path %s." % path))
+		NetLog.error("Unable to find scene at path %s.", [path], func(m): push_error(m))
 		return ""
 
 	var scene_state: SceneState = scene.get_state()

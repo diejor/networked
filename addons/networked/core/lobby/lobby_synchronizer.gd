@@ -77,47 +77,23 @@ func _on_spawned(node: Node) -> void:
 	
 	var syncs := SynchronizersCache.get_synchronizers(node)
 
-	var expected_min := 1  # SpawnSynchronizer always present via ClientComponent
-	var _save_comp: SaveComponent = node.get_node_or_null("%SaveComponent")
-	if _save_comp:
-		expected_min += 1
-	assert(
-		syncs.size() >= expected_min,
-		"LobbySynchronizer._on_spawned: '%s' has %d synchronizer(s), expected >= %d. " \
-		% [node.name, syncs.size(), expected_min] \
-		+ "SynchronizersCache may have been populated while the node was off-tree."
-	)
-
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
-	
-	var authority := node.get_multiplayer_authority()
-	if ClientComponent.parse_authority(node.name) != authority:
-		NetLog.error(func(): push_error("`%s` authority wasn't properly configured on spawn. \
-Player won't replicate to the correct peers." % node.name))
-	
-	connect_client(authority)
+
+	connect_client(node.get_multiplayer_authority())
 	spawned.emit(node)
 
 
 func _on_despawned(node: Node) -> void:
 	NetLog.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
-	
+
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
-	
-	var authority := node.get_multiplayer_authority()
-	if ClientComponent.parse_authority(node.name) != authority:
-		var err := func(m): push_error(m)
-		NetLog.error(err.bind("(res://addons/networked/utils/net_log.gd:54) `%s` authority wasn't properly configured on spawn. \
-Player won't despawn from the correct peer." % node.name))
-		print_rich("(res://addons/networked/utils/net_log.gd:54) `%s` authority wasn't properly configured on spawn. \
-Player won't despawn from the correct peer." % node.name)
-	disconnect_client(authority)
-	
-	despawned.emit(node)
 
+	disconnect_client(node.get_multiplayer_authority())
+
+	despawned.emit(node)
 
 ## Visibility filter callback passed to each tracked node's synchronizers.
 ##

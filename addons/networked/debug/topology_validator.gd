@@ -64,7 +64,13 @@ static func validate_node(node: Node) -> Dictionary:
 
 	var save_comp: SaveComponent = node.get_node_or_null("%SaveComponent")
 	if save_comp:
-		errors.append_array(_check_virtual_props(save_comp))
+		errors.append_array(_check_save_component(save_comp))
+
+	var client_comp: ClientComponent = node.get_node_or_null("%ClientComponent")
+	if client_comp:
+		errors.append_array(_check_client_component(client_comp))
+
+	errors.append_array(_check_authority(node))
 
 	return {ok = errors.is_empty(), errors = errors,
 			live_count = live.size(), expected_min = expected_min}
@@ -106,15 +112,48 @@ static func cache_diff(node: Node) -> Dictionary:
 	}
 
 
-static func _check_virtual_props(save_comp: SaveComponent) -> Array[String]:
+static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	var errs: Array[String] = []
-	if not save_comp.save_synchronizer or not save_comp.save_synchronizer.replication_config:
+	if not save_comp.save_synchronizer:
 		return errs
-	var cfg := save_comp.save_synchronizer.replication_config
-	for prop: NodePath in cfg.get_properties():
-		if cfg.property_get_watch(prop):
-			errs.append(
-				"virtual property '%s' has watch=true — C++ cannot resolve against root_path '.'" \
-				% str(prop)
-			)
+	
+	if not save_comp.save_synchronizer.replication_config or \
+			save_comp.save_synchronizer.replication_config.get_properties().is_empty():
+		errs.append(
+			"SaveSynchronizer on '%s' has 0 properties. " \
+			% [save_comp.owner.name if save_comp.owner else "?"] \
+			+ "Check that sibling MultiplayerSynchronizers have valid replication_configs."
+		)
+
+	if save_comp.save_synchronizer.replication_config:
+		var cfg := save_comp.save_synchronizer.replication_config
+		for prop: NodePath in cfg.get_properties():
+			if cfg.property_get_watch(prop):
+				errs.append(
+					"virtual property '%s' has watch=true — C++ cannot resolve against root_path '.'" \
+					% str(prop)
+				)
+	return errs
+
+
+static func _check_client_component(client: ClientComponent) -> Array[String]:
+	var errs: Array[String] = []
+	if client.spawn_sync and client.spawn_sync.root_path == NodePath(""):
+		errs.append(
+			"SpawnSynchronizer.root_path is empty on '%s'. " % client.owner.name \
+			+ "get_path_to(client.owner) was likely called before the player entered the scene tree."
+		)
+	return errs
+
+
+static func _check_authority(node: Node) -> Array[String]:
+	var errs: Array[String] = []
+	var expected := ClientComponent.parse_authority(node.name)
+	var actual := node.get_multiplayer_authority()
+	
+	if expected != 0 and actual != expected:
+		errs.append(
+			"Authority mismatch on '%s': expected=%d actual=%d. " % [node.name, expected, actual] \
+			+ "Multiplayer authority was not correctly assigned during spawn."
+		)
 	return errs

@@ -12,8 +12,7 @@ var _log_path: String
 
 func _ready() -> void:
 	if not ProjectSettings.get_setting("debug/file_logging/enable_file_logging", false):
-		NetLog.error(func(): push_error("ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF — " +
-				"enable it in Project Settings → Debug → File Logging."))
+		NetLog.error("ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF — enable it in Project Settings → Debug → File Logging.", [], func(m): push_error(m))
 		return
 
 	_log_path = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log")
@@ -46,7 +45,7 @@ func _tail_log() -> void:
 
 	var file := FileAccess.open(_log_path, FileAccess.READ)
 	if not file:
-		NetLog.error(func(): push_error("ErrorWatchdog: could not open log file: " + _log_path))
+		NetLog.error("ErrorWatchdog: could not open log file: %s", [_log_path], func(m): push_error(m))
 		return
 
 	# Seek to current end, only watch for errors that happen after this point.

@@ -240,7 +240,7 @@ func _get_config(name: StringName) -> Dictionary:
 func preload_lobby(name: StringName) -> void:
 	var path := _lobby_paths.get(name, "")
 	if path.is_empty():
-		NetLog.error(func(): push_error("MultiplayerLobbyManager: Cannot preload lobby '%s': path not found." % name))
+		NetLog.error("MultiplayerLobbyManager: Cannot preload lobby '%s': path not found.", [name], func(m): push_error(m))
 		return
 	if _lobby_cache.has(path) or active_lobbies.has(name):
 		return
@@ -258,7 +258,7 @@ func spawn_lobby(name: StringName) -> void:
 		return
 	var path := _lobby_paths.get(name, "")
 	if path.is_empty():
-		NetLog.error(func(): push_error("MultiplayerLobbyManager: Cannot spawn lobby '%s': path not found." % name))
+		NetLog.error("MultiplayerLobbyManager: Cannot spawn lobby '%s': path not found.", [name], func(m): push_error(m))
 		return
 	NetLog.info("Spawning lobby '%s'." % name)
 	spawn(path)
@@ -281,7 +281,7 @@ func activate_lobby(name: StringName) -> void:
 			spawn_lobby(name)
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.error(func(): push_error("MultiplayerLobbyManager: Failed to activate lobby '%s'." % name))
+		NetLog.error("MultiplayerLobbyManager: Failed to activate lobby '%s'.", [name], func(m): push_error(m))
 		return
 	lobby.level.process_mode = Node.PROCESS_MODE_INHERIT
 	NetLog.info("Lobby '%s' activated." % name)
@@ -293,7 +293,7 @@ func activate_lobby(name: StringName) -> void:
 func freeze_lobby(name: StringName) -> void:
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.warn(func(): push_warning("MultiplayerLobbyManager: Cannot freeze lobby '%s': not active." % name))
+		NetLog.warn("MultiplayerLobbyManager: Cannot freeze lobby '%s': not active.", [name], func(m): push_warning(m))
 		return
 	lobby.level.process_mode = Node.PROCESS_MODE_DISABLED
 	NetLog.info("Lobby '%s' frozen." % name)
@@ -306,7 +306,7 @@ func freeze_lobby(name: StringName) -> void:
 func destroy_lobby(name: StringName) -> void:
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.warn(func(): push_warning("MultiplayerLobbyManager: Cannot destroy lobby '%s': not active." % name))
+		NetLog.warn("MultiplayerLobbyManager: Cannot destroy lobby '%s': not active.", [name], func(m): push_warning(m))
 		return
 	NetLog.info("Destroying lobby '%s'." % name)
 	if lobby.get_parent():
@@ -327,7 +327,7 @@ func spawn_lobbies() -> void:
 		return
 	_build_lobby_paths()
 	if _lobby_paths.is_empty():
-		NetLog.warn(func(): push_warning("MultiplayerLobbyManager: No lobby scenes are registered."))
+		NetLog.warn("MultiplayerLobbyManager: No lobby scenes are registered.", [], func(m): push_warning(m))
 		return
 	NetLog.info("Checking %d lobby/lobbies for ON_STARTUP." % _lobby_paths.size())
 	for name: StringName in _lobby_paths:
@@ -348,7 +348,7 @@ func _spawn_lobby_node(data: Variant) -> Node:
 	if level_spawn_function.is_valid():
 		level = level_spawn_function.call(data)
 		if not is_instance_valid(level):
-			NetLog.error(func(): push_error("MultiplayerLobbyManager: level_spawn_function returned null."))
+			NetLog.error("MultiplayerLobbyManager: level_spawn_function returned null.", [], func(m): push_error(m))
 			return null
 	elif data is String:
 		var level_file_path: String = data
@@ -361,7 +361,7 @@ func _spawn_lobby_node(data: Variant) -> Node:
 			level_scene = load(level_file_path)
 		level = level_scene.instantiate()
 	else:
-		NetLog.error(func(): push_error("MultiplayerLobbyManager: invalid spawn data and no level_spawn_function set."))
+		NetLog.error("MultiplayerLobbyManager: invalid spawn data and no level_spawn_function set.", [], func(m): push_error(m))
 		return null
 
 	var lobby_scene: PackedScene = (SERVER_LOBBY
@@ -395,7 +395,7 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 
 	var lobby := active_lobbies.get(lobby_name) as Lobby
 	if not lobby:
-		NetLog.error(func(): push_error("res://res://addons/networked/utils/net_log.gd:54 Join request failed: Lobby '%s' could not be activated." % lobby_name))
+		NetLog.error("Join request failed: Lobby '%s' could not be activated.", [lobby_name], func(m): push_error(m))
 		return
 
 	var spawner_client: ClientComponent = (

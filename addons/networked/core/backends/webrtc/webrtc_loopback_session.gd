@@ -21,7 +21,7 @@ func init_server_side() -> void:
 	server_peer = WebRTCMultiplayerPeer.new()
 	var err := server_peer.create_server()
 	if err != OK:
-		NetLog.warn(func(): push_warning("Loopback: server create_server failed: %s" % error_string(err)))
+		NetLog.warn("Loopback: server create_server failed: %s", [error_string(err)], func(m): push_warning(m))
 		return
 
 	pc_server = WebRTCPeerConnection.new()
@@ -40,7 +40,7 @@ func init_client_side() -> void:
 	client_peer = WebRTCMultiplayerPeer.new()
 	var err := client_peer.create_client(2)
 	if err != OK:
-		NetLog.warn(func(): push_warning("Loopback: client create_client failed: %s" % error_string(err)))
+		NetLog.warn("Loopback: client create_client failed: %s", [error_string(err)], func(m): push_warning(m))
 		return
 
 	pc_client = WebRTCPeerConnection.new()

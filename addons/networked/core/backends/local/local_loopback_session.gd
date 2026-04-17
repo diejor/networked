@@ -29,7 +29,7 @@ func init_server_side() -> void:
 	server_peer = LocalMultiplayerPeer.new()
 	var err := server_peer.create_server()
 	if err != OK:
-		NetLog.warn(func(): push_warning("Loopback: server create_server failed"))
+		NetLog.warn("Loopback: server create_server failed", [], func(m): push_warning(m))
 
 ## Creates and links a new client peer to the server. Returns the new [LocalMultiplayerPeer].
 func create_client_peer() -> LocalMultiplayerPeer:
@@ -39,7 +39,7 @@ func create_client_peer() -> LocalMultiplayerPeer:
 	var client_id := randi_range(2, 2147483647)
 	var err := client.create_client(client_id)
 	if err != OK:
-		NetLog.warn(func(): push_warning("Loopback: client create_client failed"))
+		NetLog.warn("Loopback: client create_client failed", [], func(m): push_warning(m))
 		return client
 
 	server_peer.force_connect_peer(client_id, client)

@@ -260,7 +260,7 @@ func _request_handshake() -> void:
 func _respond_handshake(server_tickrate: int) -> void:
 	if server_tickrate != tickrate:
 		match tickrate_mismatch_action:
-			0: NetLog.warn(func(): push_warning("NetworkClock: tickrate mismatch — local=%d server=%d" % [tickrate, server_tickrate]))
+			0: NetLog.warn("NetworkClock: tickrate mismatch — local=%d server=%d", [tickrate, server_tickrate], func(m): push_warning(m))
 			1: multiplayer.multiplayer_peer.close()
 			2: tickrate_mismatch.emit(multiplayer.get_remote_sender_id(), server_tickrate)
 	_ping.rpc_id(1, Time.get_ticks_usec())

@@ -172,7 +172,7 @@ func _connect_trackers() -> Error:
 			ws.set_meta("url", url)
 			connected_count += 1
 		else:
-			NetLog.warn(func(): push_warning("Failed to connect to Tracker: %s" % url))
+			NetLog.warn("Failed to connect to Tracker: %s", [url], func(m): push_warning(m))
 			
 	if connected_count == 0:
 		return ERR_CANT_CONNECT
@@ -245,7 +245,7 @@ func _parse_packet(packet: PackedByteArray) -> void:
 	var data: Dictionary = parsed
 	
 	if data.has("warning") or data.has("failure reason"):
-		NetLog.warn(func(): push_warning("TRACKER ERROR: %s" % json_string))
+		NetLog.warn("TRACKER ERROR: %s", [json_string], func(m): push_warning(m))
 		return
 		
 	if data.get("info_hash", "") != _info_hash:

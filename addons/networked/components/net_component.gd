@@ -137,8 +137,8 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 		NetLog.Level.TRACE: NetLog.trace(full_msg, args)
 		NetLog.Level.DEBUG: NetLog.debug(full_msg, args)
 		NetLog.Level.INFO: NetLog.info(full_msg, args)
-		NetLog.Level.WARN: NetLog.warn(func(): push_warning(full_msg % args))
-		NetLog.Level.ERROR: NetLog.error(func(): push_error(full_msg % args))
+		NetLog.Level.WARN: NetLog.warn(full_msg, args, func(m): push_warning(m))
+		NetLog.Level.ERROR: NetLog.error(full_msg, args, func(m): push_error(m))
 
 #endregion
 

@@ -20,14 +20,14 @@ var tube: TubeWrapper
 func setup(tree: MultiplayerTree) -> Error:
 	NetLog.trace("TubeBackend: setup called.")
 	if tube_client_path.is_empty():
-		NetLog.error(func(): push_error("TubeBackend: TubeClient path is empty."))
+		NetLog.error("TubeBackend: TubeClient path is empty.", [], func(m): push_error(m))
 		return ERR_UNCONFIGURED
 		
 	var node = tree.get_node_or_null(tube_client_path)
 	tube = TubeWrapper.new(node)
 	
 	if not tube.is_valid():
-		NetLog.error(func(): push_error("TubeBackend: Assigned node is not a valid TubeClient."))
+		NetLog.error("TubeBackend: Assigned node is not a valid TubeClient.", [], func(m): push_error(m))
 		tube = null
 		return ERR_INVALID_DATA
 	

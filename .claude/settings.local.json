@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.gd$\")"
+      "Bash(grep -E \"\\\\.gd$\")",
+      "Bash(ls *)"
     ]
   }
 }

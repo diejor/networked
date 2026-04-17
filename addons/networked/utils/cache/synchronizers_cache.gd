@@ -63,10 +63,7 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 			_connect_invalidation(target_node)
 	else:
 		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String: return s.name)
-		NetLog.warn(func(): push_warning(
-			"SynchronizersCache: '%s' is off-tree; cache not written. " \
-			+ "Synchronizers found: [%s]" % [target_node.name, ", ".join(type_names)]
-		))
+		NetLog.warn("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]", [target_node.name, ", ".join(type_names)], func(m): push_warning(m))
 	
 	return result
 

@@ -4,9 +4,9 @@
 ## At runtime the first log call lazily detects the addon root and loads the active
 ## [NetLogSettings] profile from [code]ProjectSettings[/code].
 ## [codeblock]
-## NetLog.info("Player spawned: %s" % username)
-## NetLog.warn("Connection attempt failed, retrying...")
-## NetLog.error("Critical: lobby '%s' not found." % lobby_name)
+## NetLog.info("Player spawned: %s", [username])
+## NetLog.warn("Connection attempt failed, retrying...", [], func(m): push_warning(m))
+## NetLog.error("Critical: lobby '%s' not found.", [lobby_name], func(m): push_error(m))
 ## [/codeblock]
 class_name NetLog
 extends Object
@@ -276,36 +276,36 @@ static func info(msg: Variant, args: Array = []) -> void:
 ## Logs a [code]WARN[/code]-level message and calls [code]push_warning[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 ## [br][br]
-## Pass a [Callable] to preserve the editor jump-click: the callable must call
+## Pass a [param link_call] to preserve the editor jump-click: the callable must call
 ## [code]push_warning[/code] itself so the engine records the caller's file/line.
 ## [codeblock]
-## NetLog.warn(func(): push_warning("Player '%s' has no health." % name))
+## NetLog.warn("Player '%s' has no health.", [name], func(m): push_warning(m))
 ## [/codeblock]
-static func warn(msg: Variant, args: Array = []) -> void:
+static func warn(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
 	if Level.WARN < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.WARN >= get_effective_level(ctx.module):
 		if typeof(msg) == TYPE_CALLABLE:
 			(msg as Callable).call()
 		else:
-			_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site)
+			_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site, link_call)
 
 ## Logs an [code]ERROR[/code]-level message and calls [code]push_error[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 ## [br][br]
-## Pass a [Callable] to preserve the editor jump-click: the callable must call
+## Pass a [param link_call] to preserve the editor jump-click: the callable must call
 ## [code]push_error[/code] itself so the engine records the caller's file/line.
 ## [codeblock]
-## NetLog.error(func(): push_error("Critical: lobby '%s' not found." % lobby_name))
+## NetLog.error("Critical: lobby '%s' not found.", [lobby_name], func(m): push_error(m))
 ## [/codeblock]
-static func error(msg: Variant, args: Array = []) -> void:
+static func error(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
 	if Level.ERROR < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.ERROR >= get_effective_level(ctx.module):
 		if typeof(msg) == TYPE_CALLABLE:
 			(msg as Callable).call()
 		else:
-			_print("[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site)
+			_print("[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site, link_call)
 
 static func _get_context() -> Dictionary:
 	var stack := get_stack()
@@ -347,7 +347,7 @@ static func _module_from_path(path: String) -> String:
 		p = p.substr(_addon_root.length() + 1)
 	return p.replace("/", ".")
 
-static func _print(prefix: String, msg: Variant, args: Array, level: int, module: String, site: String) -> void:
+static func _print(prefix: String, msg: Variant, args: Array, level: int, module: String, site: String, link_call: Callable = Callable()) -> void:
 	var body: String = str(msg) % args if not args.is_empty() else str(msg)
 	var header: String
 	if not module.is_empty():
@@ -360,10 +360,16 @@ static func _print(prefix: String, msg: Variant, args: Array, level: int, module
 
 	match level:
 		Level.ERROR:
-			push_error(header + body)
+			if not link_call.is_null():
+				link_call.call(body)
+			else:
+				push_error(header + body)
 			print_rich("[color=red][b]%s[/b][/color]%s" % [header, body])
 		Level.WARN:
-			push_warning(header + body)
+			if not link_call.is_null():
+				link_call.call(body)
+			else:
+				push_warning(header + body)
 			print_rich("[color=yellow]%s[/color]%s" % [header, body])
 		Level.TRACE:
 			print_rich("[color=#555555]%s%s[/color]" % [header, body])

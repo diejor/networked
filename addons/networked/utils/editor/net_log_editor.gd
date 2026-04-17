@@ -27,18 +27,14 @@ func _enter_tree() -> void:
 	active_path = NetLog._fix_profile_path(active_path)
 
 	if not ResourceLoader.exists(active_path):
-		NetLog.warn(func(): push_warning(
-			"NetLog: Active profile no longer exists: '%s'\n  → Select a new profile in the NetLog panel." % active_path
-		))
+		NetLog.warn("NetLog: Active profile no longer exists: '%s'\n  → Select a new profile in the NetLog panel.", [active_path], func(m): push_warning(m))
 		ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return
 
 	var res = ResourceLoader.load(active_path)
 	if not res is NetLogSettings:
-		NetLog.warn(func(): push_warning(
-			"NetLog: '%s' is not a NetLogSettings resource.\n  → Select a new profile in the NetLog panel." % active_path
-		))
+		NetLog.warn("NetLog: '%s' is not a NetLogSettings resource.\n  → Select a new profile in the NetLog panel.", [active_path], func(m): push_warning(m))
 		ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return
@@ -327,9 +323,7 @@ func _prune_stale_overrides(cache: Array) -> void:
 		_settings.module_overrides.erase(path)
 		NetLog.module_levels.erase(path)
 
-	NetLog.warn(func(): push_warning("NetLog: Pruned %d stale override(s) from '%s': %s" % [
-		stale.size(), _settings.resource_path, ", ".join(stale)
-	]))
+	NetLog.warn("NetLog: Pruned %d stale override(s) from '%s': %s", [stale.size(), _settings.resource_path, ", ".join(stale)], func(m): push_warning(m))
 
 	NetLog._recompute_min_level()
 

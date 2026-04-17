@@ -118,7 +118,7 @@ func disconnect_player() -> void:
 	
 	var timer := get_tree().create_timer(3.0)
 	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
-		NetLog.error(func(): push_error("Couldn't disconnect from server."))
+		NetLog.error("Couldn't disconnect from server.", [], func(m): push_error(m))
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
@@ -170,7 +170,7 @@ func _host_server() -> String:
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
 	if server_err != OK and not in_use:
-		NetLog.error(func(): push_error("Server failed to start: %s" % error_string(server_err)))
+		NetLog.error("Server failed to start: %s", [error_string(server_err)], func(m): push_error(m))
 	
 	if in_use:
 		NetLog.info("Server address already in use, connecting to localhost.")

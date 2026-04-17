@@ -91,11 +91,11 @@ func _initialize_backend() -> void:
 		return
 	_initialized = true
 	if not backend:
-		NetLog.error(func(): push_error("NetworkedDatabase: no backend assigned. Calls will be no-ops."))
+		NetLog.error("NetworkedDatabase: no backend assigned. Calls will be no-ops.", [], func(m): push_error(m))
 		return
 	var err := backend._initialize(_schema)
 	if err != OK:
-		NetLog.error(func(): push_error("NetworkedDatabase: backend initialization failed. Error: %s" % error_string(err)))
+		NetLog.error("NetworkedDatabase: backend initialization failed. Error: %s", [error_string(err)], func(m): push_error(m))
 
 
 # ── Schema diffing ────────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ func apply_mismatch_policy(
 ## Returns [constant OK] on success or the first error returned by the backend.
 func transaction(body: Callable) -> Error:
 	if not backend:
-		NetLog.error(func(): push_error("NetworkedDatabase: transaction called but no backend is set."))
+		NetLog.error("NetworkedDatabase: transaction called but no backend is set.", [], func(m): push_error(m))
 		return ERR_UNCONFIGURED
 
 	var ctx := TransactionContext.new()
@@ -208,7 +208,7 @@ func transaction(body: Callable) -> Error:
 ## Pass [code][OK][/code] as the initial value.
 func find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> Dictionary:
 	if not backend:
-		NetLog.error(func(): push_error("NetworkedDatabase: find_by_id called but no backend is set."))
+		NetLog.error("NetworkedDatabase: find_by_id called but no backend is set.", [], func(m): push_error(m))
 		out_error[0] = ERR_UNCONFIGURED
 		return {}
 
@@ -230,7 +230,7 @@ func find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> D
 ## An empty filter returns every record.
 func find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
 	if not backend:
-		NetLog.error(func(): push_error("NetworkedDatabase: find_all called but no backend is set."))
+		NetLog.error("NetworkedDatabase: find_all called but no backend is set.", [], func(m): push_error(m))
 		return []
 	return backend._find_all(table, filter)
 
@@ -242,7 +242,7 @@ func delete(table: StringName, id: StringName) -> Error:
 
 func _delete_internal(table: StringName, id: StringName) -> Error:
 	if not backend:
-		NetLog.error(func(): push_error("NetworkedDatabase: delete called but no backend is set."))
+		NetLog.error("NetworkedDatabase: delete called but no backend is set.", [], func(m): push_error(m))
 		return ERR_UNCONFIGURED
 	return backend._delete(table, id)
 
