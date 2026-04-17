@@ -1,4 +1,4 @@
-## Clock & Sync panel — the only panel using a custom _draw() canvas.
+## Clock & Sync panel.
 ##
 ## Renders four stacked time-series lanes (RTT, Jitter, Clock Error,
 ## Display Offset) from a ring buffer of [NetworkClock._pong] samples.

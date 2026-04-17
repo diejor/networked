@@ -3,7 +3,7 @@
 ## Each adapter owns a ring buffer for one peer+panel combination. Subclasses
 ## override [method feed] (or [method SpanAdapter.feed_span]) to append entries
 ## and emit [signal data_changed]. The UI calls [method clear] and reads
-## [member ring_buffer] directly; it never pulls data — all updates are pushed.
+## [member ring_buffer] directly; it never pulls data, all updates are pushed.
 @tool
 class_name PanelDataAdapter
 extends RefCounted

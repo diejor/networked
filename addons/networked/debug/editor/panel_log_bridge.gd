@@ -1,16 +1,16 @@
-## Span Tracer panel (formerly "Log Bridge").
+## Span Tracer panel.
 ##
 ## Shows Span rows opened via [NetTrace] by the addon's own systems.
 ## They have an explicit lifecycle indicator: ◉ open (yellow), ✓ closed (green),
 ## ✗ failed (red). Each step is a child row with elapsed-ms timing.
 ##
-## [b]Breakpoint gutter[/b] (COL_BP): click the breakpoint icon on any row that has
+## [br][b]Breakpoint gutter[/b] ([constant COL_BP]): click the breakpoint icon on any row that has
 ## caller info to toggle a GDScript breakpoint at that call site. The icon stays in
 ## sync with the script editor via [method sync_breakpoint] /
 ## [method sync_breakpoints_cleared], driven by
-## [NetworkedDebuggerPlugin._breakpoint_set_in_tree].
+## [method NetworkedDebuggerPlugin._breakpoint_set_in_tree].
 ##
-## [b]Jump to source[/b]: double-click any row (or press Enter while selected) to open
+## [br][b]Jump to source[/b]: double-click any row (or press Enter while selected) to open
 ## the script at the call site in the editor.
 @tool
 class_name PanelLogBridge

@@ -1,14 +1,11 @@
 ## Main "Networked" tab in the editor debugger.
 ##
-## Pure layout and interaction — no ring buffers, no message routing.
 ## A [DebuggerSession] injected by [NetworkedDebuggerPlugin] owns all data.
-## This class reacts to session signals and drives the left-tree / right-grid layout.
-##
-## Left tree: one bold peer item per registered [MultiplayerTree], with three
-## [code]CELL_MODE_CHECK[/code] children (Span Tracer, Clock, Crash Manifest).
+## This class reacts to session signals and drives the layout.
+## [br]
 ## Checking a child creates a [PanelWrapper] in the right grid and calls
 ## [method populate] on the panel immediately with existing buffered data.
-##
+## [br]
 ## Right grid: column count auto-adjusts to [code]ceil(sqrt(active_count))[/code].
 ## Double-clicking a PanelWrapper title bar maximizes it; double-clicking again restores.
 @tool
@@ -25,10 +22,10 @@ var _scroll: ScrollContainer
 var _split: HSplitContainer
 
 # ─── State ───────────────────────────────────────────────────────────────────
-# tree_name → bold TreeItem (non-selectable peer header row)
+# tree_name -> bold TreeItem (non-selectable peer header row)
 var _peer_tree_items: Dictionary[String, TreeItem] = {}
 
-# adapter_key → PanelWrapper node currently in the grid
+# adapter_key -> PanelWrapper node currently in the grid
 var _panel_wrappers: Dictionary[String, PanelWrapper] = {}
 
 # Ordered list of currently active adapter keys (controls grid child order).
@@ -74,13 +71,13 @@ func _notification(what: int) -> void:
 func _apply_theme_styles() -> void:
 	if not is_inside_tree() or not _peer_tree:
 		return
-
+	
 	# Left tree: slightly darker than the base background, with rounded corners.
 	var tree_bg := StyleBoxFlat.new()
 	tree_bg.bg_color = get_theme_color("dark_color_2", "Editor")
 	tree_bg.set_corner_radius_all(4)
 	_peer_tree.add_theme_stylebox_override("panel", tree_bg)
-
+	
 	# Scroll area background: slightly lighter than the tree, rounding matches.
 	var scroll_bg := StyleBoxFlat.new()
 	scroll_bg.bg_color = get_theme_color("base_color", "Editor")
@@ -194,10 +191,10 @@ func _on_adapter_data_changed(key: String) -> void:
 	var adapter: PanelDataAdapter = session.get_adapter(key)
 	if not adapter or adapter.ring_buffer.is_empty():
 		return
-
+	
 	wrapper.update_live_metric(adapter.get_current_label())
 	wrapper.panel_control.on_new_entry(adapter.ring_buffer[-1])
-
+	
 	# Cross-panel sync: crash arrival highlights the peer's Span Tracer (if open).
 	if key.ends_with(":" + PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.CRASH]):
 		var cid: String = (adapter.ring_buffer[-1] as Dictionary).get("cid", "")
@@ -265,13 +262,16 @@ func _activate_panel(key: String, tree_name: String, pt: PanelDataAdapter.PanelT
 	var wrapper := PanelWrapper.new(key, title_str, color, panel)
 	wrapper.on_maximize_requested = _on_maximize_requested
 	# Wire "Break on Manifest" for crash panels.
+	# Restore the persisted break state so the button reflects the current value
+	# even after a game restart that triggered session_cleared.
 	if pt == PanelDataAdapter.PanelType.CRASH:
 		var crash_panel := panel as PanelCrashManifest
 		if crash_panel:
 			crash_panel.on_auto_break_changed = func(enabled: bool) -> void:
 				if session:
 					session.set_auto_break(enabled)
-			wrapper.add_break_button(crash_panel.on_auto_break_changed)
+			wrapper.add_break_button(crash_panel.on_auto_break_changed,
+				session.auto_break if session else false)
 
 	_panel_wrappers[key] = wrapper
 	_active_keys.append(key)
@@ -525,11 +525,14 @@ class PanelWrapper extends VBoxContainer:
 		queue_redraw()
 
 
-	## Adds a "Break on Manifest" icon button to the title bar (crash panels only).
-	func add_break_button(on_toggled: Callable) -> void:
+	## Adds a "Break on Manifest" toggle to the title bar (crash panels only).
+	## [param initial] restores the persisted state without firing [param on_toggled].
+	func add_break_button(on_toggled: Callable, initial: bool = false) -> void:
 		var btn := CheckButton.new()
 		btn.text = "Break"
 		btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
+		# Apply initial state silently — avoids a redundant set_auto_break() round-trip.
+		btn.set_pressed_no_signal(initial)
 		btn.toggled.connect(on_toggled)
 		btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		_title_bar.add_child(btn)

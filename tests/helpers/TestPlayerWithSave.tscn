@@ -38,7 +38,6 @@ metadata/_custom_type_script = "uid://d152g6yt57q6n"
 [node name="SaveComponent" type="Node" parent="." unique_id=716418857 groups=["persistent"]]
 unique_name_in_owner = true
 script = ExtResource("2_vpj8e")
-save_dir = "res://tests/tmp_saves"
 save_container = SubResource("Resource_q1h0n")
 database = SubResource("Resource_kvry4")
 

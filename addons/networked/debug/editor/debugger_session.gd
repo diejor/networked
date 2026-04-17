@@ -47,6 +47,11 @@ var _alias_map: Dictionary = {}
 ## messages that do NOT include tree_name in their payloads.
 var _span_tree_map: Dictionary[String, String] = {}
 
+## Whether to call EngineDebugger.debug() on the next crash manifest.
+## Intentionally NOT cleared in reset() so it survives game restarts and is
+## re-sent to the game on every session_registered.
+var auto_break: bool = false
+
 ## Hue index for golden-ratio peer color assignment.
 var _color_index: int = 0
 
@@ -86,9 +91,11 @@ func get_adapter(key: String) -> PanelDataAdapter:
 	return _adapters.get(key, null)
 
 
-## Sends the auto-break toggle to the running game for the given session.
-## Called by the Break on Manifest button inside a Crash Manifest PanelWrapper.
+## Saves the auto-break state and sends it to the running game.
+## Called by the Break on Manifest button inside any Crash Manifest PanelWrapper.
+## State persists across game restarts — re-applied in [method _on_session_registered].
 func set_auto_break(enabled: bool) -> void:
+	auto_break = enabled
 	if plugin:
 		plugin.send_to_game(session_id, "networked:set_auto_break", [enabled])
 
@@ -145,9 +152,10 @@ func _on_session_registered(d: Dictionary) -> void:
 				func(k: String) -> void: adapter_data_changed.emit(k)
 			)
 
-	# Push the current auto-break state now that the game session is live.
+	# Re-apply the persisted auto_break state now that this tree is live.
+	# auto_break survives reset(), so the game immediately gets the correct value.
 	if plugin:
-		plugin.send_to_game(session_id, "networked:set_auto_break", [false])
+		plugin.send_to_game(session_id, "networked:set_auto_break", [auto_break])
 
 	peer_registered.emit(tn, is_server, color)
 
@@ -201,25 +209,31 @@ func _on_span(d: Dictionary, msg_type: String) -> void:
 
 func _on_crash_manifest(d: Dictionary) -> void:
 	var ns: Dictionary = d.get("network_state", {})
-	var tn: String = ns.get("tree_name", d.get("tree_name", ""))
+
+	# Resolution order for tree_name:
+	# 1. top-level "tree_name" field (added by _on_cpp_error_caught and C++ watchdog)
+	# 2. network_state["tree_name"] (added by race-detection functions)
+	# 3. reverse-lookup from network_state["peer_id"] in the peer registry
+	# 4. single-peer fallback (common in solo-server sessions)
+	var tn: String = d.get("tree_name", ns.get("tree_name", ""))
+
+	if tn.is_empty():
+		var pid: int = ns.get("peer_id", 0)
+		if pid != 0:
+			for candidate: String in _peers:
+				if _peers[candidate].get("peer_id", -1) == pid:
+					tn = candidate
+					break
+
+	if tn.is_empty() and _peers.size() == 1:
+		tn = _peers.keys()[0]
+
+	if tn.is_empty():
+		return  # Cannot route — no registered peers yet
+
 	var key: String = _adapter_key(tn, PanelDataAdapter.PanelType.CRASH)
 	if key not in _adapters:
-		# If the crash arrived before session_registered (rare), create adapters now.
-		if tn.is_empty():
-			return
-		_assign_peer_color(tn)
-		_peers[tn] = {"is_server": false, "online": false, "color": _peer_colors[tn], "peer_id": 0}
-		for pt: PanelDataAdapter.PanelType in [
-			PanelDataAdapter.PanelType.CLOCK,
-			PanelDataAdapter.PanelType.SPAN,
-			PanelDataAdapter.PanelType.CRASH,
-		]:
-			var k: String = _adapter_key(tn, pt)
-			if k not in _adapters:
-				_adapters[k] = _create_adapter(tn, pt)
-				_adapters[k].data_changed.connect(
-					func(ak: String) -> void: adapter_data_changed.emit(ak)
-				)
+		return  # Session not fully initialized for this peer yet
 	(_adapters[key] as CrashAdapter).feed(d)
 
 

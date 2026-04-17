@@ -49,7 +49,7 @@ func _tail_log() -> void:
 		push_error("ErrorWatchdog: could not open log file: " + _log_path)
 		return
 
-	# Seek to current end — only watch for errors that happen after this point.
+	# Seek to current end, only watch for errors that happen after this point.
 	file.seek_end()
 	var read_pos := file.get_position()
 

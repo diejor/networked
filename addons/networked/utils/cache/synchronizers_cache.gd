@@ -28,7 +28,7 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 			var cached: Array[MultiplayerSynchronizer] = []
 			cached.assign(target_node.get_meta(META_KEY))
 			
-			var is_cache_valid := true
+			var is_cache_valid := false
 			for sync in cached:
 				if not is_instance_valid(sync) or sync.is_queued_for_deletion():
 					is_cache_valid = false

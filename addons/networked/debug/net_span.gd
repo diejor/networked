@@ -3,7 +3,8 @@
 ## Tracks a named operation across multiple process frames, recording a trail
 ## of named checkpoints and a final outcome (clean close or failure).
 ##
-## Do not instantiate directly — use [NetTrace.begin] or [NetTrace.begin_peer].
+## Do not instantiate directly, use [method NetTrace.begin] or 
+## [method NetTrace.begin_peer].
 class_name NetSpan
 extends RefCounted
 
@@ -15,7 +16,7 @@ var id: StringName
 ## Human-readable label for this span type (e.g., [code]"lobby_spawn"[/code]).
 var label: String
 
-## The name of the MultiplayerTree this span belongs to. Empty for global spans.
+## The name of the [MultiplayerTree] this span belongs to. Empty for global spans.
 var tree_name: String
 
 ## Current lifecycle state.
@@ -116,8 +117,9 @@ func _get_affected_peers() -> Array[int]:
 
 
 ## Returns the first call-stack frame whose source is outside the networked addon.
-## This is the user's call site — the line where [NetTrace.begin] or [method step]
-## was invoked. Returns an empty dict in release builds (get_stack returns []).
+## This is the user's call site, the line where [method NetTrace.begin] or [method step]
+## was invoked. Returns an empty dict in release builds ([method get_stack] returns 
+## [code][][/code]).
 static func _get_caller() -> Dictionary:
 	for frame: Dictionary in get_stack():
 		var src := frame.get("source", "") as String

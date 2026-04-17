@@ -1,4 +1,4 @@
-## Adapter that converts a raw NetDebugManifest dictionary into structured view-model
+## Adapter that converts a raw [NetDebugManifest] dictionary into structured view-model
 ## entries consumed by [PanelCrashManifest].
 ##
 ## All string-building and data-parsing lives here. The UI contains zero formatting logic.
@@ -6,9 +6,11 @@
 class_name ManifestFormatter
 extends RefCounted
 
-## Translate a raw manifest dict into a structured entry dict ready for the Tree widget.
+## Translate a raw manifest [Dictionary] into a structured entry ready for 
+## the [Tree] widget.
 ##
 ## Returned structure:
+## [codeblock]
 ## {
 ##   label: String,          # top-level row text
 ##   trigger: String,
@@ -112,8 +114,8 @@ static func _format_telemetry(slice: Array) -> Array:
 	return out
 
 
-## Substitutes known lobby level paths with a readable alias.
-## alias_map: NodePath (as String) → alias String (e.g. "/root/.../Level1" → "[Lobby:Level1]")
+## Substitutes known lobby level [param path] with a readable [param alias_map] 
+## (e.g. [code]"/root/.../Level1" → "[Lobby:Level1]"[/code]).
 static func _alias_path(path: String, alias_map: Dictionary) -> String:
 	for prefix: String in alias_map:
 		if path.begins_with(prefix):

@@ -87,6 +87,8 @@ func _enter_tree() -> void:
 				"network_state": {
 					"is_server": multiplayer.is_server() if multiplayer else false,
 					"peer_id": multiplayer.get_unique_id() if multiplayer else 0,
+					"tree_name": (multiplayer.get_meta(&"_multiplayer_tree") as Node).name
+						if multiplayer and multiplayer.has_meta(&"_multiplayer_tree") else "",
 				},
 				"preflight_snapshot": [{
 					"name": name,

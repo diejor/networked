@@ -3,7 +3,7 @@
 ## This is a singleton (Autoload) node that collects telemetry from all active
 ## [MultiplayerTree] instances in the process and forwards them to the editor.
 ##
-## All operations are guarded by [method _should_report] — zero overhead in
+## All operations are guarded by [method _should_report], zero overhead in
 ## exported builds or headless/test runs.
 extends Node
 
@@ -157,6 +157,7 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		"cid": cid_val,
 		"cid_timeline": cid_timeline,
 		"trigger": "C++ ERROR / LOG WATCHDOG",
+		"tree_name": _active_tree_name(active),
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": timestamp,
 		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
@@ -166,11 +167,25 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	_maybe_break()
 
 
+## Returns the tree_name for the current context: prefers the active span's tree,
+## falls back to the first registered tree, falls back to empty string.
+func _active_tree_name(active_span: RefCounted = null) -> String:
+	if active_span:
+		var tn: Variant = active_span.get("tree_name")
+		if tn is String and not (tn as String).is_empty():
+			return tn as String
+	if not _trees.is_empty():
+		return _trees[0].name
+	return ""
+
+
 ## Returns true if [param sync] has at least one property configured for delta
-## replication (ALWAYS or ON_CHANGE).
-## Spawn-only synchronizers (all NEVER) and client-authoritative synchronizers
-## do not push state to a newly connecting peer from the server, so they are
-## not a meaningful race risk and are excluded from detection.
+## replication ([constant REPLICATION_MODE_ALWAYS] or 
+## [constant REPLICATION_MODE_ON_CHANGE]).
+## Spawn-only synchronizers (all [constant REPLICATION_MODE_NEVER]) and 
+## client-authoritative synchronizers do not push state to a newly connecting 
+## peer from the server, so they are not a meaningful race risk and are excluded 
+## from detection.
 func _has_delta_replication(sync: MultiplayerSynchronizer) -> bool:
 	if not sync.replication_config:
 		return false
@@ -268,10 +283,11 @@ func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 		_hooked_lobby_syncs.erase(lobby.synchronizer)
 
 
-## Connects to the native [signal MultiplayerSpawner.spawned] signal on all spawners
-## found under [param root]. Fires a [code]spawner.native_confirmed[/code] component event
-## each time the C++ engine actually spawns a node — this is ground truth for whether the
-## spawn packet was received and processed. Skips spawners already hooked.
+## Connects to the native [signal MultiplayerSpawner.spawned] signal on all 
+## spawners found under [param root]. Fires a [code]spawner.native_confirmed[/code] 
+## component event each time the C++ engine actually spawns a node, this is ground 
+## truth for whether the spawn packet was received and processed. Skips spawners 
+## already hooked.
 func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
 		if spawner in _hooked_spawners:
@@ -283,10 +299,11 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 
 
 ## Emits a crash manifest when a lobby is spawned on the server while peers are already
-## connected. Every MultiplayerSynchronizer (public_visibility=true) and MultiplayerSpawner
-## inside the level has already sent a simplify_path packet to those peers — but the peers
-## won't receive the level's own spawn packet until the next network poll cycle, so the
-## simplify_path resolution fails with "Node not found".
+## connected. Every [MultiplayerSynchronizer] ([code]public_visibility=true[/code]) 
+## and [MultiplayerSpawner] inside the level has already sent a [code]simplify_path[/code] 
+## packet to those peers, but the peers won't receive the level's own spawn packet until 
+## the next network poll cycle, so the [code]simplify_path[/code] resolution fails with 
+## [code]"Node not found"[/code].
 func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not mt.is_server or not mt.multiplayer_api:
 		return
@@ -326,6 +343,7 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 		"active_scene": "",
 		"network_state": {
 			"is_server": true,
+			"tree_name": mt.name,
 			"peer_id": mt.multiplayer_api.get_unique_id(),
 			"connected_peers": peers,
 		},
@@ -344,14 +362,18 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 ## [code]simplify_path[/code] packets for every registered [MultiplayerSynchronizer] and
 ## [MultiplayerSpawner] to the new peer. The client will process those packets before it
 ## receives the spawn packets for the lobby and player nodes themselves, producing
-## "Node not found" errors in [code]process_simplify_path[/code].
+## [code]"Node not found"[/code] errors in [code]process_simplify_path[/code].
 ##
 ## This covers two scenarios:
-## - ON_STARTUP lobbies: lobby was spawned before the client connected; client gets
-##   simplify_path for Level1/MultiplayerSpawner before the Level1 spawn packet.
-## - Already-spawned players: a second client connects after player A is in Level1;
-##   client B gets simplify_path for diego|A/MultiplayerSynchronizer before Level1
-##   or player spawn packets.
+## [br]
+## - [constant ON_STARTUP] lobbies: lobby was spawned before the client connected; 
+##   client gets [code]simplify_path[/code] for [code]Level1/MultiplayerSpawner[/code] 
+##   before the [code]Level1[/code] spawn packet.
+## [br]
+## - Already-spawned players: a second client connects after player A is in 
+##   [code]Level1[/code]; client B gets [code]simplify_path[/code] for 
+##   [code]diego|A/MultiplayerSynchronizer[/code] before [code]Level1[/code] or 
+##   player spawn packets.
 func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not mt.lobby_manager or not mt.multiplayer_api:
 		return
@@ -393,6 +415,7 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 		"active_scene": "",
 		"network_state": {
 			"is_server": true,
+			"tree_name": mt.name,
 			"peer_id": mt.multiplayer_api.get_unique_id(),
 			"new_peer_id": peer_id,
 		},
@@ -408,11 +431,11 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 ## connected.
 ##
 ## [signal LobbySynchronizer.spawned] fires (server-side) when [code]player.tree_entered[/code]
-## fires after [method LobbySynchronizer.track_player] is called — i.e., the moment the
+## fires after [method LobbySynchronizer.track_player] is called, i.e., the moment the
 ## player enters the scene tree on the server. C++ has already sent [code]simplify_path[/code]
 ## for any public-visibility [MultiplayerSynchronizer] on the player to all connected peers.
-## Peers who have not yet received the level spawn packet will get "Node not found" when they
-## process those simplify_path packets.
+## Peers who have not yet received the level spawn packet will get [code]"Node not found"[/code] 
+## when they process those [code]simplify_path[/code] packets.
 func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, span: NetPeerSpan) -> void:
 	if not is_instance_valid(player) or not mt.multiplayer_api:
 		return
@@ -452,6 +475,7 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 		"active_scene": "",
 		"network_state": {
 			"is_server": true,
+			"tree_name": mt.name,
 			"peer_id": mt.multiplayer_api.get_unique_id(),
 			"connected_peers": peers,
 		},
@@ -586,7 +610,8 @@ func _collect_properties(node: Node, sync: MultiplayerSynchronizer) -> Dictionar
 
 
 ## Formats Godot's raw "error" debugger message into a readable string.
-## Godot 4 sends: [source_func, source_file, source_line, error_code, error_descr, is_warning, ...]
+## Godot 4 sends: 
+## [code][source_func, source_file, source_line, error_code, error_descr, is_warning, ...][/code]
 func _format_cpp_error(data: Array) -> String:
 	var parts: PackedStringArray = []
 	var prefix := "WARNING" if data.size() > 5 and data[5] else "ERROR"
@@ -660,8 +685,9 @@ func _flush_now() -> void:
 
 # ─── Telemetry Helpers ────────────────────────────────────────────────────────
 
-## Freezes the ring buffer and returns its snapshot as the telemetry_slice for a manifest.
-## Call this immediately before sending any crash_manifest message.
+## Freezes the ring buffer and returns its snapshot as the [code]telemetry_slice[/code] 
+## for a manifest. Call this immediately before sending any [code]crash_manifest[/code] 
+## message.
 func _freeze_and_slice() -> Array:
 	if _telemetry:
 		_telemetry.freeze()
@@ -669,14 +695,11 @@ func _freeze_and_slice() -> Array:
 	return []
 
 
-## Pauses the engine if "Break on Manifest" is enabled in the editor.
-## Call this immediately after sending a crash_manifest message so the editor
-## panel has already received the manifest before execution halts.
+## Pauses the engine if break is enabled in the editor for a Crash Manifest.
+## Call this immediately after sending a [code]crash_manifest[/code] message so 
+## the editor panel has already received the manifest before execution halts.
 func _maybe_break() -> void:
 	if not _auto_break:
-		return
-	if EngineDebugger.is_skipping_breakpoints():
-		push_warning("[Networked] Break on Manifest is enabled but Skip Breakpoints is active — ignoring.")
 		return
 	breakpoint
 

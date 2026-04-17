@@ -2,7 +2,7 @@
 ##
 ## Handles the [EditorDebuggerPlugin] lifecycle: creates a [DebuggerSession] and
 ## [NetworkedDebuggerUI] per session. All incoming game messages are routed to
-## [DebuggerSession.receive]; the UI reacts to session signals rather than
+## [method DebuggerSession.receive]; the UI reacts to session signals rather than
 ## handling messages directly.
 @tool
 class_name NetworkedDebuggerPlugin
