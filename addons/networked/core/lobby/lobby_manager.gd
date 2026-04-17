@@ -399,8 +399,8 @@ func request_join_player(client_data_bytes: PackedByteArray) -> void:
 		return
 
 	var spawner_client: ClientComponent = (
-		lobby.level.get_node(client_data.spawner_path.node_path))
-
+		lobby.level.get_node_or_null(client_data.spawner_path.node_path))
+	assert(spawner_client, "Player to be connected needs to have a `ClientComponent`.")
 	spawner_client.player_joined.emit(client_data)
 
 

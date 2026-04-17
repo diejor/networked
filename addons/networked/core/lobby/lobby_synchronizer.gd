@@ -76,13 +76,15 @@ func _on_spawned(node: Node) -> void:
 	tracked_nodes[node] = true
 	
 	var syncs := SynchronizersCache.get_synchronizers(node)
+	var client := ClientComponent.unwrap(node)
+	client.log_warn(syncs)
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 	
 	var authority := node.get_multiplayer_authority()
 	if ClientComponent.parse_authority(node.name) != authority:
 		NetLog.error("`%s` authority wasn't properly configured on spawn. \
-Player won't replicate to the correct peer." % node.name)
+Player won't replicate to the correct peers." % node.name)
 	
 	connect_client(authority)
 	spawned.emit(node)

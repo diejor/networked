@@ -17,6 +17,7 @@ _spawnable_scenes = PackedStringArray("uid://bo5hexvshy77x")
 spawn_path = NodePath("..")
 
 [node name="Player" parent="." unique_id=1681601538 instance=ExtResource("1_kyxg0")]
+position = Vector2(50, 121)
 
 [node name="Teleporter" parent="." unique_id=1470871843 instance=ExtResource("2_mc20k")]
 position = Vector2(171, 70)
