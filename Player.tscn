@@ -6,6 +6,10 @@
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="6_tdg3f"]
+[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="7_dtqjt"]
+[ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="8_hp6x6"]
+[ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="9_3tkgg"]
+[ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="10_l6ohk"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
@@ -25,6 +29,20 @@ properties/2/replication_mode = 2
 script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
+
+[sub_resource type="Resource" id="Resource_oudfo"]
+resource_local_to_scene = true
+script = ExtResource("8_hp6x6")
+metadata/_custom_type_script = "uid://d1mnum02gn0c0"
+
+[sub_resource type="Resource" id="Resource_d6rpx"]
+script = ExtResource("9_3tkgg")
+metadata/_custom_type_script = "uid://dlsdsleg37hm1"
+
+[sub_resource type="Resource" id="Resource_r3kul"]
+script = ExtResource("10_l6ohk")
+backend = SubResource("Resource_d6rpx")
+metadata/_custom_type_script = "uid://icayc7hx72vn"
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
@@ -60,5 +78,12 @@ property_modes = Dictionary[StringName, int]({
 &"position": 1
 })
 metadata/_custom_type_script = "uid://b21bbqt166ive"
+
+[node name="SaveComponent" type="Node" parent="." unique_id=547581579]
+script = ExtResource("7_dtqjt")
+save_container = SubResource("Resource_oudfo")
+database = SubResource("Resource_r3kul")
+table_name = &"players"
+metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

@@ -105,10 +105,11 @@ func on_new_entry(entry: Variant) -> void:
 func _dispatch_span_entry(entry: Dictionary) -> void:
 	var d: Dictionary = entry.get("data", {})
 	match entry.get("type", ""):
-		"open":  push_span_open(d)
-		"step":  push_span_step(d)
-		"close": push_span_close(d)
-		"fail":  push_span_fail(d)
+		"open":      push_span_open(d)
+		"step":      push_span_step(d)
+		"step_warn": push_span_step_warn(d)
+		"close":     push_span_close(d)
+		"fail":      push_span_fail(d)
 
 
 ## Scroll to and highlight the span row matching [param cid].
@@ -217,6 +218,36 @@ func push_span_step(d: Dictionary) -> void:
 	row.set_metadata(COL_NAME, {"caller": caller})
 	_register_caller_row(row, caller)
 
+	item.set_collapsed(false)
+
+
+## Appends a warning step child row to an existing span row (orange ⚠).
+func push_span_step_warn(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	var item: TreeItem = _span_items.get(span_id)
+	if not item:
+		return
+	var s: Dictionary = d.get("step", {})
+	var step_label: String = s.get("label", "?")
+	var step_usec: int = s.get("usec", 0)
+	var elapsed_ms: float = (step_usec - _span_start_usec.get(span_id, step_usec)) / 1000.0
+	var message: String = s.get("message", "")
+
+	var row := _tree.create_item(item)
+	var display := "   ⚠ %s" % step_label
+	if not message.is_empty():
+		display += "  [%s]" % message
+	row.set_text(COL_NAME, display)
+	row.set_text(COL_ELAPSED, "+%.1f ms" % elapsed_ms)
+	row.set_custom_color(COL_NAME, Color(1.0, 0.65, 0.1))  # orange = warned step
+
+	var step_data: Dictionary = s.get("data", {})
+	if not step_data.is_empty():
+		row.set_tooltip_text(COL_NAME, str(step_data))
+
+	var caller: Dictionary = s.get("caller", {})
+	row.set_metadata(COL_NAME, {"caller": caller})
+	_register_caller_row(row, caller)
 	item.set_collapsed(false)
 
 

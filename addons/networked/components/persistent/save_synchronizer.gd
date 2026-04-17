@@ -63,46 +63,20 @@ func _enter_tree() -> void:
 	# This catches the case where the client's SaveSynchronizer enters the tree
 	# with zero tracked properties — the C++ registration will silently fail.
 	if prop_count == 0 and _initialized:
-			# push_warning so this appears in the console even when the process
-			# is not attached to an editor debugger (e.g. the second OS process
-			# in a two-process embedded server+client session).
-			push_warning(
-				"[CRASH MANIFEST] SaveSynchronizer '%s' on '%s' has 0 properties after setup(). " \
-				+ "C++ replication registration will silently fail. " \
-				+ "peer_id=%d is_server=%s in_tree=%s root_path=%s" % [
-					name,
-					(save_component.owner.name if save_component and save_component.owner else "?"),
-					(multiplayer.get_unique_id() if multiplayer else 0),
-					str(multiplayer.is_server() if multiplayer else false),
-					str(is_inside_tree()),
-					str(root_path),
-				])
-			
-			EngineDebugger.send_message("networked:crash_manifest", [{
-				"span_id": str(save_component._save_span.id) if save_component and save_component._save_span else "N/A",
-				"trigger": "CLIENT_EMPTY_CONFIG_ON_ENTER_TREE",
-				"frame": Engine.get_process_frames(),
-				"timestamp_usec": Time.get_ticks_usec(),
-				"active_scene": "",
-				"network_state": {
-					"is_server": multiplayer.is_server() if multiplayer else false,
-					"peer_id": multiplayer.get_unique_id() if multiplayer else 0,
-					"tree_name": (multiplayer.get_meta(&"_multiplayer_tree") as Node).name
-						if multiplayer and multiplayer.has_meta(&"_multiplayer_tree") else "",
-				},
-				"preflight_snapshot": [{
-					"name": name,
-					"parent": get_parent().name if get_parent() else "?",
-					"owner": owner.name if owner else "?",
-					"root_path": str(root_path),
-					"root_path_resolves": get_node_or_null(root_path) != null,
-					"public_visibility": public_visibility,
-					"prop_count": 0,
-				}],
-				"player_name": (save_component.owner.name
-					if save_component and save_component.owner else "?"),
-				"in_tree": is_inside_tree(),
-			}])
+		# After P1 (SynchronizersCache) + P2 (watch strip) this path should be rare.
+		# push_warning appears in the console even without an editor debugger attached
+		# (e.g. two-process embedded server+client sessions).
+		NetLog.warn(func(): push_warning(
+			"[CLIENT_EMPTY_CONFIG] SaveSynchronizer '%s' on '%s' has 0 properties " \
+			+ "after entering tree. C++ replication registration will silently fail. " \
+			+ "peer_id=%d is_server=%s root_path=%s" % [
+				name,
+				save_component.owner.name if save_component and save_component.owner else "?",
+				multiplayer.get_unique_id() if multiplayer else 0,
+				str(multiplayer.is_server() if multiplayer else false),
+				str(root_path),
+			]
+		))
 
 
 func _ready() -> void:
@@ -115,7 +89,7 @@ func _ready() -> void:
 ## Initializes the virtualized replication config based on the owner's attached synchronizers.
 func setup() -> void:
 	if _initialized:
-		push_warning("Initializing once again.")
+		NetLog.warn(func(): push_warning("SaveSynchronizer.setup: called more than once."))
 		return
 	_initialized = true
 
@@ -182,7 +156,14 @@ func _virtualize_replication_configs() -> void:
 			new_config.property_set_replication_mode(virtual_path, mode)
 			new_config.property_set_spawn(virtual_path, spawn)
 			new_config.property_set_sync(virtual_path, sync_flag)
-			new_config.property_set_watch(virtual_path, watch)
+			if watch:
+				NetLog.warn(func(): push_warning((
+					"SaveSynchronizer._virtualize_replication_configs: " \
+					+ "stripping watch=true from virtual property '%s' (source: '%s'). " \
+					+ "root_path is '.' (SaveSynchronizer itself); C++ cannot resolve " \
+					+ "sibling-node paths against this root.") % [str(virtual_path), str(real_path)]
+				))
+			new_config.property_set_watch(virtual_path, false)
 
 			if not save_container.has_value(vname_sn):
 				var value: Variant = node.get_indexed(prop_path)
@@ -190,7 +171,6 @@ func _virtualize_replication_configs() -> void:
 
 	root_path = NodePath(".")
 	replication_config = new_config
-
 
 func _get_tracked_property_names() -> Array[StringName]:
 	return _property_paths.keys()
@@ -270,20 +250,24 @@ func pull_from_scene() -> void:
 ## Pushes the loaded virtual container values into the actual live scene nodes.
 func push_to_scene() -> Error:
 	if not _initialized:
-		push_error("SaveSynchronizer: push_to_scene called before setup().")
+		NetLog.error(func(): push_error("SaveSynchronizer: push_to_scene called before setup()."))
 		return ERR_UNCONFIGURED
 	assert(save_container)
 
 	for property_name in save_container:
 		var pname := StringName(property_name)
 		if not has_state_property(pname):
-			push_error("Trying to push a save with property '%s' that is not tracked by the `SaveSynchronizer`." % property_name)
+			NetLog.error(func(): push_error(
+				"SaveSynchronizer: push_to_scene — property '%s' is not tracked." % property_name
+			))
 			return Error.ERR_UNCONFIGURED
 
 		var real_path: NodePath = _property_paths[pname]
 		var value: Variant = save_container.get_value(pname)
 		if value == null:
-			push_error("Trying to push but save doesn't have property '%s' that is tracked by the `SaveSynchronizer`." % property_name)
+			NetLog.error(func(): push_error(
+				"SaveSynchronizer: push_to_scene — tracked property '%s' has no value in save container." % property_name
+			))
 			return Error.ERR_UNCONFIGURED
 
 		_set_scene_value(pname, value)

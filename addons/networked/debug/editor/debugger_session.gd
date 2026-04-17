@@ -78,6 +78,7 @@ func receive(message: String, data: Array) -> void:
 		"networked:span_step":            _on_span(d, "step")
 		"networked:span_close":           _on_span(d, "close")
 		"networked:span_fail":            _on_span(d, "fail")
+		"networked:span_step_warn":       _on_span(d, "step_warn")
 		"networked:lobby_event":          _on_lobby_event(d)
 
 

@@ -275,19 +275,37 @@ static func info(msg: Variant, args: Array = []) -> void:
 
 ## Logs a [code]WARN[/code]-level message and calls [code]push_warning[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
+## [br][br]
+## Pass a [Callable] to preserve the editor jump-click: the callable must call
+## [code]push_warning[/code] itself so the engine records the caller's file/line.
+## [codeblock]
+## NetLog.warn(func(): push_warning("Player '%s' has no health." % name))
+## [/codeblock]
 static func warn(msg: Variant, args: Array = []) -> void:
 	if Level.WARN < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.WARN >= get_effective_level(ctx.module):
-		_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site)
+		if typeof(msg) == TYPE_CALLABLE:
+			(msg as Callable).call()
+		else:
+			_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site)
 
 ## Logs an [code]ERROR[/code]-level message and calls [code]push_error[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
+## [br][br]
+## Pass a [Callable] to preserve the editor jump-click: the callable must call
+## [code]push_error[/code] itself so the engine records the caller's file/line.
+## [codeblock]
+## NetLog.error(func(): push_error("Critical: lobby '%s' not found." % lobby_name))
+## [/codeblock]
 static func error(msg: Variant, args: Array = []) -> void:
 	if Level.ERROR < _effective_min_level: return
 	var ctx := _get_context()
 	if Level.ERROR >= get_effective_level(ctx.module):
-		_print("[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site)
+		if typeof(msg) == TYPE_CALLABLE:
+			(msg as Callable).call()
+		else:
+			_print("[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site)
 
 static func _get_context() -> Dictionary:
 	var stack := get_stack()

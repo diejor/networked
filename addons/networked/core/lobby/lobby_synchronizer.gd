@@ -76,8 +76,18 @@ func _on_spawned(node: Node) -> void:
 	tracked_nodes[node] = true
 	
 	var syncs := SynchronizersCache.get_synchronizers(node)
-	var client := ClientComponent.unwrap(node)
-	client.log_warn(syncs)
+
+	var expected_min := 1  # SpawnSynchronizer always present via ClientComponent
+	var _save_comp: SaveComponent = node.get_node_or_null("%SaveComponent")
+	if _save_comp:
+		expected_min += 1
+	assert(
+		syncs.size() >= expected_min,
+		"LobbySynchronizer._on_spawned: '%s' has %d synchronizer(s), expected >= %d. " \
+		% [node.name, syncs.size(), expected_min] \
+		+ "SynchronizersCache may have been populated while the node was off-tree."
+	)
+
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 	

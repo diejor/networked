@@ -30,7 +30,10 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 			
 			var is_cache_valid := true
 			for sync in cached:
-				if not is_instance_valid(sync) or sync.is_queued_for_deletion():
+				if not is_instance_valid(sync) or sync.is_queued_for_deletion() \
+					or not sync.is_inside_tree() \
+					or not sync.has_node(sync.root_path) \
+					or sync.get_node(sync.root_path) != target_node:
 					is_cache_valid = false
 					break
 					
@@ -38,25 +41,34 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 				return cached
 				
 	synchronizers.assign(target_node.find_children("*", "MultiplayerSynchronizer"))
-	
-	var filtered_syncs := synchronizers.filter(func(sync: MultiplayerSynchronizer):
-		return sync.root_path and sync.has_node(sync.root_path) and sync.get_node(sync.root_path) == target_node
-	)
-	
-	if not Engine.is_editor_hint() and target_node.is_inside_tree():
-		target_node.set_meta(META_KEY, filtered_syncs)
 
+	var filtered_syncs: Array[MultiplayerSynchronizer] = []
+	filtered_syncs.assign(synchronizers.filter(func(sync: MultiplayerSynchronizer):
+		return sync.root_path and sync.has_node(sync.root_path) \
+			and sync.get_node(sync.root_path) == target_node
+	))
+
+	var result: Array[MultiplayerSynchronizer] = []
+	result.assign(filtered_syncs)
 	if not _providers.is_empty():
-		var extended: Array[MultiplayerSynchronizer] = []
-		extended.assign(filtered_syncs)
 		for provider: Callable in _providers:
 			var extra: Array = provider.call(target_node)
 			for s in extra:
-				if s is MultiplayerSynchronizer and not extended.has(s):
-					extended.append(s)
-		return extended
+				if s is MultiplayerSynchronizer and not result.has(s):
+					result.append(s)
 
-	return filtered_syncs
+	if not Engine.is_editor_hint():
+		if target_node.is_inside_tree():
+			target_node.set_meta(META_KEY, result)
+			_connect_invalidation(target_node)
+	else:
+		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String: return s.name)
+		NetLog.warn(func(): push_warning(
+			"SynchronizersCache: '%s' is off-tree; cache not written. " \
+			+ "Synchronizers found: [%s]" % [target_node.name, ", ".join(type_names)]
+		))
+	
+	return result
 
 
 ## Returns only the [MultiplayerSynchronizer] nodes that are owned by [param target_node] in the scene tree.
@@ -140,3 +152,17 @@ static func sync_only_server(target_node: Node) -> void:
 static func clear_cache(target_node: Node) -> void:
 	if target_node and target_node.has_meta(META_KEY):
 		target_node.remove_meta(META_KEY)
+
+
+## Connects [signal Node.child_entered_tree] to [method clear_cache] on [param node]
+## exactly once, so that adding a new [MultiplayerSynchronizer] child auto-invalidates
+## the cache.
+static func _connect_invalidation(node: Node) -> void:
+	const CONNECTED_META := &"_sc_invalidation_connected"
+	if node.has_meta(CONNECTED_META):
+		return
+	node.set_meta(CONNECTED_META, true)
+	node.child_entered_tree.connect(func(child: Node) -> void:
+		if child is MultiplayerSynchronizer:
+			clear_cache(node)
+	)

@@ -233,7 +233,7 @@ func instantiate() -> void:
 	# that confirms Hypotheses 1 or 2 (see plan).
 	var syncs_before := SynchronizersCache.get_synchronizers(owner)
 	if _save_span:
-		_save_span.step("preflight_scan", {
+		var scan_data := {
 			in_tree = is_inside_tree(),
 			sync_count = syncs_before.size(),
 			sync_names = syncs_before.map(func(s: MultiplayerSynchronizer) -> String:
@@ -242,7 +242,12 @@ func instantiate() -> void:
 					str(s.root_path),
 					str(s.get_node_or_null(s.root_path) != null),
 				]),
-		})
+		}
+		if not is_inside_tree():
+			_save_span.step_warn("preflight_scan",
+				"SaveComponent is off-tree at instantiate() time", scan_data)
+		else:
+			_save_span.step("preflight_scan", scan_data)
 
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)
@@ -262,38 +267,25 @@ func instantiate() -> void:
 		})
 
 	if prop_count == 0:
-		# Emit crash manifest before asserting so the editor panel receives it even if
-		# the game crashes immediately after.
-		if EngineDebugger.is_active():
-			var syncs_snap: Array = []
-			for s: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(owner):
-				syncs_snap.append({
-					"name": s.name,
-					"parent": s.get_parent().name if s.get_parent() else "?",
-					"owner": s.owner.name if s.owner else "?",
-					"root_path": str(s.root_path),
-					"root_path_resolves": s.get_node_or_null(s.root_path) != null,
-					"public_visibility": s.public_visibility,
-					"prop_count": s.replication_config.get_properties().size() if s.replication_config else 0,
-				})
-			EngineDebugger.send_message("networked:crash_manifest", [{
-				"span_id": str(_save_span.id if _save_span else ""),
-				"trigger": "EMPTY_REPLICATION_CONFIG",
-				"frame": Engine.get_process_frames(),
-				"timestamp_usec": Time.get_ticks_usec(),
-				"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-				"network_state": {
-					"is_server": multiplayer.is_server() if multiplayer else false,
-					"peer_id": multiplayer.get_unique_id() if multiplayer else 0,
-				},
-				"preflight_snapshot": syncs_snap,
-				"player_name": owner.name,
-				"in_tree": is_inside_tree(),
-			}])
-		assert(false,
-			"[PREFLIGHT-B] SaveSynchronizer has 0 properties after setup() on '%s'. " \
-			+ "Was _virtualize_replication_configs() called before sibling synchronizers had " \
-			+ "valid replication_configs? Check the save.preflight_scan event." % owner.name)
+		# After P1 (SynchronizersCache provider-caching fix), the server-side path here
+		# should be unreachable. On the client it may fire if sibling synchronizers have
+		# null replication_configs at the time of setup().
+		NetLog.warn(func(): push_warning(
+			"[PREFLIGHT-B] SaveSynchronizer on '%s' has 0 properties after setup(). " \
+			+ "Check that sibling MultiplayerSynchronizers have valid replication_configs. " \
+			+ "peer_id=%d in_tree=%s" % [
+				owner.name if owner else "?",
+				multiplayer.get_unique_id() if multiplayer else 0,
+				str(is_inside_tree()),
+			]
+		))
+		if _save_span:
+			_save_span.step_warn(
+				"preflight_b_empty",
+				func(): push_warning("SaveComponent: SaveSynchronizer has 0 properties after setup()"),
+				{prop_count = 0, in_tree = is_inside_tree()}
+			)
+		return
 
 	if database and not table_name.is_empty():
 		var columns: Array[StringName] = save_synchronizer._get_tracked_property_names()
