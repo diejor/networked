@@ -154,7 +154,7 @@ func host(quiet: bool = false) -> Error:
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error("Setup failed: %s" % error_string(setup_err))
+				NetLog.error(func(): push_error("Setup failed: %s" % error_string(setup_err)))
 			return setup_err
 	
 	var connection_code: Error = backend.host()
@@ -162,7 +162,7 @@ func host(quiet: bool = false) -> Error:
 	if connection_code == OK:
 		_config_api()
 	elif not quiet:
-		NetLog.error("Failed to host: %s" % error_string(connection_code))
+		NetLog.error(func(): push_error("Failed to host: %s" % error_string(connection_code)))
 		
 	return connection_code
 
@@ -180,19 +180,19 @@ func join(server_address: String, username: String, timeout: float = 5.0, quiet:
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error("Setup failed: %s" % error_string(setup_err))
+				NetLog.error(func(): push_error("Setup failed: %s" % error_string(setup_err)))
 			return setup_err
 	
 	var connection_code: Error = backend.join(server_address, username)
 	if connection_code != OK:
 		if not quiet:
-			NetLog.error("Failed to join: %s" % error_string(connection_code))
+			NetLog.error(func(): push_error("Failed to join: %s" % error_string(connection_code)))
 		return connection_code
 	
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		if not quiet:
-			NetLog.error("Connection timed out.")
+			NetLog.error(func(): push_error("Connection timed out."))
 		return ERR_CANT_CONNECT
 	
 	_config_api()

@@ -243,11 +243,6 @@ func instantiate() -> void:
 					str(s.get_node_or_null(s.root_path) != null),
 				]),
 		}
-		if not is_inside_tree():
-			_save_span.step_warn("preflight_scan",
-				"SaveComponent is off-tree at instantiate() time", scan_data)
-		else:
-			_save_span.step("preflight_scan", scan_data)
 
 	save_synchronizer.setup()
 	assert(save_synchronizer._initialized)

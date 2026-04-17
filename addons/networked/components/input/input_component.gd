@@ -49,7 +49,7 @@ func _ready() -> void:
 		if clock:
 			clock.on_tick.connect(_on_tick)
 		else:
-			push_warning("InputComponent: tick_mode=true but no NetworkClock found on this node's multiplayer API.")
+			NetLog.warn(func(): push_warning("InputComponent: tick_mode=true but no NetworkClock found on this node's multiplayer API."))
 
 ## Builds the initial [member state] dictionary from [method get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:

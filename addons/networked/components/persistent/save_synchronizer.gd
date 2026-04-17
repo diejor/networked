@@ -156,13 +156,6 @@ func _virtualize_replication_configs() -> void:
 			new_config.property_set_replication_mode(virtual_path, mode)
 			new_config.property_set_spawn(virtual_path, spawn)
 			new_config.property_set_sync(virtual_path, sync_flag)
-			if watch:
-				NetLog.warn(func(): push_warning((
-					"SaveSynchronizer._virtualize_replication_configs: " \
-					+ "stripping watch=true from virtual property '%s' (source: '%s'). " \
-					+ "root_path is '.' (SaveSynchronizer itself); C++ cannot resolve " \
-					+ "sibling-node paths against this root.") % [str(virtual_path), str(real_path)]
-				))
 			new_config.property_set_watch(virtual_path, false)
 
 			if not save_container.has_value(vname_sn):

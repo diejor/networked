@@ -27,12 +27,12 @@ func _process_copy(use_uid: bool) -> void:
 	var edited_scene_root: Node = EditorInterface.get_edited_scene_root()
 	
 	if not edited_scene_root:
-		push_warning("SceneNodePath: Cannot copy path. No scene is currently open.")
+		NetLog.warn(func(): push_warning("SceneNodePath: Cannot copy path. No scene is currently open."))
 		return
 		
 	var scene_file: String = edited_scene_root.scene_file_path
 	if scene_file.is_empty():
-		push_warning("SceneNodePath: Cannot copy path. Please save the scene first.")
+		NetLog.warn(func(): push_warning("SceneNodePath: Cannot copy path. Please save the scene first."))
 		return
 		
 	var node_path_str: String

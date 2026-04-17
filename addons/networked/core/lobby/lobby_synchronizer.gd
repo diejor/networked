@@ -93,8 +93,8 @@ func _on_spawned(node: Node) -> void:
 	
 	var authority := node.get_multiplayer_authority()
 	if ClientComponent.parse_authority(node.name) != authority:
-		NetLog.error("`%s` authority wasn't properly configured on spawn. \
-Player won't replicate to the correct peers." % node.name)
+		NetLog.error(func(): push_error("`%s` authority wasn't properly configured on spawn. \
+Player won't replicate to the correct peers." % node.name))
 	
 	connect_client(authority)
 	spawned.emit(node)
@@ -109,7 +109,10 @@ func _on_despawned(node: Node) -> void:
 	
 	var authority := node.get_multiplayer_authority()
 	if ClientComponent.parse_authority(node.name) != authority:
-		NetLog.error("`%s` authority wasn't properly configured on spawn. \
+		var err := func(m): push_error(m)
+		NetLog.error(err.bind("(res://addons/networked/utils/net_log.gd:54) `%s` authority wasn't properly configured on spawn. \
+Player won't despawn from the correct peer." % node.name))
+		print_rich("(res://addons/networked/utils/net_log.gd:54) `%s` authority wasn't properly configured on spawn. \
 Player won't despawn from the correct peer." % node.name)
 	disconnect_client(authority)
 	

@@ -195,6 +195,9 @@ func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint() or not multiplayer or not multiplayer.has_multiplayer_peer():
 		return
 
+	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+
 	if delta > stall_threshold:
 		_tick_accumulator = 0.0
 		if not multiplayer.is_server(): _request_handshake.rpc_id(1)
@@ -232,8 +235,16 @@ func _physics_process(delta: float) -> void:
 
 func _on_tree_configured() -> void:
 	var api := multiplayer as SceneMultiplayer
-	if api: api.set_meta(&"_network_clock", self)
-	if not multiplayer.is_server(): _request_handshake.rpc_id(1)
+	if api:
+		api.set_meta(&"_network_clock", self)
+		api.server_disconnected.connect(func(): is_synchronized = false)
+		api.connection_failed.connect(func(): is_synchronized = false)
+	
+	if not multiplayer.is_server():
+		if multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			_request_handshake.rpc_id(1)
+		else:
+			multiplayer.connected_to_server.connect(_request_handshake.rpc_id.bind(1), CONNECT_ONE_SHOT)
 
 #endregion
 
@@ -249,7 +260,7 @@ func _request_handshake() -> void:
 func _respond_handshake(server_tickrate: int) -> void:
 	if server_tickrate != tickrate:
 		match tickrate_mismatch_action:
-			0: push_warning("NetworkClock: tickrate mismatch — local=%d server=%d" % [tickrate, server_tickrate])
+			0: NetLog.warn(func(): push_warning("NetworkClock: tickrate mismatch — local=%d server=%d" % [tickrate, server_tickrate]))
 			1: multiplayer.multiplayer_peer.close()
 			2: tickrate_mismatch.emit(multiplayer.get_remote_sender_id(), server_tickrate)
 	_ping.rpc_id(1, Time.get_ticks_usec())

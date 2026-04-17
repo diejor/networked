@@ -94,7 +94,7 @@ func step_warn(step_label: String, warn_fn: Variant = "", data: Dictionary = {})
 		push_warning("NetSpan [%s] step '%s': %s" % [label, step_label, str(warn_fn)])
 	var s := {
 		"label": step_label,
-		"message": message,
+		"message": str(warn_fn) if typeof(warn_fn) != TYPE_CALLABLE else "<callable>",
 		"data": data,
 		"frame": Engine.get_process_frames(),
 		"usec": Time.get_ticks_usec(),
