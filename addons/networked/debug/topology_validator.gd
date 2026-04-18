@@ -133,6 +133,22 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 					"virtual property '%s' has watch=true — C++ cannot resolve against root_path '.'" \
 					% str(prop)
 				)
+
+	if save_comp.database and not save_comp.table_name.is_empty():
+		var tracked: Array[StringName] = save_comp.save_synchronizer._get_tracked_property_names()
+		var registered: Array[StringName] = save_comp.database.get_registered_columns(save_comp.table_name)
+		if not registered.is_empty():
+			var only_tracked := tracked.filter(func(c: StringName) -> bool: return c not in registered)
+			var only_registered := registered.filter(func(c: StringName) -> bool: return c not in tracked)
+			if not only_tracked.is_empty() or not only_registered.is_empty():
+				errs.append(
+					"Schema drift on '%s' table='%s': only_in_sync=%s only_in_db=%s" % [
+						save_comp.owner.name if save_comp.owner else "?",
+						save_comp.table_name,
+						str(only_tracked), str(only_registered),
+					]
+				)
+
 	return errs
 
 

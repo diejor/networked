@@ -86,6 +86,12 @@ func register_schema(table: StringName, columns: Array[StringName]) -> void:
 		_initialize_backend.call_deferred()
 
 
+## Returns the registered column names for [param table], or an empty array if
+## the table has not been registered yet.
+func get_registered_columns(table: StringName) -> Array[StringName]:
+	return (_schema.get(table, [] as Array[StringName]) as Array[StringName]).duplicate()
+
+
 func _initialize_backend() -> void:
 	if _initialized:
 		return

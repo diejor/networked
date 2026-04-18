@@ -153,18 +153,20 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	var cid_val := str(active.id) if active else "N/A"
 	var cid_timeline: Array = [cid_val] if active else ["N/A"]
 
-	EngineDebugger.send_message("networked:crash_manifest", [{
+	_send_manifest("CPP_ERROR_LOG_WATCHDOG", {
 		"cid": cid_val,
 		"cid_timeline": cid_timeline,
-		"trigger": "C++ ERROR / LOG WATCHDOG",
 		"tree_name": _active_tree_name(active),
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": timestamp,
 		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
+		"network_state": {
+			"peer_id": _trees[0].multiplayer_api.get_unique_id() if not _trees.is_empty() and _trees[0].multiplayer_api else 0,
+		},
+		"errors": [error_text],
 		"error_text": error_text,
 		"telemetry_slice": _freeze_and_slice(),
-	}])
-	_maybe_break()
+	})
 
 
 ## Returns the tree_name for the current context: prefers the active span's tree,
@@ -177,40 +179,6 @@ func _active_tree_name(active_span: RefCounted = null) -> String:
 	if not _trees.is_empty():
 		return _trees[0].name
 	return ""
-
-
-## Returns true if [param sync] has at least one property configured for delta
-## replication ([constant REPLICATION_MODE_ALWAYS] or 
-## [constant REPLICATION_MODE_ON_CHANGE]).
-## Spawn-only synchronizers (all [constant REPLICATION_MODE_NEVER]) and 
-## client-authoritative synchronizers do not push state to a newly connecting 
-## peer from the server, so they are not a meaningful race risk and are excluded 
-## from detection.
-func _has_delta_replication(sync: MultiplayerSynchronizer) -> bool:
-	if not sync.replication_config:
-		return false
-	for prop in sync.replication_config.get_properties():
-		var mode := sync.replication_config.property_get_replication_mode(prop)
-		if mode == SceneReplicationConfig.REPLICATION_MODE_ALWAYS \
-				or mode == SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE:
-			return true
-	return false
-
-
-func _get_rel_path(node: Node, mt: MultiplayerTree) -> String:
-	if not is_instance_valid(node) or not is_instance_valid(mt):
-		return "?"
-	var tree_root := mt.get_path()
-	var node_path := node.get_path()
-	var s_root := str(tree_root)
-	var s_node := str(node_path)
-	
-	if s_node.begins_with(s_root):
-		var rel := s_node.trim_prefix(s_root)
-		if rel.begins_with("/"):
-			rel = rel.substr(1)
-		return rel
-	return s_node
 
 
 func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
@@ -232,6 +200,45 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 	var ev := {"tree_name": mt.name, "peer_id": peer_id, "event": "disconnected"}
 	_cycle_peer_events.append(ev)
 	_queue("networked:peer_disconnected", {"tree_name": mt.name, "peer_id": peer_id})
+	get_tree().create_timer(2.0).timeout.connect(
+		func() -> void: _check_zombie_player(peer_id, mt),
+		CONNECT_ONE_SHOT
+	)
+
+
+## Scans active lobbies for nodes still owned by [param peer_id] two seconds after
+## that peer disconnected. If any are found, emits a [code]ZOMBIE_PLAYER_DETECTED[/code]
+## manifest so the developer knows cleanup did not run in time.
+func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
+	if not _should_report():
+		return
+	if not is_instance_valid(mt) or not mt.lobby_manager:
+		return
+	var zombies: Array[String] = []
+	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
+		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
+		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+			continue
+		for node: Node in lobby.level.find_children("*", "Node", true, false):
+			if is_instance_valid(node) and node.get_multiplayer_authority() == peer_id:
+				zombies.append(str(node.get_path()))
+	if zombies.is_empty():
+		return
+	_send_manifest("ZOMBIE_PLAYER_DETECTED", {
+		"cid": "N/A",
+		"cid_timeline": ["N/A"],
+		"frame": Engine.get_process_frames(),
+		"timestamp_usec": Time.get_ticks_usec(),
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
+		"network_state": {
+			"is_server": mt.is_server,
+			"tree_name": mt.name,
+			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+			"disconnected_peer_id": peer_id,
+		},
+		"errors": zombies,
+		"telemetry_slice": _freeze_and_slice(),
+	})
 
 
 func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
@@ -300,31 +307,13 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 
 
 ## Emits a crash manifest when a lobby is spawned on the server while peers are already
-## connected. Every [MultiplayerSynchronizer] ([code]public_visibility=true[/code]) 
-## and [MultiplayerSpawner] inside the level has already sent a [code]simplify_path[/code] 
-## packet to those peers, but the peers won't receive the level's own spawn packet until 
-## the next network poll cycle, so the [code]simplify_path[/code] resolution fails with 
+## connected. Every [MultiplayerSynchronizer] ([code]public_visibility=true[/code])
+## and [MultiplayerSpawner] inside the level has already sent a [code]simplify_path[/code]
+## packet to those peers, but the peers won't receive the level's own spawn packet until
+## the next network poll cycle, so the [code]simplify_path[/code] resolution fails with
 ## [code]"Node not found"[/code].
 func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: NetPeerSpan) -> void:
-	if not mt.is_server or not mt.multiplayer_api:
-		return
-	var peers := mt.multiplayer_api.get_peers()
-	if peers.is_empty():
-		return
-
-	var races: Array = []
-	for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
-		var sync := child as MultiplayerSynchronizer
-		if sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
-			races.append({
-				"type": "MultiplayerSynchronizer",
-				"path": str(sync.get_path()),
-				"rel_path": _get_rel_path(sync, mt),
-				"auth": sync.get_multiplayer_authority(),
-				"is_auth": sync.is_multiplayer_authority(),
-				"public_visibility": true,
-			})
-
+	var races := NetRaceDetector.find_lobby_races(lobby, mt)
 	if races.is_empty():
 		if span:
 			span.step("no_race_detected")
@@ -335,25 +324,24 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	EngineDebugger.send_message("networked:crash_manifest", [{
+	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
 		"cid": cid_val,
 		"cid_timeline": [cid_val],
-		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": "",
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
 		"network_state": {
 			"is_server": true,
 			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id(),
-			"connected_peers": peers,
+			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+			"connected_peers": mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 		},
+		"errors": races,
 		"preflight_snapshot": races,
 		"player_name": lobby.level.name,
 		"in_tree": lobby.level.is_inside_tree(),
 		"telemetry_slice": _freeze_and_slice(),
-	}])
-	_maybe_break()
+	})
 
 
 ## Emits a crash manifest when a new peer connects to the server while nodes are already
@@ -367,36 +355,16 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 ##
 ## This covers two scenarios:
 ## [br]
-## - [constant ON_STARTUP] lobbies: lobby was spawned before the client connected; 
-##   client gets [code]simplify_path[/code] for [code]Level1/MultiplayerSpawner[/code] 
+## - [constant ON_STARTUP] lobbies: lobby was spawned before the client connected;
+##   client gets [code]simplify_path[/code] for [code]Level1/MultiplayerSpawner[/code]
 ##   before the [code]Level1[/code] spawn packet.
 ## [br]
-## - Already-spawned players: a second client connects after player A is in 
-##   [code]Level1[/code]; client B gets [code]simplify_path[/code] for 
-##   [code]diego|A/MultiplayerSynchronizer[/code] before [code]Level1[/code] or 
+## - Already-spawned players: a second client connects after player A is in
+##   [code]Level1[/code]; client B gets [code]simplify_path[/code] for
+##   [code]diego|A/MultiplayerSynchronizer[/code] before [code]Level1[/code] or
 ##   player spawn packets.
 func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, span: NetPeerSpan) -> void:
-	if not mt.lobby_manager or not mt.multiplayer_api:
-		return
-
-	var races: Array = []
-	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
-		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
-			continue
-		for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):
-			var sync := child as MultiplayerSynchronizer
-			if sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
-				races.append({
-					"type": "MultiplayerSynchronizer",
-					"path": str(sync.get_path()),
-					"rel_path": _get_rel_path(sync, mt),
-					"auth": sync.get_multiplayer_authority(),
-					"is_auth": sync.is_multiplayer_authority(),
-					"lobby": str(lobby_name),
-					"public_visibility": true,
-				})
-
+	var races := NetRaceDetector.find_connect_races(peer_id, mt)
 	if races.is_empty():
 		if span:
 			span.step("no_race_detected")
@@ -407,25 +375,24 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	EngineDebugger.send_message("networked:crash_manifest", [{
+	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
 		"cid": cid_val,
 		"cid_timeline": [cid_val],
-		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": "",
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
 		"network_state": {
 			"is_server": true,
 			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id(),
+			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
 			"new_peer_id": peer_id,
 		},
+		"errors": races,
 		"preflight_snapshot": races,
 		"player_name": "peer_%d" % peer_id,
 		"in_tree": true,
 		"telemetry_slice": _freeze_and_slice(),
-	}])
-	_maybe_break()
+	})
 
 
 ## Emits a crash manifest when a player is added to a lobby on the server while peers are
@@ -435,28 +402,10 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 ## fires after [method LobbySynchronizer.track_player] is called, i.e., the moment the
 ## player enters the scene tree on the server. C++ has already sent [code]simplify_path[/code]
 ## for any public-visibility [MultiplayerSynchronizer] on the player to all connected peers.
-## Peers who have not yet received the level spawn packet will get [code]"Node not found"[/code] 
+## Peers who have not yet received the level spawn packet will get [code]"Node not found"[/code]
 ## when they process those [code]simplify_path[/code] packets.
 func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, span: NetPeerSpan) -> void:
-	if not is_instance_valid(player) or not mt.multiplayer_api:
-		return
-	var peers := mt.multiplayer_api.get_peers()
-	if peers.is_empty():
-		return
-
-	var races: Array = []
-	for child in player.find_children("*", "MultiplayerSynchronizer", true, false):
-		var sync := child as MultiplayerSynchronizer
-		if sync.is_inside_tree() and sync.public_visibility and sync.is_multiplayer_authority() and _has_delta_replication(sync):
-			races.append({
-				"type": "MultiplayerSynchronizer",
-				"path": str(sync.get_path()),
-				"rel_path": _get_rel_path(sync, mt),
-				"auth": sync.get_multiplayer_authority(),
-				"is_auth": true,
-				"public_visibility": true,
-			})
-
+	var races := NetRaceDetector.find_player_races(player, mt)
 	if races.is_empty():
 		if span:
 			span.step("no_race_detected")
@@ -467,25 +416,24 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	EngineDebugger.send_message("networked:crash_manifest", [{
+	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
 		"cid": cid_val,
 		"cid_timeline": [cid_val],
-		"trigger": "SERVER_SIMPLIFY_PATH_RACE",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": "",
+		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
 		"network_state": {
 			"is_server": true,
 			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id(),
-			"connected_peers": peers,
+			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+			"connected_peers": mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 		},
+		"errors": races,
 		"preflight_snapshot": races,
 		"player_name": player.name,
 		"in_tree": player.is_inside_tree(),
 		"telemetry_slice": _freeze_and_slice(),
-	}])
-	_maybe_break()
+	})
 
 
 ## Validates the synchronizer topology of a newly spawned player.
@@ -503,10 +451,9 @@ func _check_player_topology(player: Node, mt: MultiplayerTree, span: NetSpan) ->
 		span.fail("topology_invalid", {"errors": report.errors})
 
 	var cid_val := str(span.id) if span else "N/A"
-	EngineDebugger.send_message("networked:crash_manifest", [{
+	_send_manifest("TOPOLOGY_VALIDATION_FAILED", {
 		"cid": cid_val,
 		"cid_timeline": [cid_val],
-		"trigger": "TOPOLOGY_VALIDATION_FAILED",
 		"frame": Engine.get_process_frames(),
 		"timestamp_usec": Time.get_ticks_usec(),
 		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
@@ -519,8 +466,7 @@ func _check_player_topology(player: Node, mt: MultiplayerTree, span: NetSpan) ->
 		"player_name": player.name,
 		"in_tree": player.is_inside_tree(),
 		"telemetry_slice": _freeze_and_slice(),
-	}])
-	_maybe_break()
+	})
 
 
 func _unhook_spawners_in(root: Node) -> void:
@@ -731,13 +677,31 @@ func _freeze_and_slice() -> Array:
 	return []
 
 
+## Single dispatch point for all [code]networked:crash_manifest[/code] emissions.
+##
+## Sends via [EngineDebugger] when a debugger session is active; falls back to
+## [method push_error] otherwise so topology and race failures surface in exported
+## builds too. Always calls [method _maybe_break] so the caller does not need to.
+func _send_manifest(trigger: String, payload: Dictionary) -> void:
+	payload["trigger"] = trigger
+	if EngineDebugger.is_active():
+		EngineDebugger.send_message("networked:crash_manifest", [payload])
+	else:
+		push_error("[NETWORKED] %s | scene=%s peer=%d errors=%s" % [
+			trigger,
+			payload.get("active_scene", "?"),
+			payload.get("network_state", {}).get("peer_id", 0),
+			str(payload.get("errors", [])),
+		])
+	_maybe_break()
+
+
 ## Pauses the engine if break is enabled in the editor for a Crash Manifest.
-## Call this immediately after sending a [code]crash_manifest[/code] message so 
+## Call this immediately after sending a [code]crash_manifest[/code] message so
 ## the editor panel has already received the manifest before execution halts.
 func _maybe_break() -> void:
-	if not _auto_break:
-		return
-	breakpoint
+	if EngineDebugger.is_active() and _auto_break:
+		breakpoint
 
 
 # ─── Guard ────────────────────────────────────────────────────────────────────
