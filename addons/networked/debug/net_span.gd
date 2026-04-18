@@ -29,7 +29,7 @@ var _start_usec: int
 var _steps: Array = []
 
 
-func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name: String = "") -> void:
+func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name: String = "", follows_from: CheckpointToken = null) -> void:
 	id = p_id
 	label = p_label
 	tree_name = p_tree_name
@@ -46,6 +46,7 @@ func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name
 		"meta": meta,
 		"affected_peers": _get_affected_peers(),
 		"caller": _get_caller(),
+		"follows_from": follows_from.to_dict() if follows_from else {},
 	})
 
 
@@ -153,6 +154,23 @@ func fail(reason: String, data: Dictionary = {}, fail_fn: Callable = Callable())
 		"data": data,
 		"caller": _get_caller(),
 	})
+
+
+## Captures the current span state as a [CheckpointToken] for causal linking.
+##
+## Pass the returned token to [method NetTrace.begin] or [method NetTrace.begin_peer]
+## via the [param follows_from] parameter to declare an explicit causal relationship
+## between this span and the new one.
+## [param step_label] is optional — use it when the token represents a specific
+## step within this span rather than the span as a whole.
+func checkpoint(step_label: String = "") -> CheckpointToken:
+	var t := CheckpointToken.new()
+	t.span_id = id
+	t.span_label = label
+	t.step_label = step_label
+	t.frame = Engine.get_process_frames()
+	t.usec = Time.get_ticks_usec()
+	return t
 
 
 ## Returns the affected peer IDs. Empty for base [NetSpan]; overridden by [NetPeerSpan].

@@ -112,24 +112,20 @@ func _get_entity_id() -> StringName:
 ## Writes the current state of the container to the [member database].
 func save_state() -> Error:
 	if not database or table_name.is_empty():
-		log_warn("SaveComponent: cannot save state; database or table_name is missing.")
+		log_warn("Cannot save state; database or table_name is missing.")
 		return ERR_UNCONFIGURED
 
 	var entity_id := _get_entity_id()
 	var data := _container_to_dict()
 
-	var span := _begin_span("db_upsert", {table = table_name, id = entity_id})
-	span.step("begin")
 	var db_err := database.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(table_name, entity_id, data)
 	)
 
 	if db_err == OK:
-		log_info("SaveComponent: state saved to database (table=%s, id=%s)." % [table_name, entity_id])
-		span.step("upserted").end()
+		log_trace("State saved to database (table=%s, id=%s)." % [table_name, entity_id])
 	else:
-		log_warn("SaveComponent: database upsert failed. Error: %s" % error_string(db_err))
-		span.fail("upsert_failed", {error = db_err})
+		log_warn("Database upsert failed. Error: %s" % error_string(db_err))
 
 	return db_err
 

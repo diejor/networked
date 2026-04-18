@@ -51,6 +51,7 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 	func _init(client: ClientComponent) -> void:
 		name = "SpawnSynchronizer"
 		unique_name_in_owner = true
+		visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 		client.add_child(self)
 		owner = client
 		root_path = get_path_to(client.owner)

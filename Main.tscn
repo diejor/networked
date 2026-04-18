@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/core/lobby/lobby_manager.gd" id="4_fos0i"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/core/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/components/client/ConnectServerUI.tscn" id="7_lgr22"]
+[ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/components/tp/TPLayer.tscn" id="8_03owx"]
 
 [sub_resource type="Resource" id="Resource_20pc6"]
 script = ExtResource("3_lgr22")
@@ -48,15 +49,18 @@ metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 script = ExtResource("7_03owx")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="MultiplayerLobbyManager" type="MultiplayerSpawner" parent="NetworkSession/Client" unique_id=36558886]
+[node name="MultiplayerLobbyManager" type="MultiplayerSpawner" parent="NetworkSession/Client" unique_id=36558886 node_paths=PackedStringArray("tp_layer")]
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
 spawn_path = NodePath(".")
 script = ExtResource("4_fos0i")
+tp_layer = NodePath("TPLayer")
 lobby_config/Level1/load_mode = 1
 lobby_config/Level1/empty_action = 1
 lobby_config/Level2/load_mode = 1
 lobby_config/Level2/empty_action = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
+
+[node name="TPLayer" parent="NetworkSession/Client/MultiplayerLobbyManager" unique_id=1002194750 instance=ExtResource("8_03owx")]
 
 [node name="ConnectServerUI" parent="." unique_id=99213129 instance=ExtResource("7_lgr22")]
 spawner_node = SubResource("Resource_wkp8b")

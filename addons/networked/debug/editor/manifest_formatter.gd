@@ -45,6 +45,7 @@ static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 		"active_scene": d.get("active_scene", ""),
 		"preflight": _format_preflight(d.get("preflight_snapshot", []), alias_map),
 		"telemetry": _format_telemetry(d.get("telemetry_slice", [])),
+		"node_snapshot": d.get("node_snapshot", {}),
 	}
 
 

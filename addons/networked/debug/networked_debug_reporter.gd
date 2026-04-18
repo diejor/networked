@@ -39,6 +39,11 @@ var _telemetry: NetTelemetryBuffer
 # Peer events accumulated during the current flush cycle.
 var _cycle_peer_events: Array = []
 
+# Phased validation engine — topology-style validators only.
+# Race and zombie detection are handled as named methods (see _check_* below)
+# because they need structured output incompatible with Array[String].
+var _validators: Array[NetValidator] = []
+
 
 func _enter_tree() -> void:
 	if not _should_report():
@@ -64,6 +69,8 @@ func _enter_tree() -> void:
 		"debug/networked/telemetry_buffer_size", 120)
 	_telemetry = NetTelemetryBuffer.new(capacity)
 
+	_validators = [TopologyNetValidator.new()]
+
 	_watchdog = ErrorWatchdog.new()
 	add_child(_watchdog)
 	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
@@ -76,7 +83,9 @@ func _exit_tree() -> void:
 	NetTrace.message_delegate = Callable()
 	
 	for mt in _trees:
-		_queue("networked:session_unregistered", {"tree_name": mt.name})
+		var event := NetSessionEvent.new()
+		event.tree_name = mt.name
+		_queue("networked:session_unregistered", event.to_dict())
 	_flush_now()
 
 
@@ -97,11 +106,11 @@ func register_tree(mt: MultiplayerTree) -> void:
 	if mt.backend and mt.backend.get_script():
 		backend_class = mt.backend.get_script().get_global_name()
 
-	_queue("networked:session_registered", {
-		"tree_name": mt.name,
-		"is_server": mt.is_server,
-		"backend_class": backend_class,
-	})
+	var event := NetSessionEvent.new()
+	event.tree_name = mt.name
+	event.is_server = mt.is_server
+	event.backend_class = backend_class
+	_queue("networked:session_registered", event.to_dict())
 
 
 ## Unregisters a [MultiplayerTree] from debug reporting.
@@ -127,7 +136,10 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 			mt.lobby_manager.lobby_despawned.disconnect(_on_lobby_despawned)
 
 	_watched.erase(mt.name)
-	_queue("networked:session_unregistered", {"tree_name": mt.name})
+	
+	var event := NetSessionEvent.new()
+	event.tree_name = mt.name
+	_queue("networked:session_unregistered", event.to_dict())
 	_flush_now()
 
 
@@ -147,26 +159,20 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	if not _should_report():
 		return
 
-	# Prefer the active span's ID as the CID so the error attaches to its
-	# causal context.
 	var active := NetTrace.active_span()
 	var cid_val := str(active.id) if active else "N/A"
-	var cid_timeline: Array = [cid_val] if active else ["N/A"]
+	var mt: MultiplayerTree = _trees[0] if not _trees.is_empty() else null
 
-	_send_manifest("CPP_ERROR_LOG_WATCHDOG", {
-		"cid": cid_val,
-		"cid_timeline": cid_timeline,
+	var m := NetCppErrorManifest.new()
+	_fill_base(m, "CPP_ERROR_LOG_WATCHDOG", cid_val, mt)
+	m.timestamp_usec = timestamp  # use watchdog timestamp, not current tick
+	m.network_state = {
 		"tree_name": _active_tree_name(active),
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": timestamp,
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"peer_id": _trees[0].multiplayer_api.get_unique_id() if not _trees.is_empty() and _trees[0].multiplayer_api else 0,
-		},
-		"errors": [error_text],
-		"error_text": error_text,
-		"telemetry_slice": _freeze_and_slice(),
-	})
+		"peer_id": mt.multiplayer_api.get_unique_id() if is_instance_valid(mt) and mt.multiplayer_api else 0,
+	}
+	m.errors = [error_text]
+	m.error_text = error_text
+	_send_manifest(m)
 
 
 ## Returns the tree_name for the current context: prefers the active span's tree,
@@ -182,14 +188,18 @@ func _active_tree_name(active_span: RefCounted = null) -> String:
 
 
 func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
-	data["tree_name"] = mt.name
-	_queue("networked:clock_sample", data)
+	_queue("networked:clock_sample", NetClockSample.from_dict(data, mt.name).to_dict())
 
 
 func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 	var ev := {"tree_name": mt.name, "peer_id": peer_id, "event": "connected"}
 	_cycle_peer_events.append(ev)
-	_queue("networked:peer_connected", {"tree_name": mt.name, "peer_id": peer_id})
+	
+	var event := NetPeerEvent.new()
+	event.tree_name = mt.name
+	event.peer_id = peer_id
+	_queue("networked:peer_connected", event.to_dict())
+	
 	if mt.is_server:
 		var span: NetSpan = NetTrace.begin_peer("peer_connect", [peer_id], {"tree": mt.name}, mt.name)
 		span.step("server_received_connect")
@@ -199,7 +209,12 @@ func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 	var ev := {"tree_name": mt.name, "peer_id": peer_id, "event": "disconnected"}
 	_cycle_peer_events.append(ev)
-	_queue("networked:peer_disconnected", {"tree_name": mt.name, "peer_id": peer_id})
+	
+	var event := NetPeerEvent.new()
+	event.tree_name = mt.name
+	event.peer_id = peer_id
+	_queue("networked:peer_disconnected", event.to_dict())
+	
 	get_tree().create_timer(2.0).timeout.connect(
 		func() -> void: _check_zombie_player(peer_id, mt),
 		CONNECT_ONE_SHOT
@@ -224,40 +239,35 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 				zombies.append(str(node.get_path()))
 	if zombies.is_empty():
 		return
-	_send_manifest("ZOMBIE_PLAYER_DETECTED", {
-		"cid": "N/A",
-		"cid_timeline": ["N/A"],
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"is_server": mt.is_server,
-			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
-			"disconnected_peer_id": peer_id,
-		},
-		"errors": zombies,
-		"telemetry_slice": _freeze_and_slice(),
-	})
+
+	var m := NetZombieManifest.new()
+	_fill_base(m, "ZOMBIE_PLAYER_DETECTED", "N/A", mt)
+	m.network_state["disconnected_peer_id"] = peer_id
+	m.errors = zombies
+	_send_manifest(m)
 
 
 func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 		return
-	_queue("networked:lobby_event", {
-		"tree_name": mt.name,
-		"event": "spawned",
-		"lobby_name": str(lobby.level.name),
-	})
+	
+	var event := NetLobbyEvent.new()
+	event.tree_name = mt.name
+	event.event = "spawned"
+	event.lobby_name = str(lobby.level.name)
+	_queue("networked:lobby_event", event.to_dict())
+	
 	_hook_spawners_in(lobby.level, mt)
 
 	var lobby_span: NetPeerSpan = null
-	if mt.is_server and mt.multiplayer_api and not mt.multiplayer_api.get_peers().is_empty():
-		lobby_span = NetTrace.begin_peer("lobby_spawn", mt.multiplayer_api.get_peers(), {
-			"lobby_name": str(lobby.level.name),
-			"tree": mt.name,
-		}, mt.name)
+	if mt.is_server:
+		lobby_span = NetTrace.begin_peer("lobby_spawn",
+			mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
+			{"lobby_name": str(lobby.level.name), "tree": mt.name}, mt.name)
 		lobby_span.step("spawners_registering")
+	# Capture token before _check_simplify_path_race_lobby closes/fails the span,
+	# so player_spawn spans can declare the causal link.
+	var lobby_token: CheckpointToken = lobby_span.checkpoint() if lobby_span else null
 	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
 
 	if mt.is_server and is_instance_valid(lobby.synchronizer):
@@ -266,7 +276,7 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 			var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, {
 				"player": player.name,
 				"tree": mt.name,
-			}, mt.name)
+			}, mt.name, lobby_token)
 			spawn_span.step("player_entered_tree")
 			_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 			_check_player_topology(player, mt, spawn_span)
@@ -278,11 +288,13 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 		return
-	_queue("networked:lobby_event", {
-		"tree_name": mt.name,
-		"event": "despawned",
-		"lobby_name": str(lobby.level.name),
-	})
+	
+	var event := NetLobbyEvent.new()
+	event.tree_name = mt.name
+	event.event = "despawned"
+	event.lobby_name = str(lobby.level.name)
+	_queue("networked:lobby_event", event.to_dict())
+	
 	_unhook_spawners_in(lobby.level)
 	if is_instance_valid(lobby.synchronizer) and lobby.synchronizer in _hooked_lobby_syncs:
 		var cb: Callable = _hooked_lobby_syncs[lobby.synchronizer]
@@ -300,8 +312,10 @@ func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
 	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
 		if spawner in _hooked_spawners:
 			continue
-		var cb := func(_node: Node) -> void:
-			pass
+		var cb := func(node: Node) -> void:
+			var active := NetTrace.active_span()
+			if active and active.label == "player_spawn":
+				active.step("spawner_native_confirmed", {"node_path": str(node.get_path())})
 		spawner.spawned.connect(cb)
 		_hooked_spawners[spawner] = cb
 
@@ -324,24 +338,14 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
-		"cid": cid_val,
-		"cid_timeline": [cid_val],
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"is_server": true,
-			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
-			"connected_peers": mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
-		},
-		"errors": races,
-		"preflight_snapshot": races,
-		"player_name": lobby.level.name,
-		"in_tree": lobby.level.is_inside_tree(),
-		"telemetry_slice": _freeze_and_slice(),
-	})
+	var m := NetRaceManifest.new()
+	_fill_base(m, "SERVER_SIMPLIFY_PATH_RACE", cid_val, mt)
+	m.network_state["connected_peers"] = mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
+	m.errors = _races_to_strings(races)
+	m.preflight_snapshot = races
+	m.player_name = lobby.level.name
+	m.in_tree = lobby.level.is_inside_tree()
+	_send_manifest(m)
 
 
 ## Emits a crash manifest when a new peer connects to the server while nodes are already
@@ -375,24 +379,14 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
-		"cid": cid_val,
-		"cid_timeline": [cid_val],
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"is_server": true,
-			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
-			"new_peer_id": peer_id,
-		},
-		"errors": races,
-		"preflight_snapshot": races,
-		"player_name": "peer_%d" % peer_id,
-		"in_tree": true,
-		"telemetry_slice": _freeze_and_slice(),
-	})
+	var m := NetRaceManifest.new()
+	_fill_base(m, "SERVER_SIMPLIFY_PATH_RACE", cid_val, mt)
+	m.network_state["new_peer_id"] = peer_id
+	m.errors = _races_to_strings(races)
+	m.preflight_snapshot = races
+	m.player_name = "peer_%d" % peer_id
+	m.in_tree = true
+	_send_manifest(m)
 
 
 ## Emits a crash manifest when a player is added to a lobby on the server while peers are
@@ -416,57 +410,39 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 		span.fail("simplify_path_race", {"node_count": races.size()})
 
 	var cid_val := str(span.id) if span else "N/A"
-	_send_manifest("SERVER_SIMPLIFY_PATH_RACE", {
-		"cid": cid_val,
-		"cid_timeline": [cid_val],
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"is_server": true,
-			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
-			"connected_peers": mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
-		},
-		"errors": races,
-		"preflight_snapshot": races,
-		"player_name": player.name,
-		"in_tree": player.is_inside_tree(),
-		"telemetry_slice": _freeze_and_slice(),
-	})
+	var m := NetRaceManifest.new()
+	_fill_base(m, "SERVER_SIMPLIFY_PATH_RACE", cid_val, mt)
+	m.network_state["connected_peers"] = mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
+	m.errors = _races_to_strings(races)
+	m.preflight_snapshot = races
+	m.player_name = player.name
+	m.in_tree = player.is_inside_tree()
+	_send_manifest(m)
 
 
 ## Validates the synchronizer topology of a newly spawned player.
 ##
-## On failure, emits a crash manifest containing the errors found by
-## [TopologyValidator].
+## Runs all registered [NetValidator]s for the [code]"player_spawn"[/code] trigger
+## in phase order. On failure, emits a [NetTopologyManifest] with the error list
+## and a [NetNodeSnapshot] of the player node.
 func _check_player_topology(player: Node, mt: MultiplayerTree, span: NetSpan) -> void:
-	var report := TopologyValidator.validate_node(player)
-	if report.ok:
+	var errors := _execute_validators("player_spawn", {"player": player, "mt": mt})
+	if errors.is_empty():
 		if span:
 			span.step("topology_validated")
 		return
 
 	if span:
-		span.fail("topology_invalid", {"errors": report.errors})
+		span.fail("topology_invalid", {"errors": errors})
 
 	var cid_val := str(span.id) if span else "N/A"
-	_send_manifest("TOPOLOGY_VALIDATION_FAILED", {
-		"cid": cid_val,
-		"cid_timeline": [cid_val],
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"active_scene": get_tree().current_scene.scene_file_path if get_tree() and get_tree().current_scene else "?",
-		"network_state": {
-			"is_server": true,
-			"tree_name": mt.name,
-			"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
-		},
-		"errors": report.errors,
-		"player_name": player.name,
-		"in_tree": player.is_inside_tree(),
-		"telemetry_slice": _freeze_and_slice(),
-	})
+	var m := NetTopologyManifest.new()
+	_fill_base(m, "TOPOLOGY_VALIDATION_FAILED", cid_val, mt)
+	m.errors = errors
+	m.player_name = player.name
+	m.in_tree = player.is_inside_tree()
+	m.node_snapshot = NetNodeSnapshot.from_node(player)
+	_send_manifest(m)
 
 
 func _unhook_spawners_in(root: Node) -> void:
@@ -542,11 +518,12 @@ func _handle_unwatch_node(d: Dictionary) -> void:
 func _send_replication_snapshot(node: Node, sync: MultiplayerSynchronizer, mt: MultiplayerTree) -> void:
 	if not is_instance_valid(node) or not is_instance_valid(sync):
 		return
-	_queue("networked:replication_snapshot", {
-		"tree_name": mt.name,
-		"node_path": str(node.get_path()),
-		"properties": _collect_properties(node, sync),
-	})
+	
+	var snapshot := NetReplicationSnapshot.new()
+	snapshot.tree_name = mt.name
+	snapshot.node_path = str(node.get_path())
+	snapshot.properties = _collect_properties(node, sync)
+	_queue("networked:replication_snapshot", snapshot.to_dict())
 
 
 func _send_full_replication_snapshot(node: Node, mt: MultiplayerTree) -> void:
@@ -559,12 +536,13 @@ func _send_full_replication_snapshot(node: Node, mt: MultiplayerTree) -> void:
 			"authority": sync.get_multiplayer_authority(),
 			"root_path": str(sync.root_path),
 		})
-	_queue("networked:replication_snapshot", {
-		"tree_name": mt.name,
-		"node_path": str(node.get_path()),
-		"properties": all_props,
-		"inventory": inventory,
-	})
+	
+	var snapshot := NetReplicationSnapshot.new()
+	snapshot.tree_name = mt.name
+	snapshot.node_path = str(node.get_path())
+	snapshot.properties = all_props
+	snapshot.inventory = inventory
+	_queue("networked:replication_snapshot", snapshot.to_dict())
 
 
 func _collect_properties(node: Node, sync: MultiplayerSynchronizer) -> Dictionary:
@@ -682,18 +660,61 @@ func _freeze_and_slice() -> Array:
 ## Sends via [EngineDebugger] when a debugger session is active; falls back to
 ## [method push_error] otherwise so topology and race failures surface in exported
 ## builds too. Always calls [method _maybe_break] so the caller does not need to.
-func _send_manifest(trigger: String, payload: Dictionary) -> void:
-	payload["trigger"] = trigger
+func _send_manifest(manifest: NetManifest) -> void:
+	var payload := manifest.to_dict()
 	if EngineDebugger.is_active():
 		EngineDebugger.send_message("networked:crash_manifest", [payload])
 	else:
 		push_error("[NETWORKED] %s | scene=%s peer=%d errors=%s" % [
-			trigger,
-			payload.get("active_scene", "?"),
-			payload.get("network_state", {}).get("peer_id", 0),
+			manifest.trigger,
+			manifest.active_scene,
+			manifest.network_state.get("peer_id", 0),
 			str(payload.get("errors", [])),
 		])
 	_maybe_break()
+
+
+## Fills the common base fields of [param m] from current engine state.
+## Callers may overwrite individual fields (e.g. [code]timestamp_usec[/code],
+## extra [code]network_state[/code] keys) after calling this.
+func _fill_base(m: NetManifest, trigger: String, cid_val: String, mt: MultiplayerTree) -> void:
+	m.trigger = trigger
+	m.cid = cid_val
+	m.cid_timeline = [cid_val]
+	m.frame = Engine.get_process_frames()
+	m.timestamp_usec = Time.get_ticks_usec()
+	m.active_scene = get_tree().current_scene.scene_file_path \
+		if get_tree() and get_tree().current_scene else "?"
+	m.network_state = {
+		"is_server": mt.is_server if is_instance_valid(mt) else false,
+		"tree_name": mt.name if is_instance_valid(mt) else "",
+		"peer_id": mt.multiplayer_api.get_unique_id() \
+			if is_instance_valid(mt) and mt.multiplayer_api else 0,
+	}
+	m.telemetry_slice = _freeze_and_slice()
+
+
+## Runs all registered validators for [param trigger] in phase order.
+## Stops at the first phase that produces errors (prevents cascading failures).
+## Returns an empty array when all checks pass.
+func _execute_validators(trigger: String, ctx: Dictionary) -> Array[String]:
+	for phase: int in [NetValidator.STRUCTURAL, NetValidator.LOGICAL, NetValidator.HEAVY_HEURISTIC]:
+		var phase_errors: Array[String] = []
+		for v: NetValidator in _validators:
+			if v.phase == phase:
+				phase_errors.append_array(v.execute(trigger, ctx))
+		if not phase_errors.is_empty():
+			return phase_errors
+	return []
+
+
+## Converts raw race detail dicts (from [NetRaceDetector]) to human-readable strings
+## for the [code]errors[/code] field in [NetRaceManifest].
+static func _races_to_strings(races: Array[Dictionary]) -> Array[String]:
+	var out: Array[String] = []
+	for r: Dictionary in races:
+		out.append("simplify_path race on %s" % r.get("rel_path", r.get("path", "?")))
+	return out
 
 
 ## Pauses the engine if break is enabled in the editor for a Crash Manifest.

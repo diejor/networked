@@ -24,6 +24,9 @@ var _clear_btn: Button
 # Manifest entry dicts in insertion order (for copy/export).
 var _entries: Array = []
 
+# cid → group TreeItem. Each unique CID gets a collapsible "Validation Cycle" header.
+var _cid_groups: Dictionary[String, TreeItem] = {}
+
 
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
@@ -68,6 +71,7 @@ func _ready() -> void:
 
 func clear() -> void:
 	_entries.clear()
+	_cid_groups.clear()
 	_tree.clear()
 	_tree.create_item()  # re-create invisible root
 	var placeholder := _tree.create_item(_tree.get_root())
@@ -105,8 +109,22 @@ func push_entry(entry: Dictionary) -> void:
 	if not _tree.get_root():
 		_tree.create_item()
 
+	# ── CID group header ───────────────────────────────────────────────────────
+	var cid: String = entry.get("cid", "N/A")
+	if cid not in _cid_groups:
+		var group := _tree.create_item(_tree.get_root())
+		var cid_display := cid.substr(0, 24) + ("…" if cid.length() > 24 else "")
+		group.set_text(0, "Validation Cycle  %s" % cid_display)
+		group.set_custom_color(0, Color(0.55, 0.75, 1.0))
+		group.set_selectable(0, false)
+		group.set_selectable(1, false)
+		group.set_selectable(2, false)
+		_cid_groups[cid] = group
+
+	var parent_group: TreeItem = _cid_groups[cid]
+
 	# ── Top-level row ──────────────────────────────────────────────────────────
-	var top := _tree.create_item(_tree.get_root())
+	var top := _tree.create_item(parent_group)
 	top.set_text(0, "⚠ " + entry.get("label", "UNKNOWN"))
 	top.set_text(1, str(entry.get("frame", 0)))
 	var cid_short: String = entry.get("cid", "?")
@@ -196,7 +214,33 @@ func push_entry(entry: Dictionary) -> void:
 			tl_row.set_selectable(1, false)
 			tl_row.set_selectable(2, false)
 
+	# ── Node Snapshot ─────────────────────────────────────────────────────────
+	var snap: Dictionary = entry.get("node_snapshot", {})
+	if not snap.is_empty():
+		var snap_parent := _tree.create_item(top)
+		snap_parent.set_text(0, "Node Snapshot  %s" % snap.get("node_name", "?"))
+		snap_parent.set_custom_color(0, Color(0.7, 0.85, 0.7))
+		snap_parent.set_collapsed(true)
+		snap_parent.set_selectable(0, false)
+		snap_parent.set_selectable(1, false)
+		snap_parent.set_selectable(2, false)
+		var sync_props: Dictionary = snap.get("sync_properties", {})
+		for prop: String in sync_props:
+			var prop_row := _tree.create_item(snap_parent)
+			prop_row.set_text(0, "  %s = %s" % [prop, str(sync_props[prop])])
+			prop_row.set_selectable(0, false)
+			prop_row.set_selectable(1, false)
+			prop_row.set_selectable(2, false)
+		var debug_state: Dictionary = snap.get("debug_state", {})
+		if not debug_state.is_empty():
+			var ds_row := _tree.create_item(snap_parent)
+			ds_row.set_text(0, "  debug_state: %s" % str(debug_state))
+			ds_row.set_selectable(0, false)
+			ds_row.set_selectable(1, false)
+			ds_row.set_selectable(2, false)
+
 	top.set_collapsed(false)
+	parent_group.set_collapsed(false)
 	_copy_btn.disabled = false
 	call_deferred("_scroll_to_bottom")
 

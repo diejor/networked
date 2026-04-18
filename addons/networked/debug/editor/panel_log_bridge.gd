@@ -77,6 +77,7 @@ func _ready() -> void:
 	_tree.set_column_custom_minimum_width(COL_BP, 24)
 	_tree.set_column_custom_minimum_width(COL_ELAPSED, 70)
 	_tree.item_activated.connect(_on_item_activated)
+	_tree.item_selected.connect(_on_item_selected)
 	_tree.button_clicked.connect(_on_bp_button_clicked)
 	add_child(_tree)
 
@@ -187,6 +188,14 @@ func push_span_open(d: Dictionary) -> void:
 
 	_span_items[span_id] = item
 	_span_start_usec[span_id] = d.get("timestamp_usec", Time.get_ticks_usec())
+
+	var follows: Dictionary = d.get("follows_from", {})
+	if not follows.is_empty():
+		var f_row := _tree.create_item(item)
+		var step_part: String = ("  · %s" % follows["step_label"]) if not follows.get("step_label", "").is_empty() else ""
+		f_row.set_text(COL_NAME, "  ↖ follows: %s%s" % [follows.get("span_label", "?"), step_part])
+		f_row.set_custom_color(COL_NAME, Color(0.55, 0.55, 0.55))
+		f_row.set_metadata(COL_NAME, {"follows_span_id": follows.get("span_id", "")})
 
 	var peers: Array = d.get("affected_peers", [])
 	if not peers.is_empty():
@@ -318,6 +327,25 @@ func _refresh_bp_cell(item: TreeItem, active: bool) -> void:
 		return
 	item.set_button_color(COL_BP, 0,
 		Color(1.0, 1.0, 1.0, 1.0) if active else Color(1.0, 1.0, 1.0, 0.3))
+
+
+func _on_item_selected() -> void:
+	var item := _tree.get_selected()
+	if not item:
+		return
+	var meta = item.get_metadata(COL_NAME)
+	var follows_id: String = (meta as Dictionary).get("follows_span_id", "") if meta is Dictionary else ""
+	if follows_id.is_empty():
+		return
+	var target: TreeItem = _span_items.get(follows_id)
+	if not target:
+		for k: String in _span_items:
+			if k.begins_with(follows_id) or follows_id.begins_with(k):
+				target = _span_items[k]
+				break
+	if target:
+		target.select(COL_NAME)
+		_tree.scroll_to_item(target)
 
 
 func _on_item_activated() -> void:

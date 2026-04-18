@@ -31,22 +31,26 @@ static var _active: Array = []  # Array[RefCounted]
 ## Opens a new general-purpose span and pushes it onto the active stack.
 ## Returns a no-op [NetSpan] (empty [member NetSpan.id]) when the debugger
 ## is not active, so consumer code needs no guards.
-static func begin(span_label: String, meta: Dictionary = {}, tree_name: String = "") -> NetSpan:
+## Pass [param follows_from] to declare a causal link to a prior span via
+## [method NetSpan.checkpoint].
+static func begin(span_label: String, meta: Dictionary = {}, tree_name: String = "", follows_from: CheckpointToken = null) -> NetSpan:
 	if not message_delegate.is_valid():
 		return NetSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetSpan.new(span_id, span_label, meta, tree_name)
+	var span := NetSpan.new(span_id, span_label, meta, tree_name, follows_from)
 	_active.append(span)
 	return span
 
 
 ## Opens a new peer-aware span for a multiplayer operation affecting [param peers].
 ## Returns a no-op [NetPeerSpan] when the debugger is not active.
-static func begin_peer(span_label: String, peers: Array = [], meta: Dictionary = {}, tree_name: String = "") -> NetPeerSpan:
+## Pass [param follows_from] to declare a causal link to a prior span via
+## [method NetSpan.checkpoint].
+static func begin_peer(span_label: String, peers: Array = [], meta: Dictionary = {}, tree_name: String = "", follows_from: CheckpointToken = null) -> NetPeerSpan:
 	if not message_delegate.is_valid():
 		return NetPeerSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetPeerSpan.new(span_id, span_label, meta, tree_name)
+	var span := NetPeerSpan.new(span_id, span_label, meta, tree_name, follows_from)
 	for peer_id: int in peers:
 		span.affects(peer_id)
 	_active.append(span)
