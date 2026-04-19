@@ -6,7 +6,7 @@
 ##
 ## Tag peers with [method affects] as the operation progresses:
 ## [codeblock]
-## var span = NetTrace.begin_peer("lobby_spawn")
+## var span = NetTrace.begin_peer("lobby_spawn", peers, mt)
 ## span.affects(peer_id).step("visibility_set")
 ## set_visibility_for(peer_id, true)
 ## span.end()  # or span.fail("simplify_path_race")
@@ -18,8 +18,8 @@ extends NetSpan
 var affected_peers: Array[int] = []
 
 
-func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, p_tree_name: String = "", follows_from: CheckpointToken = null) -> void:
-	super(p_id, p_label, meta, p_tree_name, follows_from)
+func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
+	super(p_id, p_label, meta, tree, follows_from)
 
 
 ## Tags [param peer_id] as a peer affected by this operation.

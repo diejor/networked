@@ -5,7 +5,7 @@
 ## the Log Bridge, Matrices, and Components panels.
 @tool
 class_name PanelCrashManifest
-extends VBoxContainer
+extends DebugPanel
 
 ## Called by the panel when the user selects a manifest row.
 ## Signature: func(ctx: Dictionary) -> void

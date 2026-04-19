@@ -14,7 +14,7 @@
 ## the script at the call site in the editor.
 @tool
 class_name PanelLogBridge
-extends VBoxContainer
+extends DebugPanel
 
 ## Injected by [NetworkedDebuggerUI] after construction.
 ## Signature: [code]func(source: String, line: int) -> void[/code]
@@ -22,7 +22,15 @@ var toggle_breakpoint: Callable
 
 var _tree: Tree
 var _filter_edit: LineEdit
+var _copy_btn: Button
 var _filter_text: String = ""
+
+var _is_remote: bool = false
+var _full_buffer: Array = []
+# Set of span_ids that match the current filter (including matches in steps).
+var _matching_spans: Dictionary = {}
+# span_id -> aggregated lower-case searchable text for fuzzy matching.
+var _span_text_cache: Dictionary = {}
 
 # span_id → TreeItem (span lifecycle rows)
 var _span_items: Dictionary[String, TreeItem] = {}
@@ -55,8 +63,14 @@ func _ready() -> void:
 	_filter_edit = LineEdit.new()
 	_filter_edit.placeholder_text = "Filter events…"
 	_filter_edit.custom_minimum_size.x = 160
-	_filter_edit.text_changed.connect(func(v: String) -> void: _filter_text = v)
+	_filter_edit.clear_button_enabled = true
+	_filter_edit.text_changed.connect(_on_filter_changed)
 	header_row.add_child(_filter_edit)
+
+	_copy_btn = Button.new()
+	_copy_btn.text = "Copy"
+	_copy_btn.pressed.connect(_on_copy)
+	header_row.add_child(_copy_btn)
 
 	var clear_btn := Button.new()
 	clear_btn.text = "Clear"
@@ -83,24 +97,66 @@ func _ready() -> void:
 
 
 func clear() -> void:
+	_full_buffer.clear()
+	_span_text_cache.clear()
+	_clear_tree_only()
+
+
+func _clear_tree_only() -> void:
 	_tree.clear()
 	_span_items.clear()
 	_span_start_usec.clear()
 	_caller_rows.clear()
+	_matching_spans.clear()
 	# _active_breakpoints intentionally preserved — configuration survives tree switches.
+	if _is_remote:
+		_insert_remote_notice()
+
+
+## Called by [NetworkedDebuggerUI] once, right after the panel enters the scene tree.
+## Stores the flag and rebuilds the tree so the remote notice entry is placed correctly.
+func set_peer_remote(is_remote: bool) -> void:
+	if _is_remote == is_remote:
+		return
+	_is_remote = is_remote
+	if is_remote and _tree:
+		_insert_remote_notice()
 
 
 ## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
 ## Each entry is [code]{"type": String, "data": Dictionary}[/code] as stored by [SpanAdapter].
 func populate(buffer: Array) -> void:
-	clear()
-	for entry: Dictionary in buffer:
-		_dispatch_span_entry(entry)
+	_full_buffer = buffer.duplicate()
+	_rebuild_span_text_cache()
+	_rebuild_from_buffer()
 
 
 ## Pushes a single new entry (called per [signal PanelDataAdapter.data_changed]).
 func on_new_entry(entry: Variant) -> void:
-	_dispatch_span_entry(entry as Dictionary)
+	var d := entry as Dictionary
+	_full_buffer.append(d)
+	if _full_buffer.size() > 1000:
+		_full_buffer.pop_front()
+		# If we pop from history, ideally we should rebuild cache, but for 1k items
+		# and ring buffer behavior, stale cache entries for dead IDs are harmless.
+
+	var data: Dictionary = d.get("data", {})
+	var span_id: String = data.get("id", "")
+	if not span_id.is_empty():
+		var new_text := _get_entry_searchable_text(d)
+		if not new_text.is_empty():
+			_span_text_cache[span_id] = _span_text_cache.get(span_id, "") + " " + new_text
+
+	if not _filter_text.is_empty():
+		if not span_id.is_empty() and not _matching_spans.has(span_id):
+			if _check_span_match(span_id, _filter_text):
+				_rebuild_from_buffer()
+				return
+			else:
+				# Span doesn't match and wasn't matching, skip it.
+				return
+
+	_dispatch_span_entry(d)
 
 
 func _dispatch_span_entry(entry: Dictionary) -> void:
@@ -111,6 +167,64 @@ func _dispatch_span_entry(entry: Dictionary) -> void:
 		"step_warn": push_span_step_warn(d)
 		"close":     push_span_close(d)
 		"fail":      push_span_fail(d)
+
+
+func _on_filter_changed(new_text: String) -> void:
+	_filter_text = new_text
+	_rebuild_from_buffer()
+
+
+func _rebuild_span_text_cache() -> void:
+	_span_text_cache.clear()
+	for entry: Dictionary in _full_buffer:
+		var data: Dictionary = entry.get("data", {})
+		var span_id: String = data.get("id", "")
+		if span_id.is_empty(): continue
+		var txt := _get_entry_searchable_text(entry)
+		if not txt.is_empty():
+			_span_text_cache[span_id] = _span_text_cache.get(span_id, "") + " " + txt
+
+
+func _rebuild_from_buffer() -> void:
+	_clear_tree_only()
+	_matching_spans.clear()
+
+	if not _filter_text.is_empty():
+		for span_id: String in _span_text_cache:
+			if _check_span_match(span_id, _filter_text):
+				_matching_spans[span_id] = true
+
+	for entry: Dictionary in _full_buffer:
+		_dispatch_span_entry(entry)
+
+
+func _check_span_match(span_id: String, filter: String) -> bool:
+	var text: String = _span_text_cache.get(span_id, "")
+	if text.is_empty():
+		return false
+
+	var tokens := filter.to_lower().split(" ", false)
+	for t in tokens:
+		if not text.contains(t):
+			return false
+	return true
+
+
+func _get_entry_searchable_text(entry: Dictionary) -> String:
+	var type: String = entry.get("type", "")
+	var d: Dictionary = entry.get("data", {})
+	var out := ""
+
+	match type:
+		"open", "close":
+			out = d.get("label", "")
+		"step", "step_warn":
+			var s: Dictionary = d.get("step", {})
+			out = s.get("label", "") + " " + s.get("message", "")
+		"fail":
+			out = d.get("label", "") + " " + d.get("reason", "")
+	
+	return out.to_lower()
 
 
 ## Scroll to and highlight the span row matching [param cid].
@@ -170,13 +284,14 @@ func push_span_open(d: Dictionary) -> void:
 	var span_id: String = d.get("id", "")
 	if span_id.is_empty():
 		return
-	var label: String = d.get("label", "span")
-	if not _filter_text.is_empty() and not label.contains(_filter_text):
+
+	if not _filter_text.is_empty() and not _matching_spans.has(span_id):
 		return
 
 	if not _tree.get_root():
 		_tree.create_item()
 
+	var label: String = d.get("label", "span")
 	var item := _tree.create_item(_tree.get_root())
 	item.set_text(COL_NAME, "◉ %s" % label)
 	item.set_text(COL_ELAPSED, "f%d" % d.get("frame", 0))
@@ -299,6 +414,38 @@ func push_span_fail(d: Dictionary) -> void:
 
 
 # ─── Internal ─────────────────────────────────────────────────────────────────
+
+func _on_copy() -> void:
+	if _span_items.is_empty():
+		return
+	var lines: PackedStringArray = []
+	for span_id: String in _span_items:
+		var item: TreeItem = _span_items[span_id]
+		var elapsed := item.get_text(COL_ELAPSED)
+		var header := item.get_text(COL_NAME)
+		lines.append("%s  [%s]" % [header, elapsed] if not elapsed.is_empty() else header)
+		var child := item.get_first_child()
+		while child:
+			var child_name := child.get_text(COL_NAME)
+			var child_elapsed := child.get_text(COL_ELAPSED)
+			if not child_name.is_empty():
+				lines.append("%s  %s" % [child_name, child_elapsed] if not child_elapsed.is_empty() else child_name)
+			child = child.get_next()
+		lines.append("")
+	DisplayServer.clipboard_set("\n".join(lines))
+
+
+## Inserts a non-selectable informational row at the top of the span tree.
+## Survives clear() calls so it's always the first visible entry on remote panels.
+func _insert_remote_notice() -> void:
+	if not _tree.get_root():
+		_tree.create_item()
+	var item := _tree.create_item(_tree.get_root(), 0)
+	item.set_text(COL_NAME, "ℹ  History before this session connected is not available")
+	item.set_custom_color(COL_NAME, Color(0.5, 0.72, 1.0))
+	item.set_custom_bg_color(COL_NAME, Color(0.15, 0.25, 0.5, 0.18), false)
+	_set_unselectable(item)
+
 
 ## Registers [param item] in [member _caller_rows] and adds the breakpoint button.
 ## Does nothing if [param caller] is empty (no source info available).

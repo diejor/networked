@@ -12,7 +12,7 @@
 ##   synchronizer tree   — Name / Mode / Flags / Source columns
 @tool
 class_name PanelTopology
-extends VBoxContainer
+extends DebugPanel
 
 ## Called when the user clicks the node path button (local peers only).
 ## Receives the raw [code]node_path[/code] string from the snapshot.
@@ -89,6 +89,19 @@ func populate(buffer: Array) -> void:
 	clear()
 	if not buffer.is_empty():
 		on_new_entry(buffer[-1])
+
+
+## Called by [PanelWrapper.set_online] when the owning tree goes offline or comes back.
+## Disables interactive controls so the user can't send RPCs to a dead tree.
+func set_peer_online(online: bool) -> void:
+	if _node_btn:
+		_node_btn.disabled = not online or _last_node_path.is_empty() or not on_node_inspect.is_valid()
+	if _nameplate_btn:
+		_nameplate_btn.disabled = not online
+	if _bounds_btn:
+		_bounds_btn.disabled = not online
+	if _colliders_btn:
+		_colliders_btn.disabled = not online
 
 
 func on_new_entry(entry: Variant) -> void:

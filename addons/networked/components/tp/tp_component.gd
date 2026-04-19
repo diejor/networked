@@ -123,7 +123,7 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	var _tp_tree := get_multiplayer_tree()
-	_tp_span = NetTrace.begin("tp", {"scene": target_tp.scene_path}, _tp_tree.name if _tp_tree else "")
+	_tp_span = NetTrace.begin("tp", _tp_tree, {"scene": target_tp.scene_path})
 	_tp_span.step("initiate")
 	log_info("Initiating teleport to %s" % target_tp.scene_path)
 	var promise := TeleportPromise.new()

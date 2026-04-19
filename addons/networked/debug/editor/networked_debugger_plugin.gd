@@ -21,16 +21,7 @@ func _has_capture(prefix: String) -> bool:
 func _capture(message: String, data: Array, session_id: int) -> bool:
 	if session_id not in _sessions or not is_instance_valid(_sessions[session_id]):
 		return true
-	var session: DebuggerSession = _sessions[session_id]
-	if message == "relay_forward" and not data.is_empty():
-		var d: Dictionary = data[0]
-		session.receive_remote(
-			d.get("source_tree_name", ""),
-			d.get("msg", ""),
-			d.get("data", {})
-		)
-	else:
-		session.receive(message, data)
+	_sessions[session_id].receive(message, data)
 	return true
 
 
@@ -47,11 +38,18 @@ func _setup_session(session_id: int) -> void:
 
 	var godot_session := get_session(session_id)
 	# Reset at the START of a new run so crash-time data survives for inspection.
-	# Clearing on stopped wipes the ring buffers the instant the game crashes —
-	# exactly when you need them most. _discard_session still clears on editor close.
 	godot_session.started.connect(func() -> void:
 		if is_instance_valid(session):
 			session.reset()
+		# Request a fresh snapshot so the editor shows current state immediately.
+		if godot_session.is_active():
+			godot_session.send_message("networked:request_snapshot", [])
+	)
+	# Mark all peers offline when the game stops — preserves last snapshot for inspection
+	# while making it clear that no more events will arrive.
+	godot_session.stopped.connect(func() -> void:
+		if is_instance_valid(session):
+			session.mark_all_offline()
 	)
 	godot_session.add_session_tab(ui)
 

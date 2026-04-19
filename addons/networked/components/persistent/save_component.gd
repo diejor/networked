@@ -139,34 +139,28 @@ func load_state() -> Error:
 
 	var entity_id := _get_entity_id()
 	log_trace("SaveComponent: Loading state from database (table=%s, id=%s)" % [table_name, entity_id])
-	var span := _begin_span("db_load", {table = table_name, id = entity_id})
-	span.step("begin")
 
 	var out_error: Array[int] = [OK]
 	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
 
 	if out_error[0] == ERR_FILE_NOT_FOUND:
 		# PURGE policy: DB record was deleted. Treat this as a first-play scenario.
-		span.fail("mismatch_purge")
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 
 	if out_error[0] == ERR_UNCONFIGURED:
 		# FAIL policy: developer opted in to explicit mismatch errors.
-		span.fail("mismatch_fail")
 		loaded.emit()
 		return ERR_UNCONFIGURED
 
 	if record.is_empty():
 		log_debug("No database record found for (table=%s, id=%s)." % [table_name, entity_id])
-		span.fail("load_miss")
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 
 	_apply_dict_to_container(record)
 	push_to_scene()
 	log_info("State loaded from database (table=%s, id=%s)." % [table_name, entity_id])
-	span.step("loaded").end()
 	loaded.emit()
 	return OK
 

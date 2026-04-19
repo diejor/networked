@@ -147,14 +147,12 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 
 ## Opens a new general-purpose span for this component.
 func _begin_span(label: String, meta: Dictionary = {}) -> NetSpan:
-	var tree := get_multiplayer_tree()
-	return NetTrace.begin(label, meta, tree.name if tree else "")
+	return NetTrace.begin(label, get_multiplayer_tree(), meta)
 
 
 ## Opens a new peer-aware span for a multiplayer operation.
 func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}) -> NetPeerSpan:
-	var tree := get_multiplayer_tree()
-	return NetTrace.begin_peer(label, peers, meta, tree.name if tree else "")
+	return NetTrace.begin_peer(label, peers, get_multiplayer_tree(), meta)
 
 
 #endregion

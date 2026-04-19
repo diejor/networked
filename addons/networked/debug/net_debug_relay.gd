@@ -1,51 +1,24 @@
 ## Game-side debug relay bridge — routes telemetry between game processes.
 ##
-## Added as a child of the [MultiplayerTree] when [method OS.has_feature] returns
-## [code]"debug"[/code] and a [MultiplayerTree] has registered. Living under the
-## MultiplayerTree ensures RPCs use [code]mt.backend.api[/code] (the game multiplayer
-## context) rather than the default /root SceneMultiplayer.
+## Lives as a child of [MultiplayerTree] so RPCs use [code]mt.backend.api[/code]
+## (the game multiplayer context) rather than the default /root SceneMultiplayer.
+##
+## Design: pure stateless byte pipe. No deserialization, no caches, no history.
+##
+## Single inbound RPC: [method forward_to_relay].
+## The relay determines internally whether to deliver to the local EngineDebugger
+## by checking [method _is_local_peer] on the sender — same-process clients already
+## sent directly via EngineDebugger and must not be echoed. The reporter always
+## calls the same RPC regardless of topology.
+##
+## Dedup sites in this file:
+##   DEDUP-1 — [method dispatch_to_recipients]: skip local peers on fan-out.
+##   DEDUP-2 — [method register_as_recipient]: one slot per reporter_id.
 @tool
 class_name NetDebugRelay
 extends Node
 
-const MAX_PAYLOAD_BYTES := 1048576 # 1MB
-const STARTUP_BUFFER_LIMIT := 512
-const HISTORY_CACHE_LIMIT := 100 # Max batches to keep per tree for late-joiners
-
-# Peer IDs of game peers allowed to send telemetry to this relay.
-var _authorized_senders: Array[int] = []
-
-# List of peer IDs that want to receive relayed data.
-# Initialized from the reporter's static registry but managed per-instance
-# to prevent stale peer IDs from accumulating across editor runs.
-var _recipients: Array[int] = []
-
-# Per-frame outgoing batch: [[msg, data], ...]
-var _outgoing_batch: Array = []
-var _batch_tree_name: String = ""
-
-# Cache of the latest session_registered batch per unique tree instance.
-# Key: "rid:tree_name" → PackedByteArray
-var _session_cache: Dictionary = {}
-
-# History cache for late-joining recipients: tree_name -> Array[PackedByteArray]
-# Ensures remote clients see full Span Trace history even if they join late.
-var _history_cache: Dictionary = {}
-
-# Buffer for events generated before the relay is connected (for standalone clients).
-# Flushed as the first batch once is_relay_active() becomes true.
-var _startup_buffer: Array = []
-
-
-func _ready() -> void:
-	# Synchronize with the global registry but keep our own copy for the run.
-	_recipients = NetworkedDebugReporter._process_recipients.duplicate()
-	
-	if multiplayer.is_server():
-		# The server relay is the authority. It should start with a clean slate
-		# for its own session and history.
-		_session_cache.clear()
-		_history_cache.clear()
+const MAX_PAYLOAD_BYTES := 262144  # 256 KB
 
 
 func is_relay_active() -> bool:
@@ -54,193 +27,137 @@ func is_relay_active() -> bool:
 		and multiplayer.has_multiplayer_peer()
 
 
-func send(msg: String, data: Dictionary, source_tree_name: String) -> void:
-	_batch_tree_name = source_tree_name
-	
-	if not is_relay_active():
-		if _startup_buffer.size() < STARTUP_BUFFER_LIMIT:
-			_startup_buffer.append([msg, data])
-		return
-	
-	_outgoing_batch.append([msg, data])
+# ─── Server: own-event fan-out ────────────────────────────────────────────────
+
+## Forwards server-originated [param envelope_bytes] to all registered remote recipients.
+## Server reporter already delivered to its own editor via EngineDebugger.
+func dispatch_to_recipients(envelope_bytes: PackedByteArray) -> void:
+	for rid: int in NetworkedDebugger._process_recipients:
+		if rid != 1 and multiplayer.get_peers().has(rid):
+			# DEDUP-1 (transport fan-out): skip peers in this OS process.
+			if _is_local_peer(rid):
+				continue
+			forward_to_peer.rpc_id(rid, envelope_bytes)
 
 
-func flush_immediately() -> void:
-	if _outgoing_batch.is_empty() and _startup_buffer.is_empty():
-		return
-	_flush_batch()
+# ─── RPC: client → server relay ──────────────────────────────────────────────
 
-
-func _physics_process(_dt: float) -> void:
-	if not _outgoing_batch.is_empty() or not _startup_buffer.is_empty():
-		_flush_batch()
-
-
-func _flush_batch() -> void:
-	if not is_relay_active():
-		return
-
-	# First, flush any buffered startup history.
-	if not _startup_buffer.is_empty():
-		var batch := {"tn": _batch_tree_name, "events": _startup_buffer.duplicate()}
-		var bytes := var_to_bytes(batch)
-		_startup_buffer.clear()
-		
-		if multiplayer.is_server():
-			_update_caches(batch, _batch_tree_name, bytes)
-			_dispatch(bytes)
-		else:
-			forward_to_relay.rpc_id(1, bytes)
-
-	if _outgoing_batch.is_empty():
-		return
-
-	var batch := {"tn": _batch_tree_name, "events": _outgoing_batch.duplicate()}
-	var batch_bytes := var_to_bytes(batch)
-	_outgoing_batch.clear()
-
-	if batch_bytes.size() > MAX_PAYLOAD_BYTES:
-		NetLog.error("Relay: [FlushDropped] Batch too large (%d bytes)" % batch_bytes.size())
-		return
-
-	if multiplayer.is_server():
-		_update_caches(batch, _batch_tree_name, batch_bytes)
-		_dispatch(batch_bytes)
-	else:
-		forward_to_relay.rpc_id(1, batch_bytes)
-
-
+## Called by all clients regardless of whether they share an OS process with the relay.
+## Delivers to the local editor only when the sender is a different OS process
+## (same-process clients already sent via the direct EngineDebugger path).
+## Always fans out to all other registered recipients.
 @rpc("any_peer", "call_remote", "reliable")
-func forward_to_relay(batch_bytes: PackedByteArray) -> void:
+func forward_to_relay(envelope_bytes: PackedByteArray) -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	
-	if sender != 1 and not multiplayer.get_peers().has(sender):
+	if not _valid_sender(sender, envelope_bytes.size()):
 		return
+	# DEDUP-1 (local echo): same-process clients already delivered via EngineDebugger.
+	if EngineDebugger.is_active() and not _is_local_peer(sender):
+		EngineDebugger.send_message("networked:envelope_remote", [envelope_bytes])
+	_fanout(envelope_bytes, sender)
 
-	if batch_bytes.size() > MAX_PAYLOAD_BYTES:
-		return
 
-	var batch: Dictionary = bytes_to_var(batch_bytes)
-	var source_tn: String = batch.get("tn", "?")
-	
-	_update_caches(batch, source_tn, batch_bytes)
-	_dispatch(batch_bytes)
-
+# ─── RPC: server → remote client ─────────────────────────────────────────────
 
 @rpc("authority", "call_remote", "reliable")
-func forward_to_peer(batch_bytes: PackedByteArray) -> void:
+func forward_to_peer(envelope_bytes: PackedByteArray) -> void:
 	if not EngineDebugger.is_active():
 		return
+	EngineDebugger.send_message("networked:envelope_remote", [envelope_bytes])
 
-	var batch: Dictionary = bytes_to_var(batch_bytes)
-	var source_tn: String = batch.get("tn", "")
-	for event: Array in batch.get("events", []):
-		EngineDebugger.send_message("networked:relay_forward", [{
-			"msg": event[0],
-			"data": event[1],
-			"source_tree_name": source_tn,
-		}])
 
+# ─── Recipient registration ───────────────────────────────────────────────────
 
 @rpc("any_peer", "call_remote", "reliable")
-func register_as_recipient(token: String = "") -> void:
+func register_as_recipient(token: String = "", reporter_id: String = "") -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender == 0:
 		sender = multiplayer.get_unique_id()
-		if sender == 0: return
-	
+	if sender == 0 or sender == 1:
+		return  # Server's own editor uses the direct EngineDebugger path
+
 	var expected: String = ProjectSettings.get_setting("networked/debug/relay_token", "")
 	if not expected.is_empty() and token != expected:
 		return
-	
-	if sender not in _recipients:
-		NetLog.info("Relay: [RegisterSuccess] Registered peer %d as debug recipient" % sender)
-		_recipients.append(sender)
-		# Update the global registry so new relays in THIS process pick it up.
-		if sender not in NetworkedDebugReporter._process_recipients:
-			NetworkedDebugReporter._process_recipients.append(sender)
-	
-	var my_id := multiplayer.get_unique_id()
-	
-	# REPLAY HISTORY: Send all cached registration AND the recent event history
-	# to the new recipient so they catch up on what they missed.
-	NetLog.info("Relay: [FastForward] Replaying history for peer %d" % sender)
-	
-	# 1. Replay registrations first so trees exist in the UI.
-	for cached: PackedByteArray in _session_cache.values():
-		if sender == my_id: forward_to_peer(cached)
-		else: forward_to_peer.rpc_id(sender, cached)
-	
-	# 2. Replay recent event history.
-	for tn in _history_cache:
-		var history: Array = _history_cache[tn]
-		for cached: PackedByteArray in history:
-			if sender == my_id: forward_to_peer(cached)
-			else: forward_to_peer.rpc_id(sender, cached)
 
-
-func authorize(peer_id: int) -> void:
-	if peer_id not in _authorized_senders:
-		_authorized_senders.append(peer_id)
-
-
-func local_dispatch(msg: String, data: Dictionary, source_tree_name: String) -> void:
-	var batch := {"tn": source_tree_name, "events": [[msg, data]]}
-	var bytes := var_to_bytes(batch)
-	
-	_update_caches(batch, source_tree_name, bytes)
-	
-	for recipient_id: int in _recipients:
-		if recipient_id == multiplayer.get_unique_id():
-			if EngineDebugger.is_active():
-				EngineDebugger.send_message("networked:relay_forward", [{
-					"msg": msg, "data": data, "source_tree_name": source_tree_name,
-				}])
+	# DEDUP-2 (registration): one relay recipient slot per reporter_id.
+	# Multiple trees in the same process must not each register a separate slot.
+	if not reporter_id.is_empty():
+		if reporter_id in NetworkedDebugger._recipient_map:
+			var old_peer: int = NetworkedDebugger._recipient_map[reporter_id]
+			if old_peer != sender:
+				NetworkedDebugger._process_recipients.erase(old_peer)
+				NetworkedDebugger._process_recipients.append(sender)
+				NetworkedDebugger._recipient_map[reporter_id] = sender
+			return # Already registered this process
 		else:
-			# Safety: if the peer is gone, don't try to RPC.
-			if multiplayer.get_peers().has(recipient_id) or recipient_id == 1:
-				forward_to_peer.rpc_id(recipient_id, bytes)
+			NetworkedDebugger._recipient_map[reporter_id] = sender
+
+	if sender not in NetworkedDebugger._process_recipients:
+		NetLog.info("Relay: [RegisterSuccess] Registered peer %d (rid=%s) as debug recipient" % [sender, reporter_id])
+		NetworkedDebugger._process_recipients.append(sender)
+		if NetworkedDebugger:
+			# Push server's current state to the newcomer.
+			NetworkedDebugger._on_remote_snapshot_request()
+			# Also ask all existing remote clients to re-emit, so the newcomer
+			# sees their state too (not just the server's).
+			broadcast_snapshot_request()
 
 
-func deauthorize(peer_id: int) -> void:
-	_authorized_senders.erase(peer_id)
-	_recipients.erase(peer_id)
-	NetworkedDebugReporter._process_recipients.erase(peer_id)
-
-
-func _dispatch(batch_bytes: PackedByteArray) -> void:
-	var my_id := multiplayer.get_unique_id()
-	for recipient_id: int in _recipients:
-		if recipient_id == my_id:
-			forward_to_peer(batch_bytes)
-		else:
-			if multiplayer.get_peers().has(recipient_id) or recipient_id == 1:
-				forward_to_peer.rpc_id(recipient_id, batch_bytes)
-
-
-func _update_caches(batch: Dictionary, tree_name: String, batch_bytes: PackedByteArray) -> void:
-	if tree_name.is_empty(): return
-	
-	var is_registration := false
-	# Update session cache (permanent per unique tree instance)
-	for event: Array in batch.get("events", []):
-		if event.size() >= 2 and event[0] == "networked:session_registered":
-			var rid: String = event[1].get("_rid", "")
-			if not rid.is_empty():
-				# Key by RID + TreeName so multiple trees per process don't overwrite each other.
-				var cache_key := "%s:%s" % [rid, tree_name]
-				_session_cache[cache_key] = batch_bytes
-				is_registration = true
+func deregister_recipient(peer_id: int) -> void:
+	NetworkedDebugger._process_recipients.erase(peer_id)
+	for rid in NetworkedDebugger._recipient_map.keys():
+		if NetworkedDebugger._recipient_map[rid] == peer_id:
+			NetworkedDebugger._recipient_map.erase(rid)
 			break
-	
-	if is_registration:
-		return # Don't add registration batches to history buffer
-		
-	# Update history cache (rolling window for late-join catch-up)
-	if not _history_cache.has(tree_name):
-		_history_cache[tree_name] = []
-	
-	var history: Array = _history_cache[tree_name]
-	history.append(batch_bytes)
-	if history.size() > HISTORY_CACHE_LIMIT:
-		history.pop_front()
+
+
+# ─── Snapshot Protocol ────────────────────────────────────────────────────────
+
+## Asks all registered remote clients to re-emit their current state.
+func broadcast_snapshot_request() -> void:
+	for rid: int in NetworkedDebugger._process_recipients:
+		if rid != 1 and multiplayer.get_peers().has(rid):
+			request_snapshot_from_peer.rpc_id(rid)
+
+
+## RPC: server → client — asks the client to re-emit its local state.
+@rpc("authority", "call_remote", "reliable")
+func request_snapshot_from_peer() -> void:
+	if NetworkedDebugger:
+		NetworkedDebugger._on_remote_snapshot_request()
+
+
+## RPC: client → server — asks the server to re-emit its local state.
+## Used when a client-attached editor triggers a manual Refresh.
+@rpc("any_peer", "call_remote", "reliable")
+func request_snapshot_from_server() -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender not in NetworkedDebugger._process_recipients:
+		return
+	if NetworkedDebugger:
+		NetworkedDebugger._on_remote_snapshot_request()
+
+
+# ─── Internal ─────────────────────────────────────────────────────────────────
+
+func _is_local_peer(peer_id: int) -> bool:
+	for mt in NetworkedDebugger._trees:
+		if mt.multiplayer_api and mt.multiplayer_api.get_unique_id() == peer_id:
+			return true
+	return false
+
+
+func _valid_sender(sender: int, byte_size: int) -> bool:
+	if sender != 1 and not multiplayer.get_peers().has(sender):
+		return false
+	if byte_size > MAX_PAYLOAD_BYTES:
+		NetLog.error("Relay: [DropOversized] %d bytes from peer %d" % [byte_size, sender])
+		return false
+	return true
+
+
+func _fanout(envelope_bytes: PackedByteArray, except_sender: int) -> void:
+	for rid: int in NetworkedDebugger._process_recipients:
+		if rid != 1 and rid != except_sender and multiplayer.get_peers().has(rid):
+			forward_to_peer.rpc_id(rid, envelope_bytes)

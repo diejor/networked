@@ -10,7 +10,7 @@
 ##
 ## [b]Usage:[/b]
 ## [codeblock]
-## var span = NetTrace.begin_peer("lobby_spawn", peers, {"lobby": lobby_name})
+## var span = NetTrace.begin_peer("lobby_spawn", peers, mt, {"lobby": lobby_name})
 ## span.step("spawners_registering")
 ## # ...operation...
 ## span.end()       # clean close
@@ -31,26 +31,28 @@ static var _active: Array = []  # Array[RefCounted]
 ## Opens a new general-purpose span and pushes it onto the active stack.
 ## Returns a no-op [NetSpan] (empty [member NetSpan.id]) when the debugger
 ## is not active, so consumer code needs no guards.
+## Pass [param tree] to bind the span to a specific [MultiplayerTree] for routing.
 ## Pass [param follows_from] to declare a causal link to a prior span via
 ## [method NetSpan.checkpoint].
-static func begin(span_label: String, meta: Dictionary = {}, tree_name: String = "", follows_from: CheckpointToken = null) -> NetSpan:
+static func begin(span_label: String, tree: MultiplayerTree = null, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
 	if not message_delegate.is_valid():
 		return NetSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetSpan.new(span_id, span_label, meta, tree_name, follows_from)
+	var span := NetSpan.new(span_id, span_label, meta, tree, follows_from)
 	_active.append(span)
 	return span
 
 
 ## Opens a new peer-aware span for a multiplayer operation affecting [param peers].
 ## Returns a no-op [NetPeerSpan] when the debugger is not active.
+## Pass [param tree] to bind the span to a specific [MultiplayerTree] for routing.
 ## Pass [param follows_from] to declare a causal link to a prior span via
 ## [method NetSpan.checkpoint].
-static func begin_peer(span_label: String, peers: Array = [], meta: Dictionary = {}, tree_name: String = "", follows_from: CheckpointToken = null) -> NetPeerSpan:
+static func begin_peer(span_label: String, peers: Array = [], tree: MultiplayerTree = null, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetPeerSpan:
 	if not message_delegate.is_valid():
 		return NetPeerSpan.new(&"", span_label)
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetPeerSpan.new(span_id, span_label, meta, tree_name, follows_from)
+	var span := NetPeerSpan.new(span_id, span_label, meta, tree, follows_from)
 	for peer_id: int in peers:
 		span.affects(peer_id)
 	_active.append(span)
