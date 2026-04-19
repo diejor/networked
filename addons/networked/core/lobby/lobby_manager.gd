@@ -382,6 +382,11 @@ func _spawn_lobby_node(data: Variant) -> Node:
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(client_data_bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
+	for lobby: Lobby in active_lobbies.values():
+		if is_instance_valid(lobby.synchronizer) \
+				and peer_id in lobby.synchronizer.connected_clients:
+			NetLog.warning("Duplicate join attempt from peer %d — ignored." % peer_id)
+			return
 	NetLog.info("Received join request from peer %d." % peer_id)
 
 	var client_data: MultiplayerClientData = MultiplayerClientData.new()

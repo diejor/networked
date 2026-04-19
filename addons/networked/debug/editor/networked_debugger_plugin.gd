@@ -19,8 +19,18 @@ func _has_capture(prefix: String) -> bool:
 
 
 func _capture(message: String, data: Array, session_id: int) -> bool:
-	if session_id in _sessions and is_instance_valid(_sessions[session_id]):
-		_sessions[session_id].receive(message, data)
+	if session_id not in _sessions or not is_instance_valid(_sessions[session_id]):
+		return true
+	var session: DebuggerSession = _sessions[session_id]
+	if message == "relay_forward" and not data.is_empty():
+		var d: Dictionary = data[0]
+		session.receive_remote(
+			d.get("source_tree_name", ""),
+			d.get("msg", ""),
+			d.get("data", {})
+		)
+	else:
+		session.receive(message, data)
 	return true
 
 

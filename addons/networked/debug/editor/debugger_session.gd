@@ -15,10 +15,16 @@ extends RefCounted
 
 ## Emitted when a new MultiplayerTree peer completes registration.
 ## [param color] is the pre-assigned peer color; it never changes after this.
-signal peer_registered(tree_name: String, is_server: bool, color: Color)
+## [param is_remote] is true for peers that arrived via the relay bridge rather
+## than a direct [EditorDebuggerSession] connection.
+signal peer_registered(tree_name: String, is_server: bool, color: Color, is_remote: bool)
 
 ## Emitted when a peer's online status changes.
 signal peer_status_changed(tree_name: String, online: bool)
+
+## Emitted when a previously [remote] peer gains a direct editor connection and
+## is promoted to [local]. The tree_name is unchanged.
+signal peer_promoted(tree_name: String)
 
 
 ## Emitted after an adapter appends a new entry to its ring buffer.
@@ -31,9 +37,14 @@ signal session_cleared()
 var plugin: NetworkedDebuggerPlugin
 var session_id: int
 
-## Peer registry: tree_name → {is_server, backend_class, online, color, peer_id}
+## Peer registry: tree_name → {is_server, backend_class, online, color, peer_id, is_remote}
 ## peer_id is 0 until the first peer_connected/disconnected message for this tree.
+## is_remote is true for peers that arrived via the relay and have no direct editor session.
 var _peers: Dictionary[String, Dictionary] = {}
+
+## Relay messages that arrived before their session_registered was received.
+## Drained the moment session_registered comes in for that tree_name.
+var _pending_remote: Dictionary = {}  # tree_name → Array[{msg, data}]
 
 ## All adapters: adapter_key → PanelDataAdapter subclass instance.
 var _adapters: Dictionary[String, PanelDataAdapter] = {}
@@ -80,6 +91,30 @@ func receive(message: String, data: Array) -> void:
 		"networked:span_fail":            _on_span(d, "fail")
 		"networked:span_step_warn":       _on_span(d, "step_warn")
 		"networked:lobby_event":          _on_lobby_event(d)
+		"networked:topology_snapshot":    _on_topology_snapshot(d)
+
+
+## Entry point for relay-forwarded messages — called by [NetworkedDebuggerPlugin._capture]
+## when a [code]networked:relay_forward[/code] payload arrives.
+##
+## Wraps the data with [code]_is_remote = true[/code] so [method _on_session_registered]
+## marks the peer correctly. Out-of-order messages (before session_registered) are
+## buffered in [member _pending_remote] and drained when session_registered arrives.
+func receive_remote(source_tree_name: String, message: String, data: Dictionary) -> void:
+	if source_tree_name.is_empty():
+		return
+	var wrapped := data.duplicate()
+	wrapped["_is_remote"] = true
+	wrapped["tree_name"] = source_tree_name
+
+	# Buffer if the peer isn't registered yet.
+	if message != "networked:session_registered" and source_tree_name not in _peers:
+		if source_tree_name not in _pending_remote:
+			_pending_remote[source_tree_name] = []
+		_pending_remote[source_tree_name].append({"msg": message, "data": wrapped})
+		return
+
+	receive(message, [wrapped])
 
 
 ## Returns a shallow copy of the peer registry for UI consumption.
@@ -101,6 +136,24 @@ func set_auto_break(enabled: bool) -> void:
 		plugin.send_to_game(session_id, "networked:set_auto_break", [enabled])
 
 
+## Asks the editor to open [param node_path] in the scene inspector.
+## Only meaningful for [local] peers that have an active editor session.
+func send_node_inspect(p_session_id: int, node_path: String) -> void:
+	if plugin:
+		plugin.send_to_game(p_session_id, "networked:inspect_node", [node_path])
+
+
+## Sends a visualizer toggle command to the game for [param tree_name].
+## Routed via the relay for remote peers automatically by the reporter.
+func send_visualizer_toggle(tree_name: String, viz_name: String, enabled: bool) -> void:
+	if plugin:
+		plugin.send_to_game(session_id, "networked:visualizer_toggle", [{
+			"tree_name": tree_name,
+			"viz_name": viz_name,
+			"enabled": enabled,
+		}])
+
+
 ## Wipes all ring buffers without touching the peer registry or colors.
 ## Called by the Clear button — peers remain visible in the left tree.
 func clear_data() -> void:
@@ -116,6 +169,7 @@ func reset() -> void:
 	_adapters.clear()
 	_alias_map.clear()
 	_span_tree_map.clear()
+	_pending_remote.clear()
 	_color_index = 0
 	_peer_colors.clear()
 	session_cleared.emit()
@@ -128,6 +182,19 @@ func _on_session_registered(d: Dictionary) -> void:
 	if tn.is_empty():
 		return
 
+	var is_remote: bool = d.get("_is_remote", false)
+
+	# Promotion: a direct session arrived for a peer we previously knew as [remote].
+	if not is_remote and tn in _peers and _peers[tn].get("is_remote", false):
+		_peers[tn]["is_remote"] = false
+		_peers[tn]["online"] = true
+		peer_promoted.emit(tn)
+		return
+
+	# Skip re-registration if already known (prevents duplicate tree items).
+	if tn in _peers:
+		return
+
 	var is_server: bool = d.get("is_server", false)
 	var color: Color = _assign_peer_color(tn)
 	_peers[tn] = {
@@ -137,14 +204,16 @@ func _on_session_registered(d: Dictionary) -> void:
 		"color":         color,
 		# Server is always peer 1. Clients get their ID lazily from peer_connected.
 		"peer_id":       1 if is_server else 0,
+		"is_remote":     is_remote,
 	}
 
-	# Pre-create all three adapters so ring buffers accumulate even before
-	# the user opens a panel checkbox.
+	# Pre-create all adapters so ring buffers accumulate even before the user
+	# opens a panel checkbox — for both local and remote peers.
 	for pt: PanelDataAdapter.PanelType in [
 		PanelDataAdapter.PanelType.CLOCK,
 		PanelDataAdapter.PanelType.SPAN,
 		PanelDataAdapter.PanelType.CRASH,
+		PanelDataAdapter.PanelType.TOPOLOGY,
 	]:
 		var key: String = _adapter_key(tn, pt)
 		if key not in _adapters:
@@ -154,11 +223,18 @@ func _on_session_registered(d: Dictionary) -> void:
 			)
 
 	# Re-apply the persisted auto_break state now that this tree is live.
-	# auto_break survives reset(), so the game immediately gets the correct value.
-	if plugin:
+	# Only meaningful for local peers (remote peers receive via relay, not direct send).
+	if plugin and not is_remote:
 		plugin.send_to_game(session_id, "networked:set_auto_break", [auto_break])
 
-	peer_registered.emit(tn, is_server, color)
+	peer_registered.emit(tn, is_server, color, is_remote)
+
+	# Drain any messages that arrived before session_registered for this peer.
+	if tn in _pending_remote:
+		var pending: Array = _pending_remote[tn]
+		_pending_remote.erase(tn)
+		for entry: Dictionary in pending:
+			receive(entry["msg"], [entry["data"]])
 
 
 func _on_session_unregistered(d: Dictionary) -> void:
@@ -245,6 +321,16 @@ func _on_lobby_event(d: Dictionary) -> void:
 	pass
 
 
+func _on_topology_snapshot(d: Dictionary) -> void:
+	var tn: String = d.get("tree_name", "")
+	if tn.is_empty():
+		return
+	var key: String = _adapter_key(tn, PanelDataAdapter.PanelType.TOPOLOGY)
+	if key not in _adapters:
+		return
+	(_adapters[key] as TopologyAdapter).feed(d)
+
+
 # ─── Adapter Factory ──────────────────────────────────────────────────────────
 
 func _create_adapter(tn: String, pt: PanelDataAdapter.PanelType) -> PanelDataAdapter:
@@ -255,6 +341,8 @@ func _create_adapter(tn: String, pt: PanelDataAdapter.PanelType) -> PanelDataAda
 			return SpanAdapter.new(tn)
 		PanelDataAdapter.PanelType.CRASH:
 			return CrashAdapter.new(tn, _alias_map)
+		PanelDataAdapter.PanelType.TOPOLOGY:
+			return TopologyAdapter.new(tn)
 	return PanelDataAdapter.new()
 
 

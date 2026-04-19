@@ -13,20 +13,22 @@ extends RefCounted
 signal data_changed(key: String)
 
 ## Canonical panel type identifiers. Define once, reference everywhere.
-enum PanelType { CLOCK = 0, SPAN = 1, CRASH = 2 }
+enum PanelType { CLOCK = 0, SPAN = 1, CRASH = 2, TOPOLOGY = 3 }
 
 ## String names used in adapter keys: [code]"%s:%s" % [tree_name, PANEL_NAMES[type]][/code]
 const PANEL_NAMES: Dictionary = {
-	PanelType.CLOCK: "clock",
-	PanelType.SPAN:  "span",
-	PanelType.CRASH: "crash",
+	PanelType.CLOCK:    "clock",
+	PanelType.SPAN:     "span",
+	PanelType.CRASH:    "crash",
+	PanelType.TOPOLOGY: "topology",
 }
 
 ## Display labels shown in the left-tree checkboxes and panel title bars.
 const PANEL_DISPLAY_NAMES: Dictionary = {
-	PanelType.CLOCK: "Clock",
-	PanelType.SPAN:  "Span Tracer",
-	PanelType.CRASH: "Crash Manifest",
+	PanelType.CLOCK:    "Clock",
+	PanelType.SPAN:     "Span Tracer",
+	PanelType.CRASH:    "Crash Manifest",
+	PanelType.TOPOLOGY: "Topology",
 }
 
 ## Stable key: [code]"%s:%s" % [tree_name, PANEL_NAMES[panel_type]][/code]

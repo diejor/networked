@@ -57,6 +57,7 @@ func _ready() -> void:
 		return
 	session.peer_registered.connect(_on_peer_registered)
 	session.peer_status_changed.connect(_on_peer_status_changed)
+	session.peer_promoted.connect(_on_peer_promoted)
 	session.adapter_data_changed.connect(_on_adapter_data_changed)
 	session.session_cleared.connect(_on_session_cleared)
 
@@ -95,15 +96,15 @@ func _build_layout() -> void:
 	add_child(_split)
 
 	_peer_tree = Tree.new()
-	_peer_tree.custom_minimum_size.x = 240
+	_peer_tree.custom_minimum_size.x = 260
 	_peer_tree.hide_root = true
 	_peer_tree.columns = 2
 	_peer_tree.set_column_title(0, "Peer")
-	_peer_tree.set_column_title(1, "ID")
+	_peer_tree.set_column_title(1, "")
 	_peer_tree.column_titles_visible = true
 	_peer_tree.set_column_expand(0, true)
 	_peer_tree.set_column_expand(1, false)
-	_peer_tree.set_column_custom_minimum_width(1, 40)
+	_peer_tree.set_column_custom_minimum_width(1, 60)
 	_peer_tree.item_edited.connect(_on_peer_tree_item_edited)
 	# Ensure root exists.
 	_peer_tree.create_item()
@@ -125,21 +126,20 @@ func _build_layout() -> void:
 
 # ─── Session signal handlers ──────────────────────────────────────────────────
 
-func _on_peer_registered(tree_name: String, is_server: bool, color: Color) -> void:
-	# Root must exist.
+func _on_peer_registered(tree_name: String, is_server: bool, color: Color, is_remote: bool) -> void:
 	if not _peer_tree.get_root():
 		_peer_tree.create_item()
 
 	var peer_item := _peer_tree.create_item(_peer_tree.get_root())
 	var prefix: String = "[S] " if is_server else "[C] "
 	peer_item.set_text(0, prefix + tree_name)
-	# Server is always peer 1; clients get their ID lazily from peer_id_resolved.
-	peer_item.set_text(1, "1" if is_server else "—")
+	peer_item.set_text(1, "[remote]" if is_remote else "[local]")
 	peer_item.set_custom_color(0, color)
-	peer_item.set_custom_color(1, color)
+	peer_item.set_custom_color(1, Color(0.5, 0.5, 0.5) if is_remote else color)
 	peer_item.set_icon(0, _dot_online)
 	peer_item.set_selectable(0, false)
 	peer_item.set_selectable(1, false)
+	peer_item.set_metadata(0, {"is_remote": is_remote})
 
 	var font: Font = peer_item.get_tree().get_theme_font(&"bold", &"Tree") if peer_item.get_tree() else null
 	if font:
@@ -147,24 +147,35 @@ func _on_peer_registered(tree_name: String, is_server: bool, color: Color) -> vo
 
 	_peer_tree_items[tree_name] = peer_item
 
-	# Three checkbox children.
-	for pt: PanelDataAdapter.PanelType in [
-		PanelDataAdapter.PanelType.SPAN,
-		PanelDataAdapter.PanelType.CLOCK,
-		PanelDataAdapter.PanelType.CRASH,
-	]:
-		var child := _peer_tree.create_item(peer_item)
-		child.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
-		child.set_text(0, PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
-		child.set_editable(0, true)
-		child.set_checked(0, false)
-		child.set_selectable(1, false)
-		child.set_metadata(0, {
-			"tree_name": tree_name,
-			"panel_type": pt,
-		})
+	_add_peer_panel_rows(peer_item, tree_name, is_remote)
 
 	peer_item.set_collapsed(false)
+
+
+## Adds panel rows (checkboxes or label stubs) under [param peer_item].
+## Remote peers get label stubs for local-only panels (Clock, Span Tracer).
+func _add_peer_panel_rows(peer_item: TreeItem, tree_name: String, is_remote: bool) -> void:
+	for pt: PanelDataAdapter.PanelType in [
+		PanelDataAdapter.PanelType.TOPOLOGY,
+		PanelDataAdapter.PanelType.CRASH,
+		PanelDataAdapter.PanelType.SPAN,
+		PanelDataAdapter.PanelType.CLOCK,
+	]:
+		var is_local_only := pt in [
+			PanelDataAdapter.PanelType.CLOCK,
+			PanelDataAdapter.PanelType.SPAN,
+		]
+		if is_remote and is_local_only:
+			# Label stub — not interactive. Communicates availability without a fake checkbox.
+			var stub := _peer_tree.create_item(peer_item)
+			stub.set_cell_mode(0, TreeItem.CELL_MODE_LABEL)
+			stub.set_text(0, "· %s  (local only)" % PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
+			stub.set_selectable(0, false)
+			stub.set_selectable(1, false)
+			stub.set_custom_color(0, Color(0.5, 0.5, 0.5))
+			stub.set_metadata(0, {"tree_name": tree_name, "panel_type": pt, "is_stub": true})
+		else:
+			_add_panel_checkbox(peer_item, tree_name, pt)
 
 
 func _on_peer_status_changed(tree_name: String, online: bool) -> void:
@@ -173,14 +184,17 @@ func _on_peer_status_changed(tree_name: String, online: bool) -> void:
 	var peer_item: TreeItem = _peer_tree_items[tree_name]
 	peer_item.set_icon(0, _dot_online if online else _dot_offline)
 
-	# Walk checkbox children and update editability.
+	# Walk checkbox children and update editability. Skip label stubs.
 	var child := peer_item.get_first_child()
 	while child:
-		child.set_editable(0, online)
-		if not online:
-			child.set_custom_color(0, Color(0.5, 0.5, 0.5))
-		else:
-			child.clear_custom_color(0)
+		var meta: Variant = child.get_metadata(0)
+		var is_stub: bool = meta is Dictionary and (meta as Dictionary).get("is_stub", false)
+		if not is_stub:
+			child.set_editable(0, online)
+			if not online:
+				child.set_custom_color(0, Color(0.5, 0.5, 0.5))
+			else:
+				child.clear_custom_color(0)
 		child = child.get_next()
 
 
@@ -220,6 +234,43 @@ func _on_session_cleared() -> void:
 	_rebuild_grid()
 
 
+## Promotes a previously [remote] peer to [local] — updates badge and converts any
+## label stubs back to interactive checkboxes.
+func _on_peer_promoted(tree_name: String) -> void:
+	if tree_name not in _peer_tree_items:
+		return
+	var peer_item: TreeItem = _peer_tree_items[tree_name]
+	peer_item.set_text(1, "[local]")
+	var peers: Dictionary = session.get_peers()
+	var color: Color = peers.get(tree_name, {}).get("color", Color.WHITE)
+	peer_item.set_custom_color(1, color)
+
+	# Replace label stubs with proper checkboxes.
+	var child := peer_item.get_first_child()
+	while child:
+		var next := child.get_next()
+		var meta: Variant = child.get_metadata(0)
+		if meta is Dictionary and (meta as Dictionary).get("is_stub", false):
+			var pt: PanelDataAdapter.PanelType = (meta as Dictionary).get(
+				"panel_type", PanelDataAdapter.PanelType.CLOCK)
+			peer_item.remove_child(child)
+			# Re-insert as a real checkbox at the same position (append is fine —
+			# order within a peer's row is not load-bearing).
+			_add_panel_checkbox(peer_item, tree_name, pt)
+		child = next
+
+
+## Creates a single checkbox row under [param peer_item] for [param pt].
+func _add_panel_checkbox(peer_item: TreeItem, tree_name: String, pt: PanelDataAdapter.PanelType) -> void:
+	var child := _peer_tree.create_item(peer_item)
+	child.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
+	child.set_text(0, PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
+	child.set_editable(0, true)
+	child.set_checked(0, false)
+	child.set_selectable(1, false)
+	child.set_metadata(0, {"tree_name": tree_name, "panel_type": pt})
+
+
 # ─── Checkbox toggle ──────────────────────────────────────────────────────────
 
 func _on_peer_tree_item_edited() -> void:
@@ -230,6 +281,8 @@ func _on_peer_tree_item_edited() -> void:
 	if not meta is Dictionary:
 		return
 	var m: Dictionary = meta as Dictionary
+	if m.get("is_stub", false):
+		return  # Label stubs are not editable; ignore spurious signals.
 	var tn: String = m.get("tree_name", "")
 	var pt: PanelDataAdapter.PanelType = m.get("panel_type", PanelDataAdapter.PanelType.CLOCK)
 	var key: String = "%s:%s" % [tn, PanelDataAdapter.PANEL_NAMES[pt]]
@@ -386,6 +439,22 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, tree_name: String) ->
 				]
 				if span_key in _panel_wrappers:
 					(_panel_wrappers[span_key].panel_control as PanelLogBridge).highlight_cid(cid)
+			return p
+
+		PanelDataAdapter.PanelType.TOPOLOGY:
+			var p := PanelTopology.new()
+			p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			# Node inspect: opens the node in the editor scene inspector (local peers only).
+			var peers: Dictionary = session.get_peers() if session else {}
+			var is_remote: bool = peers.get(tree_name, {}).get("is_remote", false)
+			if not is_remote:
+				p.on_node_inspect = func(node_path: String) -> void:
+					if session:
+						session.send_node_inspect(session.session_id, node_path)
+			# Visualizer toggles: forwarded to the game via the existing editor→game path.
+			p.on_visualizer_toggle = func(viz_name: String, enabled: bool) -> void:
+				if session:
+					session.send_visualizer_toggle(tree_name, viz_name, enabled)
 			return p
 
 	return Control.new()
