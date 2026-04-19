@@ -13,6 +13,85 @@ class_name NetworkedDebugReporter
 static var _reporting_enabled: bool = false
 static var _reporting_checked: bool = false
 
+## Explicitly enables or disables debug reporting.
+## Useful in tests to override the default auto-detection.
+static func set_enabled(enabled: bool) -> void:
+	_reporting_enabled = enabled
+	_reporting_checked = true
+	# If we are enabling mid-run, ensure we try to register capture if possible.
+	var reporter = _get_instance()
+	if reporter and enabled:
+		reporter._try_register_capture()
+
+
+## Property-style access for the singleton instance.
+## [code]NetworkedDebugger.enabled = true[/code]
+var enabled: bool:
+	get: return _debug_build()
+	set(value): set_enabled(value)
+
+
+## Resets all debug registries, history, and telemetry.
+## Call this between tests to ensure a clean slate.
+func reset_state() -> void:
+	# Force re-detection of environment on next check.
+	_reporting_checked = false
+	_reporting_enabled = false
+
+	# Clean up tree references and disconnect signals.
+	for mt in _trees:
+		if is_instance_valid(mt):
+			if mt.peer_connected.is_connected(_on_peer_connected):
+				mt.peer_connected.disconnect(_on_peer_connected)
+			if mt.peer_disconnected.is_connected(_on_peer_disconnected):
+				mt.peer_disconnected.disconnect(_on_peer_disconnected)
+			if mt.configured.is_connected(_on_configured):
+				mt.configured.disconnect(_on_configured)
+	_trees.clear()
+
+	# Disconnect and clear spawner hooks.
+	for spawner in _hooked_spawners.keys():
+		var cb: Callable = _hooked_spawners[spawner]
+		if is_instance_valid(spawner) and spawner.spawned.is_connected(cb):
+			spawner.spawned.disconnect(cb)
+	_hooked_spawners.clear()
+
+	# Disconnect and clear lobby synchronizer hooks.
+	for lobby_sync in _hooked_lobby_syncs.keys():
+		var cb: Callable = _hooked_lobby_syncs[lobby_sync]
+		if is_instance_valid(lobby_sync) and lobby_sync.spawned.is_connected(cb):
+			lobby_sync.spawned.disconnect(cb)
+	_hooked_lobby_syncs.clear()
+
+	_process_recipients.clear()
+	_recipient_map.clear()
+	_message_queue.clear()
+	_cycle_peer_events.clear()
+	_crash_history.clear()
+	_watched.clear()
+	_relays.clear()
+	
+	if _telemetry:
+		_telemetry.clear()
+	NetTrace.reset()
+	NetLog.trace("Reporter: State reset (deep).")
+
+
+static func _get_instance() -> NetworkedDebugReporter:
+	return Engine.get_singleton("NetworkedDebugger") as NetworkedDebugReporter
+
+
+func _try_register_capture() -> void:
+	if _has_local_session() and not _capture_registered:
+		_capture_registered = true
+		EngineDebugger.register_message_capture(
+			"networked",
+			func(message: String, data: Array) -> bool:
+				_on_editor_message(message, data)
+				return true
+		)
+
+
 # Tracks whether the EngineDebugger capture has been registered for this process.
 static var _capture_registered: bool = false
 
@@ -86,14 +165,7 @@ func _enter_tree() -> void:
 
 	# The message capture (editor → game commands) only makes sense when a local
 	# editor session exists. Skip registration on headless / relay-only processes.
-	if _has_local_session() and not _capture_registered:
-		_capture_registered = true
-		EngineDebugger.register_message_capture(
-			"networked",
-			func(message: String, data: Array) -> bool:
-				_on_editor_message(message, data)
-				return true
-		)
+	_try_register_capture()
 
 	var capacity: int = ProjectSettings.get_setting(
 		"debug/networked/telemetry_buffer_size", 120)
@@ -359,7 +431,7 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 				var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, mt, {
 					"player": player.name,
 					"tree": mt.name,
-				}, lobby_token)
+				}, "", lobby_token)
 				spawn_span.step("player_entered_tree")
 				_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 				_check_player_topology_validation(player, mt, spawn_span)
@@ -830,9 +902,12 @@ func _flush_now() -> void:
 
 	for entry: Array in _message_queue:
 		var entry_mt: MultiplayerTree = entry[2] if entry.size() >= 3 else null
+		
+		# Safety Drop: messages without a tree context are orphaned and dropped.
 		if not is_instance_valid(entry_mt):
 			NetLog.warn("Reporter: [QueueDrop] '%s' — no tree context" % entry[0])
 			continue
+
 		emit_debug_event(entry[0], entry[1], entry_mt)
 	_message_queue.clear()
 
@@ -986,8 +1061,11 @@ static func _debug_build() -> bool:
 	if not _reporting_checked:
 		_reporting_checked = true
 		_reporting_enabled = true
-		for arg in OS.get_cmdline_args():
-			if arg in ["--gdunit", "--headless"]:
+		# By default, disable in headless or unit test runs to avoid noise/overhead.
+		# Can be explicitly enabled via set_enabled(true) or .enabled = true.
+		var args := OS.get_cmdline_args()
+		for arg in args:
+			if arg == "--gdunit" or arg == "--headless" or "GdUnitTestRunner.tscn" in arg:
 				_reporting_enabled = false
 				break
 	return _reporting_enabled and OS.has_feature("debug")

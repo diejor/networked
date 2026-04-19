@@ -19,10 +19,6 @@ var label: String
 ## The name of the [MultiplayerTree] this span belongs to. Empty for global spans.
 var tree_name: String
 
-## Weak reference to the [MultiplayerTree] this span belongs to.
-## Used by [method _send] to route the delegate without a string scan.
-var _mt: WeakRef = null
-
 ## Current lifecycle state.
 var state: State = State.OPEN
 
@@ -32,6 +28,9 @@ var _start_usec: int
 ## Ordered step trail recorded via [method step].
 var _steps: Array = []
 
+## Weak reference to the tree owning this span. Used for O(1) routing.
+var _mt: WeakRef
+
 
 func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
 	id = p_id
@@ -39,6 +38,7 @@ func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: Multi
 	if is_instance_valid(tree):
 		_mt = weakref(tree)
 		tree_name = tree.get_meta(&"_original_name", tree.name)
+	
 	_start_frame = Engine.get_process_frames()
 	_start_usec = Time.get_ticks_usec()
 	if id.is_empty():
@@ -204,5 +204,5 @@ static func _get_caller() -> Dictionary:
 
 func _send(msg: String, payload: Dictionary) -> void:
 	if NetTrace.message_delegate.is_valid():
-		var mt := _mt.get_ref() as MultiplayerTree if _mt else null
+		var mt: MultiplayerTree = _mt.get_ref() if _mt else null
 		NetTrace.message_delegate.call(msg, payload, mt)

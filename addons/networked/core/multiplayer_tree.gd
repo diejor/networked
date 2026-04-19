@@ -103,6 +103,28 @@ static func for_node(node: Node) -> MultiplayerTree:
 	return api.get_meta(&"_multiplayer_tree") as MultiplayerTree
 
 
+## Global resolver that finds a [MultiplayerTree] from any context.
+## Handles MultiplayerTree instances, Nodes (via metadata or hierarchy), 
+## and returns null for invalid contexts.
+static func resolve(context: Object) -> MultiplayerTree:
+	if context is MultiplayerTree:
+		return context
+	
+	if context is Node:
+		# Fast path: metadata lookup
+		var node := context as Node
+		var mt := for_node(node)
+		if mt: return mt
+		
+		# Fallback: climb hierarchy
+		var p := node.get_parent()
+		while p:
+			if p is MultiplayerTree: return p
+			p = p.get_parent()
+	
+	return null
+
+
 var _peer_contexts: Dictionary[int, PeerContext] = {}
 
 

@@ -16,12 +16,7 @@ var _cached_module_path: String = ""
 ## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
 ## [method MultiplayerTree.join] completes, or in the editor.
 func get_multiplayer_tree() -> MultiplayerTree:
-	var api := multiplayer as SceneMultiplayer
-	if not api:
-		return null
-	if api.has_meta(&"_multiplayer_tree"):
-		return api.get_meta(&"_multiplayer_tree") as MultiplayerTree
-	return null
+	return MultiplayerTree.resolve(self)
 
 
 ## Returns the [MultiplayerLobbyManager] for this session.
