@@ -13,7 +13,7 @@ class_name NetworkedDebuggerUI
 extends VBoxContainer
 
 ## Injected by [NetworkedDebuggerPlugin] before the node enters the scene tree.
-var session: DebuggerSession
+var session
 
 # ─── Layout nodes ────────────────────────────────────────────────────────────
 var _peer_tree: Tree
@@ -121,6 +121,12 @@ func _build_layout() -> void:
 	_grid.columns = 1
 	_grid.add_theme_constant_override("h_separation", 6)
 	_grid.add_theme_constant_override("v_separation", 6)
+	
+	# Add a background to the grid so we can see its boundaries.
+	var grid_bg := StyleBoxFlat.new()
+	grid_bg.bg_color = Color(0, 0, 0, 0.1)
+	_grid.add_theme_stylebox_override("panel", grid_bg)
+	
 	_scroll.add_child(_grid)
 
 
@@ -147,35 +153,20 @@ func _on_peer_registered(tree_name: String, is_server: bool, color: Color, is_re
 
 	_peer_tree_items[tree_name] = peer_item
 
-	_add_peer_panel_rows(peer_item, tree_name, is_remote)
+	_add_peer_panel_rows(peer_item, tree_name)
 
 	peer_item.set_collapsed(false)
 
 
-## Adds panel rows (checkboxes or label stubs) under [param peer_item].
-## Remote peers get label stubs for local-only panels (Clock, Span Tracer).
-func _add_peer_panel_rows(peer_item: TreeItem, tree_name: String, is_remote: bool) -> void:
+## Adds panel rows (checkboxes) under [param peer_item].
+func _add_peer_panel_rows(peer_item: TreeItem, tree_name: String) -> void:
 	for pt: PanelDataAdapter.PanelType in [
 		PanelDataAdapter.PanelType.TOPOLOGY,
 		PanelDataAdapter.PanelType.CRASH,
 		PanelDataAdapter.PanelType.SPAN,
 		PanelDataAdapter.PanelType.CLOCK,
 	]:
-		var is_local_only := pt in [
-			PanelDataAdapter.PanelType.CLOCK,
-			PanelDataAdapter.PanelType.SPAN,
-		]
-		if is_remote and is_local_only:
-			# Label stub — not interactive. Communicates availability without a fake checkbox.
-			var stub := _peer_tree.create_item(peer_item)
-			stub.set_cell_mode(0, TreeItem.CELL_MODE_LABEL)
-			stub.set_text(0, "· %s  (local only)" % PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
-			stub.set_selectable(0, false)
-			stub.set_selectable(1, false)
-			stub.set_custom_color(0, Color(0.5, 0.5, 0.5))
-			stub.set_metadata(0, {"tree_name": tree_name, "panel_type": pt, "is_stub": true})
-		else:
-			_add_panel_checkbox(peer_item, tree_name, pt)
+		_add_panel_checkbox(peer_item, tree_name, pt)
 
 
 func _on_peer_status_changed(tree_name: String, online: bool) -> void:
@@ -234,8 +225,7 @@ func _on_session_cleared() -> void:
 	_rebuild_grid()
 
 
-## Promotes a previously [remote] peer to [local] — updates badge and converts any
-## label stubs back to interactive checkboxes.
+## Promotes a previously [remote] peer to [local] — updates badge.
 func _on_peer_promoted(tree_name: String) -> void:
 	if tree_name not in _peer_tree_items:
 		return
@@ -244,20 +234,6 @@ func _on_peer_promoted(tree_name: String) -> void:
 	var peers: Dictionary = session.get_peers()
 	var color: Color = peers.get(tree_name, {}).get("color", Color.WHITE)
 	peer_item.set_custom_color(1, color)
-
-	# Replace label stubs with proper checkboxes.
-	var child := peer_item.get_first_child()
-	while child:
-		var next := child.get_next()
-		var meta: Variant = child.get_metadata(0)
-		if meta is Dictionary and (meta as Dictionary).get("is_stub", false):
-			var pt: PanelDataAdapter.PanelType = (meta as Dictionary).get(
-				"panel_type", PanelDataAdapter.PanelType.CLOCK)
-			peer_item.remove_child(child)
-			# Re-insert as a real checkbox at the same position (append is fine —
-			# order within a peer's row is not load-bearing).
-			_add_panel_checkbox(peer_item, tree_name, pt)
-		child = next
 
 
 ## Creates a single checkbox row under [param peer_item] for [param pt].
@@ -302,8 +278,10 @@ func _activate_panel(key: String, tree_name: String, pt: PanelDataAdapter.PanelT
 		return
 	var adapter: PanelDataAdapter = session.get_adapter(key)
 	if not adapter:
+		NetLog.warn("UI: [ActivateFailed] Adapter not found for key: %s" % key)
 		return
 
+	NetLog.info("UI: [ActivatePanel] %s" % key)
 	var peers: Dictionary = session.get_peers()
 	var peer_info: Dictionary = peers.get(tree_name, {})
 	var color: Color = peer_info.get("color", Color.WHITE)
@@ -313,6 +291,7 @@ func _activate_panel(key: String, tree_name: String, pt: PanelDataAdapter.PanelT
 	var title_str: String = "%s · %s" % [tree_name, display_name]
 
 	var wrapper := PanelWrapper.new(key, title_str, color, panel)
+	NetLog.trace("UI: [CreatedWrapper] %s size_flags=%d" % [key, wrapper.size_flags_vertical])
 	wrapper.on_maximize_requested = _on_maximize_requested
 	# Wire "Break on Manifest" for crash panels.
 	# Restore the persisted break state so the button reflects the current value
@@ -351,6 +330,7 @@ func _deactivate_panel(key: String) -> void:
 # ─── Grid layout ─────────────────────────────────────────────────────────────
 
 func _rebuild_grid() -> void:
+	NetLog.trace("UI: [RebuildGrid] active_count=%d" % _active_keys.size())
 	# Remove all grid children without freeing them.
 	for child: Node in _grid.get_children():
 		_grid.remove_child(child)
@@ -367,11 +347,14 @@ func _rebuild_grid() -> void:
 	for key: String in _active_keys:
 		if key in _panel_wrappers:
 			_add_wrapper_to_grid(_panel_wrappers[key], key)
+		else:
+			NetLog.warn("UI: [RebuildFailed] Wrapper missing for key: %s" % key)
 
 
 ## Adds a wrapper to the grid and populates its panel if it's newly activated.
 ## _ready() fires synchronously on add_child, so populate() is safe to call after.
 func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
+	NetLog.trace("UI: [AddChild] %s" % key)
 	_grid.add_child(wrapper)  # triggers _ready() on wrapper and its children
 	if key in _pending_populate:
 		_pending_populate.erase(key)
@@ -395,23 +378,21 @@ func _on_maximize_requested(key: String) -> void:
 # ─── Panel factory ────────────────────────────────────────────────────────────
 
 func _create_panel_control(pt: PanelDataAdapter.PanelType, tree_name: String) -> Control:
+	var control: Control
 	match pt:
 		PanelDataAdapter.PanelType.CLOCK:
-			var p := PanelClock.new()
-			p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			return p
+			control = PanelClock.new()
 
 		PanelDataAdapter.PanelType.SPAN:
-			var p := PanelLogBridge.new()
-			p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			control = PanelLogBridge.new()
 			# Inject breakpoint toggle Callable (captures p by reference).
-			p.toggle_breakpoint = func(source: String, line: int) -> void:
+			(control as PanelLogBridge).toggle_breakpoint = func(source: String, line: int) -> void:
 				var script: Script = load(source) as Script
 				if not script:
 					return
-				var new_state: bool = not bool(p._active_breakpoints.get(
+				var new_state: bool = not bool((control as PanelLogBridge)._active_breakpoints.get(
 					"%s:%d" % [source, line], false))
-				p.sync_breakpoint(source, line, new_state)
+				(control as PanelLogBridge).sync_breakpoint(source, line, new_state)
 				EditorInterface.set_main_screen_editor("Script")
 				EditorInterface.edit_script(script, line)
 				(func() -> void:
@@ -423,13 +404,11 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, tree_name: String) ->
 					if ce:
 						ce.set_line_as_breakpoint(line - 1, new_state)
 				).call_deferred()
-			return p
 
 		PanelDataAdapter.PanelType.CRASH:
-			var p := PanelCrashManifest.new()
-			p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			control = PanelCrashManifest.new()
 			# Cross-panel context selection: highlight the peer's span tracer.
-			p.on_context_selected = func(ctx: Dictionary) -> void:
+			(control as PanelCrashManifest).on_context_selected = func(ctx: Dictionary) -> void:
 				var cid: String = ctx.get("cid", "")
 				if cid.is_empty():
 					return
@@ -439,23 +418,25 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, tree_name: String) ->
 				]
 				if span_key in _panel_wrappers:
 					(_panel_wrappers[span_key].panel_control as PanelLogBridge).highlight_cid(cid)
-			return p
 
 		PanelDataAdapter.PanelType.TOPOLOGY:
-			var p := PanelTopology.new()
-			p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			control = PanelTopology.new()
 			# Node inspect: opens the node in the editor scene inspector (local peers only).
 			var peers: Dictionary = session.get_peers() if session else {}
 			var is_remote: bool = peers.get(tree_name, {}).get("is_remote", false)
 			if not is_remote:
-				p.on_node_inspect = func(node_path: String) -> void:
+				(control as PanelTopology).on_node_inspect = func(node_path: String) -> void:
 					if session:
 						session.send_node_inspect(session.session_id, node_path)
 			# Visualizer toggles: forwarded to the game via the existing editor→game path.
-			p.on_visualizer_toggle = func(viz_name: String, enabled: bool) -> void:
+			(control as PanelTopology).on_visualizer_toggle = func(viz_name: String, enabled: bool) -> void:
 				if session:
 					session.send_visualizer_toggle(tree_name, viz_name, enabled)
-			return p
+
+	if control:
+		control.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		control.custom_minimum_size = Vector2(300, 200) # Ensure panels are visible
+		return control
 
 	return Control.new()
 

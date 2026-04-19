@@ -8,7 +8,11 @@ class_name BackendPeer
 extends Resource
 
 ## The [SceneMultiplayer] instance owned by this backend.
-var api := SceneMultiplayer.new()
+var api: SceneMultiplayer
+
+
+func _init() -> void:
+	api = SceneMultiplayer.new()
 
 
 ## Starts listening as a server. Returns [code]OK[/code] on success.

@@ -71,6 +71,7 @@ class SyncInfo:
 
 var tree_name: String = ""
 var node_path: String = ""
+var username: String = ""
 var peer_id: int = 0
 var lobby_name: String = ""
 var is_server: bool = false
@@ -84,6 +85,7 @@ func to_dict() -> Dictionary:
 	return {
 		tree_name = tree_name,
 		node_path = node_path,
+		username = username,
 		peer_id = peer_id,
 		lobby_name = lobby_name,
 		is_server = is_server,
@@ -95,6 +97,7 @@ static func from_dict(d: Dictionary) -> NetTopologySnapshot:
 	var snap := NetTopologySnapshot.new()
 	snap.tree_name = d.get("tree_name", "")
 	snap.node_path = d.get("node_path", "")
+	snap.username = d.get("username", "")
 	snap.peer_id = d.get("peer_id", 0)
 	snap.lobby_name = d.get("lobby_name", "")
 	snap.is_server = d.get("is_server", false)

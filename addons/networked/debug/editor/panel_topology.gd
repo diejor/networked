@@ -106,10 +106,7 @@ func _apply_identity(d: Dictionary) -> void:
 	var is_server: bool = d.get("is_server", false)
 	var mode_str: String = "SERVER" if is_server else "CLIENT"
 
-	# Username: last path component before the peer ID suffix (e.g. "Alice|135123" → "Alice")
-	var node_name := node_path.get_file() if not node_path.is_empty() else "—"
-	var pipe_idx := node_name.rfind("|")
-	var username: String = node_name.substr(0, pipe_idx) if pipe_idx >= 0 else node_name
+	var username: String = d.get("username", "—")
 
 	_username_label.text = username
 	_peer_id_label.text = str(peer_id) if peer_id != 0 else "—"

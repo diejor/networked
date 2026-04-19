@@ -209,6 +209,9 @@ func is_online() -> bool:
 
 func _config_api() -> void:
 	NetLog.trace("MultiplayerTree: Configuring multiplayer API.")
+	
+	set_meta(&"_original_name", name)
+	
 	var multiplayer_root := get_path()
 	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
 	backend.configure_tree(get_tree(), multiplayer_root)
