@@ -93,10 +93,11 @@ func send_node_inspect(p_session_id: int, node_path: String) -> void:
 		plugin.send_to_game(p_session_id, "networked:inspect_node", [node_path])
 
 
-func send_visualizer_toggle(peer_key: String, viz_name: String, enabled: bool) -> void:
+func send_visualizer_toggle(peer_key: String, node_path: String, viz_name: String, enabled: bool) -> void:
 	if plugin:
 		plugin.send_to_game(session_id, "networked:visualizer_toggle", [{
 			"peer_key": peer_key,
+			"node_path": node_path,
 			"viz_name": viz_name,
 			"enabled": enabled,
 		}])
@@ -323,11 +324,6 @@ func _create_adapter(peer_k: String, display: String, type: PanelDataAdapter.Pan
 
 func _assign_peer_color(peer_id: int) -> Color:
 	if peer_id in _peer_colors: return _peer_colors[peer_id]
-
-	if peer_id == 1:
-		var c := Color(0.2, 0.8, 1.0)
-		_peer_colors[peer_id] = c
-		return c
 
 	var h := fmod(float(abs(peer_id)) * 0.618033988749895, 1.0)
 	var c := Color.from_hsv(h, 0.6, 0.9)

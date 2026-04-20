@@ -7,16 +7,16 @@
 class_name PanelCrashManifest
 extends DebugPanel
 
-## Called by the panel when the user selects a manifest row.
+## Called when the user selects a manifest row.
 ## Signature: func(ctx: Dictionary) -> void
 ## ctx keys: cid, frame, player_name, tree_name, lobby_name
 var on_context_selected: Callable
 
 ## Called when the Break on Manifest icon button is toggled.
 ## Signature: func(enabled: bool) -> void
-## Injected by [NetworkedDebuggerUI] when building the PanelWrapper title bar.
 var on_auto_break_changed: Callable
 
+var _break_btn: CheckButton
 var _tree: Tree
 var _copy_btn: Button
 var _clear_btn: Button
@@ -81,6 +81,21 @@ func clear() -> void:
 	placeholder.set_selectable(1, false)
 	placeholder.set_selectable(2, false)
 	_copy_btn.disabled = true
+
+
+## Returns the Break toggle button to be placed in the panel header.
+func get_break_toggle(initial: bool = false) -> CheckButton:
+	if not _break_btn:
+		_break_btn = CheckButton.new()
+		_break_btn.text = "Break"
+		_break_btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
+		_break_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+		_break_btn.set_pressed_no_signal(initial)
+		_break_btn.toggled.connect(func(enabled: bool) -> void:
+			if on_auto_break_changed.is_valid():
+				on_auto_break_changed.call(enabled)
+		)
+	return _break_btn
 
 
 ## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).

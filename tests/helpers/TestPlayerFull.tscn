@@ -4,12 +4,24 @@
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_pdren"]
 [ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_s5wog"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="3_tp"]
+[ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="4_g2jrq"]
+[ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="4_pdren"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
 
 [sub_resource type="Resource" id="Resource_g2jrq"]
 resource_local_to_scene = true
 script = ExtResource("3_s5wog")
 metadata/_custom_type_script = "uid://d1mnum02gn0c0"
+
+[sub_resource type="Resource" id="Resource_6l2ww"]
+script = ExtResource("4_g2jrq")
+base_dir = "res://tests/tmp_saves"
+metadata/_custom_type_script = "uid://dlsdsleg37hm1"
+
+[sub_resource type="Resource" id="Resource_y5ihg"]
+script = ExtResource("4_pdren")
+backend = SubResource("Resource_6l2ww")
+metadata/_custom_type_script = "uid://icayc7hx72vn"
 
 [sub_resource type="Resource" id="Resource_7io2v"]
 script = ExtResource("5_1efga")
@@ -36,8 +48,9 @@ metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
 [node name="SaveComponent" type="Node" parent="." unique_id=1774314061 groups=["persistent"]]
 script = ExtResource("2_pdren")
-save_dir = "res://tests/tmp_saves"
 save_container = SubResource("Resource_g2jrq")
+database = SubResource("Resource_y5ihg")
+table_name = &"player"
 
 [node name="TPComponent" type="Node" parent="." unique_id=401292753]
 unique_name_in_owner = true

@@ -38,30 +38,15 @@ func reset_state() -> void:
 	_reporting_checked = false
 	_reporting_enabled = false
 
-	# Clean up tree references and disconnect signals.
-	for mt in _trees:
-		if is_instance_valid(mt):
-			if mt.peer_connected.is_connected(_on_peer_connected):
-				mt.peer_connected.disconnect(_on_peer_connected)
-			if mt.peer_disconnected.is_connected(_on_peer_disconnected):
-				mt.peer_disconnected.disconnect(_on_peer_disconnected)
-			if mt.configured.is_connected(_on_configured):
-				mt.configured.disconnect(_on_configured)
+	# Free debug context nodes that are still alive (e.g. when reset is called
+	# before a queued free processes). Each context's _exit_tree cleans up its
+	# own spawner / lobby-sync hooks.
+	for ctx in _debug_contexts.values():
+		if is_instance_valid(ctx):
+			ctx.free()
+	_debug_contexts.clear()
 	_trees.clear()
-
-	# Disconnect and clear spawner hooks.
-	for spawner in _hooked_spawners.keys():
-		var cb: Callable = _hooked_spawners[spawner]
-		if is_instance_valid(spawner) and spawner.spawned.is_connected(cb):
-			spawner.spawned.disconnect(cb)
-	_hooked_spawners.clear()
-
-	# Disconnect and clear lobby synchronizer hooks.
-	for lobby_sync in _hooked_lobby_syncs.keys():
-		var cb: Callable = _hooked_lobby_syncs[lobby_sync]
-		if is_instance_valid(lobby_sync) and lobby_sync.spawned.is_connected(cb):
-			lobby_sync.spawned.disconnect(cb)
-	_hooked_lobby_syncs.clear()
+	_relays.clear()
 
 	_process_recipients.clear()
 	_recipient_map.clear()
@@ -69,8 +54,7 @@ func reset_state() -> void:
 	_cycle_peer_events.clear()
 	_crash_history.clear()
 	_watched.clear()
-	_relays.clear()
-	
+
 	if _telemetry:
 		_telemetry.clear()
 	NetTrace.reset()
@@ -108,20 +92,18 @@ var reporter_id: String = ""
 var _trees: Array[MultiplayerTree] = []
 
 # Map of MultiplayerTree -> NetDebugRelay.
-# Each tree must have its own relay child so that RPCs are correctly routed 
+# Each tree must have its own relay child so that RPCs are correctly routed
 # through that tree's specific MultiplayerAPI root.
 var _relays: Dictionary = {}
+
+# Map of MultiplayerTree -> NetDebugTreeContext (the per-tree signal wiring node).
+var _debug_contexts: Dictionary = {}
+
 var _message_queue: Array = []
 var _flush_pending: bool = false
 
 # Tree Name -> NodePath -> Array of {sync, callable} for demand-driven replication watch.
 var _watched: Dictionary = {}
-
-# MultiplayerSpawner -> Callable — tracks which spawners have native confirmation hooks.
-var _hooked_spawners: Dictionary = {}
-
-# LobbySynchronizer -> Callable — tracks player-spawn race detection hooks.
-var _hooked_lobby_syncs: Dictionary = {}
 
 
 # Whether to call EngineDebugger.debug() after sending a crash manifest.
@@ -202,9 +184,11 @@ func register_tree(mt: MultiplayerTree) -> void:
 	NetLog.info("Reporter: [Register] '%s' (is_server=%s, local_editor=%s)" % [tree_name, mt.is_server, _has_local_session()])
 
 	_trees.append(mt)
-	mt.peer_connected.connect(_on_peer_connected.bind(mt))
-	mt.peer_disconnected.connect(_on_peer_disconnected.bind(mt))
-	mt.configured.connect(_on_configured.bind(mt))
+
+	var ctx := NetDebugTreeContext.new(mt, self)
+	ctx.name = "NetDebugContext"
+	mt.add_child(ctx)
+	_debug_contexts[mt] = ctx
 
 	_setup_relay(mt)
 
@@ -227,27 +211,11 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 		return
 
 	_trees.erase(mt)
-
-	if mt.peer_connected.is_connected(_on_peer_connected):
-		mt.peer_connected.disconnect(_on_peer_connected)
-	if mt.peer_disconnected.is_connected(_on_peer_disconnected):
-		mt.peer_disconnected.disconnect(_on_peer_disconnected)
-	if mt.configured.is_connected(_on_configured):
-		mt.configured.disconnect(_on_configured)
-
-	if mt.clock and mt.clock.pong_received.is_connected(_on_clock_pong):
-		mt.clock.pong_received.disconnect(_on_clock_pong)
-	if mt.lobby_manager:
-		if mt.lobby_manager.lobby_spawned.is_connected(_on_lobby_spawned):
-			mt.lobby_manager.lobby_spawned.disconnect(_on_lobby_spawned)
-		if mt.lobby_manager.lobby_despawned.is_connected(_on_lobby_despawned):
-			mt.lobby_manager.lobby_despawned.disconnect(_on_lobby_despawned)
+	_relays.erase(mt)
+	_debug_contexts.erase(mt)
 
 	var tree_name := mt.get_meta(&"_original_name", mt.name)
 	_watched.erase(tree_name)
-
-	# Clean up the relay for this tree.
-	_relays.erase(mt)
 
 	var event := NetSessionEvent.new()
 	event.tree_name = tree_name
@@ -258,16 +226,6 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 
 
 # ─── Signal Handlers ──────────────────────────────────────────────────────────
-
-func _on_configured(mt: MultiplayerTree) -> void:
-	if not _debug_build():
-		return
-	if mt.clock:
-		mt.clock.pong_received.connect(_on_clock_pong.bind(mt))
-	if mt.lobby_manager:
-		mt.lobby_manager.lobby_spawned.connect(_on_lobby_spawned.bind(mt))
-		mt.lobby_manager.lobby_despawned.connect(_on_lobby_despawned.bind(mt))
-
 
 var _sending_manifest: bool = false
 
@@ -400,17 +358,15 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	_send_manifest(m)
 
 
-func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
-	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
-		return
-	
+## Called by [NetDebugTreeContext] when a lobby spawns.
+## Queues the lobby event and creates the span / race check.
+## Returns the [CheckpointToken] for player-spawn causal linking (may be null).
+func _on_lobby_spawned_logic(lobby: Lobby, mt: MultiplayerTree) -> CheckpointToken:
 	var event := NetLobbyEvent.new()
 	event.tree_name = mt.name
 	event.event = "spawned"
 	event.lobby_name = str(lobby.level.name)
 	_queue("networked:lobby_event", event.to_dict(), mt)
-
-	_hook_spawners_in(lobby.level, mt)
 
 	var lobby_span: NetPeerSpan = null
 	if mt.is_server:
@@ -422,57 +378,33 @@ func _on_lobby_spawned(lobby: Lobby, mt: MultiplayerTree) -> void:
 	# so player_spawn spans can declare the causal link.
 	var lobby_token: CheckpointToken = lobby_span.checkpoint() if lobby_span else null
 	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
-
-	if is_instance_valid(lobby.synchronizer):
-		var cb := func(player: Node) -> void:
-			_send_topology_snapshot(player, mt)  # always: server and client
-			if mt.is_server:
-				var peers: Array = Array(mt.multiplayer_api.get_peers()) if mt.multiplayer_api else []
-				var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, mt, {
-					"player": player.name,
-					"tree": mt.name,
-				}, "", lobby_token)
-				spawn_span.step("player_entered_tree")
-				_check_simplify_path_race_player_spawn(player, mt, spawn_span)
-				_check_player_topology_validation(player, mt, spawn_span)
-		lobby.synchronizer.spawned.connect(cb)
-
-		_hooked_lobby_syncs[lobby.synchronizer] = cb
+	return lobby_token
 
 
-func _on_lobby_despawned(lobby: Lobby, mt: MultiplayerTree) -> void:
-	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
-		return
-	
+## Called by [NetDebugTreeContext] when a player spawns inside a lobby.
+func _on_player_spawned_logic(player: Node, mt: MultiplayerTree, lobby_token: CheckpointToken) -> void:
+	_send_topology_snapshot(player, mt)  # always: server and client
+	if mt.is_server:
+		var peers: Array = Array(mt.multiplayer_api.get_peers()) if mt.multiplayer_api else []
+		var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, mt, {
+			"player": player.name,
+			"tree": mt.name,
+		}, "", lobby_token)
+		spawn_span.step("player_entered_tree")
+		_check_simplify_path_race_player_spawn(player, mt, spawn_span)
+		_check_player_topology_validation(player, mt, spawn_span)
+
+
+## Called by [NetDebugTreeContext] when a lobby despawns.
+## Spawner / synchronizer cleanup is handled by the context itself.
+func _on_lobby_despawned_logic(lobby: Lobby, mt: MultiplayerTree) -> void:
 	var event := NetLobbyEvent.new()
 	event.tree_name = mt.name
 	event.event = "despawned"
 	event.lobby_name = str(lobby.level.name)
 	_queue("networked:lobby_event", event.to_dict(), mt)
 
-	_unhook_spawners_in(lobby.level)
-	if is_instance_valid(lobby.synchronizer) and lobby.synchronizer in _hooked_lobby_syncs:
-		var cb: Callable = _hooked_lobby_syncs[lobby.synchronizer]
-		if lobby.synchronizer.spawned.is_connected(cb):
-			lobby.synchronizer.spawned.disconnect(cb)
-		_hooked_lobby_syncs.erase(lobby.synchronizer)
 
-
-## Connects to the native [signal MultiplayerSpawner.spawned] signal on all 
-## spawners found under [param root]. Fires a [code]spawner.native_confirmed[/code] 
-## component event each time the C++ engine actually spawns a node, this is ground 
-## truth for whether the spawn packet was received and processed. Skips spawners 
-## already hooked.
-func _hook_spawners_in(root: Node, mt: MultiplayerTree) -> void:
-	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
-		if spawner in _hooked_spawners:
-			continue
-		var cb := func(node: Node) -> void:
-			var active := NetTrace.active_span()
-			if active and active.label == "player_spawn":
-				active.step("spawner_native_confirmed", {"node_path": str(node.get_path())})
-		spawner.spawned.connect(cb)
-		_hooked_spawners[spawner] = cb
 
 
 ## Emits a crash manifest when a lobby is spawned on the server while peers are already
@@ -633,15 +565,6 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 		snap.synchronizers.append(si)
 	emit_debug_event("networked:topology_snapshot", snap.to_dict(), mt)
 
-
-func _unhook_spawners_in(root: Node) -> void:
-	for spawner: MultiplayerSpawner in root.find_children("*", "MultiplayerSpawner", true, false):
-		if spawner not in _hooked_spawners:
-			continue
-		var cb: Callable = _hooked_spawners[spawner]
-		if spawner.spawned.is_connected(cb):
-			spawner.spawned.disconnect(cb)
-		_hooked_spawners.erase(spawner)
 
 
 # ─── Snapshot Protocol ────────────────────────────────────────────────────────
@@ -848,6 +771,17 @@ func _format_cpp_error(data: Array) -> String:
 	return "\n".join(parts) if not parts.is_empty() else str(data)
 
 
+static var active_visualizers: Dictionary = {}
+
+static func is_visualizer_enabled(_viz_name: String) -> bool:
+	return false
+
+static func get_peer_debug_color(peer_id: int) -> Color:
+	var phi_conj := 0.618033988749895
+	var hue := fmod(float(abs(peer_id)) * phi_conj, 1.0)
+	return Color.from_hsv(hue, 0.6, 0.9)
+
+
 # ─── Incoming Editor Messages ─────────────────────────────────────────────────
 
 func _on_editor_message(message: String, data: Array) -> void:
@@ -861,9 +795,36 @@ func _on_editor_message(message: String, data: Array) -> void:
 		"set_auto_break":      _auto_break = true if data[0] else false
 		"cpp_error_caught":    _on_cpp_error_caught(Time.get_ticks_usec(), _format_cpp_error(data))
 		"request_snapshot":    _on_request_snapshot()
-		"inspect_node":        pass  # Reserved: open node_path in game-side inspector
-		"visualizer_toggle":   pass  # Reserved: toggle overlay on receiving peer
+		"inspect_node":        _handle_inspect_node(data[0])
+		"visualizer_toggle":   _handle_visualizer_toggle(data[0])
 
+
+## Forwards a node inspection request from the editor to Godot's built-in
+## Remote Scene Tree. Resolves the string path and sends the
+## [code]remote_objects_selected[/code] command.
+func _handle_inspect_node(node_path: String) -> void:
+	if not EngineDebugger.is_active() or not is_inside_tree():
+		return
+
+	var node: Node = get_tree().root.get_node_or_null(node_path)
+	if is_instance_valid(node):
+		var snapshot := [node.get_instance_id(), node.get_class(), []]
+		EngineDebugger.send_message("remote_objects_selected", [snapshot])
+
+
+func _handle_visualizer_toggle(d: Dictionary) -> void:
+	var pk: String = d.get("peer_key", "")
+	var mt: MultiplayerTree = null
+
+	for t in _trees:
+		var key := "%s|%s" % [str(t.get_path()), reporter_id]
+		if key == pk:
+			mt = t
+			break
+
+	if mt and mt in _debug_contexts:
+		var ctx := _debug_contexts[mt] as NetDebugTreeContext
+		ctx.apply_visualizer_command(d)
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
 

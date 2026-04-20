@@ -1,8 +1,7 @@
 ## Base class for all networked addon components.
 ##
-## Provides ergonomic instance-method access to the session's [MultiplayerTree],
-## [MultiplayerLobbyManager], [TPLayerAPI], and [PeerContext] buckets — replacing
-## the old [code]NetworkedAPI[/code] static helper.
+## Provides ergonomic instance-method access to the session's services via
+## [NetSessionAccess] — replacing the old [code]NetworkedAPI[/code] static helper.
 ##
 ## The lookup chain is: [code]node.multiplayer[/code] (session-scoped [SceneMultiplayer])
 ## → metadata key [code]_multiplayer_tree[/code] → [MultiplayerTree] instance.
@@ -11,18 +10,29 @@ class_name NetComponent
 extends Node
 
 var _cached_module_path: String = ""
+var _session: NetSessionAccess
 
-## Returns the [MultiplayerTree] that owns this component's multiplayer session.
+
+## Returns a [NetSessionAccess] for this component's multiplayer session.
 ## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
 ## [method MultiplayerTree.join] completes, or in the editor.
+func get_session() -> NetSessionAccess:
+	if _session == null or not _session.is_valid():
+		var mt := MultiplayerTree.resolve(self)
+		_session = NetSessionAccess.new(mt) if mt else null
+	return _session
+
+
+## Returns the [MultiplayerTree] that owns this component's multiplayer session.
+## Prefer [method get_session] for new code; this shim exists for compatibility.
 func get_multiplayer_tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
 
 
 ## Returns the [MultiplayerLobbyManager] for this session.
 func get_lobby_manager() -> MultiplayerLobbyManager:
-	var tree := get_multiplayer_tree()
-	return tree.lobby_manager if tree else null
+	var s := get_session()
+	return s.get_lobby_manager() if s else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local client.
@@ -36,8 +46,8 @@ func get_tp_layer() -> TPLayerAPI:
 
 ## Returns the [NetworkClock] for this session.
 func get_network_clock() -> NetworkClock:
-	var tree := get_multiplayer_tree()
-	return tree.clock if tree else null
+	var s := get_session()
+	return s.get_clock() if s else null
 
 
 ## Returns the [PeerContext] for [param peer_id], defaulting to the local peer.
@@ -46,9 +56,8 @@ func get_peer_context(peer_id: int = -1) -> PeerContext:
 		if not is_inside_tree() or not multiplayer:
 			return null
 		peer_id = multiplayer.get_unique_id()
-	
-	var tree := get_multiplayer_tree()
-	return tree.get_peer_context(peer_id) if tree else null
+	var s := get_session()
+	return s.get_peer_context(peer_id) if s else null
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.
@@ -142,12 +151,16 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 
 ## Opens a new general-purpose span for this component.
 func _begin_span(label: String, meta: Dictionary = {}) -> NetSpan:
-	return NetTrace.begin(label, get_multiplayer_tree(), meta)
+	var s := get_session()
+	if s: return s.begin_span(label, meta)
+	return NetTrace.begin(label, null, meta)
 
 
 ## Opens a new peer-aware span for a multiplayer operation.
 func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}) -> NetPeerSpan:
-	return NetTrace.begin_peer(label, peers, get_multiplayer_tree(), meta)
+	var s := get_session()
+	if s: return s.begin_peer_span(label, peers, meta)
+	return NetTrace.begin_peer(label, peers, null, meta)
 
 
 #endregion

@@ -295,17 +295,19 @@ func _activate_panel(key: String, peer_key: String, pt: PanelDataAdapter.PanelTy
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
 	NetLog.trace("UI: [CreatedWrapper] %s size_flags=%d" % [key, wrapper.size_flags_vertical])
 	wrapper.on_maximize_requested = _on_maximize_requested
-	# Wire "Break on Manifest" for crash panels.
-	# Restore the persisted break state so the button reflects the current value
-	# even after a game restart that triggered session_cleared.
-	if pt == PanelDataAdapter.PanelType.CRASH:
-		var crash_panel := panel as PanelCrashManifest
-		if crash_panel:
-			crash_panel.on_auto_break_changed = func(enabled: bool) -> void:
-				if session:
-					session.set_auto_break(enabled)
-			wrapper.add_break_button(crash_panel.on_auto_break_changed,
-				session.auto_break if session else false)
+
+	# Specialized header controls for certain panel types.
+	match pt:
+		PanelDataAdapter.PanelType.CRASH:
+			var crash_panel := panel as PanelCrashManifest
+			if crash_panel:
+				wrapper.add_header_control(crash_panel.get_break_toggle(
+					session.auto_break if session else false
+				))
+		PanelDataAdapter.PanelType.TOPOLOGY:
+			var topology_panel := panel as PanelTopology
+			if topology_panel:
+				wrapper.add_header_control(topology_panel.get_nameplate_toggle())
 
 	_panel_wrappers[key] = wrapper
 	_active_keys.append(key)
@@ -418,8 +420,9 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, peer_key: String) -> 
 
 		PanelDataAdapter.PanelType.CRASH:
 			control = PanelCrashManifest.new()
+			var crash_panel := control as PanelCrashManifest
 			# Cross-panel context selection: highlight the peer's span tracer.
-			(control as PanelCrashManifest).on_context_selected = func(ctx: Dictionary) -> void:
+			crash_panel.on_context_selected = func(ctx: Dictionary) -> void:
 				var cid: String = ctx.get("cid", "")
 				if cid.is_empty():
 					return
@@ -429,17 +432,23 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, peer_key: String) -> 
 				]
 				if span_key in _panel_wrappers:
 					(_panel_wrappers[span_key].panel_control as PanelLogBridge).highlight_cid(cid)
+			
+			crash_panel.on_auto_break_changed = func(enabled: bool) -> void:
+				if session:
+					session.set_auto_break(enabled)
 
 		PanelDataAdapter.PanelType.TOPOLOGY:
 			control = PanelTopology.new()
+			var topology_panel := control as PanelTopology
 			# Node inspect: always available (all known peers are directly reachable via relay).
-			(control as PanelTopology).on_node_inspect = func(node_path: String) -> void:
+			topology_panel.on_node_inspect = func(node_path: String) -> void:
 				if session:
 					session.send_node_inspect(session.session_id, node_path)
-			# Visualizer toggles: forwarded to the game via the existing editor→game path.
-			(control as PanelTopology).on_visualizer_toggle = func(viz_name: String, enabled: bool) -> void:
+			
+			# Nameplate toggle: handled by the panel itself.
+			topology_panel.on_nameplate_toggled = func(node_path: String, enabled: bool) -> void:
 				if session:
-					session.send_visualizer_toggle(peer_key, viz_name, enabled)
+					session.send_visualizer_toggle(peer_key, node_path, "nameplate", enabled)
 
 	if control:
 		control.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -486,5 +495,3 @@ static func _make_dot_texture(color: Color) -> ImageTexture:
 			if Vector2(x, y).distance_to(center) <= 4.0:
 				img.set_pixel(x, y, color)
 	return ImageTexture.create_from_image(img)
-
-

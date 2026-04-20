@@ -13,6 +13,7 @@ metadata/_custom_type_script = "uid://d1mnum02gn0c0"
 
 [sub_resource type="Resource" id="Resource_n4xd5"]
 script = ExtResource("4_q1h0n")
+base_dir = "res://tests/tmp_saves"
 metadata/_custom_type_script = "uid://dlsdsleg37hm1"
 
 [sub_resource type="Resource" id="Resource_kvry4"]
@@ -40,6 +41,7 @@ unique_name_in_owner = true
 script = ExtResource("2_vpj8e")
 save_container = SubResource("Resource_q1h0n")
 database = SubResource("Resource_kvry4")
+table_name = &"players_save"
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1837042624]
 replication_config = SubResource("SceneReplicationConfig_1")

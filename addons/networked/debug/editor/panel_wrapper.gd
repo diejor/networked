@@ -124,16 +124,10 @@ func set_online(online: bool) -> void:
 		_debug_panel.set_peer_online(online)
 
 
-## Adds a "Break on Manifest" toggle to the title bar (crash panels only).
-## [param initial] restores the persisted state without firing [param on_toggled].
-func add_break_button(on_toggled: Callable, initial: bool = false) -> void:
-	var btn := CheckButton.new()
-	btn.text = "Break"
-	btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
-	btn.set_pressed_no_signal(initial)
-	btn.toggled.connect(on_toggled)
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_title_bar.add_child(btn)
+## Adds a control to the header title bar (e.g. specialized toggle buttons).
+func add_header_control(control: Control) -> void:
+	if is_instance_valid(control):
+		_title_bar.add_child(control)
 
 
 func update_live_metric(text: String) -> void:

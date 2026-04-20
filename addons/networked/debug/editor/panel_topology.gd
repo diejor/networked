@@ -8,7 +8,6 @@
 ##   [cache banner]      — hidden unless snapshot is stale
 ##   identity rows       — username / peer_id, lobby / mode
 ##   node button         — opens the node in the editor scene inspector
-##   visualizer toolbar  — toggle overlays on the game side
 ##   synchronizer tree   — Name / Mode / Flags / Source columns
 @tool
 class_name PanelTopology
@@ -18,9 +17,9 @@ extends DebugPanel
 ## Receives the raw [code]node_path[/code] string from the snapshot.
 var on_node_inspect: Callable
 
-## Called when a visualizer toggle button changes state.
-## Receives [code](viz_name: String, enabled: bool)[/code].
-var on_visualizer_toggle: Callable
+## Called when the Nameplate visualizer is toggled.
+## Signature: func(node_path: String, enabled: bool) -> void
+var on_nameplate_toggled: Callable
 
 # ─── Widgets ──────────────────────────────────────────────────────────────────
 
@@ -35,8 +34,6 @@ var _mode_label: Label
 var _node_btn: Button
 
 var _nameplate_btn: CheckButton
-var _bounds_btn: CheckButton
-var _colliders_btn: CheckButton
 
 var _sync_tree: Tree
 
@@ -98,10 +95,20 @@ func set_peer_online(online: bool) -> void:
 		_node_btn.disabled = not online or _last_node_path.is_empty() or not on_node_inspect.is_valid()
 	if _nameplate_btn:
 		_nameplate_btn.disabled = not online
-	if _bounds_btn:
-		_bounds_btn.disabled = not online
-	if _colliders_btn:
-		_colliders_btn.disabled = not online
+
+
+## Returns the Nameplate toggle button to be placed in the panel header.
+func get_nameplate_toggle() -> CheckButton:
+	if not _nameplate_btn:
+		_nameplate_btn = CheckButton.new()
+		_nameplate_btn.text = "Nameplate"
+		_nameplate_btn.tooltip_text = "Toggle the in-world nameplate for this player."
+		_nameplate_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+		_nameplate_btn.toggled.connect(func(pressed: bool) -> void:
+			if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
+				on_nameplate_toggled.call(_last_node_path, pressed)
+		)
+	return _nameplate_btn
 
 
 func on_new_entry(entry: Variant) -> void:
@@ -175,7 +182,6 @@ func _build_layout() -> void:
 	_build_cache_banner()
 	_build_identity_rows()
 	_build_node_button()
-	_build_visualizer_toolbar()
 	_build_sync_tree()
 
 
@@ -255,27 +261,6 @@ func _build_node_button() -> void:
 			on_node_inspect.call(_last_node_path)
 	)
 	add_child(_node_btn)
-
-
-func _build_visualizer_toolbar() -> void:
-	var toolbar := HBoxContainer.new()
-	toolbar.add_theme_constant_override("separation", 6)
-	add_child(toolbar)
-
-	_nameplate_btn = _make_viz_toggle("Nameplate", toolbar)
-	_bounds_btn    = _make_viz_toggle("TP bounds", toolbar)
-	_colliders_btn = _make_viz_toggle("Colliders", toolbar)
-
-
-func _make_viz_toggle(label: String, parent: Node) -> CheckButton:
-	var btn := CheckButton.new()
-	btn.text = label
-	btn.toggled.connect(func(pressed: bool) -> void:
-		if on_visualizer_toggle.is_valid():
-			on_visualizer_toggle.call(label.to_lower().replace(" ", "_"), pressed)
-	)
-	parent.add_child(btn)
-	return btn
 
 
 func _build_sync_tree() -> void:

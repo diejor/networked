@@ -30,7 +30,7 @@ static func expected_sync_count(node: Node) -> int:
 ## Validates the synchronizer topology of [param node].
 ##
 ## Clears and rebuilds the cache as part of the check. Do not call on a live
-## frame-critical path — this is a diagnostic tool.
+## frame-critical path, this is a diagnostic tool.
 ##
 ## Returns a [Dictionary]:
 ## [codeblock]
