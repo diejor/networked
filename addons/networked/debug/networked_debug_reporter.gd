@@ -621,9 +621,10 @@ func _emit_current_state() -> void:
 			for lobby: Lobby in mt.lobby_manager.active_lobbies.values():
 				if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 					continue
-				for player: Node in lobby.level.find_children("*", "Node", true, false):
-					if player.get_multiplayer_authority() > 0:
-						_send_topology_snapshot(player, mt)
+				var comps := lobby.level.find_children("*", "ClientComponent", true, false)
+				for comp: Node in comps:
+					if is_instance_valid(comp.owner):
+						_send_topology_snapshot(comp.owner, mt)
 
 	# Replay crash history so late-joining editors see manifests from before they connected.
 	# The editor-side session deduplicates by cid so live events never double-appear.
@@ -824,7 +825,7 @@ func _handle_visualizer_toggle(d: Dictionary) -> void:
 
 	if mt and mt in _debug_contexts:
 		var ctx := _debug_contexts[mt] as NetDebugTreeContext
-		ctx.apply_visualizer_command(d)
+		ctx.apply_command(d)
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
 
