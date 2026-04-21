@@ -31,10 +31,17 @@ var _steps: Array = []
 ## Weak reference to the tree owning this span. Used for O(1) routing.
 var _mt: WeakRef
 
+## Metadata provided at creation.
+var meta: Dictionary
 
-func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
+## Explicit target node for this span, set via [method with_node].
+var _target_node: WeakRef
+
+
+func _init(p_id: StringName, p_label: String, p_meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
 	id = p_id
 	label = p_label
+	meta = p_meta
 	if is_instance_valid(tree):
 		_mt = weakref(tree)
 		tree_name = tree.get_meta(&"_original_name", tree.name)
@@ -54,6 +61,18 @@ func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: Multi
 		"caller": _get_caller(),
 		"follows_from": follows_from.to_dict() if follows_from else {},
 	})
+
+
+## Attaches an explicit target node to this span for diagnostic snapshots.
+## Returns [code]self[/code] for method chaining.
+func with_node(node: Node) -> NetSpan:
+	_target_node = weakref(node) if is_instance_valid(node) else null
+	return self
+
+
+## Returns the target node if it is still valid, otherwise [code]null[/code].
+func get_target_node() -> Node:
+	return _target_node.get_ref() if _target_node else null
 
 
 ## Records a named checkpoint in this span's step trail and sends it to the editor.

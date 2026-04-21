@@ -436,6 +436,10 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, peer_key: String) -> 
 			crash_panel.on_auto_break_changed = func(enabled: bool) -> void:
 				if session:
 					session.set_auto_break(enabled)
+			
+			crash_panel.on_request_history = func() -> void:
+				if session:
+					session.send_request_manifest_history(session.session_id, peer_key)
 
 		PanelDataAdapter.PanelType.TOPOLOGY:
 			control = PanelTopology.new()

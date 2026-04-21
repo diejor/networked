@@ -59,6 +59,41 @@ func apply_command(d: Dictionary) -> void:
 	_refresh_all()
 
 
+## Builds a diagnostic snapshot for a crash manifest.
+##
+## Prefers the span's explicit target node (if set via [method NetSpan.with_node]).
+## Falls back to a "Session Snapshot" of the tree root, enriched with high-level
+## state from the [MultiplayerLobbyManager].
+func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	if not mt: return null
+	
+	# Priority 1: Explicit target node
+	var target := span.get_target_node() if span else null
+	if is_instance_valid(target):
+		return NetNodeSnapshot.from_node(target)
+	
+	# Priority 2: Session fallback (Tree Root)
+	var snap := NetNodeSnapshot.from_node(mt)
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	
+	# Manually enrich the tree root's snapshot with service-level data.
+	# This keeps the MultiplayerTree core clean while providing rich context.
+	var session_state: Dictionary = {
+		"is_server": mt.is_server,
+		"peer_id": mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+		"connected_peers": mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
+		"active_lobbies": lm.active_lobbies.keys() if lm else [],
+		"backend": mt.backend.get_script().get_global_name() if mt.backend else "None",
+	}
+	
+	# Merge into debug_state
+	for k in session_state:
+		snap.debug_state[k] = session_state[k]
+		
+	return snap
+
+
 # ─── Decoration Lifecycle ─────────────────────────────────────────────────────
 
 func _refresh_all() -> void:

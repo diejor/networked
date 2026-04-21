@@ -139,6 +139,26 @@ func request_snapshot_from_server() -> void:
 		NetworkedDebugger._on_remote_snapshot_request()
 
 
+## RPC: any → any — asks the remote peer to re-emit its crash manifest history.
+@rpc("any_peer", "call_remote", "reliable")
+func request_manifest_history(peer_key: String) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender not in NetworkedDebugger._process_recipients:
+		return
+	if NetworkedDebugger:
+		NetworkedDebugger._handle_request_manifest_history(peer_key)
+
+
+## RPC: any → any — applies a visualizer command from the editor.
+@rpc("any_peer", "call_remote", "reliable")
+func apply_visualizer_command(d: Dictionary) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender not in NetworkedDebugger._process_recipients:
+		return
+	if NetworkedDebugger:
+		NetworkedDebugger._handle_visualizer_toggle(d)
+
+
 # ─── Internal ─────────────────────────────────────────────────────────────────
 
 func _is_local_peer(peer_id: int) -> bool:

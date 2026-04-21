@@ -103,6 +103,11 @@ func send_visualizer_toggle(peer_key: String, node_path: String, viz_name: Strin
 		}])
 
 
+func send_request_manifest_history(p_session_id: int, peer_key: String) -> void:
+	if plugin:
+		plugin.send_to_game(p_session_id, "networked:request_manifest_history", [peer_key])
+
+
 func clear_data() -> void:
 	for adapter: PanelDataAdapter in _adapters.values():
 		adapter.clear()
@@ -257,7 +262,13 @@ func _on_clock_sample(envelope: NetEnvelope) -> void:
 
 func _on_crash_manifest(envelope: NetEnvelope) -> void:
 	var pk := envelope.peer_key()
-	var uid: String = envelope.payload.get("uid", "")
+	var payload := envelope.payload
+	var trigger: String = payload.get("trigger", "UNKNOWN")
+	var cid: String = payload.get("cid", "?")
+	
+	NetLog.info("DebuggerSession: [ReceiveManifest] %s (cid=%s) from %s" % [trigger, cid, pk])
+
+	var uid: String = payload.get("uid", "")
 	# DEDUP-3 (replay idempotency): crash manifests are replayed to late-joining editors
 	# via _emit_current_state(). This prevents a manifest appearing twice when both the
 	# live event and the history replay arrive in the same editor session.

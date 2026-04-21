@@ -16,10 +16,14 @@ var on_context_selected: Callable
 ## Signature: func(enabled: bool) -> void
 var on_auto_break_changed: Callable
 
+## Called when the user clicks the Fetch History button for a remote peer.
+var on_request_history: Callable
+
 var _break_btn: CheckButton
 var _tree: Tree
 var _copy_btn: Button
 var _clear_btn: Button
+var _fetch_btn: Button
 
 # Manifest entry dicts in insertion order (for copy/export).
 var _entries: Array = []
@@ -48,6 +52,13 @@ func _ready() -> void:
 	_clear_btn.text = "Clear"
 	_clear_btn.pressed.connect(clear)
 	toolbar.add_child(_clear_btn)
+
+	_fetch_btn = Button.new()
+	_fetch_btn.text = "Fetch History"
+	_fetch_btn.tooltip_text = "Requests the last 20 manifests from the remote process."
+	_fetch_btn.pressed.connect(func(): if on_request_history.is_valid(): on_request_history.call())
+	_fetch_btn.hide() # Only shown for remote peers
+	toolbar.add_child(_fetch_btn)
 
 	_tree = Tree.new()
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -82,6 +93,15 @@ func clear() -> void:
 	_error_parents.clear()
 	_tree.clear()
 	_tree.create_item()  # re-create invisible root
+	
+	if _is_remote:
+		var notice := _tree.create_item(_tree.get_root())
+		notice.set_text(0, "Remote Peer: History not synchronized. Only LIVE errors will appear.")
+		notice.set_custom_color(0, Color(0.8, 0.6, 0.3))
+		notice.set_selectable(0, false)
+		notice.set_selectable(1, false)
+		notice.set_selectable(2, false)
+
 	var placeholder := _tree.create_item(_tree.get_root())
 	placeholder.set_text(0, "No crash manifest received yet.")
 	placeholder.set_custom_color(0, Color(0.5, 0.5, 0.5))
@@ -89,6 +109,15 @@ func clear() -> void:
 	placeholder.set_selectable(1, false)
 	placeholder.set_selectable(2, false)
 	_copy_btn.disabled = true
+
+
+var _is_remote: bool = false
+func set_peer_remote(remote: bool) -> void:
+	if _is_remote == remote: return
+	_is_remote = remote
+	if _fetch_btn:
+		_fetch_btn.visible = remote
+	clear()
 
 
 ## Returns the Break toggle button to be placed in the panel header.
@@ -136,13 +165,18 @@ func push_entry(entry: Dictionary) -> void:
 			else:
 				existing_entry["error_text"] = new_error
 			_append_error_lines(key, new_error)
+		
+		NetLog.debug("[UI] Merged subsequent error into existing row for CID: %s" % cid)
 		return
 
 	# Remove placeholder on first real entry.
 	if _entries.is_empty() and _tree.get_root():
-		var first := _tree.get_root().get_first_child()
-		if first and not first.get_text(0).is_empty() and "No crash" in first.get_text(0):
-			first.free()
+		var child := _tree.get_root().get_first_child()
+		while child:
+			if "No crash manifest" in child.get_text(0):
+				child.free()
+				break
+			child = child.get_next()
 
 	_entries.append(entry)
 
@@ -359,17 +393,45 @@ func _on_copy() -> void:
 		return
 	var lines: PackedStringArray = []
 	for e: Dictionary in _entries:
-		lines.append("=== %s ===" % e.get("label", "?"))
-		lines.append("Trigger: %s" % e.get("trigger", "?"))
-		lines.append("CID: %s" % e.get("cid", "?"))
+		lines.append("=== %s  (cid: %s) ===" % [e.get("trigger", "UNKNOWN"), e.get("cid", "?")])
 		lines.append("Timeline: %s" % " <- ".join(e.get("cid_timeline", [])))
-		lines.append("Frame: %d" % e.get("frame", 0))
+		lines.append("Frame: %d  |  Scene: %s" % [e.get("frame", 0), e.get("active_scene", "?")])
+		
+		var net: Dictionary = e.get("network_state", {})
+		lines.append("Network: tree=%s peer=%d server=%s" % [
+			net.get("tree_name", "?"), net.get("peer_id", 0), str(net.get("is_server", false))])
+		
 		if not e.get("error_text", "").is_empty():
-			lines.append("Error:\n%s" % e["error_text"])
+			lines.append("\n[Error Text]\n%s" % e["error_text"])
+		
 		var preflight: Array = e.get("preflight", [])
 		if not preflight.is_empty():
-			lines.append("Preflight (%d):" % preflight.size())
+			lines.append("\n[Preflight Snapshot]")
 			for pf: Dictionary in preflight:
-				lines.append("  %s" % pf.get("label", "?"))
-		lines.append("")
+				lines.append("  %s  (auth=%s)" % [pf.get("label", "?"), str(pf.get("auth", "?"))])
+		
+		var snap: Dictionary = e.get("node_snapshot", {})
+		if not snap.is_empty():
+			lines.append("\n[Node Snapshot: %s]" % snap.get("node_name", "?"))
+			lines.append("  Path: %s" % snap.get("node_path", "?"))
+			lines.append("  Authority: %d" % snap.get("authority", 0))
+			
+			var props: Dictionary = snap.get("sync_properties", {})
+			if not props.is_empty():
+				lines.append("  Properties:")
+				for k in props:
+					lines.append("    %s = %s" % [k, str(props[k])])
+			
+			var ds: Dictionary = snap.get("debug_state", {})
+			if not ds.is_empty():
+				lines.append("  Debug State: %s" % str(ds))
+
+		var telemetry: Array = e.get("telemetry", [])
+		if not telemetry.is_empty():
+			lines.append("\n[Telemetry Slice]")
+			for tl in telemetry:
+				lines.append("  %s" % str(tl.get("label", "?")))
+		
+		lines.append("\n" + "-".repeat(40) + "\n")
+		
 	DisplayServer.clipboard_set("\n".join(lines))

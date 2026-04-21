@@ -31,7 +31,7 @@ var starting_scene_path: SceneNodePath
 ##
 ## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
 ## Replicated on change so clients can track which lobby their player  is in.
-@export var current_scene_path: String = "":
+var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
@@ -152,6 +152,8 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 	SynchronizersCache.sync_only_server(owner)
 
+	# Clean Lock: disable physics and input on the player node during transition.
+	# This does NOT affect components (children), so the TP handshake continues.
 	owner.set_physics_process(false)
 	owner.set_process_input(false)
 
@@ -189,6 +191,12 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 
 	var player: Node = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
+	
+	# Fix: Position Flush workaround for Godot issue #14578.
+	# Move far away to force the PhysicsServer to cleanly exit any Area2D overlaps
+	# This prevents the "!E" condition crash.
+	var far_away: Variant = Vector3(99999, 99999, 99999) if player is Node3D else Vector2(99999, 99999)
+	player.set("global_position", far_away)
 	
 	tp_component.current_scene_path = to_scene_path
 	
@@ -270,6 +278,7 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_tp_mutex.unlock()
 	owner.set("global_position", snap_pos)
 
+	# Unlock the player now that we've arrived and snapped.
 	owner.set_physics_process(true)
 	owner.set_process_input(true)
 

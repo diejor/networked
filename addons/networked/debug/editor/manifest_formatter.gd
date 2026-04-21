@@ -31,6 +31,14 @@ static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 	var frame: int = d.get("frame", 0)
 	var player: String = d.get("player_name", "?")
 
+	var error_text: String = d.get("error_text", "")
+	var raw_errors: Array = d.get("errors", [])
+	if error_text.is_empty() and not raw_errors.is_empty():
+		error_text = "\n".join(raw_errors)
+	
+	if error_text.is_empty():
+		error_text = "[MISSING ERROR DATA - Check C++ watchdog or validation logic]"
+
 	return {
 		"label": "%s  @ frame %d" % [trigger, frame],
 		"trigger": trigger,
@@ -41,7 +49,7 @@ static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 		"player_name": player,
 		"in_tree": d.get("in_tree", false),
 		"network_state": d.get("network_state", {}),
-		"error_text": d.get("error_text", ""),
+		"error_text": error_text,
 		"active_scene": d.get("active_scene", ""),
 		"preflight": _format_preflight(d.get("preflight_snapshot", []), alias_map),
 		"telemetry": _format_telemetry(d.get("telemetry_slice", [])),

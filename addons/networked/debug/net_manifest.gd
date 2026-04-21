@@ -17,6 +17,7 @@ var timestamp_usec: int
 var active_scene: String
 var network_state: Dictionary
 var telemetry_slice: Array
+var node_snapshot: NetNodeSnapshot
 
 ## Unique ID for this specific emission, used for deduplication in the editor.
 var uid: String = "%d_%d" % [Time.get_ticks_usec(), randi()]
@@ -24,6 +25,20 @@ var uid: String = "%d_%d" % [Time.get_ticks_usec(), randi()]
 ## Weak reference to the MultiplayerTree that produced this manifest.
 ## Used for routing via emit_debug_event.
 var _mt: WeakRef
+
+
+## Returns true if the manifest contains all required base fields.
+## Logs a warning to the console if the contract is violated.
+func validate_contract() -> bool:
+	var missing: Array[String] = []
+	if trigger.is_empty(): missing.append("trigger")
+	if cid.is_empty(): missing.append("cid")
+	if uid.is_empty(): missing.append("uid")
+	
+	if not missing.is_empty():
+		push_warning("NetManifest: Contract violation! Missing fields: %s" % str(missing))
+		return false
+	return true
 
 
 func to_dict() -> Dictionary:
@@ -37,4 +52,5 @@ func to_dict() -> Dictionary:
 		"active_scene": active_scene,
 		"network_state": network_state,
 		"telemetry_slice": telemetry_slice,
+		"node_snapshot": node_snapshot.to_dict() if node_snapshot else {},
 	}

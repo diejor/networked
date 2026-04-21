@@ -127,6 +127,15 @@ var _validators: Array[NetValidator] = []
 var _crash_history: Array[Dictionary] = []
 const CRASH_HISTORY_CAP := 20
 
+# Rate limiter state to prevent "Manifest Storms". Keyed by manifest trigger string.
+var _manifest_count_sec: Dictionary = {}
+var _manifest_count_min: Dictionary = {}
+var _last_manifest_sec_msec: Dictionary = {}
+var _last_manifest_min_msec: Dictionary = {}
+
+# Re-entrancy guard to prevent recursive manifests if a validator fails while sending.
+var _is_sending_manifest: bool = false
+
 
 func _init() -> void:
 	randomize()
@@ -261,6 +270,12 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	}
 	m.errors = [error_text]
 	m.error_text = error_text
+	
+	# Step 2: Enrich with contextual snapshot via the Sidecar Enricher (Pull Model)
+	if is_instance_valid(mt) and mt in _debug_contexts:
+		var ctx := _debug_contexts[mt] as NetDebugTreeContext
+		m.node_snapshot = ctx.build_crash_snapshot(active)
+
 	_send_manifest(m, mt)
 	_sending_manifest = false
 
@@ -392,7 +407,7 @@ func _on_player_spawned_logic(player: Node, mt: MultiplayerTree, lobby_token: Ch
 		var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, mt, {
 			"player": player.name,
 			"tree": mt.name,
-		}, "", lobby_token)
+		}, "", lobby_token).with_node(player)
 		spawn_span.step("player_entered_tree")
 		_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 		_check_player_topology_validation(player, mt, spawn_span)
@@ -532,7 +547,13 @@ func _check_player_topology_validation(player: Node, mt: MultiplayerTree, span: 
 	m.errors = errors
 	m.player_name = player.name
 	m.in_tree = player.is_inside_tree()
-	m.node_snapshot = NetNodeSnapshot.from_node(player)
+	
+	if is_instance_valid(mt) and mt in _debug_contexts:
+		var ctx := _debug_contexts[mt] as NetDebugTreeContext
+		m.node_snapshot = ctx.build_crash_snapshot(span)
+	else:
+		m.node_snapshot = NetNodeSnapshot.from_node(player)
+		
 	_send_manifest(m, mt)
 
 
@@ -602,6 +623,18 @@ func _on_remote_snapshot_request() -> void:
 	_emit_current_state()
 
 
+func _on_remote_manifest_history_request() -> void:
+	if not _debug_build():
+		return
+	
+	for entry: Dictionary in _crash_history:
+		var ref: WeakRef = entry.get("tree") as WeakRef
+		var target_mt: MultiplayerTree = (ref.get_ref() as MultiplayerTree) if ref else null
+		if not is_instance_valid(target_mt):
+			continue
+		emit_debug_event("networked:crash_manifest", entry.get("payload", {}), target_mt)
+
+
 ## Emits [code]session_registered[/code] and [code]topology_snapshot[/code] for all 
 ## active trees and players.
 func _emit_current_state() -> void:
@@ -629,16 +662,6 @@ func _emit_current_state() -> void:
 				for comp: Node in comps:
 					if is_instance_valid(comp.owner):
 						_send_topology_snapshot(comp.owner, mt)
-
-	# Replay crash history so late-joining editors see manifests from before they connected.
-	# The editor-side session deduplicates by cid so live events never double-appear.
-	for entry: Dictionary in _crash_history:
-		var ref: WeakRef = entry.get("tree") as WeakRef
-		var target_mt: MultiplayerTree = (ref.get_ref() as MultiplayerTree) if ref else null
-		if not is_instance_valid(target_mt):
-			NetLog.warn("Reporter: [ReplaySkip] crash history entry skipped — tree freed", [], func(m): push_warning(m))
-			continue
-		emit_debug_event("networked:crash_manifest", entry.get("payload", {}), target_mt)
 
 
 # ─── Demand-Driven Replication Watch ──────────────────────────────────────────
@@ -802,6 +825,7 @@ func _on_editor_message(message: String, data: Array) -> void:
 		"request_snapshot":    _on_request_snapshot()
 		"inspect_node":        _handle_inspect_node(data[0])
 		"visualizer_toggle":   _handle_visualizer_toggle(data[0])
+		"request_manifest_history": _handle_request_manifest_history(data[0])
 
 
 ## Forwards a node inspection request from the editor to Godot's built-in
@@ -818,18 +842,54 @@ func _handle_inspect_node(node_path: String) -> void:
 
 
 func _handle_visualizer_toggle(d: Dictionary) -> void:
-	var pk: String = d.get("peer_key", "")
-	var mt: MultiplayerTree = null
+	var res := _resolve_peer_key(d.get("peer_key", ""))
+	if res.local_mt:
+		if res.local_mt in _debug_contexts:
+			_debug_contexts[res.local_mt].apply_command(d)
+	elif res.relay:
+		res.relay.apply_visualizer_command.rpc_id(res.peer_id, d)
 
-	for t in _trees:
-		var key := "%s|%s" % [str(t.get_path()), reporter_id]
-		if key == pk:
-			mt = t
-			break
 
-	if mt and mt in _debug_contexts:
-		var ctx := _debug_contexts[mt] as NetDebugTreeContext
-		ctx.apply_command(d)
+func _handle_request_manifest_history(peer_key: String) -> void:
+	var res := _resolve_peer_key(peer_key)
+	if res.local_mt:
+		_on_remote_manifest_history_request()
+	elif res.relay:
+		res.relay.request_manifest_history.rpc_id(res.peer_id, peer_key)
+
+
+## Shared routing logic for editor commands.
+## Returns a Dictionary with:
+## - local_mt: MultiplayerTree (if in this process)
+## - relay: NetDebugRelay (if remote)
+## - peer_id: int (remote peer ID)
+func _resolve_peer_key(pk: String) -> Dictionary:
+	var out := {"local_mt": null, "relay": null, "peer_id": 0}
+	if pk.is_empty(): return out
+
+	var fallback_relay: NetDebugRelay = null
+
+	for mt: MultiplayerTree in _trees:
+		if "%s|%s" % [str(mt.get_path()), reporter_id] == pk:
+			out.local_mt = mt
+			return out
+		
+		if _relays.has(mt) and is_instance_valid(_relays[mt]):
+			var relay: NetDebugRelay = _relays[mt]
+			for rid in _recipient_map:
+				if pk.ends_with("|" + rid):
+					out.relay = relay
+					out.peer_id = _recipient_map[rid]
+					return out
+			
+			if not mt.is_server and relay.is_relay_active():
+				fallback_relay = relay
+	
+	if fallback_relay:
+		out.relay = fallback_relay
+		out.peer_id = 1
+		
+	return out
 
 # ─── Message Queue ────────────────────────────────────────────────────────────
 
@@ -896,6 +956,32 @@ func _freeze_and_slice() -> Array:
 ## EngineDebugger and the relay path); falls back to [method push_error] otherwise
 ## so failures surface in release exports too. Always calls [method _maybe_break].
 func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
+	if _is_sending_manifest:
+		return
+	_is_sending_manifest = true
+
+	# Rate limiter: prevent "Manifest Storms" from flooding the network.
+	# Keyed by trigger so one failing subsystem doesn't silence another.
+	var now := Time.get_ticks_msec()
+	var t := manifest.trigger
+	
+	if now - _last_manifest_sec_msec.get(t, 0) > 1000:
+		_manifest_count_sec[t] = 0
+		_last_manifest_sec_msec[t] = now
+	if now - _last_manifest_min_msec.get(t, 0) > 60000:
+		_manifest_count_min[t] = 0
+		_last_manifest_min_msec[t] = now
+	
+	_manifest_count_sec[t] = _manifest_count_sec.get(t, 0) + 1
+	_manifest_count_min[t] = _manifest_count_min.get(t, 0) + 1
+
+	if _manifest_count_sec[t] > 3 or _manifest_count_min[t] > 10:
+		NetLog.error("Reporter: [RateLimit] Manifest blocked (freq exceeded) for trigger: %s" % t, [], func(m): push_error(m))
+		_maybe_break()
+		_is_sending_manifest = false
+		return
+
+	manifest.validate_contract()
 	var payload := manifest.to_dict()
 	NetLog.info("Reporter: [SendManifest] %s (cid=%s)" % [manifest.trigger, manifest.cid])
 
@@ -906,6 +992,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	if not is_instance_valid(target_mt):
 		NetLog.warn("Reporter: [ManifestDrop] '%s' — no valid tree" % manifest.trigger, [], func(m): push_warning(m))
 		_maybe_break()
+		_is_sending_manifest = false
 		return
 
 	if _has_local_session() or _relay_active(target_mt):
@@ -928,6 +1015,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		_crash_history.pop_front()
 
 	_maybe_break()
+	_is_sending_manifest = false
 
 
 ## Fills the common base fields of [param m] from current engine state.
