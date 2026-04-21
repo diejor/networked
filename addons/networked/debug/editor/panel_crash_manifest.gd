@@ -27,6 +27,12 @@ var _entries: Array = []
 # cid → group TreeItem. Each unique CID gets a collapsible "Validation Cycle" header.
 var _cid_groups: Dictionary[String, TreeItem] = {}
 
+# "cid:trigger" → top-level row TreeItem. Used for merging related errors.
+var _top_rows: Dictionary[String, TreeItem] = {}
+
+# "cid:trigger" → "Intercepted Error" parent TreeItem.
+var _error_parents: Dictionary[String, TreeItem] = {}
+
 
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
@@ -72,6 +78,8 @@ func _ready() -> void:
 func clear() -> void:
 	_entries.clear()
 	_cid_groups.clear()
+	_top_rows.clear()
+	_error_parents.clear()
 	_tree.clear()
 	_tree.create_item()  # re-create invisible root
 	var placeholder := _tree.create_item(_tree.get_root())
@@ -113,6 +121,23 @@ func on_new_entry(entry: Variant) -> void:
 
 ## Add a formatted manifest entry (output of [ManifestFormatter.format]).
 func push_entry(entry: Dictionary) -> void:
+	var trigger: String = entry.get("trigger", "UNKNOWN")
+	var cid: String = entry.get("cid", "N/A")
+	var key := "%s:%s" % [cid, trigger]
+
+	# Merge subsequent errors from the same validation cycle into the existing row.
+	if key in _top_rows:
+		var top: TreeItem = _top_rows[key]
+		var existing_entry: Dictionary = top.get_metadata(0)
+		var new_error: String = entry.get("error_text", "")
+		if not new_error.is_empty():
+			if not existing_entry.get("error_text", "").is_empty():
+				existing_entry["error_text"] += "\n" + new_error
+			else:
+				existing_entry["error_text"] = new_error
+			_append_error_lines(key, new_error)
+		return
+
 	# Remove placeholder on first real entry.
 	if _entries.is_empty() and _tree.get_root():
 		var first := _tree.get_root().get_first_child()
@@ -125,7 +150,6 @@ func push_entry(entry: Dictionary) -> void:
 		_tree.create_item()
 
 	# ── CID group header ───────────────────────────────────────────────────────
-	var cid: String = entry.get("cid", "N/A")
 	if cid not in _cid_groups:
 		var group := _tree.create_item(_tree.get_root())
 		var cid_display := cid.substr(0, 24) + ("…" if cid.length() > 24 else "")
@@ -140,6 +164,7 @@ func push_entry(entry: Dictionary) -> void:
 
 	# ── Top-level row ──────────────────────────────────────────────────────────
 	var top := _tree.create_item(parent_group)
+	_top_rows[key] = top
 	top.set_text(0, "⚠ " + entry.get("label", "UNKNOWN"))
 	top.set_text(1, str(entry.get("frame", 0)))
 	var cid_short: String = entry.get("cid", "?")
@@ -173,21 +198,7 @@ func push_entry(entry: Dictionary) -> void:
 	# ── Error Text ────────────────────────────────────────────────────────────
 	var error_text: String = entry.get("error_text", "")
 	if not error_text.is_empty():
-		var err_parent := _tree.create_item(top)
-		err_parent.set_text(0, "Intercepted Error")
-		err_parent.set_custom_color(0, Color(1.0, 0.65, 0.1))
-		err_parent.set_selectable(0, false)
-		err_parent.set_selectable(1, false)
-		err_parent.set_selectable(2, false)
-		for line in error_text.split("\n"):
-			if line.strip_edges().is_empty():
-				continue
-			var el := _tree.create_item(err_parent)
-			el.set_text(0, "  " + line.strip_edges())
-			el.set_custom_color(0, Color(1.0, 0.55, 0.2))
-			el.set_selectable(0, false)
-			el.set_selectable(1, false)
-			el.set_selectable(2, false)
+		_append_error_lines(key, error_text)
 
 	# ── Preflight Snapshot ────────────────────────────────────────────────────
 	var preflight: Array = entry.get("preflight", [])
@@ -258,6 +269,29 @@ func push_entry(entry: Dictionary) -> void:
 	parent_group.set_collapsed(false)
 	_copy_btn.disabled = false
 	call_deferred("_scroll_to_bottom")
+
+
+func _append_error_lines(key: String, error_text: String) -> void:
+	var top: TreeItem = _top_rows[key]
+	if key not in _error_parents:
+		var err_parent := _tree.create_item(top)
+		err_parent.set_text(0, "Intercepted Error")
+		err_parent.set_custom_color(0, Color(1.0, 0.65, 0.1))
+		err_parent.set_selectable(0, false)
+		err_parent.set_selectable(1, false)
+		err_parent.set_selectable(2, false)
+		_error_parents[key] = err_parent
+	
+	var parent: TreeItem = _error_parents[key]
+	for line in error_text.split("\n"):
+		if line.strip_edges().is_empty():
+			continue
+		var el := _tree.create_item(parent)
+		el.set_text(0, "  " + line.strip_edges())
+		el.set_custom_color(0, Color(1.0, 0.55, 0.2))
+		el.set_selectable(0, false)
+		el.set_selectable(1, false)
+		el.set_selectable(2, false)
 
 
 func _scroll_to_bottom() -> void:

@@ -1,4 +1,8 @@
-## Tests SaveComponent logic that doesn't require multiplayer or scene tree entry.
+## Unit tests for [SaveComponent] — entity binding, DB persistence, and tracked properties.
+##
+## All tests run without a SceneTree, network, or spawner. [member SaveComponent.bound_entity]
+## initializes to a fresh [DictionaryEntity] automatically, so most tests just configure
+## [member SaveComponent.tracked_properties] and assert directly on the entity data.
 class_name TestSaveComponent
 extends NetworkedTestSuite
 
@@ -24,7 +28,6 @@ func test_get_entity_id_uses_username_when_client_present() -> void:
 	root.name = "Player"
 
 	var save_comp: SaveComponent = auto_free(SaveComponent.new())
-	save_comp.save_container = DictionarySave.new()
 	root.add_child(save_comp)
 	save_comp.owner = root
 
@@ -43,7 +46,6 @@ func test_get_entity_id_uses_node_name_without_client() -> void:
 	root.name = "MyPlayer"
 
 	var save_comp: SaveComponent = auto_free(SaveComponent.new())
-	save_comp.save_container = DictionarySave.new()
 	root.add_child(save_comp)
 	save_comp.owner = root
 
@@ -51,35 +53,171 @@ func test_get_entity_id_uses_node_name_without_client() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Database save/load
+# Database save / load via entity
 # ---------------------------------------------------------------------------
 
 func test_save_and_load_round_trip_via_database() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Alice"
 
-	var container: DictionarySave = auto_free(DictionarySave.new())
-	container.set_value(&"health", 100)
-
 	var save_comp: SaveComponent = auto_free(SaveComponent.new())
 	save_comp.database = db
 	save_comp.table_name = &"players"
-	save_comp.save_container = container
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	# Must register schema before saving.
+	save_comp.bound_entity.set_value(&"health", 100)
 	db.register_schema(&"players", [&"health"])
 
 	var err: Error = save_comp.save_state()
 	assert_that(err).is_equal(OK)
 
-	# Verify record exists in backend.
 	var raw: Dictionary = backend._find_by_id(&"players", &"Alice")
 	assert_that(raw.get(&"health")).is_equal(100)
 
-	# Clear container and reload.
-	container.set_value(&"health", 0)
+	save_comp.bound_entity.set_value(&"health", 0)
 	var load_err: Error = save_comp.load_state()
 	assert_that(load_err).is_equal(OK)
-	assert_that(container.get_value(&"health")).is_equal(100)
+	assert_that(save_comp.bound_entity.get_value(&"health")).is_equal(100)
+
+
+func test_load_state_returns_file_not_found_when_no_record() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Ghost"
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	db.register_schema(&"players", [&"health"])
+
+	var err: Error = save_comp.load_state()
+	assert_that(err).is_equal(ERR_FILE_NOT_FOUND)
+
+
+func test_save_state_uses_entity_to_dict() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Bob"
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	save_comp.bound_entity.set_value(&"score", 999)
+	save_comp.bound_entity.set_value(&"level", 5)
+	db.register_schema(&"players", [&"score", &"level"])
+	save_comp.save_state()
+
+	var raw: Dictionary = backend._find_by_id(&"players", &"Bob")
+	assert_that(raw.get(&"score")).is_equal(999)
+	assert_that(raw.get(&"level")).is_equal(5)
+
+
+# ---------------------------------------------------------------------------
+# TableRepository bind flow
+# ---------------------------------------------------------------------------
+
+func test_bind_entity_via_table_repository() -> void:
+	db.register_schema(&"players", [&"score"])
+	await get_tree().process_frame  # let deferred _initialize_backend run
+
+	db.transaction(func(tx: NetworkedDatabase.TransactionContext) -> void:
+		tx.queue_upsert(&"players", &"carol", {&"score": 42})
+	)
+
+	var entity: Entity = db.table(&"players").fetch(&"carol")
+	assert_that(entity).is_not_null()
+	assert_that(entity.get_value(&"score")).is_equal(42)
+
+
+func test_table_repository_save_persists_entity() -> void:
+	db.register_schema(&"players", [&"score"])
+	await get_tree().process_frame
+
+	var entity: DictionaryEntity = DictionaryEntity.new()
+	entity.set_value(&"score", 77)
+
+	var err: Error = db.table(&"players").save(&"dave", entity)
+	assert_that(err).is_equal(OK)
+
+	var raw: Dictionary = backend._find_by_id(&"players", &"dave")
+	assert_that(raw.get(&"score")).is_equal(77)
+
+
+# ---------------------------------------------------------------------------
+# push_to_scene with tracked_properties (requires Node2D in hierarchy)
+# ---------------------------------------------------------------------------
+
+func test_push_to_scene_writes_tracked_property_to_node() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Player"
+
+	var entity: DictionaryEntity = auto_free(DictionaryEntity.new())
+	entity.set_value(&"position", Vector2(10.0, 20.0))
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	save_comp.bound_entity = entity
+	save_comp.tracked_properties = {&"position": NodePath(".:position")}
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	db.register_schema(&"players", [&"position"])
+	save_comp.instantiate()
+
+	var err: Error = save_comp.push_to_scene()
+	assert_that(err).is_equal(OK)
+	assert_that(root.position).is_equal(Vector2(10.0, 20.0))
+
+
+func test_pull_from_scene_reads_node_into_entity() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Player"
+	root.position = Vector2(5.0, 15.0)
+
+	var entity: DictionaryEntity = auto_free(DictionaryEntity.new())
+	entity.set_value(&"position", Vector2.ZERO)
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	save_comp.bound_entity = entity
+	save_comp.tracked_properties = {&"position": NodePath(".:position")}
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	db.register_schema(&"players", [&"position"])
+	save_comp.instantiate()
+
+	save_comp.pull_from_scene()
+	assert_that(entity.get_value(&"position")).is_equal(Vector2(5.0, 15.0))
+
+
+func test_untracked_entity_keys_do_not_affect_scene() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Player"
+
+	var entity: DictionaryEntity = auto_free(DictionaryEntity.new())
+	entity.set_value(&"position", Vector2(1.0, 2.0))
+	entity.set_value(&"inventory_size", 10)  # not tracked
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	save_comp.bound_entity = entity
+	save_comp.tracked_properties = {&"position": NodePath(".:position")}
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	db.register_schema(&"players", [&"position", &"inventory_size"])
+	save_comp.instantiate()
+	save_comp.push_to_scene()
+
+	# inventory_size is in entity but not in tracked_properties; push_to_scene should not crash.
+	assert_that(root.position).is_equal(Vector2(1.0, 2.0))
+	assert_that(entity.get_value(&"inventory_size")).is_equal(10)

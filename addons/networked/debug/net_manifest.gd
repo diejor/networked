@@ -18,9 +18,17 @@ var active_scene: String
 var network_state: Dictionary
 var telemetry_slice: Array
 
+## Unique ID for this specific emission, used for deduplication in the editor.
+var uid: String = "%d_%d" % [Time.get_ticks_usec(), randi()]
+
+## Weak reference to the MultiplayerTree that produced this manifest.
+## Used for routing via emit_debug_event.
+var _mt: WeakRef
+
 
 func to_dict() -> Dictionary:
 	return {
+		"uid": uid,
 		"trigger": trigger,
 		"cid": cid,
 		"cid_timeline": cid_timeline,

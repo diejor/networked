@@ -245,10 +245,10 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		mt = (active.get("_mt") as WeakRef).get_ref() as MultiplayerTree
 	if not is_instance_valid(mt):
 		if not _trees.is_empty():
-			NetLog.warn("Reporter: [CppError] no active span with tree context — attributing to first tree")
+			NetLog.warn("Reporter: [CppError] no active span with tree context — attributing to first tree", [], func(m): push_warning(m))
 			mt = _trees[0]
 		else:
-			NetLog.warn("Reporter: [CppError] no active span and no trees — dropping")
+			NetLog.warn("Reporter: [CppError] no active span and no trees — dropping", [], func(m): push_warning(m))
 			_sending_manifest = false
 			return
 
@@ -261,7 +261,7 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	}
 	m.errors = [error_text]
 	m.error_text = error_text
-	_send_manifest(m)
+	_send_manifest(m, mt)
 	_sending_manifest = false
 
 
@@ -358,7 +358,7 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	_fill_base(m, "ZOMBIE_PLAYER_DETECTED", "N/A", mt)
 	m.network_state["disconnected_peer_id"] = peer_id
 	m.errors = zombies
-	_send_manifest(m)
+	_send_manifest(m, mt)
 
 
 ## Called by [NetDebugTreeContext] when a lobby spawns.
@@ -435,7 +435,7 @@ func _check_simplify_path_race_lobby(lobby: Lobby, mt: MultiplayerTree, span: Ne
 	m.preflight_snapshot = races
 	m.player_name = lobby.level.name
 	m.in_tree = lobby.level.is_inside_tree()
-	_send_manifest(m)
+	_send_manifest(m, mt)
 
 
 ## Emits a crash manifest when a new peer connects to the server while nodes are already
@@ -476,7 +476,7 @@ func _check_simplify_path_race_on_connect(peer_id: int, mt: MultiplayerTree, spa
 	m.preflight_snapshot = races
 	m.player_name = "peer_%d" % peer_id
 	m.in_tree = true
-	_send_manifest(m)
+	_send_manifest(m, mt)
 
 
 ## Emits a crash manifest when a player is added to a lobby on the server while peers are
@@ -507,7 +507,7 @@ func _check_simplify_path_race_player_spawn(player: Node, mt: MultiplayerTree, s
 	m.preflight_snapshot = races
 	m.player_name = player.name
 	m.in_tree = player.is_inside_tree()
-	_send_manifest(m)
+	_send_manifest(m, mt)
 
 
 ## Runs topology validators for a newly spawned player (server-only).
@@ -533,7 +533,7 @@ func _check_player_topology_validation(player: Node, mt: MultiplayerTree, span: 
 	m.player_name = player.name
 	m.in_tree = player.is_inside_tree()
 	m.node_snapshot = NetNodeSnapshot.from_node(player)
-	_send_manifest(m)
+	_send_manifest(m, mt)
 
 
 ## Builds and emits a [NetTopologySnapshot] for [param player] via [method emit_debug_event].
@@ -636,7 +636,7 @@ func _emit_current_state() -> void:
 		var ref: WeakRef = entry.get("tree") as WeakRef
 		var target_mt: MultiplayerTree = (ref.get_ref() as MultiplayerTree) if ref else null
 		if not is_instance_valid(target_mt):
-			NetLog.warn("Reporter: [ReplaySkip] crash history entry skipped — tree freed")
+			NetLog.warn("Reporter: [ReplaySkip] crash history entry skipped — tree freed", [], func(m): push_warning(m))
 			continue
 		emit_debug_event("networked:crash_manifest", entry.get("payload", {}), target_mt)
 
@@ -871,7 +871,7 @@ func _flush_now() -> void:
 		
 		# Safety Drop: messages without a tree context are orphaned and dropped.
 		if not is_instance_valid(entry_mt):
-			NetLog.warn("Reporter: [QueueDrop] '%s' — no tree context" % entry[0])
+			NetLog.warn("Reporter: [QueueDrop] '%s' — no tree context" % entry[0], [], func(m): push_warning(m))
 			continue
 
 		emit_debug_event(entry[0], entry[1], entry_mt)
@@ -897,10 +897,14 @@ func _freeze_and_slice() -> Array:
 ## so failures surface in release exports too. Always calls [method _maybe_break].
 func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	var payload := manifest.to_dict()
+	NetLog.info("Reporter: [SendManifest] %s (cid=%s)" % [manifest.trigger, manifest.cid])
 
 	var target_mt := mt
+	if not is_instance_valid(target_mt) and manifest._mt:
+		target_mt = manifest._mt.get_ref() as MultiplayerTree
+
 	if not is_instance_valid(target_mt):
-		NetLog.warn("Reporter: [ManifestDrop] '%s' — no valid tree" % manifest.trigger)
+		NetLog.warn("Reporter: [ManifestDrop] '%s' — no valid tree" % manifest.trigger, [], func(m): push_warning(m))
 		_maybe_break()
 		return
 
@@ -932,6 +936,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 func _fill_base(m: NetManifest, trigger: String, cid_val: String, mt: MultiplayerTree) -> void:
 	m.trigger = trigger
 	m.cid = cid_val
+	m._mt = weakref(mt) if is_instance_valid(mt) else null
 	m.cid_timeline = [cid_val]
 	m.frame = Engine.get_process_frames()
 	m.timestamp_usec = Time.get_ticks_usec()
@@ -1005,7 +1010,7 @@ func emit_debug_event(msg: String, data: Dictionary, mt: MultiplayerTree) -> voi
 	# Path 2: Relay path for remote editors.
 	if not _relay_active(mt):
 		if not _has_local_session():
-			NetLog.warn("Reporter: [EmitDropped] %s — no relay or local session" % msg)
+			NetLog.warn("Reporter: [EmitDropped] %s — no relay or local session" % msg, [], func(m): push_warning(m))
 		return
 
 	var relay: NetDebugRelay = _relays[mt]

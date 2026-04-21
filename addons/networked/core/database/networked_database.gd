@@ -6,9 +6,26 @@
 ## to declare its table and columns; the database initializes its backend once all
 ## schemas are known.
 ##
+## [b]Table access:[/b] retrieve a [TableRepository] for a named table with
+## [method table], then fetch, save, or delete [Entity] records:
+## [codeblock lang=gdscript]
+## # Bind a player entity before spawn:
+## save_comp.bound_entity = db.table(&"players").fetch(username)
+##
+## # Property-style access also works (autocomplete via _get_property_list):
+## save_comp.bound_entity = db.players.fetch(username)
+## [/codeblock]
+##
+## [b]Typed tables:[/b] register an entity subclass so [method TableRepository.fetch]
+## returns the right type automatically:
+## [codeblock lang=gdscript]
+## db.register_table(&"rocks", RockEntity)
+## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
+## [/codeblock]
+##
 ## [b]Transaction API:[/b] batch writes via a closure to guarantee the commit always runs:
-## [codeblock]
-## DB.transaction(func(tx: NetworkedDatabase.TransactionContext):
+## [codeblock lang=gdscript]
+## db.transaction(func(tx: NetworkedDatabase.TransactionContext):
 ##     tx.queue_upsert(&"rocks", &"rock_1", {&"health": 50})
 ##     tx.queue_upsert(&"rocks", &"rock_2", {&"health": 75})
 ## )
@@ -60,6 +77,77 @@ enum SchemaMismatchPolicy {
 var _schema: Dictionary[StringName, Array] = {}
 var _initialized: bool = false
 
+# Cached TableRepository instances, keyed by table name.
+var _repositories: Dictionary[StringName, TableRepository] = {}
+
+
+# ── Table access ──────────────────────────────────────────────────────────────
+
+## Returns the [TableRepository] for [param table_name].
+##
+## Repositories are cached — repeated calls for the same name return the same instance.
+## The table does not need to be registered before calling this; registration is done
+## separately via [method register_schema] or [method register_table].
+## [codeblock lang=gdscript]
+## var entity := db.table(&"players").fetch(username)
+## [/codeblock]
+func table(table_name: StringName) -> TableRepository:
+	if not _repositories.has(table_name):
+		_repositories[table_name] = TableRepository.new(self, table_name)
+	return _repositories[table_name]
+
+
+## Registers [param table_name] with an optional typed [param entity_script] and
+## an optional explicit [param columns] list.
+##
+## When [param entity_script] is provided, [method TableRepository.fetch] and
+## [method TableRepository.fetch_all] will return instances of that class instead
+## of [DictionaryEntity]. When [param columns] is omitted and the entity script
+## overrides [method Entity.to_dict], columns are inferred later from the first
+## [method SaveComponent.instantiate] call.
+## [codeblock lang=gdscript]
+## db.register_table(&"rocks", RockEntity, [&"health", &"position"])
+## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
+## [/codeblock]
+func register_table(
+		table_name: StringName,
+		entity_script: Script = null,
+		columns: Array[StringName] = []) -> void:
+	if not _repositories.has(table_name):
+		_repositories[table_name] = TableRepository.new(self, table_name, entity_script)
+	else:
+		_repositories[table_name]._entity_script = entity_script
+
+	if not columns.is_empty():
+		register_schema(table_name, columns)
+
+
+# ── Dynamic property proxy ────────────────────────────────────────────────────
+
+## Exposes registered tables as properties for ergonomic access.
+##
+## Any registered table name resolves to its [TableRepository]:
+## [codeblock lang=gdscript]
+## var entity := db.players.fetch(username)   # same as db.table(&"players").fetch(...)
+## [/codeblock]
+func _get(property: StringName) -> Variant:
+	if _schema.has(property):
+		return table(property)
+	return null
+
+## Makes registered table names visible to the GDScript autocomplete and property inspector.
+func _get_property_list() -> Array[Dictionary]:
+	var props: Array[Dictionary] = []
+	for tname: StringName in _schema:
+		props.append({
+			"name": tname,
+			"type": TYPE_OBJECT,
+			"hint": PROPERTY_HINT_RESOURCE_TYPE,
+			"hint_string": "TableRepository",
+			"usage": PROPERTY_USAGE_NONE,
+		})
+	return props
+
 
 # ── Schema Registration ───────────────────────────────────────────────────────
 
@@ -80,7 +168,6 @@ func register_schema(table: StringName, columns: Array[StringName]) -> void:
 			existing.append(col)
 
 	schema_registered.emit(table, existing.duplicate())
-
 
 	if not _initialized:
 		_initialize_backend.call_deferred()

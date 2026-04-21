@@ -102,6 +102,28 @@ func test_config_spawn_properties_skips_spawn_sync() -> void:
 	assert_that(config.has_property(NodePath(":visible"))).is_false()
 
 
+func test_config_spawn_properties_includes_username() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "TestPlayer"
+
+	var client := ClientComponent.new()
+	client.name = "ClientComponent"
+	root.add_child(client)
+	client.owner = root
+
+	ClientComponent.SpawnSynchronizer.new(client)
+
+	# No other syncs present. config_spawn_properties should still add username.
+	client.spawn_sync.config_spawn_properties(client)
+	var spawn_config := client.spawn_sync.replication_config
+	
+	var expected_path := NodePath("ClientComponent:username")
+	assert_that(spawn_config.has_property(expected_path)).is_true()
+	assert_that(spawn_config.property_get_spawn(expected_path)).is_true()
+	assert_that(spawn_config.property_get_replication_mode(expected_path))\
+		.is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
+
+
 # ---------------------------------------------------------------------------
 # authority_mode — default value
 # ---------------------------------------------------------------------------

@@ -31,8 +31,27 @@ func _ready() -> void:
 
 ## Binds a player's lifecycle to the lobby's visibility filters.
 func track_player(player: Node) -> void:
-	player.tree_entered.connect(_on_spawned.bind(player))
-	player.tree_exiting.connect(_on_despawned.bind(player))
+	var on_spawned_bound := _on_spawned.bind(player)
+	if not player.tree_entered.is_connected(on_spawned_bound):
+		player.tree_entered.connect(on_spawned_bound)
+		
+	var on_despawned_bound := _on_despawned.bind(player)
+	if not player.tree_exiting.is_connected(on_despawned_bound):
+		player.tree_exiting.connect(on_despawned_bound)
+
+
+## Removes a player from the lobby's lifecycle tracking and visibility filters.
+func untrack_player(player: Node) -> void:
+	var on_spawned_bound := _on_spawned.bind(player)
+	if player.tree_entered.is_connected(on_spawned_bound):
+		player.tree_entered.disconnect(on_spawned_bound)
+		
+	var on_despawned_bound := _on_despawned.bind(player)
+	if player.tree_exiting.is_connected(on_despawned_bound):
+		player.tree_exiting.disconnect(on_despawned_bound)
+	
+	if player in tracked_nodes:
+		_on_despawned(player)
 
 
 ## Forces a visibility update for all synchronizers belonging to tracked nodes in this lobby.

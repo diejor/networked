@@ -57,7 +57,7 @@ func _spawn_save_player() -> Node2D:
 
 
 # ---------------------------------------------------------------------------
-# SaveSynchronizer.setup() — virtualization
+# SaveSynchronizer.setup() — config
 # ---------------------------------------------------------------------------
 
 func test_setup_initializes_synchronizer() -> void:
@@ -66,16 +66,16 @@ func test_setup_initializes_synchronizer() -> void:
 	assert_that(save_comp.save_synchronizer._initialized).is_true()
 
 
-func test_setup_virtualizes_position_property() -> void:
+func test_setup_tracks_position_property() -> void:
 	var player := await _spawn_save_player()
 	var save_sync: SaveSynchronizer = player.get_node("%SaveComponent/%SaveSynchronizer")
 	assert_that(save_sync.has_state_property(&"position")).is_true()
 
 
-func test_setup_populates_container_with_initial_values() -> void:
+func test_setup_populates_entity_with_initial_values() -> void:
 	var player := await _spawn_save_player()
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	assert_that(save_comp.save_container.has_value(&"position")).is_true()
+	assert_that(save_comp.bound_entity.has_value(&"position")).is_true()
 
 
 # ---------------------------------------------------------------------------
@@ -89,14 +89,14 @@ func test_pull_from_scene_captures_live_position() -> void:
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.pull_from_scene()
 
-	assert_that(save_comp.save_container.get_value(&"position")).is_equal(Vector2(50, 75))
+	assert_that(save_comp.bound_entity.get_value(&"position")).is_equal(Vector2(50, 75))
 
 
 func test_push_to_scene_restores_position() -> void:
 	var player := await _spawn_save_player()
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 
-	save_comp.save_container.set_value(&"position", Vector2(99, 99))
+	save_comp.bound_entity.set_value(&"position", Vector2(99, 99))
 	save_comp.push_to_scene()
 
 	assert_that(player.position).is_equal(Vector2(99, 99))
@@ -143,7 +143,7 @@ func test_load_state_restores_from_database() -> void:
 	save_comp.save_state()
 
 	player.position = Vector2.ZERO
-	save_comp.save_container.set_value(&"position", Vector2.ZERO)
+	save_comp.bound_entity.set_value(&"position", Vector2.ZERO)
 
 	var err: Error = save_comp.load_state()
 	assert_that(err).is_equal(OK)

@@ -7,7 +7,6 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="6_tdg3f"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="7_dtqjt"]
-[ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="8_hp6x6"]
 [ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="9_3tkgg"]
 [ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="10_l6ohk"]
 
@@ -18,22 +17,11 @@ size = Vector2(84, 20)
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 1
-properties/1/path = NodePath("ClientComponent:username")
-properties/1/spawn = true
-properties/1/replication_mode = 0
-properties/2/path = NodePath("TPComponent:current_scene_path")
-properties/2/spawn = true
-properties/2/replication_mode = 2
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
-
-[sub_resource type="Resource" id="Resource_oudfo"]
-resource_local_to_scene = true
-script = ExtResource("8_hp6x6")
-metadata/_custom_type_script = "uid://d1mnum02gn0c0"
 
 [sub_resource type="Resource" id="Resource_d6rpx"]
 script = ExtResource("9_3tkgg")
@@ -81,7 +69,6 @@ metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [node name="SaveComponent" type="Node" parent="." unique_id=547581579]
 script = ExtResource("7_dtqjt")
-save_container = SubResource("Resource_oudfo")
 database = SubResource("Resource_r3kul")
 table_name = &"players"
 metadata/_custom_type_script = "uid://c72wanrudisxw"

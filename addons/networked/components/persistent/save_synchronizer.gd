@@ -1,8 +1,13 @@
-## Virtualizes sibling [MultiplayerSynchronizer] configs into a single [SaveContainer].
+## Network radio for [SaveComponent] — replicates the bound entity over the wire.
 ##
-## On [method setup], scans all synchronizers whose [code]root_path[/code] points to the same
-## owner and builds a virtual [SceneReplicationConfig] whose properties map to flat names in
-## the container. Changes received over the network are written back to the live scene nodes.
+## On [method setup], builds a virtual [SceneReplicationConfig] from
+## [member SaveComponent.tracked_properties]: each entity key becomes a virtual
+## property whose getter/setter round-trips through the [Entity] and the actual
+## scene node at the declared [NodePath].
+##
+## Unlike the old implicit-scan approach, [SaveSynchronizer] no longer touches
+## sibling [MultiplayerSynchronizer] nodes. Tracked properties are declared
+## explicitly on [SaveComponent.tracked_properties].
 class_name SaveSynchronizer
 extends MultiplayerSynchronizer
 
@@ -11,13 +16,12 @@ signal state_changed
 
 var save_component: SaveComponent
 
-var save_container: SaveContainer:
-	get: return save_component.save_container
+var bound_entity: Entity:
+	get: return save_component.bound_entity
 
 var scene_owner: Node:
 	get: return save_component.owner
 
-var _property_paths: Dictionary[StringName, NodePath] = {}
 var _initialized: bool = false
 var _state_changed: bool = false
 
@@ -31,7 +35,7 @@ func _init(scomponent: SaveComponent) -> void:
 	replication_interval = 5.0
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 	public_visibility = false
-
+	
 	name = "SaveSynchronizer"
 	unique_name_in_owner = true
 	
@@ -42,28 +46,12 @@ func _init(scomponent: SaveComponent) -> void:
 	root_path = get_path_to(scomponent.owner)
 
 func _enter_tree() -> void:
-	# Call setup() here, NOT in _ready(), so replication_config is set before
-	# C++ MultiplayerSynchronizer processes NOTIFICATION_READY.
-	#
-	# In Godot 4, Object::notification() calls the C++ _notification() chain BEFORE
-	# GDScript _ready() runs. If replication_config is null when NOTIFICATION_READY
-	# fires (C++ side), the synchronizer is never registered in the replication cache.
-	# That is why the client produces "ID X not found in cache" errors: the client runs
-	# _ready() → setup() AFTER C++ has already processed NOTIFICATION_READY with a null
-	# config. The server avoids this because save_component.spawn() calls setup() while
-	# the player is still off-tree, before NOTIFICATION_READY is ever dispatched.
-	#
-	# This _enter_tree() approach fixes it on the client: NOTIFICATION_ENTER_TREE fires
-	# before NOTIFICATION_READY, so the config is in place when C++ does its registration.
-	if not _initialized and save_component.save_container:
+	if not _initialized:
 		setup()
-
-	# Emit crash manifest if setup() still hasn't produced any properties.
+	
 	var prop_count := replication_config.get_properties().size() if replication_config else 0
-	# This catches the case where the client's SaveSynchronizer enters the tree
-	# with zero tracked properties — the C++ registration will silently fail.
-	if prop_count == 0 and _initialized:
-		NetLog.warn("[CLIENT_EMPTY_CONFIG] SaveSynchronizer '%s' on '%s' has 0 properties " \
+	if prop_count == 0 and not save_component.tracked_properties.is_empty():
+		NetLog.warn("[CLIENT_EMPTY_CONFIG] '%s' on '%s' has 0 properties " \
 			+ "after entering tree. C++ replication registration will silently fail. " \
 			+ "peer_id=%d is_server=%s root_path=%s", [
 				name,
@@ -77,97 +65,65 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	if not _initialized:
 		setup()
-
+	
 	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
 
 
-## Initializes the virtualized replication config based on the owner's attached synchronizers.
+## Builds the virtual replication config from [member SaveComponent.tracked_properties].
+##
+## Each entry in [member SaveComponent.tracked_properties] becomes one virtual property
+## in the config. The virtual property name equals the entity key; reads and writes are
+## intercepted by [method _get] and [method _set] and forwarded to the entity and the
+## real scene node at the declared [NodePath].
 func setup() -> void:
 	if _initialized:
 		NetLog.warn("SaveSynchronizer.setup: called more than once.", [], func(m): push_warning(m))
 		return
 	_initialized = true
-
-	assert(save_container)
+	
+	assert(bound_entity)
 	assert(
-		save_container.resource_local_to_scene,
-		"`%s` is not local to scene." % save_container,
+		bound_entity.resource_local_to_scene,
+		"`%s` is not local to scene." % bound_entity,
 	)
 
-	_virtualize_replication_configs()
+	_build_replication_config()
 	notify_property_list_changed()
 
 
-func _virtualize_replication_configs() -> void:
+func _build_replication_config() -> void:
 	var new_config := SceneReplicationConfig.new()
-	_property_paths.clear()
-	
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(scene_owner):
-		if sync == self or not sync.replication_config:
-			continue 
 
-		var source_config: SceneReplicationConfig = sync.replication_config
+	for entity_key: StringName in save_component.tracked_properties:
+		var scene_path: NodePath = save_component.tracked_properties[entity_key]
 		
-		for real_path: NodePath in source_config.get_properties():
-			var mode := source_config.property_get_replication_mode(real_path)
-			var spawn := source_config.property_get_spawn(real_path)
-			var sync_flag := source_config.property_get_sync(real_path)
-			var watch := source_config.property_get_watch(real_path)
-			
-			if mode == SceneReplicationConfig.ReplicationMode.REPLICATION_MODE_NEVER:
-				continue
-			
-			var node_res: Array = scene_owner.get_node_and_resource(real_path)
-			assert(node_res[0],
-				"Trying to synchronize '%s' which is not a valid property path. Check source_config." % real_path)
+		var virtual_path := NodePath(":" + String(entity_key))
+		
+		new_config.add_property(virtual_path)
+		new_config.property_set_replication_mode(
+			virtual_path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
+		new_config.property_set_spawn(virtual_path, true)
+		new_config.property_set_sync(virtual_path, true)
+		new_config.property_set_watch(virtual_path, false)
 
-			var node: Node = node_res[0]
-			var prop_path: NodePath = node_res[2]
-
-			var is_root := node == scene_owner
-			var node_label := "" if is_root else String(node.name)
-
-			var leaf: String
-			if prop_path.get_subname_count() > 0:
-				leaf = prop_path.get_subname(prop_path.get_subname_count() - 1)
-			else:
-				leaf = String(prop_path).trim_prefix(":")
-
-			var virtual_name: String
-			if is_root:
-				virtual_name = leaf
-			else:
-				virtual_name = node_label + "/" + leaf
-
-			var vname_sn := StringName(virtual_name)
-			
-			if _property_paths.has(vname_sn):
-				continue
-
-			_property_paths[vname_sn] = real_path
-			var virtual_path := NodePath(":" + virtual_name)
-			
-			new_config.add_property(virtual_path)
-			new_config.property_set_replication_mode(virtual_path, mode)
-			new_config.property_set_spawn(virtual_path, spawn)
-			new_config.property_set_sync(virtual_path, sync_flag)
-			new_config.property_set_watch(virtual_path, false)
-
-			if not save_container.has_value(vname_sn):
-				var value: Variant = node.get_indexed(prop_path)
-				save_container.set_value(vname_sn, value)
+		if scene_owner and not bound_entity.has_value(entity_key):
+			var node_res: Array = scene_owner.get_node_and_resource(scene_path)
+			if node_res[0]:
+				var value: Variant = (node_res[0] as Node).get_indexed(node_res[2])
+				bound_entity.set_value(entity_key, value)
 
 	root_path = NodePath(".")
 	replication_config = new_config
 
+
 func _get_tracked_property_names() -> Array[StringName]:
-	return _property_paths.keys()
+	return save_component.tracked_properties.keys()
 
 
 func _get_property_list() -> Array[Dictionary]:
 	var properties: Array[Dictionary] = []
 	for property_name: StringName in _get_tracked_property_names():
-		var value: Variant = save_container.get_value(property_name, null)
+		var value: Variant = bound_entity.get_value(property_name, null)
 		properties.append({
 			"name": property_name,
 			"type": typeof(value),
@@ -175,29 +131,23 @@ func _get_property_list() -> Array[Dictionary]:
 	return properties
 
 
-## Returns [code]true[/code] if [param property] is tracked by the virtual replication config.
+## Returns [code]true[/code] if [param property] is declared in [member SaveComponent.tracked_properties].
 func has_state_property(property: StringName) -> bool:
-	return _property_paths.has(property)
+	return save_component.tracked_properties.has(property)
 
 
 func _get_scene_value(property_name: StringName) -> Variant:
-	var real_path: NodePath = _property_paths[property_name]
-	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0], "Invalid real property path for get_scene_value: %s" % String(real_path))
-	
-	var node: Node = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	return node.get_indexed(prop_path)
+	var scene_path: NodePath = save_component.tracked_properties[property_name]
+	var node_res := scene_owner.get_node_and_resource(scene_path)
+	assert(node_res[0], "Invalid scene path for '%s': %s" % [property_name, scene_path])
+	return (node_res[0] as Node).get_indexed(node_res[2])
 
 
 func _set_scene_value(property_name: StringName, value: Variant) -> void:
-	var real_path: NodePath = _property_paths[property_name]
-	var node_res := scene_owner.get_node_and_resource(real_path)
-	assert(node_res[0], "Invalid real property path for set_scene_value: %s" % String(real_path))
-	
-	var node: Node = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	node.set_indexed(prop_path, value)
+	var scene_path: NodePath = save_component.tracked_properties[property_name]
+	var node_res := scene_owner.get_node_and_resource(scene_path)
+	assert(node_res[0], "Invalid scene path for '%s': %s" % [property_name, scene_path])
+	(node_res[0] as Node).set_indexed(node_res[2], value)
 
 
 func _get(property: StringName) -> Variant:
@@ -208,13 +158,10 @@ func _get(property: StringName) -> Variant:
 
 func _set(property: StringName, value: Variant) -> bool:
 	if has_state_property(property):
-		save_container.set_value(property, value)
-
+		bound_entity.set_value(property, value)
 		_state_changed = true
 		save_once.call_deferred()
-
 		return true
-
 	return false
 
 
@@ -227,50 +174,44 @@ func save_once() -> void:
 		_state_changed = false
 
 
-## Pulls the latest live values from the scene nodes into the virtualized save container.
+## Reads the current live values from the scene into the entity.
 func pull_from_scene() -> void:
 	assert(_initialized, "Synchronizer not initialized.")
-	for property_name: StringName in _get_tracked_property_names():
-		var value: Variant = _get_scene_value(property_name)
-		save_container.set_value(property_name, value)
+	for property_name: StringName in save_component.tracked_properties:
+		bound_entity.set_value(property_name, _get_scene_value(property_name))
 
 
-## Pushes the loaded virtual container values into the actual live scene nodes.
+## Writes entity values for all tracked properties into the live scene nodes.
+##
+## Skips properties that the entity does not yet have a value for (the scene node
+## keeps its default). Always returns [constant OK].
 func push_to_scene() -> Error:
 	if not _initialized:
 		NetLog.error("SaveSynchronizer: push_to_scene called before setup().", [], func(m): push_error(m))
 		return ERR_UNCONFIGURED
-	assert(save_container)
 
-	for property_name in save_container:
-		var pname := StringName(property_name)
-		if not has_state_property(pname):
-			NetLog.error("SaveSynchronizer: push_to_scene — property '%s' is not tracked.", [property_name], func(m): push_error(m))
-			return Error.ERR_UNCONFIGURED
+	assert(bound_entity)
 
-		var real_path: NodePath = _property_paths[pname]
-		var value: Variant = save_container.get_value(pname)
-		if value == null:
-			NetLog.error("SaveSynchronizer: push_to_scene — tracked property '%s' has no value in save container.", [property_name], func(m): push_error(m))
-			return Error.ERR_UNCONFIGURED
+	for entity_key: StringName in save_component.tracked_properties:
+		if not bound_entity.has_value(entity_key):
+			continue
+		_set_scene_value(entity_key, bound_entity.get_value(entity_key))
 
-		_set_scene_value(pname, value)
-
-	return Error.OK
+	return OK
 
 
-## Packages the current scene state and sends it over the network to the specified peer.
+## Packages the current scene state and sends it over the network to [param peer_id].
 func push_to(peer_id: int) -> void:
 	pull_from_scene()
 	state_changed.emit()
-	request_push.rpc_id(peer_id, save_container.serialize())
+	request_push.rpc_id(peer_id, bound_entity.serialize())
 
 
-## RPC called by a client to push its serialized save state to this peer.
+## RPC called by a client to push its serialized entity state to this peer.
 ##
-## Deserializes [param bytes] into the container and applies the result to the live scene.
+## Deserializes [param bytes] into the entity and applies the result to the live scene.
 @rpc("any_peer", "call_remote", "reliable")
 func request_push(bytes: PackedByteArray) -> void:
-	save_container.deserialize(bytes)
+	bound_entity.deserialize(bytes)
 	push_to_scene()
 	state_changed.emit()

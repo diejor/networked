@@ -109,7 +109,7 @@ func register_service(service: Node, type: Script = null) -> void:
 		type = service.get_script()
 	
 	if type in _services:
-		NetLog.warn("Service %s already registered — overwriting." % type.get_global_name())
+		NetLog.warn("Service %s already registered — overwriting." % type.get_global_name(), [], func(m): push_warning(m))
 	
 	_services[type] = service
 	NetLog.debug("Service %s registered." % type.get_global_name())

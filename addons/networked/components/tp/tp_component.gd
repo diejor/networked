@@ -1,4 +1,3 @@
-@tool
 class_name TPComponent
 extends NetComponent
 
@@ -32,8 +31,7 @@ var starting_scene_path: SceneNodePath
 ##
 ## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
 ## Replicated on change so clients can track which lobby their player  is in.
-@export_custom(PROPERTY_HINT_NONE, "replicated:on_change")
-var current_scene_path: String = "":
+@export var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
@@ -66,36 +64,28 @@ class TeleportPromise extends RefCounted:
 	signal completed
 
 
-func _get_configuration_warnings() -> PackedStringArray:
-	return ReplicationValidator.get_configuration_warnings(self)
-
-
-func _validate_editor() -> void:
-	ReplicationValidator.verify_and_configure(self)
-
-
 func _init() -> void:
 	## TODO: move name conventions to NetComponent
 	name = "TPComponent"
 	unique_name_in_owner = true
 
-
 func _ready() -> void:
-	if EditorTooling.validate_and_halt(self, _validate_editor):
-		return
-
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
 			sync.delta_synchronized.connect(client_synchronized.emit)
 			sync.synchronized.connect(client_synchronized.emit)
 
 
+func _ensure_current_scene_path() -> void:
+	if current_scene_path.is_empty() and starting_scene_path:
+		current_scene_path = starting_scene_path.scene_path
+
+
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if current_scene_path.is_empty():
-		current_scene_path = starting_scene_path.scene_path
+	_ensure_current_scene_path()
 
 
 static func _resolve_scene_name(path_or_uid: String) -> String:
@@ -162,45 +152,53 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 	SynchronizersCache.sync_only_server(owner)
 
+	owner.set_physics_process(false)
+	owner.set_process_input(false)
+
 	log_trace("Sending request_teleport RPC to server.")
 	_tp_span.step("rpc_sent")
 	request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,
 		from_scene,
+		target_tp.scene_path,
 		target_tp.node_path
 	)
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_teleport(username: String, from_scene_name: String, tp_path: String) -> void:
+func request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
 	var span := _begin_peer_span("tp_server", [sender_id], {
 		"username": username,
-		"from_scene": from_scene_name
+		"from_scene": from_scene_name,
+		"to_scene": to_scene_path
 	})
-	log_info("Server received teleport request from %s (Peer: %d)" % [username, sender_id])
+	log_info("Server received teleport request from %s (Peer: %d) to %s" % [username, sender_id, to_scene_path])
 
 	var lobby_manager := get_lobby_manager()
 	if not lobby_manager:
-		log_error("TPComponent: Cannot teleport, lobby manager not found.")
+		log_error("TPComponent: Cannot teleport, lobby manager not found.", [], func(m): push_error(m))
 		span.fail("no_lobby_manager")
 		return
 
 	var from_lobby: Lobby = lobby_manager.active_lobbies.get(from_scene_name)
 	if not from_lobby:
-		log_error("TPComponent: Source lobby '%s' not found." % from_scene_name)
+		log_error("TPComponent: Source lobby '%s' not found." % from_scene_name, [], func(m): push_error(m))
 		span.fail("source_lobby_not_found", {"lobby": from_scene_name})
 		return
 
 	var player: Node = from_lobby.level.get_node(username)
 	var tp_component: TPComponent = player.get_node("%TPComponent")
+	
+	tp_component.current_scene_path = to_scene_path
+	
 	span.step("received", {"from_scene": from_scene_name, "sender": sender_id})
 
 	log_trace("Waiting for client synchronization...")
 	span.step("awaiting_client_sync")
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(tp_component.client_synchronized, timer):
-		log_error("TPComponent: Client couldn't synchronize while teleporting.")
+		log_error("TPComponent: Client couldn't synchronize while teleporting.", [], func(m): push_error(m))
 		span.fail("client_sync_timeout")
 	else:
 		span.step("client_synced")
@@ -210,7 +208,7 @@ func request_teleport(username: String, from_scene_name: String, tp_path: String
 	await lobby_manager.activate_lobby(StringName(to_lobby_name))
 	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_lobby_name))
 	if not to_lobby:
-		log_error("TPComponent: Destination lobby '%s' could not be activated." % to_lobby_name)
+		log_error("TPComponent: Destination lobby '%s' could not be activated." % to_lobby_name, [], func(m): push_error(m))
 		span.fail("dest_lobby_activation_failed", {"lobby": to_lobby_name})
 		return
 
@@ -272,6 +270,9 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_tp_mutex.unlock()
 	owner.set("global_position", snap_pos)
 
+	owner.set_physics_process(true)
+	owner.set_process_input(true)
+
 	var tp_layer := get_tp_layer()
 	if tp_layer:
 		log_trace("Playing teleport_in transition.")
@@ -294,8 +295,10 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 ## Registers the entity with the specified lobby manager and spawns it into the active scene level.
 func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
 	log_trace("TPComponent: spawn called.")
+	_ensure_current_scene_path()
+	
 	if current_scene_path.is_empty():
-		log_error("TPComponent: Does not have a scene to tp into.")
+		log_error("TPComponent: Does not have a scene to tp into.", [], func(m): push_error(m))
 		return
 
 	var lobby: Lobby = lobby_mgr.active_lobbies.get(current_scene_name)

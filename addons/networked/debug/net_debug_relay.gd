@@ -152,7 +152,7 @@ func _valid_sender(sender: int, byte_size: int) -> bool:
 	if sender != 1 and not multiplayer.get_peers().has(sender):
 		return false
 	if byte_size > MAX_PAYLOAD_BYTES:
-		NetLog.error("Relay: [DropOversized] %d bytes from peer %d" % [byte_size, sender])
+		NetLog.error("Relay: [DropOversized] %d bytes from peer %d" % [byte_size, sender], [], func(m): push_error(m))
 		return false
 	return true
 

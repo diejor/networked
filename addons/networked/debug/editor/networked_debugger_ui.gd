@@ -279,7 +279,7 @@ func _activate_panel(key: String, peer_key: String, pt: PanelDataAdapter.PanelTy
 		return
 	var adapter: PanelDataAdapter = session.get_adapter(key)
 	if not adapter:
-		NetLog.warn("UI: [ActivateFailed] Adapter not found for key: %s" % key)
+		NetLog.warn("UI: [ActivateFailed] Adapter not found for key: %s" % key, [], func(m): push_warning(m))
 		return
 
 	NetLog.info("UI: [ActivatePanel] %s" % key)
@@ -352,7 +352,7 @@ func _rebuild_grid() -> void:
 		if key in _panel_wrappers:
 			_add_wrapper_to_grid(_panel_wrappers[key], key)
 		else:
-			NetLog.warn("UI: [RebuildFailed] Wrapper missing for key: %s" % key)
+			NetLog.warn("UI: [RebuildFailed] Wrapper missing for key: %s" % key, [], func(m): push_warning(m))
 
 
 ## Adds a wrapper to the grid and populates its panel if it's newly activated.

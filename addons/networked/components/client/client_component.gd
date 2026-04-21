@@ -31,10 +31,7 @@ enum AuthorityMode {
 @export var authority_mode: AuthorityMode = AuthorityMode.CLIENT
 
 ## The username of the player associated with this component, assigned by the player.
-@export_custom(PROPERTY_HINT_NONE, "replicated:never")
-var username: String = "":
-	set(user):
-		username = user
+var username: String = ""
 
 
 ## The [MultiplayerSynchronizer] used for initial spawn state replication.
@@ -67,6 +64,20 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 	" % target_node.name)
 		
 		replication_config = SceneReplicationConfig.new()
+		
+		# Explicitly add username from the ClientComponent itself.
+		# Path must be relative to the root_path (the player node).
+		if target_node.owner:
+			var component_path := target_node.owner.get_path_to(target_node)
+			var username_path := NodePath(str(component_path) + ":username")
+			_add_spawn_property(username_path)
+			
+			var tp := target_node.owner.get_node_or_null("%TPComponent")
+			if tp:
+				var tp_path := target_node.owner.get_path_to(tp)
+				var scene_path := NodePath(str(tp_path) + ":current_scene_path")
+				_add_spawn_property(scene_path)
+		
 		var syncs := SynchronizersCache.get_client_synchronizers(target_node.owner 
 			if target_node is ClientComponent else target_node)
 		
@@ -76,15 +87,18 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 			
 			var source_config: SceneReplicationConfig = sync.replication_config
 			for property: NodePath in source_config.get_properties():
-				assert(not replication_config.has_property(property), "Adding an \
-existing property.")
+				if replication_config.has_property(property):
+					continue
 				
-				replication_config.add_property(property)
-				replication_config.property_set_replication_mode(property, 
-					SceneReplicationConfig.REPLICATION_MODE_NEVER)
-				replication_config.property_set_spawn(property, true)
-				replication_config.property_set_sync(property, false)
-				replication_config.property_set_watch(property, false)
+				_add_spawn_property(property)
+	
+	func _add_spawn_property(property: NodePath) -> void:
+		replication_config.add_property(property)
+		replication_config.property_set_replication_mode(property, 
+			SceneReplicationConfig.REPLICATION_MODE_NEVER)
+		replication_config.property_set_spawn(property, true)
+		replication_config.property_set_sync(property, false)
+		replication_config.property_set_watch(property, false)
 
 
 ## Returns the [ClientComponent] with unique name [code]%ClientComponent[/code] 
@@ -115,7 +129,8 @@ func _init() -> void:
 func _ready() -> void:
 	log_trace("ClientComponent: _ready for %s" % owner.name)
 	
-	if EditorTooling.validate_and_halt(self, _validate_editor):
+	if Engine.is_editor_hint():
+		_validate_editor()
 		return
 	
 	# TODO: move client_synchronized signal to NetComponent
@@ -144,19 +159,19 @@ automatically." % [owner.name, _on_owner_tree_entered])
 		tp_layer.teleport_in()
 
 
-func _get_configuration_warnings() -> PackedStringArray:
-	return ReplicationValidator.get_configuration_warnings(self)
-
-
 func _validate_editor() -> void:
-	ReplicationValidator.verify_and_configure(self)
-	
 	if owner and not owner.tree_entered.is_connected(_on_owner_tree_entered):
 		owner.tree_entered.connect(_on_owner_tree_entered, ConnectFlags.CONNECT_PERSIST)
+
 
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
+		
+	# Guard against double calls if the signal is still connected in existing scenes.
+	if owner.get_multiplayer_authority() != 1:
+		return
+
 	log_trace("Client `%s` entering tree." % [owner.name])
 	assert(owner.name != "|")
 
@@ -223,7 +238,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 			log_info("Placing player `%s` into lobby `%s`." % [player.name, lobby.name])
 			lobby.add_player(player)
 		else:
-			log_error("Could not find active lobby for scene `%s`." % scene_name)
+			log_error("Could not find active lobby for scene `%s`." % scene_name, [], func(m): push_error(m))
 	
 	span.end()
 

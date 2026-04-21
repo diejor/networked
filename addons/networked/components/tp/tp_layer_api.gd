@@ -81,16 +81,16 @@ func log_info(msg: Variant, args: Array = []) -> void:
 
 
 ## Logs a [code]WARN[/code] message with rich multiplayer context.
-func log_warn(msg: Variant, args: Array = []) -> void:
-	_log_proxy(NetLog.Level.WARN, msg, args)
+func log_warn(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
+	_log_proxy(NetLog.Level.WARN, msg, args, link_call)
 
 
 ## Logs an [code]ERROR[/code] message with rich multiplayer context.
-func log_error(msg: Variant, args: Array = []) -> void:
-	_log_proxy(NetLog.Level.ERROR, msg, args)
+func log_error(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
+	_log_proxy(NetLog.Level.ERROR, msg, args, link_call)
 
 
-func _log_proxy(level: int, msg: Variant, args: Array) -> void:
+func _log_proxy(level: int, msg: Variant, args: Array, link_call: Callable = Callable()) -> void:
 	var tree := get_multiplayer_tree()
 	var has_mp := is_inside_tree() and multiplayer
 	
@@ -120,7 +120,7 @@ func _log_proxy(level: int, msg: Variant, args: Array) -> void:
 		NetLog.Level.TRACE: NetLog.trace(full_msg, args)
 		NetLog.Level.DEBUG: NetLog.debug(full_msg, args)
 		NetLog.Level.INFO: NetLog.info(full_msg, args)
-		NetLog.Level.WARN: NetLog.warn(full_msg, args, func(m): push_warning(m))
-		NetLog.Level.ERROR: NetLog.error(full_msg, args, func(m): push_error(m))
+		NetLog.Level.WARN: NetLog.warn(full_msg, args, link_call)
+		NetLog.Level.ERROR: NetLog.error(full_msg, args, link_call)
 
 #endregion

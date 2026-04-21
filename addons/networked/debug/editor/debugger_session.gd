@@ -71,7 +71,7 @@ func receive(message: String, data: Array) -> void:
 		return
 
 	# Fallback: legacy message handling for any pre-envelope path still in flight.
-	NetLog.warn("DebuggerSession: [LegacyMessage] %s — expected envelope" % message)
+	NetLog.warn("DebuggerSession: [LegacyMessage] %s — expected envelope" % message, [], func(m): push_warning(m))
 
 
 func get_peers() -> Dictionary:
@@ -142,7 +142,7 @@ func mark_remote_peers_offline() -> void:
 
 func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 	if envelope.source_path.is_empty() or envelope.reporter_id.is_empty():
-		NetLog.warn("DebuggerSession: [DropBadEnvelope] missing source_path or reporter_id")
+		NetLog.warn("DebuggerSession: [DropBadEnvelope] missing source_path or reporter_id", [], func(m): push_warning(m))
 		return
 
 	var pk := envelope.peer_key()
@@ -257,16 +257,16 @@ func _on_clock_sample(envelope: NetEnvelope) -> void:
 
 func _on_crash_manifest(envelope: NetEnvelope) -> void:
 	var pk := envelope.peer_key()
-	var cid: String = envelope.payload.get("cid", "")
+	var uid: String = envelope.payload.get("uid", "")
 	# DEDUP-3 (replay idempotency): crash manifests are replayed to late-joining editors
 	# via _emit_current_state(). This prevents a manifest appearing twice when both the
 	# live event and the history replay arrive in the same editor session.
-	if not cid.is_empty():
+	if not uid.is_empty():
 		if pk not in _seen_crash_cids:
 			_seen_crash_cids[pk] = {}
-		if cid in _seen_crash_cids[pk]:
+		if uid in _seen_crash_cids[pk]:
 			return
-		_seen_crash_cids[pk][cid] = true
+		_seen_crash_cids[pk][uid] = true
 	var key := _adapter_key(pk, PanelDataAdapter.PanelType.CRASH)
 	if key in _adapters:
 		_adapters[key].feed(envelope.payload)

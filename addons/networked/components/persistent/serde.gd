@@ -1,6 +1,6 @@
 ## Abstract base for resources that can round-trip through a [PackedByteArray].
 ##
-## Extend this to create serializable resources (e.g. [MultiplayerClientData], [DictionarySave]).
+## Extend this to create serializable resources (e.g. [MultiplayerClientData], [DictionaryEntity]).
 @abstract
 class_name Serde
 extends Resource

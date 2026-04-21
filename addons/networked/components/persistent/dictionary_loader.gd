@@ -1,4 +1,6 @@
-## [ResourceFormatLoader] that reads [DictionarySave] resources from custom file formats.
+## [ResourceFormatLoader] that reads [DictionaryEntity] resources from custom file formats.
+##
+## Recognized class_name: [DictionaryEntity] (file [code]dictionary_save.gd[/code]).
 ##
 ## Supports two extensions:
 ## - [code].tdict[/code] — JSON text, loaded with [method JSON.parse].
@@ -17,14 +19,14 @@ func _get_recognized_extensions() -> PackedStringArray:
 
 func _handles_type(type: StringName) -> bool:
 	return (type == &"Resource"
-		or type == &"SaveContainer"
-		or type == &"DictionarySave")
+		or type == &"Entity"
+		or type == &"DictionaryEntity")
 
 
 func _get_resource_type(path: String) -> String:
 	var ext := path.get_extension().to_lower()
 	if ext == TEXT_EXT or ext == BIN_EXT:
-		return "DictionarySave"
+		return "DictionaryEntity"
 	return ""
 
 
@@ -45,7 +47,7 @@ func _exists(path: String) -> bool:
 
 func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_mode: int) -> Variant:
 	var ext := path.get_extension().to_lower()
-	assert(ext == TEXT_EXT or ext == BIN_EXT, 
+	assert(ext == TEXT_EXT or ext == BIN_EXT,
 		"`dictionary_loader` given unsupported extension: %s." % ext)
 
 	if not FileAccess.file_exists(path):
@@ -56,7 +58,7 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 	if file == null:
 		return FileAccess.get_open_error()
 
-	var dict_res := DictionarySave.new()
+	var dict_res := DictionaryEntity.new()
 
 	match ext:
 		TEXT_EXT:
@@ -64,9 +66,9 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 
 			var json := JSON.new()
 			var err := json.parse(text)
-			assert(err == OK, 
-				"JSON parse failed for `DictionarySave` `\"*.tdict\"`. 
-				Error: %s" % error_string(err)) 
+			assert(err == OK,
+				"JSON parse failed for `DictionaryEntity` `\"*.tdict\"`. "
+				+ "Error: %s" % error_string(err))
 
 			dict_res.data = JSON.to_native(json.data, false)
 		BIN_EXT:
@@ -75,9 +77,8 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 				return ERR_FILE_CORRUPT
 
 			var decoded: Variant = file.get_var()
-			assert(typeof(decoded) == TYPE_DICTIONARY, 
-				"Binary `\"*.dict\"` did not contain a Dictionary for 
-				DictionarySave.")
+			assert(typeof(decoded) == TYPE_DICTIONARY,
+				"Binary `\"*.dict\"` did not contain a Dictionary for DictionaryEntity.")
 			if typeof(decoded) != TYPE_DICTIONARY:
 				return ERR_FILE_CORRUPT
 
@@ -85,7 +86,7 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 		_:
 			@warning_ignore("assert_always_false")
 			assert(false, "Unrecognized extension.")
-		
-	
+
+
 	dict_res.take_over_path(path)
 	return dict_res

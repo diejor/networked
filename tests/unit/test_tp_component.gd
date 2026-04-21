@@ -38,10 +38,22 @@ func test_enter_tree_uses_starting_scene_when_empty() -> void:
 	# current_scene_path is empty by default
 	assert_that(tp.current_scene_path).is_equal("")
 
-	# Simulate _enter_tree behavior (can't add to tree because of
-	# EditorTooling.validate_and_halt in _ready)
 	if tp.current_scene_path.is_empty():
 		tp.current_scene_path = tp.starting_scene_path.scene_path
 
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
 	assert_that(tp.current_scene_name).is_equal("TestLevel")
+
+
+func test_spawn_initializes_current_scene_path_from_starting_scene() -> void:
+	var tp: TPComponent = auto_free(TPComponent.new())
+	tp.starting_scene_path = SceneNodePath.new(TEST_LEVEL + "::")
+	
+	# We need a LobbyManager for spawn()
+	var lobby_mgr: MultiplayerLobbyManager = auto_free(MultiplayerLobbyManager.new())
+	
+	# Manually call spawn without it being in tree
+	tp.spawn(lobby_mgr)
+	
+	# It should have initialized current_scene_path from starting_scene_path
+	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
