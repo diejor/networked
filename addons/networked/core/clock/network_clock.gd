@@ -187,8 +187,38 @@ var _drift_timer: float = 0.0
 
 #region ── Lifecycle ───────────────────────────────────────────────────────────
 
-func _init() -> void:
-	configured.connect(_on_tree_configured)
+func _enter_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	
+	var mt := get_parent() as MultiplayerTree
+	if is_instance_valid(mt):
+		mt.register_service(self, NetworkClock)
+		
+		if not mt.configured.is_connected(_on_tree_configured):
+			mt.configured.connect(_on_tree_configured)
+		
+		if not mt.configured.is_connected(configured.emit):
+			mt.configured.connect(configured.emit)
+
+
+func _ready() -> void:
+	pass
+
+
+func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+		
+	var mt := get_parent() as MultiplayerTree
+	if is_instance_valid(mt):
+		mt.unregister_service(self, NetworkClock)
+		
+		if mt.configured.is_connected(_on_tree_configured):
+			mt.configured.disconnect(_on_tree_configured)
+			
+		if mt.configured.is_connected(configured.emit):
+			mt.configured.disconnect(configured.emit)
 
 
 func _physics_process(delta: float) -> void:

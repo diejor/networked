@@ -4,7 +4,6 @@
 
 [resource]
 script = ExtResource("1_gsje6")
-global_level = 0
 module_overrides = {
 "core.tick_interpolator": 2
 }

@@ -74,13 +74,14 @@ func test_client_is_online_after_connect_player() -> void:
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
+	#var lm: MultiplayerLobbyManager = server.get_service(MultiplayerLobbyManager)
 	#await wait_until(func():
 		#@warning_ignore("confusable_local_declaration")
-		#var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+		#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
 		#return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
 	#, 5.0)
 #
-	#var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+	#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
 	#var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
 	#assert_that(player).is_not_null()
 #
@@ -90,13 +91,14 @@ func test_client_is_online_after_connect_player() -> void:
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
+	#var lm: MultiplayerLobbyManager = server.get_service(MultiplayerLobbyManager)
 	#await wait_until(func():
 		#@warning_ignore("confusable_local_declaration")
-		#var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+		#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
 		#return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
 	#, 5.0)
 #
-	#var lobby: Lobby = server.lobby_manager.active_lobbies.get(&"TestLevel")
+	#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
 	#var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
 	#assert_that(player.get_multiplayer_authority()).is_equal(peer_id)
 
@@ -116,9 +118,8 @@ func _setup_server() -> void:
 	backend.session = session
 	server.backend = backend
 
-	var mgr := LOBBY_MANAGER_SCENE.instantiate() as MultiplayerLobbyManager
+	var mgr: MultiplayerLobbyManager = LOBBY_MANAGER_SCENE.instantiate()
 	server.add_child(mgr)
-	server.lobby_manager = mgr
 	# Scenes must be registered before host() because spawn_lobbies() runs
 	# synchronously inside _on_configured(), which fires during host().
 	mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
@@ -139,9 +140,8 @@ func _setup_network() -> void:
 	backend.session = session
 	client_tree.backend = backend
 
-	var mgr := LOBBY_MANAGER_SCENE.instantiate() as MultiplayerLobbyManager
+	var mgr: MultiplayerLobbyManager = LOBBY_MANAGER_SCENE.instantiate()
 	client_tree.add_child(mgr)
-	client_tree.lobby_manager = mgr
 
 	# Assigning client triggers signal wiring inside NetworkSession.
 	network.client = client_tree

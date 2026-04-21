@@ -26,12 +26,16 @@ static func find_lobby_races(lobby: Lobby, mt: MultiplayerTree) -> Array[Diction
 
 ## Returns a list of potential races when a new peer connects.
 static func find_connect_races(peer_id: int, mt: MultiplayerTree) -> Array[Dictionary]:
-	if not mt.lobby_manager or not mt.multiplayer_api:
+	if not mt or not mt.multiplayer_api:
+		return []
+
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	if not lm:
 		return []
 
 	var races: Array[Dictionary] = []
-	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
+	for lobby_name: StringName in lm.active_lobbies:
+		var lobby: Lobby = lm.active_lobbies[lobby_name]
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
 		for child in lobby.level.find_children("*", "MultiplayerSynchronizer", true, false):

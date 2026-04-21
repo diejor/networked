@@ -19,10 +19,10 @@ func before_test() -> void:
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
-	server_mgr = harness.get_server().lobby_manager
+	server_mgr = harness._get_lobby_manager(harness.get_server())
 	# Add a client so the server is online; capture its manager for parity setup.
 	var client := await harness.add_client()
-	client_mgr = client.lobby_manager
+	client_mgr = harness._get_lobby_manager(client)
 
 
 func after_test() -> void:

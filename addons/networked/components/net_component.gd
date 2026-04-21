@@ -31,7 +31,7 @@ func get_multiplayer_tree() -> MultiplayerTree:
 
 ## Returns the [MultiplayerLobbyManager] for this session.
 func get_lobby_manager() -> MultiplayerLobbyManager:
-	var s := get_session()
+	var s: NetSessionAccess = get_session()
 	return s.get_lobby_manager() if s else null
 
 
@@ -40,13 +40,15 @@ func get_lobby_manager() -> MultiplayerLobbyManager:
 func get_tp_layer() -> TPLayerAPI:
 	if not is_inside_tree() or not multiplayer or multiplayer.is_server():
 		return null
-	var manager := get_lobby_manager()
-	return manager.tp_layer if manager else null
+	var s: NetSessionAccess = get_session()
+	if not s: return null
+	var tp_layer: TPLayerAPI = s.get_service(TPLayerAPI)
+	return tp_layer
 
 
 ## Returns the [NetworkClock] for this session.
 func get_network_clock() -> NetworkClock:
-	var s := get_session()
+	var s: NetSessionAccess = get_session()
 	return s.get_clock() if s else null
 
 

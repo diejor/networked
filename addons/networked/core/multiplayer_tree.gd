@@ -26,6 +26,8 @@ signal peer_disconnected(peer_id: int)
 signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
+## Emitted on the server when a peer requests to join.
+signal player_join_requested(client_data: MultiplayerClientData)
 
 ## Set to [code]true[/code] to configure this instance as the authoritative server.
 var is_server: bool
@@ -54,36 +56,6 @@ var is_server: bool
 			if backend and not backend.changed.is_connected(update_configuration_warnings):
 				backend.changed.connect(update_configuration_warnings)
 				
-		update_configuration_warnings()
-
-## The [MultiplayerLobbyManager] responsible for handling player lobbies, spawning, and scene transitions.
-@export var lobby_manager: MultiplayerLobbyManager:
-	set(manager):
-		if not Engine.is_editor_hint():
-			if lobby_manager and configured.is_connected(lobby_manager.configured.emit):
-				configured.disconnect(lobby_manager.configured.emit)
-				
-			lobby_manager = manager
-			
-			if lobby_manager and not configured.is_connected(lobby_manager.configured.emit):
-				configured.connect(lobby_manager.configured.emit)
-		else:
-			lobby_manager = manager
-			
-		update_configuration_warnings()
-
-## Optional [NetworkClock] child node. When assigned, the clock's [method NetworkClock._on_tree_configured]
-## is automatically connected to [signal configured] so it can register itself on the multiplayer API.
-@export var clock: NetworkClock:
-	set(c):
-		if not Engine.is_editor_hint():
-			if clock and configured.is_connected(clock.configured.emit):
-				configured.disconnect(clock.configured.emit)
-			clock = c
-			if clock and not configured.is_connected(clock.configured.emit):
-				configured.connect(clock.configured.emit)
-		else:
-			clock = c
 		update_configuration_warnings()
 
 ## The active [SceneMultiplayer] instance provided by the current [member backend].
@@ -126,6 +98,36 @@ static func resolve(context: Object) -> MultiplayerTree:
 
 
 var _peer_contexts: Dictionary[int, PeerContext] = {}
+var _services: Dictionary[Script, Node] = {}
+
+
+## Registers a [Node] as a service for this session.
+func register_service(service: Node, type: Script = null) -> void:
+	assert(is_ancestor_of(service) or service == self, "Service %s must be a descendant of the MultiplayerTree." % service.name)
+	
+	if not type:
+		type = service.get_script()
+	
+	if type in _services:
+		NetLog.warn("Service %s already registered — overwriting." % type.get_global_name())
+	
+	_services[type] = service
+	NetLog.debug("Service %s registered." % type.get_global_name())
+
+
+## Unregisters a [Node] from this session's services.
+func unregister_service(service: Node, type: Script = null) -> void:
+	if not type:
+		type = service.get_script()
+	
+	if _services.get(type) == service:
+		_services.erase(type)
+		NetLog.debug("Service %s unregistered." % type.get_global_name())
+
+
+## Returns the service registered for [param type], or [code]null[/code].
+func get_service(type: Script) -> Node:
+	return _services.get(type)
 
 
 ## Returns the [PeerContext] for [param peer_id], creating one on first access.
@@ -144,9 +146,6 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("The assigned backend is the abstract 'BackendPeer' class. Please assign a functional derived class.")
 	elif backend:
 		warnings.append_array(backend._get_backend_warnings(self))
-		
-	if not lobby_manager:
-		warnings.append("A MultiplayerLobbyManager must be assigned to the 'lobby_manager' property.")
 		
 	return warnings
 
@@ -227,6 +226,22 @@ func is_online() -> bool:
 		and not multiplayer_peer is OfflineMultiplayerPeer 
 		and multiplayer_api != null 
 		and multiplayer_api.has_multiplayer_peer())
+
+
+## Entry point for a client to request entry into the game world.
+##
+## Deserializes [param bytes] into a [MultiplayerClientData]. If a [MultiplayerLobbyManager]
+## service is registered, delegates the join to it. Otherwise, emits [signal player_join_requested]
+## for manual handling by the user.
+@rpc("any_peer", "call_remote", "reliable")
+func request_join_player(bytes: PackedByteArray) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	
+	var client_data: MultiplayerClientData = MultiplayerClientData.new()
+	client_data.deserialize(bytes)
+	client_data.peer_id = peer_id
+
+	player_join_requested.emit(client_data)
 
 
 func _config_api() -> void:

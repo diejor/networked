@@ -99,9 +99,10 @@ func _get_stable_id_from_path(path: String) -> Variant:
 
 func _find_players(mt: MultiplayerTree) -> Array[Node]:
 	var players: Array[Node] = []
-	if not mt.lobby_manager: return players
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	if not lm: return players
 
-	for lobby in mt.lobby_manager.active_lobbies.values():
+	for lobby in lm.active_lobbies.values():
 		if is_instance_valid(lobby) and is_instance_valid(lobby.level):
 			var comps: Array[Node] = lobby.level.find_children("*", "ClientComponent", true, false)
 			for c in comps: players.append(c.owner)
@@ -111,7 +112,7 @@ func _find_players(mt: MultiplayerTree) -> Array[Node]:
 # ─── Signal Wiring ────────────────────────────────────────────────────────────
 
 func _ready() -> void:
-	var mt := _mt_ref.get_ref() as MultiplayerTree
+	var mt: MultiplayerTree = _mt_ref.get_ref()
 	if not mt: return
 
 	# Decoration observer — safe to connect at any time.
@@ -131,7 +132,8 @@ func _ready() -> void:
 
 	# Debug signal wiring for lobby/clock requires configured state.
 	mt.configured.connect(_on_configured)
-	if mt.lobby_manager:
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	if lm:
 		_on_configured()
 
 
@@ -144,20 +146,22 @@ func _exit_tree() -> void:
 
 func _on_configured() -> void:
 	_refresh_all()
-	var mt := _mt_ref.get_ref() as MultiplayerTree
+	var mt: MultiplayerTree = _mt_ref.get_ref()
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if not mt or not reporter or _lobby_wired: return
 	_lobby_wired = true
 
-	if mt.clock:
-		mt.clock.pong_received.connect(func(data: Dictionary): reporter._on_clock_pong(data, mt))
+	var clock: NetworkClock = mt.get_service(NetworkClock)
+	if clock:
+		clock.pong_received.connect(func(data: Dictionary): reporter._on_clock_pong(data, mt))
 
-	if not mt.lobby_manager: return
-	mt.lobby_manager.lobby_spawned.connect(_on_lobby_spawned)
-	mt.lobby_manager.lobby_despawned.connect(_on_lobby_despawned)
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	if not lm: return
+	lm.lobby_spawned.connect(_on_lobby_spawned)
+	lm.lobby_despawned.connect(_on_lobby_despawned)
 
 	# Retroactively hook lobbies that spawned before this context was ready (e.g. ON_STARTUP).
-	for lobby: Lobby in mt.lobby_manager.active_lobbies.values():
+	for lobby: Lobby in lm.active_lobbies.values():
 		if not is_instance_valid(lobby) or _hooked_lobbies.has(lobby): continue
 		_lobby_tokens[lobby] = null  # no causal token for lobbies we didn't witness
 		_hook_synchronizer(lobby)

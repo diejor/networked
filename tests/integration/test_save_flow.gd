@@ -26,7 +26,7 @@ func before_test() -> void:
 	add_child(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
 
-	var server_mgr: MultiplayerLobbyManager = harness.get_server().lobby_manager
+	var server_mgr := harness._get_lobby_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
 
 	client0 = await harness.add_client()

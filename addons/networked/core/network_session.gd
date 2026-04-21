@@ -85,7 +85,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 
 
 func _request_join(client_data: MultiplayerClientData) -> void:
-	client.lobby_manager.request_join_player.rpc_id(
+	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
 		client_data.serialize()
 	)

@@ -17,7 +17,7 @@ func before_test() -> void:
 	auto_free(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
 
-	server_mgr = harness.get_server().lobby_manager
+	server_mgr = harness._get_lobby_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 
 	client0 = await harness.add_client()

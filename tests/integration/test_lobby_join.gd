@@ -13,7 +13,7 @@ func before_test() -> void:
 	add_child(harness)
 	auto_free(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
-	server_mgr = harness.get_server().lobby_manager
+	server_mgr = harness._get_lobby_manager(harness.get_server())
 	# Scenes must be registered before add_client() because spawn_lobbies()
 	# runs synchronously inside host() during _on_configured().
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
@@ -48,7 +48,7 @@ func test_two_clients_both_connect_to_server_with_lobby() -> void:
 	add_child(harness)
 	auto_free(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
-	harness.get_server().lobby_manager.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	harness._get_lobby_manager(harness.get_server()).add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 	await harness.add_client()
 	await harness.add_client()
 

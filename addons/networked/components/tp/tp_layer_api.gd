@@ -19,6 +19,28 @@ signal configured
 func _init() -> void:
 	configured.connect(_on_multiplayer_configured)
 
+
+func _enter_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	
+	var mt: MultiplayerTree = get_multiplayer_tree()
+	assert(is_instance_valid(mt), "TPLayer must be added as a descendant of a MultiplayerTree")
+	mt.register_service(self, TPLayerAPI)
+
+
+func _ready() -> void:
+	pass
+
+
+func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	
+	var mt: MultiplayerTree = get_multiplayer_tree()
+	if is_instance_valid(mt):
+		mt.unregister_service(self, TPLayerAPI)
+
 ## Plays the outgoing transition (cover the screen). Awaitable.
 @abstract
 func teleport_out() -> void

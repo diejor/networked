@@ -212,18 +212,44 @@ func _init() -> void:
 	lobby_despawned.connect(_on_lobby_despawned)
 
 
-func _ready() -> void:
+func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
 	spawn_function = _spawn_lobby_node
 	spawn_path = "."
 	add_to_group("lobby_managers")
+	
+	var mt: MultiplayerTree = get_parent()
+	assert(is_instance_valid(mt), "LobbyManager must be a direct child of MultiplayerTree")
+	mt.register_service(self, MultiplayerLobbyManager)
+	
+	if not mt.player_join_requested.is_connected(handle_join_request):
+		mt.player_join_requested.connect(handle_join_request)
+	
+	if not mt.configured.is_connected(configured.emit):
+		mt.configured.connect(configured.emit)
+
+
+func _ready() -> void:
+	pass
 
 
 func _exit_tree() -> void:
-	if not Engine.is_editor_hint():
-		active_lobbies.clear()
+	if Engine.is_editor_hint():
+		return
+		
+	var mt: MultiplayerTree = get_parent()
+	if is_instance_valid(mt):
+		mt.unregister_service(self, MultiplayerLobbyManager)
+		
+		if mt.player_join_requested.is_connected(handle_join_request):
+			mt.player_join_requested.disconnect(handle_join_request)
+			
+		if mt.configured.is_connected(configured.emit):
+			mt.configured.disconnect(configured.emit)
+			
+	active_lobbies.clear()
 
 
 ## Returns the stored config for [param name], falling back to safe defaults.
@@ -375,23 +401,17 @@ func _spawn_lobby_node(data: Variant) -> Node:
 	return lobby
 
 
-## RPC called by the client to request entry into a lobby after connecting.
+## Called by [MultiplayerTree] to handle a player entry request.
 ##
-## Deserializes [param client_data_bytes] into a [MultiplayerClientData], activates the
-## destination lobby on demand if required, then emits [signal ClientComponent.player_joined].
-@rpc("any_peer", "call_remote", "reliable")
-func request_join_player(client_data_bytes: PackedByteArray) -> void:
-	var peer_id := multiplayer.get_remote_sender_id()
+## Activates the destination lobby on demand if required, then emits [signal ClientComponent.player_joined].
+func handle_join_request(client_data: MultiplayerClientData) -> void:
+	var peer_id := client_data.peer_id
 	for lobby: Lobby in active_lobbies.values():
 		if is_instance_valid(lobby.synchronizer) \
 				and peer_id in lobby.synchronizer.connected_clients:
 			NetLog.warn("Duplicate join attempt from peer %d — ignored.", [peer_id], func(m): push_warning(m))
 			return
 	NetLog.info("Received join request from peer %d." % peer_id)
-
-	var client_data: MultiplayerClientData = MultiplayerClientData.new()
-	client_data.deserialize(client_data_bytes)
-	client_data.peer_id = peer_id
 
 	NetLog.debug("Join request data: username=%s spawner=%s" % [client_data.username, client_data.spawner_path.node_path])
 

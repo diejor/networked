@@ -40,7 +40,6 @@ func _add_clock(tree: MultiplayerTree) -> NetworkClock:
 	clock.tickrate       = TICKRATE
 	clock.display_offset = DISPLAY_OFFSET
 	tree.add_child(clock)
-	tree.clock = clock
 	return clock
 
 func _make_replication_config(prop_path: NodePath) -> SceneReplicationConfig:

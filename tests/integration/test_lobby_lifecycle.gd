@@ -18,7 +18,7 @@ func before_test() -> void:
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
-	server_mgr = harness.get_server().lobby_manager
+	server_mgr = harness._get_lobby_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 	server_mgr.add_spawnable_scene(TEST_LEVEL_2_SCENE.resource_path)
 	await harness.add_client()
@@ -43,7 +43,7 @@ func test_on_demand_lobby_skipped_at_startup() -> void:
 	add_child(h2)
 	await h2.setup(LOBBY_MANAGER_SCENE)
 
-	var mgr2: MultiplayerLobbyManager = h2.get_server().lobby_manager
+	var mgr2 := h2._get_lobby_manager(h2.get_server())
 	mgr2._lobby_configs[&"TestLevel2"] = {
 		"load_mode": MultiplayerLobbyManager.LoadMode.ON_DEMAND,
 		"empty_action": MultiplayerLobbyManager.EmptyAction.FREEZE,

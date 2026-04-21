@@ -34,19 +34,18 @@ var _interpolator: TickInterpolator
 # ---------------------------------------------------------------------------
 
 func before_test() -> void:
+	# Tree — required for NetComponent bucket lookups.
+	_tree = MultiplayerTree.new()
+	add_child(_tree)
+	auto_free(_tree)
+
 	# Clock — manually driven, not connected to the physics loop.
 	_clock = NetworkClock.new()
 	_clock.tickrate = 30
 	_clock.display_offset = 0  # display_tick = clock.tick; easier to reason about in tests
-	add_child(_clock)
+	_tree.add_child(_clock)
 	auto_free(_clock)
 	_clock.set_physics_process(false)
-
-	# Tree — required for NetComponent bucket lookups.
-	_tree = MultiplayerTree.new()
-	_tree.clock = _clock
-	add_child(_tree)
-	auto_free(_tree)
 
 	var api := _clock.multiplayer as SceneMultiplayer
 	assert(api != null, "test requires SceneMultiplayer")

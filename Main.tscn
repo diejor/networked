@@ -37,11 +37,9 @@ client = NodePath("Client")
 init_client_data = SubResource("Resource_5vvyt")
 metadata/_custom_type_script = "uid://xwxgwpe3rp8c"
 
-[node name="Client" type="Node" parent="NetworkSession" unique_id=185172770 node_paths=PackedStringArray("lobby_manager", "clock")]
+[node name="Client" type="Node" parent="NetworkSession" unique_id=185172770]
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_03owx")
-lobby_manager = NodePath("MultiplayerLobbyManager")
-clock = NodePath("NetworkClock")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="NetworkSession/Client" unique_id=498939000]

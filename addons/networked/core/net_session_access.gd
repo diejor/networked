@@ -23,18 +23,25 @@ func is_valid() -> bool:
 
 
 func get_lobby_manager() -> MultiplayerLobbyManager:
-	var mt := _mt_ref.get_ref() as MultiplayerTree
-	return mt.lobby_manager if mt else null
+	var mt: MultiplayerTree = _mt_ref.get_ref()
+	if not mt: return null
+	return mt.get_service(MultiplayerLobbyManager)
 
 
 func get_clock() -> NetworkClock:
-	var mt := _mt_ref.get_ref() as MultiplayerTree
-	return mt.clock if mt else null
+	var mt: MultiplayerTree = _mt_ref.get_ref()
+	if not mt: return null
+	return mt.get_service(NetworkClock)
 
 
 func get_peer_context(peer_id: int) -> PeerContext:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	return mt.get_peer_context(peer_id) if mt else null
+
+
+func get_service(type: Script) -> Node:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	return mt.get_service(type) if mt else null
 
 
 func is_server() -> bool:

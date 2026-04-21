@@ -338,11 +338,14 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	if not _debug_build():
 		return
-	if not is_instance_valid(mt) or not mt.lobby_manager:
+	if not is_instance_valid(mt):
+		return
+	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+	if not lm:
 		return
 	var zombies: Array[String] = []
-	for lobby_name: StringName in mt.lobby_manager.active_lobbies:
-		var lobby: Lobby = mt.lobby_manager.active_lobbies[lobby_name]
+	for lobby_name: StringName in lm.active_lobbies:
+		var lobby: Lobby = lm.active_lobbies[lobby_name]
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
 		for node: Node in lobby.level.find_children("*", "Node", true, false):
@@ -617,8 +620,9 @@ func _emit_current_state() -> void:
 		_queue("networked:session_registered", event.to_dict(), mt)
 
 		# Re-emit topology for every player currently in any lobby.
-		if is_instance_valid(mt.lobby_manager):
-			for lobby: Lobby in mt.lobby_manager.active_lobbies.values():
+		var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+		if is_instance_valid(lm):
+			for lobby: Lobby in lm.active_lobbies.values():
 				if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 					continue
 				var comps := lobby.level.find_children("*", "ClientComponent", true, false)
