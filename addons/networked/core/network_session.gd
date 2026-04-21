@@ -50,9 +50,15 @@ var server: MultiplayerTree
 ## On web builds, falls back to [LocalLoopbackBackend] for singleplayer when not using WebRTC.
 func connect_player(client_data: MultiplayerClientData) -> void:
 	NetLog.trace("NetworkSession: connect_player called.")
-	assert(client_data)
-	assert(client_data.username)
-	assert(client_data.spawner_path)
+	if not client_data:
+		NetLog.error("connect_player: client_data is null.", [], func(m): push_error(m))
+		return
+	if client_data.username.is_empty():
+		NetLog.error("connect_player: username is empty.", [], func(m): push_error(m))
+		return
+	if not client_data.spawner_path or not client_data.spawner_path.is_valid():
+		NetLog.error("connect_player: spawner_path is invalid or missing.", [], func(m): push_error(m))
+		return
 	
 	await disconnect_player()
 
@@ -162,6 +168,8 @@ func _host_server() -> String:
 	server = client.duplicate()
 	server.is_server = true
 	server.name = "Server"
+	if client._pending_world:
+		server._pending_world_scene_path = client._pending_world.scene_file_path
 	add_child(server)
 	
 	NetLog.info("Starting embedded server...")

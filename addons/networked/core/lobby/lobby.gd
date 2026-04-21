@@ -29,13 +29,11 @@ func hook_spawn_signals(level: Node) -> void:
 		spawner.despawned.connect(synchronizer._on_despawned)
 
 
-## Returns all [MultiplayerSpawner]s in [param node] whose [member MultiplayerSpawner.spawn_path] points to [param node] directly.
+## Returns all [MultiplayerSpawner]s within the [param node]'s hierarchy.
 func get_spawners(node: Node) -> Array[MultiplayerSpawner]:
 	var spawners: Array[MultiplayerSpawner] = []
 	spawners.assign(node.find_children("*", "MultiplayerSpawner"))
-	return spawners.filter(func(spawner: MultiplayerSpawner) -> bool:
-		return spawner.get_path_to(level) == spawner.spawn_path
-	)
+	return spawners
 
 
 ## Registers [param player] with the synchronizer and adds it to the level scene.

@@ -139,14 +139,14 @@ func has_state_property(property: StringName) -> bool:
 func _get_scene_value(property_name: StringName) -> Variant:
 	var scene_path: NodePath = save_component.tracked_properties[property_name]
 	var node_res := scene_owner.get_node_and_resource(scene_path)
-	assert(node_res[0], "Invalid scene path for '%s': %s" % [property_name, scene_path])
+	assert(node_res[0], "Invalid property path for '%s': %s" % [property_name, scene_path])
 	return (node_res[0] as Node).get_indexed(node_res[2])
 
 
 func _set_scene_value(property_name: StringName, value: Variant) -> void:
 	var scene_path: NodePath = save_component.tracked_properties[property_name]
 	var node_res := scene_owner.get_node_and_resource(scene_path)
-	assert(node_res[0], "Invalid scene path for '%s': %s" % [property_name, scene_path])
+	assert(node_res[0], "Invalid property path for '%s': %s" % [property_name, scene_path])
 	(node_res[0] as Node).set_indexed(node_res[2], value)
 
 

@@ -68,6 +68,7 @@ func test_save_and_load_round_trip_via_database() -> void:
 
 	save_comp.bound_entity.set_value(&"health", 100)
 	db.register_schema(&"players", [&"health"])
+	save_comp.instantiate()
 
 	var err: Error = save_comp.save_state()
 	assert_that(err).is_equal(OK)
@@ -92,6 +93,7 @@ func test_load_state_returns_file_not_found_when_no_record() -> void:
 	save_comp.owner = root
 
 	db.register_schema(&"players", [&"health"])
+	save_comp.instantiate()
 
 	var err: Error = save_comp.load_state()
 	assert_that(err).is_equal(ERR_FILE_NOT_FOUND)
@@ -110,6 +112,7 @@ func test_save_state_uses_entity_to_dict() -> void:
 	save_comp.bound_entity.set_value(&"score", 999)
 	save_comp.bound_entity.set_value(&"level", 5)
 	db.register_schema(&"players", [&"score", &"level"])
+	save_comp.instantiate()
 	save_comp.save_state()
 
 	var raw: Dictionary = backend._find_by_id(&"players", &"Bob")

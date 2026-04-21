@@ -8,6 +8,7 @@ var _session: LocalLoopbackSession
 var _server: MultiplayerTree
 var _clients: Array[MultiplayerTree] = []
 var _lobby_manager_scene: PackedScene
+var _world_scene: PackedScene
 
 
 const DEFAULT_TIMEOUT := 1.0
@@ -27,8 +28,9 @@ func wait_for(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> bool:
 ## Creates a fresh session and a server node. Does NOT host yet — register
 ## spawnable scenes on _get_lobby_manager(get_server()) before calling add_client().
 ## Must be awaited — waits one frame for _ready() to fire before returning.
-func setup(lobby_manager_scene: PackedScene = null) -> void:
+func setup(lobby_manager_scene: PackedScene = null, world_scene: PackedScene = null) -> void:
 	_lobby_manager_scene = lobby_manager_scene
+	_world_scene = world_scene
 	_session = LocalLoopbackSession.new()
 	_setup_server()
 	await get_tree().process_frame
@@ -184,6 +186,10 @@ func _setup_server() -> void:
 	_server = MultiplayerTree.new()
 	_server.name = "HarnessServer"
 	_server.is_server = true
+
+	if _world_scene:
+		_server.add_child(_world_scene.instantiate())
+
 	add_child(_server)
 
 	var backend := LocalLoopbackBackend.new()

@@ -192,17 +192,6 @@ func _has_spawnable_scene_path(target_path: String) -> bool:
 	return false
 
 
-func _get_configuration_warnings() -> PackedStringArray:
-	var warnings := PackedStringArray()
-
-	if not tp_layer:
-		warnings.append("Optional: No TPLayer is provided. Teleportation and \
-scene transitions will not work visually. You can use TPLayer Scene to test \
-functionality.")
-
-	return warnings
-
-
 func _init() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -420,7 +409,7 @@ func handle_join_request(client_data: MultiplayerClientData) -> void:
 
 	var lobby := active_lobbies.get(lobby_name) as Lobby
 	if not lobby:
-		NetLog.error("Join request failed: Lobby '%s' could not be activated.", [lobby_name], func(m): push_error(m))
+		NetLog.error("Join request failed: Scene '%s' is not registered in the LobbyManager spawn list." % lobby_name, [], func(m): push_error(m))
 		return
 
 	var spawner_client: ClientComponent = (

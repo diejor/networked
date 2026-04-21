@@ -202,7 +202,6 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 	
 	span.step("received", {"from_scene": from_scene_name, "sender": sender_id})
 
-	log_trace("Waiting for client synchronization...")
 	span.step("awaiting_client_sync")
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(tp_component.client_synchronized, timer):
@@ -216,7 +215,7 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 	await lobby_manager.activate_lobby(StringName(to_lobby_name))
 	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_lobby_name))
 	if not to_lobby:
-		log_error("TPComponent: Destination lobby '%s' could not be activated." % to_lobby_name, [], func(m): push_error(m))
+		log_error("Destination lobby '%s' could not be activated." % to_lobby_name, [], func(m): push_error(m))
 		span.fail("dest_lobby_activation_failed", {"lobby": to_lobby_name})
 		return
 
@@ -246,7 +245,7 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 ## Server-side callback invoked after the entity safely enters the destination lobby.
 ## Sets position on the server and forwards the snap coordinates to the client.
 func teleported(scene: Node, _tp_path: String) -> void:
-	log_trace("TPComponent: teleported callback on server.")
+	log_trace("`teleported` callback on server.")
 	var teleport_success := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `teleported` was called when `is_inside_tree = false`.")
 		var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO

@@ -100,6 +100,9 @@ static func resolve(context: Object) -> MultiplayerTree:
 var _peer_contexts: Dictionary[int, PeerContext] = {}
 var _services: Dictionary[Script, Node] = {}
 
+var _pending_world: Node = null
+var _pending_world_scene_path: String = ""
+
 
 ## Registers a [Node] as a service for this session.
 func register_service(service: Node, type: Script = null) -> void:
@@ -147,7 +150,103 @@ func _get_configuration_warnings() -> PackedStringArray:
 	elif backend:
 		warnings.append_array(backend._get_backend_warnings(self))
 		
+	var has_lobby_manager := false
+	var has_lobbyless_world := false
+	for child in get_children():
+		if child is MultiplayerLobbyManager:
+			has_lobby_manager = true
+			break
+		if _has_client_component(child):
+			has_lobbyless_world = true
+			break
+			
+	if not has_lobby_manager and not has_lobbyless_world:
+		warnings.append("No Scene (with a ClientComponent inside) or \
+`MultiplayerLobbyManager` found in children. No replication will happen.")
+		
 	return warnings
+
+
+func _enter_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	for child in get_children():
+		if child is MultiplayerLobbyManager:
+			return
+	for child in get_children():
+		if _has_client_component(child):
+			NetLog.info("Lobbyless mode: Identified '%s' as the initial world." % child.name)
+			_pending_world = child
+			_pending_world_scene_path = child.scene_file_path
+			if _pending_world_scene_path.is_empty():
+				push_error("[networked] Lobbyless world '%s' must be a saved .tscn (scene_file_path is empty)." % child.name)
+				_pending_world = null
+				return
+			remove_child(child)
+			return
+
+
+static func _has_client_component(node: Node) -> bool:
+	if node is ClientComponent:
+		return true
+	for child in node.get_children():
+		if _has_client_component(child):
+			return true
+	return false
+
+
+func _create_world_wrapper() -> Node:
+	var wrapper: Node
+	if is_server:
+		var vp := SubViewport.new()
+		vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		wrapper = vp
+	else:
+		wrapper = Node.new()
+	wrapper.name = "World"
+	wrapper.set_meta(&"_is_world_wrapper", true)
+	return wrapper
+
+
+func _setup_pending_world() -> void:
+	if not _pending_world and _pending_world_scene_path.is_empty():
+		return
+	var wrapper := _create_world_wrapper()
+	add_child(wrapper)
+	if is_server:
+		var level: Node = load(_pending_world_scene_path).instantiate()
+		wrapper.add_child(level)
+	else:
+		wrapper.add_child(_pending_world)
+	_pending_world = null
+	_pending_world_scene_path = ""
+
+
+func _find_world(spawner_path: SceneNodePath) -> Node:
+	for child in get_children():
+		if not child.get_meta(&"_is_world_wrapper", false):
+			continue
+		for level in child.get_children():
+			if _scene_paths_match(level.scene_file_path, spawner_path.scene_path):
+				return level
+	return null
+
+
+static func _scene_paths_match(a: String, b: String) -> bool:
+	return SceneNodePath._safe_resolve_path(a) == SceneNodePath._safe_resolve_path(b)
+
+
+func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
+	var world := _find_world(client_data.spawner_path)
+	if not world:
+		var scene_path := SceneNodePath._safe_resolve_path(client_data.spawner_path.scene_path)
+		push_error("[networked] Lobbyless: no active world matches spawner scene '%s'." % scene_path)
+		return
+	var client_comp := world.get_node_or_null(client_data.spawner_path.node_path) as ClientComponent
+	if not client_comp:
+		push_error("[networked] Lobbyless: ClientComponent not found at '%s'. Add a ClientComponent to your Level and point spawner_path at it." % client_data.spawner_path.node_path)
+		return
+	client_comp.player_joined.emit(client_data)
 
 
 func _init() -> void:
@@ -241,7 +340,10 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	client_data.deserialize(bytes)
 	client_data.peer_id = peer_id
 
-	player_join_requested.emit(client_data)
+	if get_service(MultiplayerLobbyManager):
+		player_join_requested.emit(client_data)
+	else:
+		_route_lobbyless_join(client_data)
 
 
 func _config_api() -> void:
@@ -260,6 +362,7 @@ func _config_api() -> void:
 		get_tree().root.get_node("NetworkedDebugger").register_tree(self)
 
 	configured.emit()
+	_setup_pending_world()
 
 
 func _connect_backend_signals() -> void:

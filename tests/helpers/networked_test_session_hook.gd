@@ -9,6 +9,7 @@ func _init() -> void:
 	super("NetworkedTestHook", "Auto-resets the NetworkedDebugger between tests.")
 
 func startup(session: GdUnitTestSession) -> GdUnitResult:
+	NetLog.push_setting_str("none")
 	session.test_event.connect(_on_test_event)
 	return GdUnitResult.success()
 

@@ -212,9 +212,10 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	})
 	span.step("joined")
 	log_info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
-	assert(client_data.peer_id)
-	assert(client_data.spawner_path)
-	assert(client_data.username)
+	if not client_data.peer_id or not client_data.spawner_path or client_data.username.is_empty():
+		log_error("Player join failed: invalid client data.", [], func(m): push_error(m))
+		span.end()
+		return
 	
 	var player := _instantiate_player(client_data)
 	
@@ -239,14 +240,18 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 			lobby.add_player(player)
 		else:
 			log_error("Could not find active lobby for scene `%s`." % scene_name, [], func(m): push_error(m))
-	
+	else:
+		owner.get_parent().add_child(player)
+
 	span.end()
 
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
 	log_trace("Connecting player %s" % client_data.username)
-	assert(get_tree().current_scene is NetworkSession)
-	var network: NetworkSession = get_tree().current_scene
+	var network := get_tree().current_scene as NetworkSession
+	if not network:
+		log_error("Could not connect player: current scene is not a NetworkSession.", [], func(m): push_error(m))
+		return
 	network.connect_player(client_data)
 
 
