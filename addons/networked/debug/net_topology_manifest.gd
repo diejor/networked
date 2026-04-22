@@ -7,6 +7,7 @@ var player_name: String
 var in_tree: bool
 
 
+## Serializes this manifest into a [Dictionary].
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["errors"] = errors

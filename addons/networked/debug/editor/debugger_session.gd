@@ -232,6 +232,9 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 		PanelDataAdapter.PanelType.CRASH,
 		PanelDataAdapter.PanelType.TOPOLOGY,
 	]:
+		if pt == PanelDataAdapter.PanelType.TOPOLOGY and is_server:
+			continue
+			
 		var key: String = _adapter_key(pk, pt)
 		if key not in _adapters:
 			_adapters[key] = _create_adapter(pk, display, pt)

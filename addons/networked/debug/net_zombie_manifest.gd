@@ -7,6 +7,7 @@ var errors: Array[String]
 var disconnected_peer_id: int
 
 
+## Serializes this manifest into a [Dictionary].
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["errors"] = errors

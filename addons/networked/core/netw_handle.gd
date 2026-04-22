@@ -17,42 +17,58 @@ func _init(component: Node) -> void:
 ## Logs an [code]INFO[/code] message.
 func info(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.info(c, arg1, arg2, arg3)
+	if c:
+		Netw.dbg.info(c, arg1, arg2, arg3)
 
 
 ## Logs a [code]DEBUG[/code] message.
 func debug(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.debug(c, arg1, arg2, arg3)
+	if c:
+		Netw.dbg.debug(c, arg1, arg2, arg3)
 
 
 ## Logs a [code]TRACE[/code] message.
 func trace(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.trace(c, arg1, arg2, arg3)
+	if c:
+		Netw.dbg.trace(c, arg1, arg2, arg3)
 
 
-## Logs a [code]WARN[/code] message and calls [code]push_warning[/code].
+## Logs a [code]WARN[/code] message and calls [method @GlobalScope.push_warning].
 func warn(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.warn(c, arg1, arg2, arg3)
+	if c:
+		Netw.dbg.warn(c, arg1, arg2, arg3)
 
 
-## Logs an [code]ERROR[/code] message and calls [code]push_error[/code].
+## Logs an [code]ERROR[/code] message and calls [method @GlobalScope.push_error].
 func error(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.error(c, arg1, arg2, arg3)
+	if c:
+		Netw.dbg.error(c, arg1, arg2, arg3)
 
 
 ## Opens a new general-purpose [NetSpan].
-func span(label: String, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
+func span(
+	label: String,
+	meta: Dictionary = {},
+	follows_from: CheckpointToken = null
+) -> NetSpan:
 	var c := _comp_ref.get_ref() as Node
-	if c: return Netw.dbg.span(c, label, meta, follows_from)
+	if c:
+		return Netw.dbg.span(c, label, meta, follows_from)
 	return NetSpan.new(&"", label)
 
 
 ## Opens a new peer-aware [NetPeerSpan].
-func peer_span(label: String, peers: Array = [], meta: Dictionary = {}, token: CheckpointToken = null) -> NetPeerSpan:
+func peer_span(
+	label: String,
+	peers: Array = [],
+	meta: Dictionary = {},
+	token: CheckpointToken = null
+) -> NetPeerSpan:
 	var c := _comp_ref.get_ref() as Node
-	if c: return Netw.dbg.peer_span(c, label, peers, meta, token)
+	if c:
+		return Netw.dbg.peer_span(c, label, peers, meta, token)
 	return NetPeerSpan.new(&"", label)

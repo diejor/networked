@@ -13,7 +13,7 @@
 ## [br][b]Jump to source[/b]: double-click any row (or press Enter while selected) to open
 ## the script at the call site in the editor.
 @tool
-class_name PanelLogBridge
+class_name PanelSpanTracer
 extends DebugPanel
 
 ## Injected by [NetworkedDebuggerUI] after construction.

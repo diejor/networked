@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://tbhnhps2h4nm" path="res://addons/networked/core/client_data.gd" id="2_03owx"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/core/multiplayer_tree.gd" id="2_r0du0"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
-[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/core/backends/websocket_backend.gd" id="3_trn2v"]
+[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/core/backends/websocket_backend.gd" id="5_trn2v"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/core/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/components/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/core/lobby/lobby_manager.gd" id="7_trn2v"]
@@ -21,7 +21,7 @@ spawner_path = SubResource("Resource_20pc6")
 metadata/_custom_type_script = "uid://tbhnhps2h4nm"
 
 [sub_resource type="Resource" id="Resource_03owx"]
-script = ExtResource("3_trn2v")
+script = ExtResource("5_trn2v")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_wkp8b"]

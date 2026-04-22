@@ -2,22 +2,40 @@
 ##
 ## Created once at the source; never mutated downstream. Replaces the
 ## [code]data.duplicate() + patched["tree_name"] = ...[/code] pattern.
-## [br]
+## [br][br]
 ## Identity is defined by [member source_path] (unique within a process) and
-## [member reporter_id] (differentiates two processes sharing one editor session).
+## [member reporter_id] (differentiates two processes sharing one editor
+## session).
 class_name NetEnvelope
 extends RefCounted
 
 
-var source_path: String  ## str(mt.get_path()), e.g. "/root/Net/Server"
-var reporter_id: String  ## 8-hex UUID; unique per reporter instance
-var peer_id: int         ## multiplayer peer ID at emit time
-var msg: StringName      ## full message name, e.g. "networked:clock_sample"
-var payload: Dictionary  ## original data dict, never mutated
-var frame: int           ## Engine.get_process_frames() at emit time
+## [code]str(mt.get_path())[/code], e.g. [code]"/root/Net/Server"[/code].
+var source_path: String
+
+## 8-hex UUID; unique per reporter instance.
+var reporter_id: String
+
+## Multiplayer peer ID at emit time.
+var peer_id: int
+
+## Full message name, e.g. [code]"networked:clock_sample"[/code].
+var msg: StringName
+
+## Original data dict, never mutated.
+var payload: Dictionary
+
+## [method Engine.get_process_frames] at emit time.
+var frame: int
 
 
-static func from_mt(mt: MultiplayerTree, p_msg: StringName, data: Dictionary, rid: String) -> NetEnvelope:
+## Creates a [NetEnvelope] from a [MultiplayerTree] and message data.
+static func from_mt(
+	mt: MultiplayerTree,
+	p_msg: StringName,
+	data: Dictionary,
+	rid: String
+) -> NetEnvelope:
 	var e := NetEnvelope.new()
 	e.source_path = str(mt.get_path())
 	e.reporter_id = rid
@@ -28,18 +46,20 @@ static func from_mt(mt: MultiplayerTree, p_msg: StringName, data: Dictionary, ri
 	return e
 
 
-## Last segment of source_path — used as the human-readable peer label in the UI.
+## Returns the last segment of [member source_path] as a human-readable label.
 func display_name() -> String:
 	var np := NodePath(source_path)
-	return np.get_name(np.get_name_count() - 1) if np.get_name_count() > 0 else source_path
+	if np.get_name_count() > 0:
+		return np.get_name(np.get_name_count() - 1)
+	return source_path
 
 
-## Unique key for the peer registry and adapter lookup.
-## Combines source_path (unique per process) with reporter_id (unique per OS process).
+## Returns a unique key combining [member source_path] and [member reporter_id].
 func peer_key() -> String:
 	return "%s|%s" % [source_path, reporter_id]
 
 
+## Serializes this envelope into a [Dictionary].
 func to_dict() -> Dictionary:
 	return {
 		"source_path": source_path,
@@ -51,6 +71,7 @@ func to_dict() -> Dictionary:
 	}
 
 
+## Creates a [NetEnvelope] from a [Dictionary].
 static func from_dict(d: Dictionary) -> NetEnvelope:
 	var e := NetEnvelope.new()
 	e.source_path = d.get("source_path", "")

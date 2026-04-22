@@ -2,7 +2,6 @@
 ##
 ## This is a singleton (Autoload) node that collects telemetry from all active
 ## [MultiplayerTree] instances in the process and forwards them to the editor.
-##
 ## [br][br]
 ## [b]Note:[/b] All operations are guarded by [method _debug_build], ensuring
 ## zero overhead in release exports or headless/test runs.
@@ -28,8 +27,10 @@ static func set_enabled(enabled: bool) -> void:
 
 ## Property-style access for the singleton instance.
 var enabled: bool:
-	get: return _debug_build()
-	set(value): set_enabled(value)
+	get:
+		return _debug_build()
+	set(value):
+		set_enabled(value)
 
 ## Unique ID for this reporter instance; used to deduplicate echos in the editor.
 var reporter_id: String = ""
@@ -109,7 +110,7 @@ func _try_register_capture() -> void:
 func _init() -> void:
 	randomize()
 	reporter_id = "%08x" % (randi() % 0xFFFFFFFF)
-	Netw.dbg.trace("Reporter: Started with ID %s" % reporter_id)
+	Netw.dbg.trace("Reporter: Started with ID %s" % [reporter_id])
 
 
 func _enter_tree() -> void:
@@ -403,10 +404,11 @@ func _on_player_spawned_logic(
 		if mt.multiplayer_api:
 			peers = Array(mt.multiplayer_api.get_peers())
 			
-		var spawn_span: NetSpan = NetTrace.begin_peer("player_spawn", peers, mt, {
-			"player": player.name,
-			"tree": mt.name,
-		}, "", lobby_token).with_node(player)
+		var spawn_span: NetSpan = NetTrace.begin_peer(
+			"player_spawn", peers, mt, {
+				"player": player.name,
+				"tree": mt.name,
+			}, "", lobby_token).with_node(player)
 		spawn_span.step("player_entered_tree")
 		_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 		_check_player_topology_validation(player, mt, spawn_span)
@@ -476,7 +478,7 @@ func _check_simplify_path_race_on_connect(
 
 ## Emits a crash manifest when a player is added to a lobby on the server.
 func _check_simplify_path_race_player_spawn(
-	player: Node, mt: MultiplayerTree, span: NetPeerSpan
+	player: Node, mt: MultiplayerTree, span: NetSpan
 ) -> void:
 	var races := NetRaceDetector.find_player_races(player, mt)
 	if races.is_empty():
@@ -504,7 +506,9 @@ func _check_simplify_path_race_player_spawn(
 func _check_player_topology_validation(
 	player: Node, mt: MultiplayerTree, span: NetSpan
 ) -> void:
-	var errors := _execute_validators("player_spawn", {"player": player, "mt": mt})
+	var errors := _execute_validators(
+		"player_spawn", {"player": player, "mt": mt}
+	)
 	if errors.is_empty():
 		if span:
 			span.step("topology_validated")
@@ -545,14 +549,17 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	snap.lobby_name = player.get_parent().name \
 		if is_instance_valid(player.get_parent()) else ""
 		
+	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	snap.active_scene = ctx.get_active_scene_path(player) if ctx else "?"
+		
+	var syncs := SynchronizersCache.get_synchronizers(player)
+	
 	snap.cache_info = {
 		"hit": player.has_meta(SynchronizersCache.META_KEY),
 		"hooked": player.has_meta(&"_sc_invalidation_connected")
 	}
 	
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(
-		player
-	):
+	for sync: MultiplayerSynchronizer in syncs:
 		var si := NetTopologySnapshot.SyncInfo.new()
 		si.name = sync.name
 		si.root_path = str(sync.root_path)
@@ -704,9 +711,8 @@ func _handle_watch_node(d: Dictionary) -> void:
 		return
 		
 	var hooked: Array = []
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(
-		node
-	):
+	for sync: MultiplayerSynchronizer in \
+			SynchronizersCache.get_synchronizers(node):
 		var cb := func() -> void: _send_replication_snapshot(node, sync, mt)
 		sync.delta_synchronized.connect(cb)
 		sync.synchronized.connect(cb)
@@ -758,9 +764,8 @@ func _send_replication_snapshot(
 func _send_full_replication_snapshot(node: Node, mt: MultiplayerTree) -> void:
 	var all_props: Dictionary = {}
 	var inventory: Array = []
-	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(
-		node
-	):
+	for sync: MultiplayerSynchronizer in \
+			SynchronizersCache.get_synchronizers(node):
 		all_props.merge(_collect_properties(node, sync))
 		inventory.append({
 			"name": sync.name,
@@ -858,15 +863,22 @@ func _on_editor_message(message: String, data: Array) -> void:
 		return
 		
 	match message:
-		"watch_node":          _handle_watch_node(data[0])
-		"unwatch_node":        _handle_unwatch_node(data[0])
-		"set_auto_break":      _auto_break = true if data[0] else false
-		"cpp_error_caught":    
+		"watch_node":
+			_handle_watch_node(data[0])
+		"unwatch_node":
+			_handle_unwatch_node(data[0])
+		"set_auto_break":
+			_auto_break = true if data[0] else false
+		"cpp_error_caught":
 			_on_cpp_error_caught(Time.get_ticks_usec(), _format_cpp_error(data))
-		"request_snapshot":    _on_request_snapshot()
-		"inspect_node":        _handle_inspect_node(data[0])
-		"visualizer_toggle":   _handle_visualizer_toggle(data[0])
-		"request_manifest_history": _handle_request_manifest_history(data[0])
+		"request_snapshot":
+			_on_request_snapshot()
+		"inspect_node":
+			_handle_inspect_node(data[0])
+		"visualizer_toggle":
+			_handle_visualizer_toggle(data[0])
+		"request_manifest_history":
+			_handle_request_manifest_history(data[0])
 
 
 ## Forwards a node inspection request from the editor.
@@ -969,7 +981,7 @@ func _flush_now() -> void:
 		
 		if not is_instance_valid(entry_mt):
 			Netw.dbg.warn(
-				"Reporter: [QueueDrop] '%s' - no tree context" % entry[0],
+				"Reporter: [QueueDrop] '%s' - no tree context" % [entry[0]],
 				func(m): push_warning(m)
 			)
 			continue
@@ -1010,7 +1022,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	
 	if _manifest_count_sec[t] > 3 or _manifest_count_min[t] > 10:
 		Netw.dbg.error(
-			"Reporter: [RateLimit] Manifest blocked for trigger: %s" % t,
+			"Reporter: [RateLimit] Manifest blocked for trigger: %s" % [t],
 			func(m): push_error(m)
 		)
 		_maybe_break()
@@ -1020,7 +1032,8 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	manifest.validate_contract()
 	var payload := manifest.to_dict()
 	Netw.dbg.info(
-		"Reporter: [SendManifest] %s (cid=%s)" % [manifest.trigger, manifest.cid]
+		"Reporter: [SendManifest] %s (cid=%s)" % \
+		[manifest.trigger, manifest.cid]
 	)
 	
 	var target_mt := mt
@@ -1029,7 +1042,8 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		
 	if not is_instance_valid(target_mt):
 		Netw.dbg.warn(
-			"Reporter: [ManifestDrop] '%s' - no valid tree" % manifest.trigger,
+			"Reporter: [ManifestDrop] '%s' - no valid tree" % \
+			[manifest.trigger],
 			func(m): push_warning(m)
 		)
 		_maybe_break()
@@ -1067,9 +1081,9 @@ func _fill_base(
 	m.cid_timeline = [cid_val]
 	m.frame = Engine.get_process_frames()
 	m.timestamp_usec = Time.get_ticks_usec()
-	m.active_scene = "?"
-	if get_tree() and get_tree().current_scene:
-		m.active_scene = get_tree().current_scene.scene_file_path
+	
+	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	m.active_scene = ctx.get_active_scene_path() if ctx else "?"
 		
 	m.network_state = {
 		"is_server": mt.is_server if is_instance_valid(mt) else false,
@@ -1102,7 +1116,7 @@ static func _races_to_strings(races: Array[Dictionary]) -> Array[String]:
 	var out: Array[String] = []
 	for r: Dictionary in races:
 		var p := r.get("rel_path", r.get("path", "?"))
-		out.append("simplify_path race on %s" % p)
+		out.append("simplify_path race on %s" % [p])
 	return out
 
 
@@ -1126,13 +1140,13 @@ func emit_debug_event(
 	var bytes := var_to_bytes(envelope.to_dict())
 	
 	if _has_local_session():
-		_trace_emit("[EmitDirect]", msg, "(path=%s)" % envelope.source_path)
+		_trace_emit("[EmitDirect]", msg, "(path=%s)" % [envelope.source_path])
 		EngineDebugger.send_message("networked:envelope", [bytes])
 		
 	if not _relay_active(mt):
 		if not _has_local_session():
 			Netw.dbg.warn(
-				"Reporter: [EmitDropped] %s - no relay or local" % msg,
+				"Reporter: [EmitDropped] %s - no relay or local" % [msg],
 				func(m): push_warning(m)
 			)
 		return
@@ -1198,7 +1212,7 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 	mt.add_child(relay)
 	_relays[mt] = relay
 	
-	Netw.dbg.trace("Reporter: [RelayCreated] for path %s" % mt.get_path())
+	Netw.dbg.trace("Reporter: [RelayCreated] for path %s" % [mt.get_path()])
 	
 	if not _has_local_session():
 		return
@@ -1207,7 +1221,9 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 		"networked/debug/relay_token", ""
 	)
 	if mt.is_server:
-		Netw.dbg.trace("Reporter: [RelayReady] Server relay at %s" % mt.get_path())
+		Netw.dbg.trace(
+			"Reporter: [RelayReady] Server relay at %s" % [mt.get_path()]
+		)
 	else:
 		Netw.dbg.trace("Reporter: [RelayRegister] Client registering via RPC")
 		relay.register_as_recipient.rpc_id(1, token, reporter_id)

@@ -8,6 +8,7 @@ var properties: Dictionary
 var inventory: Array = []
 
 
+## Serializes this snapshot into a [Dictionary].
 func to_dict() -> Dictionary:
 	var d := {
 		"tree_name": tree_name,

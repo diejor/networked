@@ -8,6 +8,7 @@ extends Node
 ## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a
 ## [MultiplayerLobbyManager], then call [method host] or [method join] to start
 ## a session.
+## [br][br]
 ## [codeblock]
 ## # Server
 ## await multiplayer_tree.host()
@@ -20,16 +21,22 @@ extends Node
 
 ## Emitted when the multiplayer API and lobby manager have been configured.
 signal configured()
+
 ## Emitted when a new peer connects to the server.
 signal peer_connected(peer_id: int)
+
 ## Emitted when a peer disconnects from the server.
 signal peer_disconnected(peer_id: int)
+
 ## Emitted on the client when it successfully connects to the server.
 signal connected_to_server()
+
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
+
 ## Emitted on the server when a peer requests to join.
 signal player_join_requested(client_data: MultiplayerClientData)
+
 
 ## Set to [code]true[/code] to configure this instance as the server.
 var is_server: bool
@@ -65,9 +72,11 @@ var is_server: bool
 				
 		update_configuration_warnings()
 
-## The active [SceneMultiplayer] instance provided by the current [member backend].
+## The active [SceneMultiplayer] instance provided by the current
+## [member backend].
 var multiplayer_api: SceneMultiplayer:
-	get: return backend.api if backend else null
+	get:
+		return backend.api if backend else null
 
 ## The active [MultiplayerPeer] connection managed by the [member backend].
 var multiplayer_peer: MultiplayerPeer:
@@ -87,8 +96,8 @@ static func for_node(node: Node) -> MultiplayerTree:
 
 ## Global resolver that finds a [MultiplayerTree] from any context.
 ##
-## Handles MultiplayerTree instances, Nodes (via metadata or hierarchy),
-## and returns null for invalid contexts.
+## Handles [MultiplayerTree] instances, [Node]s (via metadata or hierarchy),
+## and returns [code]null[/code] for invalid contexts.
 static func resolve(context: Object) -> MultiplayerTree:
 	if context is MultiplayerTree:
 		return context
@@ -127,7 +136,8 @@ func register_service(service: Node, type: Script = null) -> void:
 	
 	if type in _services:
 		Netw.dbg.warn(
-			"Service %s already registered — overwriting." % [type.get_global_name()], 
+			"Service %s already registered — overwriting." % \
+			[type.get_global_name()], 
 			func(m): push_warning(m)
 		)
 	
@@ -161,7 +171,7 @@ func get_peer_context(peer_id: int) -> PeerContext:
 ##
 ## Obtained via [method MultiplayerTree.get_spawn_context].
 class SpawnContext extends RefCounted:
-	## Causal [CheckpointToken] for span tracing. May be null.
+	## Causal [CheckpointToken] for span tracing. May be [code]null[/code].
 	var token: CheckpointToken
 	var _lobby: Lobby
 	var _parent_node: Node
@@ -173,6 +183,7 @@ class SpawnContext extends RefCounted:
 		return is_instance_valid(_lobby)
 
 	## Lobby mode: calls [method Lobby.add_player].
+	## [br]
 	## Lobbyless mode: calls [method Node.add_child] on the parent container.
 	func place_player(player: Node) -> void:
 		if is_instance_valid(_lobby):
@@ -276,7 +287,8 @@ func _enter_tree() -> void:
 	for child in get_children():
 		if _has_client_component(child):
 			Netw.dbg.info(
-				"Lobbyless mode: Identified '%s' as the initial world." % [child.name]
+				"Lobbyless mode: Identified '%s' as the initial world." % \
+				[child.name]
 			)
 			_pending_world = child
 			_pending_world_scene_path = child.scene_file_path
@@ -442,7 +454,8 @@ func join(
 	quiet: bool = false
 ) -> Error:
 	Netw.dbg.trace(
-		"MultiplayerTree: Joining at %s with username %s." % [server_address, username]
+		"MultiplayerTree: Joining at %s with username %s." % \
+		[server_address, username]
 	)
 	backend.peer_reset_state()
 	
@@ -507,7 +520,9 @@ func _config_api() -> void:
 	set_meta(&"_original_name", name)
 	
 	var multiplayer_root := get_path()
-	Netw.dbg.debug("Configuring multiplayer API with root: %s" % [multiplayer_root])
+	Netw.dbg.debug(
+		"Configuring multiplayer API with root: %s" % [multiplayer_root]
+	)
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	

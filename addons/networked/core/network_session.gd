@@ -1,7 +1,10 @@
-## Top-level scene node that orchestrates the full client/server multiplayer lifecycle.
+## Top-level scene node that orchestrates the full client/server multiplayer
+## lifecycle.
 ##
-## Place this node as your main scene root. Assign a [MultiplayerTree] to [member client],
-## then call [method connect_player] to connect. On headless builds the server is started automatically.
+## Place this node as your main scene root. Assign a [MultiplayerTree] to
+## [member client], then call [method connect_player] to connect. On headless
+## builds the server is started automatically.
+## [br][br]
 ## [codeblock]
 ## # Minimal usage — assign via the inspector or at runtime:
 ## var data := MultiplayerClientData.new()
@@ -32,32 +35,44 @@ extends Node
 			client.queue_free()
 
 
-## When [code]false[/code], [method connect_player] will not promote this node to the scene root
-## and will not auto-start a local server for localhost URLs.
+## When [code]false[/code], [method connect_player] will not promote this node to
+## the scene root and will not auto-start a local server for localhost URLs.
 @export var manage_scene: bool = true
 
 @export_group("Debug")
-## When set, [method connect_player] is called automatically on [code]_ready[/code] with this data.
+## When set, [method connect_player] is called automatically on [code]_ready[/code]
+## with this data.
 @export var init_client_data: MultiplayerClientData
 @export_group("", "")
 
-## The server-side [MultiplayerTree], created dynamically when hosting a local session.
+## The server-side [MultiplayerTree], created dynamically when hosting a local
+## session.
 var server: MultiplayerTree
 
 ## Disconnects any existing session, then connects using [param client_data].
 ##
-## Automatically spins up a local server when [member MultiplayerClientData.url] is empty or localhost.
-## On web builds, falls back to [LocalLoopbackBackend] for singleplayer when not using WebRTC.
+## Automatically spins up a local server when [member MultiplayerClientData.url]
+## is empty or localhost. On web builds, falls back to [LocalLoopbackBackend] for
+## singleplayer when not using WebRTC.
 func connect_player(client_data: MultiplayerClientData) -> void:
 	Netw.dbg.trace("NetworkSession: connect_player called.")
 	if not client_data:
-		Netw.dbg.error("connect_player: client_data is null.", func(m): push_error(m))
+		Netw.dbg.error(
+			"connect_player: client_data is null.",
+			func(m): push_error(m)
+		)
 		return
 	if client_data.username.is_empty():
-		Netw.dbg.error("connect_player: username is empty.", func(m): push_error(m))
+		Netw.dbg.error(
+			"connect_player: username is empty.",
+			func(m): push_error(m)
+		)
 		return
 	if not client_data.spawner_path or not client_data.spawner_path.is_valid():
-		Netw.dbg.error("connect_player: spawner_path is invalid or missing.", func(m): push_error(m))
+		Netw.dbg.error(
+			"connect_player: spawner_path is invalid or missing.",
+			func(m): push_error(m)
+		)
 		return
 	
 	await disconnect_player()
@@ -70,16 +85,24 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	
 	if manage_scene and _is_singleplayer(url):
 		# First attempt: Try to join an existing server on localhost.
-		# If url is empty, we MUST probe localhost to find existing local sessions.
+		# If url is empty, we MUST probe localhost to find existing local
+		# sessions.
 		var probe_url := url if not url.is_empty() else "localhost"
 		
-		# We use a short timeout and quiet=true so we can pivot to hosting quickly without error logs.
-		var probe_err: Error = await client.join(probe_url, client_data.username, 1.0, true)
+		# We use a short timeout and quiet=true so we can pivot to hosting
+		# quickly without error logs.
+		var probe_err: Error = await client.join(
+			probe_url,
+			client_data.username,
+			1.0,
+			true
+		)
 		if probe_err == OK:
 			_request_join(client_data)
 			return
 		
-		# Second attempt: If join failed (timeout or refused), try to host the server ourselves.
+		# Second attempt: If join failed (timeout or refused), try to host the
+		# server ourselves.
 		url = await _host_server()
 	elif OS.has_feature("web"):
 		if url.begins_with("ws"):
@@ -97,7 +120,8 @@ func _request_join(client_data: MultiplayerClientData) -> void:
 	)
 
 
-## Starts this session as a dedicated server without creating a separate server node.
+## Starts this session as a dedicated server without creating a separate server
+## node.
 ##
 ## Returns the error code from [method MultiplayerTree.host].
 func host() -> Error:
@@ -107,30 +131,42 @@ func host() -> Error:
 	return client.host()
 
 
-## Returns the address clients should use to connect after [method host] succeeds.
+## Returns the address clients should use to connect after [method host]
+## succeeds.
 func get_host_address() -> String:
 	return _resolve_server_address()
 
 
-## Saves game state, closes the multiplayer peer, and waits for the server to acknowledge disconnection.
+## Saves game state, closes the multiplayer peer, and waits for the server to
+## acknowledge disconnection.
 func disconnect_player() -> void:
 	if not client.is_online():
 		return
 	
 	Netw.dbg.trace("NetworkSession: disconnect_player called.")
 	Netw.dbg.info("Disconnecting player.")
-	SaveComponent.save_all_in(client.get_peer_context(client.multiplayer_api.get_unique_id()))
+	SaveComponent.save_all_in(
+		client.get_peer_context(client.multiplayer_api.get_unique_id())
+	)
 	client.multiplayer_peer.close()
 	
 	var timer := get_tree().create_timer(3.0)
 	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
-		Netw.dbg.error("Couldn't disconnect from server.", func(m): push_error(m))
+		Netw.dbg.error(
+			"Couldn't disconnect from server.",
+			func(m): push_error(m)
+		)
+
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	if not client:
-		warnings.append("A MultiplayerTree must be assigned to the 'client' property for the network to function.")
+		warnings.append(
+			"A MultiplayerTree must be assigned to the 'client' property " + \
+			"for the network to function."
+		)
 	return warnings
+
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -142,8 +178,10 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		_host_server()
 
+
 func _is_current_scene() -> bool:
 	return get_tree().current_scene == self
+
 
 func _close_server() -> void:
 	Netw.dbg.info("Closing embedded server.")
@@ -152,13 +190,19 @@ func _close_server() -> void:
 		server.queue_free()
 		server = null
 
-## Returns [code]true[/code] if the client's current [member MultiplayerTree.backend] is WebRTC-based.
+
+## Returns [code]true[/code] if the client's current
+## [member MultiplayerTree.backend] is WebRTC-based.
 func is_webrtc() -> bool:
 	var script: Script = client.backend.get_script()
 	var n := script.get_global_name().to_lower()
 	var is_rtc := "rtc" in n or "tube" in n
-	Netw.dbg.debug("Backend check: class=%s is_webrtc=%s" % [script.get_global_name(), is_rtc])
+	Netw.dbg.debug(
+		"Backend check: class=%s is_webrtc=%s" % \
+		[script.get_global_name(), is_rtc]
+	)
 	return is_rtc
+
 
 func _host_server() -> String:
 	Netw.dbg.trace("NetworkSession: _host_server called.")
@@ -173,12 +217,16 @@ func _host_server() -> String:
 	add_child(server)
 	
 	Netw.dbg.info("Starting embedded server...")
-	# We use quiet=true here because we expect ERR_ALREADY_IN_USE in multi-client scenarios.
+	# We use quiet=true here because we expect ERR_ALREADY_IN_USE in 
+	# multi-client scenarios.
 	var server_err := server.host(true)
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
 	if server_err != OK and not in_use:
-		Netw.dbg.error("Server failed to start: %s" % [error_string(server_err)], func(m): push_error(m))
+		Netw.dbg.error(
+			"Server failed to start: %s" % [error_string(server_err)],
+			func(m): push_error(m)
+		)
 	
 	if in_use:
 		Netw.dbg.info("Server address already in use, connecting to localhost.")
@@ -189,11 +237,13 @@ func _host_server() -> String:
 	Netw.dbg.info("Embedded server started at: %s" % [addr])
 	return addr
 
+
 func _resolve_server_address() -> String:
 	var tree := server if server else client
 	if not tree or not tree.backend:
 		return "localhost"
 	return tree.backend.get_join_address()
+
 
 func _validate_current_scene() -> void:
 	if not _is_current_scene():
@@ -201,6 +251,7 @@ func _validate_current_scene() -> void:
 		owner.remove_child.call_deferred(self)
 		tree.change_scene_to_node.call_deferred(self)
 		await tree.scene_changed
+
 
 func _is_singleplayer(url: String) -> bool:
 	return url.is_empty() or "localhost" in url or "127.0.0.1" in url

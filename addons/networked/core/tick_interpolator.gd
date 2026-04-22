@@ -8,8 +8,8 @@ extends NetComponent
 
 ## Defines the interpolation algorithm for a property.
 enum Mode {
-	NONE = 0,  ## No interpolation.
-	LERP = 1,  ## Linear interpolation.
+	NONE = 0, ## No interpolation.
+	LERP = 1, ## Linear interpolation.
 	ANGLE = 2, ## Angular interpolation (shortest path).
 }
 
@@ -18,7 +18,7 @@ enum Mode {
 
 #region ── Configuration ───────────────────────────────────────────────────────
 
-## Dictionary mapping property names to their [enum Mode].
+## Dictionary mapping property names to their [enum TickInterpolator.Mode].
 @export var property_modes: Dictionary[StringName, Mode] = {}:
 	set(v):
 		property_modes = v
@@ -26,23 +26,34 @@ enum Mode {
 		update_configuration_warnings()
 		notify_property_list_changed()
 
-## If [code]true[/code], the interpolator will locally slow down its playhead when snapshots
-## are missing to prevent visual jitter.
+
+## If [code]true[/code], the interpolator will locally slow down its playhead
+## when snapshots are missing to prevent visual jitter.
 @export var enable_smart_dilation: bool = true
 
-## Controls the "softness" or "floatiness" of the interpolation. 
-## [br]0.0: Crisp and instant (pure time-based interpolation).
-## [br]>0.0: Adds exponential smoothing, making motion feel heavier/fluid but adding visual lag.
+
+## Controls the "softness" or "floatiness" of the interpolation.
+## [br][br]
+## [br]- [code]0.0[/code]: Crisp and instant (pure time-based interpolation).
+## [br]- [code]>0.0[/code]: Adds exponential smoothing, making motion feel
+## heavier/fluid but adding visual lag.
 @export_range(0.0, 0.99) var smoothing: float = 0.0
 
-## Maximum distance allowed before the interpolator snaps to the target instead of lerping.
+
+## Maximum distance allowed before the interpolator snaps to the target instead
+## of lerping.
+## [br][br]
 ## Useful for teleports. Set to [code]0.0[/code] to disable.
 @export var max_lerp_distance: float = 0.0
 
-## The maximum number of extra ticks the interpolator can dilate beyond its floor.
+
+## The maximum number of extra ticks the interpolator can dilate beyond its
+## floor.
 @export var max_extra_dilation: float = 4.0
 
-## If greater than [code]0[/code], the interpolator will log its internal state every N frames.
+
+## If greater than [code]0[/code], the interpolator will log its internal state
+## every N frames.
 @export var trace_interval: int = 30
 
 #endregion
@@ -62,6 +73,7 @@ var starvation_ticks: int = 0
 #region ── Public API ──────────────────────────────────────────────────────────
 
 ## Instantly snaps [param property] to [param value], bypassing interpolation.
+## [br][br]
 ## [codeblock]
 ## # Snap a base property
 ## interpolator.snap_property(&"position", Vector2(200, 100))
@@ -82,7 +94,9 @@ func snap_property(property: StringName, value: Variant) -> void:
 			return
 
 
-## Instantly accepts the target node's current physical state as the absolute truth.
+## Instantly accepts the target node's current physical state as the absolute
+## truth.
+## [br][br]
 ## [codeblock]
 ## # 1. Update the node's properties manually
 ## player.position = spawn_point
@@ -106,7 +120,8 @@ func teleport() -> void:
 		state.is_sleeping = false
 
 
-## Clears all history buffers and resets internal state to match the target's current values.
+## Clears all history buffers and resets internal state to match the target's
+## current values.
 func reset() -> void:
 	display_lag = 0.0
 	starvation_ticks = 0
@@ -114,14 +129,17 @@ func reset() -> void:
 		state.reset()
 
 
-## Returns the [HistoryBuffer] for the given [param property], or [code]null[/code] if not found.
+## Returns the [HistoryBuffer] for the given [param property], or [code]null[/code]
+## if not found.
 func get_buffer(property: StringName) -> HistoryBuffer:
 	for state in _states:
-		if state.name == property: return state.history
+		if state.name == property:
+			return state.history
 	return null
 
 
 ## Temporarily disables interpolation for [param duration] seconds.
+## [br][br]
 ## Returns a [SceneTreeTimer] that can be awaited.
 func disable_for(duration: float) -> SceneTreeTimer:
 	process_mode = PROCESS_MODE_DISABLED
@@ -232,36 +250,48 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 			var newest := state.history.newest_tick()
 			debug_newest = newest
 			
-			var max_starvation_window := _expected_interval_ticks + _STARVATION_GRACE_FRAMES
+			var max_starvation_window := \
+				_expected_interval_ticks + _STARVATION_GRACE_FRAMES
 			debug_window = max_starvation_window
 			if newest != -1 and (effective_dt - newest) <= max_starvation_window:
 				is_starving = true
 				break
 	
 	if trace:
-		_dbg.trace("[Dilation] eff_dt: %d | newest: %d | gap: %d | window: %d | starving: %s | ticks: %d | lag: %.2f" % [
-			effective_dt, debug_newest, (effective_dt - debug_newest), debug_window, str(is_starving), starvation_ticks, display_lag
-		])
+		_dbg.trace(
+			"[Dilation] eff_dt: %d | newest: %d | gap: %d | " + \
+			"window: %d | starving: %s | ticks: %d | lag: %.2f" % [
+				effective_dt, debug_newest, (effective_dt - debug_newest),
+				debug_window, str(is_starving), starvation_ticks, display_lag
+			]
+		)
 	
 	var current_floor := _calculate_min_lag()
-	var prev_starvation := starvation_ticks
 	if is_starving:
 		starvation_ticks += 1
 		if starvation_ticks >= _STARVATION_GRACE_FRAMES:
-			display_lag = minf(display_lag + (frame_ticks * _DILATION_STRENGTH), current_floor + max_extra_dilation)
+			display_lag = minf(
+				display_lag + (frame_ticks * _DILATION_STRENGTH),
+				current_floor + max_extra_dilation
+			)
 	else:
 		starvation_ticks = 0
-		display_lag = maxf(current_floor, display_lag - (frame_ticks * (_CATCHUP_SPEED - 1.0)))
+		display_lag = maxf(
+			current_floor,
+			display_lag - (frame_ticks * (_CATCHUP_SPEED - 1.0))
+		)
 
 	_was_starving = is_starving
 
 
 func _refresh_property_states() -> void:
 	_states.clear()
-	if not _target: return
+	if not _target:
+		return
 	
 	for prop in property_modes:
-		if property_modes[prop] == Mode.NONE: continue
+		if property_modes[prop] == Mode.NONE:
+			continue
 		
 		var state := _PropertyState.new()
 		state.interpolator = self
@@ -269,12 +299,15 @@ func _refresh_property_states() -> void:
 		state.mode = property_modes[prop]
 		
 		var path_str := str(prop)
-		var path: NodePath = NodePath(path_str) if ":" in path_str else NodePath(":" + path_str)
+		var path: NodePath = NodePath(path_str) if ":" in path_str else \
+			NodePath(":" + path_str)
 		var res := _target.get_node_and_resource(path)
 		
 		if res[0]:
 			state.target_obj = res[0]
-			state.target_prop = res[2].get_subname(0) if res[2].get_subname_count() > 0 else StringName(str(res[2]).trim_prefix(":"))
+			state.target_prop = res[2].get_subname(0) if \
+				res[2].get_subname_count() > 0 else \
+				StringName(str(res[2]).trim_prefix(":"))
 			
 			var initial_val = state.target_obj.get(state.target_prop)
 			state.last_written = initial_val
@@ -377,10 +410,12 @@ class _Batcher extends RefCounted:
 
 	func update_all(delta: float) -> void:
 		var frame := Engine.get_frames_drawn()
-		if delta > 0.0 and frame == _last_update_frame: return
+		if delta > 0.0 and frame == _last_update_frame:
+			return
 		_last_update_frame = frame
 		
-		if not clock: return
+		if not clock:
+			return
 		
 		var global_dt := clock.display_tick
 		var global_factor := clock.tick_factor
@@ -391,7 +426,12 @@ class _Batcher extends RefCounted:
 			if inst.smoothing > 0.0:
 				smooth_weight = 1.0 - pow(inst.smoothing, delta * 60.0)
 				
-			inst._update_instance(global_dt, global_factor, frame_ticks, smooth_weight)
+			inst._update_instance(
+				global_dt,
+				global_factor,
+				frame_ticks,
+				smooth_weight
+			)
 
 
 class _PropertyState:
@@ -433,7 +473,14 @@ class _PropertyState:
 			_has_recorded = true
 			is_sleeping = false
 
-	func apply(dt: int, factor: float, snap_dist: float, trace: bool, lag: float, weight: float) -> void:
+	func apply(
+		dt: int,
+		factor: float,
+		snap_dist: float,
+		trace: bool,
+		lag: float,
+		weight: float
+	) -> void:
 		if is_sleeping:
 			return
 		
@@ -443,7 +490,8 @@ class _PropertyState:
 		
 		cached_prev_tick = prev_tick
 
-		if prev_tick == -1: return
+		if prev_tick == -1:
+			return
 
 		var result: Variant
 		if next_tick == -1:
@@ -459,8 +507,16 @@ class _PropertyState:
 			if snap_dist > 0.0 and _should_snap(p_val, n_val, snap_dist):
 				result = n_val
 			else:
-				var t := clampf((float(dt - prev_tick) + factor) / float(next_tick - prev_tick), 0.0, 1.0)
-				result = lerp_angle(p_val, n_val, t) if mode == Mode.ANGLE else lerp(p_val, n_val, t)
+				var t := clampf(
+					(float(dt - prev_tick) + factor) / \
+					float(next_tick - prev_tick),
+					0.0,
+					1.0
+				)
+				if mode == Mode.ANGLE:
+					result = lerp_angle(p_val, n_val, t)
+				else:
+					result = lerp(p_val, n_val, t)
 
 		# Apply additional smoothing if weight < 1.0
 		if weight < 1.0:
@@ -473,23 +529,32 @@ class _PropertyState:
 		last_written = result
 		
 		if trace:
-			interpolator._dbg.trace("Interp %s: dt=%d lag=%.2f val=%s", [name, dt, lag, result])
+			interpolator._dbg.trace(
+				"Interp %s: dt=%d lag=%.2f val=%s",
+				[name, dt, lag, result]
+			)
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
-		if typeof(v1) != typeof(v2): return true
+		if typeof(v1) != typeof(v2):
+			return true
 		match typeof(v1):
-			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I: return v1.distance_to(v2) > dist
+			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
+				return v1.distance_to(v2) > dist
 			TYPE_FLOAT, TYPE_INT:
-				if mode == Mode.ANGLE: return abs(angle_difference(v1, v2)) > dist
+				if mode == Mode.ANGLE:
+					return abs(angle_difference(v1, v2)) > dist
 				return abs(v1 - v2) > dist
 		return false
 
 	func _is_close(v1: Variant, v2: Variant) -> bool:
-		if typeof(v1) != typeof(v2): return false
+		if typeof(v1) != typeof(v2):
+			return false
 		match typeof(v1):
-			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I: return v1.is_equal_approx(v2)
+			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
+				return v1.is_equal_approx(v2)
 			TYPE_FLOAT, TYPE_INT:
-				if mode == Mode.ANGLE: return abs(angle_difference(v1, v2)) < 0.001
+				if mode == Mode.ANGLE:
+					return abs(angle_difference(v1, v2)) < 0.001
 				return is_equal_approx(v1, v2)
 		return true
 

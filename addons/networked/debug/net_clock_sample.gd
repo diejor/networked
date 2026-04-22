@@ -1,7 +1,8 @@
 ## Typed wrapper for a single network clock pong measurement.
 ##
 ## Created from the raw [Dictionary] emitted by [signal NetworkClock.pong_received]
-## and serialized via [method to_dict] before crossing the [EngineDebugger] boundary.
+## and serialized via [method to_dict] before crossing the [EngineDebugger]
+## boundary.
 class_name NetClockSample
 extends RefCounted
 
@@ -17,6 +18,7 @@ var is_stable: bool
 var is_synchronized: bool
 
 
+## Creates a [NetClockSample] from a [Dictionary] and tree name.
 static func from_dict(d: Dictionary, p_tree_name: String) -> NetClockSample:
 	var s := NetClockSample.new()
 	s.tree_name = p_tree_name
@@ -32,6 +34,7 @@ static func from_dict(d: Dictionary, p_tree_name: String) -> NetClockSample:
 	return s
 
 
+## Serializes this sample into a [Dictionary].
 func to_dict() -> Dictionary:
 	return {
 		"tree_name": tree_name,

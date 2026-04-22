@@ -6,6 +6,7 @@ var errors: Array[String]
 var error_text: String
 
 
+## Serializes this manifest into a [Dictionary].
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["errors"] = errors

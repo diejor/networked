@@ -2,15 +2,20 @@
 class_name NetRaceManifest
 extends NetManifest
 
-## Human-readable description of each detected race (used in fallback push_error).
+## Human-readable description of each detected race (used in fallback
+## [method @GlobalScope.push_error]).
 var errors: Array[String]
-## Raw race detail dicts from [NetRaceDetector] — consumed by [ManifestFormatter]
-## for the Preflight Snapshot section of the editor panel.
+
+## Raw race detail dicts from [NetRaceDetector] — consumed by
+## [code]ManifestFormatter[/code] for the Preflight Snapshot section of the
+## editor panel.
 var preflight_snapshot: Array
+
 var player_name: String
 var in_tree: bool
 
 
+## Serializes this manifest into a [Dictionary].
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["errors"] = errors

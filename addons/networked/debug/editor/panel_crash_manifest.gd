@@ -2,7 +2,7 @@
 ##
 ## Displays received [NetDebugManifest] entries as an interactive [Tree].
 ## Selecting a row calls back into [NetworkedDebuggerUI] to synchronize
-## the Log Bridge, Matrices, and Components panels.
+## the Span Tracer, Matrices, and Components panels.
 @tool
 class_name PanelCrashManifest
 extends DebugPanel

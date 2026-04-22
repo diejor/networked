@@ -2,10 +2,10 @@
 ##
 ## Holds the fields common to every manifest. Subclasses add trigger-specific
 ## fields and call [code]super.to_dict()[/code] when serializing.
-##
+## [br][br]
 ## [b]Key invariant:[/b] [method to_dict] must produce the exact key set that
-## [ManifestFormatter.format] expects. Do not rename keys without updating the
-## formatter.
+## [code]ManifestFormatter.format[/code] expects. Do not rename keys without
+## updating the formatter.
 class_name NetManifest
 extends RefCounted
 
@@ -22,25 +22,33 @@ var node_snapshot: NetNodeSnapshot
 ## Unique ID for this specific emission, used for deduplication in the editor.
 var uid: String = "%d_%d" % [Time.get_ticks_usec(), randi()]
 
-## Weak reference to the MultiplayerTree that produced this manifest.
-## Used for routing via emit_debug_event.
+## Weak reference to the [MultiplayerTree] that produced this manifest.
+## Used for routing via [code]emit_debug_event[/code].
 var _mt: WeakRef
 
 
-## Returns true if the manifest contains all required base fields.
+## Returns [code]true[/code] if the manifest contains all required base fields.
+## [br][br]
 ## Logs a warning to the console if the contract is violated.
 func validate_contract() -> bool:
 	var missing: Array[String] = []
-	if trigger.is_empty(): missing.append("trigger")
-	if cid.is_empty(): missing.append("cid")
-	if uid.is_empty(): missing.append("uid")
+	if trigger.is_empty():
+		missing.append("trigger")
+	if cid.is_empty():
+		missing.append("cid")
+	if uid.is_empty():
+		missing.append("uid")
 	
 	if not missing.is_empty():
-		push_warning("NetManifest: Contract violation! Missing fields: %s" % str(missing))
+		push_warning(
+			"NetManifest: Contract violation! Missing fields: %s" % \
+			[str(missing)]
+		)
 		return false
 	return true
 
 
+## Serializes this manifest into a [Dictionary].
 func to_dict() -> Dictionary:
 	return {
 		"uid": uid,

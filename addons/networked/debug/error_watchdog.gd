@@ -1,3 +1,4 @@
+## Watchdog that monitors the Godot log file to intercept C++ engine errors.
 class_name ErrorWatchdog
 extends Node
 
@@ -11,11 +12,21 @@ var _log_path: String
 
 
 func _ready() -> void:
-	if not ProjectSettings.get_setting("debug/file_logging/enable_file_logging", false):
-		Netw.dbg.error("ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF — enable it in Project Settings → Debug → File Logging.", func(m): push_error(m))
+	if not ProjectSettings.get_setting(
+		"debug/file_logging/enable_file_logging",
+		false
+	):
+		Netw.dbg.error(
+			"ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF " + \
+			"— enable it in Project Settings → Debug → File Logging.",
+			func(m): push_error(m)
+		)
 		return
 
-	_log_path = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log")
+	_log_path = ProjectSettings.get_setting(
+		"debug/file_logging/log_path",
+		"user://logs/godot.log"
+	)
 	if _log_path.is_empty():
 		_log_path = "user://logs/godot.log"
 
@@ -29,6 +40,7 @@ func _exit_tree() -> void:
 		_mutex.lock()
 		_quit = true
 		_mutex.unlock()
+	
 	if _thread and _thread.is_alive():
 		_thread.wait_to_finish()
 
@@ -45,7 +57,10 @@ func _tail_log() -> void:
 
 	var file := FileAccess.open(_log_path, FileAccess.READ)
 	if not file:
-		Netw.dbg.error("ErrorWatchdog: could not open log file: %s" % _log_path, func(m): push_error(m))
+		Netw.dbg.error(
+			"ErrorWatchdog: could not open log file: %s" % [_log_path],
+			func(m): push_error(m)
+		)
 		return
 
 	# Seek to current end, only watch for errors that happen after this point.

@@ -7,9 +7,9 @@ class_name NetTelemetryBuffer
 extends RefCounted
 
 var _capacity: int
-var _entries: Array  # circular, length <= _capacity
-var _write: int = 0  # next write index
-var _count: int = 0  # entries actually stored
+var _entries: Array # circular, length <= _capacity
+var _write: int = 0 # next write index
+var _count: int = 0 # entries actually stored
 var _frozen: bool = false
 
 
@@ -29,10 +29,16 @@ func thaw() -> void:
 
 
 ## Record one flush-cycle snapshot. Ignored while frozen.
-func record(frame: int, cid_stack: Array, component_events: Array,
-		peer_events: Array, lobby_snapshots: Dictionary) -> void:
+func record(
+	frame: int,
+	cid_stack: Array,
+	component_events: Array,
+	peer_events: Array,
+	lobby_snapshots: Dictionary
+) -> void:
 	if _frozen:
 		return
+	
 	_entries[_write] = {
 		"frame": frame,
 		"cid_stack": cid_stack.duplicate(),
@@ -46,13 +52,16 @@ func record(frame: int, cid_stack: Array, component_events: Array,
 
 
 ## Return up to [param n] most-recent entries in chronological order.
-## If [param n] is -1, returns all stored entries.
+## [br][br]
+## If [param n] is [code]-1[/code], returns all stored entries.
 func snapshot(n: int = -1) -> Array:
 	if _count == 0:
 		return []
+	
 	var take := _count if n < 0 else mini(n, _count)
 	var result: Array = []
 	result.resize(take)
+	
 	# Oldest entry in the ring:
 	var start: int = (_write - _count + _capacity) % _capacity
 	for i in take:
@@ -61,6 +70,7 @@ func snapshot(n: int = -1) -> Array:
 	return result
 
 
+## Clears the buffer and resets its state.
 func clear() -> void:
 	_write = 0
 	_count = 0

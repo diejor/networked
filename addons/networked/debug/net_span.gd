@@ -2,8 +2,8 @@
 ##
 ## Tracks a named operation across multiple process frames, recording a trail
 ## of named checkpoints and a final outcome (clean close or failure).
-##
-## Do not instantiate directly, use [method NetTrace.begin] or 
+## [br][br]
+## Do not instantiate directly, use [method NetTrace.begin] or
 ## [method NetTrace.begin_peer].
 class_name NetSpan
 extends RefCounted
@@ -16,7 +16,8 @@ var id: StringName
 ## Human-readable label for this span type (e.g., [code]"lobby_spawn"[/code]).
 var label: String
 
-## The name of the [MultiplayerTree] this span belongs to. Empty for global spans.
+## The name of the [MultiplayerTree] this span belongs to. Empty for global
+## spans.
 var tree_name: String
 
 ## Current lifecycle state.
@@ -38,7 +39,14 @@ var meta: Dictionary
 var _target_node: WeakRef
 
 
-func _init(p_id: StringName, p_label: String, p_meta: Dictionary = {}, tree: MultiplayerTree = null, p_tree_name: String = "", follows_from: CheckpointToken = null) -> void:
+func _init(
+	p_id: StringName,
+	p_label: String,
+	p_meta: Dictionary = {},
+	tree: MultiplayerTree = null,
+	p_tree_name: String = "",
+	follows_from: CheckpointToken = null
+) -> void:
 	id = p_id
 	label = p_label
 	meta = p_meta
@@ -66,6 +74,7 @@ func _init(p_id: StringName, p_label: String, p_meta: Dictionary = {}, tree: Mul
 
 
 ## Attaches an explicit target node to this span for diagnostic snapshots.
+## [br][br]
 ## Returns [code]self[/code] for method chaining.
 func with_node(node: Node) -> NetSpan:
 	_target_node = weakref(node) if is_instance_valid(node) else null
@@ -77,7 +86,9 @@ func get_target_node() -> Node:
 	return _target_node.get_ref() if _target_node else null
 
 
-## Records a named checkpoint in this span's step trail and sends it to the editor.
+## Records a named checkpoint in this span's step trail and sends it to the
+## editor.
+## [br][br]
 ## Returns [code]self[/code] for method chaining:
 ## [codeblock]
 ## span.step("visibility_set").step("clients_notified")
@@ -85,6 +96,7 @@ func get_target_node() -> Node:
 func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 	if state != State.OPEN or id.is_empty():
 		return self
+	
 	var s := {
 		"label": step_label,
 		"data": data,
@@ -103,13 +115,19 @@ func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 
 
 ## Records a non-fatal warning checkpoint within this span without closing it.
-##
+## [br][br]
 ## Use this for conditions that are suspicious but not immediately fatal —
 ## the span stays OPEN for further steps. For a fatal outcome, use [method fail].
+## [br][br]
 ## Sends [code]networked:span_step_warn[/code] and emits [method push_warning].
-func step_warn(step_label: String, message: String = "", data: Dictionary = {}) -> NetSpan:
+func step_warn(
+	step_label: String,
+	message: String = "",
+	data: Dictionary = {}
+) -> NetSpan:
 	if state != State.OPEN or id.is_empty():
 		return self
+	
 	var s := {
 		"label": step_label,
 		"message": message,
@@ -132,6 +150,7 @@ func step_warn(step_label: String, message: String = "", data: Dictionary = {}) 
 func end() -> void:
 	if state != State.OPEN or id.is_empty():
 		return
+	
 	state = State.CLOSED
 	NetTrace._pop_span(self)
 	_send("networked:span_close", {
@@ -144,11 +163,15 @@ func end() -> void:
 
 
 ## Closes the span with a failure outcome and forwards context to the editor.
-## [param reason] is a short machine-readable tag, e.g. [code]"simplify_path_race"[/code].
+## [br][br]
+## [param reason] is a short machine-readable tag, e.g.
+## [code]"simplify_path_race"[/code].
+## [br][br]
 ## [param data] is arbitrary serialisable context attached to the failure.
 func fail(reason: String, data: Dictionary = {}) -> void:
 	if state != State.OPEN or id.is_empty():
 		return
+	
 	state = State.FAILED
 	NetTrace._pop_span(self)
 	_send("networked:span_fail", {
@@ -165,17 +188,20 @@ func fail(reason: String, data: Dictionary = {}) -> void:
 	})
 
 
-## Opens a new phase scope within this span. 
-## Returns a [NetSpanPhase] that should be closed with [method NetSpanPhase.done].
+## Opens a new phase scope within this span.
+## [br][br]
+## Returns a [NetSpanPhase] that should be closed with
+## [method NetSpanPhase.done].
 func phase(phase_name: String) -> NetSpanPhase:
 	return NetSpanPhase.new(self, phase_name)
 
 
 ## Captures the current span state as a [CheckpointToken] for causal linking.
-##
-## Pass the returned token to [method NetTrace.begin] or [method NetTrace.begin_peer]
-## via the [param follows_from] parameter to declare an explicit causal relationship
-## between this span and the new one.
+## [br][br]
+## Pass the returned token to [method NetTrace.begin] or
+## [method NetTrace.begin_peer] via the [param follows_from] parameter to
+## declare an explicit causal relationship between this span and the new one.
+## [br][br]
 ## [param step_label] is optional — use it when the token represents a specific
 ## step within this span rather than the span as a whole.
 func checkpoint(step_label: String = "") -> CheckpointToken:
@@ -188,15 +214,18 @@ func checkpoint(step_label: String = "") -> CheckpointToken:
 	return t
 
 
-## Returns the affected peer IDs. Empty for base [NetSpan]; overridden by [NetPeerSpan].
+## Returns the affected peer IDs. Empty for base [NetSpan]; overridden by
+## [NetPeerSpan].
 func _get_affected_peers() -> Array[int]:
 	return []
 
 
-## Returns the first call-stack frame whose source is outside the networked addon.
-## This is the user's call site, the line where [method NetTrace.begin] or [method step]
-## was invoked. Returns an empty dict in release builds ([method get_stack] returns 
-## [code][][/code]).
+## Returns the first call-stack frame whose source is outside the networked
+## addon.
+## [br][br]
+## This is the user's call site, the line where [method NetTrace.begin] or
+## [method step] was invoked. Returns an empty dict in release builds
+## ([method get_stack] returns [code][][/code]).
 static func _get_caller() -> Dictionary:
 	for frame: Dictionary in get_stack():
 		var src := frame.get("source", "") as String
