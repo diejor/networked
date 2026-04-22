@@ -90,10 +90,15 @@ func clear() -> void:
 ## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
 func populate(buffer: Array) -> void:
 	clear()
-	for d: Dictionary in buffer:
-		_samples.append(d)
-		if _samples.size() > BUFFER_SIZE:
-			_samples.pop_front()
+	if buffer.size() > BUFFER_SIZE:
+		_samples = buffer.slice(-BUFFER_SIZE)
+	else:
+		_samples = buffer.duplicate()
+	
+	# Update the graph reference (it might be pointing to the old array)
+	if _graph:
+		_graph.samples_ref = _samples
+
 	if not _samples.is_empty():
 		_update_stats(_samples[-1] as Dictionary)
 	_graph.queue_redraw()

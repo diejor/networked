@@ -11,6 +11,8 @@ extends RefCounted
 ## Per-property metadata within a synchronizer.
 class PropInfo:
 	var path: String          ## Full NodePath string, e.g. [code]":position"[/code]
+	var type: int             ## Variant.Type of the property
+	var target_class: String  ## Class name of the owner node/resource
 	var replication_mode: int ## [constant SceneReplicationConfig.REPLICATION_MODE_ALWAYS] etc.
 	var spawn: bool           ## True = property is included in the spawn packet
 	var sync: bool            ## True = property is included in delta sync packets
@@ -20,6 +22,8 @@ class PropInfo:
 	func to_dict() -> Dictionary:
 		return {
 			path = path,
+			type = type,
+			target_class = target_class,
 			replication_mode = replication_mode,
 			spawn = spawn,
 			sync = sync,
@@ -30,6 +34,8 @@ class PropInfo:
 	static func from_dict(d: Dictionary) -> PropInfo:
 		var p := PropInfo.new()
 		p.path = d.get("path", "")
+		p.type = d.get("type", 0)
+		p.target_class = d.get("target_class", "")
 		p.replication_mode = d.get("replication_mode", 0)
 		p.spawn = d.get("spawn", false)
 		p.sync = d.get("sync", false)
@@ -75,6 +81,7 @@ var username: String = ""
 var peer_id: int = 0
 var lobby_name: String = ""
 var is_server: bool = false
+var cache_info: Dictionary = {}  ## Cache diagnostic data: {hit: bool, hooked: bool}
 var synchronizers: Array = []  ## Array[SyncInfo]
 
 
@@ -89,6 +96,7 @@ func to_dict() -> Dictionary:
 		peer_id = peer_id,
 		lobby_name = lobby_name,
 		is_server = is_server,
+		cache_info = cache_info,
 		synchronizers = syncs,
 	}
 
@@ -101,6 +109,7 @@ static func from_dict(d: Dictionary) -> NetTopologySnapshot:
 	snap.peer_id = d.get("peer_id", 0)
 	snap.lobby_name = d.get("lobby_name", "")
 	snap.is_server = d.get("is_server", false)
+	snap.cache_info = d.get("cache_info", {})
 	for sd: Dictionary in d.get("synchronizers", []):
 		snap.synchronizers.append(SyncInfo.from_dict(sd))
 	return snap

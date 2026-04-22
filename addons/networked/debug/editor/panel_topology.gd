@@ -17,15 +17,14 @@ extends DebugPanel
 ## Receives the raw [code]node_path[/code] string from the snapshot.
 var on_node_inspect: Callable
 
+## Called when the user clicks the refresh button.
+var on_refresh_requested: Callable
+
 ## Called when the Nameplate visualizer is toggled.
 ## Signature: func(node_path: String, enabled: bool) -> void
 var on_nameplate_toggled: Callable
 
 # ─── Widgets ──────────────────────────────────────────────────────────────────
-
-var _cache_banner: PanelContainer
-var _cache_label: Label
-var _refresh_btn: Button
 
 var _username_label: Label
 var _peer_id_label: Label
@@ -44,9 +43,9 @@ var _last_node_path: String = ""
 
 # Replication mode int → short string
 const _MODE_LABELS: Dictionary = {
-	0: "NEVER",   # SceneReplicationConfig.REPLICATION_MODE_NEVER
-	1: "ALWAYS",  # SceneReplicationConfig.REPLICATION_MODE_ALWAYS
-	2: "ON_CHANGE",
+	0: "Never",
+	1: "Always",
+	2: "On change",
 }
 
 
@@ -55,26 +54,17 @@ func _ready() -> void:
 	_build_layout()
 
 
-func _process(_delta: float) -> void:
-	if _stale_since_usec >= 0 and is_instance_valid(_cache_label):
-		var elapsed := int((Time.get_ticks_usec() - _stale_since_usec) / 1_000_000)
-		_cache_label.text = "Cache: STALE  (%ds ago)" % elapsed
-
-
 # ─── Panel interface ──────────────────────────────────────────────────────────
 
 func clear() -> void:
 	_last_node_path = ""
 	_stale_since_usec = -1
-	if _cache_banner:
-		_cache_banner.hide()
 	if _username_label:
 		_username_label.text = "—"
 		_peer_id_label.text = "—"
 		_lobby_label.text = "—"
 		_mode_label.text = "—"
 	if _node_btn:
-		_node_btn.text = ""
 		_node_btn.disabled = true
 	if _sync_tree:
 		_sync_tree.clear()
@@ -97,24 +87,30 @@ func set_peer_online(online: bool) -> void:
 		_nameplate_btn.disabled = not online
 
 
-## Returns the Nameplate toggle button to be placed in the panel header.
-func get_nameplate_toggle() -> CheckButton:
-	if not _nameplate_btn:
-		_nameplate_btn = CheckButton.new()
-		_nameplate_btn.text = "Nameplate"
-		_nameplate_btn.tooltip_text = "Toggle the in-world nameplate for this player."
-		_nameplate_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		_nameplate_btn.toggled.connect(func(pressed: bool) -> void:
-			if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
-				on_nameplate_toggled.call(_last_node_path, pressed)
-		)
-	return _nameplate_btn
-
-
 func on_new_entry(entry: Variant) -> void:
 	var d: Dictionary = entry as Dictionary
 	_apply_identity(d)
 	_populate_sync_tree(d)
+	_update_cache_visuals(d.get("cache_info", {}))
+
+
+func _update_cache_visuals(cache_info: Dictionary) -> void:
+	var hit: bool = cache_info.get("hit", false)
+	var hooked: bool = cache_info.get("hooked", false)
+	
+	var status_text := "cached" if hit else "searched"
+	if not hooked:
+		status_text = "not hooked"
+	
+	_sync_tree.set_column_title(0, "Synchronizers (%s)" % status_text)
+	
+	var status_color: Color = get_theme_color("success_color", "Editor")
+	if not hooked:
+		status_color = get_theme_color("error_color", "Editor")
+	elif not hit:
+		status_color = get_theme_color("warning_color", "Editor")
+		
+	_sync_tree.add_theme_color_override("font_title_color", status_color)
 
 
 # ─── Identity rows ────────────────────────────────────────────────────────────
@@ -134,8 +130,8 @@ func _apply_identity(d: Dictionary) -> void:
 	_mode_label.text = "[%s]" % mode_str
 
 	_last_node_path = node_path
-	_node_btn.text = node_path if not node_path.is_empty() else "(unknown)"
-	_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
+	if _node_btn:
+		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
 
 
 # ─── Synchronizer tree ────────────────────────────────────────────────────────
@@ -144,140 +140,154 @@ func _populate_sync_tree(d: Dictionary) -> void:
 	_sync_tree.clear()
 	_sync_tree.create_item()  # invisible root
 
+	var cache_info: Dictionary = d.get("cache_info", {})
+	var hit: bool = cache_info.get("hit", false)
+	var hooked: bool = cache_info.get("hooked", false)
+
+	var sync_icon := get_theme_icon("MultiplayerSynchronizer", "EditorIcons")
+	var cache_icon := get_theme_icon("InstanceOptions", "EditorIcons")
+
+	var status_color: Color = get_theme_color("success_color", "Editor")
+	if not hooked:
+		status_color = get_theme_color("error_color", "Editor")
+	elif not hit:
+		status_color = get_theme_color("warning_color", "Editor")
+
 	for sd: Dictionary in d.get("synchronizers", []):
 		var sync_item := _sync_tree.create_item(_sync_tree.get_root())
 		var auth_peer: int = sd.get("authority", 0)
-		var auth_str: String = "auth=server" if auth_peer == 1 else "auth=client"
-		sync_item.set_text(0, "▼ " + sd.get("name", "?"))
-		sync_item.set_text(1, "root=%s" % sd.get("root_path", "."))
-		sync_item.set_text(2, "✓" if sd.get("enabled", true) else "✗")
-		sync_item.set_text(3, auth_str)
+		var is_srv := auth_peer == 1
+		var auth_tag: String = " [server]" if is_srv else " [client]"
+
+		sync_item.set_text(0, sd.get("name", "?") + auth_tag)
+		sync_item.set_icon(0, sync_icon)
+
 		sync_item.set_selectable(0, false)
 		sync_item.set_selectable(1, false)
-		sync_item.set_selectable(2, false)
-		sync_item.set_selectable(3, false)
 
 		for pd: Dictionary in sd.get("properties", []):
 			var prop_item := _sync_tree.create_item(sync_item)
 			var mode_int: int = pd.get("replication_mode", 0)
 			var mode_str: String = _MODE_LABELS.get(mode_int, str(mode_int))
-			var w: String = "w✓" if pd.get("spawn", false) else "w✗"
-			var s: String = "s✓" if pd.get("sync", false) else "s✗"
-			var src: String = pd.get("source_path", "")
-			prop_item.set_text(0, "  " + pd.get("path", "?"))
+			
+			prop_item.set_text(0, pd.get("path", "?"))
 			prop_item.set_text(1, mode_str)
-			prop_item.set_text(2, "%s %s" % [w, s])
-			prop_item.set_text(3, "← %s" % src if not src.is_empty() else "")
+			
+			# Property Class/Type Icon (e.g. String, int, Vector2, or specific Resource)
+			var type_name: String = pd.get("target_class", "")
+			if not type_name.is_empty() and has_theme_icon(type_name, "EditorIcons"):
+				prop_item.set_icon(0, get_theme_icon(type_name, "EditorIcons"))
+			elif pd.get("type", 0) != TYPE_NIL:
+				var fallback_type := type_string(pd.get("type", 0))
+				if has_theme_icon(fallback_type, "EditorIcons"):
+					prop_item.set_icon(0, get_theme_icon(fallback_type, "EditorIcons"))
+			
 			prop_item.set_selectable(0, false)
 			prop_item.set_selectable(1, false)
-			prop_item.set_selectable(2, false)
-			prop_item.set_selectable(3, false)
 
 
 # ─── Layout construction ──────────────────────────────────────────────────────
 
 func _build_layout() -> void:
-	add_theme_constant_override("separation", 4)
+	add_theme_constant_override("separation", 6)
 
-	_build_cache_banner()
-	_build_identity_rows()
-	_build_node_button()
+	_build_identity_section()
 	_build_sync_tree()
 
 
-func _build_cache_banner() -> void:
-	_cache_banner = PanelContainer.new()
+func _build_identity_section() -> void:
+	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.6, 0.4, 0.1, 0.25)
-	style.set_corner_radius_all(3)
-	style.content_margin_left = 6
-	style.content_margin_right = 6
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	_cache_banner.add_theme_stylebox_override("panel", style)
-	_cache_banner.hide()
-	add_child(_cache_banner)
+	style.bg_color = get_theme_color("dark_color_1", "Editor")
+	style.set_border_width_all(0)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", style)
+	add_child(panel)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	_cache_banner.add_child(row)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
 
-	_cache_label = Label.new()
-	_cache_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cache_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.3))
-	row.add_child(_cache_label)
-
-	_refresh_btn = Button.new()
-	_refresh_btn.text = "Refresh"
-	_refresh_btn.flat = true
-	row.add_child(_refresh_btn)
-
-
-func _build_identity_rows() -> void:
 	var row1 := HBoxContainer.new()
 	row1.add_theme_constant_override("separation", 12)
-	add_child(row1)
+	vbox.add_child(row1)
 
 	var un_lbl := Label.new(); un_lbl.text = "Username:"
-	un_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	un_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(un_lbl)
 	_username_label = Label.new(); _username_label.text = "—"
 	_username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_username_label.add_theme_font_size_override("font_size", 14)
 	row1.add_child(_username_label)
 
 	var pid_lbl := Label.new(); pid_lbl.text = "Peer ID:"
-	pid_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	pid_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(pid_lbl)
 	_peer_id_label = Label.new(); _peer_id_label.text = "—"
 	row1.add_child(_peer_id_label)
 
 	var row2 := HBoxContainer.new()
 	row2.add_theme_constant_override("separation", 12)
-	add_child(row2)
+	vbox.add_child(row2)
 
 	var lb_lbl := Label.new(); lb_lbl.text = "Lobby:"
-	lb_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	lb_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(lb_lbl)
 	_lobby_label = Label.new(); _lobby_label.text = "—"
 	_lobby_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row2.add_child(_lobby_label)
 
 	var mode_hdr := Label.new(); mode_hdr.text = "Mode:"
-	mode_hdr.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	mode_hdr.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(mode_hdr)
 	_mode_label = Label.new(); _mode_label.text = "—"
+	_mode_label.add_theme_color_override("font_color", get_theme_color("warning_color", "Editor"))
 	row2.add_child(_mode_label)
 
+	var row3 := HBoxContainer.new()
+	row3.add_theme_constant_override("separation", 8)
+	vbox.add_child(row3)
 
-func _build_node_button() -> void:
 	_node_btn = Button.new()
-	_node_btn.text = ""
+	_node_btn.text = "Inspect Node"
+	_node_btn.tooltip_text = "Select this node in the Remote Scene Tree."
 	_node_btn.disabled = true
-	_node_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_node_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_node_btn.flat = false
 	_node_btn.pressed.connect(func() -> void:
 		if on_node_inspect.is_valid() and not _last_node_path.is_empty():
 			on_node_inspect.call(_last_node_path)
 	)
-	add_child(_node_btn)
+	row3.add_child(_node_btn)
+
+	_nameplate_btn = CheckButton.new()
+	_nameplate_btn.text = "Nameplate"
+	_nameplate_btn.tooltip_text = "Toggle the in-world nameplate for this player."
+	_nameplate_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_nameplate_btn.toggled.connect(func(pressed: bool) -> void:
+		if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
+			on_nameplate_toggled.call(_last_node_path, pressed)
+	)
+	row3.add_child(_nameplate_btn)
 
 
 func _build_sync_tree() -> void:
 	_sync_tree = Tree.new()
 	_sync_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_sync_tree.hide_root = true
-	_sync_tree.columns = 4
-	_sync_tree.set_column_title(0, "Name")
+	_sync_tree.columns = 2
+	_sync_tree.set_column_title(0, "Synchronizers (cached)")
 	_sync_tree.set_column_title(1, "Mode")
-	_sync_tree.set_column_title(2, "Flags")
-	_sync_tree.set_column_title(3, "Source")
 	_sync_tree.column_titles_visible = true
 	_sync_tree.set_column_expand(0, true)
 	_sync_tree.set_column_expand(1, false)
-	_sync_tree.set_column_expand(2, false)
-	_sync_tree.set_column_expand(3, true)
-	_sync_tree.set_column_custom_minimum_width(1, 80)
-	_sync_tree.set_column_custom_minimum_width(2, 60)
+	_sync_tree.set_column_custom_minimum_width(1, 120)
+	_sync_tree.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	_sync_tree.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_sync_tree.add_theme_stylebox_override("selected", StyleBoxEmpty.new())
+	_sync_tree.add_theme_stylebox_override("selected_focus", StyleBoxEmpty.new())
+	_sync_tree.add_theme_stylebox_override("cursor", StyleBoxEmpty.new())
+	_sync_tree.add_theme_stylebox_override("cursor_unfocused", StyleBoxEmpty.new())
 	_sync_tree.create_item()  # invisible root
 	add_child(_sync_tree)

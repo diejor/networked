@@ -156,7 +156,7 @@ func apply_visualizer_command(d: Dictionary) -> void:
 	if sender != 1 and sender not in NetworkedDebugger._process_recipients:
 		return
 	if NetworkedDebugger:
-		NetworkedDebugger._handle_visualizer_toggle(d)
+		NetworkedDebugger._handle_visualizer_toggle(d, true)
 
 
 # ─── Internal ─────────────────────────────────────────────────────────────────

@@ -140,6 +140,75 @@ func get_peer_context(peer_id: int) -> PeerContext:
 	return _peer_contexts[peer_id]
 
 
+## Carries both the causal token and the placement target for a single player spawn.
+## Obtained via [method MultiplayerTree.get_spawn_context].
+class SpawnContext extends RefCounted:
+	## Causal [CheckpointToken] for span tracing. May be null.
+	var token: CheckpointToken
+	var _lobby: Lobby
+	var _parent_node: Node
+
+	func is_valid() -> bool:
+		return is_instance_valid(_lobby) or is_instance_valid(_parent_node)
+
+	func has_lobby() -> bool:
+		return is_instance_valid(_lobby)
+
+	## Lobby mode: calls [method Lobby.add_player] (tracks synchronizer + add_child).
+	## Lobbyless mode: calls [method Node.add_child] on the parent container.
+	func place_player(player: Node) -> void:
+		if is_instance_valid(_lobby):
+			_lobby.add_player(player)
+		elif is_instance_valid(_parent_node):
+			_parent_node.add_child(player)
+
+
+## Resolves the correct spawn location and causal token for a new player.
+func get_spawn_context(spawner_path: SceneNodePath) -> SpawnContext:
+	var ctx := SpawnContext.new()
+	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
+
+	if lm:
+		var scene_name := StringName(spawner_path.get_scene_name())
+		var lobby: Lobby = lm.active_lobbies.get(scene_name)
+		if is_instance_valid(lobby):
+			ctx._lobby = lobby
+			if lobby.has_meta(&"_net_lobby_token"):
+				ctx.token = lobby.get_meta(&"_net_lobby_token")
+	else:
+		var world := _find_world(spawner_path)
+		if is_instance_valid(world):
+			ctx._parent_node = world
+			
+			var wrapper := world.get_parent()
+			if is_instance_valid(wrapper) and wrapper.get_meta(&"_is_world_wrapper", false):
+				if wrapper.has_meta(&"_net_session_token"):
+					ctx.token = wrapper.get_meta(&"_net_session_token")
+
+	return ctx
+
+
+## Returns an array of all active player nodes across all lobbies or the lobbyless world.
+func get_all_players() -> Array[Node]:
+	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
+	if lm:
+		return lm.get_all_players()
+	var players: Array[Node] = []
+	for c in find_children("*", "ClientComponent", true, false):
+		if is_instance_valid(c.owner):
+			players.append(c.owner)
+	return players
+
+
+## Returns the session-level causal token for lobbyless mode.
+func get_lobbyless_session_token() -> CheckpointToken:
+	for child in get_children():
+		if child.get_meta(&"_is_world_wrapper", false):
+			if child.has_meta(&"_net_session_token"):
+				return child.get_meta(&"_net_session_token")
+	return null
+
+
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	
@@ -211,15 +280,33 @@ func _create_world_wrapper() -> Node:
 func _setup_pending_world() -> void:
 	if not _pending_world and _pending_world_scene_path.is_empty():
 		return
+	
+	var span: NetSpan = null
+	if not _pending_world_scene_path.is_empty():
+		span = NetTrace.begin("session", self, {"world": _pending_world_scene_path})
+		if span:
+			span.step("initializing_world")
+
 	var wrapper := _create_world_wrapper()
+	if is_server and wrapper is SubViewport:
+		wrapper.set("multiplayer", multiplayer_api)
+	
+	if span:
+		wrapper.set_meta(&"_net_session_token", span.checkpoint())
+	
 	add_child(wrapper)
 	if is_server:
+		if _pending_world:
+			_pending_world.free()
 		var level: Node = load(_pending_world_scene_path).instantiate()
 		wrapper.add_child(level)
 	else:
 		wrapper.add_child(_pending_world)
 	_pending_world = null
 	_pending_world_scene_path = ""
+	
+	if span:
+		span.end()
 
 
 func _find_world(spawner_path: SceneNodePath) -> Node:

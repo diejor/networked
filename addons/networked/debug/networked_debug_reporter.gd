@@ -140,7 +140,7 @@ var _is_sending_manifest: bool = false
 func _init() -> void:
 	randomize()
 	reporter_id = "%08x" % (randi() % 0xFFFFFFFF)
-	NetLog.debug("Reporter: Started with ID %s" % reporter_id)
+	NetLog.trace("Reporter: Started with ID %s" % reporter_id)
 
 
 func _enter_tree() -> void:
@@ -392,8 +392,7 @@ func _on_lobby_spawned_logic(lobby: Lobby, mt: MultiplayerTree) -> CheckpointTok
 			mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 			mt, {"lobby_name": str(lobby.level.name), "tree": mt.name})
 		lobby_span.step("spawners_registering")
-	# Capture token before _check_simplify_path_race_lobby closes/fails the span,
-	# so player_spawn spans can declare the causal link.
+	
 	var lobby_token: CheckpointToken = lobby_span.checkpoint() if lobby_span else null
 	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
 	return lobby_token
@@ -571,16 +570,46 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	snap.is_server = mt.is_server
 	snap.lobby_name = player.get_parent().name \
 		if is_instance_valid(player.get_parent()) else ""
+	
+	snap.cache_info = {
+		"hit": player.has_meta(SynchronizersCache.META_KEY),
+		"hooked": player.has_meta(&"_sc_invalidation_connected")
+	}
+
 	for sync: MultiplayerSynchronizer in SynchronizersCache.get_synchronizers(player):
 		var si := NetTopologySnapshot.SyncInfo.new()
 		si.name = sync.name
 		si.root_path = str(sync.root_path)
 		si.authority = sync.get_multiplayer_authority()
 		si.enabled = true
+		
+		var root := sync.get_node_or_null(sync.root_path)
+		
 		if sync.replication_config:
 			for prop: NodePath in sync.replication_config.get_properties():
 				var pi := NetTopologySnapshot.PropInfo.new()
 				pi.path = str(prop)
+				
+				if is_instance_valid(root):
+					var resolution := root.get_node_and_resource(prop)
+					var target: Object = resolution[0]
+					var subpath: NodePath = resolution[2]
+					
+					if is_instance_valid(target):
+						for pinfo in target.get_property_list():
+							if pinfo.name == str(subpath):
+								pi.type = pinfo.type
+								pi.target_class = pinfo.class_name if pi.type == TYPE_OBJECT else type_string(pi.type)
+								break
+						
+						if pi.type == TYPE_NIL:
+							var value = target.get_indexed(subpath)
+							pi.type = typeof(value)
+							pi.target_class = value.get_class() if pi.type == TYPE_OBJECT and is_instance_valid(value) else type_string(pi.type)
+					
+					if pi.target_class.is_empty():
+						pi.target_class = type_string(pi.type)
+				
 				pi.replication_mode = sync.replication_config.property_get_replication_mode(prop)
 				pi.spawn = sync.replication_config.property_get_spawn(prop)
 				pi.sync = sync.replication_config.property_get_sync(prop)
@@ -662,6 +691,12 @@ func _emit_current_state() -> void:
 				for comp: Node in comps:
 					if is_instance_valid(comp.owner):
 						_send_topology_snapshot(comp.owner, mt)
+		else:
+			# Lobbyless mode: find all ClientComponents directly in the tree.
+			var comps := mt.find_children("*", "ClientComponent", true, false)
+			for comp: Node in comps:
+				if is_instance_valid(comp.owner):
+					_send_topology_snapshot(comp.owner, mt)
 
 
 # ─── Demand-Driven Replication Watch ──────────────────────────────────────────
@@ -841,13 +876,14 @@ func _handle_inspect_node(node_path: String) -> void:
 		EngineDebugger.send_message("remote_objects_selected", [snapshot])
 
 
-func _handle_visualizer_toggle(d: Dictionary) -> void:
-	var res := _resolve_peer_key(d.get("peer_key", ""))
-	if res.local_mt:
-		if res.local_mt in _debug_contexts:
-			_debug_contexts[res.local_mt].apply_command(d)
-	elif res.relay:
-		res.relay.apply_visualizer_command.rpc_id(res.peer_id, d)
+func _handle_visualizer_toggle(d: Dictionary, from_relay: bool = false) -> void:
+	for context in _debug_contexts.values():
+		context.apply_command(d)
+
+	if not from_relay:
+		var res := _resolve_peer_key(d.get("peer_key", ""))
+		if res.relay:
+			res.relay.apply_visualizer_command.rpc_id(res.peer_id, d)
 
 
 func _handle_request_manifest_history(peer_key: String) -> void:
@@ -1090,12 +1126,12 @@ func emit_debug_event(msg: String, data: Dictionary, mt: MultiplayerTree) -> voi
 	var envelope := NetEnvelope.from_mt(mt, msg, data, reporter_id)
 	var bytes := var_to_bytes(envelope.to_dict())
 
-	# Path 1: Direct to local editor (zero round-trip, no echo from relay).
+	# Direct to local editor (zero round-trip, no echo from relay).
 	if _has_local_session():
-		NetLog.trace("Reporter: [EmitDirect] %s (path=%s)" % [msg, envelope.source_path])
+		_trace_emit("[EmitDirect]", msg, "(path=%s)" % envelope.source_path)
 		EngineDebugger.send_message("networked:envelope", [bytes])
 
-	# Path 2: Relay path for remote editors.
+	# Relay path for remote editors.
 	if not _relay_active(mt):
 		if not _has_local_session():
 			NetLog.warn("Reporter: [EmitDropped] %s — no relay or local session" % msg, [], func(m): push_warning(m))
@@ -1104,12 +1140,23 @@ func emit_debug_event(msg: String, data: Dictionary, mt: MultiplayerTree) -> voi
 	var relay: NetDebugRelay = _relays[mt]
 	if mt.is_server:
 		# Server's editor already received it above; only fan-out to remote recipients.
-		NetLog.trace("Reporter: [EmitRelayServer] %s" % msg)
+		_trace_emit("[EmitRelayServer]", msg)
 		relay.dispatch_to_recipients(bytes)
 	else:
 		# Relay decides whether to deliver locally based on _is_local_peer — always use one RPC.
-		NetLog.trace("Reporter: [EmitRelayClient] %s" % msg)
+		_trace_emit("[EmitRelayClient]", msg)
 		relay.forward_to_relay.rpc_id(1, bytes)
+
+
+func _trace_emit(prefix: String, msg: String, extra: String = "") -> void:
+	# Filter heartbeats and other high-frequency traffic that floods the trace.
+	if msg == "networked:clock_sample" or msg.begins_with("networked:span_"):
+		return
+	
+	if extra:
+		NetLog.trace("Reporter: %s %s %s" % [prefix, msg, extra])
+	else:
+		NetLog.trace("Reporter: %s %s" % [prefix, msg])
 
 
 # ─── Guards ───────────────────────────────────────────────────────────────────
@@ -1165,7 +1212,7 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 	mt.add_child(relay)
 	_relays[mt] = relay
 
-	NetLog.info("Reporter: [RelayCreated] for path %s" % mt.get_path())
+	NetLog.trace("Reporter: [RelayCreated] for path %s" % mt.get_path())
 
 	if not _has_local_session():
 		return  # Headless process: relay exists for forwarding only, no local recipient
@@ -1174,8 +1221,8 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 	if mt.is_server:
 		# Server's own editor uses the direct EngineDebugger path — no recipient registration.
 		# Remote clients will call register_as_recipient() via RPC when they connect.
-		NetLog.info("Reporter: [RelayReady] Server relay at %s (editor uses direct path)" % mt.get_path())
+		NetLog.trace("Reporter: [RelayReady] Server relay at %s (editor uses direct path)" % mt.get_path())
 	else:
 		# Client with editor: register on the server relay so it forwards server telemetry here.
-		NetLog.info("Reporter: [RelayRegister] Client registering as recipient via RPC")
+		NetLog.trace("Reporter: [RelayRegister] Client registering as recipient via RPC")
 		relay.register_as_recipient.rpc_id(1, token, reporter_id)

@@ -9,6 +9,10 @@ class_name DebugPanel
 extends VBoxContainer
 
 
+func _init() -> void:
+	add_theme_constant_override("separation", 4)
+
+
 ## Called by [PanelWrapper.set_online] when the owning peer goes offline or back online.
 ## Override to disable interactive controls that send RPCs to a dead tree.
 func set_peer_online(_online: bool) -> void:

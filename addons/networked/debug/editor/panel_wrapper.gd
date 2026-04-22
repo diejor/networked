@@ -4,11 +4,10 @@
 ## panel when the panel implements [DebugPanel]. Panels that extend [HBoxContainer]
 ## (e.g. [PanelClock]) are stored as plain [Control] and skipped for hooks.
 ##
-## Draws a rounded editor-themed background using [method Control._draw].
 ## Double-clicking the title bar fires [member on_maximize_requested].
 @tool
 class_name PanelWrapper
-extends VBoxContainer
+extends PanelContainer
 
 ## Called with [member adapter_key] when the title bar is double-clicked.
 var on_maximize_requested: Callable
@@ -35,6 +34,7 @@ var _title_bar: HBoxContainer
 var _title_panel: PanelContainer
 var _title_style: StyleBoxFlat
 var _outer_style: StyleBoxFlat
+var _content_vbox: VBoxContainer
 
 
 func _init(
@@ -52,6 +52,10 @@ func _init(
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 
+	_content_vbox = VBoxContainer.new()
+	_content_vbox.add_theme_constant_override("separation", 0)
+	add_child(_content_vbox)
+
 	_title_panel = PanelContainer.new()
 	_title_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_style = StyleBoxFlat.new()
@@ -61,7 +65,7 @@ func _init(
 	_title_panel.add_theme_stylebox_override("panel", _title_style)
 	_title_panel.gui_input.connect(_on_title_bar_gui_input)
 	_title_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_title_panel)
+	_content_vbox.add_child(_title_panel)
 
 	_title_bar = HBoxContainer.new()
 	_title_bar.add_theme_constant_override("separation", 8)
@@ -81,21 +85,13 @@ func _init(
 	_title_bar.add_child(_metric_label)
 
 	panel_control.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(panel_control)
+	_content_vbox.add_child(panel_control)
 
 
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_READY, NOTIFICATION_THEME_CHANGED:
 			_rebuild_outer_style()
-		NOTIFICATION_RESIZED:
-			queue_redraw()
-
-
-## Draws a rounded background using the editor theme's dark panel color.
-func _draw() -> void:
-	if _outer_style:
-		draw_style_box(_outer_style, Rect2(Vector2.ZERO, size))
 
 
 ## Called by [NetworkedDebuggerUI._add_wrapper_to_grid] once after the panel
@@ -134,20 +130,24 @@ func update_live_metric(text: String) -> void:
 	_metric_label.text = text
 
 
+var _is_rebuilding_style: bool = false
 func _rebuild_outer_style() -> void:
-	if not is_inside_tree():
+	if not is_inside_tree() or _is_rebuilding_style:
 		return
+	
+	_is_rebuilding_style = true
 	var border_alpha := 0.35 if _is_online else 0.12
 	_outer_style = StyleBoxFlat.new()
 	_outer_style.bg_color = get_theme_color("dark_color_1", "Editor")
 	_outer_style.border_color = Color(_peer_color.r, _peer_color.g, _peer_color.b, border_alpha)
 	_outer_style.set_border_width_all(1)
 	_outer_style.set_corner_radius_all(4)
-	_outer_style.content_margin_left   = 2
-	_outer_style.content_margin_right  = 2
-	_outer_style.content_margin_top    = 2
-	_outer_style.content_margin_bottom = 2
-	queue_redraw()
+	_outer_style.content_margin_left   = 4
+	_outer_style.content_margin_right  = 4
+	_outer_style.content_margin_top    = 4
+	_outer_style.content_margin_bottom = 4
+	add_theme_stylebox_override("panel", _outer_style)
+	_is_rebuilding_style = false
 
 
 func _on_title_bar_gui_input(event: InputEvent) -> void:
@@ -155,3 +155,4 @@ func _on_title_bar_gui_input(event: InputEvent) -> void:
 	if mb and mb.double_click and mb.button_index == MOUSE_BUTTON_LEFT:
 		if on_maximize_requested.is_valid():
 			on_maximize_requested.call(adapter_key)
+

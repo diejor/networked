@@ -40,6 +40,7 @@ var _error_parents: Dictionary[String, TreeItem] = {}
 
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 4)
 	add_child(toolbar)
 
 	_copy_btn = Button.new()
@@ -52,6 +53,16 @@ func _ready() -> void:
 	_clear_btn.text = "Clear"
 	_clear_btn.pressed.connect(clear)
 	toolbar.add_child(_clear_btn)
+
+	_break_btn = CheckButton.new()
+	_break_btn.text = "Break"
+	_break_btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
+	_break_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_break_btn.toggled.connect(func(enabled: bool) -> void:
+		if on_auto_break_changed.is_valid():
+			on_auto_break_changed.call(enabled)
+	)
+	toolbar.add_child(_break_btn)
 
 	_fetch_btn = Button.new()
 	_fetch_btn.text = "Fetch History"
@@ -118,21 +129,6 @@ func set_peer_remote(remote: bool) -> void:
 	if _fetch_btn:
 		_fetch_btn.visible = remote
 	clear()
-
-
-## Returns the Break toggle button to be placed in the panel header.
-func get_break_toggle(initial: bool = false) -> CheckButton:
-	if not _break_btn:
-		_break_btn = CheckButton.new()
-		_break_btn.text = "Break"
-		_break_btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
-		_break_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		_break_btn.set_pressed_no_signal(initial)
-		_break_btn.toggled.connect(func(enabled: bool) -> void:
-			if on_auto_break_changed.is_valid():
-				on_auto_break_changed.call(enabled)
-		)
-	return _break_btn
 
 
 ## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).

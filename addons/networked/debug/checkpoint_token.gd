@@ -8,7 +8,7 @@
 ## [codeblock]
 ## var token := write_span.checkpoint("cache_written")
 ## func load_data(token: CheckpointToken = null) -> void:
-##     var span := NetTrace.begin("cache_read", {}, "tree", token)
+##     var span := NetTrace.begin("cache_read", null, {}, "", token)
 ## [/codeblock]
 class_name CheckpointToken
 extends RefCounted

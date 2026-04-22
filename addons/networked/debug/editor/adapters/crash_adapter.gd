@@ -19,3 +19,12 @@ func on_peer_event(_d: Dictionary, _connected: bool) -> void:
 
 func get_current_label() -> String:
 	return "%d crash%s" % [ring_buffer.size(), "es" if ring_buffer.size() != 1 else ""]
+
+func get_status_banner_text() -> String:
+	if ring_buffer.is_empty():
+		return "No crashes detected."
+	var last: Dictionary = ring_buffer[-1] as Dictionary
+	return "Last: %s (Frame %d)" % [last.get("trigger", "UNKNOWN"), last.get("frame", 0)]
+
+func get_status_level() -> int:
+	return 2 if not ring_buffer.is_empty() else 0

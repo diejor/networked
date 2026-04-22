@@ -19,3 +19,24 @@ func get_current_label() -> String:
 		return ""
 	var last: Dictionary = ring_buffer[-1] as Dictionary
 	return "%.1f ms" % ((last.get("rtt_avg", 0.0) as float) * 1000.0)
+
+func get_status_banner_text() -> String:
+	if ring_buffer.is_empty():
+		return "Waiting for clock data..."
+	var last: Dictionary = ring_buffer[-1] as Dictionary
+	var rtt := (last.get("rtt_avg", 0.0) as float) * 1000.0
+	var jitter := (last.get("rtt_jitter", 0.0) as float) * 1000.0
+	var stable: bool = last.get("is_stable", false)
+	var synced: bool = last.get("is_synchronized", false)
+	
+	var status := "Stable" if stable else "UNSTABLE"
+	if not synced: status = "Syncing..."
+	
+	return "RTT: %.1fms | Jitter: %.1fms | %s" % [rtt, jitter, status]
+
+func get_status_level() -> int:
+	if ring_buffer.is_empty(): return 0
+	var last: Dictionary = ring_buffer[-1] as Dictionary
+	if not last.get("is_stable", false): return 1
+	if (last.get("rtt_avg", 0.0) as float) * 1000.0 > 100.0: return 1
+	return 0

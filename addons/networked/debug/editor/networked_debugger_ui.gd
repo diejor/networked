@@ -28,6 +28,9 @@ var _peer_tree_items: Dictionary[String, TreeItem] = {}
 # adapter_key -> PanelWrapper node currently in the grid
 var _panel_wrappers: Dictionary[String, PanelWrapper] = {}
 
+# adapter_key -> TreeItem (checkbox row)
+var _checkbox_items: Dictionary[String, TreeItem] = {}
+
 # Ordered list of currently active adapter keys (controls grid child order).
 var _active_keys: Array[String] = []
 
@@ -67,24 +70,35 @@ func _notification(what: int) -> void:
 		_apply_theme_styles()
 
 
+var _is_applying_theme: bool = false
 ## Applies editor-theme-aware styles to the tree panel and scroll area.
 ## Re-runs on NOTIFICATION_THEME_CHANGED so light/dark switches update live.
 func _apply_theme_styles() -> void:
-	if not is_inside_tree() or not _peer_tree:
+	if not is_inside_tree() or not _peer_tree or _is_applying_theme:
 		return
 	
+	_is_applying_theme = true
 	# Left tree: slightly darker than the base background, with rounded corners.
 	var tree_bg := StyleBoxFlat.new()
 	tree_bg.bg_color = get_theme_color("dark_color_2", "Editor")
 	tree_bg.set_corner_radius_all(4)
+	tree_bg.content_margin_left = 4
+	tree_bg.content_margin_right = 4
+	tree_bg.content_margin_top = 4
+	tree_bg.content_margin_bottom = 4
 	_peer_tree.add_theme_stylebox_override("panel", tree_bg)
 	
 	# Scroll area background: slightly lighter than the tree, rounding matches.
 	var scroll_bg := StyleBoxFlat.new()
 	scroll_bg.bg_color = get_theme_color("base_color", "Editor")
 	scroll_bg.set_corner_radius_all(4)
+	scroll_bg.content_margin_left = 4
+	scroll_bg.content_margin_right = 4
+	scroll_bg.content_margin_top = 4
+	scroll_bg.content_margin_bottom = 4
 	# ScrollContainer uses "panel" for its backdrop in the editor theme.
 	_scroll.add_theme_stylebox_override("panel", scroll_bg)
+	_is_applying_theme = false
 
 
 # ─── Layout construction ──────────────────────────────────────────────────────
@@ -98,13 +112,10 @@ func _build_layout() -> void:
 	_peer_tree = Tree.new()
 	_peer_tree.custom_minimum_size.x = 260
 	_peer_tree.hide_root = true
-	_peer_tree.columns = 2
+	_peer_tree.columns = 1
 	_peer_tree.set_column_title(0, "Peer")
-	_peer_tree.set_column_title(1, "ID")
 	_peer_tree.column_titles_visible = true
 	_peer_tree.set_column_expand(0, true)
-	_peer_tree.set_column_expand(1, false)
-	_peer_tree.set_column_custom_minimum_width(1, 80)
 	_peer_tree.item_edited.connect(_on_peer_tree_item_edited)
 	# Ensure root exists.
 	_peer_tree.create_item()
@@ -143,11 +154,11 @@ func _on_peer_registered(peer_key: String, display_name: String, is_server: bool
 	peer_item.set_custom_color(0, color)
 	peer_item.set_icon(0, _dot_online)
 	peer_item.set_selectable(0, false)
-	peer_item.set_selectable(1, false)
 
-	# Column 1: peer_id only. Shows "?" until the snapshot resolves the real id.
-	peer_item.set_text(1, "%d" % peer_id if peer_id != 0 else "?")
-	peer_item.set_custom_color(1, color)
+	if peer_id != 0:
+		peer_item.set_tooltip_text(0, "peer=%d" % peer_id)
+	else:
+		peer_item.set_tooltip_text(0, "peer=?")
 
 	var font: Font = peer_item.get_tree().get_theme_font(&"bold", &"Tree") if peer_item.get_tree() else null
 	if font:
@@ -200,15 +211,49 @@ func _on_peer_status_changed(peer_key: String, online: bool) -> void:
 func _on_peer_id_resolved(peer_key: String, peer_id: int) -> void:
 	if peer_key not in _peer_tree_items:
 		return
-	_peer_tree_items[peer_key].set_text(1, "%d" % peer_id)
+	_peer_tree_items[peer_key].set_tooltip_text(0, "peer=%d" % peer_id)
 
 
 func _on_adapter_data_changed(key: String) -> void:
+	var adapter: PanelDataAdapter = session.get_adapter(key)
+	if not adapter:
+		return
+	
+	var summary := adapter.get_status_banner_text()
+	var level := adapter.get_status_level()
+	
+	# Update Tree tooltip and icon.
+	if key in _checkbox_items:
+		var item: TreeItem = _checkbox_items[key]
+		if not summary.is_empty():
+			item.set_tooltip_text(0, summary)
+			
+			var button_idx := -1
+			# Status button is always the first button if it exists.
+			# (Checking metadata would be safer if we had other buttons, but here it's exclusive).
+			if item.get_button_count(0) > 0:
+				button_idx = 0
+			
+			if level > 0:
+				var icon := get_theme_icon("NodeWarning" if level == 1 else "StatusError", "EditorIcons")
+				var color := get_theme_color("warning_color" if level == 1 else "error_color", "Editor")
+				
+				if button_idx == -1:
+					item.add_button(0, icon)
+					button_idx = 0
+				else:
+					item.set_button(0, button_idx, icon)
+				
+				item.set_button_color(0, button_idx, color)
+			else:
+				if button_idx != -1:
+					item.erase_button(0, button_idx)
+
 	if key not in _panel_wrappers:
 		return
+	
 	var wrapper: PanelWrapper = _panel_wrappers[key]
-	var adapter: PanelDataAdapter = session.get_adapter(key)
-	if not adapter or adapter.ring_buffer.is_empty():
+	if adapter.ring_buffer.is_empty():
 		return
 	
 	wrapper.update_live_metric(adapter.get_current_label())
@@ -232,6 +277,7 @@ func _on_session_cleared() -> void:
 		_deactivate_panel(key)
 	_active_keys.clear()
 	_panel_wrappers.clear()
+	_checkbox_items.clear()
 	_peer_tree_items.clear()
 	_peer_tree.clear()
 	_peer_tree.create_item()  # re-create invisible root
@@ -246,8 +292,10 @@ func _add_panel_checkbox(peer_item: TreeItem, peer_key: String, pt: PanelDataAda
 	child.set_text(0, PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
 	child.set_editable(0, true)
 	child.set_checked(0, false)
-	child.set_selectable(1, false)
 	child.set_metadata(0, {"peer_key": peer_key, "panel_type": pt})
+	
+	var key: String = "%s:%s" % [peer_key, PanelDataAdapter.PANEL_NAMES[pt]]
+	_checkbox_items[key] = child
 
 
 # ─── Checkbox toggle ──────────────────────────────────────────────────────────
@@ -295,19 +343,6 @@ func _activate_panel(key: String, peer_key: String, pt: PanelDataAdapter.PanelTy
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
 	NetLog.trace("UI: [CreatedWrapper] %s size_flags=%d" % [key, wrapper.size_flags_vertical])
 	wrapper.on_maximize_requested = _on_maximize_requested
-
-	# Specialized header controls for certain panel types.
-	match pt:
-		PanelDataAdapter.PanelType.CRASH:
-			var crash_panel := panel as PanelCrashManifest
-			if crash_panel:
-				wrapper.add_header_control(crash_panel.get_break_toggle(
-					session.auto_break if session else false
-				))
-		PanelDataAdapter.PanelType.TOPOLOGY:
-			var topology_panel := panel as PanelTopology
-			if topology_panel:
-				wrapper.add_header_control(topology_panel.get_nameplate_toggle())
 
 	_panel_wrappers[key] = wrapper
 	_active_keys.append(key)
@@ -368,6 +403,10 @@ func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
 			peer_info.get("is_remote", false),
 			peer_info.get("online", true),
 		)
+		
+		# Specialized post-ready initialization.
+		if wrapper.panel_control is PanelCrashManifest:
+			(wrapper.panel_control as PanelCrashManifest)._break_btn.set_pressed_no_signal(session.auto_break)
 
 	if key in _pending_populate:
 		_pending_populate.erase(key)
@@ -375,7 +414,8 @@ func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
 			var adapter: PanelDataAdapter = session.get_adapter(key)
 			if adapter:
 				wrapper.panel_control.populate(adapter.ring_buffer)
-				wrapper.update_live_metric(adapter.get_current_label())
+				# Initialise summary tooltips and icons.
+				_on_adapter_data_changed(key)
 
 
 # ─── Maximize / restore ───────────────────────────────────────────────────────
@@ -448,8 +488,13 @@ func _create_panel_control(pt: PanelDataAdapter.PanelType, peer_key: String) -> 
 			topology_panel.on_node_inspect = func(node_path: String) -> void:
 				if session:
 					session.send_node_inspect(session.session_id, node_path)
-			
+
+			topology_panel.on_refresh_requested = func() -> void:
+				if session and session.plugin:
+					session.plugin.send_to_game(session.session_id, "networked:request_snapshot", [])
+
 			# Nameplate toggle: handled by the panel itself.
+
 			topology_panel.on_nameplate_toggled = func(node_path: String, enabled: bool) -> void:
 				if session:
 					session.send_visualizer_toggle(peer_key, node_path, "nameplate", enabled)

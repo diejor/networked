@@ -117,6 +117,7 @@ func _decorate_player(player: Node) -> void:
 			nameplate.follow_client(client)
 			player.add_child(nameplate)
 	elif not should_have and existing:
+		existing.name = "Nameplate_Deleting"
 		existing.queue_free()
 
 
@@ -133,15 +134,7 @@ func _get_stable_id_from_path(path: String) -> Variant:
 
 
 func _find_players(mt: MultiplayerTree) -> Array[Node]:
-	var players: Array[Node] = []
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if not lm: return players
-
-	for lobby in lm.active_lobbies.values():
-		if is_instance_valid(lobby) and is_instance_valid(lobby.level):
-			var comps: Array[Node] = lobby.level.find_children("*", "ClientComponent", true, false)
-			for c in comps: players.append(c.owner)
-	return players
+	return mt.get_all_players()
 
 
 # ─── Signal Wiring ────────────────────────────────────────────────────────────
@@ -191,21 +184,23 @@ func _on_configured() -> void:
 		clock.pong_received.connect(func(data: Dictionary): reporter._on_clock_pong(data, mt))
 
 	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if not lm: return
-	lm.lobby_spawned.connect(_on_lobby_spawned)
-	lm.lobby_despawned.connect(_on_lobby_despawned)
+	if is_instance_valid(lm):
+		lm.lobby_spawned.connect(_on_lobby_spawned)
+		lm.lobby_despawned.connect(_on_lobby_despawned)
 
-	# Retroactively hook lobbies that spawned before this context was ready (e.g. ON_STARTUP).
-	for lobby: Lobby in lm.active_lobbies.values():
-		if not is_instance_valid(lobby) or _hooked_lobbies.has(lobby): continue
-		_lobby_tokens[lobby] = null  # no causal token for lobbies we didn't witness
-		_hook_synchronizer(lobby)
-		# Emit topology for players already present in this lobby.
-		if is_instance_valid(lobby.level):
-			var comps := lobby.level.find_children("*", "ClientComponent", true, false)
-			for c: Node in comps:
-				if is_instance_valid(c.owner):
-					reporter._on_player_spawned_logic(c.owner, mt, null)
+		# Retroactively hook lobbies that spawned before this context was ready (e.g. ON_STARTUP).
+		for lobby: Lobby in lm.active_lobbies.values():
+			if not is_instance_valid(lobby) or _hooked_lobbies.has(lobby): continue
+			_lobby_tokens[lobby] = null  # no causal token for lobbies we didn't witness
+			_hook_synchronizer(lobby)
+
+		# Emit topology for players already present.
+		for player in mt.get_all_players():
+			reporter._on_player_spawned_logic(player, mt, null)
+	else:
+		# Lobbyless mode: emit topology for all current players.
+		for player in mt.get_all_players():
+			reporter._on_player_spawned_logic(player, mt, null)
 
 
 # ─── Lobby Lifecycle ──────────────────────────────────────────────────────────
@@ -217,6 +212,8 @@ func _on_lobby_spawned(lobby: Lobby) -> void:
 
 	var token: CheckpointToken = reporter._on_lobby_spawned_logic(lobby, mt)
 	_lobby_tokens[lobby] = token
+	if is_instance_valid(lobby):
+		lobby.set_meta(&"_net_lobby_token", token)
 	_hook_synchronizer(lobby)
 
 
@@ -252,6 +249,9 @@ func _on_player_spawned(player: Node, lobby: Lobby) -> void:
 	if not mt or not reporter: return
 
 	var token: CheckpointToken = _lobby_tokens.get(lobby, null)
+	if not token and not lobby:
+		token = mt.get_lobbyless_session_token()
+
 	reporter._on_player_spawned_logic(player, mt, token)
 	_decorate_player(player)
 
@@ -271,3 +271,11 @@ func _on_client_added(comp: ClientComponent) -> void:
 	var player := comp.owner
 	if not is_instance_valid(player): return
 	_decorate_player(player)
+
+	# Notify reporter for topology and spans.
+	# In lobbyless mode, this is our only trigger. In lobby mode, this might be
+	# redundant with lobby.synchronizer.spawned, but reporter._on_player_spawned_logic
+	# is idempotent for spans (deduped by node path) and snapshots (just replaces latest).
+	var r := _reporter_ref.get_ref() as NetworkedDebugReporter
+	if r:
+		r._on_player_spawned_logic(player, mt, null)

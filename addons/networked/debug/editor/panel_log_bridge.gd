@@ -52,20 +52,8 @@ const COL_ELAPSED := 2
 
 func _ready() -> void:
 	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 4)
 	add_child(header_row)
-
-	var title := Label.new()
-	title.text = "Span Tracer"
-	title.add_theme_font_size_override("font_size", 12)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(title)
-
-	_filter_edit = LineEdit.new()
-	_filter_edit.placeholder_text = "Filter events…"
-	_filter_edit.custom_minimum_size.x = 160
-	_filter_edit.clear_button_enabled = true
-	_filter_edit.text_changed.connect(_on_filter_changed)
-	header_row.add_child(_filter_edit)
 
 	_copy_btn = Button.new()
 	_copy_btn.text = "Copy"
@@ -76,6 +64,13 @@ func _ready() -> void:
 	clear_btn.text = "Clear"
 	clear_btn.pressed.connect(clear)
 	header_row.add_child(clear_btn)
+
+	_filter_edit = LineEdit.new()
+	_filter_edit.placeholder_text = "Filter events…"
+	_filter_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_filter_edit.clear_button_enabled = true
+	_filter_edit.text_changed.connect(_on_filter_changed)
+	header_row.add_child(_filter_edit)
 
 	_tree = Tree.new()
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL

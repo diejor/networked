@@ -329,6 +329,18 @@ func destroy_lobby(name: StringName) -> void:
 	lobby.queue_free()
 
 
+## Returns an array of all active player nodes across all active lobbies.
+func get_all_players() -> Array[Node]:
+	var players: Array[Node] = []
+	for lobby: Lobby in active_lobbies.values():
+		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+			continue
+		for c in lobby.level.find_children("*", "ClientComponent", true, false):
+			if is_instance_valid(c.owner):
+				players.append(c.owner)
+	return players
+
+
 ## Instantiates all lobbies configured as [constant LoadMode.ON_STARTUP].
 ##
 ## Lobbies configured as [constant LoadMode.ON_DEMAND] are skipped to save startup time and RAM.

@@ -152,17 +152,17 @@ func _log_proxy(level: int, msg: Variant, args: Array, link_call: Callable = Cal
 #region ── Debug Events ───────────────────────────────────────────────────────
 
 ## Opens a new general-purpose span for this component.
-func _begin_span(label: String, meta: Dictionary = {}) -> NetSpan:
+func _begin_span(label: String, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
 	var s := get_session()
-	if s: return s.begin_span(label, meta)
-	return NetTrace.begin(label, null, meta)
+	if s: return s.begin_span(label, meta, follows_from)
+	return NetTrace.begin(label, null, meta, "", follows_from)
 
 
 ## Opens a new peer-aware span for a multiplayer operation.
-func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}) -> NetPeerSpan:
+func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetPeerSpan:
 	var s := get_session()
-	if s: return s.begin_peer_span(label, peers, meta)
-	return NetTrace.begin_peer(label, peers, null, meta)
+	if s: return s.begin_peer_span(label, peers, meta, follows_from)
+	return NetTrace.begin_peer(label, peers, null, meta, "", follows_from)
 
 
 #endregion

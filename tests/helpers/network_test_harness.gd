@@ -51,6 +51,10 @@ func add_client() -> MultiplayerTree:
 	client.name = "HarnessClient%d" % index
 	client.is_server = false
 	client.set_meta(&"_harness_username", username)
+
+	if _world_scene:
+		client.add_child(_world_scene.instantiate())
+
 	add_child(client)
 
 	var backend := LocalLoopbackBackend.new()

@@ -44,6 +44,20 @@ func get_service(type: Script) -> Node:
 	return mt.get_service(type) if mt else null
 
 
+## Resolves the correct spawn location and causal token for a new player.
+func get_spawn_context(spawner_path: SceneNodePath) -> MultiplayerTree.SpawnContext:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	if not mt:
+		return MultiplayerTree.SpawnContext.new() # is_valid() -> false; safe sentinel
+	return mt.get_spawn_context(spawner_path)
+
+
+## Returns an array of all active player nodes across all lobbies or the lobbyless world.
+func get_all_players() -> Array[Node]:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	return mt.get_all_players() if mt else []
+
+
 func is_server() -> bool:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	return mt.is_server if mt else false
@@ -59,9 +73,9 @@ func get_tree_name() -> String:
 	return mt.get_meta(&"_original_name", mt.name) if mt else ""
 
 
-func begin_span(label: String, meta: Dictionary = {}) -> NetSpan:
-	return NetTrace.begin(label, _mt_ref.get_ref(), meta)
+func begin_span(label: String, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
+	return NetTrace.begin(label, _mt_ref.get_ref(), meta, "", follows_from)
 
 
-func begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}) -> NetPeerSpan:
-	return NetTrace.begin_peer(label, peers, _mt_ref.get_ref(), meta)
+func begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetPeerSpan:
+	return NetTrace.begin_peer(label, peers, _mt_ref.get_ref(), meta, "", follows_from)

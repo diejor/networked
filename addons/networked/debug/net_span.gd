@@ -38,13 +38,15 @@ var meta: Dictionary
 var _target_node: WeakRef
 
 
-func _init(p_id: StringName, p_label: String, p_meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
+func _init(p_id: StringName, p_label: String, p_meta: Dictionary = {}, tree: MultiplayerTree = null, p_tree_name: String = "", follows_from: CheckpointToken = null) -> void:
 	id = p_id
 	label = p_label
 	meta = p_meta
+	tree_name = p_tree_name
 	if is_instance_valid(tree):
 		_mt = weakref(tree)
-		tree_name = tree.get_meta(&"_original_name", tree.name)
+		if tree_name.is_empty():
+			tree_name = tree.get_meta(&"_original_name", tree.name)
 	
 	_start_frame = Engine.get_process_frames()
 	_start_usec = Time.get_ticks_usec()

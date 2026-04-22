@@ -43,7 +43,7 @@ static func begin(span_label: String, context: Object = null, meta: Dictionary =
 		tree_name = mt.get_meta(&"_original_name", mt.name)
 
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetSpan.new(span_id, span_label, meta, mt, follows_from)
+	var span := NetSpan.new(span_id, span_label, meta, mt, tree_name, follows_from)
 	_active.append(span)
 	return span
 
@@ -59,7 +59,7 @@ static func begin_peer(span_label: String, peers: Array = [], context: Object = 
 		tree_name = mt.get_meta(&"_original_name", mt.name)
 
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
-	var span := NetPeerSpan.new(span_id, span_label, meta, mt, follows_from)
+	var span := NetPeerSpan.new(span_id, span_label, meta, mt, tree_name, follows_from)
 	for peer_id: int in peers:
 		span.affects(peer_id)
 	

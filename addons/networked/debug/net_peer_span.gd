@@ -18,8 +18,8 @@ extends NetSpan
 var affected_peers: Array[int] = []
 
 
-func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: MultiplayerTree = null, follows_from: CheckpointToken = null) -> void:
-	super(p_id, p_label, meta, tree, follows_from)
+func _init(p_id: StringName, p_label: String, meta: Dictionary = {}, tree: MultiplayerTree = null, p_tree_name: String = "", follows_from: CheckpointToken = null) -> void:
+	super(p_id, p_label, meta, tree, p_tree_name, follows_from)
 
 
 ## Tags [param peer_id] as a peer affected by this operation.

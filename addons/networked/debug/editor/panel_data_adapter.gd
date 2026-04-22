@@ -44,6 +44,15 @@ func on_span_event(_d: Dictionary, _type: String) -> void:
 func get_current_label() -> String:
 	return ""
 
+## Returns a detailed single-line summary for the "Status Banner".
+func get_status_banner_text() -> String:
+	return ""
+
+## Returns the severity level: 0=Info, 1=Warning, 2=Error.
+## Used to color the status banner.
+func get_status_level() -> int:
+	return 0
+
 func clear() -> void:
 	ring_buffer.clear()
 	data_changed.emit(adapter_key)

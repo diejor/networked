@@ -203,45 +203,39 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	# Generate a join span that groups all events for this specific join attempt.
-	# Passed through to save_component.spawn() so the log bridge can show the full join timeline.
+	var ctx := get_session().get_spawn_context(client_data.spawner_path)
+	if not ctx.is_valid():
+		log_error("Player join failed: no active world or lobby for scene '%s'." \
+			% client_data.spawner_path.get_scene_name(), [], func(m): push_error(m))
+		return
+
 	var span := _begin_span("player_join", {
 		"username": client_data.username,
 		"peer_id": client_data.peer_id,
 		"authority_mode": authority_mode,
-	})
+	}, ctx.token)
 	span.step("joined")
 	log_info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
+
 	if not client_data.peer_id or not client_data.spawner_path or client_data.username.is_empty():
 		log_error("Player join failed: invalid client data.", [], func(m): push_error(m))
 		span.end()
 		return
-	
+
 	var player := _instantiate_player(client_data)
-	
+
 	var save_component: SaveComponent = player.get_node_or_null("%SaveComponent")
 	if save_component:
-		log_debug("Loading player with SaveComponent for player `%s`.\
-" % client_data.username)
+		log_debug("Loading player with SaveComponent for player `%s`." % client_data.username)
 		save_component.spawn(owner, span)
-	
-	var lobby_manager := get_lobby_manager()
+
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
-	
-	if tp_component and save_component and lobby_manager:
+
+	if tp_component and save_component and ctx.has_lobby():
 		log_debug("Using TPComponent to spawn player `%s`." % client_data.username)
-		tp_component.spawn(lobby_manager)
-	elif lobby_manager:
-		var scene_name := client_data.spawner_path.get_scene_name()
-		var lobby: Lobby = lobby_manager.active_lobbies.get(scene_name)
-	
-		if lobby:
-			log_info("Placing player `%s` into lobby `%s`." % [player.name, lobby.name])
-			lobby.add_player(player)
-		else:
-			log_error("Could not find active lobby for scene `%s`." % scene_name, [], func(m): push_error(m))
+		tp_component.spawn(get_session().get_lobby_manager())
 	else:
-		owner.get_parent().add_child(player)
+		ctx.place_player(player)
 
 	span.end()
 

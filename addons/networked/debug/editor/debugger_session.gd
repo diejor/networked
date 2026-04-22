@@ -56,7 +56,7 @@ var _peer_colors: Dictionary[int, Color] = {}
 ##   (for "networked:envelope"), OR
 ## - A control message with non-envelope payload (e.g. "networked:relay_disconnected").
 func receive(message: String, data: Array) -> void:
-	# Control messages that carry no envelope — handle before the empty-data guard.
+	# Control messages that carry no envelope, handle before the empty-data guard.
 	if message == "networked:relay_disconnected":
 		mark_remote_peers_offline()
 		return
@@ -158,7 +158,7 @@ func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 	if is_remote and pk in _peers and not _peers[pk].get("is_remote", true):
 		return
 
-	NetLog.trace("DebuggerSession: [Route] %s from %s (remote=%s)" % [envelope.msg, pk, is_remote])
+	_trace_route(envelope.msg, pk, is_remote)
 
 	match envelope.msg:
 		"networked:session_registered":   _on_session_registered(envelope, is_remote)
@@ -176,6 +176,14 @@ func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 		"networked:topology_snapshot":    _on_topology_snapshot(envelope)
 		_:
 			NetLog.trace("DebuggerSession: [UnknownMsg] %s" % envelope.msg)
+
+
+func _trace_route(msg: String, pk: String, is_remote: bool) -> void:
+	# Filter heartbeats and other high-frequency traffic that floods the trace.
+	if msg == "networked:clock_sample" or msg.begins_with("networked:span_"):
+		return
+	
+	NetLog.trace("DebuggerSession: [Route] %s from %s (remote=%s)" % [msg, pk, is_remote])
 
 
 # ─── Message Handlers ─────────────────────────────────────────────────────────

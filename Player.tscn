@@ -71,6 +71,9 @@ metadata/_custom_type_script = "uid://b21bbqt166ive"
 script = ExtResource("7_dtqjt")
 database = SubResource("Resource_r3kul")
 table_name = &"players"
+tracked_properties = Dictionary[StringName, NodePath]({
+&"position": NodePath(".:position")
+})
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
