@@ -51,9 +51,9 @@ func _enter_tree() -> void:
 	
 	var prop_count := replication_config.get_properties().size() if replication_config else 0
 	if prop_count == 0 and not save_component.tracked_properties.is_empty():
-		NetLog.warn("[CLIENT_EMPTY_CONFIG] '%s' on '%s' has 0 properties " \
+		Netw.dbg.warn("[CLIENT_EMPTY_CONFIG] '%s' on '%s' has 0 properties " \
 			+ "after entering tree. C++ replication registration will silently fail. " \
-			+ "peer_id=%d is_server=%s root_path=%s", [
+			+ "peer_id=%d is_server=%s root_path=%s" % [
 				name,
 				save_component.owner.name if save_component and save_component.owner else "?",
 				multiplayer.get_unique_id() if multiplayer else 0,
@@ -77,7 +77,7 @@ func _ready() -> void:
 ## real scene node at the declared [NodePath].
 func setup() -> void:
 	if _initialized:
-		NetLog.warn("SaveSynchronizer.setup: called more than once.", [], func(m): push_warning(m))
+		Netw.dbg.warn("SaveSynchronizer.setup: called more than once.", func(m): push_warning(m))
 		return
 	_initialized = true
 	
@@ -187,7 +187,7 @@ func pull_from_scene() -> void:
 ## keeps its default). Always returns [constant OK].
 func push_to_scene() -> Error:
 	if not _initialized:
-		NetLog.error("SaveSynchronizer: push_to_scene called before setup().", [], func(m): push_error(m))
+		Netw.dbg.error("SaveSynchronizer: push_to_scene called before setup().", func(m): push_error(m))
 		return ERR_UNCONFIGURED
 
 	assert(bound_entity)

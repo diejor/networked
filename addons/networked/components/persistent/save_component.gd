@@ -165,7 +165,7 @@ func save_state() -> Error:
 	if db_err == OK:
 		_dbg.trace("State saved (table=%s, id=%s)." % [table_name, entity_id])
 	else:
-		_dbg.warn("Database upsert failed. Error: %s" % error_string(db_err), func(m): push_warning(m))
+		_dbg.warn("Database upsert failed. Error: %s" % [error_string(db_err)], func(m): push_warning(m))
 
 	return db_err
 
@@ -177,7 +177,7 @@ func load_state() -> Error:
 		loaded.emit()
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
-	_dbg.trace("Loading state (table=%s, id=%s)" % [table_name, entity_id])
+	_dbg.trace("Loading state (table=%s, id=%s)", [table_name, entity_id])
 
 	var out_error: Array[int] = [OK]
 	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
@@ -204,7 +204,7 @@ func load_state() -> Error:
 
 ## Deserializes a network byte array into the entity and pushes the result to the scene.
 func deserialize_scene(bytes: PackedByteArray) -> void:
-	_dbg.trace("deserializing scene (%d bytes)." % bytes.size())
+	_dbg.trace("deserializing scene (%d bytes)." % [bytes.size()])
 	bound_entity.deserialize(bytes)
 	push_to_scene()
 

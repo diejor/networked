@@ -1,19 +1,19 @@
 ## Main editor plugin for the Networked addon.
 ##
 ## Initializes the logging system, registers singletons, and adds the
-## NetLog dock and debugger plugin to the Godot editor.
+## NetwLog dock and debugger plugin to the Godot editor.
 @tool
 extends EditorPlugin
 
 const SceneNodePathPlugin = preload("uid://dtj5ucl1iy3ug")
-const NetLogEditor = preload("uid://b2dp22x17yufo")
+const NetwLogEditor = preload("res://addons/networked/utils/editor/netw_log_editor.gd")
 const DebuggerPlugin = preload("uid://b2lc6aalf32kx")
 const DEBUG_REPORTER_PATH = "res://addons/networked/debug/networked_debug_reporter.gd"
 
 ## Reference to the SceneNodePath editor plugin instance.
 var scene_node_path_plugin: EditorPlugin
 
-## Reference to the NetLog editor dock control.
+## Reference to the NetwLog editor dock control.
 var log_editor: Control
 
 ## Reference to the networked debugger plugin instance.
@@ -21,15 +21,15 @@ var _debugger_plugin: EditorDebuggerPlugin
 
 
 func _enter_tree() -> void:
-	NetLog.initialize(get_script().get_path().get_base_dir())
+	NetwLog.initialize(get_script().get_path().get_base_dir())
 
 	add_autoload_singleton("NetworkedDebugger", DEBUG_REPORTER_PATH)
 
 	scene_node_path_plugin = SceneNodePathPlugin.new()
 	add_child(scene_node_path_plugin)
 
-	log_editor = NetLogEditor.new()
-	log_editor.name = "NetLog"
+	log_editor = NetwLogEditor.new()
+	log_editor.name = "NetwLog"
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, log_editor)
 
 	_debugger_plugin = DebuggerPlugin.new()

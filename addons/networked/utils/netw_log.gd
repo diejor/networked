@@ -2,13 +2,12 @@
 ##
 ## Log calls resolve a per-module level by walking the dot-separated module hierarchy.
 ## At runtime the first log call lazily detects the addon root and loads the active
-## [NetLogSettings] profile from [code]ProjectSettings[/code].
+## [NetwLogSettings] profile from [code]ProjectSettings[/code].
 ## [codeblock]
-## Netw.dbg.info(self, "Player spawned: %s" % username)
+## Netw.dbg.info(self, "Player spawned: %s", [username])
 ## Netw.dbg.warn(self, "Connection attempt failed, retrying...")
-## push_warning("Connection attempt failed, retrying...")
 ## [/codeblock]
-class_name NetLog
+class_name NetwLog
 extends Object
 
 ## Ordered severity levels for filtering log output.
@@ -31,9 +30,10 @@ static var module_levels: Dictionary = {}
 
 static var _min_active_level: int = Level.INFO
 static var _effective_min_level: int = Level.INFO
-static var _settings_stack: Array[NetLogSettings] = []
+static var _settings_stack: Array[NetwLogSettings] = []
 static var _addon_root: String = ""
 static var _runtime_initialized: bool = false
+static var _is_debug: bool = OS.is_debug_build()
 
 const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 
@@ -67,7 +67,7 @@ static func _load_active_profile() -> void:
 
 	if not ResourceLoader.exists(path):
 		push_warning(
-			"NetLog: Active profile not found: '%s'\n" % path + \
+			"NetwLog: Active profile not found: '%s'\n" % path + \
 			"  → The resource may have been deleted or moved.\n" + \
 			"  → Clear or reassign it at Project Settings > %s" \
 			% SETTING_ACTIVE_PROFILE
@@ -75,12 +75,12 @@ static func _load_active_profile() -> void:
 		return
 
 	var res = ResourceLoader.load(path)
-	if res is NetLogSettings:
+	if res is NetwLogSettings:
 		current_level = res.global_level
 		module_levels = res.module_overrides.duplicate()
 	else:
 		push_warning(
-			"NetLog: '%s' is not a NetLogSettings resource.\n" % path + \
+			"NetwLog: '%s' is not a NetwLogSettings resource.\n" % path + \
 			"  → Reassign it at Project Settings > %s" \
 			% SETTING_ACTIVE_PROFILE
 		)
@@ -108,7 +108,7 @@ static func _recompute_min_level() -> void:
 
 static func _stack_min_level() -> int:
 	var m: int = _min_active_level
-	for top: NetLogSettings in _settings_stack:
+	for top: NetwLogSettings in _settings_stack:
 		if top.global_level != Level.INHERIT and top.global_level < m:
 			m = top.global_level
 		for l: int in top.module_overrides.values():
@@ -133,17 +133,17 @@ static func is_level_active(level: int, script_path: String) -> bool:
 	return level >= get_effective_level(module)
 
 
-## Pushes a [NetLogSettings] resource onto the isolation stack.
+## Pushes a [NetwLogSettings] resource onto the isolation stack.
 ##
 ## Settings pushed onto the stack cascade: queries check the top of the stack
 ## first, and if no explicit override is found, fall back down the stack until
 ## reaching the base profile settings.
-static func push_settings(settings: NetLogSettings) -> void:
+static func push_settings(settings: NetwLogSettings) -> void:
 	_settings_stack.push_back(settings)
 	_effective_min_level = _stack_min_level()
 
 
-## Pops the topmost [NetLogSettings] from the isolation stack.
+## Pops the topmost [NetwLogSettings] from the isolation stack.
 static func pop_settings() -> void:
 	if not _settings_stack.is_empty():
 		_settings_stack.pop_back()
@@ -162,7 +162,7 @@ static func get_effective_level(module_path: String) -> int:
 	var parts := module_path.split(".")
 	
 	for i in range(_settings_stack.size() - 1, -1, -1):
-		var top: NetLogSettings = _settings_stack[i]
+		var top: NetwLogSettings = _settings_stack[i]
 		
 		var temp_parts := parts.duplicate()
 		while temp_parts.size() > 0:
@@ -190,14 +190,14 @@ static func get_effective_level(module_path: String) -> int:
 
 
 ## Pushes a new configuration onto the stack using the LOGL string syntax.
-## Example: [code]NetLog.push_setting_str("info,core.network=trace")[/code]
+## Example: [code]NetwLog.push_setting_str("info,core.network=trace")[/code]
 static func push_setting_str(logl_str: String) -> void:
 	push_settings(parse_logl(logl_str))
 
 
-## Parses a LOGL string into a [NetLogSettings] resource.
-static func parse_logl(logl_str: String) -> NetLogSettings:
-	var res := NetLogSettings.new()
+## Parses a LOGL string into a [NetwLogSettings] resource.
+static func parse_logl(logl_str: String) -> NetwLogSettings:
+	var res := NetwLogSettings.new()
 	res.global_level = Level.INHERIT
 	
 	if logl_str.strip_edges().is_empty():
@@ -222,8 +222,8 @@ static func parse_logl(logl_str: String) -> NetLogSettings:
 	return res
 
 
-## Serializes a [NetLogSettings] resource into a LOGL string.
-static func to_logl(settings: NetLogSettings) -> String:
+## Serializes a [NetwLogSettings] resource into a LOGL string.
+static func to_logl(settings: NetwLogSettings) -> String:
 	var parts: Array = []
 	if settings.global_level != Level.INHERIT:
 		parts.append(_level_to_string(settings.global_level).to_lower())
@@ -261,11 +261,11 @@ static func _level_to_string(l: int) -> String:
 
 ## Dumps the current configuration state to the console.
 static func dump_settings() -> void:
-	print_rich("[color=cyan][b]--- NetLog Configuration Dump ---[/b][/color]")
+	print_rich("[color=cyan][b]--- NetwLog Configuration Dump ---[/b][/color]")
 	var root_str := _addon_root if not _addon_root.is_empty() else "(empty)"
 	print_rich("[color=gray]Addon Root:[/color] %s" % root_str)
 	
-	var base_settings := NetLogSettings.new()
+	var base_settings := NetwLogSettings.new()
 	base_settings.global_level = current_level
 	base_settings.module_overrides = module_levels.duplicate()
 	var base_logl := to_logl(base_settings)
@@ -290,7 +290,7 @@ static func dump_settings() -> void:
 		var stack_size := _settings_stack.size()
 		print_rich("[color=gray]Settings Stack (%d layers):[/color]" % stack_size)
 		for i in range(_settings_stack.size() - 1, -1, -1):
-			var settings: NetLogSettings = _settings_stack[i]
+			var settings: NetwLogSettings = _settings_stack[i]
 			print_rich("  [Layer %d] %s" % [i, to_logl(settings)])
 			
 	var min_lvl_str := _level_to_string(_effective_min_level)
@@ -303,6 +303,10 @@ static func dump_settings() -> void:
 static func trace(msg: Variant, args: Array = []) -> void:
 	if Level.TRACE < _effective_min_level:
 		return
+	if not _is_debug:
+		if Level.TRACE >= current_level:
+			_print("[TRACE]", msg, args, Level.TRACE, "", "")
+		return
 	var ctx := _get_context()
 	if Level.TRACE >= get_effective_level(ctx.module):
 		_print("[TRACE]", msg, args, Level.TRACE, ctx.module, ctx.site)
@@ -313,6 +317,10 @@ static func trace(msg: Variant, args: Array = []) -> void:
 static func debug(msg: Variant, args: Array = []) -> void:
 	if Level.DEBUG < _effective_min_level:
 		return
+	if not _is_debug:
+		if Level.DEBUG >= current_level:
+			_print("[DEBUG]", msg, args, Level.DEBUG, "", "")
+		return
 	var ctx := _get_context()
 	if Level.DEBUG >= get_effective_level(ctx.module):
 		_print("[DEBUG]", msg, args, Level.DEBUG, ctx.module, ctx.site)
@@ -322,6 +330,10 @@ static func debug(msg: Variant, args: Array = []) -> void:
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func info(msg: Variant, args: Array = []) -> void:
 	if Level.INFO < _effective_min_level:
+		return
+	if not _is_debug:
+		if Level.INFO >= current_level:
+			_print("[INFO]", msg, args, Level.INFO, "", "")
 		return
 	var ctx := _get_context()
 	if Level.INFO >= get_effective_level(ctx.module):
@@ -335,12 +347,17 @@ static func info(msg: Variant, args: Array = []) -> void:
 ## call [code]push_warning[/code] itself so the engine records the caller's
 ## file/line.
 ## [codeblock]
-## NetLog.warn("Player '%s' has no health.", [name], func(m): push_warning(m))
+## NetwLog.warn("Player '%s' has no health.", [name], func(m): push_warning(m))
 ## [/codeblock]
 static func warn(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
 	if Level.WARN < _effective_min_level:
+		return
+	if not _is_debug:
+		if Level.WARN >= current_level:
+			if typeof(msg) == TYPE_CALLABLE: (msg as Callable).call()
+			else: _print("[WARN]", msg, args, Level.WARN, "", "", link_call)
 		return
 	var ctx := _get_context()
 	if Level.WARN >= get_effective_level(ctx.module):
@@ -357,12 +374,17 @@ static func warn(
 ## call [code]push_error[/code] itself so the engine records the caller's
 ## file/line.
 ## [codeblock]
-## NetLog.error("Critical: lobby '%s' not found.", [lobby_name], func(m): push_error(m))
+## NetwLog.error("Critical: lobby '%s' not found.", [lobby_name], func(m): push_error(m))
 ## [/codeblock]
 static func error(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
 	if Level.ERROR < _effective_min_level:
+		return
+	if not _is_debug:
+		if Level.ERROR >= current_level:
+			if typeof(msg) == TYPE_CALLABLE: (msg as Callable).call()
+			else: _print("[ERROR]", msg, args, Level.ERROR, "", "", link_call)
 		return
 	var ctx := _get_context()
 	if Level.ERROR >= get_effective_level(ctx.module):
@@ -381,7 +403,7 @@ static func _get_context() -> Dictionary:
 		_runtime_initialized = true
 		for frame: Dictionary in stack:
 			var src: String = frame.get("source", "")
-			if src.ends_with("net_log.gd"):
+			if src.ends_with("netw_log.gd"):
 				_addon_root = src.get_base_dir().get_base_dir() \
 					.replace("res://", "").trim_suffix("/")
 				break
@@ -391,7 +413,7 @@ static func _get_context() -> Dictionary:
 	for i in range(1, stack.size()):
 		var frame: Dictionary = stack[i]
 		var source: String = frame.source
-		if (source.ends_with("net_log.gd") 
+		if (source.ends_with("netw_log.gd") 
 				or source.ends_with("net_component.gd") 
 				or source.ends_with("tp_layer_api.gd")
 				or source.ends_with("netw_dbg.gd")

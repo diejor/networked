@@ -11,18 +11,18 @@ extends BackendPeer
 @export var max_clients: int = 32
 
 func host() -> Error:
-	NetLog.trace("ENetBackend: host called.")
+	Netw.dbg.trace("ENetBackend: host called.")
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)
 	
 	if err == OK:
 		api.multiplayer_peer = peer
-		NetLog.info("ENet server ready on port %d" % port)
+		Netw.dbg.info("ENet server ready on port %d" % [port])
 	
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
-	NetLog.trace("ENetBackend: join called at %s" % server_address)
+	Netw.dbg.trace("ENetBackend: join called at %s" % [server_address])
 	var peer := ENetMultiplayerPeer.new()
 	if server_address.is_empty():
 		server_address = "localhost"
@@ -31,7 +31,7 @@ func join(server_address: String, _username: String = "") -> Error:
 	
 	if err == OK:
 		api.multiplayer_peer = peer
-		NetLog.info("ENet client connecting to %s:%d" % [server_address, port])
+		Netw.dbg.info("ENet client connecting to %s:%d" % [server_address, port])
 		
 	return err
 

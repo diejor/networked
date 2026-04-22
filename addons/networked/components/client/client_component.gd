@@ -62,7 +62,7 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 	## ([code]REPLICATION_MODE_NEVER[/code] with spawn enabled)
 	## so initial state is transferred on spawn without ongoing delta replication.
 	func config_spawn_properties(target_node: Node) -> void:
-		Netw.dbg.trace("Configuring spawn properties for %s" % target_node.name)
+		Netw.dbg.trace("Configuring spawn properties for %s" % [target_node.name])
 		
 		replication_config = SceneReplicationConfig.new()
 		
@@ -128,7 +128,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	_dbg.trace("_ready for %s" % owner.name)
+	_dbg.trace("_ready for %s" % [owner.name])
 	
 	if Engine.is_editor_hint():
 		_validate_editor()
@@ -141,7 +141,7 @@ func _ready() -> void:
 
 	if username.is_empty():
 		if not multiplayer.is_server():
-			_dbg.trace("Freeing spawner node `%s` because we are in client." % owner.name)
+			_dbg.trace("Freeing spawner node `%s` because we are in client." % [owner.name])
 			owner.queue_free()
 
 		SynchronizersCache.sync_only_server(owner)
@@ -156,7 +156,7 @@ automatically." % [owner.name, _on_owner_tree_entered])
 
 	var tp_layer := get_tp_layer()
 	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
-		_dbg.info("Local player %s ready. Playing teleport transition." % username)
+		_dbg.info("Local player %s ready. Playing teleport transition." % [username])
 		tp_layer.teleport_in()
 
 
@@ -226,13 +226,13 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 	var save_component: SaveComponent = player.get_node_or_null("%SaveComponent")
 	if save_component:
-		_dbg.debug("Loading player with SaveComponent for player `%s`." % client_data.username)
+		_dbg.debug("Loading player with SaveComponent for player `%s`." % [client_data.username])
 		save_component.spawn(owner, span)
 
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
 
 	if tp_component and save_component and ctx.has_lobby():
-		_dbg.debug("Using TPComponent to spawn player `%s`." % client_data.username)
+		_dbg.debug("Using TPComponent to spawn player `%s`." % [client_data.username])
 		tp_component.spawn(get_session().get_lobby_manager())
 	else:
 		ctx.place_player(player)
@@ -241,7 +241,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
-	_dbg.trace("Connecting player %s" % client_data.username)
+	_dbg.trace("Connecting player %s" % [client_data.username])
 	var network := get_tree().current_scene as NetworkSession
 	if not network:
 		_dbg.error("Could not connect player: current scene is not a NetworkSession.", func(m): push_error(m))

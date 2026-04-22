@@ -327,10 +327,10 @@ func _activate_panel(key: String, peer_key: String, pt: PanelDataAdapter.PanelTy
 		return
 	var adapter: PanelDataAdapter = session.get_adapter(key)
 	if not adapter:
-		NetLog.warn("UI: [ActivateFailed] Adapter not found for key: %s" % key, [], func(m): push_warning(m))
+		Netw.dbg.warn("UI: [ActivateFailed] Adapter not found for key: %s" % [key], func(m): push_warning(m))
 		return
 
-	NetLog.info("UI: [ActivatePanel] %s" % key)
+	Netw.dbg.info("UI: [ActivatePanel] %s" % [key])
 	var peers: Dictionary = session.get_peers()
 	var peer_info: Dictionary = peers.get(peer_key, {})
 	var color: Color = peer_info.get("color", Color.WHITE)
@@ -341,7 +341,7 @@ func _activate_panel(key: String, peer_key: String, pt: PanelDataAdapter.PanelTy
 	var title_str: String = "%s · %s" % [peer_display, panel_display]
 
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
-	NetLog.trace("UI: [CreatedWrapper] %s size_flags=%d" % [key, wrapper.size_flags_vertical])
+	Netw.dbg.trace("UI: [CreatedWrapper] %s size_flags=%d" % [key, wrapper.size_flags_vertical])
 	wrapper.on_maximize_requested = _on_maximize_requested
 
 	_panel_wrappers[key] = wrapper
@@ -369,7 +369,7 @@ func _deactivate_panel(key: String) -> void:
 # ─── Grid layout ─────────────────────────────────────────────────────────────
 
 func _rebuild_grid() -> void:
-	NetLog.trace("UI: [RebuildGrid] active_count=%d" % _active_keys.size())
+	Netw.dbg.trace("UI: [RebuildGrid] active_count=%d" % [_active_keys.size()])
 	# Remove all grid children without freeing them.
 	for child: Node in _grid.get_children():
 		_grid.remove_child(child)
@@ -387,13 +387,13 @@ func _rebuild_grid() -> void:
 		if key in _panel_wrappers:
 			_add_wrapper_to_grid(_panel_wrappers[key], key)
 		else:
-			NetLog.warn("UI: [RebuildFailed] Wrapper missing for key: %s" % key, [], func(m): push_warning(m))
+			Netw.dbg.warn("UI: [RebuildFailed] Wrapper missing for key: %s" % [key], func(m): push_warning(m))
 
 
 ## Adds a wrapper to the grid and populates its panel if it's newly activated.
 ## _ready() fires synchronously on add_child, so all post-ready calls are safe after.
 func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
-	NetLog.trace("UI: [AddChild] %s" % key)
+	Netw.dbg.trace("UI: [AddChild] %s" % [key])
 	_grid.add_child(wrapper)  # triggers _ready() on wrapper and its children
 
 	# Initialise peer context now that _ready() has fired on the panel.

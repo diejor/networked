@@ -63,7 +63,7 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 			_connect_invalidation(target_node)
 	elif not Engine.is_editor_hint():
 		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String: return s.name)
-		NetLog.debug("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]", [target_node.name, ", ".join(type_names)])
+		Netw.dbg.debug("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]" % [target_node.name, ", ".join(type_names)])
 	
 	return result
 

@@ -5,7 +5,7 @@ var session: LocalLoopbackSession
 
 
 func after():
-	NetLog.pop_settings()
+	NetwLog.pop_settings()
 
 
 func before_test() -> void:

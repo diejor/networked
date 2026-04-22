@@ -18,29 +18,29 @@ var ws_peer: WebSocketMultiplayerPeer:
 		api.multiplayer_peer = peer
 
 func host() -> Error:
-	NetLog.trace("WebSocketBackend: host called.")
+	Netw.dbg.trace("WebSocketBackend: host called.")
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var err := peer.create_server(port)
 	
 	if err == OK:
 		ws_peer = peer
-		NetLog.info("WebSocket server ready on *:%d" % port)
+		Netw.dbg.info("WebSocket server ready on *:%d" % [port])
 		return OK
 	
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
-	NetLog.trace("WebSocketBackend: join called at %s" % server_address)
+	Netw.dbg.trace("WebSocketBackend: join called at %s" % [server_address])
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var url := build_url(server_address)
-	NetLog.debug("WebSocket connecting to URL: %s" % url)
+	Netw.dbg.debug("WebSocket connecting to URL: %s" % [url])
 
 	var err := peer.create_client(url)
 	if err == OK:
 		ws_peer = peer
-		NetLog.info("Client connecting to %s" % url)
+		Netw.dbg.info("Client connecting to %s" % [url])
 		return OK
 	
 	return err

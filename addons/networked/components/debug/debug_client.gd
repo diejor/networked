@@ -12,7 +12,7 @@ var _client: ClientComponent
 
 func _exit_tree() -> void:
 	if is_instance_valid(_client):
-		NetLog.trace("DebugClient: Freed nameplate for %s" % _client.owner.name)
+		Netw.dbg.trace("DebugClient: Freed nameplate for %s" % [_client.owner.name])
 
 
 func _ready() -> void:

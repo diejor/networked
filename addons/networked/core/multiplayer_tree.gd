@@ -126,13 +126,13 @@ func register_service(service: Node, type: Script = null) -> void:
 		type = service.get_script()
 	
 	if type in _services:
-		NetLog.warn(
-			"Service %s already registered — overwriting." % \
-			type.get_global_name(), [], func(m): push_warning(m)
+		Netw.dbg.warn(
+			"Service %s already registered — overwriting." % [type.get_global_name()], 
+			func(m): push_warning(m)
 		)
 	
 	_services[type] = service
-	NetLog.debug("Service %s registered." % type.get_global_name())
+	Netw.dbg.debug("Service %s registered." % [type.get_global_name()])
 
 
 ## Unregisters a [Node] from this session's services.
@@ -142,7 +142,7 @@ func unregister_service(service: Node, type: Script = null) -> void:
 	
 	if _services.get(type) == service:
 		_services.erase(type)
-		NetLog.debug("Service %s unregistered." % type.get_global_name())
+		Netw.dbg.debug("Service %s unregistered." % [type.get_global_name()])
 
 
 ## Returns the service registered for [param type], or [code]null[/code].
@@ -275,9 +275,8 @@ func _enter_tree() -> void:
 	
 	for child in get_children():
 		if _has_client_component(child):
-			NetLog.info(
-				"Lobbyless mode: Identified '%s' as the initial world." % \
-				child.name
+			Netw.dbg.info(
+				"Lobbyless mode: Identified '%s' as the initial world." % [child.name]
 			)
 			_pending_world = child
 			_pending_world_scene_path = child.scene_file_path
@@ -369,9 +368,9 @@ func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
 		var scene_path := SceneNodePath._safe_resolve_path(
 			client_data.spawner_path.scene_path
 		)
-		push_error(
-			"[networked] Lobbyless: no world matches spawner scene '%s'." % \
-			scene_path
+		Netw.dbg.error(
+			"Lobbyless: no world matches spawner scene '%s'." % scene_path,
+			func(m): push_error(m)
 		)
 		return
 	
@@ -379,9 +378,10 @@ func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
 		client_data.spawner_path.node_path
 	) as ClientComponent
 	if not client_comp:
-		push_error(
-			"[networked] Lobbyless: ClientComponent not found at '%s'." % \
-			client_data.spawner_path.node_path
+		Netw.dbg.error(
+			"Lobbyless: ClientComponent not found at '%s'." % \
+			client_data.spawner_path.node_path,
+			func(m): push_error(m)
 		)
 		return
 	client_comp.player_joined.emit(client_data)
@@ -405,15 +405,15 @@ func _process(dt: float) -> void:
 ## Calls [code]setup()[/code] on the backend if available, then [code]host()[/code].
 ## Returns [code]OK[/code] on success or a non-zero [enum Error] code on failure.
 func host(quiet: bool = false) -> Error:
-	NetLog.trace("MultiplayerTree: Hosting session.")
+	Netw.dbg.trace("MultiplayerTree: Hosting session.")
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error(
-					"Setup failed: %s", [error_string(setup_err)], 
+				Netw.dbg.error(
+					"Setup failed: %s" % [error_string(setup_err)], 
 					func(m): push_error(m)
 				)
 			return setup_err
@@ -423,8 +423,8 @@ func host(quiet: bool = false) -> Error:
 	if connection_code == OK:
 		_config_api()
 	elif not quiet:
-		NetLog.error(
-			"Failed to host: %s", [error_string(connection_code)], 
+		Netw.dbg.error(
+			"Failed to host: %s" % [error_string(connection_code)], 
 			func(m): push_error(m)
 		)
 		
@@ -441,9 +441,8 @@ func join(
 	timeout: float = 5.0, 
 	quiet: bool = false
 ) -> Error:
-	NetLog.trace(
-		"MultiplayerTree: Joining at %s with username %s." % \
-		[server_address, username]
+	Netw.dbg.trace(
+		"MultiplayerTree: Joining at %s with username %s." % [server_address, username]
 	)
 	backend.peer_reset_state()
 	
@@ -451,8 +450,8 @@ func join(
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error(
-					"Setup failed: %s", [error_string(setup_err)], 
+				Netw.dbg.error(
+					"Setup failed: %s" % [error_string(setup_err)], 
 					func(m): push_error(m)
 				)
 			return setup_err
@@ -460,8 +459,8 @@ func join(
 	var connection_code: Error = backend.join(server_address, username)
 	if connection_code != OK:
 		if not quiet:
-			NetLog.error(
-				"Failed to join: %s", [error_string(connection_code)], 
+			Netw.dbg.error(
+				"Failed to join: %s" % [error_string(connection_code)], 
 				func(m): push_error(m)
 			)
 		return connection_code
@@ -469,7 +468,7 @@ func join(
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		if not quiet:
-			NetLog.error("Connection timed out.", [], func(m): push_error(m))
+			Netw.dbg.error("Connection timed out.", func(m): push_error(m))
 		return ERR_CANT_CONNECT
 	
 	_config_api()
@@ -503,12 +502,12 @@ func request_join_player(bytes: PackedByteArray) -> void:
 
 
 func _config_api() -> void:
-	NetLog.trace("MultiplayerTree: Configuring multiplayer API.")
+	Netw.dbg.trace("MultiplayerTree: Configuring multiplayer API.")
 	
 	set_meta(&"_original_name", name)
 	
 	var multiplayer_root := get_path()
-	NetLog.debug("Configuring multiplayer API with root: %s" % multiplayer_root)
+	Netw.dbg.debug("Configuring multiplayer API with root: %s" % [multiplayer_root])
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	
@@ -548,7 +547,7 @@ func _disconnect_backend_signals() -> void:
 
 
 func _on_exiting() -> void:
-	NetLog.trace("MultiplayerTree: Exiting.")
+	Netw.dbg.trace("MultiplayerTree: Exiting.")
 	
 	var debugger = null
 	if Engine.has_singleton("NetworkedDebugger"):
@@ -567,24 +566,24 @@ func _on_exiting() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
-	NetLog.info("Peer connected: %d" % peer_id)
+	Netw.dbg.info("Peer connected: %d" % [peer_id])
 	peer_connected.emit(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	NetLog.info("Peer disconnected: %d" % peer_id)
+	Netw.dbg.info("Peer disconnected: %d" % [peer_id])
 	_peer_contexts.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
 func _on_connected_to_server() -> void:
 	var peer_id := multiplayer_peer.get_unique_id()
-	NetLog.info("Connected to server as peer %d." % peer_id)
+	Netw.dbg.info("Connected to server as peer %d." % [peer_id])
 
 	set_multiplayer_authority(peer_id, false) 
 	connected_to_server.emit()
 
 
 func _on_server_disconnected() -> void:
-	NetLog.info("Disconnected from server.")
+	Netw.dbg.info("Disconnected from server.")
 	server_disconnected.emit()

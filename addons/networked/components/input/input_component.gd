@@ -75,12 +75,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(action):
 			if state[action] != true:
 				state[action] = true
-				_dbg.trace("Action %s Pressed" % action)
+				_dbg.trace("Action %s Pressed", [action])
 				action_changed.emit(action, true)
 		elif event.is_action_released(action):
 			if state[action] != false:
 				state[action] = false
-				_dbg.trace("Action %s Released" % action)
+				_dbg.trace("Action %s Released", [action])
 				action_changed.emit(action, false)
 
 

@@ -3,7 +3,7 @@ extends Control
 
 var _tree: Tree
 var _picker: EditorResourcePicker
-var _settings: NetLogSettings
+var _settings: NetwLogSettings
 var _search_box: LineEdit
 var _overrides_only_btn: CheckBox
 var _search_filter: String = ""
@@ -20,22 +20,22 @@ func _enter_tree() -> void:
 	if not _tree:
 		_build_ui()
 
-	var active_path: String = ProjectSettings.get_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
+	var active_path: String = ProjectSettings.get_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 	if active_path.is_empty():
 		return
 
-	active_path = NetLog._fix_profile_path(active_path)
+	active_path = NetwLog._fix_profile_path(active_path)
 
 	if not ResourceLoader.exists(active_path):
-		NetLog.warn("NetLog: Active profile no longer exists: '%s'\n  → Select a new profile in the NetLog panel.", [active_path], func(m): push_warning(m))
-		ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
+		Netw.dbg.warn("NetwLog: Active profile no longer exists: '%s'\n  → Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return
 
 	var res = ResourceLoader.load(active_path)
-	if not res is NetLogSettings:
-		NetLog.warn("NetLog: '%s' is not a NetLogSettings resource.\n  → Select a new profile in the NetLog panel.", [active_path], func(m): push_warning(m))
-		ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
+	if not res is NetwLogSettings:
+		Netw.dbg.warn("NetwLog: '%s' is not a NetwLogSettings resource.\n  → Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return
 
@@ -55,7 +55,7 @@ func _build_ui() -> void:
 	hb.add_child(label)
 
 	_picker = EditorResourcePicker.new()
-	_picker.base_type = "NetLogSettings"
+	_picker.base_type = "NetwLogSettings"
 	_picker.custom_minimum_size.x = 250
 	_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_picker.resource_changed.connect(_on_resource_changed)
@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	var dump_btn := Button.new()
 	dump_btn.text = "Dump"
 	dump_btn.tooltip_text = "Dump current settings to console"
-	dump_btn.pressed.connect(NetLog.dump_settings)
+	dump_btn.pressed.connect(NetwLog.dump_settings)
 	hb.add_child(dump_btn)
 
 	var search_hb := HBoxContainer.new()
@@ -101,7 +101,7 @@ func _build_ui() -> void:
 # --- Profile management ---
 
 func _on_resource_changed(res: Resource) -> void:
-	if res is NetLogSettings:
+	if res is NetwLogSettings:
 		_settings = res
 		if not _settings.resource_path.is_empty():
 			var uid_int := ResourceLoader.get_resource_uid(_settings.resource_path)
@@ -110,15 +110,15 @@ func _on_resource_changed(res: Resource) -> void:
 				if uid_int != ResourceUID.INVALID_ID
 				else _settings.resource_path
 			)
-			ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, profile_ref)
+			ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, profile_ref)
 			ProjectSettings.save()
 		
-		var addon_root := NetLog._addon_root
-		NetLog.initialize(addon_root)
+		var addon_root := NetwLog._addon_root
+		NetwLog.initialize(addon_root)
 		_refresh_tree()
 	else:
 		_settings = null
-		ProjectSettings.set_setting(NetLog.SETTING_ACTIVE_PROFILE, "")
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		_tree.clear()
 
@@ -221,21 +221,21 @@ func _on_item_edited() -> void:
 
 	if item.get_parent() == _tree.get_root() and item.get_index() == 0:
 		_settings.global_level = val
-		NetLog.current_level = val
-		NetLog._recompute_min_level()
+		NetwLog.current_level = val
+		NetwLog._recompute_min_level()
 		_setup_level_cell(item, val, false)
 	else:
 		var mod_path = item.get_metadata(0)
 		if mod_path:
 			if level_name == "INHERIT":
 				_settings.module_overrides.erase(mod_path)
-				NetLog.module_levels.erase(mod_path)
+				NetwLog.module_levels.erase(mod_path)
 				_setup_level_cell(item, -1, true)
 			else:
 				_settings.module_overrides[mod_path] = val
-				NetLog.module_levels[mod_path] = val
+				NetwLog.module_levels[mod_path] = val
 				_setup_level_cell(item, val, true)
-			NetLog._recompute_min_level()
+			NetwLog._recompute_min_level()
 
 	if not _settings.resource_path.is_empty():
 		ResourceSaver.save(_settings, _settings.resource_path)
@@ -299,7 +299,7 @@ func _to_module_path(path: String) -> String:
 	var p := path.replace(ROOT_PATH, "").trim_suffix("/")
 	if p.ends_with(".gd"):
 		p = p.left(p.length() - 3)
-	var addon_root := NetLog._addon_root
+	var addon_root := NetwLog._addon_root
 	if not addon_root.is_empty() and p.begins_with(addon_root + "/"):
 		p = p.substr(addon_root.length() + 1)
 	return p.replace("/", ".")
@@ -321,11 +321,11 @@ func _prune_stale_overrides(cache: Array) -> void:
 
 	for path: String in stale:
 		_settings.module_overrides.erase(path)
-		NetLog.module_levels.erase(path)
+		NetwLog.module_levels.erase(path)
 
-	NetLog.warn("NetLog: Pruned %d stale override(s) from '%s': %s", [stale.size(), _settings.resource_path, ", ".join(stale)], func(m): push_warning(m))
+	Netw.dbg.warn("NetwLog: Pruned %d stale override(s) from '%s': %s" % [stale.size(), _settings.resource_path, ", ".join(stale)], func(m): push_warning(m))
 
-	NetLog._recompute_min_level()
+	NetwLog._recompute_min_level()
 
 	if not _settings.resource_path.is_empty():
 		ResourceSaver.save(_settings, _settings.resource_path)

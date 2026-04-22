@@ -473,7 +473,7 @@ class _PropertyState:
 		last_written = result
 		
 		if trace:
-			interpolator._dbg.trace("Interp %s: dt=%d lag=%.2f val=%s" % [name, dt, lag, result])
+			interpolator._dbg.trace("Interp %s: dt=%d lag=%.2f val=%s", [name, dt, lag, result])
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
 		if typeof(v1) != typeof(v2): return true

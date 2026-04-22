@@ -290,7 +290,7 @@ func _request_handshake() -> void:
 func _respond_handshake(server_tickrate: int) -> void:
 	if server_tickrate != tickrate:
 		match tickrate_mismatch_action:
-			0: NetLog.warn("NetworkClock: tickrate mismatch — local=%d server=%d", [tickrate, server_tickrate], func(m): push_warning(m))
+			0: Netw.dbg.warn("NetworkClock: tickrate mismatch — local=%d server=%d" % [tickrate, server_tickrate], func(m): push_warning(m))
 			1: multiplayer.multiplayer_peer.close()
 			2: tickrate_mismatch.emit(multiplayer.get_remote_sender_id(), server_tickrate)
 	_ping.rpc_id(1, Time.get_ticks_usec())
@@ -363,21 +363,21 @@ func _log_drift() -> void:
 	if _drift_samples.is_empty(): return
 	var sum := 0
 	for s in _drift_samples: sum += s
-	NetLog.info("NetworkClock: 60s average drift = %.2f ticks" % (float(sum) / _drift_samples.size()))
+	Netw.dbg.info("NetworkClock: 60s average drift = %.2f ticks" % [float(sum) / _drift_samples.size()])
 	_drift_samples.clear()
 	_drift_timer = 0.0
 
 
 func _run_auto_config() -> void:
 	if multiplayer.is_server(): return
-	NetLog.info("NetworkClock: Starting 5s auto-config test...")
+	Netw.dbg.info("NetworkClock: Starting 5s auto-config test...")
 	var max_rec := 0
 	for i in range(50):
 		await get_tree().create_timer(0.1).timeout
 		if not is_instance_valid(self): return
 		max_rec = maxi(max_rec, recommended_display_offset)
 	display_offset = max_rec
-	NetLog.info("NetworkClock: Auto-config complete. display_offset = %d" % max_rec)
+	Netw.dbg.info("NetworkClock: Auto-config complete. display_offset = %d" % [max_rec])
 
 #endregion
 

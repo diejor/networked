@@ -161,10 +161,9 @@ func push_entry(entry: Dictionary) -> void:
 			else:
 				existing_entry["error_text"] = new_error
 			_append_error_lines(key, new_error)
-		
-		NetLog.debug("[UI] Merged subsequent error into existing row for CID: %s" % cid)
-		return
 
+			Netw.dbg.debug("[UI] Merged subsequent error into existing row for CID: %s" % [cid])
+			return
 	# Remove placeholder on first real entry.
 	if _entries.is_empty() and _tree.get_root():
 		var child := _tree.get_root().get_first_child()

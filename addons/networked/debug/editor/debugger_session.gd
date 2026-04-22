@@ -71,7 +71,7 @@ func receive(message: String, data: Array) -> void:
 		return
 
 	# Fallback: legacy message handling for any pre-envelope path still in flight.
-	NetLog.warn("DebuggerSession: [LegacyMessage] %s — expected envelope" % message, [], func(m): push_warning(m))
+	Netw.dbg.warn("DebuggerSession: [LegacyMessage] %s — expected envelope" % [message], func(m): push_warning(m))
 
 
 func get_peers() -> Dictionary:
@@ -147,7 +147,7 @@ func mark_remote_peers_offline() -> void:
 
 func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 	if envelope.source_path.is_empty() or envelope.reporter_id.is_empty():
-		NetLog.warn("DebuggerSession: [DropBadEnvelope] missing source_path or reporter_id", [], func(m): push_warning(m))
+		Netw.dbg.warn("DebuggerSession: [DropBadEnvelope] missing source_path or reporter_id")
 		return
 
 	var pk := envelope.peer_key()
@@ -170,12 +170,12 @@ func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 		"networked:span_open":            _on_span(envelope, "open")
 		"networked:span_step":            _on_span(envelope, "step")
 		"networked:span_close":           _on_span(envelope, "close")
-		"networked:span_fail":            _on_span(envelope, "fail")
-		"networked:span_step_warn":       _on_span(envelope, "step_warn")
+		"networked:span_fail":            _on_span(envelope, "close")
+		"networked:span_step_warn":       _on_span(envelope, "close")
 		"networked:lobby_event":          _on_lobby_event(envelope)
 		"networked:topology_snapshot":    _on_topology_snapshot(envelope)
 		_:
-			NetLog.trace("DebuggerSession: [UnknownMsg] %s" % envelope.msg)
+			Netw.dbg.trace("DebuggerSession: [UnknownMsg] %s" % [envelope.msg])
 
 
 func _trace_route(msg: String, pk: String, is_remote: bool) -> void:
@@ -183,7 +183,7 @@ func _trace_route(msg: String, pk: String, is_remote: bool) -> void:
 	if msg == "networked:clock_sample" or msg.begins_with("networked:span_"):
 		return
 	
-	NetLog.trace("DebuggerSession: [Route] %s from %s (remote=%s)" % [msg, pk, is_remote])
+	Netw.dbg.trace("DebuggerSession: [Route] %s from %s (remote=%s)" % [msg, pk, is_remote])
 
 
 # ─── Message Handlers ─────────────────────────────────────────────────────────
@@ -203,15 +203,15 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 		# Upgrade path: if we were remote but just got a local registration, prefer local.
 		if not is_remote and _peers[pk].get("is_remote", false):
 			_peers[pk]["is_remote"] = false
-			NetLog.info("DebuggerSession: [UpgradeToLocal] '%s'" % display)
+			Netw.dbg.info("DebuggerSession: [UpgradeToLocal] '%s'" % [display])
 
 		if _peers[pk].get("peer_id", 0) == 0 and peer_id != 0:
 			_peers[pk]["peer_id"] = peer_id
 			peer_id_resolved.emit(pk, peer_id)
-		NetLog.debug("DebuggerSession: [IgnoreDuplicate] for '%s'" % display)
+		Netw.dbg.debug("DebuggerSession: [IgnoreDuplicate] for '%s'" % [display])
 		return
 
-	NetLog.info("DebuggerSession: [Registered] '%s' (peer=%d, remote=%s, path=%s)" % [display, peer_id, is_remote, envelope.source_path])
+	Netw.dbg.info("DebuggerSession: [Registered] '%s' (peer=%d, remote=%s, path=%s)" % [display, peer_id, is_remote, envelope.source_path])
 
 	var color: Color = _assign_peer_color(peer_id)
 	_peers[pk] = {
@@ -274,7 +274,7 @@ func _on_crash_manifest(envelope: NetEnvelope) -> void:
 	var trigger: String = payload.get("trigger", "UNKNOWN")
 	var cid: String = payload.get("cid", "?")
 	
-	NetLog.info("DebuggerSession: [ReceiveManifest] %s (cid=%s) from %s" % [trigger, cid, pk])
+	Netw.dbg.info("DebuggerSession: [ReceiveManifest] %s (cid=%s) from %s" % [trigger, cid, pk])
 
 	var uid: String = payload.get("uid", "")
 	# DEDUP-3 (replay idempotency): crash manifests are replayed to late-joining editors

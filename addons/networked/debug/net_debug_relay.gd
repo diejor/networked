@@ -94,7 +94,7 @@ func register_as_recipient(token: String = "", reporter_id: String = "") -> void
 			NetworkedDebugger._recipient_map[reporter_id] = sender
 
 	if sender not in NetworkedDebugger._process_recipients:
-		NetLog.info("Relay: [RegisterSuccess] Registered peer %d (rid=%s) as debug recipient" % [sender, reporter_id])
+		Netw.dbg.info("Relay: [RegisterSuccess] Registered peer %d (rid=%s) as debug recipient" % [sender, reporter_id])
 		NetworkedDebugger._process_recipients.append(sender)
 		if NetworkedDebugger:
 			# Push server's current state to the newcomer.
@@ -172,7 +172,7 @@ func _valid_sender(sender: int, byte_size: int) -> bool:
 	if sender != 1 and not multiplayer.get_peers().has(sender):
 		return false
 	if byte_size > MAX_PAYLOAD_BYTES:
-		NetLog.error("Relay: [DropOversized] %d bytes from peer %d" % [byte_size, sender], [], func(m): push_error(m))
+		Netw.dbg.error("Relay: [DropOversized] %d bytes from peer %d" % [byte_size, sender], func(m): push_error(m))
 		return false
 	return true
 

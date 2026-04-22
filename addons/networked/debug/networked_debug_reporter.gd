@@ -88,7 +88,7 @@ func reset_state() -> void:
 		_telemetry.clear()
 		
 	NetTrace.reset()
-	NetLog.trace("Reporter: State reset (deep).")
+	Netw.dbg.trace("Reporter: State reset (deep).")
 
 
 static func _get_instance() -> NetworkedDebugReporter:
@@ -109,7 +109,7 @@ func _try_register_capture() -> void:
 func _init() -> void:
 	randomize()
 	reporter_id = "%08x" % (randi() % 0xFFFFFFFF)
-	NetLog.trace("Reporter: Started with ID %s" % reporter_id)
+	Netw.dbg.trace("Reporter: Started with ID %s" % reporter_id)
 
 
 func _enter_tree() -> void:
@@ -155,7 +155,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 		return
 		
 	var tree_name := mt.get_meta(&"_original_name", mt.name)
-	NetLog.info(
+	Netw.dbg.info(
 		"Reporter: [Register] '%s' (is_server=%s, local_editor=%s)" % \
 		[tree_name, mt.is_server, _has_local_session()]
 	)
@@ -224,15 +224,16 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		
 	if not is_instance_valid(mt):
 		if not _trees.is_empty():
-			NetLog.warn(
+			Netw.dbg.warn(
 				"Reporter: [CppError] no active span tree context - " + \
-				"attributing to first tree", [], func(m): push_warning(m)
+				"attributing to first tree",
+				func(m): push_warning(m)
 			)
 			mt = _trees[0]
 		else:
-			NetLog.warn(
-				"Reporter: [CppError] no active span and no trees - dropping", 
-				[], func(m): push_warning(m)
+			Netw.dbg.warn(
+				"Reporter: [CppError] no active span and no trees - dropping",
+				func(m): push_warning(m)
 			)
 			_sending_manifest = false
 			return
@@ -304,7 +305,7 @@ func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
 			var token: String = ProjectSettings.get_setting(
 				"networked/debug/relay_token", ""
 			)
-			NetLog.info("Reporter: [RelayRegister] Client registering via RPC")
+			Netw.dbg.info("Reporter: [RelayRegister] Client registering via RPC")
 			relay.register_as_recipient.rpc_id(1, token, reporter_id)
 
 
@@ -967,9 +968,9 @@ func _flush_now() -> void:
 		var entry_mt: MultiplayerTree = entry[2] if entry.size() >= 3 else null
 		
 		if not is_instance_valid(entry_mt):
-			NetLog.warn(
-				"Reporter: [QueueDrop] '%s' - no tree context" % entry[0], 
-				[], func(m): push_warning(m)
+			Netw.dbg.warn(
+				"Reporter: [QueueDrop] '%s' - no tree context" % entry[0],
+				func(m): push_warning(m)
 			)
 			continue
 			
@@ -1008,9 +1009,9 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	_manifest_count_min[t] = _manifest_count_min.get(t, 0) + 1
 	
 	if _manifest_count_sec[t] > 3 or _manifest_count_min[t] > 10:
-		NetLog.error(
-			"Reporter: [RateLimit] Manifest blocked for trigger: %s" % t, 
-			[], func(m): push_error(m)
+		Netw.dbg.error(
+			"Reporter: [RateLimit] Manifest blocked for trigger: %s" % t,
+			func(m): push_error(m)
 		)
 		_maybe_break()
 		_is_sending_manifest = false
@@ -1018,7 +1019,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		
 	manifest.validate_contract()
 	var payload := manifest.to_dict()
-	NetLog.info(
+	Netw.dbg.info(
 		"Reporter: [SendManifest] %s (cid=%s)" % [manifest.trigger, manifest.cid]
 	)
 	
@@ -1027,9 +1028,9 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		target_mt = manifest._mt.get_ref() as MultiplayerTree
 		
 	if not is_instance_valid(target_mt):
-		NetLog.warn(
-			"Reporter: [ManifestDrop] '%s' - no valid tree" % manifest.trigger, 
-			[], func(m): push_warning(m)
+		Netw.dbg.warn(
+			"Reporter: [ManifestDrop] '%s' - no valid tree" % manifest.trigger,
+			func(m): push_warning(m)
 		)
 		_maybe_break()
 		_is_sending_manifest = false
@@ -1130,9 +1131,9 @@ func emit_debug_event(
 		
 	if not _relay_active(mt):
 		if not _has_local_session():
-			NetLog.warn(
-				"Reporter: [EmitDropped] %s - no relay or local" % msg, 
-				[], func(m): push_warning(m)
+			Netw.dbg.warn(
+				"Reporter: [EmitDropped] %s - no relay or local" % msg,
+				func(m): push_warning(m)
 			)
 		return
 		
@@ -1150,9 +1151,9 @@ func _trace_emit(prefix: String, msg: String, extra: String = "") -> void:
 		return
 		
 	if extra:
-		NetLog.trace("Reporter: %s %s %s" % [prefix, msg, extra])
+		Netw.dbg.trace("Reporter: %s %s %s" % [prefix, msg, extra])
 	else:
-		NetLog.trace("Reporter: %s %s" % [prefix, msg])
+		Netw.dbg.trace("Reporter: %s %s" % [prefix, msg])
 
 
 # --- Guards -------------------------------------------------------------------
@@ -1197,7 +1198,7 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 	mt.add_child(relay)
 	_relays[mt] = relay
 	
-	NetLog.trace("Reporter: [RelayCreated] for path %s" % mt.get_path())
+	Netw.dbg.trace("Reporter: [RelayCreated] for path %s" % mt.get_path())
 	
 	if not _has_local_session():
 		return
@@ -1206,7 +1207,7 @@ func _setup_relay(mt: MultiplayerTree) -> void:
 		"networked/debug/relay_token", ""
 	)
 	if mt.is_server:
-		NetLog.trace("Reporter: [RelayReady] Server relay at %s" % mt.get_path())
+		Netw.dbg.trace("Reporter: [RelayReady] Server relay at %s" % mt.get_path())
 	else:
-		NetLog.trace("Reporter: [RelayRegister] Client registering via RPC")
+		Netw.dbg.trace("Reporter: [RelayRegister] Client registering via RPC")
 		relay.register_as_recipient.rpc_id(1, token, reporter_id)

@@ -17,13 +17,13 @@ func host() -> Error:
 	if not session.has_live_server():
 		session.reset()
 	api.multiplayer_peer = session.get_server_peer()
-	NetLog.info("WebRTC loopback server ready.")
+	Netw.dbg.info("WebRTC loopback server ready.")
 	return OK
 
 ## Creates a loopback client peer and links it to the server. Returns [code]OK[/code].
 func join(_server_address: String, _username: String = "") -> Error:
 	api.multiplayer_peer = session.get_client_peer()
-	NetLog.info("WebRTC loopback client ready.")
+	Netw.dbg.info("WebRTC loopback client ready.")
 	return OK
 
 func poll(dt: float) -> void:

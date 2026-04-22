@@ -76,7 +76,7 @@ When a peer disconnects, the reporter schedules a deferred check two seconds lat
 
 ## Layer 3 — Production Components
 
-`SaveComponent`, `ClientComponent`, and `LobbySynchronizer` contain no debug assertions and no `NetLog` calls that address concerns the debugger covers. If a new diagnostic is needed, it goes into a validator first, then the reporter calls it. This boundary ensures that exported builds have zero overhead from the debug system and that the detection logic can be tested independently of the component lifecycle.
+`SaveComponent`, `ClientComponent`, and `LobbySynchronizer` contain no debug assertions and no `NetwLog` calls that address concerns the debugger covers. If a new diagnostic is needed, it goes into a validator first, then the reporter calls it. This boundary ensures that exported builds have zero overhead from the debug system and that the detection logic can be tested independently of the component lifecycle.
 
 ---
 

@@ -69,7 +69,7 @@ func update_client(node: Node) -> void:
 
 ## Registers a peer as connected to this lobby and updates visibility states.
 func connect_client(peer_id: int) -> void:
-	NetLog.debug("client `peer_id=%s` connected to lobby.", [peer_id])
+	Netw.dbg.debug("client `peer_id=%s` connected to lobby." % peer_id)
 	set_visibility_for(peer_id, true)
 	connected_clients[peer_id] = true
 	update_clients()
@@ -80,17 +80,17 @@ func connect_client(peer_id: int) -> void:
 ## The deferred call order is intentional — see
 ## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_client(peer_id: int) -> void:
-	NetLog.debug("client `peer_id=%s` disconnected from lobby." % [peer_id])
+	Netw.dbg.debug("client `peer_id=%s` disconnected from lobby." % peer_id)
 	connected_clients.erase(peer_id)
 	update_clients()
-	
+
 	# Very important the order in which the client visibility is handled:
 	# `https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958`
 	set_visibility_for.call_deferred(peer_id, false) 
 
 
 func _on_spawned(node: Node) -> void:
-	NetLog.debug("%s spawned." % node.name)
+	Netw.dbg.debug("%s spawned." % node.name)
 	
 	tracked_nodes[node] = true
 	
@@ -104,7 +104,7 @@ func _on_spawned(node: Node) -> void:
 
 
 func _on_despawned(node: Node) -> void:
-	NetLog.debug("%s despawned." % node.name)
+	Netw.dbg.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
 
 	for sync in SynchronizersCache.get_synchronizers(node):
@@ -113,6 +113,7 @@ func _on_despawned(node: Node) -> void:
 	disconnect_client(node.get_multiplayer_authority())
 
 	despawned.emit(node)
+
 
 ## Visibility filter callback passed to each tracked node's synchronizers.
 ##

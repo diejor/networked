@@ -49,15 +49,15 @@ var server: MultiplayerTree
 ## Automatically spins up a local server when [member MultiplayerClientData.url] is empty or localhost.
 ## On web builds, falls back to [LocalLoopbackBackend] for singleplayer when not using WebRTC.
 func connect_player(client_data: MultiplayerClientData) -> void:
-	NetLog.trace("NetworkSession: connect_player called.")
+	Netw.dbg.trace("NetworkSession: connect_player called.")
 	if not client_data:
-		NetLog.error("connect_player: client_data is null.", [], func(m): push_error(m))
+		Netw.dbg.error("connect_player: client_data is null.", func(m): push_error(m))
 		return
 	if client_data.username.is_empty():
-		NetLog.error("connect_player: username is empty.", [], func(m): push_error(m))
+		Netw.dbg.error("connect_player: username is empty.", func(m): push_error(m))
 		return
 	if not client_data.spawner_path or not client_data.spawner_path.is_valid():
-		NetLog.error("connect_player: spawner_path is invalid or missing.", [], func(m): push_error(m))
+		Netw.dbg.error("connect_player: spawner_path is invalid or missing.", func(m): push_error(m))
 		return
 	
 	await disconnect_player()
@@ -66,7 +66,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		await _validate_current_scene()
 
 	var url := client_data.url
-	NetLog.info("Connecting player %s to %s" % [client_data.username, url])
+	Netw.dbg.info("Connecting player %s to %s" % [client_data.username, url])
 	
 	if manage_scene and _is_singleplayer(url):
 		# First attempt: Try to join an existing server on localhost.
@@ -101,7 +101,7 @@ func _request_join(client_data: MultiplayerClientData) -> void:
 ##
 ## Returns the error code from [method MultiplayerTree.host].
 func host() -> Error:
-	NetLog.trace("NetworkSession: host called.")
+	Netw.dbg.trace("NetworkSession: host called.")
 	client.is_server = true
 	client.name = "Server"
 	return client.host()
@@ -117,14 +117,14 @@ func disconnect_player() -> void:
 	if not client.is_online():
 		return
 	
-	NetLog.trace("NetworkSession: disconnect_player called.")
-	NetLog.info("Disconnecting player.")
+	Netw.dbg.trace("NetworkSession: disconnect_player called.")
+	Netw.dbg.info("Disconnecting player.")
 	SaveComponent.save_all_in(client.get_peer_context(client.multiplayer_api.get_unique_id()))
 	client.multiplayer_peer.close()
 	
 	var timer := get_tree().create_timer(3.0)
 	if await Async.timeout(client.multiplayer_api.server_disconnected, timer):
-		NetLog.error("Couldn't disconnect from server.", [], func(m): push_error(m))
+		Netw.dbg.error("Couldn't disconnect from server.", func(m): push_error(m))
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
@@ -146,7 +146,7 @@ func _is_current_scene() -> bool:
 	return get_tree().current_scene == self
 
 func _close_server() -> void:
-	NetLog.info("Closing embedded server.")
+	Netw.dbg.info("Closing embedded server.")
 	if server:
 		server.get_parent().remove_child(server)
 		server.queue_free()
@@ -157,11 +157,11 @@ func is_webrtc() -> bool:
 	var script: Script = client.backend.get_script()
 	var n := script.get_global_name().to_lower()
 	var is_rtc := "rtc" in n or "tube" in n
-	NetLog.debug("Backend check: class=%s is_webrtc=%s" % [script.get_global_name(), is_rtc])
+	Netw.dbg.debug("Backend check: class=%s is_webrtc=%s" % [script.get_global_name(), is_rtc])
 	return is_rtc
 
 func _host_server() -> String:
-	NetLog.trace("NetworkSession: _host_server called.")
+	Netw.dbg.trace("NetworkSession: _host_server called.")
 	if OS.has_feature("web") and not is_webrtc():
 		client.backend = LocalLoopbackBackend.new()
 	
@@ -172,21 +172,21 @@ func _host_server() -> String:
 		server._pending_world_scene_path = client._pending_world.scene_file_path
 	add_child(server)
 	
-	NetLog.info("Starting embedded server...")
+	Netw.dbg.info("Starting embedded server...")
 	# We use quiet=true here because we expect ERR_ALREADY_IN_USE in multi-client scenarios.
 	var server_err := server.host(true)
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	
 	if server_err != OK and not in_use:
-		NetLog.error("Server failed to start: %s", [error_string(server_err)], func(m): push_error(m))
+		Netw.dbg.error("Server failed to start: %s" % [error_string(server_err)], func(m): push_error(m))
 	
 	if in_use:
-		NetLog.info("Server address already in use, connecting to localhost.")
+		Netw.dbg.info("Server address already in use, connecting to localhost.")
 		server.queue_free.call_deferred()
 		return "localhost"
 		
 	var addr := _resolve_server_address()
-	NetLog.info("Embedded server started at: %s" % addr)
+	Netw.dbg.info("Embedded server started at: %s" % [addr])
 	return addr
 
 func _resolve_server_address() -> String:

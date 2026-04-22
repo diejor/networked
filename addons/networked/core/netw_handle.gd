@@ -15,33 +15,33 @@ func _init(component: Node) -> void:
 
 
 ## Logs an [code]INFO[/code] message.
-func info(msg: String) -> void:
+func info(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.info(c, msg)
+	if c: Netw.dbg.info(c, arg1, arg2, arg3)
 
 
 ## Logs a [code]DEBUG[/code] message.
-func debug(msg: String) -> void:
+func debug(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.debug(c, msg)
+	if c: Netw.dbg.debug(c, arg1, arg2, arg3)
 
 
 ## Logs a [code]TRACE[/code] message.
-func trace(msg: String) -> void:
+func trace(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.trace(c, msg)
+	if c: Netw.dbg.trace(c, arg1, arg2, arg3)
 
 
 ## Logs a [code]WARN[/code] message and calls [code]push_warning[/code].
-func warn(msg: String, link_call: Callable = Callable()) -> void:
+func warn(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.warn(c, msg, link_call)
+	if c: Netw.dbg.warn(c, arg1, arg2, arg3)
 
 
 ## Logs an [code]ERROR[/code] message and calls [code]push_error[/code].
-func error(msg: String, link_call: Callable = Callable()) -> void:
+func error(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 	var c := _comp_ref.get_ref() as Node
-	if c: Netw.dbg.error(c, msg, link_call)
+	if c: Netw.dbg.error(c, arg1, arg2, arg3)
 
 
 ## Opens a new general-purpose [NetSpan].

@@ -52,6 +52,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 ## (which resolves it) across the delete+respawn cycle caused by server reparenting.
 class Bucket extends RefCounted:
 	var pending: Dictionary[int, TeleportPromise] = {}
+	var span: NetSpan # Active span for the local player's teleport
 
 func _get_bucket() -> Bucket:
 	return get_bucket(Bucket) as Bucket
@@ -62,6 +63,7 @@ class TeleportPromise extends RefCounted:
 	## Survives the client node's lifetime — safe to await even when the client player
 	## is destroyed and respawned during the teleport handshake.
 	signal completed
+	var span: NetSpan # Reference to the initiating span
 
 
 func _init() -> void:
@@ -94,13 +96,13 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 
 	var path: String = ResourceUID.ensure_path(path_or_uid)
 	if not ResourceLoader.exists(path):
-		Netw.dbg.error("Unable to find scene at path '%s'." % path, func(m): push_error(m))
+		Netw.dbg.error("Unable to find scene at path '%s'." % [path], func(m): push_error(m))
 		return ""
 
 	var scene: PackedScene = load(path)
 
 	if not is_instance_valid(scene):
-		Netw.dbg.error("Unable to find scene at path '%s'." % path, func(m): push_error(m))
+		Netw.dbg.error("Unable to find scene at path '%s'." % [path], func(m): push_error(m))
 		return ""
 
 	var scene_state: SceneState = scene.get_state()
@@ -113,9 +115,10 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	_tp_span = _dbg.span("tp", {"scene": target_tp.scene_path})
-	_tp_span.step("initiate")
-	_dbg.info("Initiating teleport to %s" % target_tp.scene_path)
 	var promise := TeleportPromise.new()
+	promise.span = _tp_span
+	_tp_span.step("initiate")
+	_dbg.info("Initiating teleport to %s" % [target_tp.scene_path])
 	_do_teleport(target_tp, promise)
 	return promise
 
@@ -130,6 +133,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	var bucket := _get_bucket()
 	if bucket:
 		bucket.pending[peer_id] = promise
+		bucket.span = _tp_span
 	
 	var from_scene := current_scene_name
 	current_scene_path = target_tp.scene_path
@@ -181,13 +185,13 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 
 	var from_lobby: Lobby = lobby_manager.active_lobbies.get(from_scene_name)
 	if not from_lobby:
-		_dbg.error("Source lobby '%s' not found." % from_scene_name, func(m): push_error(m))
+		_dbg.error("Source lobby '%s' not found." % [from_scene_name], func(m): push_error(m))
 		span.fail("source_lobby_not_found", {"lobby": from_scene_name})
 		return
 
 	var player: Node = from_lobby.level.get_node_or_null(username)
 	if not player:
-		_dbg.error("Player '%s' not found in source lobby." % username, func(m): push_error(m))
+		_dbg.error("Player '%s' not found in source lobby." % [username], func(m): push_error(m))
 		span.fail("player_not_found")
 		return
 
@@ -232,7 +236,7 @@ func _activate_destination(to_scene_path: String, span: NetSpan) -> Lobby:
 	await lobby_manager.activate_lobby(StringName(to_scene_name))
 	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_scene_name))
 	if not to_lobby:
-		_dbg.error("Destination lobby '%s' could not be activated." % to_scene_name, func(m): push_error(m))
+		_dbg.error("Destination lobby '%s' could not be activated." % [to_scene_name], func(m): push_error(m))
 		span.fail("dest_lobby_activation_failed", {"lobby": to_scene_name})
 		return null
 	return to_lobby
@@ -276,7 +280,7 @@ func teleported(scene: Node, _tp_path: String) -> void:
 			if tp_node:
 				snap_pos = tp_node.get("global_position")
 
-		_dbg.debug("Teleport server-side complete. Snapping to %s" % str(snap_pos))
+		_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
 		owner.set("global_position", snap_pos)
 		_rpc_teleport_committed.rpc_id(owner.get_multiplayer_authority(), snap_pos)
 
@@ -288,7 +292,12 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 
-	_dbg.info("Teleport committed. Snapping local player to %s" % str(snap_pos))
+	# Recovery: If we were recreated, pick up the span from the persistent bucket
+	if not _tp_span and bucket:
+		_tp_span = bucket.span
+		bucket.span = null
+
+	_dbg.info("Teleport committed. Snapping local player to %s" % [str(snap_pos)])
 	if _tp_span: _tp_span.step("committed", {"snap_pos": str(snap_pos)})
 	_teleport_committed.emit()
 	_tp_mutex.unlock()
@@ -307,7 +316,7 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 
 	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
 	if promise:
-		_dbg.debug("Resolving teleport promise for peer %d" % peer_id)
+		_dbg.debug("Resolving teleport promise for peer %d" % [peer_id])
 		if _tp_span: _tp_span.step("promise_resolved")
 		promise.completed.emit()
 		bucket.pending.erase(peer_id)
@@ -328,7 +337,7 @@ func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
 
 	var lobby: Lobby = lobby_mgr.active_lobbies.get(current_scene_name)
 	if lobby:
-		_dbg.info("Spawning player into lobby %s" % current_scene_name)
+		_dbg.info("Spawning player into lobby %s", [current_scene_name])
 		lobby.synchronizer.track_player(owner)
 		lobby.level.add_child(owner)
 		owner.owner = lobby.level
