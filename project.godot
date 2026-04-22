@@ -15,10 +15,6 @@ run/main_scene="uid://bi445hl7e416b"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
-[autoload]
-
-NetworkedDebugger="*uid://bg56gori67101"
-
 [debug]
 
 file_logging/enable_file_logging=true

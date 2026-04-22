@@ -4,24 +4,29 @@ extends EditorPlugin
 const SceneNodePathPlugin = preload("uid://dtj5ucl1iy3ug")
 var scene_node_path_plugin: EditorPlugin
 
+const NetLogEditor = preload("uid://b2dp22x17yufo")
 var log_editor: Control
+
+const DebuggerPlugin = preload("uid://b2lc6aalf32kx")
 var _debugger_plugin: EditorDebuggerPlugin
 
+const DEBUG_REPORTER_PATH = "res://addons/networked/debug/networked_debug_reporter.gd"
+
+
+
 func _enter_tree() -> void:
-	# Pass the addon root so NetLog can produce addon-relative module paths.
-	# This makes saved overrides stable even if the addon directory is moved.
 	NetLog.initialize(get_script().get_path().get_base_dir())
 
-	add_autoload_singleton("NetworkedDebugger", "res://addons/networked/debug/networked_debug_reporter.gd")
+	add_autoload_singleton("NetworkedDebugger", DEBUG_REPORTER_PATH)
 
 	scene_node_path_plugin = SceneNodePathPlugin.new()
 	add_child(scene_node_path_plugin)
 
-	log_editor = preload("uid://b2dp22x17yufo").new()
-	log_editor.custom_minimum_size.y = 200
-	add_control_to_bottom_panel(log_editor, "NetLog")
+	log_editor = NetLogEditor.new()
+	log_editor.name = "NetLog"
+	add_control_to_dock(DOCK_SLOT_RIGHT_UL, log_editor)
 
-	_debugger_plugin = preload("uid://b2lc6aalf32kx").new()
+	_debugger_plugin = DebuggerPlugin.new()
 	add_debugger_plugin(_debugger_plugin)
 
 func _exit_tree() -> void:
@@ -31,7 +36,7 @@ func _exit_tree() -> void:
 		scene_node_path_plugin.queue_free()
 
 	if log_editor:
-		remove_control_from_bottom_panel(log_editor)
+		remove_control_from_docks(log_editor)
 		log_editor.queue_free()
 
 	if _debugger_plugin:

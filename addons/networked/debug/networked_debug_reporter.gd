@@ -161,7 +161,7 @@ func _enter_tree() -> void:
 	var capacity: int = ProjectSettings.get_setting(
 		"debug/networked/telemetry_buffer_size", 120)
 	_telemetry = NetTelemetryBuffer.new(capacity)
-
+	
 	_validators = [TopologyNetValidator.new()]
 
 	_watchdog = ErrorWatchdog.new()
@@ -234,7 +234,8 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 	_flush_now()
 
 
-# ─── Signal Handlers ──────────────────────────────────────────────────────────
+#region ─── Signal Handlers ──────────────────────────────────────────────────────────
+
 
 var _sending_manifest: bool = false
 
@@ -279,6 +280,7 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	_send_manifest(m, mt)
 	_sending_manifest = false
 
+#endregion
 
 ## Returns the tree_name for the current context: prefers the active span's tree,
 ## falls back to the first registered tree, falls back to empty string.
