@@ -4,9 +4,6 @@ extends NetworkedTestSuite
 var session: LocalLoopbackSession
 
 
-var _silent_log := NetLogSettings.new()
-
-
 func after():
 	NetLog.pop_settings()
 

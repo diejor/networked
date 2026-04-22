@@ -57,13 +57,13 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 				if s is MultiplayerSynchronizer and not result.has(s):
 					result.append(s)
 
-	if not Engine.is_editor_hint():
-		if target_node.is_inside_tree():
+	if target_node.is_inside_tree():
+		if not Engine.is_editor_hint():
 			target_node.set_meta(META_KEY, result)
 			_connect_invalidation(target_node)
-	else:
+	elif not Engine.is_editor_hint():
 		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String: return s.name)
-		NetLog.warn("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]", [target_node.name, ", ".join(type_names)], func(m): push_warning(m))
+		NetLog.debug("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]", [target_node.name, ", ".join(type_names)])
 	
 	return result
 

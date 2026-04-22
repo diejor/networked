@@ -179,7 +179,6 @@ func _ready() -> void:
 	_cache_sync_intervals()
 	
 	display_lag = _calculate_min_lag()
-	log_info("Ready: target=%s, props=%d" % [_target.name, _states.size()])
 
 
 func _exit_tree() -> void:

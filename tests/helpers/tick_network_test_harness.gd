@@ -138,6 +138,7 @@ func create_environment_with_sprite(node_name: StringName) -> TickSimulationEnvi
 	return env
 
 func sync_ticks(n: int) -> void:
+	@warning_ignore("redundant_await")
 	await _runner.simulate_frames(n)
 
 func yield_to_sync(extra_frames: int = 0) -> void:
