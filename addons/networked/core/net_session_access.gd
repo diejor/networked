@@ -74,8 +74,8 @@ func get_tree_name() -> String:
 
 
 func begin_span(label: String, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
-	return NetTrace.begin(label, _mt_ref.get_ref(), meta, "", follows_from)
+	return Netw.dbg.span(_mt_ref.get_ref(), label, meta, follows_from)
 
 
 func begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetPeerSpan:
-	return NetTrace.begin_peer(label, peers, _mt_ref.get_ref(), meta, "", follows_from)
+	return Netw.dbg.peer_span(_mt_ref.get_ref(), label, peers, meta, follows_from)

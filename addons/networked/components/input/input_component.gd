@@ -30,6 +30,8 @@ signal tick_snapshot(tick: int, state: Dictionary)
 ## Current pressed state for each tracked action, keyed by action name.
 @onready var state: Dictionary[StringName, bool] = build_state_dict_from_actions()
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 ## Returns the list of action name strings this component should track.
 @abstract func get_inputs() -> Array
 
@@ -49,7 +51,7 @@ func _ready() -> void:
 		if clock:
 			clock.on_tick.connect(_on_tick)
 		else:
-			NetLog.warn("InputComponent: tick_mode=true but no NetworkClock found on this node's multiplayer API.", [], func(m): push_warning(m))
+			_dbg.warn("tick_mode=true but no NetworkClock found on this node's multiplayer API.", func(m): push_warning(m))
 
 ## Builds the initial [member state] dictionary from [method get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
@@ -73,12 +75,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed(action):
 			if state[action] != true:
 				state[action] = true
-				log_trace("InputComponent: Action %s Pressed" % action)
+				_dbg.trace("Action %s Pressed" % action)
 				action_changed.emit(action, true)
 		elif event.is_action_released(action):
 			if state[action] != false:
 				state[action] = false
-				log_trace("InputComponent: Action %s Released" % action)
+				_dbg.trace("Action %s Released" % action)
 				action_changed.emit(action, false)
 
 

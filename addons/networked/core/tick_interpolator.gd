@@ -152,6 +152,7 @@ var _has_explicit_sync_interval: bool = false
 
 var _peer_batcher: _Batcher
 var _was_starving: bool = false
+var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 #endregion
 
@@ -238,7 +239,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 				break
 	
 	if trace:
-		log_trace("[Dilation] eff_dt: %d | newest: %d | gap: %d | window: %d | starving: %s | ticks: %d | lag: %.2f" % [
+		_dbg.trace("[Dilation] eff_dt: %d | newest: %d | gap: %d | window: %d | starving: %s | ticks: %d | lag: %.2f" % [
 			effective_dt, debug_newest, (effective_dt - debug_newest), debug_window, str(is_starving), starvation_ticks, display_lag
 		])
 	
@@ -472,7 +473,7 @@ class _PropertyState:
 		last_written = result
 		
 		if trace:
-			interpolator.log_trace("Interp %s: dt=%d lag=%.2f val=%s", [name, dt, lag, result])
+			interpolator._dbg.trace("Interp %s: dt=%d lag=%.2f val=%s" % [name, dt, lag, result])
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
 		if typeof(v1) != typeof(v2): return true

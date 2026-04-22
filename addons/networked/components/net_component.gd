@@ -9,7 +9,6 @@
 class_name NetComponent
 extends Node
 
-var _cached_module_path: String = ""
 var _session: NetSessionAccess
 
 
@@ -69,100 +68,17 @@ func get_bucket(bucket_type) -> RefCounted:
 	return ctx.get_bucket(bucket_type) if ctx else null
 
 
-#region ── Logging Proxy ──────────────────────────────────────────────────────
-
-## Lazily resolves and caches the LOGL module path for this script.
-func _get_cached_module_path() -> String:
-	if _cached_module_path.is_empty():
-		_cached_module_path = NetLog._module_from_path(get_script().resource_path)
-	
-	return _cached_module_path
-
-## Logs a [code]TRACE[/code] message with rich multiplayer context.
-func log_trace(msg: Variant, args: Array = []) -> void:
-	_log_proxy(NetLog.Level.TRACE, msg, args)
-
-
-## Logs a [code]DEBUG[/code] message with rich multiplayer context.
-func log_debug(msg: Variant, args: Array = []) -> void:
-	_log_proxy(NetLog.Level.DEBUG, msg, args)
-
-
-## Logs an [code]INFO[/code] message with rich multiplayer context.
-func log_info(msg: Variant, args: Array = []) -> void:
-	_log_proxy(NetLog.Level.INFO, msg, args)
-
-
-## Logs a [code]WARN[/code] message with rich multiplayer context.
-func log_warn(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
-	_log_proxy(NetLog.Level.WARN, msg, args, link_call)
-
-
-## Logs an [code]ERROR[/code] message with rich multiplayer context.
-func log_error(msg: Variant, args: Array = [], link_call: Callable = Callable()) -> void:
-	_log_proxy(NetLog.Level.ERROR, msg, args, link_call)
-
-
-func _log_proxy(level: int, msg: Variant, args: Array, link_call: Callable = Callable()) -> void:
-	if not NetLog.is_level_active_for_module(level, _get_cached_module_path()):
-		return
-
-	var resolved_msg: String
-	if typeof(msg) == TYPE_CALLABLE:
-		resolved_msg = str(msg.call())
-	else:
-		resolved_msg = str(msg)
-
-	var tree := get_multiplayer_tree()
-	var has_mp := is_inside_tree() and multiplayer
-	
-	var full_msg: String
-	if not tree and not has_mp:
-		full_msg = resolved_msg
-	else:
-		var tree_id := "MT:" + tree.name if tree else "null"
-		var side_label := "?"
-		var auth_label := "?"
-		var is_local_auth := false
-		
-		if has_mp:
-			var local_id := multiplayer.get_unique_id()
-			var auth_id := get_multiplayer_authority()
-			
-			side_label = "S" if local_id == 1 else "C%d" % local_id
-			auth_label = "S" if auth_id == 1 else "C%d" % auth_id
-			is_local_auth = (local_id == auth_id)
-		
-		var context := "[%s*]" % side_label if is_local_auth else "[%s:%s]" % [side_label, auth_label]
-		var display_name := owner.name.split("|")[0] if owner else ""
-		var player_label := ("{%s}" % display_name) if not display_name.is_empty() else ""
-		
-		full_msg = "%s[%s]%s %s" % [context, tree_id, player_label, resolved_msg]
-	
-	match level:
-		NetLog.Level.TRACE: NetLog.trace(full_msg, args)
-		NetLog.Level.DEBUG: NetLog.debug(full_msg, args)
-		NetLog.Level.INFO: NetLog.info(full_msg, args)
-		NetLog.Level.WARN: NetLog.warn(full_msg, args, link_call)
-		NetLog.Level.ERROR: NetLog.error(full_msg, args, link_call)
-
-#endregion
-
-
-#region ── Debug Events ───────────────────────────────────────────────────────
-
-## Opens a new general-purpose span for this component.
-func _begin_span(label: String, meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetSpan:
-	var s := get_session()
-	if s: return s.begin_span(label, meta, follows_from)
-	return NetTrace.begin(label, null, meta, "", follows_from)
-
-
-## Opens a new peer-aware span for a multiplayer operation.
-func _begin_peer_span(label: String, peers: Array = [], meta: Dictionary = {}, follows_from: CheckpointToken = null) -> NetPeerSpan:
-	var s := get_session()
-	if s: return s.begin_peer_span(label, peers, meta, follows_from)
-	return NetTrace.begin_peer(label, peers, null, meta, "", follows_from)
-
-
-#endregion
+# [b]Note on Debugging:[/b]
+# This component does not provide direct logging or span methods. Use [Netw.dbg]
+# or [method NetwDbg.handle] instead.
+#
+# [b]Editor Jump-to-Line Convention:[/b]
+# To preserve the Godot editor's ability to jump to the correct line when
+# clicking an error or warning in the Output panel, you MUST pass a lambda
+# that calls push_error() or push_warning() to the debug call:
+# [codeblock]
+# Netw.dbg.error(self, "Failed to load level", func(m): push_error(m))
+#
+# # Via handle:
+# _dbg.error("Failed to load level", func(m): push_error(m))
+# [/codeblock]

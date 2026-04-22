@@ -1,17 +1,23 @@
+## Main editor plugin for the Networked addon.
+##
+## Initializes the logging system, registers singletons, and adds the
+## NetLog dock and debugger plugin to the Godot editor.
 @tool
 extends EditorPlugin
 
 const SceneNodePathPlugin = preload("uid://dtj5ucl1iy3ug")
-var scene_node_path_plugin: EditorPlugin
-
 const NetLogEditor = preload("uid://b2dp22x17yufo")
-var log_editor: Control
-
 const DebuggerPlugin = preload("uid://b2lc6aalf32kx")
-var _debugger_plugin: EditorDebuggerPlugin
-
 const DEBUG_REPORTER_PATH = "res://addons/networked/debug/networked_debug_reporter.gd"
 
+## Reference to the SceneNodePath editor plugin instance.
+var scene_node_path_plugin: EditorPlugin
+
+## Reference to the NetLog editor dock control.
+var log_editor: Control
+
+## Reference to the networked debugger plugin instance.
+var _debugger_plugin: EditorDebuggerPlugin
 
 
 func _enter_tree() -> void:
@@ -29,6 +35,7 @@ func _enter_tree() -> void:
 	_debugger_plugin = DebuggerPlugin.new()
 	add_debugger_plugin(_debugger_plugin)
 
+
 func _exit_tree() -> void:
 	remove_autoload_singleton("NetworkedDebugger")
 
@@ -43,5 +50,8 @@ func _exit_tree() -> void:
 		remove_debugger_plugin(_debugger_plugin)
 		_debugger_plugin = null
 
+
 func _get_plugin_icon() -> Texture2D:
-	return get_editor_interface().get_base_control().get_theme_icon("Log", "EditorIcons")
+	return get_editor_interface().get_base_control().get_theme_icon(
+		"Log", "EditorIcons"
+	)

@@ -2,20 +2,20 @@
 class_name MultiplayerLobbyManager
 extends MultiplayerSpawner
 
-## Central authority that spawns and manages multiplayer lobbies for all connected players.
+## Central authority that manages multiplayer lobbies for all connected players.
 ##
-## Extends [MultiplayerSpawner] to replicate lobby scenes to clients automatically.
-## Add level scenes to the spawn list via the [member add_to_spawn_list] helper property in the
-## inspector. Each level gets two per-level dropdowns in the Inspector:
-## [b]Load Mode[/b] ([enum LoadMode]) and [b]Empty Action[/b] ([enum EmptyAction]).
+## Extends [MultiplayerSpawner] to replicate lobby scenes to clients.
+## Add level scenes to the spawn list via the [member add_to_spawn_list] property.
 ## [codeblock]
 ## # Listen for lobbies becoming available:
-## lobby_manager.lobby_spawned.connect(func(lobby): print("Lobby ready: ", lobby.level.name))
+## lobby_manager.lobby_spawned.connect(
+##     func(lobby): print("Lobby ready: ", lobby.level.name)
+## )
 ## # Activate an on-demand lobby before routing a player into it:
 ## await lobby_manager.activate_lobby(&"Level1")
 ## [/codeblock]
 
-## Emitted when the manager has been successfully initialized by the [MultiplayerTree].
+## Emitted when the manager has been initialized by the [MultiplayerTree].
 signal configured()
 
 ## Emitted when a new [Lobby] has been instantiated and entered the tree.
@@ -28,7 +28,7 @@ const SERVER_LOBBY = preload("uid://dga0loylsa26i")
 const CLIENT_LOBBY = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
 
-## Controls when a lobby's level scene is loaded relative to server startup.
+## Controls when a lobby's level scene is loaded.
 enum LoadMode {
 	## Level is only loaded and spawned when the first player needs to enter it.
 	ON_DEMAND = 0,
@@ -40,15 +40,13 @@ enum LoadMode {
 enum EmptyAction {
 	## The lobby continues processing normally.
 	KEEP_ACTIVE = 0,
-	## The level's process mode is set to [constant Node.PROCESS_MODE_DISABLED], saving CPU.
+	## The level's process mode is set to [constant Node.PROCESS_MODE_DISABLED].
 	FREEZE = 1,
-	## The lobby is removed from the tree and freed, saving RAM.
+	## The lobby is removed from the tree and freed.
 	DESTROY = 2,
 }
 
-## [b]Optional.[/b] The [TPLayerAPI] used for visual screen transitions during teleportation.
-##
-## If unassigned, players are still moved between lobbies but no fade animation plays.
+## [b]Optional.[/b] The [TPLayerAPI] used for visual screen transitions.
 @export var tp_layer: TPLayerAPI:
 	set(layer):
 		if not Engine.is_editor_hint():
@@ -58,7 +56,8 @@ enum EmptyAction {
 			tp_layer = layer
 
 			if tp_layer and not configured.is_connected(
-				tp_layer.configured.emit):
+				tp_layer.configured.emit
+			):
 				configured.connect(tp_layer.configured.emit)
 		else:
 			tp_layer = layer
@@ -66,9 +65,6 @@ enum EmptyAction {
 		update_configuration_warnings()
 
 ## Helper property to add level scenes to the spawn list via the inspector.
-##
-## TODO: Verify that the target MultiplayerSpawner has `spawn_path` set to the root,
-## assert or make editor warning to warn the user that the system will not work as expected.
 @export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
 var add_to_spawn_list: SceneNodePath:
 	set(value):
@@ -82,30 +78,18 @@ var add_to_spawn_list: SceneNodePath:
 
 		add_to_spawn_list = null
 
-## Optional. If set, delegates level instantiation to this callable instead of the
-## default path-based loading. Called on both server and clients during spawn.
-## [br][br]
+## Optional. Delegates level instantiation to this callable.
+##
 ## Signature: [code]func(data: Variant) -> Node[/code]
-## [br][br]
-## The returned node's [member Node.name] MUST be deterministic and match the lobby name
-## used in [method activate_lobby] and the scene basename clients embed in their SpawnerPath —
-## it becomes the key in [member active_lobbies].
-## [br][br]
-## When set, automatic ON_STARTUP spawning via [method spawn_lobbies] is not supported.
-## Call [method spawn] manually in [signal configured] for lobbies that should exist at startup.
 var level_spawn_function: Callable
 
-## Per-lobby spawn data used by [method activate_lobby] when [member level_spawn_function] is set.
-## [br][br]
-## Keys are lobby names ([StringName]). Values are the [code]data[/code] argument passed to
-## [member level_spawn_function] and replicated to clients via [MultiplayerSpawner].
-## If a lobby name has no entry here, the name itself is passed as data.
+## Per-lobby spawn data used by [method activate_lobby].
 var lobby_spawn_data: Dictionary[StringName, Variant] = {}
 
-## All currently active [Lobby] instances, keyed by their level's [member Node.name].
+## All currently active [Lobby] instances, keyed by their level's Node name.
 var active_lobbies: Dictionary[StringName, Lobby]
 
-## Lazily populated list of level scene file paths from the spawnable scene list.
+## Lazily populated list of level scene file paths.
 var lobbies: Array[String]:
 	get:
 		if lobbies.is_empty():
@@ -116,16 +100,8 @@ var lobbies: Array[String]:
 			clear_spawnable_scenes()
 		return lobbies
 
-## Per-level load mode and empty-action configuration.
-##
-## Keys are the level basenames (scene filename without extension).
-## Values are Dictionaries with keys [code]"load_mode"[/code] and [code]"empty_action"[/code].
 var _lobby_configs: Dictionary = {}
-
-## Scenes preloaded by [method preload_lobby] but not yet instantiated.
 var _lobby_cache: Dictionary[String, PackedScene] = {}
-
-## Maps each level basename to its scene file path. Built lazily in [method spawn_lobbies].
 var _lobby_paths: Dictionary[StringName, String] = {}
 
 
@@ -210,7 +186,10 @@ func _enter_tree() -> void:
 	add_to_group("lobby_managers")
 	
 	var mt: MultiplayerTree = get_parent()
-	assert(is_instance_valid(mt), "LobbyManager must be a direct child of MultiplayerTree")
+	assert(
+		is_instance_valid(mt), 
+		"LobbyManager must be a direct child of MultiplayerTree"
+	)
 	mt.register_service(self, MultiplayerLobbyManager)
 	
 	if not mt.player_join_requested.is_connected(handle_join_request):
@@ -218,10 +197,6 @@ func _enter_tree() -> void:
 	
 	if not mt.configured.is_connected(configured.emit):
 		mt.configured.connect(configured.emit)
-
-
-func _ready() -> void:
-	pass
 
 
 func _exit_tree() -> void:
@@ -241,21 +216,21 @@ func _exit_tree() -> void:
 	active_lobbies.clear()
 
 
-## Returns the stored config for [param name], falling back to safe defaults.
+## Returns the stored config for [param name].
 func _get_config(name: StringName) -> Dictionary:
 	if not _lobby_configs.has(name):
 		return {"load_mode": LoadMode.ON_STARTUP, "empty_action": EmptyAction.FREEZE}
 	return _lobby_configs[name]
 
 
-## Loads the level scene for [param name] into a local cache without instantiating it.
-##
-## Useful for proximity-based preloading. A cached scene is consumed on the next
-## [method spawn_lobby] call, eliminating disk I/O at spawn time.
+## Loads the level scene for [param name] into a local cache.
 func preload_lobby(name: StringName) -> void:
 	var path := _lobby_paths.get(name, "")
 	if path.is_empty():
-		NetLog.error("MultiplayerLobbyManager: Cannot preload lobby '%s': path not found.", [name], func(m): push_error(m))
+		NetLog.error(
+			"MultiplayerLobbyManager: Cannot preload lobby '%s': not found." % \
+			name, [], func(m): push_error(m)
+		)
 		return
 	if _lobby_cache.has(path) or active_lobbies.has(name):
 		return
@@ -265,27 +240,21 @@ func preload_lobby(name: StringName) -> void:
 
 
 ## Instantiates and adds [param name] to the scene tree.
-##
-## Does nothing if the lobby is already active. Callers that need to guarantee the lobby
-## is processing should use [method activate_lobby] instead.
 func spawn_lobby(name: StringName) -> void:
 	if active_lobbies.has(name):
 		return
 	var path := _lobby_paths.get(name, "")
 	if path.is_empty():
-		NetLog.error("MultiplayerLobbyManager: Cannot spawn lobby '%s': path not found.", [name], func(m): push_error(m))
+		NetLog.error(
+			"MultiplayerLobbyManager: Cannot spawn lobby '%s': not found." % \
+			name, [], func(m): push_error(m)
+		)
 		return
 	NetLog.info("Spawning lobby '%s'." % name)
 	spawn(path)
 
 
-## Ensures [param name] is spawned and forces its level's process mode to [constant Node.PROCESS_MODE_INHERIT].
-##
-## Spawns the lobby on demand if not yet active, then wakes the level regardless of its
-## configured [enum EmptyAction]. Safe to [operator await] from any context.
-## [br][br]
-## When [member level_spawn_function] is set, spawn data is looked up from
-## [member lobby_spawn_data]; if no entry exists for [param name], the name itself is passed.
+## Ensures [param name] is spawned and forces its level's process mode to INHERIT.
 func activate_lobby(name: StringName) -> void:
 	NetLog.trace("MultiplayerLobbyManager: activate_lobby('%s') called." % name)
 	if not active_lobbies.has(name):
@@ -294,34 +263,40 @@ func activate_lobby(name: StringName) -> void:
 			spawn(data)
 		else:
 			spawn_lobby(name)
+	
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.error("MultiplayerLobbyManager: Failed to activate lobby '%s'.", [name], func(m): push_error(m))
+		NetLog.error(
+			"MultiplayerLobbyManager: Failed to activate lobby '%s'." % name, 
+			[], func(m): push_error(m)
+		)
 		return
+	
 	lobby.level.process_mode = Node.PROCESS_MODE_INHERIT
 	NetLog.info("Lobby '%s' activated." % name)
 
 
-## Sets the lobby level's process mode to [constant Node.PROCESS_MODE_DISABLED], pausing simulation.
-##
-## The lobby remains in the scene tree and can be woken with [method activate_lobby].
+## Sets the lobby level's process mode to DISABLED.
 func freeze_lobby(name: StringName) -> void:
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.warn("MultiplayerLobbyManager: Cannot freeze lobby '%s': not active.", [name], func(m): push_warning(m))
+		NetLog.warn(
+			"MultiplayerLobbyManager: Cannot freeze lobby '%s': not active." % \
+			name, [], func(m): push_warning(m)
+		)
 		return
 	lobby.level.process_mode = Node.PROCESS_MODE_DISABLED
 	NetLog.info("Lobby '%s' frozen." % name)
 
 
-## Removes and frees the lobby, releasing its memory.
-##
-## The lobby is detached from the tree synchronously before being freed, which triggers
-## [signal lobby_despawned] and removes it from [member active_lobbies] immediately.
+## Removes and frees the lobby.
 func destroy_lobby(name: StringName) -> void:
 	var lobby := active_lobbies.get(name) as Lobby
 	if not lobby:
-		NetLog.warn("MultiplayerLobbyManager: Cannot destroy lobby '%s': not active.", [name], func(m): push_warning(m))
+		NetLog.warn(
+			"MultiplayerLobbyManager: Cannot destroy lobby '%s': not active." % \
+			name, [], func(m): push_warning(m)
+		)
 		return
 	NetLog.info("Destroying lobby '%s'." % name)
 	if lobby.get_parent():
@@ -329,7 +304,7 @@ func destroy_lobby(name: StringName) -> void:
 	lobby.queue_free()
 
 
-## Returns an array of all active player nodes across all active lobbies.
+## Returns an array of all active player nodes.
 func get_all_players() -> Array[Node]:
 	var players: Array[Node] = []
 	for lobby: Lobby in active_lobbies.values():
@@ -341,20 +316,17 @@ func get_all_players() -> Array[Node]:
 	return players
 
 
-## Instantiates all lobbies configured as [constant LoadMode.ON_STARTUP].
-##
-## Lobbies configured as [constant LoadMode.ON_DEMAND] are skipped to save startup time and RAM.
-## Called automatically after [signal configured] is received.
-## [br][br]
-## When [member level_spawn_function] is set this method is a no-op; call [method spawn]
-## manually in a [signal configured] handler for lobbies that should exist at startup.
+## Instantiates all lobbies configured as ON_STARTUP.
 func spawn_lobbies() -> void:
 	NetLog.trace("MultiplayerLobbyManager: spawn_lobbies called.")
 	if not multiplayer.is_server():
 		return
 	_build_lobby_paths()
 	if _lobby_paths.is_empty():
-		NetLog.warn("MultiplayerLobbyManager: No lobby scenes are registered.", [], func(m): push_warning(m))
+		NetLog.warn(
+			"MultiplayerLobbyManager: No lobby scenes are registered.", 
+			[], func(m): push_warning(m)
+		)
 		return
 	NetLog.info("Checking %d lobby/lobbies for ON_STARTUP." % _lobby_paths.size())
 	for name: StringName in _lobby_paths:
@@ -362,20 +334,17 @@ func spawn_lobbies() -> void:
 			spawn_lobby(name)
 
 
-## Spawn function used by [MultiplayerSpawner] to wrap a level scene in a [Lobby] container.
-##
-## If [member level_spawn_function] is set, delegates level instantiation to that callable so
-## the level can be initialised with arbitrary data before entering the tree. Otherwise
-## [param data] must be a [String] file path; a cached scene from [member _lobby_cache] is
-## consumed if available, otherwise the scene is loaded from disk.
-## Selects the server or client [Lobby] variant based on the current peer role.
+## Spawn function used by [MultiplayerSpawner].
 func _spawn_lobby_node(data: Variant) -> Node:
 	var level: Node
 
 	if level_spawn_function.is_valid():
 		level = level_spawn_function.call(data)
 		if not is_instance_valid(level):
-			NetLog.error("MultiplayerLobbyManager: level_spawn_function returned null.", [], func(m): push_error(m))
+			NetLog.error(
+				"MultiplayerLobbyManager: spawn function returned null.", 
+				[], func(m): push_error(m)
+			)
 			return null
 	elif data is String:
 		var level_file_path: String = data
@@ -388,7 +357,10 @@ func _spawn_lobby_node(data: Variant) -> Node:
 			level_scene = load(level_file_path)
 		level = level_scene.instantiate()
 	else:
-		NetLog.error("MultiplayerLobbyManager: invalid spawn data and no level_spawn_function set.", [], func(m): push_error(m))
+		NetLog.error(
+			"MultiplayerLobbyManager: invalid spawn data.", 
+			[], func(m): push_error(m)
+		)
 		return null
 
 	var lobby_scene: PackedScene = (SERVER_LOBBY
@@ -403,30 +375,32 @@ func _spawn_lobby_node(data: Variant) -> Node:
 
 
 ## Called by [MultiplayerTree] to handle a player entry request.
-##
-## Activates the destination lobby on demand if required, then emits [signal ClientComponent.player_joined].
 func handle_join_request(client_data: MultiplayerClientData) -> void:
 	var peer_id := client_data.peer_id
 	for lobby: Lobby in active_lobbies.values():
-		if is_instance_valid(lobby.synchronizer) \
-				and peer_id in lobby.synchronizer.connected_clients:
-			NetLog.warn("Duplicate join attempt from peer %d — ignored.", [peer_id], func(m): push_warning(m))
+		var sync := lobby.synchronizer
+		if is_instance_valid(sync) and peer_id in sync.connected_clients:
+			NetLog.warn(
+				"Duplicate join from peer %d — ignored." % peer_id, 
+				[], func(m): push_warning(m)
+			)
 			return
+	
 	NetLog.info("Received join request from peer %d." % peer_id)
-
-	NetLog.debug("Join request data: username=%s spawner=%s" % [client_data.username, client_data.spawner_path.node_path])
-
 	var lobby_name := StringName(client_data.spawner_path.get_scene_name())
 	await activate_lobby(lobby_name)
 
 	var lobby := active_lobbies.get(lobby_name) as Lobby
 	if not lobby:
-		NetLog.error("Join request failed: Scene '%s' is not registered in the LobbyManager spawn list." % lobby_name, [], func(m): push_error(m))
+		NetLog.error(
+			"Join failed: Scene '%s' not registered." % lobby_name, 
+			[], func(m): push_error(m)
+		)
 		return
 
 	var spawner_client: ClientComponent = (
-		lobby.level.get_node_or_null(client_data.spawner_path.node_path))
-	assert(spawner_client, "Player to be connected needs to have a `ClientComponent`.")
+		lobby.level.get_node_or_null(client_data.spawner_path.node_path) as ClientComponent)
+	assert(spawner_client, "Player needs a `ClientComponent`.")
 	spawner_client.player_joined.emit(client_data)
 
 
@@ -479,9 +453,9 @@ func _on_configured() -> void:
 		multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 	if multiplayer.is_server():
-		var debug_viewports: ViewportDebug = VIEWPORTS_DEBUG.instantiate()
-		child_entered_tree.connect(debug_viewports._on_node_entered)
-		child_exiting_tree.connect(debug_viewports._on_node_exited)
+		var debug_viewports: Node = VIEWPORTS_DEBUG.instantiate()
+		child_entered_tree.connect(debug_viewports.get("_on_node_entered"))
+		child_exiting_tree.connect(debug_viewports.get("_on_node_exited"))
 		add_child(debug_viewports)
 
 		spawn_lobbies.call_deferred()

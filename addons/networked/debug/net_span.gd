@@ -107,22 +107,12 @@ func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 ## Use this for conditions that are suspicious but not immediately fatal —
 ## the span stays OPEN for further steps. For a fatal outcome, use [method fail].
 ## Sends [code]networked:span_step_warn[/code] and emits [method push_warning].
-## [br][br]
-## Pass a [Callable] as [param warn_fn] to preserve the editor jump-click:
-## the callable must call [code]push_warning[/code] itself.
-## [codeblock]
-## span.step_warn("bad_path", func(): push_warning("NetSpan: path is invalid"))
-## [/codeblock]
-func step_warn(step_label: String, warn_fn: Variant = "", data: Dictionary = {}) -> NetSpan:
+func step_warn(step_label: String, message: String = "", data: Dictionary = {}) -> NetSpan:
 	if state != State.OPEN or id.is_empty():
 		return self
-	if typeof(warn_fn) == TYPE_CALLABLE:
-		(warn_fn as Callable).call()
-	else:
-		push_warning("NetSpan [%s] step '%s': %s" % [label, step_label, str(warn_fn)])
 	var s := {
 		"label": step_label,
-		"message": str(warn_fn) if typeof(warn_fn) != TYPE_CALLABLE else "<callable>",
+		"message": message,
 		"data": data,
 		"frame": Engine.get_process_frames(),
 		"usec": Time.get_ticks_usec(),
@@ -156,15 +146,7 @@ func end() -> void:
 ## Closes the span with a failure outcome and forwards context to the editor.
 ## [param reason] is a short machine-readable tag, e.g. [code]"simplify_path_race"[/code].
 ## [param data] is arbitrary serialisable context attached to the failure.
-## [br][br]
-## Pass a [Callable] as [param fail_fn] to preserve the editor jump-click:
-## the callable must call [code]push_error[/code] itself.
-## [codeblock]
-## span.fail("bad_peer", {}, func(): push_error("NetSpan: peer %d not found" % id))
-## [/codeblock]
-func fail(reason: String, data: Dictionary = {}, fail_fn: Callable = Callable()) -> void:
-	if fail_fn.is_valid():
-		fail_fn.call()
+func fail(reason: String, data: Dictionary = {}) -> void:
 	if state != State.OPEN or id.is_empty():
 		return
 	state = State.FAILED
@@ -181,6 +163,12 @@ func fail(reason: String, data: Dictionary = {}, fail_fn: Callable = Callable())
 		"data": data,
 		"caller": _get_caller(),
 	})
+
+
+## Opens a new phase scope within this span. 
+## Returns a [NetSpanPhase] that should be closed with [method NetSpanPhase.done].
+func phase(phase_name: String) -> NetSpanPhase:
+	return NetSpanPhase.new(self, phase_name)
 
 
 ## Captures the current span state as a [CheckpointToken] for causal linking.
@@ -217,7 +205,9 @@ static func _get_caller() -> Dictionary:
 		if src.contains("addons/networked/debug/net_span.gd") \
 				or src.contains("addons/networked/debug/net_peer_span.gd") \
 				or src.contains("addons/networked/debug/net_trace.gd") \
-				or src.contains("addons/networked/components/net_component.gd"):
+				or src.contains("addons/networked/components/net_component.gd") \
+				or src.contains("addons/networked/core/netw_dbg.gd") \
+				or src.contains("addons/networked/core/netw_handle.gd"):
 			continue
 		return frame
 	return {}
@@ -227,3 +217,18 @@ func _send(msg: String, payload: Dictionary) -> void:
 	if NetTrace.message_delegate.is_valid():
 		var mt: MultiplayerTree = _mt.get_ref() if _mt else null
 		NetTrace.message_delegate.call(msg, payload, mt)
+
+
+## Scope object for a named phase within a [NetSpan].
+class NetSpanPhase extends RefCounted:
+	var _span: NetSpan
+	var _name: String
+
+	func _init(span: NetSpan, name: String) -> void:
+		_span = span
+		_name = name
+		_span.step(_name + "_begin")
+
+	## Records the end of the phase as a step.
+	func done() -> void:
+		_span.step(_name + "_end")

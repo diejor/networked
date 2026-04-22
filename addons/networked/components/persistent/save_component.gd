@@ -35,6 +35,7 @@ signal client_synchronized
 
 
 var _save_span: NetSpan
+var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
 ## Per-peer storage bucket for [SaveComponent].
@@ -154,7 +155,7 @@ func _get_entity_id() -> StringName:
 ## Writes the current entity state to [member database].
 func save_state() -> Error:
 	if not database or table_name.is_empty():
-		log_warn("Cannot save state; database or table_name is missing.", [], func(m): push_warning(m))
+		_dbg.warn("Cannot save state; database or table_name is missing.", func(m): push_warning(m))
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
 	var db_err := database.transaction(func(tx: NetworkedDatabase.TransactionContext) -> void:
@@ -162,9 +163,9 @@ func save_state() -> Error:
 	)
 
 	if db_err == OK:
-		log_trace("State saved (table=%s, id=%s)." % [table_name, entity_id])
+		_dbg.trace("State saved (table=%s, id=%s)." % [table_name, entity_id])
 	else:
-		log_warn("Database upsert failed. Error: %s" % error_string(db_err), [], func(m): push_warning(m))
+		_dbg.warn("Database upsert failed. Error: %s" % error_string(db_err), func(m): push_warning(m))
 
 	return db_err
 
@@ -172,11 +173,11 @@ func save_state() -> Error:
 ## Loads saved state from [member database] and pushes it to the scene.
 func load_state() -> Error:
 	if not database or table_name.is_empty():
-		log_warn("Cannot load state; database or table_name is missing.", [], func(m): push_warning(m))
+		_dbg.warn("Cannot load state; database or table_name is missing.", func(m): push_warning(m))
 		loaded.emit()
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
-	log_trace("Loading state (table=%s, id=%s)" % [table_name, entity_id])
+	_dbg.trace("Loading state (table=%s, id=%s)" % [table_name, entity_id])
 
 	var out_error: Array[int] = [OK]
 	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
@@ -190,34 +191,34 @@ func load_state() -> Error:
 		return ERR_UNCONFIGURED
 
 	if record.is_empty():
-		log_debug("No record found (table=%s, id=%s)." % [table_name, entity_id])
+		_dbg.debug("No record found (table=%s, id=%s)." % [table_name, entity_id])
 		loaded.emit()
 		return ERR_FILE_NOT_FOUND
 
 	bound_entity.from_dict(record)
 	push_to_scene()
-	log_info("State loaded (table=%s, id=%s)." % [table_name, entity_id])
+	_dbg.info("State loaded (table=%s, id=%s)." % [table_name, entity_id])
 	loaded.emit()
 	return OK
 
 
 ## Deserializes a network byte array into the entity and pushes the result to the scene.
 func deserialize_scene(bytes: PackedByteArray) -> void:
-	log_trace("SaveComponent: deserializing scene (%d bytes)." % bytes.size())
+	_dbg.trace("deserializing scene (%d bytes)." % bytes.size())
 	bound_entity.deserialize(bytes)
 	push_to_scene()
 
 
 ## Pulls the latest data from the scene and serializes the entity for network transfer.
 func serialize_scene() -> PackedByteArray:
-	log_trace("SaveComponent: serializing scene.")
+	_dbg.trace("serializing scene.")
 	pull_from_scene()
 	return bound_entity.serialize()
 
 
 ## Writes the entity's tracked values into the live scene nodes.
 func push_to_scene() -> Error:
-	log_trace("SaveComponent: pushing entity to scene.")
+	_dbg.trace("pushing entity to scene.")
 	return save_synchronizer.push_to_scene()
 
 
@@ -270,7 +271,7 @@ func spawn(caller: Node, parent_span: NetSpan = null) -> void:
 	_save_span = parent_span
 	var local_span: NetSpan = null
 	if not _save_span:
-		local_span = _begin_span("save_spawn")
+		local_span = _dbg.span("save_spawn")
 		_save_span = local_span
 
 	_save_span.step("spawn_begin")
@@ -285,7 +286,7 @@ func spawn(caller: Node, parent_span: NetSpan = null) -> void:
 	if load_err == ERR_FILE_NOT_FOUND:
 		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
 		if spawner_save and spawner_save.save_synchronizer._initialized:
-			log_debug("Loading data from spawner.")
+			_dbg.debug("Loading data from spawner.")
 			deserialize_scene(spawner_save.serialize_scene())
 
 	if local_span:
@@ -334,7 +335,7 @@ func _unregister() -> void:
 
 
 func _handle_shutdown() -> void:
-	log_info("Beginning graceful shutdown...")
+	_dbg.info("Beginning graceful shutdown...")
 	SaveComponent.save_all_in(get_peer_context())
-	log_info("All states saved. Quitting.")
+	_dbg.info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

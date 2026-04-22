@@ -2,10 +2,12 @@
 class_name MultiplayerTree
 extends Node
 
-## Core networking node that bridges a [BackendPeer] transport with Godot's [SceneMultiplayer] API.
+## Core networking node that bridges a [BackendPeer] transport with Godot's
+## [SceneMultiplayer] API.
 ##
-## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a [MultiplayerLobbyManager],
-## then call [method host] or [method join] to start a session.
+## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a
+## [MultiplayerLobbyManager], then call [method host] or [method join] to start
+## a session.
 ## [codeblock]
 ## # Server
 ## await multiplayer_tree.host()
@@ -16,7 +18,7 @@ extends Node
 ##     push_error("Join failed: %s" % error_string(err))
 ## [/codeblock]
 
-## Emitted when the multiplayer API and lobby manager have been successfully configured.
+## Emitted when the multiplayer API and lobby manager have been configured.
 signal configured()
 ## Emitted when a new peer connects to the server.
 signal peer_connected(peer_id: int)
@@ -29,12 +31,13 @@ signal server_disconnected()
 ## Emitted on the server when a peer requests to join.
 signal player_join_requested(client_data: MultiplayerClientData)
 
-## Set to [code]true[/code] to configure this instance as the authoritative server.
+## Set to [code]true[/code] to configure this instance as the server.
 var is_server: bool
 
-## The transport implementation used for this session (e.g. [ENetBackend], [WebSocketBackend], [WebRTCBackend]).
+## The transport implementation used for this session.
 ##
-## The resource is automatically duplicated at runtime to ensure each session gets an isolated state.
+## Example: [ENetBackend], [WebSocketBackend], [WebRTCBackend].
+## The resource is automatically duplicated at runtime to ensure isolation.
 @export var backend: BackendPeer:
 	set(value):
 		if not Engine.is_editor_hint():
@@ -48,12 +51,16 @@ var is_server: bool
 			else:
 				backend = null
 		else:
-			if backend and backend.changed.is_connected(update_configuration_warnings):
+			if backend and backend.changed.is_connected(
+				update_configuration_warnings
+			):
 				backend.changed.disconnect(update_configuration_warnings)
 				
 			backend = value
 			
-			if backend and not backend.changed.is_connected(update_configuration_warnings):
+			if backend and not backend.changed.is_connected(
+				update_configuration_warnings
+			):
 				backend.changed.connect(update_configuration_warnings)
 				
 		update_configuration_warnings()
@@ -62,12 +69,15 @@ var is_server: bool
 var multiplayer_api: SceneMultiplayer:
 	get: return backend.api if backend else null
 
-## The active [MultiplayerPeer] connection managed by the current [member backend].
+## The active [MultiplayerPeer] connection managed by the [member backend].
 var multiplayer_peer: MultiplayerPeer:
-	get: return backend.api.multiplayer_peer if backend and backend.api else null
+	get:
+		if backend and backend.api:
+			return backend.api.multiplayer_peer
+		return null
 
 
-## Locates the [MultiplayerTree] registered on the [param node]'s [SceneMultiplayer] instance.
+## Locates the [MultiplayerTree] registered on the node's [SceneMultiplayer].
 static func for_node(node: Node) -> MultiplayerTree:
 	var api := node.multiplayer as SceneMultiplayer
 	if not api or not api.has_meta(&"_multiplayer_tree"):
@@ -76,22 +86,23 @@ static func for_node(node: Node) -> MultiplayerTree:
 
 
 ## Global resolver that finds a [MultiplayerTree] from any context.
-## Handles MultiplayerTree instances, Nodes (via metadata or hierarchy), 
+##
+## Handles MultiplayerTree instances, Nodes (via metadata or hierarchy),
 ## and returns null for invalid contexts.
 static func resolve(context: Object) -> MultiplayerTree:
 	if context is MultiplayerTree:
 		return context
 	
 	if context is Node:
-		# Fast path: metadata lookup
 		var node := context as Node
 		var mt := for_node(node)
-		if mt: return mt
+		if mt:
+			return mt
 		
-		# Fallback: climb hierarchy
 		var p := node.get_parent()
 		while p:
-			if p is MultiplayerTree: return p
+			if p is MultiplayerTree:
+				return p
 			p = p.get_parent()
 	
 	return null
@@ -106,13 +117,19 @@ var _pending_world_scene_path: String = ""
 
 ## Registers a [Node] as a service for this session.
 func register_service(service: Node, type: Script = null) -> void:
-	assert(is_ancestor_of(service) or service == self, "Service %s must be a descendant of the MultiplayerTree." % service.name)
+	assert(
+		is_ancestor_of(service) or service == self, 
+		"Service %s must be a descendant of the MultiplayerTree." % service.name
+	)
 	
 	if not type:
 		type = service.get_script()
 	
 	if type in _services:
-		NetLog.warn("Service %s already registered — overwriting." % type.get_global_name(), [], func(m): push_warning(m))
+		NetLog.warn(
+			"Service %s already registered — overwriting." % \
+			type.get_global_name(), [], func(m): push_warning(m)
+		)
 	
 	_services[type] = service
 	NetLog.debug("Service %s registered." % type.get_global_name())
@@ -140,7 +157,8 @@ func get_peer_context(peer_id: int) -> PeerContext:
 	return _peer_contexts[peer_id]
 
 
-## Carries both the causal token and the placement target for a single player spawn.
+## Carries both the causal token and the placement target for a player spawn.
+##
 ## Obtained via [method MultiplayerTree.get_spawn_context].
 class SpawnContext extends RefCounted:
 	## Causal [CheckpointToken] for span tracing. May be null.
@@ -154,7 +172,7 @@ class SpawnContext extends RefCounted:
 	func has_lobby() -> bool:
 		return is_instance_valid(_lobby)
 
-	## Lobby mode: calls [method Lobby.add_player] (tracks synchronizer + add_child).
+	## Lobby mode: calls [method Lobby.add_player].
 	## Lobbyless mode: calls [method Node.add_child] on the parent container.
 	func place_player(player: Node) -> void:
 		if is_instance_valid(_lobby):
@@ -181,18 +199,20 @@ func get_spawn_context(spawner_path: SceneNodePath) -> SpawnContext:
 			ctx._parent_node = world
 			
 			var wrapper := world.get_parent()
-			if is_instance_valid(wrapper) and wrapper.get_meta(&"_is_world_wrapper", false):
+			if is_instance_valid(wrapper) and \
+					wrapper.get_meta(&"_is_world_wrapper", false):
 				if wrapper.has_meta(&"_net_session_token"):
 					ctx.token = wrapper.get_meta(&"_net_session_token")
 
 	return ctx
 
 
-## Returns an array of all active player nodes across all lobbies or the lobbyless world.
+## Returns an array of all active player nodes across all lobbies.
 func get_all_players() -> Array[Node]:
 	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
 	if lm:
 		return lm.get_all_players()
+	
 	var players: Array[Node] = []
 	for c in find_children("*", "ClientComponent", true, false):
 		if is_instance_valid(c.owner):
@@ -213,9 +233,15 @@ func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	
 	if not backend:
-		warnings.append("A BackendPeer resource must be assigned to the 'backend' property.")
-	elif backend.get_script() != null and backend.get_script().get_global_name() == "BackendPeer":
-		warnings.append("The assigned backend is the abstract 'BackendPeer' class. Please assign a functional derived class.")
+		warnings.append(
+			"A BackendPeer resource must be assigned to the 'backend' property."
+		)
+	elif backend.get_script() != null and \
+			backend.get_script().get_global_name() == "BackendPeer":
+		warnings.append(
+			"The assigned backend is the abstract 'BackendPeer' class. " + \
+			"Please assign a functional derived class."
+		)
 	elif backend:
 		warnings.append_array(backend._get_backend_warnings(self))
 		
@@ -230,8 +256,11 @@ func _get_configuration_warnings() -> PackedStringArray:
 			break
 			
 	if not has_lobby_manager and not has_lobbyless_world:
-		warnings.append("No Scene (with a ClientComponent inside) or \
-`MultiplayerLobbyManager` found in children. No replication will happen.")
+		warnings.append(
+			"No Scene (with a ClientComponent inside) or " + \
+			"`MultiplayerLobbyManager` found in children. " + \
+			"No replication will happen."
+		)
 		
 	return warnings
 
@@ -239,16 +268,24 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	
 	for child in get_children():
 		if child is MultiplayerLobbyManager:
 			return
+	
 	for child in get_children():
 		if _has_client_component(child):
-			NetLog.info("Lobbyless mode: Identified '%s' as the initial world." % child.name)
+			NetLog.info(
+				"Lobbyless mode: Identified '%s' as the initial world." % \
+				child.name
+			)
 			_pending_world = child
 			_pending_world_scene_path = child.scene_file_path
 			if _pending_world_scene_path.is_empty():
-				push_error("[networked] Lobbyless world '%s' must be a saved .tscn (scene_file_path is empty)." % child.name)
+				push_error(
+					"[networked] Lobbyless world '%s' must be a saved .tscn." % \
+					child.name
+				)
 				_pending_world = null
 				return
 			remove_child(child)
@@ -283,7 +320,9 @@ func _setup_pending_world() -> void:
 	
 	var span: NetSpan = null
 	if not _pending_world_scene_path.is_empty():
-		span = NetTrace.begin("session", self, {"world": _pending_world_scene_path})
+		span = Netw.dbg.span(
+			self, "session", {"world": _pending_world_scene_path}
+		)
 		if span:
 			span.step("initializing_world")
 
@@ -320,18 +359,30 @@ func _find_world(spawner_path: SceneNodePath) -> Node:
 
 
 static func _scene_paths_match(a: String, b: String) -> bool:
-	return SceneNodePath._safe_resolve_path(a) == SceneNodePath._safe_resolve_path(b)
+	return SceneNodePath._safe_resolve_path(a) == \
+		SceneNodePath._safe_resolve_path(b)
 
 
 func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
 	var world := _find_world(client_data.spawner_path)
 	if not world:
-		var scene_path := SceneNodePath._safe_resolve_path(client_data.spawner_path.scene_path)
-		push_error("[networked] Lobbyless: no active world matches spawner scene '%s'." % scene_path)
+		var scene_path := SceneNodePath._safe_resolve_path(
+			client_data.spawner_path.scene_path
+		)
+		push_error(
+			"[networked] Lobbyless: no world matches spawner scene '%s'." % \
+			scene_path
+		)
 		return
-	var client_comp := world.get_node_or_null(client_data.spawner_path.node_path) as ClientComponent
+	
+	var client_comp := world.get_node_or_null(
+		client_data.spawner_path.node_path
+	) as ClientComponent
 	if not client_comp:
-		push_error("[networked] Lobbyless: ClientComponent not found at '%s'. Add a ClientComponent to your Level and point spawner_path at it." % client_data.spawner_path.node_path)
+		push_error(
+			"[networked] Lobbyless: ClientComponent not found at '%s'." % \
+			client_data.spawner_path.node_path
+		)
 		return
 	client_comp.player_joined.emit(client_data)
 
@@ -349,7 +400,7 @@ func _process(dt: float) -> void:
 		backend.poll(dt)
 
 
-## Starts this instance as a network host and configures the [SceneMultiplayer] API.
+## Starts this instance as a network host.
 ##
 ## Calls [code]setup()[/code] on the backend if available, then [code]host()[/code].
 ## Returns [code]OK[/code] on success or a non-zero [enum Error] code on failure.
@@ -361,7 +412,10 @@ func host(quiet: bool = false) -> Error:
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error("Setup failed: %s", [error_string(setup_err)], func(m): push_error(m))
+				NetLog.error(
+					"Setup failed: %s", [error_string(setup_err)], 
+					func(m): push_error(m)
+				)
 			return setup_err
 	
 	var connection_code: Error = backend.host()
@@ -369,31 +423,47 @@ func host(quiet: bool = false) -> Error:
 	if connection_code == OK:
 		_config_api()
 	elif not quiet:
-		NetLog.error("Failed to host: %s", [error_string(connection_code)], func(m): push_error(m))
+		NetLog.error(
+			"Failed to host: %s", [error_string(connection_code)], 
+			func(m): push_error(m)
+		)
 		
 	return connection_code
 
 
-## Connects to an active server at [param server_address] using the given [param username].
+## Connects to an active server at [param server_address].
 ##
-## Awaits [signal connected_to_server] with the specified [param timeout] (default 5.0s).
-## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time, or another
-## [enum Error] code if the backend rejects the connection immediately.
-func join(server_address: String, username: String, timeout: float = 5.0, quiet: bool = false) -> Error:
-	NetLog.trace("MultiplayerTree: Joining session at %s with username %s." % [server_address, username])
+## Awaits [signal connected_to_server] with the specified [param timeout].
+## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time.
+func join(
+	server_address: String, 
+	username: String, 
+	timeout: float = 5.0, 
+	quiet: bool = false
+) -> Error:
+	NetLog.trace(
+		"MultiplayerTree: Joining at %s with username %s." % \
+		[server_address, username]
+	)
 	backend.peer_reset_state()
 	
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
 			if not quiet:
-				NetLog.error("Setup failed: %s", [error_string(setup_err)], func(m): push_error(m))
+				NetLog.error(
+					"Setup failed: %s", [error_string(setup_err)], 
+					func(m): push_error(m)
+				)
 			return setup_err
 	
 	var connection_code: Error = backend.join(server_address, username)
 	if connection_code != OK:
 		if not quiet:
-			NetLog.error("Failed to join: %s", [error_string(connection_code)], func(m): push_error(m))
+			NetLog.error(
+				"Failed to join: %s", [error_string(connection_code)], 
+				func(m): push_error(m)
+			)
 		return connection_code
 	
 	var timer := get_tree().create_timer(timeout)
@@ -406,7 +476,7 @@ func join(server_address: String, username: String, timeout: float = 5.0, quiet:
 	return OK
 
 
-## Returns [code]true[/code] if the multiplayer peer is initialized and in an active connection.
+## Returns [code]true[/code] if the multiplayer peer is in an active connection.
 func is_online() -> bool:
 	return (multiplayer_peer != null 
 		and not multiplayer_peer is OfflineMultiplayerPeer 
@@ -416,9 +486,8 @@ func is_online() -> bool:
 
 ## Entry point for a client to request entry into the game world.
 ##
-## Deserializes [param bytes] into a [MultiplayerClientData]. If a [MultiplayerLobbyManager]
-## service is registered, delegates the join to it. Otherwise, emits [signal player_join_requested]
-## for manual handling by the user.
+## Deserializes [param bytes] into a [MultiplayerClientData]. Delegates to 
+## [MultiplayerLobbyManager] if registered, otherwise routes as lobbyless.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
@@ -443,10 +512,14 @@ func _config_api() -> void:
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	
+	var debugger = null
 	if Engine.has_singleton("NetworkedDebugger"):
-		Engine.get_singleton("NetworkedDebugger").register_tree(self)
+		debugger = Engine.get_singleton("NetworkedDebugger")
 	elif get_tree().root.has_node("NetworkedDebugger"):
-		get_tree().root.get_node("NetworkedDebugger").register_tree(self)
+		debugger = get_tree().root.get_node("NetworkedDebugger")
+		
+	if debugger:
+		debugger.register_tree(self)
 
 	configured.emit()
 	_setup_pending_world()
@@ -477,10 +550,14 @@ func _disconnect_backend_signals() -> void:
 func _on_exiting() -> void:
 	NetLog.trace("MultiplayerTree: Exiting.")
 	
+	var debugger = null
 	if Engine.has_singleton("NetworkedDebugger"):
-		Engine.get_singleton("NetworkedDebugger").unregister_tree(self)
+		debugger = Engine.get_singleton("NetworkedDebugger")
 	elif get_tree().root.has_node("NetworkedDebugger"):
-		get_tree().root.get_node("NetworkedDebugger").unregister_tree(self)
+		debugger = get_tree().root.get_node("NetworkedDebugger")
+		
+	if debugger:
+		debugger.unregister_tree(self)
 
 	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
 		multiplayer_api.remove_meta(&"_multiplayer_tree")

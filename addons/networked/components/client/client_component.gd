@@ -33,6 +33,8 @@ enum AuthorityMode {
 ## The username of the player associated with this component, assigned by the player.
 var username: String = ""
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 ## The [MultiplayerSynchronizer] used for initial spawn state replication.
 var spawn_sync: SpawnSynchronizer:
@@ -60,8 +62,7 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 	## ([code]REPLICATION_MODE_NEVER[/code] with spawn enabled)
 	## so initial state is transferred on spawn without ongoing delta replication.
 	func config_spawn_properties(target_node: Node) -> void:
-		NetLog.trace("ClientComponent: Configuring spawn properties for %s\
-	" % target_node.name)
+		Netw.dbg.trace("Configuring spawn properties for %s" % target_node.name)
 		
 		replication_config = SceneReplicationConfig.new()
 		
@@ -127,7 +128,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	log_trace("ClientComponent: _ready for %s" % owner.name)
+	_dbg.trace("_ready for %s" % owner.name)
 	
 	if Engine.is_editor_hint():
 		_validate_editor()
@@ -140,7 +141,7 @@ func _ready() -> void:
 
 	if username.is_empty():
 		if not multiplayer.is_server():
-			log_trace("Freeing spawner node `%s` because we are in client." % owner.name)
+			_dbg.trace("Freeing spawner node `%s` because we are in client." % owner.name)
 			owner.queue_free()
 
 		SynchronizersCache.sync_only_server(owner)
@@ -155,7 +156,7 @@ automatically." % [owner.name, _on_owner_tree_entered])
 
 	var tp_layer := get_tp_layer()
 	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
-		log_info("Local player %s ready. Playing teleport transition." % username)
+		_dbg.info("Local player %s ready. Playing teleport transition." % username)
 		tp_layer.teleport_in()
 
 
@@ -172,12 +173,12 @@ func _on_owner_tree_entered() -> void:
 	if owner.get_multiplayer_authority() != 1:
 		return
 
-	log_trace("Client `%s` entering tree." % [owner.name])
+	_dbg.trace("Client `%s` entering tree." % [owner.name])
 	assert(owner.name != "|")
 
 	var authority := parse_authority(owner.name)
 	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
-		log_debug("Setting authority for %s to %d" % [owner.name, authority])
+		_dbg.debug("Setting authority for %s to %d" % [owner.name, authority])
 		owner.set_multiplayer_authority(authority)
 	# SERVER_AUTHORITATIVE: node stays at peer 1; peer_id in name is for routing only.
 
@@ -193,8 +194,7 @@ func _get_player_scene() -> PackedScene:
 
 
 func _instantiate_player(client_data: MultiplayerClientData) -> Node:
-	log_trace("ClientComponent: Instantiating player for %s (ID: %d)\
-" % [client_data.username, client_data.peer_id])
+	_dbg.trace("Instantiating player for %s (ID: %d)" % [client_data.username, client_data.peer_id])
 	var player := _get_player_scene().instantiate()
 	var client: ClientComponent = player.get_node("%ClientComponent")
 	client.username = client_data.username
@@ -205,20 +205,20 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	var ctx := get_session().get_spawn_context(client_data.spawner_path)
 	if not ctx.is_valid():
-		log_error("Player join failed: no active world or lobby for scene '%s'." \
-			% client_data.spawner_path.get_scene_name(), [], func(m): push_error(m))
+		_dbg.error("Player join failed: no active world or lobby for scene '%s'." \
+			% client_data.spawner_path.get_scene_name(), func(m): push_error(m))
 		return
 
-	var span := _begin_span("player_join", {
+	var span: NetSpan = _dbg.span("player_join", {
 		"username": client_data.username,
 		"peer_id": client_data.peer_id,
 		"authority_mode": authority_mode,
-	}, ctx.token)
+	})
 	span.step("joined")
-	log_info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
+	_dbg.info("Player joined: %s (ID: %d)" % [client_data.username, client_data.peer_id])
 
 	if not client_data.peer_id or not client_data.spawner_path or client_data.username.is_empty():
-		log_error("Player join failed: invalid client data.", [], func(m): push_error(m))
+		_dbg.error("Player join failed: invalid client data.", func(m): push_error(m))
 		span.end()
 		return
 
@@ -226,13 +226,13 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 	var save_component: SaveComponent = player.get_node_or_null("%SaveComponent")
 	if save_component:
-		log_debug("Loading player with SaveComponent for player `%s`." % client_data.username)
+		_dbg.debug("Loading player with SaveComponent for player `%s`." % client_data.username)
 		save_component.spawn(owner, span)
 
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
 
 	if tp_component and save_component and ctx.has_lobby():
-		log_debug("Using TPComponent to spawn player `%s`." % client_data.username)
+		_dbg.debug("Using TPComponent to spawn player `%s`." % client_data.username)
 		tp_component.spawn(get_session().get_lobby_manager())
 	else:
 		ctx.place_player(player)
@@ -241,10 +241,10 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
-	log_trace("Connecting player %s" % client_data.username)
+	_dbg.trace("Connecting player %s" % client_data.username)
 	var network := get_tree().current_scene as NetworkSession
 	if not network:
-		log_error("Could not connect player: current scene is not a NetworkSession.", [], func(m): push_error(m))
+		_dbg.error("Could not connect player: current scene is not a NetworkSession.", func(m): push_error(m))
 		return
 	network.connect_player(client_data)
 
@@ -252,7 +252,6 @@ func _on_connect_player(client_data: MultiplayerClientData) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	if (multiplayer and multiplayer.is_server()
 		and get_multiplayer_authority() == peer_id):
-		log_info("Peer %d disconnected. Freeing owned player %s.\
-" % [peer_id, owner.name])
+		_dbg.info("Peer %d disconnected. Freeing owned player %s." % [peer_id, owner.name])
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()
