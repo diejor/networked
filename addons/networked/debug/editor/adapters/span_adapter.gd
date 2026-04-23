@@ -14,8 +14,7 @@ func feed(d: Dictionary) -> void:
 	on_span_event(d, "step")
 
 func on_peer_event(_d: Dictionary, _connected: bool) -> void:
-	if not _connected:
-		clear()
+	pass
 
 func get_current_label() -> String:
 	var open_count: int = 0

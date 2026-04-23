@@ -7,6 +7,10 @@ class_name NetwDbg
 extends Object
 
 
+## Emitted when the editor requests all instances to re-calculate their tiling.
+signal tiling_requested
+
+
 ## Creates a [NetwHandle] for O(1) debug access from a [NetComponent].
 func handle(component: Node) -> NetwHandle:
 	return NetwHandle.new(component)
@@ -92,6 +96,16 @@ func peer_span(
 	token: CheckpointToken = null
 ) -> NetPeerSpan:
 	return NetTrace.begin_peer(label, peers, context, meta, "", token)
+
+
+## Returns the currently active [NetSpan] on the top of the trace stack.
+func active_span() -> NetSpan:
+	return NetTrace.active_span()
+
+
+## Resets the [NetTrace] system, clearing all active spans.
+func reset() -> void:
+	NetTrace.reset()
 
 
 func _log(

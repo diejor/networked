@@ -20,8 +20,9 @@ func set_peer_online(_online: bool) -> void:
 
 
 ## Called by [PanelWrapper.init_peer_context] once, right after the panel enters
-## the scene tree, when the peer is known to be relay-forwarded from a remote process.
-## Override to show history-unavailable notices or adjust live-only behaviour.
+## the scene tree, when the peer is known to be relay-forwarded from another
+## debugger session.
+## Override to adjust live-only behavior.
 func set_peer_remote(_remote: bool) -> void:
 	pass
 

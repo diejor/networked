@@ -11,8 +11,7 @@ func feed(d: Dictionary) -> void:
 	_push(d)
 
 func on_peer_event(_d: Dictionary, _connected: bool) -> void:
-	if not _connected:
-		clear()
+	pass
 
 func get_current_label() -> String:
 	if ring_buffer.is_empty():

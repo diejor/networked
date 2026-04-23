@@ -23,6 +23,10 @@ NetworkedDebugger="*uid://bg56gori67101"
 
 file_logging/enable_file_logging=true
 
+[display]
+
+window/subwindows/embed_subwindows=false
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/script-ide/plugin.cfg", "res://addons/tube/plugin.cfg")

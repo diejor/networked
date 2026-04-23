@@ -54,7 +54,7 @@ func _init(
 	if is_instance_valid(tree):
 		_mt = weakref(tree)
 		if tree_name.is_empty():
-			tree_name = tree.get_meta(&"_original_name", tree.name)
+			tree_name = tree.get_tree_name()
 	
 	_start_frame = Engine.get_process_frames()
 	_start_usec = Time.get_ticks_usec()

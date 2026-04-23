@@ -86,7 +86,7 @@ func get_unique_id() -> int:
 ## Returns the original name of the [MultiplayerTree] node.
 func get_tree_name() -> String:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	return mt.get_meta(&"_original_name", mt.name) if mt else ""
+	return mt.get_tree_name() if mt else ""
 
 
 ## Begins a [NetSpan] for tracing.

@@ -9,10 +9,16 @@
 class_name NetDebugTreeContext
 extends Node
 
+## Emitted when the tree has finished initial wiring and is ready for debug tiling.
+signal tree_ready
+
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
 ## The locally authoritative [ClientComponent] for this tree.
-var local_client: ClientComponent
+var authority_client: ClientComponent:
+	get:
+		var mt := _mt_ref.get_ref() as MultiplayerTree
+		return mt.authority_client if mt else null
 
 var _mt_ref: WeakRef
 var _reporter_ref: WeakRef
@@ -28,11 +34,11 @@ var _reporter_ref: WeakRef
 ## default.
 var _visualizers: Dictionary = {}
 
-## Lobby → [CheckpointToken] captured from the [code]lobby_spawn[/code] span,
+## Lobby -> [CheckpointToken] captured from the [code]lobby_spawn[/code] span,
 ## used for causal linking.
 var _lobby_tokens: Dictionary = {}
 
-## Lobby → [Callable] connected to [member Lobby.synchronizer.spawned], for
+## Lobby -> [Callable] connected to [member Lobby.synchronizer.spawned], for
 ## disconnect-on-cleanup.
 var _hooked_lobbies: Dictionary = {}
 
@@ -61,12 +67,19 @@ func apply_command(d: Dictionary) -> void:
 	var viz: String = d.get("viz_name", "")
 	var enabled: bool = d.get("enabled", false)
 	var path: String = d.get("node_path", "")
+	var peer_id: int = d.get("peer_id", 0)
 
 	if viz.is_empty():
 		return
 
 	var states: Dictionary = _visualizers.get(viz, {})
-	var id := _get_stable_id_from_path(path) if not path.is_empty() else ""
+	
+	var id: Variant
+	if peer_id != 0:
+		id = peer_id
+	else:
+		id = _get_stable_id_from_path(path) if not path.is_empty() else ""
+		
 	states[id] = enabled
 	_visualizers[viz] = states
 
@@ -196,12 +209,11 @@ func _ready() -> void:
 	if not mt:
 		return
 
-	# Decoration observer — safe to connect at any time.
+	# Decoration observer - safe to connect at any time.
 	get_tree().node_added.connect(_on_node_added)
 	get_tree().node_removed.connect(_on_node_removed)
 
-	# Peer events: notify reporter (spans, relay registration) and
-	# refresh decoration.
+	# Peer events: notify reporter (spans, topology) and refresh decoration.
 	mt.peer_connected.connect(func(id: int):
 		var r := _reporter_ref.get_ref() as NetworkedDebugReporter
 		if r:
@@ -214,6 +226,9 @@ func _ready() -> void:
 			r._on_peer_disconnected(id, mt)
 		_refresh_all()
 	)
+
+	# Identity changes: notify reporter to re-emit session registration.
+	mt.authority_client_changed.connect(_on_authority_client_changed)
 
 	# Debug signal wiring for lobby/clock requires configured state.
 	mt.configured.connect(_on_configured)
@@ -265,6 +280,8 @@ func _on_configured() -> void:
 		# Lobbyless mode: emit topology for all current players.
 		for player in mt.get_all_players():
 			reporter._on_player_spawned_logic(player, mt, null)
+			
+	tree_ready.emit.call_deferred()
 
 
 # ─── Lobby Lifecycle ──────────────────────────────────────────────────────────
@@ -329,14 +346,13 @@ func _on_player_spawned(player: Node, lobby: Lobby) -> void:
 # ─── Node Observer (Decoration Only) ─────────────────────────────────────────
 
 func _on_node_added(node: Node) -> void:
-	# Only decoration — topology is driven by lobby.synchronizer.spawned.
+	# Only decoration - topology is driven by lobby.synchronizer.spawned.
 	if node is ClientComponent:
 		_on_client_added.call_deferred(node)
 
 
-func _on_node_removed(node: Node) -> void:
-	if node == local_client:
-		local_client = null
+func _on_node_removed(_node: Node) -> void:
+	pass
 
 
 func _on_client_added(comp: ClientComponent) -> void:
@@ -345,15 +361,6 @@ func _on_client_added(comp: ClientComponent) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt or not mt.is_ancestor_of(comp):
 		return
-	
-	# Track local identity for the topology panel and debug visuals.
-	if comp.is_multiplayer_authority():
-		if is_instance_valid(local_client) and local_client != comp:
-			Netw.dbg.error("Multiple local ClientComponents detected " + \
-				"in tree '%s'. A MultiplayerTree must only have " + \
-				"one local player identity.", [mt.name],
-				func(m): push_error(m))
-		local_client = comp
 	
 	var player := comp.owner
 	if not is_instance_valid(player):
@@ -368,3 +375,10 @@ func _on_client_added(comp: ClientComponent) -> void:
 	var r := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if r:
 		r._on_player_spawned_logic(player, mt, null)
+
+
+func _on_authority_client_changed(_client: ClientComponent) -> void:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
+	if mt and reporter:
+		reporter.report_session_registered(mt)

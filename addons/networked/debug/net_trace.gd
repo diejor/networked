@@ -10,7 +10,7 @@
 ## [br][br]
 ## [b]Usage:[/b]
 ## [codeblock]
-## var span = NetTrace.begin_peer("lobby_spawn", peers, self)
+## var span = Netw.dbg.peer_span(self, "lobby_spawn", peers)
 ## span.step("spawners_registering")
 ## # ...operation...
 ## span.end()       # clean close
@@ -51,7 +51,7 @@ static func begin(
 
 	var mt := MultiplayerTree.resolve(context)
 	if mt and tree_name.is_empty():
-		tree_name = mt.get_meta(&"_original_name", mt.name)
+		tree_name = mt.get_tree_name()
 
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
 	var span := NetSpan.new(
@@ -82,7 +82,7 @@ static func begin_peer(
 
 	var mt := MultiplayerTree.resolve(context)
 	if mt and tree_name.is_empty():
-		tree_name = mt.get_meta(&"_original_name", mt.name)
+		tree_name = mt.get_tree_name()
 
 	var span_id := StringName("%s_%d" % [span_label, Time.get_ticks_usec()])
 	var span := NetPeerSpan.new(

@@ -3,6 +3,7 @@ class_name NetSessionEvent
 extends RefCounted
 
 var tree_name: String
+var username: String = ""
 var is_server: bool = false
 var backend_class: String = ""
 var rid: String = ""
@@ -13,6 +14,7 @@ var peer_id: int = 0
 func to_dict() -> Dictionary:
 	var d := {
 		"tree_name": tree_name,
+		"username": username,
 		"peer_id": peer_id
 	}
 	if not rid.is_empty():

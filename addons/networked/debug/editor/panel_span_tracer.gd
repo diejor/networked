@@ -1,6 +1,6 @@
 ## Span Tracer panel.
 ##
-## Shows Span rows opened via [NetTrace] by the addon's own systems.
+## Shows Span rows opened via [Netw.dbg] by the addon's own systems.
 ## They have an explicit lifecycle indicator: ◉ open (yellow), ✓ closed (green),
 ## ✗ failed (red). Each step is a child row with elapsed-ms timing.
 ##
@@ -103,19 +103,16 @@ func _clear_tree_only() -> void:
 	_span_start_usec.clear()
 	_caller_rows.clear()
 	_matching_spans.clear()
-	# _active_breakpoints intentionally preserved — configuration survives tree switches.
-	if _is_remote:
-		_insert_remote_notice()
+	# _active_breakpoints intentionally preserved - configuration survives tree.
 
 
 ## Called by [NetworkedDebuggerUI] once, right after the panel enters the scene tree.
-## Stores the flag and rebuilds the tree so the remote notice entry is placed correctly.
+## Stores the flag and rebuilds the tree.
 func set_peer_remote(is_remote: bool) -> void:
 	if _is_remote == is_remote:
 		return
 	_is_remote = is_remote
-	if is_remote and _tree:
-		_insert_remote_notice()
+	clear()
 
 
 ## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
@@ -428,18 +425,6 @@ func _on_copy() -> void:
 			child = child.get_next()
 		lines.append("")
 	DisplayServer.clipboard_set("\n".join(lines))
-
-
-## Inserts a non-selectable informational row at the top of the span tree.
-## Survives clear() calls so it's always the first visible entry on remote panels.
-func _insert_remote_notice() -> void:
-	if not _tree.get_root():
-		_tree.create_item()
-	var item := _tree.create_item(_tree.get_root(), 0)
-	item.set_text(COL_NAME, "ℹ  History before this session connected is not available")
-	item.set_custom_color(COL_NAME, Color(0.5, 0.72, 1.0))
-	item.set_custom_bg_color(COL_NAME, Color(0.15, 0.25, 0.5, 0.18), false)
-	_set_unselectable(item)
 
 
 ## Registers [param item] in [member _caller_rows] and adds the breakpoint button.

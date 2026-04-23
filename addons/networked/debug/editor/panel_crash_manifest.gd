@@ -16,14 +16,10 @@ var on_context_selected: Callable
 ## Signature: func(enabled: bool) -> void
 var on_auto_break_changed: Callable
 
-## Called when the user clicks the Fetch History button for a remote peer.
-var on_request_history: Callable
-
 var _break_btn: CheckButton
 var _tree: Tree
 var _copy_btn: Button
 var _clear_btn: Button
-var _fetch_btn: Button
 
 # Manifest entry dicts in insertion order (for copy/export).
 var _entries: Array = []
@@ -64,13 +60,6 @@ func _ready() -> void:
 	)
 	toolbar.add_child(_break_btn)
 
-	_fetch_btn = Button.new()
-	_fetch_btn.text = "Fetch History"
-	_fetch_btn.tooltip_text = "Requests the last 20 manifests from the remote process."
-	_fetch_btn.pressed.connect(func(): if on_request_history.is_valid(): on_request_history.call())
-	_fetch_btn.hide() # Only shown for remote peers
-	toolbar.add_child(_fetch_btn)
-
 	_tree = Tree.new()
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tree.columns = 3
@@ -104,16 +93,9 @@ func clear() -> void:
 	_error_parents.clear()
 	_tree.clear()
 	_tree.create_item()  # re-create invisible root
-	
-	if _is_remote:
-		var notice := _tree.create_item(_tree.get_root())
-		notice.set_text(0, "Remote Peer: Crash history not synchronized.")
-		notice.set_custom_color(0, Color(0.8, 0.6, 0.3))
-		notice.set_selectable(0, false)
-		notice.set_selectable(1, false)
-		notice.set_selectable(2, false)
 
 	var placeholder := _tree.create_item(_tree.get_root())
+
 	placeholder.set_text(0, "No crash manifest received yet.")
 	placeholder.set_custom_color(0, Color(0.5, 0.5, 0.5))
 	placeholder.set_selectable(0, false)
@@ -124,10 +106,9 @@ func clear() -> void:
 
 var _is_remote: bool = false
 func set_peer_remote(remote: bool) -> void:
-	if _is_remote == remote: return
+	if _is_remote == remote:
+		return
 	_is_remote = remote
-	if _fetch_btn:
-		_fetch_btn.visible = remote
 	clear()
 
 

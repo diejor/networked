@@ -48,9 +48,9 @@ When a `MultiplayerTree` calls `register_tree`, the reporter connects to its sig
 
 ### Span Tracing
 
-Every significant network operation (lobby spawn, peer connect, player spawn) opens a `NetSpan` or `NetPeerSpan` via `NetTrace`. Spans are causal identifiers: they track which operation was in flight when a failure occurred and what peers it involved. A span's ID flows into every manifest emitted during that operation as the `cid` field, making it possible to correlate a manifest in the editor panel with the exact span step that preceded it.
+Every significant network operation (lobby spawn, peer connect, player spawn) opens a [code]NetSpan[/code] or [code]NetPeerSpan[/code] via [code]Netw.dbg.span[/code] or [code]Netw.dbg.peer_span[/code]. Spans are causal identifiers: they track which operation was in flight when a failure occurred and what peers it involved. A span's ID flows into every manifest emitted during that operation as the [code]cid[/code] field, making it possible to correlate a manifest in the editor panel with the exact span step that preceded it.
 
-Spans are no-ops when the debugger is not active — `NetTrace.begin` returns a dummy span — so call sites need no conditional guards.
+Spans are no-ops when the debugger is not active — [code]Netw.dbg.span[/code] returns a dummy span — so call sites need no conditional guards.
 
 ### Telemetry Ring Buffer
 

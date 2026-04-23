@@ -174,7 +174,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
-	var span: NetPeerSpan = Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
+	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
 
 	var lobby_manager := get_lobby_manager()

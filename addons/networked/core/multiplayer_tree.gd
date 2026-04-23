@@ -8,7 +8,6 @@ extends Node
 ## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a
 ## [MultiplayerLobbyManager], then call [method host] or [method join] to start
 ## a session.
-## [br][br]
 ## [codeblock]
 ## # Server
 ## await multiplayer_tree.host()
@@ -84,6 +83,26 @@ var multiplayer_peer: MultiplayerPeer:
 		if backend and backend.api:
 			return backend.api.multiplayer_peer
 		return null
+
+var _tree_name: String = ""
+
+## The [ClientComponent] representing the local player identity for this tree.
+## [br][br]
+## [b]Note:[/b] This is [code]null[/code] on dedicated servers or before the
+## player has spawned.
+var authority_client: ClientComponent:
+	set(value):
+		if authority_client != value:
+			authority_client = value
+			authority_client_changed.emit(value)
+
+## Emitted when [member authority_client] is assigned or cleared.
+signal authority_client_changed(client: ClientComponent)
+
+
+## Returns the original name of the tree, even if renamed for embedded use.
+func get_tree_name() -> String:
+	return _tree_name if not _tree_name.is_empty() else name
 
 
 ## Locates the [MultiplayerTree] registered on the node's [SceneMultiplayer].
@@ -448,9 +467,9 @@ func host(quiet: bool = false) -> Error:
 ## Awaits [signal connected_to_server] with the specified [param timeout].
 ## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time.
 func join(
-	server_address: String, 
-	username: String, 
-	timeout: float = 5.0, 
+	server_address: String,
+	username: String,
+	timeout: float = 5.0,
 	quiet: bool = false
 ) -> Error:
 	Netw.dbg.trace(
@@ -549,7 +568,7 @@ func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
 func _config_api() -> void:
 	Netw.dbg.trace("MultiplayerTree: Configuring multiplayer API.")
 	
-	set_meta(&"_original_name", name)
+	_tree_name = name
 	
 	var multiplayer_root := get_path()
 	Netw.dbg.debug(

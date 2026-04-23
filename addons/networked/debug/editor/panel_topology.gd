@@ -14,14 +14,14 @@ class_name PanelTopology
 extends DebugPanel
 
 ## Called when the user clicks the node path button (local peers only).
-## Receives the raw [code]node_path[/code] string from the snapshot.
+## Receives the raw [code]node_path[/code] string and the [code]peer_id[/code].
 var on_node_inspect: Callable
 
 ## Called when the user clicks the refresh button.
 var on_refresh_requested: Callable
 
 ## Called when the Nameplate visualizer is toggled.
-## Signature: func(node_path: String, enabled: bool) -> void
+## Signature: func(node_path: String, enabled: bool, peer_id: int) -> void
 var on_nameplate_toggled: Callable
 
 # ─── Widgets ──────────────────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ var _sync_tree: Tree
 
 var _stale_since_usec: int = -1
 var _last_node_path: String = ""
+var _last_peer_id: int = 0
 
 # Replication mode int → short string
 const _MODE_LABELS: Dictionary = {
@@ -58,6 +59,7 @@ func _ready() -> void:
 
 func clear() -> void:
 	_last_node_path = ""
+	_last_peer_id = 0
 	_stale_since_usec = -1
 	if _username_label:
 		_username_label.text = "—"
@@ -130,6 +132,7 @@ func _apply_identity(d: Dictionary) -> void:
 	_mode_label.text = "[%s]" % mode_str
 
 	_last_node_path = node_path
+	_last_peer_id = peer_id
 	if _node_btn:
 		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
 
@@ -257,7 +260,7 @@ func _build_identity_section() -> void:
 	_node_btn.disabled = true
 	_node_btn.pressed.connect(func() -> void:
 		if on_node_inspect.is_valid() and not _last_node_path.is_empty():
-			on_node_inspect.call(_last_node_path)
+			on_node_inspect.call(_last_node_path, _last_peer_id)
 	)
 	row3.add_child(_node_btn)
 
@@ -267,7 +270,7 @@ func _build_identity_section() -> void:
 	_nameplate_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_nameplate_btn.toggled.connect(func(pressed: bool) -> void:
 		if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
-			on_nameplate_toggled.call(_last_node_path, pressed)
+			on_nameplate_toggled.call(_last_node_path, pressed, _last_peer_id)
 	)
 	row3.add_child(_nameplate_btn)
 

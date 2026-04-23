@@ -4,7 +4,6 @@
 ## Place this node as your main scene root. Assign a [MultiplayerTree] to
 ## [member client], then call [method connect_player] to connect. On headless
 ## builds the server is started automatically.
-## [br][br]
 ## [codeblock]
 ## # Minimal usage — assign via the inspector or at runtime:
 ## var data := MultiplayerClientData.new()

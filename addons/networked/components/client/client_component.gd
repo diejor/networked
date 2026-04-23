@@ -135,6 +135,12 @@ func _ready() -> void:
 		_validate_editor()
 		return
 	
+	# Register as the authority client if we own this player.
+	if is_multiplayer_authority():
+		var mt := MultiplayerTree.resolve(self)
+		if mt:
+			mt.authority_client = self
+	
 	# TODO: move client_synchronized signal to NetComponent
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -266,3 +272,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 			[peer_id, owner.name])
 		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 		owner.queue_free.call_deferred()
+
+
+func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+		
+	if is_multiplayer_authority():
+		var mt := MultiplayerTree.resolve(self)
+		if mt and mt.authority_client == self:
+			mt.authority_client = null
