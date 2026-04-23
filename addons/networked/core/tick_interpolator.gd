@@ -260,7 +260,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 	if trace:
 		_dbg.trace(
 			"[Dilation] eff_dt: %d | newest: %d | gap: %d | " + \
-			"window: %d | starving: %s | ticks: %d | lag: %.2f" % [
+			"window: %d | starving: %s | ticks: %d | lag: %.2f", [
 				effective_dt, debug_newest, (effective_dt - debug_newest),
 				debug_window, str(is_starving), starvation_ticks, display_lag
 			]

@@ -1,4 +1,4 @@
-## Orchestrates debug signals and visuals for a single [MultiplayerTree] instance.
+## Orchestrares debug signals and visuals for a single [MultiplayerTree] instance.
 ##
 ## Owns the full lifecycle of all per-tree debug connections: lobby events,
 ## per-lobby synchronizer hooks, peer events, and visual decorations
@@ -10,6 +10,9 @@ class_name NetDebugTreeContext
 extends Node
 
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
+
+## The locally authoritative [ClientComponent] for this tree.
+var local_client: ClientComponent
 
 var _mt_ref: WeakRef
 var _reporter_ref: WeakRef
@@ -336,6 +339,16 @@ func _on_client_added(comp: ClientComponent) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt or not mt.is_ancestor_of(comp):
 		return
+	
+	# Track local identity for the topology panel and debug visuals.
+	if comp.is_multiplayer_authority():
+		if is_instance_valid(local_client) and local_client != comp:
+			Netw.dbg.error("Multiple local ClientComponents detected " + \
+				"in tree '%s'. A MultiplayerTree must only have " + \
+				"one local player identity.", [mt.name],
+				func(m): push_error(m))
+		local_client = comp
+	
 	var player := comp.owner
 	if not is_instance_valid(player):
 		return

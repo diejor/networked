@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="7_dtqjt"]
 [ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="9_3tkgg"]
+[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="9_wi0c6"]
 [ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="10_l6ohk"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
@@ -49,8 +50,8 @@ script = ExtResource("3_kne1u")
 metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
-replication_interval = 0.25
-delta_interval = 0.25
+replication_interval = 0.1
+delta_interval = 0.1
 replication_config = SubResource("SceneReplicationConfig_kne1u")
 
 [node name="TPComponent" type="Node" parent="." unique_id=1784597384]
@@ -67,5 +68,12 @@ tracked_properties = Dictionary[StringName, NodePath]({
 &"position": NodePath(".:position")
 })
 metadata/_custom_type_script = "uid://c72wanrudisxw"
+
+[node name="TickInterpolator" type="Node" parent="." unique_id=616016356]
+script = ExtResource("9_wi0c6")
+property_modes = Dictionary[StringName, int]({
+&"position": 1
+})
+metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

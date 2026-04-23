@@ -537,6 +537,16 @@ func _check_player_topology_validation(
 func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	if not _debug_build():
 		return
+	
+	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	
+	# Clients only emit topology for their 'owned' player. 
+	# Servers emit for everyone (to populate the server's topology view).
+	if not mt.is_server:
+		if not is_instance_valid(ctx) or \
+				not is_instance_valid(ctx.local_client) or \
+				ctx.local_client.owner != player:
+			return
 		
 	var tree_name := mt.get_meta(&"_original_name", mt.name)
 	var snap := NetTopologySnapshot.new()
@@ -548,8 +558,7 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	snap.is_server = mt.is_server
 	snap.lobby_name = player.get_parent().name \
 		if is_instance_valid(player.get_parent()) else ""
-		
-	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	
 	snap.active_scene = ctx.get_active_scene_path(player) if ctx else "?"
 		
 	var syncs := SynchronizersCache.get_synchronizers(player)
@@ -665,24 +674,18 @@ func _emit_current_state() -> void:
 			mt.multiplayer_api else 0
 		_queue("networked:session_registered", event.to_dict(), mt)
 		
-		var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-		if is_instance_valid(lm):
-			for lobby: Lobby in lm.active_lobbies.values():
-				if not is_instance_valid(lobby) or \
-						not is_instance_valid(lobby.level):
-					continue
-					
-				var comps := lobby.level.find_children(
-					"*", "ClientComponent", true, false
-				)
-				for comp: Node in comps:
-					if is_instance_valid(comp.owner):
-						_send_topology_snapshot(comp.owner, mt)
-		else:
-			var comps := mt.find_children("*", "ClientComponent", true, false)
-			for comp: Node in comps:
-				if is_instance_valid(comp.owner):
-					_send_topology_snapshot(comp.owner, mt)
+		var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+		if not is_instance_valid(ctx):
+			continue
+			
+		if mt.is_server:
+			# Server sends topology for all active players.
+			for player in mt.get_all_players():
+				_send_topology_snapshot(player, mt)
+		elif is_instance_valid(ctx.local_client) and \
+				is_instance_valid(ctx.local_client.owner):
+			# Client only sends its own.
+			_send_topology_snapshot(ctx.local_client.owner, mt)
 
 
 # --- Demand-Driven Replication Watch ------------------------------------------
@@ -892,14 +895,13 @@ func _handle_inspect_node(node_path: String) -> void:
 		EngineDebugger.send_message("remote_objects_selected", [snapshot])
 
 
-func _handle_visualizer_toggle(d: Dictionary, from_relay: bool = false) -> void:
+func _handle_visualizer_toggle(d: Dictionary, _from_relay: bool = false) -> void:
+	# Visualizer toggles (like nameplates) are local debug session preferences.
+	# We apply them to every MultiplayerTree in this process so they manifest
+	# on whatever view the user is looking at. We never relay these commands
+	# to remote processes to avoid cross-contamination.
 	for context in _debug_contexts.values():
 		context.apply_command(d)
-		
-	if not from_relay:
-		var res := _resolve_peer_key(d.get("peer_key", ""))
-		if res.relay:
-			res.relay.apply_visualizer_command.rpc_id(res.peer_id, d)
 
 
 func _handle_request_manifest_history(peer_key: String) -> void:

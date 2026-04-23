@@ -107,7 +107,7 @@ func clear() -> void:
 	
 	if _is_remote:
 		var notice := _tree.create_item(_tree.get_root())
-		notice.set_text(0, "Remote Peer: History not synchronized. Only LIVE errors will appear.")
+		notice.set_text(0, "Remote Peer: Crash history not synchronized.")
 		notice.set_custom_color(0, Color(0.8, 0.6, 0.3))
 		notice.set_selectable(0, false)
 		notice.set_selectable(1, false)

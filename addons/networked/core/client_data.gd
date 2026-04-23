@@ -25,6 +25,10 @@ var spawner_path: SceneNodePath
 ## [b]Note:[/b] This is not set by the client.
 var peer_id: int
 
+## When [code]true[/code], indicates this connection was initiated using debug 
+## initialization data.
+var is_debug: bool = false
+
 
 ## Serializes the client data into a [PackedByteArray] for network transmission.
 func serialize() -> PackedByteArray:
@@ -32,7 +36,8 @@ func serialize() -> PackedByteArray:
 		username = username,
 		spawner_path = spawner_path.as_uid(),
 		url = url,
-		peer_id = peer_id
+		peer_id = peer_id,
+		is_debug = is_debug
 	})
 
 
@@ -41,8 +46,10 @@ func serialize() -> PackedByteArray:
 func deserialize(bytes: PackedByteArray) -> void:
 	var data := bytes_to_var(bytes)
 	assert(data)
-	
+
 	username = data.username
 	spawner_path = SceneNodePath.new(data.spawner_path)
 	url = data.url
 	peer_id = data.peer_id
+	is_debug = data.get("is_debug", false)
+

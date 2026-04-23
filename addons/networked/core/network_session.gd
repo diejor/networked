@@ -173,6 +173,7 @@ func _ready() -> void:
 		return
 		
 	if init_client_data:
+		init_client_data.is_debug = true
 		connect_player(init_client_data)
 	
 	if DisplayServer.get_name() == "headless":

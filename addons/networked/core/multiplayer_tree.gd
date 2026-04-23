@@ -508,10 +508,42 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	client_data.deserialize(bytes)
 	client_data.peer_id = peer_id
 
+	_resolve_username_collision(client_data)
+
 	if get_service(MultiplayerLobbyManager):
 		player_join_requested.emit(client_data)
 	else:
 		_route_lobbyless_join(client_data)
+
+
+func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
+	var existing_names: Array[StringName] = []
+	for player in get_all_players():
+		var client := ClientComponent.unwrap(player)
+		if client:
+			existing_names.append(client.username)
+	
+	var original_name := client_data.username
+	if not original_name in existing_names:
+		return
+		
+	if client_data.is_debug:
+		var suffix := 1
+		var new_name := StringName(str(original_name) + str(suffix))
+		while new_name in existing_names:
+			suffix += 1
+			new_name = StringName(str(original_name) + str(suffix))
+		
+		Netw.dbg.info(
+			"Debug name collision: renaming %s to %s" % [original_name, new_name]
+		)
+		client_data.username = new_name
+	else:
+		Netw.dbg.warn(
+			"Username collision detected for '%s'. " + \
+			"Topology nameplates may break." % original_name, 
+			func(m): push_warning(m)
+		)
 
 
 func _config_api() -> void:
