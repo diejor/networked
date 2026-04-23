@@ -5,10 +5,7 @@
 [ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="3_kne1u"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
-[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="7_dtqjt"]
-[ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="9_3tkgg"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="9_wi0c6"]
-[ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="10_l6ohk"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
@@ -22,15 +19,6 @@ properties/0/replication_mode = 1
 script = ExtResource("5_cxr5p")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
-
-[sub_resource type="Resource" id="Resource_d6rpx"]
-script = ExtResource("9_3tkgg")
-metadata/_custom_type_script = "uid://dlsdsleg37hm1"
-
-[sub_resource type="Resource" id="Resource_r3kul"]
-script = ExtResource("10_l6ohk")
-backend = SubResource("Resource_d6rpx")
-metadata/_custom_type_script = "uid://icayc7hx72vn"
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
@@ -59,15 +47,6 @@ unique_name_in_owner = true
 script = ExtResource("4_e80uo")
 starting_scene_path = SubResource("Resource_tdg3f")
 metadata/_custom_type_script = "uid://c4gt8tvkmcals"
-
-[node name="SaveComponent" type="Node" parent="." unique_id=547581579]
-script = ExtResource("7_dtqjt")
-database = SubResource("Resource_r3kul")
-table_name = &"players"
-tracked_properties = Dictionary[StringName, NodePath]({
-&"position": NodePath(".:position")
-})
-metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=616016356]
 script = ExtResource("9_wi0c6")

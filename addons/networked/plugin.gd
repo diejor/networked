@@ -23,6 +23,7 @@ var _debugger_plugin: EditorDebuggerPlugin
 func _enter_tree() -> void:
 	NetwLog.initialize(get_script().get_path().get_base_dir())
 
+	_register_settings()
 	add_autoload_singleton("NetworkedDebugger", DEBUG_REPORTER_PATH)
 
 	scene_node_path_plugin = SceneNodePathPlugin.new()
@@ -55,3 +56,28 @@ func _get_plugin_icon() -> Texture2D:
 	return get_editor_interface().get_base_control().get_theme_icon(
 		"Log", "EditorIcons"
 	)
+
+
+func _register_settings() -> void:
+	var setting_name := "networked/debug/auto_tile_instances"
+	if not ProjectSettings.has_setting(setting_name):
+		ProjectSettings.set_setting(setting_name, true)
+	
+	ProjectSettings.set_initial_value(setting_name, true)
+	ProjectSettings.add_property_info({
+		"name": setting_name,
+		"type": TYPE_BOOL,
+		"hint": PROPERTY_HINT_NONE,
+	})
+
+	var scale_name := "networked/debug/window_scale"
+	if not ProjectSettings.has_setting(scale_name):
+		ProjectSettings.set_setting(scale_name, 0.6)
+	
+	ProjectSettings.set_initial_value(scale_name, 0.6)
+	ProjectSettings.add_property_info({
+		"name": scale_name,
+		"type": TYPE_FLOAT,
+		"hint": PROPERTY_HINT_RANGE,
+		"hint_string": "0.1,1.0,0.1",
+	})

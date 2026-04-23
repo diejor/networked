@@ -198,6 +198,7 @@ func _ready() -> void:
 
 	# Decoration observer — safe to connect at any time.
 	get_tree().node_added.connect(_on_node_added)
+	get_tree().node_removed.connect(_on_node_removed)
 
 	# Peer events: notify reporter (spans, relay registration) and
 	# refresh decoration.
@@ -331,6 +332,11 @@ func _on_node_added(node: Node) -> void:
 	# Only decoration — topology is driven by lobby.synchronizer.spawned.
 	if node is ClientComponent:
 		_on_client_added.call_deferred(node)
+
+
+func _on_node_removed(node: Node) -> void:
+	if node == local_client:
+		local_client = null
 
 
 func _on_client_added(comp: ClientComponent) -> void:

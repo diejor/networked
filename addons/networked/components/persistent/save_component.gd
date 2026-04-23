@@ -80,7 +80,7 @@ var bound_entity: Entity = DictionaryEntity.new()
 ##     &"position": NodePath(".:position"),
 ##     &"rotation": NodePath(".:rotation"),
 ## }
-## [/codeblock]
+## [/codeblock]Name
 @export var tracked_properties: Dictionary[StringName, NodePath] = {}
 
 var save_synchronizer: SaveSynchronizer:

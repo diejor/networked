@@ -59,6 +59,7 @@ func _ready() -> void:
 	
 	if not session:
 		return
+	
 	session.peer_registered.connect(_on_peer_registered)
 	session.peer_status_changed.connect(_on_peer_status_changed)
 	session.peer_id_resolved.connect(_on_peer_id_resolved)

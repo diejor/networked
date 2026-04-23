@@ -134,6 +134,10 @@ func _enter_tree() -> void:
 	_watchdog = ErrorWatchdog.new()
 	add_child(_watchdog)
 	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
+	
+	var multi_instance := NetMultiInstance.new()
+	multi_instance.name = "NetMultiInstance"
+	add_child(multi_instance)
 
 
 func _exit_tree() -> void:
