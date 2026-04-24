@@ -1,7 +1,7 @@
 extends CharacterBody2D
 
 
-@export var speed: float = 64
+@export_custom(PROPERTY_HINT_NONE, "suffix:px/s") var speed: float = 64
 
 
 func _physics_process(_delta: float) -> void:

@@ -7,6 +7,14 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/core/tick_interpolator.gd" id="9_wi0c6"]
 
+[sub_resource type="GDScript" id="GDScript_tdg3f"]
+script/source = "extends Camera2D
+
+func _ready() -> void:
+	if not is_multiplayer_authority():
+		queue_free()
+"
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
@@ -25,7 +33,12 @@ motion_mode = 1
 script = ExtResource("1_kne1u")
 speed = 256.0
 
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1848961013]
+position_smoothing_enabled = true
+script = SubResource("GDScript_tdg3f")
+
 [node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
+physics_interpolation_mode = 2
 texture = ExtResource("2_kpjcp")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
@@ -53,6 +66,7 @@ script = ExtResource("9_wi0c6")
 property_modes = Dictionary[StringName, int]({
 &"position": 1
 })
+visual_root = NodePath("../Icon")
 metadata/_custom_type_script = "uid://b21bbqt166ive"
 
 [connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]

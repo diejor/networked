@@ -134,8 +134,8 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 		errs.append(
 			"SaveSynchronizer on '%s' has 0 properties. " % \
 			[save_comp.owner.name if save_comp.owner else "?"] + \
-			"Check that sibling MultiplayerSynchronizers have valid " + \
-			"replication_configs."
+			"Check that 'tracked_properties' is correctly assigned on the " + \
+			"parent SaveComponent."
 		)
 
 	if config:

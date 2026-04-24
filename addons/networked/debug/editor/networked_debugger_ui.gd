@@ -271,8 +271,7 @@ func _on_peer_unregistered(peer_key: String) -> void:
 func _add_peer_panel_rows(peer_item: TreeItem, peer_key: String, is_server: bool) -> void:
 	for pt in PanelDataAdapter.PANEL_NAMES.keys():
 		if is_server:
-			if pt == PanelDataAdapter.PanelType.TOPOLOGY or \
-					pt == PanelDataAdapter.PanelType.CLOCK:
+			if pt == PanelDataAdapter.PanelType.TOPOLOGY:
 				continue
 		_add_panel_checkbox(peer_item, peer_key, pt)
 
@@ -630,9 +629,6 @@ func _create_panel_control(
 ) -> Control:
 	var control: Control
 	match pt:
-		PanelDataAdapter.PanelType.CLOCK:
-			control = PanelClock.new()
-
 		PanelDataAdapter.PanelType.SPAN:
 			control = PanelSpanTracer.new()
 			# Inject breakpoint toggle Callable (captures p by reference).

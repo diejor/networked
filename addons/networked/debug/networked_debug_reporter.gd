@@ -56,6 +56,7 @@ var _last_manifest_sec_msec: Dictionary = {}
 var _last_manifest_min_msec: Dictionary = {}
 
 var _is_sending_manifest: bool = false
+var _clock_monitor: NetClockMonitor = null
 
 
 ## Resets all debug registries, history, and telemetry.
@@ -65,6 +66,9 @@ var _is_sending_manifest: bool = false
 func reset_state() -> void:
 	_reporting_checked = false
 	_reporting_enabled = false
+	
+	if _clock_monitor:
+		_clock_monitor.clear_all()
 	
 	for ctx in _debug_contexts.values():
 		if is_instance_valid(ctx):
@@ -124,6 +128,10 @@ func _enter_tree() -> void:
 	_telemetry = NetTelemetryBuffer.new(cap)
 	_validators = [TopologyNetValidator.new()]
 
+	_clock_monitor = NetClockMonitor.new()
+	_clock_monitor.name = "NetClockMonitor"
+	add_child(_clock_monitor)
+
 	_watchdog = ErrorWatchdog.new()
 	add_child(_watchdog)
 	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
@@ -163,6 +171,12 @@ func register_tree(mt: MultiplayerTree) -> void:
 	var ctx := NetDebugTreeContext.new(mt, self)
 	ctx.name = "NetDebugContext"
 	ctx.tree_ready.connect(func() -> void: Netw.dbg.tiling_requested.emit())
+	ctx.clock_pong_captured.connect(func(d: Dictionary) -> void: 
+		if _clock_monitor:
+			_clock_monitor.update_local_clock(mt, d)
+		var sample := NetClockSample.from_dict(d, mt.get_tree_name())
+		_queue("networked:clock_sample", sample.to_dict(), mt)
+	)
 	mt.add_child(ctx)
 	_debug_contexts[mt] = ctx
 	
@@ -278,12 +292,6 @@ func _active_tree_name(active_span: RefCounted = null) -> String:
 		return mt.get_tree_name()
 		
 	return ""
-
-
-func _on_clock_pong(data: Dictionary, mt: MultiplayerTree) -> void:
-	var tree_name := mt.get_tree_name()
-	var sample := NetClockSample.from_dict(data, tree_name)
-	_queue("networked:clock_sample", sample.to_dict(), mt)
 
 
 func _on_peer_connected(peer_id: int, mt: MultiplayerTree) -> void:
@@ -850,6 +858,12 @@ func _on_editor_message(message: String, data: Array) -> void:
 			_handle_inspect_node(data[0])
 		"visualizer_toggle":
 			_handle_visualizer_toggle(data[0])
+		"remote_clock_sample":
+			if _clock_monitor:
+				_clock_monitor.update_relayed_clock(NetEnvelope.from_dict(data[0]))
+		"remote_session_unregistered":
+			if _clock_monitor:
+				_clock_monitor.remove_relayed_clock(NetEnvelope.from_dict(data[0]))
 
 
 ## Forwards a node inspection request from the editor.
@@ -914,6 +928,10 @@ func _flush_now() -> void:
 		_cycle_peer_events.clear()
 		return
 		
+	var mt: MultiplayerTree = null
+	if not _trees.is_empty():
+		mt = _trees[0]
+
 	if _telemetry:
 		var active_span := Netw.dbg.active_span()
 		var cid_trail: Array = [str(active_span.id)] if active_span else ["N/A"]
@@ -930,12 +948,12 @@ func _flush_now() -> void:
 		var entry_mt: MultiplayerTree = entry[2] if entry.size() >= 3 else null
 		
 		if not is_instance_valid(entry_mt):
-			Netw.dbg.warn(
-				"Reporter: [QueueDrop] '%s' - no tree context" % [entry[0]],
-				func(m): push_warning(m)
-			)
-			continue
-			
+			if not mt:
+				Netw.dbg.warn(
+					"Reporter: [QueueDrop] '%s' - no tree context", [entry[0]]
+				)
+				continue
+
 		emit_debug_event(entry[0], entry[1], entry_mt)
 	_message_queue.clear()
 
@@ -972,8 +990,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	
 	if _manifest_count_sec[t] > 3 or _manifest_count_min[t] > 10:
 		Netw.dbg.error(
-			"Reporter: [RateLimit] Manifest blocked for trigger: %s" % [t],
-			func(m): push_error(m)
+			"Reporter: [RateLimit] Manifest blocked for trigger: %s", [t]
 		)
 		_maybe_break()
 		_is_sending_manifest = false
@@ -992,9 +1009,8 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		
 	if not is_instance_valid(target_mt):
 		Netw.dbg.warn(
-			"Reporter: [ManifestDrop] '%s' - no valid tree" % \
-			[manifest.trigger],
-			func(m): push_warning(m)
+			"Reporter: [ManifestDrop] '%s' - no valid tree",
+			[manifest.trigger]
 		)
 		_maybe_break()
 		_is_sending_manifest = false
@@ -1087,8 +1103,7 @@ func emit_debug_event(
 		EngineDebugger.send_message("networked:envelope", [bytes])
 	else:
 		Netw.dbg.warn(
-			"Reporter: [EmitDropped] %s - no active debugger session" % [msg],
-			func(m): push_warning(m)
+			"Reporter: [EmitDropped] %s - no active debugger session", [msg]
 		)
 
 

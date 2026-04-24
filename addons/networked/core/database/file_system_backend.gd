@@ -62,10 +62,13 @@ func _initialize(schema: Dictionary) -> Error:
 			if dir.current_is_dir() and not entry.begins_with("."):
 				var sn := StringName(entry)
 				if not schema.has(sn):
-					Netw.dbg.warn("FileSystemBackend: ghost table '%s' found at '%s'. " \
+					Netw.dbg.warn(
+						"FileSystemBackend: ghost table '%s' found at '%s'. " \
 						+ "It is not in the current schema. Run a manual migration " \
-						+ "or delete the directory if it is no longer needed." % \
-						[entry, base_dir.path_join(entry)], func(m): push_warning(m))
+						+ "or delete the directory if it is no longer needed.",
+						[entry, base_dir.path_join(entry)],
+						func(m): push_warning(m)
+					)
 			entry = dir.get_next()
 		dir.list_dir_end()
 

@@ -7,6 +7,7 @@ class_name NetClockSample
 extends RefCounted
 
 var tree_name: String
+var username: String
 var rtt_raw: float
 var rtt_avg: float
 var rtt_jitter: float
@@ -22,6 +23,7 @@ var is_synchronized: bool
 static func from_dict(d: Dictionary, p_tree_name: String) -> NetClockSample:
 	var s := NetClockSample.new()
 	s.tree_name = p_tree_name
+	s.username = d.get("username", "")
 	s.rtt_raw = d.get("rtt_raw", 0.0)
 	s.rtt_avg = d.get("rtt_avg", 0.0)
 	s.rtt_jitter = d.get("rtt_jitter", 0.0)
@@ -38,6 +40,7 @@ static func from_dict(d: Dictionary, p_tree_name: String) -> NetClockSample:
 func to_dict() -> Dictionary:
 	return {
 		"tree_name": tree_name,
+		"username": username,
 		"rtt_raw": rtt_raw,
 		"rtt_avg": rtt_avg,
 		"rtt_jitter": rtt_jitter,

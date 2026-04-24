@@ -9,7 +9,16 @@ func _init() -> void:
 	super("NetworkedTestHook", "Auto-resets the NetworkedDebugger between tests.")
 
 func startup(session: GdUnitTestSession) -> GdUnitResult:
-	NetwLog.push_setting_str("none")
+	var log_level := "none"
+	
+	if OS.has_environment("NETW_TEST_LOG"):
+		log_level = OS.get_environment("NETW_TEST_LOG")
+	
+	for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+		if arg.begins_with("--netw-log="):
+			log_level = arg.split("=")[1]
+			
+	NetwLog.push_setting_str(log_level)
 	session.test_event.connect(_on_test_event)
 	return GdUnitResult.success()
 

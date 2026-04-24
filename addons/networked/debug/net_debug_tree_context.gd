@@ -1,4 +1,4 @@
-## Orchestrares debug signals and visuals for a single [MultiplayerTree] instance.
+## Orchestrates debug signals and visuals for a single [MultiplayerTree] instance.
 ##
 ## Owns the full lifecycle of all per-tree debug connections: lobby events,
 ## per-lobby synchronizer hooks, peer events, and visual decorations
@@ -11,6 +11,10 @@ extends Node
 
 ## Emitted when the tree has finished initial wiring and is ready for debug tiling.
 signal tree_ready
+
+## Emitted when a local clock pong is captured.
+signal clock_pong_captured(data: Dictionary)
+
 
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
@@ -256,9 +260,7 @@ func _on_configured() -> void:
 
 	var clock: NetworkClock = mt.get_service(NetworkClock)
 	if clock:
-		clock.pong_received.connect(
-			func(data: Dictionary): reporter._on_clock_pong(data, mt)
-		)
+		clock.pong_received.connect(_on_clock_pong)
 
 	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
 	if is_instance_valid(lm):
@@ -382,3 +384,10 @@ func _on_authority_client_changed(_client: ClientComponent) -> void:
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if mt and reporter:
 		reporter.report_session_registered(mt)
+
+
+func _on_clock_pong(data: Dictionary) -> void:
+	var mt := _mt_ref.get_ref() as MultiplayerTree
+	if is_instance_valid(mt) and mt.authority_client:
+		data["username"] = mt.authority_client.username
+	clock_pong_captured.emit(data)

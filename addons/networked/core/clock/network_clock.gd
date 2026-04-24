@@ -149,7 +149,33 @@ var ticktime: float:
 
 
 ## The fractional position [0, 1) within the current tick.
-var tick_factor: float = 0.0
+var tick_factor: float:
+	set(v):
+		_tick_factor_override = v
+	get:
+		if _tick_factor_override >= 0.0:
+			return _tick_factor_override
+			
+		if Engine.is_editor_hint() or not is_inside_tree():
+			return 0.0
+		
+		var phys_delta := get_physics_process_delta_time()
+		var time_in_frame := 0.0
+		
+		if use_physics_interpolation and \
+				Engine.has_method(&"get_physics_interpolation_fraction"):
+			# Engine fraction (0->1) represents time since start of physics frame
+			time_in_frame = Engine.get_physics_interpolation_fraction() * phys_delta
+		else:
+			# Fallback to wall-clock time since start of physics frame
+			time_in_frame = (Time.get_ticks_usec() - _last_physics_time_usec) / 1_000_000.0
+		
+		# CRITICAL: Do NOT clamp to 1.0. 
+		# If the render frame happens just before the next physics frame and 
+		# timing is slightly off, the factor might be 1.01.
+		# Clamping causes the playhead to stall, creating small jagged jumps.
+		# TickInterpolator already handles factor > 1.0 by floor()ing it into dt.
+		return (_tick_accumulator + time_in_frame) / ticktime
 
 
 ## The tick index used for visual display: [code]tick - display_offset[/code].
@@ -219,6 +245,8 @@ const PING_INTERVAL: float = 1.0
 const _DRIFT_LOG_INTERVAL := 60.0
 
 var _tick_accumulator: float = 0.0
+var _last_physics_time_usec: int = 0
+var _tick_factor_override: float = -1.0
 var _ping_timer: float = 0.0
 var _stats := _NetworkStats.new()
 var _display_offset_insufficient: bool = false
@@ -273,12 +301,13 @@ func _physics_process(delta: float) -> void:
 			MultiplayerPeer.CONNECTION_CONNECTED:
 		return
 
+	_last_physics_time_usec = Time.get_ticks_usec()
+
 	if delta > stall_threshold:
 		_tick_accumulator = 0.0
 		if not multiplayer.is_server():
 			_request_handshake.rpc_id(1)
 
-	tick_factor = 0.0
 	before_tick_loop.emit()
 
 	_tick_accumulator += delta
@@ -291,12 +320,6 @@ func _physics_process(delta: float) -> void:
 		after_tick.emit(ticktime, tick)
 		tick += 1
 		ticks_this_frame += 1
-
-	if use_physics_interpolation and \
-			Engine.has_method(&"get_physics_interpolation_fraction"):
-		tick_factor = Engine.get_physics_interpolation_fraction()
-	else:
-		tick_factor = _tick_accumulator / ticktime
 		
 	after_tick_loop.emit()
 

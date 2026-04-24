@@ -45,6 +45,7 @@ script = ExtResource("2_pdren")
 save_container = SubResource("Resource_g2jrq")
 database = SubResource("Resource_y5ihg")
 table_name = &"player"
+tracked_properties = {&"position": NodePath(".:position")}
 
 [node name="TPComponent" type="Node" parent="." unique_id=401292753]
 unique_name_in_owner = true

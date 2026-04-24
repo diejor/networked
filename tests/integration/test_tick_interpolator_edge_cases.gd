@@ -77,11 +77,12 @@ func test_feedback_loop_guard() -> void:
 	await _harness.sync_ticks(20)
 
 	_env.set_server_property(&"position", P1)
-	await _harness.sync_ticks(5)
+	await _harness.sync_ticks(40)
 
 	var newest_tick: int = _env.get_buffer_newest_tick(&"position")
-	var snap: Variant = _env.get_buffer_at(&"position", newest_tick)
+	assert_int(newest_tick).is_not_equal(-1)
 	
+	var snap: Variant = _env.get_buffer_at(&"position", newest_tick)
 	assert_vector(snap).is_equal_approx(P1, Vector2(0.01, 0.01))
 
 func test_visual_smooth_movement_realtime() -> void:

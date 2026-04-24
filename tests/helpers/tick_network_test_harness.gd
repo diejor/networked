@@ -69,6 +69,7 @@ func _build_server_node(node_name: StringName, prop_path: NodePath, extra_child:
 	sync.replication_config = _make_replication_config(prop_path)
 	sync.delta_interval = DELTA_INTERVAL
 	player.add_child(sync)
+	sync.owner = player
 
 	return player
 
@@ -91,6 +92,7 @@ func _build_client_node(node_name: StringName, prop_path: NodePath, interp_props
 	sync.replication_config = _make_replication_config(prop_path)
 	sync.delta_interval = DELTA_INTERVAL
 	player.add_child(sync)
+	sync.owner = player
 
 	var interp := TickInterpolator.new()
 	interp.name = "TickInterpolator"

@@ -1,9 +1,9 @@
 ## Base class for all Networked Debugger panel controls.
 ##
 ## Defines the interface contract that [PanelWrapper] relies on for peer-context
-## hooks and data lifecycle. Panels that cannot extend this (e.g. [PanelClock],
-## which needs [HBoxContainer]) are treated as opaque [Control] nodes by the
-## wrapper — they simply don't participate in the hook protocol.
+## hooks and data lifecycle. Panels that do not extend this are treated as 
+## opaque [Control] nodes by the wrapper — they simply don't participate 
+## in the hook protocol.
 @tool
 class_name DebugPanel
 extends VBoxContainer

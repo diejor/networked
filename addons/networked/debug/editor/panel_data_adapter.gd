@@ -8,17 +8,15 @@ extends RefCounted
 
 signal data_changed(key: String)
 
-enum PanelType { CLOCK = 0, SPAN = 1, CRASH = 2, TOPOLOGY = 3 }
+enum PanelType { SPAN = 0, CRASH = 1, TOPOLOGY = 2 }
 
 const PANEL_NAMES: Dictionary = {
-	PanelType.CLOCK:    "clock",
 	PanelType.SPAN:     "span",
 	PanelType.CRASH:    "crash",
 	PanelType.TOPOLOGY: "topology",
 }
 
 const PANEL_DISPLAY_NAMES: Dictionary = {
-	PanelType.CLOCK:    "Clock",
 	PanelType.SPAN:     "Span Tracer",
 	PanelType.CRASH:    "Crash Manifest",
 	PanelType.TOPOLOGY: "Topology",
@@ -26,7 +24,7 @@ const PANEL_DISPLAY_NAMES: Dictionary = {
 
 var adapter_key: String = ""
 var tree_name: String = ""
-var panel_type: PanelType = PanelType.CLOCK
+var panel_type: PanelType = PanelType.SPAN
 
 var ring_buffer: Array = []
 var buffer_size: int = 512

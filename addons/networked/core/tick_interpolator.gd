@@ -27,6 +27,18 @@ enum Mode {
 		notify_property_list_changed()
 
 
+## If set, smooth output will be written to this child node instead of the
+## parent node.
+## [br][br]
+## This is recommended for physics bodies ([code]CharacterBody2D[/code], etc.)
+## to prevent the interpolator from fighting with the physics engine.
+@export var visual_root: NodePath = NodePath(""):
+	set(v):
+		visual_root = v
+		_refresh_property_states()
+		update_configuration_warnings()
+
+
 ## If [code]true[/code], the interpolator will locally slow down its playhead
 ## when snapshots are missing to prevent visual jitter.
 @export var enable_smart_dilation: bool = true
@@ -54,7 +66,7 @@ enum Mode {
 
 ## If greater than [code]0[/code], the interpolator will log its internal state
 ## every N frames.
-@export var trace_interval: int = 30
+@export var trace_interval: int = 0
 
 #endregion
 
@@ -106,27 +118,23 @@ func snap_property(property: StringName, value: Variant) -> void:
 ## interpolator.teleport()
 ## [/codeblock]
 func teleport() -> void:
-	display_lag = 0.0
-	starvation_ticks = 0
+	reset()
+
+
+## Clears all recorded history and resets the visual state to match 
+## the current raw positions. 
+##
+## Call this after manual teleports or significant state changes 
+## to prevent the interpolator from "sliding" the node across the map.
+func reset() -> void:
+	if not _clock: _clock = get_network_clock()
+	if not _target: _target = owner if owner else get_parent()
 	
 	for state in _states:
-		state.history.clear()
-		var current = state.target_obj.get(state.target_prop)
-		state.last_written = current
-		state.pending_snapshot = current
-		state.last_recorded = current
-		state._has_recorded = false
-		state.cached_prev_tick = -1
-		state.is_sleeping = false
-
-
-## Clears all history buffers and resets internal state to match the target's
-## current values.
-func reset() -> void:
-	display_lag = 0.0
-	starvation_ticks = 0
-	for state in _states:
 		state.reset()
+	display_lag = _calculate_min_lag()
+	_was_starving = false
+	starvation_ticks = 0
 
 
 ## Returns the [HistoryBuffer] for the given [param property], or [code]null[/code]
@@ -179,11 +187,13 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 func _ready() -> void:
 	if Engine.is_editor_hint(): return
+	
+	process_priority = 100
 
-	_target = get_parent()
+	_target = owner if owner else get_parent()
 	_clock = get_network_clock()
 
-	assert(_target, "TickInterpolator: Parent node is missing.")
+	assert(_target, "TickInterpolator: Target node (owner/parent) is missing.")
 	assert(_clock, "TickInterpolator: Requires a NetworkClock on the multiplayer API.")
 
 	if _target.is_multiplayer_authority():
@@ -195,9 +205,7 @@ func _ready() -> void:
 		_peer_batcher.register(self, _clock)
 	
 	_refresh_property_states()
-	_cache_sync_intervals()
-	
-	display_lag = _calculate_min_lag()
+	reset()
 
 
 func _exit_tree() -> void:
@@ -240,35 +248,23 @@ func _update_instance(global_dt: int, global_factor: float, frame_ticks: float, 
 
 
 func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
+	var current_floor := _calculate_min_lag()
 	var effective_dt := int(floor(float(global_dt) - display_lag))
+	
 	var is_starving := false
 	var debug_newest := -1
-	var debug_window := 0
 
 	for state in _states:
 		if not state.history.has_tick_after(effective_dt):
-			var newest := state.history.newest_tick()
-			debug_newest = newest
-			
-			var max_starvation_window := \
-				_expected_interval_ticks + _STARVATION_GRACE_FRAMES
-			debug_window = max_starvation_window
-			if newest != -1 and (effective_dt - newest) <= max_starvation_window:
-				is_starving = true
-				break
+			is_starving = true
+			debug_newest = state.history.newest_tick()
+			break
 	
-	if trace:
-		_dbg.trace(
-			"[Dilation] eff_dt: %d | newest: %d | gap: %d | " + \
-			"window: %d | starving: %s | ticks: %d | lag: %.2f", [
-				effective_dt, debug_newest, (effective_dt - debug_newest),
-				debug_window, str(is_starving), starvation_ticks, display_lag
-			]
-		)
-	
-	var current_floor := _calculate_min_lag()
 	if is_starving:
 		starvation_ticks += 1
+		for state in _states:
+			state.is_sleeping = false
+			
 		if starvation_ticks >= _STARVATION_GRACE_FRAMES:
 			display_lag = minf(
 				display_lag + (frame_ticks * _DILATION_STRENGTH),
@@ -281,13 +277,26 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 			display_lag - (frame_ticks * (_CATCHUP_SPEED - 1.0))
 		)
 
+	if trace:
+		_dbg.trace(
+			"[Dilation] eff_dt: %d | newest: %d | starving: %s | " + \
+			"ticks: %d | lag: %.2f | floor: %.2f", [
+				effective_dt, debug_newest, str(is_starving), 
+				starvation_ticks, display_lag, current_floor
+			]
+		)
+
 	_was_starving = is_starving
 
 
 func _refresh_property_states() -> void:
 	_states.clear()
 	if not _target:
-		return
+		_target = owner if owner else get_parent()
+		if not _target:
+			return
+	
+	var v_root: Node = get_node_or_null(visual_root) if not visual_root.is_empty() else null
 	
 	for prop in property_modes:
 		if property_modes[prop] == Mode.NONE:
@@ -301,23 +310,49 @@ func _refresh_property_states() -> void:
 		var path_str := str(prop)
 		var path: NodePath = NodePath(path_str) if ":" in path_str else \
 			NodePath(":" + path_str)
-		var res := _target.get_node_and_resource(path)
 		
-		if res[0]:
-			state.target_obj = res[0]
-			state.target_prop = res[2].get_subname(0) if \
-				res[2].get_subname_count() > 0 else \
-				StringName(str(res[2]).trim_prefix(":"))
+		# Source is always on the main target (the physics body/authoritative node)
+		var res_source := _target.get_node_and_resource(path)
+		if not res_source[0]:
+			continue
 			
-			var initial_val = state.target_obj.get(state.target_prop)
-			state.last_written = initial_val
-			state.pending_snapshot = initial_val
-			state.last_recorded = initial_val
-			state._has_recorded = false
-			_states.append(state)
+		state.source_obj = res_source[0]
+		state.source_prop = res_source[2].get_subname(0) if \
+			res_source[2].get_subname_count() > 0 else \
+			StringName(str(res_source[2]).trim_prefix(":"))
+		
+		# Target is either v_root or source
+		if v_root:
+			# Redirect smooth output to the visual root child
+			state.target_obj = v_root
+			state.target_prop = state.source_prop
+			
+			# If the target is a child, we must apply relative offset 
+			# to avoid double-transform (since it inherits the snapped parent)
+			state.is_relative = _target.is_ancestor_of(v_root)
+			if state.is_relative:
+				state.initial_offset = v_root.get(state.target_prop)
+		else:
+			state.target_obj = state.source_obj
+			state.target_prop = state.source_prop
+			state.is_relative = false
+			
+		var initial_val = state.source_obj.get(state.source_prop)
+		state.last_written = initial_val
+		state.pending_snapshot = initial_val
+		state.last_recorded = initial_val
+		state.cached_prev_tick = -1
+		state._has_recorded = false
+		state.is_sleeping = false
+		_states.append(state)
+	
+	_cache_sync_intervals()
 
 
 func _calculate_min_lag() -> float:
+	if not _clock:
+		return 0.0
+		
 	var needed := float(_expected_interval_ticks + 1)
 	var network_padding := float(maxi(0, _clock.recommended_display_offset - _clock.display_offset))
 	return maxf(0.0, needed - float(_clock.display_offset) + network_padding)
@@ -327,13 +362,84 @@ func _cache_sync_intervals() -> void:
 	var max_interval := 0.0
 	for sync in SynchronizersCache.get_client_synchronizers(_target):
 		max_interval = maxf(max_interval, maxf(sync.replication_interval, sync.delta_interval))
+		
+		# Connect signals for immediate snapshot injection
+		if not sync.delta_synchronized.is_connected(_on_synced):
+			sync.delta_synchronized.connect(_on_synced)
+		if not sync.synchronized.is_connected(_on_synced):
+			sync.synchronized.connect(_on_synced)
+		
+		# Mark which properties are covered by signals
+		var synced_props := SynchronizersCache.get_all_synchronized_properties(_target)
+		for state in _states:
+			if state.name in synced_props:
+				state.uses_signal = true
+				
 	_has_explicit_sync_interval = max_interval > 0.0
 	_expected_interval_ticks = maxi(1, ceili(max_interval * _clock.tickrate))
+
+
+func _on_synced() -> void:
+	var tick := _clock.tick
+	for state in _states:
+		if state.uses_signal:
+			# For signal-based states, we record the value immediately to history
+			# This prevents the one-frame race where apply() would overwrite 
+			# the value set by the synchronizer before it's recorded.
+			var value = state.source_obj.get(state.source_prop)
+			
+			if not state._has_recorded or value != state.last_recorded:
+				if trace_interval > 0:
+					_dbg.trace(
+						"Record (Signal) %s: tick=%d val=%s",
+						[state.name, tick, value]
+					)
+				state.history.record(tick, value)
+				state.last_recorded = value
+				state.pending_snapshot = value
+				state._has_recorded = true
+				state.is_sleeping = false
 
 #endregion
 
 
 #region ── Inspector & Validation ───────────────────────────────────────────────
+
+func _get_configuration_warnings() -> PackedStringArray:
+	var warnings := PackedStringArray()
+	var target = owner if owner else get_parent()
+	if not target:
+		return warnings
+
+	for state in _states:
+		if not state.uses_signal:
+			warnings.append(
+				"No client MultiplayerSynchronizer found for property '%s'. " % state.name + \
+				"TickInterpolator will use frame polling, which causes " + \
+				"one-frame snapshot delays. Add a MultiplayerSynchronizer " + \
+				"replicating this property."
+			)
+
+	if target is CharacterBody2D or target is RigidBody2D or \
+		(ClassDB.class_exists("CharacterBody3D") and target.is_class("CharacterBody3D")) or \
+		(ClassDB.class_exists("RigidBody3D") and target.is_class("RigidBody3D")):
+		
+		var has_pos := false
+		for state in _states:
+			if state.name in [&"position", &"global_position"]:
+				has_pos = true
+				break
+		
+		if has_pos and visual_root.is_empty():
+			warnings.append(
+				"Parent is a physics body. Setting 'visual_root' to a child " + \
+				"node separates physics state from visual smoothing. The " + \
+				"physics body will receive snapped network positions; the " + \
+				"visual child will be smooth."
+			)
+
+	return warnings
+
 
 func _get_property_list() -> Array[Dictionary]:
 	var props: Array[Dictionary] = []
@@ -376,6 +482,9 @@ func _validate_property(property: Dictionary) -> void:
 
 
 func _get_tracked_properties(target: Node) -> Array[StringName]:
+	if not target: target = owner if owner else get_parent()
+	if not target: return []
+	
 	var result: Array[StringName] = []
 	var props := SynchronizersCache.get_all_synchronized_properties(target)
 	for clean_name in props:
@@ -439,8 +548,15 @@ class _PropertyState:
 	var name: StringName
 	var mode: Mode
 	var history := HistoryBuffer.new(16)
+	
+	var source_obj: Object
+	var source_prop: StringName
 	var target_obj: Object
 	var target_prop: StringName
+	
+	var uses_signal: bool = false
+	var is_relative: bool = false
+	var initial_offset: Variant
 	
 	var last_written: Variant
 	var pending_snapshot: Variant
@@ -452,23 +568,39 @@ class _PropertyState:
 	var _search_results := PackedInt32Array([-1, -1])
 
 	func reset() -> void:
-		var current = target_obj.get(target_prop)
+		if not source_obj: return
+		var current = source_obj.get(source_prop)
+		history.clear()
 		last_written = current
 		pending_snapshot = current
 		last_recorded = current
 		_has_recorded = false
 		cached_prev_tick = -1
 		is_sleeping = false
+		
+		if is_relative and target_obj:
+			initial_offset = target_obj.get(target_prop)
 
 	func update_snapshot() -> void:
-		var current_val = target_obj.get(target_prop)
-		if current_val != last_written:
+		var current_val = source_obj.get(source_prop)
+		# Feedback loop protection: only accept values that weren't just written
+		# by the interpolator itself (if writing back to source).
+		if target_obj != source_obj or not _is_close(current_val, last_written):
+			if not _has_recorded:
+				last_written = current_val
 			pending_snapshot = current_val
 			is_sleeping = false
 
 	func record_tick(tick: int) -> void:
 		if not _has_recorded or pending_snapshot != last_recorded:
+			if interpolator.trace_interval > 0:
+				interpolator._dbg.trace(
+					"Record %s: tick=%d val=%s",
+					[name, tick, pending_snapshot]
+				)
 			history.record(tick, pending_snapshot)
+			if not _has_recorded:
+				last_written = pending_snapshot
 			last_recorded = pending_snapshot
 			_has_recorded = true
 			is_sleeping = false
@@ -494,11 +626,18 @@ class _PropertyState:
 			return
 
 		var result: Variant
+		var snapped := false
+		
 		if next_tick == -1:
 			result = history.get_at(prev_tick)
+			if snap_dist > 0.0 and _should_snap(last_written, result, snap_dist):
+				snapped = true
+				
 			if pending_snapshot == last_recorded:
-				# Only sleep if we've reached the target visually
-				if weight >= 1.0 or _is_close(last_written, result):
+				# Only sleep if we've reached the target visually AND it's the 
+				# absolute newest snapshot we have.
+				if (weight >= 1.0 or _is_close(last_written, result)) \
+					and not history.has_tick_after(prev_tick):
 					is_sleeping = true
 		else:
 			var p_val = history.get_at(prev_tick)
@@ -506,33 +645,68 @@ class _PropertyState:
 
 			if snap_dist > 0.0 and _should_snap(p_val, n_val, snap_dist):
 				result = n_val
+				snapped = true
 			else:
-				var t := clampf(
-					(float(dt - prev_tick) + factor) / \
-					float(next_tick - prev_tick),
-					0.0,
-					1.0
-				)
-				if mode == Mode.ANGLE:
-					result = lerp_angle(p_val, n_val, t)
+				var gap := next_tick - prev_tick
+				var threshold := interpolator._expected_interval_ticks * 2
+				
+				# Option A: If the gap is huge (stationary period), stay at P0 
+				# until we are close to P1.
+				if gap > threshold:
+					if dt < next_tick - interpolator._expected_interval_ticks:
+						# Still in the "dead zone" of the stationary period
+						result = p_val
+					else:
+						# We are in the last interval before P1, start the lerp.
+						# We lerp from P0 to P1 over exactly one _expected_interval.
+						var t := clampf(
+							(float(dt - (next_tick - interpolator._expected_interval_ticks)) + factor) / \
+							float(interpolator._expected_interval_ticks),
+							0.0,
+							1.0
+						)
+						if mode == Mode.ANGLE:
+							result = lerp_angle(p_val, n_val, t)
+						else:
+							result = lerp(p_val, n_val, t)
 				else:
-					result = lerp(p_val, n_val, t)
+					# Standard small-gap lerp
+					var t := clampf(
+						(float(dt - prev_tick) + factor) / \
+						float(next_tick - prev_tick),
+						0.0,
+						1.0
+					)
+					if mode == Mode.ANGLE:
+						result = lerp_angle(p_val, n_val, t)
+					else:
+						result = lerp(p_val, n_val, t)
 
 		# Apply additional smoothing if weight < 1.0
-		if weight < 1.0:
+		if weight < 1.0 and not snapped:
 			if mode == Mode.ANGLE:
 				result = lerp_angle(last_written, result, weight)
 			else:
 				result = lerp(last_written, result, weight)
 
-		target_obj.set(target_prop, result)
-		last_written = result
-		
 		if trace:
 			interpolator._dbg.trace(
 				"Interp %s: dt=%d lag=%.2f val=%s",
 				[name, dt, lag, result]
 			)
+
+		if is_relative:
+			var current_raw = source_obj.get(source_prop)
+			var type = typeof(result)
+			# Apply the smooth-raw difference as an offset to the initial local state
+			if type == TYPE_VECTOR2 or type == TYPE_VECTOR3 or type == TYPE_FLOAT or type == TYPE_INT:
+				target_obj.set(target_prop, initial_offset + (result - current_raw))
+			else:
+				target_obj.set(target_prop, result)
+		else:
+			target_obj.set(target_prop, result)
+			
+		last_written = result
 
 	func _should_snap(v1: Variant, v2: Variant, dist: float) -> bool:
 		if typeof(v1) != typeof(v2):

@@ -4,7 +4,7 @@
 ## Provides consolidated logging, span creation, and component handles.
 ## All state is static; do not instantiate directly.
 class_name NetwDbg
-extends Object
+extends RefCounted
 
 
 ## Emitted when the editor requests all instances to re-calculate their tiling.

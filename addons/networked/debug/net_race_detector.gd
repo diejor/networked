@@ -24,7 +24,8 @@ static func find_lobby_races(
 		"*", "MultiplayerSynchronizer", true, false
 	):
 		var sync := child as MultiplayerSynchronizer
-		if sync.public_visibility and sync.is_multiplayer_authority() and \
+		if sync.is_inside_tree() and sync.public_visibility and \
+				sync.is_multiplayer_authority() and \
 				_has_delta_replication(sync):
 			races.append(_format_race(sync, mt))
 
@@ -53,7 +54,8 @@ static func find_connect_races(
 			"*", "MultiplayerSynchronizer", true, false
 		):
 			var sync := child as MultiplayerSynchronizer
-			if sync.public_visibility and sync.is_multiplayer_authority() and \
+			if sync.is_inside_tree() and sync.public_visibility and \
+					sync.is_multiplayer_authority() and \
 					_has_delta_replication(sync):
 				var r := _format_race(sync, mt)
 				r["lobby"] = str(lobby_name)

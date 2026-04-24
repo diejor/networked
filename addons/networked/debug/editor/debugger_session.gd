@@ -200,11 +200,12 @@ func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
 
 	match envelope.msg:
 		"networked:session_registered":   _on_session_registered(envelope, is_remote)
-		"networked:session_unregistered": _on_session_unregistered(envelope)
+		"networked:session_unregistered": _on_session_unregistered(envelope, is_remote)
 		"networked:peer_connected":       _on_peer_event(envelope, true)
 		"networked:peer_disconnected":    _on_peer_event(envelope, false)
-		"networked:clock_sample":         _on_clock_sample(envelope)
+		"networked:clock_sample":         _on_clock_sample(envelope, is_remote)
 		"networked:crash_manifest":       _on_crash_manifest(envelope)
+
 		"networked:span_open":            _on_span(envelope, "open")
 		"networked:span_step":            _on_span(envelope, "step")
 		"networked:span_close":           _on_span(envelope, "close")
@@ -287,8 +288,7 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 
 	for pt in PanelDataAdapter.PANEL_NAMES.keys():
 		if is_server:
-			if pt == PanelDataAdapter.PanelType.TOPOLOGY or \
-					pt == PanelDataAdapter.PanelType.CLOCK:
+			if pt == PanelDataAdapter.PanelType.TOPOLOGY:
 				continue
 
 		var key: String = _adapter_key(pk, pt)
@@ -303,11 +303,15 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 		plugin.send_to_game(session_id, "networked:set_auto_break", [auto_break])
 
 
-func _on_session_unregistered(envelope: NetEnvelope) -> void:
+func _on_session_unregistered(envelope: NetEnvelope, is_remote: bool = false) -> void:
 	var pk := envelope.peer_key()
 	if pk not in _peers: return
 	_peers[pk]["online"] = false
 	peer_status_changed.emit(pk, false)
+	
+	if is_remote and plugin:
+		plugin.send_to_game(session_id, "networked:remote_session_unregistered",
+				[envelope.to_dict()])
 
 
 func _on_peer_event(envelope: NetEnvelope, connected: bool) -> void:
@@ -322,10 +326,13 @@ func _on_peer_event(envelope: NetEnvelope, connected: bool) -> void:
 			_adapters[key].on_peer_event(envelope.payload, connected)
 
 
-func _on_clock_sample(envelope: NetEnvelope) -> void:
-	var key := _adapter_key(envelope.peer_key(), PanelDataAdapter.PanelType.CLOCK)
-	if key in _adapters:
-		_adapters[key].feed(envelope.payload)
+func _on_clock_sample(envelope: NetEnvelope, is_remote: bool = false) -> void:
+	if is_remote and plugin:
+		# Forward the remote clock sample back to the game process associated
+		# with this session. This allows the game process to register a
+		# Performance monitor for the remote peer.
+		plugin.send_to_game(session_id, "networked:remote_clock_sample",
+				[envelope.to_dict()])
 
 
 func _on_crash_manifest(envelope: NetEnvelope) -> void:
@@ -388,8 +395,6 @@ func _adapter_key(peer_k: String, type: PanelDataAdapter.PanelType) -> String:
 func _create_adapter(peer_k: String, display: String, type: PanelDataAdapter.PanelType) -> PanelDataAdapter:
 	var adapter: PanelDataAdapter
 	match type:
-		PanelDataAdapter.PanelType.CLOCK:
-			adapter = ClockAdapter.new(display)
 		PanelDataAdapter.PanelType.SPAN:
 			adapter = SpanAdapter.new(display)
 		PanelDataAdapter.PanelType.CRASH:

@@ -1,9 +1,8 @@
 ## Wraps a panel [Control] in a titled container with a colored header bar.
 ##
 ## Owns the peer-context state (online / remote) and propagates it to the inner
-## panel when the panel implements [DebugPanel]. Panels that extend
-## [HBoxContainer] (e.g. [PanelClock]) are stored as plain [Control] and skipped
-## for hooks.
+## panel when the panel implements [DebugPanel]. Panels that do not implement
+## [DebugPanel] are stored as plain [Control] and skipped for hooks.
 ##
 ## Double-clicking the title bar fires [member on_maximize_requested].
 @tool
