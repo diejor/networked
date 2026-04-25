@@ -128,7 +128,6 @@ func _setup_server() -> void:
 func _setup_network() -> void:
 	network = NetworkSession.new()
 	network.manage_scene = false
-	add_child(network)
 	auto_free(network)
 
 	var client_tree := MultiplayerTree.new()
@@ -145,6 +144,7 @@ func _setup_network() -> void:
 
 	# Assigning client triggers signal wiring inside NetworkSession.
 	network.client = client_tree
+	add_child(network)
 
 
 func _client_data(username: String) -> MultiplayerClientData:

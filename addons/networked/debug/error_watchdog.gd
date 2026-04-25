@@ -60,8 +60,7 @@ func _tail_log() -> void:
 	var file := FileAccess.open(_log_path, FileAccess.READ)
 	if not file:
 		_dbg.error(
-			"ErrorWatchdog: could not open log file: %s" % [_log_path],
-			func(m): push_error(m)
+			"ErrorWatchdog: could not open log file: %s", [_log_path]
 		)
 		return
 
@@ -109,3 +108,4 @@ func _should_quit() -> bool:
 	var q := _quit
 	_mutex.unlock()
 	return q
+

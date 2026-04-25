@@ -947,7 +947,7 @@ func _flush_now() -> void:
 	_cycle_peer_events.clear()
 	
 	for entry: Array in _message_queue:
-		var entry_mt: MultiplayerTree = entry[2] if entry.size() >= 3 else null
+		var entry_mt = entry[2] if entry.size() >= 3 else null
 		
 		if not is_instance_valid(entry_mt):
 			if not mt:
@@ -955,6 +955,7 @@ func _flush_now() -> void:
 					"Reporter: [QueueDrop] '%s' - no tree context", [entry[0]]
 				)
 				continue
+			entry_mt = mt
 
 		emit_debug_event(entry[0], entry[1], entry_mt)
 	_message_queue.clear()

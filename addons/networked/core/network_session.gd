@@ -30,12 +30,13 @@ extends Node
 		if not client.server_disconnected.is_connected(_close_server):
 			client.server_disconnected.connect(_close_server)
 		
-		if DisplayServer.get_name() == "headless":
+		if manage_scene and DisplayServer.get_name() == "headless":
 			client.queue_free()
 
 
 ## When [code]false[/code], [method connect_player] will not promote this node to
 ## the scene root and will not auto-start a local server for localhost URLs.
+## When running as a dedicated server, it will remove the client and auto-host.
 @export var manage_scene: bool = true
 
 @export_group("Debug")
@@ -175,7 +176,7 @@ func _ready() -> void:
 		init_client_data.is_debug = true
 		connect_player(init_client_data)
 	
-	if DisplayServer.get_name() == "headless":
+	if manage_scene and DisplayServer.get_name() == "headless":
 		_host_server()
 
 
@@ -198,7 +199,7 @@ func is_webrtc() -> bool:
 	var n := script.get_global_name().to_lower()
 	var is_rtc := "rtc" in n or "tube" in n
 	Netw.dbg.debug(
-		"Backend check: class=%s is_webrtc=%s" % \
+		"Backend check: class=%s is_webrtc=%s", \
 		[script.get_global_name(), is_rtc]
 	)
 	return is_rtc
@@ -224,7 +225,7 @@ func _host_server() -> String:
 	
 	if server_err != OK and not in_use:
 		Netw.dbg.error(
-			"Server failed to start: %s" % [error_string(server_err)],
+			"Server failed to start: %s", [error_string(server_err)],
 			func(m): push_error(m)
 		)
 	
@@ -234,7 +235,7 @@ func _host_server() -> String:
 		return "localhost"
 		
 	var addr := _resolve_server_address()
-	Netw.dbg.info("Embedded server started at: %s" % [addr])
+	Netw.dbg.info("Embedded server started at: %s", [addr])
 	return addr
 
 

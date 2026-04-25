@@ -29,7 +29,6 @@ enum Mode {
 
 ## If set, smooth output will be written to this child node instead of the
 ## parent node.
-## [br][br]
 ## This is recommended for physics bodies ([code]CharacterBody2D[/code], etc.)
 ## to prevent the interpolator from fighting with the physics engine.
 @export var visual_root: NodePath = NodePath(""):
@@ -45,28 +44,26 @@ enum Mode {
 
 
 ## Controls the "softness" or "floatiness" of the interpolation.
-## [br][br]
 ## [br]- [code]0.0[/code]: Crisp and instant (pure time-based interpolation).
-## [br]- [code]>0.0[/code]: Adds exponential smoothing, making motion feel
+## [br]- [code]> 0.0[/code]: Adds exponential smoothing, making motion feel
 ## heavier/fluid but adding visual lag.
 @export_range(0.0, 0.99) var smoothing: float = 0.0
 
 
 ## Maximum distance allowed before the interpolator snaps to the target instead
 ## of lerping.
-## [br][br]
 ## Useful for teleports. Set to [code]0.0[/code] to disable.
-@export var max_lerp_distance: float = 0.0
+@export_custom(0, "suffix:px") var max_lerp_distance: float = 0.0
 
 
 ## The maximum number of extra ticks the interpolator can dilate beyond its
 ## floor.
-@export var max_extra_dilation: float = 4.0
+@export_custom(0, "suffix:ticks") var max_extra_dilation: float = 4.0
 
 
 ## If greater than [code]0[/code], the interpolator will log its internal state
 ## every N frames.
-@export var trace_interval: int = 0
+@export_custom(0, "suffix:frames")  var trace_interval: int = 0
 
 #endregion
 
@@ -85,7 +82,6 @@ var starvation_ticks: int = 0
 #region ── Public API ──────────────────────────────────────────────────────────
 
 ## Instantly snaps [param property] to [param value], bypassing interpolation.
-## [br][br]
 ## [codeblock]
 ## # Snap a base property
 ## interpolator.snap_property(&"position", Vector2(200, 100))
@@ -106,24 +102,8 @@ func snap_property(property: StringName, value: Variant) -> void:
 			return
 
 
-## Instantly accepts the target node's current physical state as the absolute
-## truth.
-## [br][br]
-## [codeblock]
-## # Update the node's properties manually
-## player.position = spawn_point
-## player.rotation = spawn_rotation
-## 
-## # Tell the interpolator to anchor to this new reality
-## interpolator.teleport()
-## [/codeblock]
-func teleport() -> void:
-	reset()
-
-
 ## Clears all recorded history and resets the visual state to match 
 ## the current raw positions. 
-##
 ## Call this after manual teleports or significant state changes 
 ## to prevent the interpolator from "sliding" the node across the map.
 func reset() -> void:
@@ -146,7 +126,6 @@ func get_buffer(property: StringName) -> HistoryBuffer:
 
 
 ## Temporarily disables interpolation for [param duration] seconds.
-## [br][br]
 ## Returns a [SceneTreeTimer] that can be awaited.
 func disable_for(duration: float) -> SceneTreeTimer:
 	process_mode = PROCESS_MODE_DISABLED

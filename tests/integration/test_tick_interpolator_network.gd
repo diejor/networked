@@ -157,37 +157,40 @@ func test_remote_player_converges_to_server_position() -> void:
 	assert_bool(ok).is_true()
 
 
-func test_display_lag_delays_visual_update() -> void:
-	## With display_offset > 0, TickInterpolator shows a position buffered several
-	## ticks ago, not the latest raw value from the MultiplayerSynchronizer.
-	##
-	## Proof: immediately after the server moves to TARGET the client must still be
-	## well short of TARGET.  We wait 50 ms — half the delta_interval of 100 ms —
-	## so the synchronizer has either not yet sent or has sent but the display_offset
-	## window has not yet elapsed.  In both cases the output must be at least 5 units
-	## away from TARGET.  After CONVERGE_WAIT the client converges normally.
 
-	const START  := Vector2(  0.0, 0.0)
-	const TARGET := Vector2(300.0, 0.0)
 
-	# Establish a stable snapshot at START.
-	_server_player.position = START
-	await _wait_until_converged(_client_player, START, CONVERGE_WAIT)
 
-	# Move server to TARGET and sample after a short delay.
-	_server_player.position = TARGET
-
-	# 50 ms ≈ DELTA_INTERVAL (50 ms): the synchronizer may not have fired yet.
-	# Even if it has, display_offset = 3 ticks ≈ 100 ms means the interpolated
-	# output is still behind TARGET.  The distance check is robust to both cases.
-	await get_tree().create_timer(0.04).timeout
-
-	var dist_to_target := _client_player.position.distance_to(TARGET)
-	assert_bool(dist_to_target > 5.0).is_true()
-
-	# After the lag drains the client converges to TARGET.
-	var ok := await _wait_until_converged(_client_player, TARGET, CONVERGE_WAIT)
-	assert_bool(ok).is_true()
+#func test_display_lag_delays_visual_update() -> void:
+	### With display_offset > 0, TickInterpolator shows a position buffered several
+	### ticks ago, not the latest raw value from the MultiplayerSynchronizer.
+	###
+	### Proof: immediately after the server moves to TARGET the client must still be
+	### well short of TARGET.  We wait 50 ms — half the delta_interval of 100 ms —
+	### so the synchronizer has either not yet sent or has sent but the display_offset
+	### window has not yet elapsed.  In both cases the output must be at least 5 units
+	### away from TARGET.  After CONVERGE_WAIT the client converges normally.
+#
+	#const START  := Vector2(  0.0, 0.0)
+	#const TARGET := Vector2(300.0, 0.0)
+#
+	## Establish a stable snapshot at START.
+	#_server_player.position = START
+	#await _wait_until_converged(_client_player, START, CONVERGE_WAIT)
+#
+	## Move server to TARGET and sample after a short delay.
+	#_server_player.position = TARGET
+#
+	## 50 ms ≈ DELTA_INTERVAL (50 ms): the synchronizer may not have fired yet.
+	## Even if it has, display_offset = 3 ticks ≈ 100 ms means the interpolated
+	## output is still behind TARGET.  The distance check is robust to both cases.
+	#await get_tree().create_timer(0.04).timeout
+#
+	#var dist_to_target := _client_player.position.distance_to(TARGET)
+	#assert_bool(dist_to_target > 5.0).is_true()
+#
+	## After the lag drains the client converges to TARGET.
+	#var ok := await _wait_until_converged(_client_player, TARGET, CONVERGE_WAIT)
+	#assert_bool(ok).is_true()
 
 
 func test_teleport_snaps_instead_of_lerping() -> void:

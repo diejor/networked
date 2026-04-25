@@ -74,19 +74,17 @@ signal pong_received(data: Dictionary)
 
 @export_group("Simulation")
 ## How many simulation ticks to run per second.
-@export var tickrate: int = 30
 
+@export_custom(0, "suffix:frames") var tickrate: int = 30
 
 ## Maximum simulation ticks allowed to run in a single physics frame.
-@export var max_ticks_per_frame: int = 8
+@export_custom(0, "suffix:ticks")  var max_ticks_per_frame: int = 8
 
 
-## Frame delta threshold (seconds) before resetting the accumulator.
-@export var stall_threshold: float = 1.0
+## Frame delta threshold before resetting the accumulator.
+@export_custom(0, "suffix:s")  var stall_threshold: float = 1.0
 
 
-## Uses Godot 4.3+ physics interpolation fraction for sub-frame visual
-## smoothness.
 @export var use_physics_interpolation: bool = true
 
 
@@ -95,8 +93,8 @@ signal pong_received(data: Dictionary)
 @export_enum("Snap", "Stretch") var sync_mode: int = 0
 
 
-## The maximum allowed divergence (ticks) before a hard Snap is forced.
-@export var panic_snap_threshold: int = 20
+## The maximum allowed divergence before a hard Snap is forced.
+@export_custom(0, "suffix:ticks") var panic_snap_threshold: int = 20
 
 
 ## Multiplier for drift correction speed in [b]Stretch[/b] mode.
@@ -105,15 +103,15 @@ signal pong_received(data: Dictionary)
 
 @export_group("Network Buffering")
 ## The number of ticks the visual display lags behind the simulation.
-@export var display_offset: int = 2
+@export_custom(0, "suffix:ticks")  var display_offset: int = 2
 
 
 ## Scales jitter impact on the [member recommended_display_offset].
 @export var jitter_multiplier: float = 2.0
 
 
-## The threshold (seconds) below which the connection is considered stable.
-@export var jitter_stability_threshold: float = 0.05
+## The threshold below which the connection is considered stable.
+@export_custom(0, "suffix:s")  var jitter_stability_threshold: float = 0.05
 
 
 @export_group("Compatibility")
@@ -339,8 +337,8 @@ func _on_tree_configured() -> void:
 	var api := multiplayer as SceneMultiplayer
 	if api:
 		api.set_meta(&"_network_clock", self)
-		api.server_disconnected.connect(func(): is_synchronized = false)
-		api.connection_failed.connect(func(): is_synchronized = false)
+		api.server_disconnected.connect(_on_server_disconnect)
+		api.connection_failed.connect(_on_server_disconnect)
 	
 	if not multiplayer.is_server():
 		if multiplayer.multiplayer_peer.get_connection_status() == \
@@ -351,6 +349,9 @@ func _on_tree_configured() -> void:
 				_request_handshake.rpc_id.bind(1),
 				CONNECT_ONE_SHOT
 			)
+
+func _on_server_disconnect() -> void:
+	is_synchronized = false
 
 #endregion
 
