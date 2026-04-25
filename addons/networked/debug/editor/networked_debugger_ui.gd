@@ -557,9 +557,6 @@ func _deactivate_panel(key: String) -> void:
 # ─── Grid layout ─────────────────────────────────────────────────────────────
 
 func _rebuild_grid() -> void:
-	Netw.dbg.trace(
-		"UI: [RebuildGrid] active_count=%d" % [_active_keys.size()]
-	)
 	# Remove all grid children without freeing them.
 	for child: Node in _grid.get_children():
 		_grid.remove_child(child)

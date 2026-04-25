@@ -26,7 +26,6 @@ func _enter_tree() -> void:
 	
 	_determine_instance_id()
 	
-	# Instead of polling, we react to signals from the Editor via Netw.dbg.
 	Netw.dbg.tiling_requested.connect(_on_tiling_requested)
 	
 	# Initial layout.
