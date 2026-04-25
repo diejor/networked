@@ -34,13 +34,11 @@ func before_test() -> void:
 	_player = Node2D.new()
 	_player.name = "RemotePlayer"
 	_player.set_multiplayer_authority(999)
-	add_child(_player)
 	auto_free(_player)
 
 	_visual = Node2D.new()
 	_visual.name = "Visual"
 	_player.add_child(_visual)
-	auto_free(_visual)
 
 	_sync = MultiplayerSynchronizer.new()
 	var cfg := SceneReplicationConfig.new()
@@ -53,8 +51,11 @@ func before_test() -> void:
 	_interpolator = TickInterpolator.new()
 	_interpolator.property_modes = {&"position": TickInterpolator.Mode.LERP}
 	_interpolator.enable_smart_dilation = false
+	_interpolator.trace_interval = 1
 	_player.add_child(_interpolator)
 	_interpolator.set_process(false)
+
+	add_child(_player)
 
 	await get_tree().process_frame
 
@@ -112,6 +113,7 @@ func test_visual_root_decoupling() -> void:
 	## When visual_root is set, interpolation writes the absolute smooth value 
 	## to the child, while the parent (physics body) keeps the raw network position.
 	
+	_sync.replication_interval = 0.5
 	_interpolator.visual_root = NodePath("../Visual")
 	
 	_player.position = P0
@@ -134,8 +136,8 @@ func test_visual_root_decoupling() -> void:
 	# Parent remains at raw P1 (latest set by sync)
 	assert_vector(_player.position).is_equal(P1)
 	
-	# Visual child is at midpoint P0.5 (absolute value)
-	assert_vector(_visual.position).is_equal_approx(P0.lerp(P1, 0.5), Vector2(0.1, 0.1))
+	# Visual child is at midpoint P0.5 (relative to raw parent)
+	assert_vector(_visual.position).is_equal_approx(P0.lerp(P1, 0.5) - P1, Vector2(0.1, 0.1))
 
 
 func test_polling_is_disabled_when_signals_available() -> void:

@@ -186,6 +186,16 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 func _ready() -> void:
 	if Engine.is_editor_hint(): return
 	
+	if not owner:
+		owner = get_parent()
+		if owner:
+			_dbg.warn(
+				"TickInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " + \
+				"Assign the owner explicitly for better stability.", 
+				[owner.name], 
+				func(m): push_warning(m)
+			)
+	
 	process_priority = 100
 	_clock = get_network_clock()
 

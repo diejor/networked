@@ -96,12 +96,14 @@ func _build_client_node(node_name: StringName, prop_path: NodePath, interp_props
 
 	var interp := TickInterpolator.new()
 	interp.name = "TickInterpolator"
+	interp.trace_interval = 1
 	# Initialize typed dictionary to avoid assignment mismatch
 	var modes: Dictionary[StringName, TickInterpolator.Mode] = {}
 	for key in interp_props:
 		modes[key] = interp_props[key]
 	interp.property_modes = modes
 	player.add_child(interp)
+	interp.owner = player
 
 	return player
 

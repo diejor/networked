@@ -58,6 +58,8 @@ var _last_manifest_min_msec: Dictionary = {}
 var _is_sending_manifest: bool = false
 var _clock_monitor: NetClockMonitor = null
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 ## Resets all debug registries, history, and telemetry.
 ## [br][br]
@@ -85,7 +87,7 @@ func reset_state() -> void:
 		_telemetry.clear()
 		
 	Netw.dbg.reset()
-	Netw.dbg.trace("Reporter: State reset (deep).")
+	_dbg.trace("Reporter: State reset (deep).")
 
 
 static func _get_instance() -> NetworkedDebugReporter:
@@ -161,7 +163,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 		return
 		
 	var tree_name := mt.get_tree_name()
-	Netw.dbg.info(
+	_dbg.info(
 		"Reporter: [Register] '%s' (is_server=%s, local_editor=%s)" % \
 		[tree_name, mt.is_server, _has_local_session()]
 	)
@@ -245,14 +247,14 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		
 	if not is_instance_valid(mt):
 		if not _trees.is_empty():
-			Netw.dbg.warn(
+			_dbg.warn(
 				"Reporter: [CppError] no active span tree context - " + \
 				"attributing to first tree",
 				func(m): push_warning(m)
 			)
 			mt = _trees[0]
 		else:
-			Netw.dbg.warn(
+			_dbg.warn(
 				"Reporter: [CppError] no active span and no trees - dropping",
 				func(m): push_warning(m)
 			)
@@ -837,7 +839,7 @@ static func get_peer_debug_color(peer_id: int) -> Color:
 
 func _on_editor_message(message: String, data: Array) -> void:
 	if data.is_empty():
-		Netw.dbg.warn("Reporter: [EditorMessage] '%s' received with empty " + \
+		_dbg.warn("Reporter: [EditorMessage] '%s' received with empty " + \
 			"payload." % [message], func(m: String) -> void: push_warning(m))
 		return
 		
@@ -949,7 +951,7 @@ func _flush_now() -> void:
 		
 		if not is_instance_valid(entry_mt):
 			if not mt:
-				Netw.dbg.warn(
+				_dbg.warn(
 					"Reporter: [QueueDrop] '%s' - no tree context", [entry[0]]
 				)
 				continue
@@ -989,7 +991,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 	_manifest_count_min[t] = _manifest_count_min.get(t, 0) + 1
 	
 	if _manifest_count_sec[t] > 3 or _manifest_count_min[t] > 10:
-		Netw.dbg.error(
+		_dbg.error(
 			"Reporter: [RateLimit] Manifest blocked for trigger: %s", [t]
 		)
 		_maybe_break()
@@ -998,7 +1000,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		
 	manifest.validate_contract()
 	var payload := manifest.to_dict()
-	Netw.dbg.info(
+	_dbg.info(
 		"Reporter: [SendManifest] %s (cid=%s)" % \
 		[manifest.trigger, manifest.cid]
 	)
@@ -1008,7 +1010,7 @@ func _send_manifest(manifest: NetManifest, mt: MultiplayerTree = null) -> void:
 		target_mt = manifest._mt.get_ref() as MultiplayerTree
 		
 	if not is_instance_valid(target_mt):
-		Netw.dbg.warn(
+		_dbg.warn(
 			"Reporter: [ManifestDrop] '%s' - no valid tree",
 			[manifest.trigger]
 		)
@@ -1102,7 +1104,7 @@ func emit_debug_event(
 		_trace_emit("[EmitDirect]", msg, "(path=%s)" % [envelope.source_path])
 		EngineDebugger.send_message("networked:envelope", [bytes])
 	else:
-		Netw.dbg.warn(
+		_dbg.warn(
 			"Reporter: [EmitDropped] %s - no active debugger session", [msg]
 		)
 
@@ -1112,9 +1114,9 @@ func _trace_emit(prefix: String, msg: String, extra: String = "") -> void:
 		return
 		
 	if extra:
-		Netw.dbg.trace("Reporter: %s %s %s" % [prefix, msg, extra])
+		_dbg.trace("Reporter: %s %s %s" % [prefix, msg, extra])
 	else:
-		Netw.dbg.trace("Reporter: %s %s" % [prefix, msg])
+		_dbg.trace("Reporter: %s %s" % [prefix, msg])
 
 
 # --- Guards -------------------------------------------------------------------

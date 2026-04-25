@@ -33,6 +33,8 @@ var _top_rows: Dictionary[String, TreeItem] = {}
 # "cid:trigger" → "Intercepted Error" parent TreeItem.
 var _error_parents: Dictionary[String, TreeItem] = {}
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
@@ -143,7 +145,7 @@ func push_entry(entry: Dictionary) -> void:
 				existing_entry["error_text"] = new_error
 			_append_error_lines(key, new_error)
 
-			Netw.dbg.debug("[UI] Merged subsequent error into existing row for CID: %s" % [cid])
+			_dbg.debug("[UI] Merged subsequent error into existing row for CID: %s" % [cid])
 			return
 	# Remove placeholder on first real entry.
 	if _entries.is_empty() and _tree.get_root():

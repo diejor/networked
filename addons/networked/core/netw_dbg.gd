@@ -11,9 +11,9 @@ extends RefCounted
 signal tiling_requested
 
 
-## Creates a [NetwHandle] for O(1) debug access from a [NetComponent].
-func handle(component: Node) -> NetwHandle:
-	return NetwHandle.new(component)
+## Creates a [NetwHandle] for O(1) debug access from a [NetComponent] or [Object].
+func handle(context: Object) -> NetwHandle:
+	return NetwHandle.new(context)
 
 
 ## Logs an [code]INFO[/code] message.
@@ -118,14 +118,14 @@ func _log(
 	if level < NetwLog._effective_min_level:
 		return
 
-	var component: Node = null
+	var context: Object = null
 	var msg: Variant = ""
 	var args: Array = []
 	var link_call: Callable = Callable()
 
 	if typeof(arg1) == TYPE_OBJECT and not arg1 is String and \
 			not arg1 is StringName:
-		component = arg1 as Node
+		context = arg1
 		msg = arg2
 		if typeof(arg3) == TYPE_ARRAY:
 			args = arg3
@@ -142,32 +142,34 @@ func _log(
 		elif typeof(arg2) == TYPE_CALLABLE:
 			link_call = arg2
 
-	if component:
-		var script := component.get_script() as Script
+	if context:
+		var script := context.get_script() as Script
 		if script and not NetwLog.is_level_active(level, script.resource_path):
 			return
 		elif not script and not NetwLog.is_level_active_for_module(
 			level,
-			component.get_class()
+			context.get_class()
 		):
 			return
 
-		var peer_id := -1
-		if component.is_inside_tree() and component.multiplayer:
-			peer_id = component.multiplayer.get_unique_id()
+		var component := context as Node
+		if component:
+			var peer_id := -1
+			if component.is_inside_tree() and component.multiplayer:
+				peer_id = component.multiplayer.get_unique_id()
 
-		var peer_label := "S" if peer_id == 1 else \
-			"C%d" % peer_id if peer_id > 0 else "?"
-		var owner_name := component.owner.name if component.owner else \
-			component.name
+			var peer_label := "S" if peer_id == 1 else \
+				"C%d" % peer_id if peer_id > 0 else "?"
+			var owner_name := component.owner.name if component.owner else \
+				component.name
 
-		var cls_name: String = ""
-		if script:
-			cls_name = script.resource_path.get_file().get_basename()
-		else:
-			cls_name = component.get_class()
+			var cls_name: String = ""
+			if script:
+				cls_name = script.resource_path.get_file().get_basename()
+			else:
+				cls_name = component.get_class()
 
-		msg = "[%s] [%s] [%s] %s" % [peer_label, owner_name, cls_name, str(msg)]
+			msg = "[%s] [%s] [%s] %s" % [peer_label, owner_name, cls_name, str(msg)]
 
 	match level:
 		NetwLog.Level.TRACE: NetwLog.trace(msg, args)

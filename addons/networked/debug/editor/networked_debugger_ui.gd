@@ -51,6 +51,8 @@ var _dot_online: ImageTexture
 var _dot_offline: ImageTexture
 var _dot_unknown: ImageTexture
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 func _ready() -> void:
 	custom_minimum_size.y = 250
@@ -500,10 +502,10 @@ func _activate_panel(
 	var adapter: PanelDataAdapter = session.get_adapter(key)
 	if not adapter:
 		var msg := "UI: [ActivateFailed] Adapter not found for key: %s" % [key]
-		Netw.dbg.warn(msg, func(m): push_warning(m))
+		_dbg.warn(msg, func(m): push_warning(m))
 		return
 
-	Netw.dbg.info("UI: [ActivatePanel] %s" % [key])
+	_dbg.info("UI: [ActivatePanel] %s" % [key])
 	var peers: Dictionary = session.get_peers()
 	var peer_info: Dictionary = peers.get(peer_key, {})
 	var color: Color = peer_info.get("color", Color.WHITE)
@@ -522,7 +524,7 @@ func _activate_panel(
 	var title_str: String = "%s · %s" % [peer_display, panel_display]
 
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
-	Netw.dbg.trace(
+	_dbg.trace(
 		"UI: [CreatedWrapper] %s size_flags=%d" % [
 			key, wrapper.size_flags_vertical
 		]
@@ -575,14 +577,14 @@ func _rebuild_grid() -> void:
 			_add_wrapper_to_grid(_panel_wrappers[key], key)
 		else:
 			var msg := "UI: [RebuildFailed] Wrapper missing for key: %s" % [key]
-			Netw.dbg.warn(msg, func(m): push_warning(m))
+			_dbg.warn(msg, func(m): push_warning(m))
 
 
 ## Adds a wrapper to the grid and populates its panel if it's newly activated.
 ## [method _ready] fires synchronously on add_child, so all post-ready calls are
 ## safe after.
 func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
-	Netw.dbg.trace("UI: [AddChild] %s" % [key])
+	_dbg.trace("UI: [AddChild] %s" % [key])
 	_grid.add_child(wrapper)  # triggers _ready() on wrapper and its children
 
 	# Initialise peer context now that _ready() has fired on the panel.

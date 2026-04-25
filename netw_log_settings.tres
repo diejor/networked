@@ -4,6 +4,4 @@
 
 [resource]
 script = ExtResource("1_gsje6")
-module_overrides = {
-"addons.networked.debug": 5
-}
+global_level = 5

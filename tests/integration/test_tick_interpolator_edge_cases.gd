@@ -14,6 +14,9 @@ func before_test() -> void:
 	await _harness.setup(_runner)
 	_env = await _harness.create_environment(&"EdgeCasePlayer")
 	
+	var interpolator: TickInterpolator = _env.client_node.get_node("TickInterpolator")
+	interpolator.trace_interval = 1
+
 	_harness.set_time_factor(2.0)
 
 func after_test() -> void:

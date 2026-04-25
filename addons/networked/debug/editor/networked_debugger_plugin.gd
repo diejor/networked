@@ -15,6 +15,8 @@ var _uis: Dictionary[int, NetworkedDebuggerUI] = {}
 # peer_key -> session_id (tracks which session natively owns each peer)
 var _local_peer_map: Dictionary[String, int] = {}
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 func _has_capture(prefix: String) -> bool:
 	return prefix == "networked"
@@ -126,7 +128,7 @@ func _discard_session(session_id: int) -> void:
 
 ## Broadcasts a tiling update request to all active game sessions.
 func _broadcast_tiling_update() -> void:
-	Netw.dbg.trace("DebuggerPlugin: [Broadcast] Tiling update requested.")
+	_dbg.trace("DebuggerPlugin: [Broadcast] Tiling update requested.")
 	for session_id in _sessions:
 		var s := get_session(session_id)
 		if s and s.is_active():

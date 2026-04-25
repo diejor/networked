@@ -15,6 +15,8 @@ var _instance_lock: TCPServer
 var _last_seen_count: int = 0
 var _debounce_timer: SceneTreeTimer
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 func _enter_tree() -> void:
 	if not OS.has_feature("debug") or DisplayServer.get_name() == "headless" \
@@ -134,7 +136,7 @@ func _apply_window_layout(force: bool = false) -> void:
 	
 	var new_title := "[ID:%d] [RID:%s] %s" % [instance_id, rid, app_name]
 	
-	Netw.dbg.trace("Tiling ID:%d. Total:%d. Pos:(%d,%d) Size:(%d,%d)" % \
+	_dbg.trace("Tiling ID:%d. Total:%d. Pos:(%d,%d) Size:(%d,%d)" % \
 		[instance_id, total_count, x, y, content_size.x, content_size.y])
 	
 	var apply_logic := func() -> void:
@@ -144,7 +146,7 @@ func _apply_window_layout(force: bool = false) -> void:
 		
 		if Engine.has_method("is_embedded_in_editor") and \
 				Engine.is_embedded_in_editor():
-			Netw.dbg.warn("Tiling blocked: 'Embed Game' is active. " + \
+			_dbg.warn("Tiling blocked: 'Embed Game' is active. " + \
 				"Disable it in Editor or disable 'auto_tile_instances' " + \
 				"in Project Settings.", func(m: String) -> void: push_warning(m))
 			return

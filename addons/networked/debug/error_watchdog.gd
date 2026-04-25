@@ -10,13 +10,15 @@ var _mutex: Mutex
 var _quit: bool = false
 var _log_path: String
 
+var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 func _ready() -> void:
 	if not ProjectSettings.get_setting(
 		"debug/file_logging/enable_file_logging",
 		false
 	):
-		Netw.dbg.error(
+		_dbg.error(
 			"ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF " + \
 			"— enable it in Project Settings → Debug → File Logging.",
 			func(m): push_error(m)
@@ -57,7 +59,7 @@ func _tail_log() -> void:
 
 	var file := FileAccess.open(_log_path, FileAccess.READ)
 	if not file:
-		Netw.dbg.error(
+		_dbg.error(
 			"ErrorWatchdog: could not open log file: %s" % [_log_path],
 			func(m): push_error(m)
 		)

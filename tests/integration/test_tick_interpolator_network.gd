@@ -124,6 +124,7 @@ func _build_client_node() -> Node2D:
 	var interp := TickInterpolator.new()
 	interp.name = "TickInterpolator"
 	interp.property_modes = {&"position": TickInterpolator.Mode.LERP}
+	interp.trace_interval = 1
 	player.add_child(interp)
 
 	return player
