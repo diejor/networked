@@ -171,7 +171,7 @@ var _clock: NetworkClock
 var _states: Array[_PropertyState] = []
 var _trace_frame: int = 0
 
-var _expected_interval_ticks: int = 1
+var _expected_interval_ticks: int = 3
 var _has_explicit_sync_interval: bool = false
 
 var _peer_batcher: _Batcher
@@ -192,8 +192,7 @@ func _ready() -> void:
 			_dbg.warn(
 				"TickInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " + \
 				"Assign the owner explicitly for better stability.", 
-				[owner.name], 
-				func(m): push_warning(m)
+				[owner.name]
 			)
 	
 	process_priority = 100
@@ -351,7 +350,15 @@ func _calculate_min_lag() -> float:
 
 func _cache_sync_intervals() -> void:
 	var max_interval := 0.0
-	for sync in SynchronizersCache.get_client_synchronizers(owner):
+	
+	# Reset signal tracking
+	for state in _states:
+		state.uses_signal = false
+		
+	var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
+	var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
+	
+	for sync in all_syncs:
 		max_interval = maxf(max_interval, maxf(sync.replication_interval, sync.delta_interval))
 		
 		# Connect signals for immediate snapshot injection
@@ -360,11 +367,10 @@ func _cache_sync_intervals() -> void:
 		if not sync.synchronized.is_connected(_on_synced):
 			sync.synchronized.connect(_on_synced)
 		
-		# Mark which properties are covered by signals
-		var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
-		for state in _states:
-			if state.name in synced_props:
-				state.uses_signal = true
+	# Mark which properties are covered by signals
+	for state in _states:
+		if state.name in synced_props:
+			state.uses_signal = true
 				
 	_has_explicit_sync_interval = max_interval > 0.0
 	_expected_interval_ticks = maxi(1, ceili(max_interval * _clock.tickrate))
@@ -377,15 +383,18 @@ func _on_synced() -> void:
 			continue
 			
 		var value = state.source_obj.get(state.source_prop)
-		if not state._has_recorded or value != state.last_recorded:
-			if trace_interval > 0:
-				_dbg.trace("Record (Signal) %s: tick=%d val=%s", [state.name, tick, value])
-			
-			state.history.record(tick, value)
-			state.last_recorded = value
-			state.pending_snapshot = value
-			state._has_recorded = true
-			state.is_sleeping = false
+		
+		# If using signals, we trust the signal timing over polling.
+		# Always record it into history to ensure the jitter buffer stays
+		# aligned with the network stream.
+		if trace_interval > 0:
+			_dbg.trace("Record (Signal) %s: tick=%d val=%s", [state.name, tick, value])
+		
+		state.history.record(tick, value)
+		state.last_recorded = value
+		state.pending_snapshot = value
+		state._has_recorded = true
+		state.is_sleeping = false
 
 #endregion
 

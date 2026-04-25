@@ -41,12 +41,13 @@ func before_test() -> void:
 	_player.add_child(_visual)
 
 	_sync = MultiplayerSynchronizer.new()
+	_sync.name = "MultiplayerSynchronizer"
 	var cfg := SceneReplicationConfig.new()
 	var ppath := NodePath(".:position")
 	cfg.add_property(ppath)
 	_sync.replication_config = cfg
+	_sync.set_multiplayer_authority(999)
 	_player.add_child(_sync)
-	_sync.owner = _player
 
 	_interpolator = TickInterpolator.new()
 	_interpolator.property_modes = {&"position": TickInterpolator.Mode.LERP}
@@ -54,6 +55,10 @@ func before_test() -> void:
 	_interpolator.trace_interval = 1
 	_player.add_child(_interpolator)
 	_interpolator.set_process(false)
+
+	# Set owners BEFORE tree entry
+	_sync.owner = _player
+	_interpolator.owner = _player
 
 	add_child(_player)
 
@@ -104,7 +109,9 @@ func test_signal_injection_prevents_overwrite() -> void:
 	# clock.display_tick = 1 (if display_offset=0), factor = 0.0 -> should read P1 from history
 	_clock.display_offset = 0
 	_clock.tick_factor = 0.0
-	_interpolator._process(0.0)
+	
+	# Trigger internal logic directly since we don't have a peer batcher in this test
+	_interpolator._update_instance(_clock.display_tick, _clock.tick_factor, 0.0, 1.0)
 	
 	assert_vector(_player.position).is_equal(P1)
 
@@ -113,30 +120,33 @@ func test_visual_root_decoupling() -> void:
 	## When visual_root is set, interpolation writes the absolute smooth value 
 	## to the child, while the parent (physics body) keeps the raw network position.
 	
-	_sync.replication_interval = 0.5
+	# Setup visual root BEFORE recording snapshots
 	_interpolator.visual_root = NodePath("../Visual")
+	_visual.position = Vector2.ZERO
+	_interpolator.reset()
 	
 	_player.position = P0
-	_sync.synchronized.emit() # tick 0
+	_sync.synchronized.emit() # recorded at tick 0
 	
-	for i in 10: _tick() # clock.tick -> 10
+	_tick() # clock.tick -> 1
 	
 	_player.position = P1
-	_sync.synchronized.emit() # tick 10
+	_sync.synchronized.emit() # recorded at tick 1
 	
-	for i in 10: _tick() # clock.tick -> 20
+	# We want to display midpoint between tick 0 and tick 1.
+	# display_tick = 0, factor = 0.5.
+	_clock.display_offset = 1 # clock.tick(1) - 1 = 0
+	_clock.tick_factor = 0.5
 	
-	# We want to display tick 5 (midpoint between 0 and 10)
-	# clock.tick (20) - display_offset (15) = 5
-	_clock.display_offset = 15
-	_clock.tick_factor = 0.0
-	
-	_interpolator._process(0.0)
+	_interpolator._update_instance(_clock.display_tick, _clock.tick_factor, 0.0, 1.0)
 	
 	# Parent remains at raw P1 (latest set by sync)
 	assert_vector(_player.position).is_equal(P1)
 	
 	# Visual child is at midpoint P0.5 (relative to raw parent)
+	# global_interpolated = P0.lerp(P1, 0.5) = (50, 0)
+	# global_parent = P1 = (100, 0)
+	# relative_offset = (50, 0) - (100, 0) = (-50, 0)
 	assert_vector(_visual.position).is_equal_approx(P0.lerp(P1, 0.5) - P1, Vector2(0.1, 0.1))
 
 
@@ -151,7 +161,7 @@ func test_polling_is_disabled_when_signals_available() -> void:
 	
 	# Manual change without signal
 	_player.position = P1
-	_interpolator._process(0.0)
+	_interpolator._update_instance(_clock.display_tick, _clock.tick_factor, 0.0, 1.0)
 	
 	var buf := _interpolator.get_buffer(&"position")
 	# buf should still only have P0 from tick 0
