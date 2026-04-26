@@ -1,5 +1,5 @@
 class_name TestLocalMultiplayerPeer
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var server: LocalMultiplayerPeer
 var client: LocalMultiplayerPeer

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.gd$\")",
+      "Bash(ls *)",
+      "Bash(xargs grep *)",
+      "Bash(jj diff *)"
+    ]
+  }
+}

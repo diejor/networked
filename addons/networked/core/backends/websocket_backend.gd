@@ -1,11 +1,15 @@
+## [BackendPeer] implementation using [WebSocketMultiplayerPeer].
+##
+## Supports both [code]ws://[/code] (local) and [code]wss://[/code] (production) connections
+## and is compatible with web exports.
 @tool
 class_name WebSocketBackend
 extends BackendPeer
 
-
+## TCP port the server listens on.
 @export var port: int = 21253
+## Hostname used for WSS connections when no explicit address is supplied.
 @export var public_host: String = "ws.diejor.tech"
-
 
 var ws_peer: WebSocketMultiplayerPeer:
 	get:
@@ -13,36 +17,38 @@ var ws_peer: WebSocketMultiplayerPeer:
 	set(peer):
 		api.multiplayer_peer = peer
 
-
 func host() -> Error:
-	NetLog.trace("WebSocketBackend: host called.")
+	Netw.dbg.trace("WebSocketBackend: host called.")
 	var peer := WebSocketMultiplayerPeer.new()
+	peer.set_outbound_buffer_size(1048576) # 1MB
 	var err := peer.create_server(port)
 	
 	if err == OK:
 		ws_peer = peer
-		NetLog.info("WebSocket server ready on *:%d" % port)
+		Netw.dbg.info("WebSocket server ready on *:%d" % [port])
 		return OK
 	
-	NetLog.error("Failed to create WebSocket server: %s" % error_string(err))
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
-	NetLog.trace("WebSocketBackend: join called at %s" % server_address)
+	Netw.dbg.trace("WebSocketBackend: join called at %s" % [server_address])
 	var peer := WebSocketMultiplayerPeer.new()
+	peer.set_outbound_buffer_size(1048576) # 1MB
 	var url := build_url(server_address)
-	NetLog.debug("WebSocket connecting to URL: %s" % url)
+	Netw.dbg.debug("WebSocket connecting to URL: %s" % [url])
 
 	var err := peer.create_client(url)
-	if err != OK:
-		NetLog.error("Can't create client (%s) to %s" % [error_string(err), url])
-		return err
+	if err == OK:
+		ws_peer = peer
+		Netw.dbg.info("Client connecting to %s" % [url])
+		return OK
 	
-	ws_peer = peer
-	NetLog.info("Client connecting to %s" % url)
-	return OK
+	return err
 
-
+## Builds the WebSocket URL from [param server_address].
+##
+## Empty address maps to [code]wss://[member public_host][/code]; localhost maps to
+## [code]ws://localhost:[member port][/code]; anything else maps to [code]wss://[param server_address][/code].
 func build_url(server_address: String) -> String:
 	if server_address.is_empty():
 		return "wss://" + public_host

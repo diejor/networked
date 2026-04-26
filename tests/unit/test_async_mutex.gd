@@ -1,5 +1,5 @@
 class_name TestAsyncMutex
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var mutex: AsyncMutex
 
@@ -50,12 +50,12 @@ func test_second_lock_waits_until_release() -> void:
 	acquire_second.call()
 
 	# Give the coroutine a frame to start waiting
-	await await_idle_frame()
+	await get_tree().process_frame
 	assert_that(second_acquired[0]).is_false()
 
 	# Release the first lock — second should acquire
 	mutex.unlock()
-	await await_idle_frame()
+	await wait_until(func(): return second_acquired[0])
 	assert_that(second_acquired[0]).is_true()
 	assert_that(mutex.is_locked()).is_true()
 

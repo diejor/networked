@@ -4,7 +4,7 @@
 ## Players are spawned via harness.spawn_player() which bypasses the RPC chain
 ## and directly calls lobby.add_player(), testing the server-side spawn path.
 class_name TestPlayerSpawn
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
@@ -20,7 +20,7 @@ func before_test() -> void:
 	add_child(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
 
-	var server_mgr: MultiplayerLobbyManager = harness.get_server().lobby_manager
+	var server_mgr := harness._get_lobby_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 
 	client0 = await harness.add_client()
@@ -30,7 +30,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		harness.teardown()
-		await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 
 func test_spawned_player_is_in_lobby() -> void:

@@ -1,8 +1,16 @@
+## Utility class providing async/await helpers for signal-based flow control.
 class_name Async
 extends Object
 
-## Awaits a signal but aborts if the timeout is reached first.
-## Returns `true` if it timed out, and `false` if the signal fired in time.
+
+## Awaits [param target_signal] and aborts early if [param timer] expires first.
+##
+## Returns [code]true[/code] if the timer fired before the signal, [code]false[/code] if the signal fired in time.
+## [codeblock]
+## var timer := get_tree().create_timer(5.0)
+## if await Async.timeout(my_signal, timer):
+##     push_error("Timed out waiting for my_signal.")
+## [/codeblock]
 static func timeout(target_signal: Signal, timer: SceneTreeTimer) -> bool:
 	var dummy := RefCounted.new()
 	dummy.add_user_signal("resolved")

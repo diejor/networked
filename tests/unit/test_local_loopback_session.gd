@@ -1,11 +1,11 @@
 class_name TestLocalLoopbackSession
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 var session: LocalLoopbackSession
 
 
-func before():
-	NetLog.current_level = NetLog.Level.NONE
+func after():
+	NetwLog.pop_settings()
 
 
 func before_test() -> void:

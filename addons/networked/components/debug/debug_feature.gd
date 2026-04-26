@@ -1,6 +1,8 @@
+## Utility class for conditionally removing debug-only nodes from non-debug builds.
 class_name DebugFeature
 extends Object
 
+## Frees [param node] unless the process is both a debug build and has collision hints enabled.
 static func free_if_debug(node: Node) -> void:
 	if Engine.is_editor_hint():
 		return

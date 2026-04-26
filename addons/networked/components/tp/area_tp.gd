@@ -1,11 +1,12 @@
 @tool
-class_name AreaTP
+class_name AreaTP2D
 extends Area2D
 
-## A trigger area that teleports entities possessing a [TPComponent] to a designated [SceneNodePath].
+## A 2D trigger area that teleports entities possessing a [TPComponent] to a designated [SceneNodePath].
 ##
 ## Teleportation logic is executed strictly on the client that owns the entering body.
 ## The server and non-authoritative clients will ignore the trigger.
+## For 3D physics bodies use [AreaTP3D] instead.
 
 ## Emitted locally immediately before the entity is teleported.
 ## [param body] is guaranteed to have a valid [TPComponent] when this is emitted.
@@ -53,7 +54,7 @@ func _on_body_entered(body: Node2D) -> void:
 	if tp == null or multiplayer.is_server() or not tp.is_multiplayer_authority():
 		return
 	
-	assert(target_tp and target_tp.is_valid(), "AreaTP: `target_tp` is not valid.")
+	assert(target_tp and target_tp.is_valid(), "AreaTP2D: `target_tp` is not valid.")
 	
 	teleport.emit(body)
 	tp.teleport.call_deferred(target_tp)

@@ -6,7 +6,7 @@
 ## C++ MultiplayerSynchronizer method that requires a real peer registered in the
 ## engine's replication interface. That requirement belongs in integration tests.
 class_name TestLobbySynchronizer
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const SYNCHRONIZER_SCENE := preload("res://addons/networked/core/lobby/LobbySynchronizer.tscn")
 

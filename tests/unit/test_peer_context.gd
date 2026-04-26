@@ -3,7 +3,7 @@
 ## No multiplayer or scene tree required — PeerContext is a plain RefCounted.
 ## Dummy bucket types are defined inline to avoid coupling to real components.
 class_name TestPeerContext
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 
 ## Dummy bucket types used as distinct keys in these tests.

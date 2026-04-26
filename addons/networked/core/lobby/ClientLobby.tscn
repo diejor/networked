@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/core/lobby/lobby.gd" id="1_4dcnm"]
 [ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/core/lobby/LobbySynchronizer.tscn" id="2_ooybb"]
 
-[node name="Lobby" type="Node2D" unique_id=46516096 node_paths=PackedStringArray("synchronizer")]
+[node name="Lobby" type="Node" unique_id=46516096 node_paths=PackedStringArray("synchronizer")]
 script = ExtResource("1_4dcnm")
 synchronizer = NodePath("LobbySynchronizer")
 

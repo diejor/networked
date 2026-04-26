@@ -1,12 +1,6 @@
 ## Integration tests for PeerContext lifecycle within a real multiplayer session.
-##
-## Covers two properties that have no unit-level equivalent:
-##   1. Loopback isolation — server and client in the same process maintain
-##      separate PeerContext instances and SaveComponent buckets never overlap.
-##   2. Disconnect cleanup — the server erases a peer's context when that peer
-##      disconnects, preventing stale state from leaking across sessions.
 class_name TestPeerContextLifecycle
-extends GdUnitTestSuite
+extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
@@ -15,17 +9,24 @@ const LOBBY_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
-var save_dir: String
+var test_dir: String
+var backend: FileSystemBackend
+var db: NetworkedDatabase
 
 
 func before_test() -> void:
-	save_dir = create_temp_dir("peer_context_lifecycle")
+	test_dir = create_temp_dir("peer_context_lifecycle")
+	backend = auto_free(FileSystemBackend.new())
+	backend.base_dir = test_dir
+	db = auto_free(NetworkedDatabase.new())
+	db.backend = backend
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
 	await harness.setup(LOBBY_MANAGER_SCENE)
 
-	harness.get_server().lobby_manager.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
+	var server_mgr := harness._get_lobby_manager(harness.get_server())
+	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
 
 	client0 = await harness.add_client()
 
@@ -33,7 +34,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		harness.teardown()
-		await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 
 # ---------------------------------------------------------------------------
@@ -50,9 +51,7 @@ func test_context_erased_on_peer_disconnect() -> void:
 	assert_that(server._peer_contexts.has(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
-	# Two frames: one for the close to propagate, one for the server to poll it.
-	await get_tree().process_frame
-	await get_tree().process_frame
+	await wait_until(func(): return not server._peer_contexts.has(client_peer_id))
 
 	assert_that(server._peer_contexts.has(client_peer_id)).is_false()
 
@@ -66,7 +65,8 @@ func _spawn_save_player() -> void:
 		client0, TEST_LEVEL_SAVE_SCENE.resource_path, SPAWNER_PATH)
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.save_dir = save_dir
+	save_comp.database = db
+	save_comp.table_name = &"players"
 
 	# Wait for the replicated player to appear on the client side so both
 	# buckets are populated before any assertions run.

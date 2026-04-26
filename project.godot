@@ -15,16 +15,30 @@ run/main_scene="uid://bi445hl7e416b"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+NetworkedDebugger="*uid://bg56gori67101"
+
+[debug]
+
+file_logging/enable_file_logging=true
+
+[display]
+
+window/subwindows/embed_subwindows=false
+
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg")
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/script-ide/plugin.cfg", "res://addons/tube/plugin.cfg")
 
 [gdunit4]
 
 report/godot/push_error=true
-report/hooks={
-"res://addons/networked/utils/net_log_session_hook.gd": true
-}
+hooks/session_hooks=Dictionary[String, bool]({
+"res://addons/gdUnit4/src/core/hooks/GdUnitHtmlReporterTestSessionHook.gd": true,
+"res://addons/gdUnit4/src/core/hooks/GdUnitXMLReporterTestSessionHook.gd": true,
+"res://tests/helpers/networked_test_session_hook.gd": true
+})
 
 [input]
 
@@ -52,6 +66,7 @@ move_right={
 [networked]
 
 logging/active_profile="uid://dd2xtj1kbwpm7"
+debug/window_scale=0.7
 
 [physics]
 

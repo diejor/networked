@@ -1,22 +1,33 @@
+## [BackendPeer] implementation that delegates transport to a duck-typed TubeClient node.
+##
+## Assign a [code]NodePath[/code] to a TubeClient node in the scene. Call
+## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal — this
+## backend will create or join a Tube session and copy its [MultiplayerAPI] into [member BackendPeer.api].
 @tool
 class_name TubeBackend
 extends BackendPeer
 
+## Scene-relative path to the TubeClient node that manages the Tube transport.
 @export_node_path("Node") var tube_client_path: NodePath
 
 var tube: TubeWrapper
 
+## Resolves the TubeClient node at [param tree] and wires it into the backend.
+##
+## Must be called before [method host] or [method join].
+## Returns [code]ERR_UNCONFIGURED[/code] if [member tube_client_path] is empty,
+## or [code]ERR_INVALID_DATA[/code] if the node is not a valid TubeClient.
 func setup(tree: MultiplayerTree) -> Error:
-	NetLog.trace("TubeBackend: setup called.")
+	Netw.dbg.trace("TubeBackend: setup called.")
 	if tube_client_path.is_empty():
-		NetLog.error("TubeBackend: TubeClient path is empty.")
+		Netw.dbg.error("TubeBackend: TubeClient path is empty.", func(m): push_error(m))
 		return ERR_UNCONFIGURED
 		
 	var node = tree.get_node_or_null(tube_client_path)
 	tube = TubeWrapper.new(node)
 	
 	if not tube.is_valid():
-		NetLog.error("TubeBackend: Assigned node is not a valid TubeClient.")
+		Netw.dbg.error("TubeBackend: Assigned node is not a valid TubeClient.", func(m): push_error(m))
 		tube = null
 		return ERR_INVALID_DATA
 	
@@ -27,32 +38,32 @@ func setup(tree: MultiplayerTree) -> Error:
 	
 	return OK
 
+## Creates a new Tube session and copies the session ID to the clipboard. Returns [code]OK[/code] or an error code.
 func host() -> Error:
-	NetLog.trace("TubeBackend: host called.")
+	Netw.dbg.trace("TubeBackend: host called.")
 	assert(tube != null, "Backend needs to `setup()` first.")
 		
 	tube.create_session()
-	NetLog.debug("Tube state after create_session: %d" % tube.state)
+	Netw.dbg.debug("Tube state after create_session: %d" % [tube.state])
 	
 	if tube.state == TubeWrapper.State.CREATING_SESSION or tube.state == TubeWrapper.State.SESSION_CREATED:
-		NetLog.info("Tube session ready at `%s` (saved to clipboard). " % tube.session_id)
+		Netw.dbg.info("Tube session ready at `%s` (saved to clipboard). " % [tube.session_id])
 		DisplayServer.clipboard_set(tube.session_id)
 		return OK
 		
-	NetLog.error("Tube failed to create session. State: %d" % tube.state)
 	return ERR_CANT_CREATE
 
+## Joins the Tube session identified by [param server_address]. Returns [code]OK[/code] or an error code.
 func join(server_address: String, _username: String = "") -> Error:
-	NetLog.trace("TubeBackend: join called at %s" % server_address)
+	Netw.dbg.trace("TubeBackend: join called at %s" % [server_address])
 	assert(tube != null, "Backend needs to `setup()` first.")
 		
 	tube.join_session(server_address)
-	NetLog.debug("Tube state after join_session: %d" % tube.state)
+	Netw.dbg.debug("Tube state after join_session: %d" % [tube.state])
 	
 	if tube.state == TubeWrapper.State.JOINING_SESSION or tube.state == TubeWrapper.State.SESSION_JOINED:
 		return OK
 		
-	NetLog.error("Tube failed to join session. State: %d" % tube.state)
 	return ERR_CANT_CONNECT
 
 func peer_reset_state() -> void:

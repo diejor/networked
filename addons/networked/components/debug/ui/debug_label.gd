@@ -1,3 +1,4 @@
+## Simple debug label that automatically frees itself in non-debug builds.
 class_name DebugLabel
 extends Label
 
