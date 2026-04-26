@@ -39,7 +39,7 @@ func after_test() -> void:
 	clean_temp_dir()
 	if is_instance_valid(harness):
 		harness.teardown()
-		await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 
 ## Helper: joins a player via the real RPC chain and overrides its database.

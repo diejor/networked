@@ -69,27 +69,30 @@ func reset_state() -> void:
 	_reporting_checked = false
 	_reporting_enabled = false
 	_capture_registered = false
-	
+
 	if _clock_monitor:
 		_clock_monitor.clear_all()
-	
+
 	for ctx in _debug_contexts.values():
 		if is_instance_valid(ctx):
 			ctx.free()
-			
+
 	_debug_contexts.clear()
 	_trees.clear()
-	
+
 	_message_queue.clear()
 	_cycle_peer_events.clear()
 	_watched.clear()
-	
+	active_visualizers.clear()
+
 	if _telemetry:
 		_telemetry.clear()
-		
+
+	if LocalLoopbackSession.shared:
+		LocalLoopbackSession.shared.reset()
+
 	Netw.dbg.reset()
 	_dbg.trace("Reporter: State reset (deep).")
-
 
 static func _get_instance() -> NetworkedDebugReporter:
 	if Engine.has_singleton("NetworkedDebugger"):
@@ -214,6 +217,9 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 		return
 		
 	_trees.erase(mt)
+	var ctx: NetDebugTreeContext = _debug_contexts.get(mt)
+	if is_instance_valid(ctx):
+		ctx.free()
 	_debug_contexts.erase(mt)
 	
 	var tree_name := mt.get_tree_name()
@@ -338,9 +344,8 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 		func() -> void:
 			var mt_instance = mt_ref.get_ref()
 			if mt_instance:
-				_check_zombie_player(peer_id, mt_instance),
-		CONNECT_ONE_SHOT
-	)
+				_check_zombie_player(peer_id, mt_instance)
+	, CONNECT_ONE_SHOT)
 
 
 ## Scans active lobbies for nodes still owned by [param peer_id].

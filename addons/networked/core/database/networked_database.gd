@@ -170,7 +170,7 @@ func register_schema(table: StringName, columns: Array[StringName]) -> void:
 	schema_registered.emit(table, existing.duplicate())
 
 	if not _initialized:
-		_initialize_backend.call_deferred()
+		_initialize_backend()
 
 
 ## Returns the registered column names for [param table], or an empty array if

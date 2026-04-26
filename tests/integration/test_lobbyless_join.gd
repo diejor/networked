@@ -20,7 +20,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		harness.teardown()
-		await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 
 func test_world_wrapper_created_on_server() -> void:

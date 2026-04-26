@@ -485,6 +485,14 @@ class _Batcher extends RefCounted:
 
 	func unregister(inst: TickInterpolator) -> void:
 		instances.erase(inst)
+		if instances.is_empty():
+			shutdown()
+
+	func shutdown() -> void:
+		if clock and clock.after_tick.is_connected(_on_clock_tick):
+			clock.after_tick.disconnect(_on_clock_tick)
+		clock = null
+		instances.clear()
 
 	func _on_clock_tick(_delta: float, tick: int) -> void:
 		for inst in instances:

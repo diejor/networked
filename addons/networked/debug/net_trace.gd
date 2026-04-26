@@ -134,3 +134,4 @@ static func _pop_span(span: RefCounted) -> void:
 ## Clears active spans from the previous session.
 static func reset() -> void:
 	_active.clear()
+	message_delegate = Callable()
