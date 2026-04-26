@@ -332,8 +332,12 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 	event.peer_id = peer_id
 	_queue("networked:peer_disconnected", event.to_dict(), mt)
 	
+	var mt_ref := weakref(mt)
 	get_tree().create_timer(2.0).timeout.connect(
-		func() -> void: _check_zombie_player(peer_id, mt),
+		func() -> void:
+			var mt_instance = mt_ref.get_ref()
+			if mt_instance:
+				_check_zombie_player(peer_id, mt_instance),
 		CONNECT_ONE_SHOT
 	)
 
