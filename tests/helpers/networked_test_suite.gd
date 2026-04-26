@@ -23,3 +23,13 @@ func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
 		if timeout_timer.time_left <= 0:
 			fail("Timed out waiting for condition after %.1f seconds." % timeout)
 			return
+
+
+## Drains the [SceneTree] of pending [code]queue_free[/code] calls and 
+## [code]call_deferred[/code] operations by awaiting multiple frames.
+## [br][br]
+## Use this in [method after_test] or when cleaning up complex scenes to 
+## prevent state leakage between test cases.
+static func drain_frames(tree: SceneTree, count: int = 3) -> void:
+	for i in count:
+		await tree.process_frame

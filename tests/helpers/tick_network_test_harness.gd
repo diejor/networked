@@ -142,12 +142,57 @@ func create_environment_with_sprite(node_name: StringName) -> TickSimulationEnvi
 	return env
 
 func sync_ticks(n: int) -> void:
-	@warning_ignore("redundant_await")
-	await _runner.simulate_frames(n)
+	await sync_ticks_real(n)
+
+
+## Advances the simulation by exactly [param n] network ticks.
+## [br][br]
+## This is more reliable than [method GdUnitSceneRunner.simulate_frames] in CI 
+## because it anchors to the actual simulation clock signals.
+func sync_ticks_real(n: int) -> void:
+	var clock := _inner.get_server().get_service(NetworkClock) as NetworkClock
+	if not clock:
+		await _runner.simulate_frames(n)
+		return
+		
+	var target_tick := clock.tick + n
+	
+	# Calculate approximate frames needed: (ticks * physics_fps / tickrate)
+	# We add a small buffer to ensure we reach the target.
+	var physics_fps: int = ProjectSettings.get_setting(
+		"physics/common/physics_ticks_per_second", 60)
+	var estimated_frames := ceili(float(n) * float(physics_fps) / float(TICKRATE))
+	
+	# Simulate the bulk of frames in one go (very fast)
+	if estimated_frames > 2:
+		await _runner.simulate_frames(estimated_frames - 2)
+	
+	# Fine-tune the last few ticks to hit exactly target_tick
+	var timeout := 100
+	while clock.tick < target_tick and timeout > 0:
+		await _runner.simulate_frames(1)
+		timeout -= 1
+
+
+## Awaits until the client [NetworkClock] is fully synchronized with the server.
+func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
+	var client_clock := _client.get_service(NetworkClock) as NetworkClock
+	var timeout := timeout_ticks
+	
+	while not client_clock.is_synchronized and timeout > 0:
+		# Simulate in small batches to allow the handshake RPCs to fly
+		await _runner.simulate_frames(2)
+		timeout -= 1
+	
+	assert(client_clock.is_synchronized, 
+		"Timed out waiting for NetworkClock synchronization")
+
 
 func yield_to_sync(extra_frames: int = 0) -> void:
-	var frames := DISPLAY_OFFSET + ceili(DELTA_INTERVAL * TICKRATE) + 4 + extra_frames
-	await sync_ticks(frames)
+	# Calculate total ticks needed to cover display offset + replication interval
+	var needed_ticks := DISPLAY_OFFSET + ceili(DELTA_INTERVAL * TICKRATE) + \
+		4 + extra_frames
+	await sync_ticks_real(needed_ticks)
 
 func set_time_factor(factor: float) -> void:
 	_runner.set_time_factor(factor)

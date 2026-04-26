@@ -68,6 +68,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 func reset_state() -> void:
 	_reporting_checked = false
 	_reporting_enabled = false
+	_capture_registered = false
 	
 	if _clock_monitor:
 		_clock_monitor.clear_all()

@@ -14,15 +14,18 @@ func before_test() -> void:
 	await _harness.setup(_runner)
 	_env = await _harness.create_environment(&"EdgeCasePlayer")
 	
+	# Ensure the clock is synchronized before we start any movement tests
+	await _harness.wait_for_clock_sync()
+	
 	var interpolator: TickInterpolator = _env.client_node.get_node("TickInterpolator")
-	interpolator.trace_interval = 1
+	interpolator.trace_interval = 0
 
-	_harness.set_time_factor(2.0)
+	_harness.set_time_factor(10.0)
 
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		_harness.teardown()
-	await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 func test_authority_handover() -> void:
 	const START := Vector2(0.0, 0.0)

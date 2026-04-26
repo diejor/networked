@@ -55,6 +55,9 @@ func before_test() -> void:
 	# Client clock: join() has already fired `configured`, so we trigger registration manually.
 	var client_clock := _add_clock(_client)
 	client_clock._on_tree_configured()
+	
+	if not client_clock.is_synchronized:
+		await timeout_await(client_clock.clock_synchronized)
 
 	# Build identically-named nodes under each peer's MultiplayerTree so the
 	# MultiplayerSynchronizer can route updates by matching relative paths.
@@ -70,7 +73,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		_harness.teardown()
-	await get_tree().process_frame
+	await drain_frames(get_tree(), 3)
 
 
 # ---------------------------------------------------------------------------
