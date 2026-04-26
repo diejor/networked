@@ -130,10 +130,12 @@ func get_buffer(property: StringName) -> HistoryBuffer:
 func disable_for(duration: float) -> SceneTreeTimer:
 	process_mode = PROCESS_MODE_DISABLED
 	reset()
+	var self_ref := weakref(self)
 	var timer := get_tree().create_timer(duration)
 	timer.timeout.connect(func():
-		if is_instance_valid(self) and owner and not owner.is_multiplayer_authority():
-			process_mode = PROCESS_MODE_INHERIT
+		var inst = self_ref.get_ref()
+		if inst and is_instance_valid(inst) and inst.owner and not inst.owner.is_multiplayer_authority():
+			inst.process_mode = PROCESS_MODE_INHERIT
 	)
 	return timer
 
@@ -195,6 +197,14 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _peer_batcher:
 		_peer_batcher.unregister(self)
+	
+	if owner:
+		var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
+		for sync in all_syncs:
+			if sync.delta_synchronized.is_connected(_on_synced):
+				sync.delta_synchronized.disconnect(_on_synced)
+			if sync.synchronized.is_connected(_on_synced):
+				sync.synchronized.disconnect(_on_synced)
 
 
 func _process(delta: float) -> void:

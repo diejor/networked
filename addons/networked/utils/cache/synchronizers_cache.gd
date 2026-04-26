@@ -17,6 +17,11 @@ static func register_provider(provider: Callable) -> void:
 	_providers.append(provider)
 
 
+## Clears all registered providers.
+static func reset() -> void:
+	_providers.clear()
+
+
 ## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code] points to [param target_node].
 static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
 	var synchronizers: Array[MultiplayerSynchronizer] = []

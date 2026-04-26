@@ -218,18 +218,8 @@ func _ready() -> void:
 	get_tree().node_removed.connect(_on_node_removed)
 
 	# Peer events: notify reporter (spans, topology) and refresh decoration.
-	mt.peer_connected.connect(func(id: int):
-		var r := _reporter_ref.get_ref() as NetworkedDebugReporter
-		if r:
-			r._on_peer_connected(id, mt)
-		_refresh_all()
-	)
-	mt.peer_disconnected.connect(func(id: int):
-		var r := _reporter_ref.get_ref() as NetworkedDebugReporter
-		if r:
-			r._on_peer_disconnected(id, mt)
-		_refresh_all()
-	)
+	mt.peer_connected.connect(_on_mt_peer_connected)
+	mt.peer_disconnected.connect(_on_mt_peer_disconnected)
 
 	# Identity changes: notify reporter to re-emit session registration.
 	mt.authority_client_changed.connect(_on_authority_client_changed)
@@ -242,10 +232,56 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_disconnect_all()
 	for lobby: Lobby in _hooked_lobbies.keys():
 		_unhook_synchronizer(lobby)
 	_hooked_lobbies.clear()
 	_lobby_tokens.clear()
+
+
+func _disconnect_all() -> void:
+	var mt: MultiplayerTree = _mt_ref.get_ref()
+	
+	if is_inside_tree():
+		get_tree().node_added.disconnect(_on_node_added)
+		get_tree().node_removed.disconnect(_on_node_removed)
+	
+	if mt:
+		if mt.peer_connected.is_connected(_on_mt_peer_connected):
+			mt.peer_connected.disconnect(_on_mt_peer_connected)
+		if mt.peer_disconnected.is_connected(_on_mt_peer_disconnected):
+			mt.peer_disconnected.disconnect(_on_mt_peer_disconnected)
+		if mt.authority_client_changed.is_connected(_on_authority_client_changed):
+			mt.authority_client_changed.disconnect(_on_authority_client_changed)
+		if mt.configured.is_connected(_on_configured):
+			mt.configured.disconnect(_on_configured)
+		
+		var clock: NetworkClock = mt.get_service(NetworkClock)
+		if clock and clock.pong_received.is_connected(_on_clock_pong):
+			clock.pong_received.disconnect(_on_clock_pong)
+			
+		var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
+		if is_instance_valid(lm):
+			if lm.lobby_spawned.is_connected(_on_lobby_spawned):
+				lm.lobby_spawned.disconnect(_on_lobby_spawned)
+			if lm.lobby_despawned.is_connected(_on_lobby_despawned):
+				lm.lobby_despawned.disconnect(_on_lobby_despawned)
+
+
+func _on_mt_peer_connected(id: int) -> void:
+	var mt: MultiplayerTree = _mt_ref.get_ref()
+	var r := _reporter_ref.get_ref() as NetworkedDebugReporter
+	if r and mt:
+		r._on_peer_connected(id, mt)
+	_refresh_all()
+
+
+func _on_mt_peer_disconnected(id: int) -> void:
+	var mt: MultiplayerTree = _mt_ref.get_ref()
+	var r := _reporter_ref.get_ref() as NetworkedDebugReporter
+	if r and mt:
+		r._on_peer_disconnected(id, mt)
+	_refresh_all()
 
 
 func _on_configured() -> void:

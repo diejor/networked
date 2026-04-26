@@ -615,6 +615,8 @@ func _disconnect_backend_signals() -> void:
 func _on_exiting() -> void:
 	Netw.dbg.trace("MultiplayerTree: Exiting.")
 	
+	_disconnect_backend_signals()
+	
 	var debugger = null
 	if Engine.has_singleton("NetworkedDebugger"):
 		debugger = Engine.get_singleton("NetworkedDebugger")

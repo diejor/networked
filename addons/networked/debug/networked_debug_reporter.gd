@@ -57,6 +57,7 @@ var _last_manifest_min_msec: Dictionary = {}
 
 var _is_sending_manifest: bool = false
 var _clock_monitor: NetClockMonitor = null
+var _pending_zombie_checks: Array[SceneTreeTimer] = []
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -85,12 +86,21 @@ func reset_state() -> void:
 	_watched.clear()
 	active_visualizers.clear()
 
+	for timer in _pending_zombie_checks:
+		if is_instance_valid(timer):
+			# Disconnect all connections from the timeout signal
+			for connection in timer.timeout.get_connections():
+				timer.timeout.disconnect(connection.callable)
+	_pending_zombie_checks.clear()
+
 	if _telemetry:
 		_telemetry.clear()
 
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()
+		LocalLoopbackSession.shared = null
 
+	SynchronizersCache.reset()
 	Netw.dbg.reset()
 	_dbg.trace("Reporter: State reset (deep).")
 
@@ -340,8 +350,14 @@ func _on_peer_disconnected(peer_id: int, mt: MultiplayerTree) -> void:
 	_queue("networked:peer_disconnected", event.to_dict(), mt)
 	
 	var mt_ref := weakref(mt)
-	get_tree().create_timer(2.0).timeout.connect(
+	var timer := get_tree().create_timer(2.0)
+	_pending_zombie_checks.append(timer)
+	
+	timer.timeout.connect(
 		func() -> void:
+			if timer in _pending_zombie_checks:
+				_pending_zombie_checks.erase(timer)
+				
 			var mt_instance = mt_ref.get_ref()
 			if mt_instance:
 				_check_zombie_player(peer_id, mt_instance)

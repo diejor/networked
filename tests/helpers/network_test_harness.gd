@@ -102,6 +102,8 @@ func teardown() -> void:
 	if is_inside_tree():
 		get_parent().remove_child(self)
 	queue_free()
+	
+	await NetworkedTestSuite.drain_frames(get_tree(), 3)
 
 
 func get_server() -> MultiplayerTree:

@@ -66,11 +66,14 @@ func _on_tiling_requested() -> void:
 	if _debounce_timer:
 		return
 	
+	var self_ref := weakref(self)
 	_debounce_timer = get_tree().create_timer(0.1)
 	_debounce_timer.timeout.connect(
 		func() -> void:
-			_debounce_timer = null
-			_apply_window_layout()
+			var inst = self_ref.get_ref()
+			if inst:
+				inst._debounce_timer = null
+				inst._apply_window_layout()
 	)
 
 
@@ -157,9 +160,11 @@ func _apply_window_layout(force: bool = false) -> void:
 		DisplayServer.window_set_position(Vector2i(x, y), win_id)
 		
 		# Persistence pass
+		var win_ref := weakref(win)
 		get_tree().create_timer(0.15).timeout.connect(
 			func() -> void:
-				if is_instance_valid(win):
+				var w = win_ref.get_ref()
+				if is_instance_valid(w):
 					DisplayServer.window_set_position(Vector2i(x, y), win_id)
 		)
 		
@@ -170,7 +175,8 @@ func _apply_window_layout(force: bool = false) -> void:
 		
 		get_tree().create_timer(0.5).timeout.connect(
 			func() -> void:
-				if is_instance_valid(win):
+				var w = win_ref.get_ref()
+				if is_instance_valid(w):
 					DisplayServer.window_set_flag(
 						DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, false, win_id
 					)
