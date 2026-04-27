@@ -69,15 +69,3 @@ func _register_settings() -> void:
 		"type": TYPE_BOOL,
 		"hint": PROPERTY_HINT_NONE,
 	})
-
-	var scale_name := "networked/debug/window_scale"
-	if not ProjectSettings.has_setting(scale_name):
-		ProjectSettings.set_setting(scale_name, 0.6)
-	
-	ProjectSettings.set_initial_value(scale_name, 0.6)
-	ProjectSettings.add_property_info({
-		"name": scale_name,
-		"type": TYPE_FLOAT,
-		"hint": PROPERTY_HINT_RANGE,
-		"hint_string": "0.1,1.0,0.1",
-	})

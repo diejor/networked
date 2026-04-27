@@ -26,7 +26,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	
-	var mt: MultiplayerTree = get_multiplayer_tree()
+	var mt: MultiplayerTree = get_parent().get_parent() as MultiplayerTree
 	assert(is_instance_valid(mt), "TPLayer must be added as a descendant of a MultiplayerTree")
 	mt.register_service(self, TPLayerAPI)
 
