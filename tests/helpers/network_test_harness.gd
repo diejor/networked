@@ -89,6 +89,10 @@ func add_client() -> MultiplayerTree:
 ## Should be called in after_test().
 func teardown() -> void:
 	NetwLog.pop_settings()
+	
+	if _session:
+		_session.reset()
+	
 	if is_instance_valid(_server):
 		_server.queue_free()
 
@@ -101,11 +105,12 @@ func teardown() -> void:
 
 	if is_inside_tree():
 		get_parent().remove_child(self)
-	queue_free()
-	
+
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree:
 		await NetworkedTestSuite.drain_frames(tree, 3)
+
+	queue_free()
 
 
 func get_server() -> MultiplayerTree:

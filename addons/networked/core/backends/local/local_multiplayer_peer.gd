@@ -58,6 +58,15 @@ func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> v
 		Netw.dbg.trace("Queued peer_connected for Client %d." % [peer_id])
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		linked_peers.clear()
+		_packet_queue.clear()
+		_current_packet.clear()
+		_peers_to_emit_connected.clear()
+		_peers_to_emit_disconnected.clear()
+
+
 func _poll() -> void:
 	if (not _is_server_peer) and _connection_status == CONNECTION_CONNECTING:
 		_connection_status = CONNECTION_CONNECTED
@@ -179,6 +188,8 @@ func _close() -> void:
 		var other: LocalMultiplayerPeer = linked_peers.get(peer_id)
 		if other:
 			other._remote_closed(my_id, _is_server_peer)
+	
+	_finalize_close()
 
 func _finalize_close() -> void:
 	_closing = false

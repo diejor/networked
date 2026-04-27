@@ -33,7 +33,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	if is_instance_valid(harness):
-		harness.teardown()
+		await harness.teardown()
 	await drain_frames(get_tree(), 3)
 
 

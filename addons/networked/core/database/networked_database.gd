@@ -77,8 +77,8 @@ enum SchemaMismatchPolicy {
 var _schema: Dictionary[StringName, Array] = {}
 var _initialized: bool = false
 
-# Cached TableRepository instances, keyed by table name.
-var _repositories: Dictionary[StringName, TableRepository] = {}
+# table → Script (entity subclass)
+var _table_scripts: Dictionary[StringName, Script] = {}
 
 
 # ── Table access ──────────────────────────────────────────────────────────────
@@ -92,9 +92,8 @@ var _repositories: Dictionary[StringName, TableRepository] = {}
 ## var entity := db.table(&"players").fetch(username)
 ## [/codeblock]
 func table(table_name: StringName) -> TableRepository:
-	if not _repositories.has(table_name):
-		_repositories[table_name] = TableRepository.new(self, table_name)
-	return _repositories[table_name]
+	var script := _table_scripts.get(table_name)
+	return TableRepository.new(self, table_name, script)
 
 
 ## Registers [param table_name] with an optional typed [param entity_script] and
@@ -113,10 +112,8 @@ func register_table(
 		table_name: StringName,
 		entity_script: Script = null,
 		columns: Array[StringName] = []) -> void:
-	if not _repositories.has(table_name):
-		_repositories[table_name] = TableRepository.new(self, table_name, entity_script)
-	else:
-		_repositories[table_name]._entity_script = entity_script
+	if entity_script:
+		_table_scripts[table_name] = entity_script
 
 	if not columns.is_empty():
 		register_schema(table_name, columns)

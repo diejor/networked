@@ -23,7 +23,7 @@ func setup(runner: GdUnitSceneRunner) -> void:
 
 func teardown() -> void:
 	if is_instance_valid(_inner):
-		_inner.teardown()
+		await _inner.teardown()
 	if is_inside_tree():
 		get_parent().remove_child(self)
 	queue_free()

@@ -81,7 +81,7 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		await _validate_current_scene()
 
 	var url := client_data.url
-	Netw.dbg.info("Connecting player %s to %s" % [client_data.username, url])
+	Netw.dbg.info("Connecting player %s to %s", [client_data.username, url])
 	
 	if manage_scene and _is_singleplayer(url):
 		# First attempt: Try to join an existing server on localhost.
@@ -91,11 +91,12 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		
 		# We use a short timeout and quiet=true so we can pivot to hosting
 		# quickly without error logs.
+		var quiet := true
 		var probe_err: Error = await client.join(
 			probe_url,
 			client_data.username,
 			1.0,
-			true
+			quiet
 		)
 		if probe_err == OK:
 			_request_join(client_data)
@@ -111,7 +112,6 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	var client_err: Error = await client.join(url, client_data.username)
 	if client_err == OK:
 		_request_join(client_data)
-
 
 func _request_join(client_data: MultiplayerClientData) -> void:
 	client.request_join_player.rpc_id(

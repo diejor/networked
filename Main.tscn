@@ -20,7 +20,7 @@ username = &"diego"
 spawner_path = SubResource("Resource_20pc6")
 metadata/_custom_type_script = "uid://tbhnhps2h4nm"
 
-[sub_resource type="Resource" id="Resource_03owx"]
+[sub_resource type="Resource" id="Resource_trn2v"]
 script = ExtResource("5_trn2v")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
@@ -39,7 +39,7 @@ metadata/_custom_type_script = "uid://xwxgwpe3rp8c"
 
 [node name="Client" type="Node" parent="NetworkSession" unique_id=185172770]
 script = ExtResource("2_r0du0")
-backend = SubResource("Resource_03owx")
+backend = SubResource("Resource_trn2v")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="NetworkSession/Client" unique_id=498939000]

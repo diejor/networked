@@ -51,8 +51,8 @@ script = ExtResource("3_kne1u")
 metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
-replication_interval = 0.25
-delta_interval = 0.25
+replication_interval = 0.1
+delta_interval = 0.1
 replication_config = SubResource("SceneReplicationConfig_kne1u")
 
 [node name="TPComponent" type="Node" parent="." unique_id=1784597384]

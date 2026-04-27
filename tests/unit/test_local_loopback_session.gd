@@ -64,6 +64,8 @@ func test_session_is_independent_of_shared_singleton() -> void:
 	assert_that(session.get_instance_id()).is_not_equal(
 		LocalLoopbackSession.get_shared_session().get_instance_id()
 	)
+	# Clean up pollution for test isolation
+	LocalLoopbackSession.shared = null
 
 
 func test_get_client_peer_delegates_to_create() -> void:

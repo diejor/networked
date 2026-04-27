@@ -179,6 +179,14 @@ func get_service(type: Script) -> Node:
 	return _services.get(type)
 
 
+## Forcefully clears all internal states and services to break circular
+## references during teardown.
+func dispose() -> void:
+	_services.clear()
+	_peer_contexts.clear()
+	_pending_world = null
+
+
 ## Returns the [PeerContext] for [param peer_id], creating one on first access.
 func get_peer_context(peer_id: int) -> PeerContext:
 	if peer_id not in _peer_contexts:
@@ -298,6 +306,11 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	
+	_connect_backend_signals()
+	
+	if is_online():
+		_config_api()
 	
 	for child in get_children():
 		if child is MultiplayerLobbyManager:
@@ -426,7 +439,7 @@ func _init() -> void:
 func _process(dt: float) -> void:
 	if Engine.is_editor_hint():
 		return
-		
+
 	if backend:
 		backend.poll(dt)
 
@@ -438,7 +451,7 @@ func _process(dt: float) -> void:
 func host(quiet: bool = false) -> Error:
 	Netw.dbg.trace("MultiplayerTree: Hosting session.")
 	backend.peer_reset_state()
-	
+
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
@@ -448,9 +461,9 @@ func host(quiet: bool = false) -> Error:
 					func(m): push_error(m)
 				)
 			return setup_err
-	
+
 	var connection_code: Error = backend.host()
-	
+
 	if connection_code == OK:
 		_config_api()
 	elif not quiet:
@@ -458,7 +471,7 @@ func host(quiet: bool = false) -> Error:
 			"Failed to host: %s" % [error_string(connection_code)], 
 			func(m): push_error(m)
 		)
-		
+
 	return connection_code
 
 
@@ -477,7 +490,7 @@ func join(
 		[server_address, username]
 	)
 	backend.peer_reset_state()
-	
+
 	if backend.has_method("setup"):
 		var setup_err: Error = backend.setup(self)
 		if setup_err != OK:
@@ -487,7 +500,7 @@ func join(
 					func(m): push_error(m)
 				)
 			return setup_err
-	
+
 	var connection_code: Error = backend.join(server_address, username)
 	if connection_code != OK:
 		if not quiet:
@@ -496,16 +509,15 @@ func join(
 				func(m): push_error(m)
 			)
 		return connection_code
-	
+
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		if not quiet:
 			Netw.dbg.error("Connection timed out.", func(m): push_error(m))
 		return ERR_CANT_CONNECT
-	
+
 	_config_api()
 	return OK
-
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
 func is_online() -> bool:
@@ -591,13 +603,16 @@ func _config_api() -> void:
 
 
 func _connect_backend_signals() -> void:
-	if not multiplayer_api: 
+	if not multiplayer_api:
 		return
-	multiplayer_api.peer_connected.connect(_on_peer_connected)
-	multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
-	multiplayer_api.connected_to_server.connect(_on_connected_to_server)
-	multiplayer_api.server_disconnected.connect(_on_server_disconnected)
-
+	if not multiplayer_api.peer_connected.is_connected(_on_peer_connected):
+		multiplayer_api.peer_connected.connect(_on_peer_connected)
+	if not multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
+		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
+	if not multiplayer_api.connected_to_server.is_connected(_on_connected_to_server):
+		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
+	if not multiplayer_api.server_disconnected.is_connected(_on_server_disconnected):
+		multiplayer_api.server_disconnected.connect(_on_server_disconnected)
 
 func _disconnect_backend_signals() -> void:
 	if not multiplayer_api: 
@@ -617,20 +632,29 @@ func _on_exiting() -> void:
 	
 	_disconnect_backend_signals()
 	
+	# When re-parenting, we only unregister the API from the previous path 
+	# to keep the connection alive. [method _enter_tree] handles re-registration.
+	if not is_queued_for_deletion():
+		if backend:
+			backend.unregister_tree(get_tree())
+		return
+	
 	var debugger = null
 	if Engine.has_singleton("NetworkedDebugger"):
 		debugger = Engine.get_singleton("NetworkedDebugger")
 	elif get_tree().root.has_node("NetworkedDebugger"):
 		debugger = get_tree().root.get_node("NetworkedDebugger")
-		
+	
 	if debugger:
 		debugger.unregister_tree(self)
-
+	
 	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
 		multiplayer_api.remove_meta(&"_multiplayer_tree")
-	_peer_contexts.clear()
+	
 	if backend:
-		backend.peer_reset_state()
+		backend.unconfigure_tree(get_tree())
+	
+	dispose()
 
 
 func _on_peer_connected(peer_id: int) -> void:

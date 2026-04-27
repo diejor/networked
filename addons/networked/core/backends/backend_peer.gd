@@ -36,6 +36,21 @@ func configure_tree(tree: SceneTree, root_path: NodePath) -> void:
 	tree.set_multiplayer(api, root_path)
 
 
+## Removes [member api] from the [SceneTree] without closing the peer.
+func unregister_tree(tree: SceneTree) -> void:
+	if not api or api.root_path.is_empty():
+		return
+	# Replaces the registry entry with a fresh empty [SceneMultiplayer] because 
+	# Godot 4 does not accept null for a non-root path.
+	tree.set_multiplayer(SceneMultiplayer.new(), api.root_path)
+
+
+## Removes [member api] from the [SceneTree] and closes the active peer.
+func unconfigure_tree(tree: SceneTree) -> void:
+	peer_reset_state()
+	unregister_tree(tree)
+
+
 ## Polls the underlying [MultiplayerPeer] each frame.
 func poll(_dt: float) -> void:
 	if api and api.has_multiplayer_peer():
