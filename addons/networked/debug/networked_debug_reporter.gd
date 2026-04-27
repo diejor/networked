@@ -1154,12 +1154,16 @@ static func _debug_build() -> bool:
 	if not _reporting_checked:
 		_reporting_checked = true
 		_reporting_enabled = true
-		var args := OS.get_cmdline_args()
-		for arg in args:
-			if (arg == "--gdunit" or arg == "--headless" or 
-					"GdUnitTestRunner.tscn" in arg):
-				_reporting_enabled = false
-				break
+		
+		if Netw.is_test_env():
+			_reporting_enabled = false
+		else:
+			var args := OS.get_cmdline_args()
+			for arg in args:
+				if arg == "--headless":
+					_reporting_enabled = false
+					break
+					
 	return _reporting_enabled and OS.has_feature("debug")
 
 

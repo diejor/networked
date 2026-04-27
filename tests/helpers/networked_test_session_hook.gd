@@ -21,6 +21,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 			log_level = arg.split("=")[1]
 			
 	NetwLog.push_setting_str(log_level)
+	OS.set_environment("NETW_TEST_LOG", log_level)
 	session.test_event.connect(_on_test_event)
 	
 	return GdUnitResult.success()

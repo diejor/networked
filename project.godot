@@ -29,7 +29,7 @@ window/subwindows/embed_subwindows=false
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/script-ide/plugin.cfg", "res://addons/tube/plugin.cfg")
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/tube/plugin.cfg")
 
 [gdunit4]
 

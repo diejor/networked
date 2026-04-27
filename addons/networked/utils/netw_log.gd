@@ -22,14 +22,15 @@ enum Level {
 }
 
 ## Global minimum log level applied when no per-module override matches.
-static var current_level: int = Level.INFO
+static var current_level: int = Level.NONE
 
 ## Per-module level overrides keyed by dot-separated module path.
 ## Example: [code]"core.network_session"[/code].
 static var module_levels: Dictionary = {}
 
-static var _min_active_level: int = Level.INFO
-static var _effective_min_level: int = Level.INFO
+static var _min_active_level: int = Level.NONE
+static var _effective_min_level: int = Level.NONE
+static var _effective_global_level: int = Level.NONE
 static var _settings_stack: Array[NetwLogSettings] = []
 static var _addon_root: String = ""
 static var _runtime_initialized: bool = false
@@ -45,12 +46,49 @@ const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 ## — makes module paths relative to the addon root so saved overrides survive
 ## directory renames.
 static func initialize(addon_root: String = "") -> void:
-	_addon_root = addon_root.replace("res://", "").trim_suffix("/")
+	if not addon_root.is_empty():
+		_addon_root = addon_root.replace("res://", "").trim_suffix("/")
+	
 	_runtime_initialized = true
 	current_level = Level.INFO
 	module_levels.clear()
 	_load_active_profile()
 	_recompute_min_level()
+
+
+static func _ensure_initialized() -> void:
+	if _runtime_initialized:
+		return
+	
+	if _addon_root.is_empty():
+		var stack := get_stack()
+		for frame: Dictionary in stack:
+			var src: String = frame.get("source", "")
+			if src.ends_with("netw_log.gd"):
+				_addon_root = src.get_base_dir().get_base_dir() \
+					.replace("res://", "").trim_suffix("/")
+				break
+		
+		# Robust fallback if stack trace is unavailable (e.g. release builds)
+		if _addon_root.is_empty():
+			_addon_root = "addons/networked"
+
+	_runtime_initialized = true
+	
+	var test_override := _detect_test_log_override()
+	if not test_override.is_empty():
+		# Load profile first so overrides in the string can cascade over it
+		_load_active_profile()
+		push_setting_str(test_override)
+	elif Netw.is_test_env():
+		current_level = Level.NONE
+		module_levels.clear()
+		_recompute_min_level()
+	else:
+		# In regular runtime, default to INFO and load assigned profile
+		current_level = Level.INFO
+		_load_active_profile()
+		_recompute_min_level()
 
 
 static func _load_active_profile() -> void:
@@ -100,24 +138,44 @@ static func _recompute_min_level() -> void:
 		if l != Level.INHERIT and l < _min_active_level:
 			_min_active_level = l
 	
-	if not _settings_stack.is_empty():
-		_effective_min_level = _stack_min_level()
-	else:
-		_effective_min_level = _min_active_level
+	_effective_min_level = _stack_min_level()
+	_effective_global_level = _compute_effective_global_level()
+
+
+static func _compute_effective_global_level() -> int:
+	for i in range(_settings_stack.size() - 1, -1, -1):
+		if _settings_stack[i].global_level != Level.INHERIT:
+			return _settings_stack[i].global_level
+	return current_level
 
 
 static func _stack_min_level() -> int:
-	var m: int = _min_active_level
-	for top: NetwLogSettings in _settings_stack:
-		if top.global_level != Level.INHERIT and top.global_level < m:
-			m = top.global_level
+	var m: int = Level.NONE
+	var found_global := false
+	
+	for i in range(_settings_stack.size() - 1, -1, -1):
+		var top := _settings_stack[i]
 		for l: int in top.module_overrides.values():
 			if l != Level.INHERIT and l < m:
 				m = l
+		if not found_global and top.global_level != Level.INHERIT:
+			if top.global_level < m:
+				m = top.global_level
+			found_global = true
+			break
+			
+	if not found_global:
+		for l: int in module_levels.values():
+			if l != Level.INHERIT and l < m:
+				m = l
+		if current_level < m:
+			m = current_level
+			
 	return m
 
 
 static func is_level_active_for_module(level: int, module_path: String) -> bool:
+	_ensure_initialized()
 	if level < _effective_min_level:
 		return false
 	return level >= get_effective_level(module_path)
@@ -126,6 +184,7 @@ static func is_level_active_for_module(level: int, module_path: String) -> bool:
 ## Fast check to see if a level is active for a specific script path.
 ## Allows components to early-out before doing expensive string formatting.
 static func is_level_active(level: int, script_path: String) -> bool:
+	_ensure_initialized()
 	if level < _effective_min_level:
 		return false
 	
@@ -140,7 +199,7 @@ static func is_level_active(level: int, script_path: String) -> bool:
 ## reaching the base profile settings.
 static func push_settings(settings: NetwLogSettings) -> void:
 	_settings_stack.push_back(settings)
-	_effective_min_level = _stack_min_level()
+	_recompute_min_level()
 
 
 ## Pops the topmost [NetwLogSettings] from the isolation stack.
@@ -148,10 +207,7 @@ static func pop_settings() -> void:
 	if not _settings_stack.is_empty():
 		_settings_stack.pop_back()
 	
-	if not _settings_stack.is_empty():
-		_effective_min_level = _stack_min_level()
-	else:
-		_effective_min_level = _min_active_level
+	_recompute_min_level()
 
 
 ## Returns the effective log level for [param module_path].
@@ -159,6 +215,10 @@ static func pop_settings() -> void:
 ## Walks up the dot-separated hierarchy until a matching override is found.
 ## Cascades through pushed settings before falling back to the base profile.
 static func get_effective_level(module_path: String) -> int:
+	_ensure_initialized()
+	if _settings_stack.is_empty() and module_levels.is_empty():
+		return current_level
+		
 	var parts := module_path.split(".")
 	
 	for i in range(_settings_stack.size() - 1, -1, -1):
@@ -261,6 +321,7 @@ static func _level_to_string(l: int) -> String:
 
 ## Dumps the current configuration state to the console.
 static func dump_settings() -> void:
+	_ensure_initialized()
 	print_rich("[color=cyan][b]--- NetwLog Configuration Dump ---[/b][/color]")
 	var root_str := _addon_root if not _addon_root.is_empty() else "(empty)"
 	print_rich("[color=gray]Addon Root:[/color] %s" % root_str)
@@ -301,10 +362,11 @@ static func dump_settings() -> void:
 ## Logs a [code]TRACE[/code]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func trace(msg: Variant, args: Array = []) -> void:
+	_ensure_initialized()
 	if Level.TRACE < _effective_min_level:
 		return
 	if not _is_debug:
-		if Level.TRACE >= current_level:
+		if Level.TRACE >= _effective_global_level:
 			_print("[TRACE]", msg, args, Level.TRACE, "", "")
 		return
 	var ctx := _get_context()
@@ -315,10 +377,11 @@ static func trace(msg: Variant, args: Array = []) -> void:
 ## Logs a [code]DEBUG[/code]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func debug(msg: Variant, args: Array = []) -> void:
+	_ensure_initialized()
 	if Level.DEBUG < _effective_min_level:
 		return
 	if not _is_debug:
-		if Level.DEBUG >= current_level:
+		if Level.DEBUG >= _effective_global_level:
 			_print("[DEBUG]", msg, args, Level.DEBUG, "", "")
 		return
 	var ctx := _get_context()
@@ -329,10 +392,11 @@ static func debug(msg: Variant, args: Array = []) -> void:
 ## Logs an [code]INFO[/code]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func info(msg: Variant, args: Array = []) -> void:
+	_ensure_initialized()
 	if Level.INFO < _effective_min_level:
 		return
 	if not _is_debug:
-		if Level.INFO >= current_level:
+		if Level.INFO >= _effective_global_level:
 			_print("[INFO]", msg, args, Level.INFO, "", "")
 		return
 	var ctx := _get_context()
@@ -352,10 +416,11 @@ static func info(msg: Variant, args: Array = []) -> void:
 static func warn(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
+	_ensure_initialized()
 	if Level.WARN < _effective_min_level:
 		return
 	if not _is_debug:
-		if Level.WARN >= current_level:
+		if Level.WARN >= _effective_global_level:
 			if typeof(msg) == TYPE_CALLABLE: (msg as Callable).call()
 			else: _print("[WARN]", msg, args, Level.WARN, "", "", link_call)
 		return
@@ -379,10 +444,11 @@ static func warn(
 static func error(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
+	_ensure_initialized()
 	if Level.ERROR < _effective_min_level:
 		return
 	if not _is_debug:
-		if Level.ERROR >= current_level:
+		if Level.ERROR >= _effective_global_level:
 			if typeof(msg) == TYPE_CALLABLE: (msg as Callable).call()
 			else: _print("[ERROR]", msg, args, Level.ERROR, "", "", link_call)
 		return
@@ -398,17 +464,6 @@ static func error(
 
 static func _get_context() -> Dictionary:
 	var stack := get_stack()
-
-	if not _runtime_initialized:
-		_runtime_initialized = true
-		for frame: Dictionary in stack:
-			var src: String = frame.get("source", "")
-			if src.ends_with("netw_log.gd"):
-				_addon_root = src.get_base_dir().get_base_dir() \
-					.replace("res://", "").trim_suffix("/")
-				break
-		_load_active_profile()
-		_recompute_min_level()
 
 	for i in range(1, stack.size()):
 		var frame: Dictionary = stack[i]
@@ -436,6 +491,15 @@ static func _module_from_path(path: String) -> String:
 	if not _addon_root.is_empty() and p.begins_with(_addon_root + "/"):
 		p = p.substr(_addon_root.length() + 1)
 	return p.replace("/", ".")
+
+
+static func _detect_test_log_override() -> String:
+	if OS.has_environment("NETW_TEST_LOG"):
+		return OS.get_environment("NETW_TEST_LOG")
+	for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+		if arg.begins_with("--netw-log="):
+			return arg.split("=")[1]
+	return ""
 
 
 static func _print(

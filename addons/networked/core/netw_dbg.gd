@@ -3,6 +3,31 @@
 ##
 ## Provides consolidated logging, span creation, and component handles.
 ## All state is static; do not instantiate directly.
+## [br][br]
+## [b]Performance Best Practices:[/b]
+## [br]To avoid expensive string formatting in release builds or when levels are 
+## suppressed, always pass arguments as an [Array] instead of using [code]%[/code]
+## directly in the message.
+## [codeblock]
+## # Correct (Optimized)
+## Netw.dbg.info("Player %s connected", [player_name])
+## # Incorrect (Expensive)
+## Netw.dbg.info("Player %s connected" % [player_name])
+## [/codeblock]
+## [br][br]
+## [b]Testing & Log Suppression:[/b]
+## [br]Logging is automatically set to [code]NONE[/code] in GdUnit4 environments 
+## to prevent console spam. To enable logging during a test run, use:
+## [br]- [b]CLI:[/b] Pass [code]--netw-log=<logl_string>[/code] after [code]--[/code].
+## [br]- [b]Env:[/b] Set the [code]NETW_TEST_LOG[/code] environment variable.
+## [br]- [b]Format:[/b] [code]"info,core.network=trace"[/code] (Module overrides supported).
+## [br][br]
+## [b]Preserving Editor Jump-Click:[/b]
+## [br]To make [method warn] or [method error] jump to your script instead of the 
+## logger when clicked in the console, pass a lambda that calls the global method:
+## [codeblock]
+## Netw.dbg.error("Critical failure", [], func(m): push_error(m))
+## [/codeblock]
 class_name NetwDbg
 extends RefCounted
 
@@ -115,6 +140,7 @@ func _log(
 	arg3: Variant,
 	arg4: Variant
 ) -> void:
+	NetwLog._ensure_initialized()
 	if level < NetwLog._effective_min_level:
 		return
 
