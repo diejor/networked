@@ -47,6 +47,10 @@ func _reset_debugger() -> void:
 		Engine.get_singleton("NetworkedDebugger").reset_state()
 	elif is_instance_valid(NetworkedDebugger):
 		NetworkedDebugger.reset_state()
+	
+	if LocalLoopbackSession.shared:
+		LocalLoopbackSession.shared.reset()
+		LocalLoopbackSession.shared = null
 
 
 func _assert_clean_state(event: GdUnitEvent) -> void:

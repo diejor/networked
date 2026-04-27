@@ -7,11 +7,14 @@ class_name LocalLoopbackBackend
 extends BackendPeer
 
 ## The shared in-process loopback session.
-var session: LocalLoopbackSession = LocalLoopbackSession.get_shared_session()
+var session: LocalLoopbackSession = null
 
 ## Initializes the loopback server peer. Returns [code]OK[/code].
 func host() -> Error:
 	Netw.dbg.trace("LocalLoopbackBackend: host called.")
+	if not session:
+		session = LocalLoopbackSession.get_shared_session()
+		
 	if not session.has_live_server():
 		session.reset()
 	api.multiplayer_peer = session.get_server_peer()
@@ -21,6 +24,9 @@ func host() -> Error:
 ## Creates a new loopback client peer and links it to the server. Returns [code]OK[/code].
 func join(_server_address: String, _username: String = "") -> Error:
 	Netw.dbg.trace("LocalLoopbackBackend: join called.")
+	if not session:
+		session = LocalLoopbackSession.get_shared_session()
+		
 	api.multiplayer_peer = session.create_client_peer()
 	Netw.dbg.info("Local loopback client ready.")
 	return OK

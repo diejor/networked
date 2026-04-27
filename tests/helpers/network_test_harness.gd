@@ -103,7 +103,9 @@ func teardown() -> void:
 		get_parent().remove_child(self)
 	queue_free()
 	
-	await NetworkedTestSuite.drain_frames(get_tree(), 3)
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree:
+		await NetworkedTestSuite.drain_frames(tree, 3)
 
 
 func get_server() -> MultiplayerTree:
