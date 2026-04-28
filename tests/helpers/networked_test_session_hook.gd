@@ -11,25 +11,26 @@ func _init() -> void:
 var _baseline_child_count: int = 0
 
 func startup(session: GdUnitTestSession) -> GdUnitResult:
-	var log_level := "none"
+	assert(Netw.is_test_env(), "NetworkedTestHook: GdUnit4 environment not detected! Check markers (Engine meta or cmdline args).")
 	
+	var log_level := "none"
+
 	if OS.has_environment("NETW_TEST_LOG"):
 		log_level = OS.get_environment("NETW_TEST_LOG")
-	
+
 	for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
 		if arg.begins_with("--netw-log="):
 			log_level = arg.split("=")[1]
-			
+
 	NetwLog.push_setting_str(log_level)
 	OS.set_environment("NETW_TEST_LOG", log_level)
 	session.test_event.connect(_on_test_event)
-	
+
 	return GdUnitResult.success()
 
 func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
 	NetwLog.pop_settings()
 	return GdUnitResult.success()
-
 func _on_test_event(event: GdUnitEvent) -> void:
 	if event.type() == GdUnitEvent.TESTSUITE_BEFORE:
 		_baseline_child_count = Engine.get_main_loop().root.get_child_count()

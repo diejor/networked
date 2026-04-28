@@ -61,6 +61,12 @@ func get_peer_context(peer_id: int = -1) -> PeerContext:
 	return s.get_peer_context(peer_id) if s else null
 
 
+## Returns the [NetLobbyContext] for the lobby containing this component.
+## Works in both lobby and lobbyless mode.
+func get_lobby_context() -> NetLobbyContext:
+	return NetLobbyContext.for_node(self)
+
+
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.
 ## Shorthand for [code]get_peer_context().get_bucket(bucket_type)[/code].
 func get_bucket(bucket_type) -> RefCounted:

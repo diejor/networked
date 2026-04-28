@@ -49,11 +49,11 @@ static func initialize(addon_root: String = "") -> void:
 	if not addon_root.is_empty():
 		_addon_root = addon_root.replace("res://", "").trim_suffix("/")
 	
-	_runtime_initialized = true
-	current_level = Level.INFO
-	module_levels.clear()
-	_load_active_profile()
-	_recompute_min_level()
+	if _runtime_initialized:
+		_recompute_min_level()
+		return
+
+	_ensure_initialized()
 
 
 static func _ensure_initialized() -> void:
@@ -63,7 +63,7 @@ static func _ensure_initialized() -> void:
 	if _addon_root.is_empty():
 		var stack := get_stack()
 		for frame: Dictionary in stack:
-			var src: String = frame.get("source", "")
+			var src: String = frame.source if frame.has("source") else ""
 			if src.ends_with("netw_log.gd"):
 				_addon_root = src.get_base_dir().get_base_dir() \
 					.replace("res://", "").trim_suffix("/")
@@ -80,10 +80,6 @@ static func _ensure_initialized() -> void:
 		# Load profile first so overrides in the string can cascade over it
 		_load_active_profile()
 		push_setting_str(test_override)
-	elif Netw.is_test_env():
-		current_level = Level.NONE
-		module_levels.clear()
-		_recompute_min_level()
 	else:
 		# In regular runtime, default to INFO and load assigned profile
 		current_level = Level.INFO

@@ -31,7 +31,7 @@ func create_server() -> Error:
 	_unique_id = 1
 	_is_server_peer = true
 	_connection_status = CONNECTION_CONNECTED
-	Netw.dbg.info("LocalMultiplayerPeer initialized as Server (ID: %d)" % [_unique_id])
+	Netw.dbg.info("LocalMultiplayerPeer initialized as Server (ID: %d)", [_unique_id])
 	return OK
 
 ## Initializes this peer as a client with [param client_id].
@@ -40,7 +40,7 @@ func create_client(client_id: int) -> Error:
 	_unique_id = client_id
 	_is_server_peer = false
 	_connection_status = CONNECTION_CONNECTING
-	Netw.dbg.info("LocalMultiplayerPeer initialized as Client (ID: %d)" % [_unique_id])
+	Netw.dbg.info("LocalMultiplayerPeer initialized as Client (ID: %d)", [_unique_id])
 	return OK
 
 ## Links [param peer_reference] as a known remote peer with ID [param peer_id].
@@ -51,11 +51,11 @@ func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> v
 		return
 
 	linked_peers[peer_id] = peer_reference
-	Netw.dbg.trace("Linked internally to peer %d." % [peer_id])
+	Netw.dbg.trace("Linked internally to peer %d.", [peer_id])
 
 	if _is_server_peer:
 		_peers_to_emit_connected.append(peer_id)
-		Netw.dbg.trace("Queued peer_connected for Client %d." % [peer_id])
+		Netw.dbg.trace("Queued peer_connected for Client %d.", [peer_id])
 
 
 func _notification(what: int) -> void:
@@ -76,12 +76,12 @@ func _poll() -> void:
 	while not _peers_to_emit_connected.is_empty():
 		var p_id := _peers_to_emit_connected.pop_front()
 		peer_connected.emit(p_id)
-		Netw.dbg.trace("Emitted peer_connected for %d." % [p_id])
+		Netw.dbg.trace("Emitted peer_connected for %d.", [p_id])
 
 	while not _peers_to_emit_disconnected.is_empty():
 		var p_id := _peers_to_emit_disconnected.pop_front()
 		peer_disconnected.emit(p_id)
-		Netw.dbg.trace("Emitted peer_disconnected for %d." % [p_id])
+		Netw.dbg.trace("Emitted peer_disconnected for %d.", [p_id])
 
 	if _closing:
 		_finalize_close()
@@ -90,7 +90,7 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 	if _closed or _closing:
 		return ERR_UNAVAILABLE
 
-	Netw.dbg.trace("Putting packet of %d bytes. Target: %d" % [p_buffer.size(), _target_peer])
+	Netw.dbg.trace("Putting packet of %d bytes. Target: %d", [p_buffer.size(), _target_peer])
 
 	if _target_peer == 0:
 		for peer_id in linked_peers.keys():
@@ -105,7 +105,7 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 
 	# If we are a client and the target is not the server, we must route through the server for relaying.
 	if not _is_server_peer and _target_peer != 1:
-		Netw.dbg.trace("Routing packet through server for relaying to %d." % [_target_peer])
+		Netw.dbg.trace("Routing packet through server for relaying to %d.", [_target_peer])
 		return _send_to_peer(1, p_buffer)
 
 	return _send_to_peer(_target_peer, p_buffer)
@@ -115,16 +115,16 @@ func _send_to_peer(peer_id: int, p_buffer: PackedByteArray) -> Error:
 		return ERR_UNAVAILABLE
 
 	if not linked_peers.has(peer_id):
-		Netw.dbg.trace("Failed to send to %d: Not linked." % [peer_id])
+		Netw.dbg.trace("Failed to send to %d: Not linked.", [peer_id])
 		return ERR_UNAVAILABLE
 
 	var target: LocalMultiplayerPeer = linked_peers[peer_id]
 	if target == null or target._closed or target._closing:
 		linked_peers.erase(peer_id)
-		Netw.dbg.trace("Failed to send to %d: Target closed." % [peer_id])
+		Netw.dbg.trace("Failed to send to %d: Target closed.", [peer_id])
 		return ERR_UNAVAILABLE
 
-	Netw.dbg.trace("Routing packet directly to %d's memory." % [peer_id])
+	Netw.dbg.trace("Routing packet directly to %d's memory.", [peer_id])
 	target._receive_packet(p_buffer, _unique_id, _transfer_channel, _transfer_mode)
 	return OK
 
@@ -138,7 +138,7 @@ func _receive_packet(p_buffer: PackedByteArray, p_sender: int, p_channel: int, p
 		"channel": p_channel,
 		"mode": p_mode
 	})
-	Netw.dbg.trace("Received packet from %d (Size: %d). Queue length: %d" % [p_sender, p_buffer.size(), _packet_queue.size()])
+	Netw.dbg.trace("Received packet from %d (Size: %d). Queue length: %d", [p_sender, p_buffer.size(), _packet_queue.size()])
 
 func _get_packet_script() -> PackedByteArray:
 	if _packet_queue.is_empty():
@@ -146,7 +146,7 @@ func _get_packet_script() -> PackedByteArray:
 
 	_current_packet = _packet_queue.pop_front()
 	var data: PackedByteArray = _current_packet.get("data", PackedByteArray())
-	Netw.dbg.trace("Popped packet from %d (Size: %d). Queue left: %d" % [_current_packet.get("peer", 0), data.size(), _packet_queue.size()])
+	Netw.dbg.trace("Popped packet from %d (Size: %d). Queue left: %d", [_current_packet.get("peer", 0), data.size(), _packet_queue.size()])
 	return data
 
 func _purge_packets_from(sender_id: int) -> void:
@@ -211,7 +211,7 @@ func _finalize_close() -> void:
 	Netw.dbg.trace("Peer fully closed.")
 
 func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
-	Netw.dbg.trace("Disconnecting peer %d (scheduled)." % [p_peer])
+	Netw.dbg.trace("Disconnecting peer %d (scheduled).", [p_peer])
 
 	linked_peers.erase(p_peer)
 	_purge_packets_from(p_peer)

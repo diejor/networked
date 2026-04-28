@@ -244,11 +244,12 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		save_component.spawn(owner, span)
 
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
+	var lobby_manager := get_session().get_lobby_manager()
 
-	if tp_component and save_component and ctx.has_lobby():
-		_dbg.debug("Using TPComponent to spawn player `%s`.", 
+	if tp_component and save_component and lobby_manager:
+		_dbg.debug("Using TPComponent to spawn player `%s`.",
 			[client_data.username])
-		tp_component.spawn(get_session().get_lobby_manager())
+		tp_component.spawn(lobby_manager)
 	else:
 		ctx.place_player(player)
 

@@ -13,6 +13,8 @@ static var dbg := NetwDbg.new()
 ## Returns [code]true[/code] if the current process is running under a GdUnit4
 ## test environment.
 static func is_test_env() -> bool:
+	if Engine.has_meta("GdUnitRunner"):
+		return true
 	var args := OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	for arg in args:
 		if "GdUnit" in arg or "GdUnitTestRunner.tscn" in arg:
