@@ -7,20 +7,6 @@ extends RefCounted
 
 const META_KEY := &"cached_synchronizers"
 
-## Registered provider callables added via [method register_provider].
-## Each callable takes a [Node] and returns [code]Array[MultiplayerSynchronizer][/code].
-static var _providers: Array[Callable] = []
-
-
-## Registers a [param provider] callable that supplements the default MS discovery.
-static func register_provider(provider: Callable) -> void:
-	_providers.append(provider)
-
-
-## Clears all registered providers.
-static func reset() -> void:
-	_providers.clear()
-
 
 ## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code] points to [param target_node].
 static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
@@ -55,12 +41,6 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 
 	var result: Array[MultiplayerSynchronizer] = []
 	result.assign(filtered_syncs)
-	if not _providers.is_empty():
-		for provider: Callable in _providers:
-			var extra: Array = provider.call(target_node)
-			for s in extra:
-				if s is MultiplayerSynchronizer and not result.has(s):
-					result.append(s)
 
 	if target_node.is_inside_tree():
 		if not Engine.is_editor_hint():

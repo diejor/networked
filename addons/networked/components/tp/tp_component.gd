@@ -31,7 +31,7 @@ var starting_scene_path: SceneNodePath
 ##
 ## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
 ## Replicated on change so clients can track which lobby their player  is in.
-var current_scene_path: String = "":
+@export var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value

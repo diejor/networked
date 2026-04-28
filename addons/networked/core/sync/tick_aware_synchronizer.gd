@@ -37,6 +37,10 @@ func _set(property: StringName, value: Variant) -> bool:
 ## Inserts [code]__tick[/code] as the FIRST property in the replication config so that
 ## [member _pending_tick] is populated before any other [method _write_property] call.
 func finalize_with_tick() -> void:
+	# Ensure UI properties are imported first
+	if replication_config and replication_config != _config:
+		_import_from_config(replication_config)
+	
 	var tick_path := NodePath(":__tick")
 
 	var ordered := SceneReplicationConfig.new()
@@ -48,10 +52,11 @@ func finalize_with_tick() -> void:
 
 	# Copy all registered properties after __tick.
 	for prop: NodePath in _config.get_properties():
+		if prop == tick_path: continue
 		ordered.add_property(prop)
 		ordered.property_set_replication_mode(prop, _config.property_get_replication_mode(prop))
 		ordered.property_set_spawn(prop, _config.property_get_spawn(prop))
 		ordered.property_set_watch(prop, _config.property_get_watch(prop))
 
 	_config = ordered
-	replication_config = _config
+	super.finalize()

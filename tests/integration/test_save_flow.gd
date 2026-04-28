@@ -1,4 +1,4 @@
-## Integration tests for SaveComponent + SaveSynchronizer with real multiplayer.
+## Integration tests for SaveComponent with real multiplayer.
 class_name TestSaveFlow
 extends NetworkedTestSuite
 
@@ -57,19 +57,19 @@ func _spawn_save_player() -> Node2D:
 
 
 # ---------------------------------------------------------------------------
-# SaveSynchronizer.setup() — config
+# SaveComponent setup — config
 # ---------------------------------------------------------------------------
 
 func test_setup_initializes_synchronizer() -> void:
 	var player := await _spawn_save_player()
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	assert_that(save_comp.save_synchronizer._initialized).is_true()
+	assert_that(save_comp._initialized).is_true()
 
 
 func test_setup_tracks_position_property() -> void:
 	var player := await _spawn_save_player()
-	var save_sync: SaveSynchronizer = player.get_node("%SaveComponent/%SaveSynchronizer")
-	assert_that(save_sync.has_state_property(&"position")).is_true()
+	var save_comp: SaveComponent = player.get_node("%SaveComponent")
+	assert_that(save_comp.has_virtual_property(&"position")).is_true()
 
 
 func test_setup_populates_entity_with_initial_values() -> void:
@@ -151,7 +151,7 @@ func test_load_state_restores_from_database() -> void:
 
 
 # ---------------------------------------------------------------------------
-# serialize_scene() / deserialize_scene() — network byte transfer
+# _serialize_scene() / _deserialize_scene() — network byte transfer
 # ---------------------------------------------------------------------------
 
 func test_serialize_deserialize_round_trip() -> void:
@@ -159,10 +159,10 @@ func test_serialize_deserialize_round_trip() -> void:
 	player.position = Vector2(55, 66)
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	var bytes := save_comp.serialize_scene()
+	var bytes := save_comp._serialize_scene()
 	assert_that(bytes.size() > 0).is_true()
 
 	player.position = Vector2.ZERO
-	save_comp.deserialize_scene(bytes)
+	save_comp._deserialize_scene(bytes)
 
 	assert_that(player.position).is_equal(Vector2(55, 66))

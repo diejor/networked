@@ -79,7 +79,7 @@ static func _format_preflight(snapshot: Array, alias_map: Dictionary) -> Array:
 					" (engine broadcast)" if broadcast else ""],
 			})
 		else:
-			# SaveSynchronizer audit entry
+			# SaveComponent audit entry
 			var ok: bool = s.get("root_path_resolves", false)
 			out.append({
 				"type": "SaveAudit",

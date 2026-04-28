@@ -55,43 +55,65 @@ class SpawnSynchronizer extends MultiplayerSynchronizer:
 		owner = client
 		root_path = get_path_to(client.owner)
 	
-	## Builds a [SceneReplicationConfig] collecting properties from all client 
+	## Builds a [SceneReplicationConfig] collecting properties from all client
 	## synchronizers of [param target_node].
 	##
-	## Marks each collected property as spawn-only 
+	## Marks each collected property as spawn-only
 	## ([code]REPLICATION_MODE_NEVER[/code] with spawn enabled)
 	## so initial state is transferred on spawn without ongoing delta replication.
+	##
+	## [b]How spawn discovery works:[/b]
+	## [br]1. SpawnSynchronizer runs at [method ClientComponent._on_owner_tree_entered]
+	## [br]2. It queries [method SynchronizersCache.get_client_synchronizers] to find all
+	##    [MultiplayerSynchronizer] nodes whose [member MultiplayerSynchronizer.root_path]
+	##    points to this player
+	## [br]3. For each synchronizer found (including [SaveComponent]), its
+	##    [member MultiplayerSynchronizer.replication_config] properties are added to
+	##    the spawn config as spawn-only (no delta, no watch)
+	## [br]4. Later, [SaveComponent]'s [method ProxySynchronizer.finalize] pivots
+	##    [member MultiplayerSynchronizer.root_path] to [code]"."[/code] for virtualization—
+	##    but the spawn config was already baked with the correct paths
+	## [br]5. At runtime, virtual property paths resolve through [ProxySynchronizer]'s
+	##    [method Object._get]/[method Object._set] interception back to actual scene nodes
 	func config_spawn_properties(target_node: Node) -> void:
-		Netw.dbg.trace("Configuring spawn properties for %s", 
+		Netw.dbg.trace("Configuring spawn properties for %s",
 			[target_node.name])
-		
+
 		replication_config = SceneReplicationConfig.new()
-		
+
 		# Explicitly add username from the ClientComponent itself.
 		# Path must be relative to the root_path (the player node).
 		if target_node.owner:
 			var component_path := target_node.owner.get_path_to(target_node)
 			var username_path := NodePath(str(component_path) + ":username")
 			_add_spawn_property(username_path)
-			
+
 			var tp := target_node.owner.get_node_or_null("%TPComponent")
 			if tp:
 				var tp_path := target_node.owner.get_path_to(tp)
 				var scene_path := NodePath(str(tp_path) + ":current_scene_path")
 				_add_spawn_property(scene_path)
-		
-		var syncs := SynchronizersCache.get_client_synchronizers(target_node.owner 
+
+		var syncs := SynchronizersCache.get_client_synchronizers(target_node.owner
 			if target_node is ClientComponent else target_node)
-		
+
+		var sync_names := syncs.map(func(s): return s.name)
+		Netw.dbg.debug("Found %d synchronizers for spawn: [%s]",
+			[syncs.size(), ", ".join(sync_names)])
+
 		for sync: MultiplayerSynchronizer in syncs:
 			if sync == self or not sync.replication_config:
 				continue
-			
+
 			var source_config: SceneReplicationConfig = sync.replication_config
+			var prop_count = source_config.get_properties().size()
+			Netw.dbg.trace("Adding %d properties from %s",
+				[prop_count, sync.name])
+
 			for property: NodePath in source_config.get_properties():
 				if replication_config.has_property(property):
 					continue
-				
+
 				_add_spawn_property(property)
 	
 	func _add_spawn_property(property: NodePath) -> void:

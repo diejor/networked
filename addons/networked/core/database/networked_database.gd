@@ -6,6 +6,7 @@
 ## to declare its table and columns; the database initializes its backend once all
 ## schemas are known.
 ##
+## [br][br]
 ## [b]Table access:[/b] retrieve a [TableRepository] for a named table with
 ## [method table], then fetch, save, or delete [Entity] records:
 ## [codeblock lang=gdscript]
@@ -55,8 +56,7 @@ signal transaction_committed(table_count: int, record_count: int)
 
 ## Controls what happens when a loaded record has columns not in the current schema.
 enum SchemaMismatchPolicy {
-	## Delete the record and start fresh. Mirrors the existing disk behaviour in
-	## [SaveComponent.push_to_scene] which removes the file on [constant ERR_UNCONFIGURED].
+	## Delete the record and start fresh.
 	PURGE,
 	## Strip unknown columns from the loaded data and proceed with known columns only.
 	## Properties missing from the record get their scene-default values.

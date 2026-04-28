@@ -152,6 +152,7 @@ func sync_ticks(n: int) -> void:
 func sync_ticks_real(n: int) -> void:
 	var clock := _inner.get_server().get_service(NetworkClock) as NetworkClock
 	if not clock:
+		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(n)
 		return
 		
@@ -165,11 +166,13 @@ func sync_ticks_real(n: int) -> void:
 	
 	# Simulate the bulk of frames in one go (very fast)
 	if estimated_frames > 2:
+		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(estimated_frames - 2)
 	
 	# Fine-tune the last few ticks to hit exactly target_tick
 	var timeout := 100
 	while clock.tick < target_tick and timeout > 0:
+		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(1)
 		timeout -= 1
 
@@ -181,6 +184,7 @@ func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
 	
 	while not client_clock.is_synchronized and timeout > 0:
 		# Simulate in small batches to allow the handshake RPCs to fly
+		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(2)
 		timeout -= 1
 	

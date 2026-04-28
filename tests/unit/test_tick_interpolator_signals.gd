@@ -101,11 +101,11 @@ func test_signal_injection_prevents_overwrite() -> void:
 	_player.position = P0
 	_tick() # clock.tick is now 1
 	
-	# 1. Sync arrives
+	# Sync arrives
 	_player.position = P1
 	_sync.synchronized.emit() # recorded at tick 1
 	
-	# 2. Interpolator runs in same frame
+	# Interpolator runs in same frame
 	# clock.display_tick = 1 (if display_offset=0), factor = 0.0 -> should read P1 from history
 	_clock.display_offset = 0
 	_clock.tick_factor = 0.0

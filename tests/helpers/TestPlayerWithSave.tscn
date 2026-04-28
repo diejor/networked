@@ -26,6 +26,11 @@ properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 1
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_save"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
 [node name="TestPlayerWithSave" type="Node2D" unique_id=659081648]
 
 [node name="ClientComponent" type="Node" parent="." unique_id=202690495]
@@ -33,13 +38,13 @@ unique_name_in_owner = true
 script = ExtResource("1_v07vo")
 metadata/_custom_type_script = "uid://d152g6yt57q6n"
 
-[node name="SaveComponent" type="Node" parent="." unique_id=716418857 groups=["persistent"]]
+[node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=716418857 groups=["persistent"]]
 unique_name_in_owner = true
+root_path = NodePath("..")
+replication_config = SubResource("SceneReplicationConfig_save")
 script = ExtResource("2_vpj8e")
 bound_entity = SubResource("Resource_q1h0n")
-database = SubResource("Resource_kvry4")
 table_name = &"players_save"
-tracked_properties = {&"position": NodePath(".:position")}
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1837042624]
 replication_config = SubResource("SceneReplicationConfig_1")

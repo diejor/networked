@@ -12,6 +12,10 @@
 class_name FileSystemBackend
 extends NetworkedBackend
 
+# Static registry mapping globalized base_dir -> WeakRef(FileSystemBackend).
+# Ensures that only one backend instance manages a specific directory at a time.
+static var _path_registry: Dictionary = {}
+
 ## Root directory for all table subdirectories.
 ## In exported builds you should point this at [code]user://saves[/code].
 @export_dir var base_dir: String = "res://saves"
@@ -36,6 +40,18 @@ func _table_dir(table: StringName) -> String:
 # ── NetworkedBackend overrides ────────────────────────────────────────────────
 
 func _initialize(schema: Dictionary) -> Error:
+	# Ensure the same base_dir isn't being used by multiple active backends.
+	var global_path := ProjectSettings.globalize_path(base_dir)
+	if _path_registry.has(global_path):
+		var other = _path_registry[global_path].get_ref()
+		if other and other != self:
+			assert(false, 
+				"FileSystemBackend: Multiple instances are pointing to the same " + \
+				"base_dir '%s'. This will cause data corruption and ghost-table " % [base_dir] + \
+				"warnings. Use a shared NetworkedDatabase instead."
+			)
+	_path_registry[global_path] = weakref(self)
+
 	# Redirect res:// to user:// in exported builds.
 	if not OS.has_feature("editor") and base_dir.begins_with("res://"):
 		base_dir = base_dir.replace("res://", "user://")
@@ -44,7 +60,7 @@ func _initialize(schema: Dictionary) -> Error:
 	if not DirAccess.dir_exists_absolute(base_dir):
 		var err := DirAccess.make_dir_recursive_absolute(base_dir)
 		if err != OK:
-			Netw.dbg.error("FileSystemBackend: could not create base_dir '%s'. Error: %s" % [base_dir, error_string(err)], func(m): push_error(m))
+			Netw.dbg.error("FileSystemBackend: could not create base_dir '%s'. Error: %s", [base_dir, error_string(err)], func(m): push_error(m))
 			return err
 
 	# Create subdirectories for all known tables.

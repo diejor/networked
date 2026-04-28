@@ -99,8 +99,7 @@ func reset_state() -> void:
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
-
-	SynchronizersCache.reset()
+	
 	Netw.dbg.reset()
 	_dbg.trace("Reporter: State reset (deep).")
 

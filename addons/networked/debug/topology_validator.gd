@@ -16,14 +16,11 @@ extends RefCounted
 ## [br][br]
 ## Counts standard components present as children:
 ## [br]- [ClientComponent] → 1 (SpawnSynchronizer)
-## [br]- [SaveComponent]   → +1 (SaveSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
 	var n := 0
 	if node.get_node_or_null("%ClientComponent"):
-		n += 1
-	if node.get_node_or_null("%SaveComponent"):
 		n += 1
 	return n
 
@@ -126,30 +123,26 @@ static func cache_diff(node: Node) -> Dictionary:
 
 static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	var errs: Array[String] = []
-	if not save_comp.save_synchronizer:
-		return errs
-	
-	var config := save_comp.save_synchronizer.replication_config
+
+	var config := save_comp.replication_config
 	if not config or config.get_properties().is_empty():
 		errs.append(
-			"SaveSynchronizer on '%s' has 0 properties. " % \
+			"SaveComponent on '%s' has 0 replication properties. " % \
 			[save_comp.owner.name if save_comp.owner else "?"] + \
-			"Check that 'tracked_properties' is correctly assigned on the " + \
-			"parent SaveComponent."
+			"Check the Replication panel in the Editor and ensure " + \
+			"instantiate() has been called."
 		)
 
 	if config:
 		for prop: NodePath in config.get_properties():
 			if config.property_get_watch(prop):
 				errs.append(
-					"virtual property '%s' has watch=true — C++ cannot " + \
-					"resolve against root_path '.'" % \
-					[str(prop)]
+					"virtual property '%s' has watch=true — C++ cannot " % [str(prop)] + \
+					"resolve against root_path '.'"
 				)
 
 	if save_comp.database and not save_comp.table_name.is_empty():
-		var tracked: Array[StringName] = \
-			save_comp.save_synchronizer._get_tracked_property_names()
+		var tracked: Array[StringName] = save_comp._properties.keys()
 		var registered: Array[StringName] = \
 			save_comp.database.get_registered_columns(save_comp.table_name)
 		if not registered.is_empty():
