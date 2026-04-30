@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://buvcsv4w31hx"]
+
+[ext_resource type="Script" uid="uid://djoja7uwpos57" path="res://addons/networked/nodes/client/connect_server_ui.gd" id="1_uhn4w"]
+[ext_resource type="PackedScene" uid="uid://4rqj7gr6xifw" path="res://addons/networked/nodes/client/ConnectToServer.tscn" id="2_uhn4w"]
+
+[node name="ConnectServerUI" type="CanvasLayer" unique_id=99213129]
+script = ExtResource("1_uhn4w")
+
+[node name="TabContainer" type="TabContainer" parent="." unique_id=927752352]
+offset_left = 15.0
+offset_top = 104.0
+offset_right = 216.0
+offset_bottom = 135.0
+current_tab = 0
+
+[node name="~" type="Control" parent="TabContainer" unique_id=1003231885]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="Connect To Server" parent="TabContainer" unique_id=628941669 instance=ExtResource("2_uhn4w")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[connection signal="connect_player" from="TabContainer/Connect To Server" to="." method="_on_connect_player"]

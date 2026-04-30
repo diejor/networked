@@ -10,7 +10,7 @@
 class_name TestNetworkSessionConnect
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
+const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
 ## Path from the level root to the [SpawnerComponent] that acts as the spawn template.

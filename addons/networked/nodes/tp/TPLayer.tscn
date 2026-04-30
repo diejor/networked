@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://vj1s4e7rbmsn"]
+
+[ext_resource type="Script" uid="uid://dfloy6o50whju" path="res://addons/networked/nodes/tp/tp_layer.gd" id="1_jetau"]
+
+[sub_resource type="Gradient" id="Gradient_uei8g"]
+colors = PackedColorArray(0.9019608, 0.9019608, 0.9019608, 1, 0.50980395, 0.7058824, 0.87058824, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_uei8g"]
+frequency = 0.0008
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_fir41"]
+noise = SubResource("FastNoiseLite_uei8g")
+color_ramp = SubResource("Gradient_uei8g")
+
+[sub_resource type="Animation" id="Animation_fir41"]
+resource_name = "RESET"
+length = 0.001
+
+[sub_resource type="Animation" id="Animation_ifkpp"]
+resource_name = "tp"
+length = 1.5
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("TPLayer/TransitionProgress:value")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 100.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("TPLayer/TransitionProgress:modulate")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_33snq"]
+_data = {
+&"RESET": SubResource("Animation_fir41"),
+&"tp": SubResource("Animation_ifkpp")
+}
+
+[node name="TPLayer" type="CanvasLayer" unique_id=1002194750 node_paths=PackedStringArray("transition_progress", "transition_anim")]
+layer = 9999
+script = ExtResource("1_jetau")
+transition_progress = NodePath("TransitionProgress")
+transition_anim = NodePath("TransitionAnim")
+
+[node name="TransitionProgress" type="TextureProgressBar" parent="." unique_id=367840752]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+value = 100.0
+fill_mode = 8
+nine_patch_stretch = true
+texture_progress = SubResource("NoiseTexture2D_fir41")
+metadata/_edit_use_anchors_ = true
+
+[node name="TransitionAnim" type="AnimationPlayer" parent="." unique_id=765122609]
+unique_name_in_owner = true
+process_mode = 3
+root_node = NodePath("../..")
+libraries/ = SubResource("AnimationLibrary_33snq")
+playback_auto_capture = false

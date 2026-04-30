@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bpnpmprpg6p6b"]
 
-[ext_resource type="Script" uid="uid://bspawnrcomp001" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_6f1h7"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_6f1h7"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 

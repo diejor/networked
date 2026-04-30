@@ -2,7 +2,7 @@
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
+const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
 const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
 const LOBBY_NAME := &"TestLevelSave"

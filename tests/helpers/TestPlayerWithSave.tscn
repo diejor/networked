@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bmwo8mmp1gejs"]
 
-[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_v07vo"]
-[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_vpj8e"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_v07vo"]
+[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="2_vpj8e"]
 [ext_resource type="Resource" uid="uid://bvmv6qjvcl56a" path="res://tests/test_db.tres" id="3_v07vo"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_save"]

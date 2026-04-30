@@ -1,7 +1,7 @@
 class_name TestLobbyIsolation
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
+const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
 var harness: NetworkTestHarness

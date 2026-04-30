@@ -8,7 +8,7 @@
 class_name TestLobbySynchronizer
 extends NetworkedTestSuite
 
-const SYNCHRONIZER_SCENE := preload("res://addons/networked/core/lobby/LobbySynchronizer.tscn")
+const SYNCHRONIZER_SCENE = preload("uid://by6v45orjo182")
 
 var sync: LobbySynchronizer
 

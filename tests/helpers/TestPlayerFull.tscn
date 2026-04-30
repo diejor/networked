@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c5tj2gqmrl0mg"]
 
-[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_2lw5h"]
-[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_pdren"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_2lw5h"]
+[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="2_pdren"]
 [ext_resource type="Resource" uid="uid://bvmv6qjvcl56a" path="res://tests/test_db.tres" id="3_2lw5h"]
-[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="3_tp"]
+[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="3_tp"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pdren"]
