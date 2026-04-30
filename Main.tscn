@@ -46,8 +46,9 @@ metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 script = ExtResource("7_03owx")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="MultiplayerLobbyManager" type="MultiplayerSpawner" parent="NetworkSession/Client" unique_id=1223019495]
+[node name="MultiplayerLobbyManager" type="MultiplayerSpawner" parent="NetworkSession/Client" unique_id=726132212]
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
+spawn_path = NodePath(".")
 script = ExtResource("7_trn2v")
 lobby_config/Level1/load_mode = 1
 lobby_config/Level1/empty_action = 1

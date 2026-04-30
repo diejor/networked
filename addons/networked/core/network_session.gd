@@ -209,17 +209,21 @@ func _host_server() -> String:
 	Netw.dbg.trace("NetworkSession: _host_server called.")
 	if OS.has_feature("web") and not is_webrtc():
 		client.backend = LocalLoopbackBackend.new()
-	
+
+	var client_lm := client.get_service(MultiplayerLobbyManager) \
+		as MultiplayerLobbyManager
 	server = client.duplicate()
 	server.is_server = true
 	server.name = "Server"
-	if client._pending_world:
-		server._pending_world_scene_path = client._pending_world.scene_file_path
 	add_child(server)
-	
+	if client_lm:
+		var server_lm := server.get_service(MultiplayerLobbyManager) \
+			as MultiplayerLobbyManager
+		for path in client_lm._get_configured_paths():
+			server_lm._configure_default(path)
+
 	Netw.dbg.info("Starting embedded server...")
-	# We use quiet=true here because we expect ERR_ALREADY_IN_USE in 
-	# multi-client scenarios.
+	# quiet=true: ERR_ALREADY_IN_USE is expected in multi-client scenarios.
 	var server_err := server.host(true)
 	var in_use := (server_err == ERR_ALREADY_IN_USE or server_err == ERR_CANT_CREATE)
 	

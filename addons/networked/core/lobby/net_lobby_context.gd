@@ -1,8 +1,9 @@
 ## Lobby-scoped facade providing player tracking, lifecycle signals, and
-## server operations for both lobby and lobbyless sessions.
+## server operations.
 ##
-## Access via [method NetComponent.get_lobby_context] or [method NetLobbyContext.for_node].
-## Holds a [WeakRef] to the underlying [Lobby] — check [method is_valid] before use.
+## Access via [method NetComponent.get_lobby_context] or
+## [method NetLobbyContext.for_node]. Holds a [WeakRef] to the underlying
+## [Lobby] - check [method is_valid] before use.
 ## [codeblock]
 ## var ctx := get_lobby_context()
 ##
@@ -108,12 +109,6 @@ func get_lobby_name() -> StringName:
 	return StringName(lobby.level.name)
 
 
-## Returns [code]true[/code] if this context belongs to a lobbyless session.
-func is_lobbyless() -> bool:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	return is_instance_valid(lobby) and lobby.get_meta(&"_is_lobbyless", false)
-
-
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
@@ -171,8 +166,7 @@ func wait_for_players(n: int) -> void:
 
 ## Returns the [NetLobbyContext] for [param node] by walking its ancestor chain.
 ##
-## Falls back to the lobbyless world context if no [Lobby] ancestor is found.
-## Returns [code]null[/code] if the node is not inside any active session.
+## Returns [code]null[/code] if [param node] is not inside an active [Lobby].
 static func for_node(node: Node) -> NetLobbyContext:
 	var lobby := MultiplayerTree.lobby_for_node(node)
 	return lobby.get_context() if is_instance_valid(lobby) else null

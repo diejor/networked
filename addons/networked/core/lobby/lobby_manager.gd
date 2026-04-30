@@ -169,9 +169,11 @@ func _has_spawnable_scene_path(target_path: String) -> bool:
 
 
 func _init() -> void:
+	spawn_path = "."
+	
 	if Engine.is_editor_hint():
 		return
-
+	
 	configured.connect(_on_configured)
 	lobby_spawned.connect(_on_lobby_spawned)
 	lobby_despawned.connect(_on_lobby_despawned)
@@ -438,3 +440,26 @@ func _build_lobby_paths() -> void:
 		var basename := StringName(path.get_file().get_basename())
 		_lobby_paths[basename] = path
 		Netw.dbg.debug("Registered lobby path: '%s' → '%s'." % [basename, path])
+
+
+# Registers [param scene_path] as a single [constant LoadMode.ON_STARTUP]
+# lobby, bypassing the inspector workflow.
+# Called by [MultiplayerTree] when a world scene is dropped as a direct child.
+func _configure_default(scene_path: String) -> void:
+	var basename := StringName(scene_path.get_file().get_basename())
+	_lobby_paths[basename] = scene_path
+	_lobby_configs[basename] = {
+		"load_mode": LoadMode.ON_STARTUP,
+		"empty_action": EmptyAction.KEEP_ACTIVE,
+	}
+	Netw.dbg.debug(
+		"Default lobby configured: '%s' -> '%s'.", [basename, scene_path]
+	)
+
+
+# Returns all scene paths set via [method _configure_default].
+# Used to restore configuration after [method Node.duplicate].
+func _get_configured_paths() -> Array[String]:
+	var paths: Array[String] = []
+	paths.assign(_lobby_paths.values())
+	return paths

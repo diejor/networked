@@ -5,9 +5,10 @@ extends Node
 ## Core networking node that bridges a [BackendPeer] transport with Godot's
 ## [SceneMultiplayer] API.
 ##
-## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]) and a
-## [MultiplayerLobbyManager], then call [method host] or [method join] to start
-## a session.
+## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]), then call
+## [method host] or [method join] to start a session. Add a
+## [MultiplayerLobbyManager] as a child to manage multiple lobbies, or drop a
+## world scene directly as a child to use a single auto-configured lobby.
 ## [codeblock]
 ## # Server
 ## await multiplayer_tree.host()
@@ -139,12 +140,6 @@ static func resolve(context: Object) -> MultiplayerTree:
 var _peer_contexts: Dictionary[int, PeerContext] = {}
 var _services: Dictionary[Script, Node] = {}
 
-var _pending_world: Node = null
-var _pending_world_scene_path: String = ""
-
-## The synthetic [Lobby] used in lobbyless sessions.
-var _lobbyless_lobby: Lobby = null
-
 
 ## Registers a [Node] as a service for this session.
 func register_service(service: Node, type: Script = null) -> void:
@@ -187,8 +182,6 @@ func get_service(type: Script) -> Node:
 func dispose() -> void:
 	_services.clear()
 	_peer_contexts.clear()
-	_pending_world = null
-	_lobbyless_lobby = null
 
 
 ## Returns the [PeerContext] for [param peer_id], creating one on first access.
@@ -213,9 +206,8 @@ class SpawnSlot extends RefCounted:
 	func has_lobby() -> bool:
 		return is_instance_valid(_lobby)
 
-	## Lobby mode: calls [method Lobby.add_player].
-	## [br]
-	## Lobbyless mode: calls [method Node.add_child] on the parent container.
+	## Adds [param player] to the lobby via [method Lobby.add_player],
+	## or directly to [member _parent_node] if no lobby is set.
 	func place_player(player: Node) -> void:
 		if is_instance_valid(_lobby):
 			_lobby.add_player(player)
@@ -235,10 +227,6 @@ func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 			slot._lobby = lobby
 			if lobby.has_meta(&"_net_lobby_token"):
 				slot.token = lobby.get_meta(&"_net_lobby_token")
-	elif is_instance_valid(_lobbyless_lobby):
-		slot._lobby = _lobbyless_lobby
-		if _lobbyless_lobby.has_meta(&"_net_lobby_token"):
-			slot.token = _lobbyless_lobby.get_meta(&"_net_lobby_token")
 
 	return slot
 
@@ -248,26 +236,17 @@ func get_all_players() -> Array[Node]:
 	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
 	if lm:
 		return lm.get_all_players()
-
-	if is_instance_valid(_lobbyless_lobby):
-		var players: Array[Node] = []
-		players.assign(_lobbyless_lobby.synchronizer.tracked_nodes.keys())
-		return players
-
 	return []
 
 
-## Finds the [Lobby] node that contains [param node] by walking its ancestor chain,
-## falling back to the lobbyless lobby if the node is not inside a [Lobby].
+## Finds the [Lobby] node that contains [param node] by walking its ancestor
+## chain. Returns [code]null[/code] if [param node] is not inside any [Lobby].
 static func lobby_for_node(node: Node) -> Lobby:
 	var p := node.get_parent()
 	while p:
 		if p is Lobby:
 			return p as Lobby
 		p = p.get_parent()
-	var mt := resolve(node)
-	if mt and is_instance_valid(mt._lobbyless_lobby):
-		return mt._lobbyless_lobby
 	return null
 
 
@@ -299,8 +278,8 @@ func _get_configuration_warnings() -> PackedStringArray:
 			
 	if not has_lobby_manager and not has_lobbyless_world:
 		warnings.append(
-			"No Scene (with a SpawnerComponent inside) or " + \
-			"`MultiplayerLobbyManager` found in children. " + \
+			"No world scene (containing a SpawnerComponent) or " +
+			"MultiplayerLobbyManager found as a child. " +
 			"No replication will happen."
 		)
 		
@@ -319,23 +298,24 @@ func _enter_tree() -> void:
 	for child in get_children():
 		if child is MultiplayerLobbyManager:
 			return
-	
+
 	for child in get_children():
 		if _has_spawner_component(child):
-			Netw.dbg.info(
-				"Lobbyless mode: Identified '%s' as the initial world." % \
-				[child.name]
-			)
-			_pending_world = child
-			_pending_world_scene_path = child.scene_file_path
-			if _pending_world_scene_path.is_empty():
+			var scene_path := child.scene_file_path
+			if scene_path.is_empty():
 				push_error(
-					"[networked] Lobbyless world '%s' must be a saved .tscn." % \
-					child.name
+					"[networked] World '%s' must be a saved .tscn." % child.name
 				)
-				_pending_world = null
 				return
+			Netw.dbg.info(
+				"Default lobby: using '%s' as the session world.", [child.name]
+			)
 			remove_child(child)
+			child.queue_free()
+			var manager := MultiplayerLobbyManager.new()
+			manager.name = &"LobbyManager"
+			add_child(manager)
+			manager._configure_default(scene_path)
 			return
 
 
@@ -346,70 +326,6 @@ static func _has_spawner_component(node: Node) -> bool:
 		if _has_spawner_component(child):
 			return true
 	return false
-
-
-func _bootstrap_lobbyless() -> void:
-	if not _pending_world and _pending_world_scene_path.is_empty():
-		return
-
-	var span: NetSpan = null
-	if not _pending_world_scene_path.is_empty():
-		span = Netw.dbg.span(
-			self, "session", {"world": _pending_world_scene_path}
-		)
-		if span:
-			span.step("initializing_world")
-
-	var lobby_scene: PackedScene = (MultiplayerLobbyManager.SERVER_LOBBY
-		if is_server else MultiplayerLobbyManager.CLIENT_LOBBY)
-	var lobby_node: Node = lobby_scene.instantiate()
-	var lobby: Lobby = lobby_node as Lobby
-
-	if is_server and lobby_node is SubViewport:
-		lobby_node.set("multiplayer", multiplayer_api)
-
-	if span:
-		lobby.set_meta(&"_net_lobby_token", span.checkpoint())
-
-	lobby.set_meta(&"_is_lobbyless", true)
-
-	if is_server:
-		if is_instance_valid(_pending_world):
-			_pending_world.free()
-		lobby.level = load(_pending_world_scene_path).instantiate()
-	else:
-		lobby.level = _pending_world
-
-	add_child(lobby)
-	_lobbyless_lobby = lobby
-
-	_pending_world = null
-	_pending_world_scene_path = ""
-
-	if span:
-		span.end()
-
-
-
-func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
-	if not is_instance_valid(_lobbyless_lobby):
-		Netw.dbg.error(
-			"Lobbyless: world not initialized yet.",
-			func(m): push_error(m)
-		)
-		return
-
-	var spawner_comp := _lobbyless_lobby.level.get_node_or_null(
-		client_data.spawner_path.node_path
-	) as SpawnerComponent
-	if not spawner_comp:
-		Netw.dbg.error(
-			"Lobbyless: SpawnerComponent not found at '%s'." % \
-			client_data.spawner_path.node_path,
-			func(m): push_error(m)
-		)
-		return
-	spawner_comp.player_joined.emit(client_data)
 
 
 func _init() -> void:
@@ -510,8 +426,8 @@ func is_online() -> bool:
 
 ## Entry point for a client to request entry into the game world.
 ##
-## Deserializes [param bytes] into a [MultiplayerClientData]. Delegates to 
-## [MultiplayerLobbyManager] if registered, otherwise routes as lobbyless.
+## Deserializes [param bytes] into a [MultiplayerClientData] and emits
+## [signal player_join_requested] for the [MultiplayerLobbyManager] to handle.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
@@ -522,10 +438,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 
 	_resolve_username_collision(client_data)
 
-	if get_service(MultiplayerLobbyManager):
-		player_join_requested.emit(client_data)
-	else:
-		_route_lobbyless_join(client_data)
+	player_join_requested.emit(client_data)
 
 
 func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
@@ -580,7 +493,6 @@ func _config_api() -> void:
 		debugger.register_tree(self)
 
 	configured.emit()
-	_bootstrap_lobbyless()
 
 
 func _connect_backend_signals() -> void:

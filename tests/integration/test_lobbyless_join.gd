@@ -1,6 +1,6 @@
-## Integration test for the lobby-less join flow.
+## Integration test for the default-lobby join flow.
 ## Verifies that dropping a Level as a direct child of MultiplayerTree
-## automatically handles join routing and player spawning.
+## automatically routes joins and spawns players via a managed lobby.
 class_name TestLobbylessJoin
 extends NetworkedTestSuite
 
@@ -23,16 +23,17 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-func test_lobbyless_lobby_created_on_server() -> void:
+func test_default_lobby_created_on_server() -> void:
 	var server := harness.get_server()
-	var lobby := server.get_node_or_null("TestLevelLobby")
+	var lobby := server.get_node_or_null("LobbyManager/TestLevelLobby")
 	assert_that(lobby).is_not_null()
-	assert_that(lobby.get_meta(&"_is_lobbyless", false)).is_true()
 
 
 func test_level_inside_lobby_on_server() -> void:
 	var server := harness.get_server()
-	var level := server.get_node_or_null("TestLevelLobby/TestLevel")
+	var level := server.get_node_or_null(
+		"LobbyManager/TestLevelLobby/TestLevel"
+	)
 	assert_that(level).is_not_null()
 
 
@@ -55,9 +56,14 @@ func test_player_spawns_in_level_after_join() -> void:
 	)
 
 	var player_name := "%s|%d" % [username, peer_id]
-	var level := server.get_node_or_null("TestLevelLobby/TestLevel")
+	var level := server.get_node_or_null(
+		"LobbyManager/TestLevelLobby/TestLevel"
+	)
 
-	await wait_until(func(): return level != null and level.get_node_or_null(player_name) != null)
+	await wait_until(
+		func(): return level != null \
+			and level.get_node_or_null(player_name) != null
+	)
 
 	assert_that(level.get_node_or_null(player_name)).is_not_null()
 
@@ -81,8 +87,13 @@ func test_spawned_player_has_correct_username() -> void:
 	)
 
 	var player_name := "%s|%d" % [username, peer_id]
-	var level := server.get_node_or_null("TestLevelLobby/TestLevel")
-	await wait_until(func(): return level != null and level.get_node_or_null(player_name) != null)
+	var level := server.get_node_or_null(
+		"LobbyManager/TestLevelLobby/TestLevel"
+	)
+	await wait_until(
+		func(): return level != null \
+			and level.get_node_or_null(player_name) != null
+	)
 
 	var player := level.get_node(player_name)
 	var client_comp := SpawnerComponent.unwrap(player)
@@ -92,10 +103,11 @@ func test_spawned_player_has_correct_username() -> void:
 
 func test_lobby_context_accessible_from_level_node() -> void:
 	var server := harness.get_server()
-	var level := server.get_node_or_null("TestLevelLobby/TestLevel")
+	var level := server.get_node_or_null(
+		"LobbyManager/TestLevelLobby/TestLevel"
+	)
 	assert_that(level).is_not_null()
 
 	var ctx := NetLobbyContext.for_node(level)
 	assert_that(ctx).is_not_null()
 	assert_that(ctx.is_valid()).is_true()
-	assert_that(ctx.is_lobbyless()).is_true()
