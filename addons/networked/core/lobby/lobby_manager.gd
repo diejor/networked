@@ -295,7 +295,7 @@ func get_all_players() -> Array[Node]:
 	for lobby: Lobby in active_lobbies.values():
 		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
 			continue
-		for c in lobby.level.find_children("*", "ClientComponent", true, false):
+		for c in lobby.level.find_children("*", "SpawnerComponent", true, false):
 			if is_instance_valid(c.owner):
 				players.append(c.owner)
 	return players
@@ -368,9 +368,9 @@ func handle_join_request(client_data: MultiplayerClientData) -> void:
 		Netw.dbg.error("Join failed: Scene '%s' not registered." % lobby_name, func(m): push_error(m))
 		return
 
-	var spawner_client: ClientComponent = (
-		lobby.level.get_node_or_null(client_data.spawner_path.node_path) as ClientComponent)
-	assert(spawner_client, "Player needs a `ClientComponent`.")
+	var spawner_client: SpawnerComponent = (
+		lobby.level.get_node_or_null(client_data.spawner_path.node_path) as SpawnerComponent)
+	assert(spawner_client, "Player needs a `SpawnerComponent`.")
 	spawner_client.player_joined.emit(client_data)
 
 

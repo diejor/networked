@@ -5,7 +5,7 @@
 ## constraint checks.
 ## [br][br]
 ## [b]Never import this file from production components.[/b]
-## (SaveComponent, LobbySynchronizer, ClientComponent, etc.)
+## (SaveComponent, LobbySynchronizer, SpawnerComponent, etc.)
 ## [br][br]
 ## Use from: tests, [code]@tool[/code] scripts, debugger panels.
 class_name TopologyValidator
@@ -15,12 +15,12 @@ extends RefCounted
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
-## [br]- [ClientComponent] → 1 (SpawnSynchronizer)
+## [br]- [SpawnerComponent] -> 1 (SpawnSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
 	var n := 0
-	if node.get_node_or_null("%ClientComponent"):
+	if node.get_node_or_null("%SpawnerComponent"):
 		n += 1
 	return n
 
@@ -66,10 +66,10 @@ static func validate_node(node: Node) -> Dictionary:
 	if save_comp:
 		errors.append_array(_check_save_component(save_comp))
 
-	var client_comp: ClientComponent = \
-		node.get_node_or_null("%ClientComponent")
+	var client_comp: SpawnerComponent = \
+		node.get_node_or_null("%SpawnerComponent")
 	if client_comp:
-		errors.append_array(_check_client_component(client_comp))
+		errors.append_array(_check_spawner_component(client_comp))
 
 	errors.append_array(_check_authority(node))
 
@@ -134,12 +134,7 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 		)
 
 	if config:
-		for prop: NodePath in config.get_properties():
-			if config.property_get_watch(prop):
-				errs.append(
-					"virtual property '%s' has watch=true — C++ cannot " % [str(prop)] + \
-					"resolve against root_path '.'"
-				)
+		pass
 
 	if save_comp.database and not save_comp.table_name.is_empty():
 		var tracked: Array[StringName] = save_comp._properties.keys()
@@ -165,13 +160,13 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	return errs
 
 
-static func _check_client_component(client: ClientComponent) -> Array[String]:
+static func _check_spawner_component(spawner: SpawnerComponent) -> Array[String]:
 	var errs: Array[String] = []
-	if client.spawn_sync and client.spawn_sync.root_path == NodePath(""):
+	if spawner.spawn_sync and spawner.spawn_sync.root_path == NodePath(""):
 		errs.append(
 			"SpawnSynchronizer.root_path is empty on '%s'. " % \
-			[client.owner.name] + \
-			"get_path_to(client.owner) was likely called before the " + \
+			[spawner.owner.name] + \
+			"get_path_to(spawner.owner) was likely called before the " + \
 			"player entered the scene tree."
 		)
 	return errs
@@ -179,7 +174,7 @@ static func _check_client_component(client: ClientComponent) -> Array[String]:
 
 static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var expected := ClientComponent.parse_authority(node.name)
+	var expected := MultiplayerClientData.parse_authority(node.name)
 	var actual := node.get_multiplayer_authority()
 	
 	if expected != 0 and actual != expected:

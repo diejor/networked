@@ -138,7 +138,7 @@ func get_server_lobby(lobby_name: StringName = "") -> Lobby:
 ## triggering the full _on_player_joined production chain.
 ## level_scene_path must be a registered spawnable scene whose filename (no extension)
 ## matches the level root node name (e.g. "TestLevel.tscn" → root "TestLevel").
-## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/ClientComponent").
+## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/SpawnerComponent").
 ## Returns the spawned player node from the server lobby after one process frame.
 func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
@@ -179,7 +179,7 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, lobby_name
 
 	var player := player_scene.instantiate()
 	player.name = "%s|%d" % [username, peer_id]
-	var client_comp: ClientComponent = player.get_node("%ClientComponent")
+	var client_comp: SpawnerComponent = player.get_node("%SpawnerComponent")
 	client_comp.username = username
 
 	var lobby := get_server_lobby(lobby_name)

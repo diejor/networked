@@ -7,7 +7,7 @@ const OFFSET_3D := Vector3(0, 2.0, 0)
 @onready var uid_label: RichTextLabel = %UIDLabel
 @onready var username_label: RichTextLabel = %UsernameLabel
 
-var _client: ClientComponent
+var _client: SpawnerComponent
 
 
 func _exit_tree() -> void:
@@ -33,7 +33,7 @@ func _process(_delta: float) -> void:
 	_update_position(_client.owner)
 
 
-func follow_client(client: ClientComponent) -> void:
+func follow_client(client: SpawnerComponent) -> void:
 	_client = client
 
 

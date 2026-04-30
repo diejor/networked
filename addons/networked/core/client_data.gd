@@ -9,11 +9,11 @@ extends Serde
 ## The player's display name, used as the spawned node name prefix.
 @export var username: StringName
 
-## Path to the [ClientComponent] spawner node the player should enter.
+## Path to the [SpawnerComponent] node the player should enter.
 ##
-## [b]Note:[/b] The target [ClientComponent] must reside in a scene that
+## [b]Note:[/b] The target [SpawnerComponent] must reside in a scene that
 ## tracks the owner scene correctly.
-@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:ClientComponent")
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
 var spawner_path: SceneNodePath
 
 ## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a
@@ -52,4 +52,15 @@ func deserialize(bytes: PackedByteArray) -> void:
 	url = data.url
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)
+
+
+## Parses the multiplayer authority from a node name formatted as
+## [code]username|peer_id[/code].
+## Returns [param peer_id] as an [int], or [code]0[/code] if the name does
+## not contain the separator.
+static func parse_authority(node_name: String) -> int:
+	var parts := node_name.split("|")
+	if parts.size() == 2:
+		return parts[1].to_int()
+	return 0
 

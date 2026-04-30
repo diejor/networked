@@ -52,14 +52,13 @@ func get_service(type: Script) -> Node:
 
 
 ## Resolves the correct spawn location and causal token for a new player.
-func get_spawn_context(
+func get_spawn_slot(
 	spawner_path: SceneNodePath
-) -> MultiplayerTree.SpawnContext:
+) -> MultiplayerTree.SpawnSlot:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt:
-		# is_valid() -> false; safe sentinel
-		return MultiplayerTree.SpawnContext.new()
-	return mt.get_spawn_context(spawner_path)
+		return MultiplayerTree.SpawnSlot.new()
+	return mt.get_spawn_slot(spawner_path)
 
 
 ## Returns an array of all active player nodes across all lobbies or the

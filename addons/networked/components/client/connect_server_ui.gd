@@ -7,8 +7,8 @@ extends CanvasLayer
 ## Emitted when the player submits connection details. Connect to [method NetworkSession.connect_player].
 signal connect_player(client_data: MultiplayerClientData)
 
-## [SceneNodePath] pointing to the target [ClientComponent] spawner.
-@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:ClientComponent")
+## [SceneNodePath] pointing to the target [SpawnerComponent] spawner.
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
 var spawner_node: SceneNodePath
 
 func _ready() -> void:

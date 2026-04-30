@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bmwo8mmp1gejs"]
 
-[ext_resource type="Script" uid="uid://d152g6yt57q6n" path="res://addons/networked/components/client/client_component.gd" id="1_v07vo"]
+[ext_resource type="Script" uid="uid://bspawnrcomp001" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_v07vo"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_vpj8e"]
 [ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_v07vo"]
 [ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="4_q1h0n"]
@@ -33,10 +33,10 @@ properties/0/replication_mode = 1
 
 [node name="TestPlayerWithSave" type="Node2D" unique_id=659081648]
 
-[node name="ClientComponent" type="Node" parent="." unique_id=202690495]
+[node name="SpawnerComponent" type="Node" parent="." unique_id=202690495]
 unique_name_in_owner = true
 script = ExtResource("1_v07vo")
-metadata/_custom_type_script = "uid://d152g6yt57q6n"
+metadata/_custom_type_script = "uid://bspawnrcomp001"
 
 [node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=716418857 groups=["persistent"]]
 unique_name_in_owner = true
@@ -49,4 +49,4 @@ table_name = &"players_save"
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1837042624]
 replication_config = SubResource("SceneReplicationConfig_1")
 
-[connection signal="tree_entered" from="." to="ClientComponent" method="_on_owner_tree_entered"]
+[connection signal="tree_entered" from="." to="SpawnerComponent" method="_on_owner_tree_entered"]

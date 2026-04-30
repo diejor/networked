@@ -13,8 +13,8 @@ extends NetworkedTestSuite
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
-## Path from the level root to the ClientComponent that acts as the spawn template.
-const SPAWNER_PATH := "TestPlayerFull/ClientComponent"
+## Path from the level root to the [SpawnerComponent] that acts as the spawn template.
+const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
 var session: LocalLoopbackSession
 var server: MultiplayerTree

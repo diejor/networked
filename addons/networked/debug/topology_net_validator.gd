@@ -1,7 +1,7 @@
 ## Structural validator that delegates to [TopologyValidator].
 ##
 ## Checks that the synchronizer topology of a spawned player node is correct:
-## expected count, cache/live consistency, [SaveComponent], [ClientComponent],
+## expected count, cache/live consistency, [SaveComponent], [SpawnerComponent],
 ## and authority assignments.
 class_name TopologyNetValidator
 extends NetValidator

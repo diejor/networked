@@ -86,18 +86,18 @@ var multiplayer_peer: MultiplayerPeer:
 
 var _tree_name: String = ""
 
-## The [ClientComponent] representing the local player identity for this tree.
+## The [SpawnerComponent] representing the local player identity for this tree.
 ## [br][br]
 ## [b]Note:[/b] This is [code]null[/code] on dedicated servers or before the
 ## player has spawned.
-var authority_client: ClientComponent:
+var authority_client: SpawnerComponent:
 	set(value):
 		if authority_client != value:
 			authority_client = value
 			authority_client_changed.emit(value)
 
 ## Emitted when [member authority_client] is assigned or cleared.
-signal authority_client_changed(client: ClientComponent)
+signal authority_client_changed(client: SpawnerComponent)
 
 
 ## Returns the original name of the tree, even if renamed for embedded use.
@@ -200,8 +200,8 @@ func get_peer_context(peer_id: int) -> PeerContext:
 
 ## Carries both the causal token and the placement target for a player spawn.
 ##
-## Obtained via [method MultiplayerTree.get_spawn_context].
-class SpawnContext extends RefCounted:
+## Obtained via [method MultiplayerTree.get_spawn_slot].
+class SpawnSlot extends RefCounted:
 	## Causal [CheckpointToken] for span tracing. May be [code]null[/code].
 	var token: CheckpointToken
 	var _lobby: Lobby
@@ -224,23 +224,23 @@ class SpawnContext extends RefCounted:
 
 
 ## Resolves the correct spawn location and causal token for a new player.
-func get_spawn_context(spawner_path: SceneNodePath) -> SpawnContext:
-	var ctx := SpawnContext.new()
+func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
+	var slot := SpawnSlot.new()
 	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
 
 	if lm:
 		var scene_name := StringName(spawner_path.get_scene_name())
 		var lobby: Lobby = lm.active_lobbies.get(scene_name)
 		if is_instance_valid(lobby):
-			ctx._lobby = lobby
+			slot._lobby = lobby
 			if lobby.has_meta(&"_net_lobby_token"):
-				ctx.token = lobby.get_meta(&"_net_lobby_token")
+				slot.token = lobby.get_meta(&"_net_lobby_token")
 	elif is_instance_valid(_lobbyless_lobby):
-		ctx._lobby = _lobbyless_lobby
+		slot._lobby = _lobbyless_lobby
 		if _lobbyless_lobby.has_meta(&"_net_lobby_token"):
-			ctx.token = _lobbyless_lobby.get_meta(&"_net_lobby_token")
+			slot.token = _lobbyless_lobby.get_meta(&"_net_lobby_token")
 
-	return ctx
+	return slot
 
 
 ## Returns an array of all active player nodes across all lobbies.
@@ -293,13 +293,13 @@ func _get_configuration_warnings() -> PackedStringArray:
 		if child is MultiplayerLobbyManager:
 			has_lobby_manager = true
 			break
-		if _has_client_component(child):
+		if _has_spawner_component(child):
 			has_lobbyless_world = true
 			break
 			
 	if not has_lobby_manager and not has_lobbyless_world:
 		warnings.append(
-			"No Scene (with a ClientComponent inside) or " + \
+			"No Scene (with a SpawnerComponent inside) or " + \
 			"`MultiplayerLobbyManager` found in children. " + \
 			"No replication will happen."
 		)
@@ -321,7 +321,7 @@ func _enter_tree() -> void:
 			return
 	
 	for child in get_children():
-		if _has_client_component(child):
+		if _has_spawner_component(child):
 			Netw.dbg.info(
 				"Lobbyless mode: Identified '%s' as the initial world." % \
 				[child.name]
@@ -339,11 +339,11 @@ func _enter_tree() -> void:
 			return
 
 
-static func _has_client_component(node: Node) -> bool:
-	if node is ClientComponent:
+static func _has_spawner_component(node: Node) -> bool:
+	if node is SpawnerComponent:
 		return true
 	for child in node.get_children():
-		if _has_client_component(child):
+		if _has_spawner_component(child):
 			return true
 	return false
 
@@ -399,17 +399,17 @@ func _route_lobbyless_join(client_data: MultiplayerClientData) -> void:
 		)
 		return
 
-	var client_comp := _lobbyless_lobby.level.get_node_or_null(
+	var spawner_comp := _lobbyless_lobby.level.get_node_or_null(
 		client_data.spawner_path.node_path
-	) as ClientComponent
-	if not client_comp:
+	) as SpawnerComponent
+	if not spawner_comp:
 		Netw.dbg.error(
-			"Lobbyless: ClientComponent not found at '%s'." % \
+			"Lobbyless: SpawnerComponent not found at '%s'." % \
 			client_data.spawner_path.node_path,
 			func(m): push_error(m)
 		)
 		return
-	client_comp.player_joined.emit(client_data)
+	spawner_comp.player_joined.emit(client_data)
 
 
 func _init() -> void:
@@ -531,7 +531,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
-		var client := ClientComponent.unwrap(player)
+		var client := SpawnerComponent.unwrap(player)
 		if client:
 			existing_names.append(client.username)
 	

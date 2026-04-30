@@ -7,8 +7,8 @@ const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyMan
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 const TEST_LEVEL_2_SCENE := preload("res://tests/helpers/TestLevel2.tscn")
 
-## Node path from level root to the ClientComponent spawner.
-const SPAWNER_PATH := "TestPlayerFull/ClientComponent"
+## Node path from level root to the [SpawnerComponent] spawner.
+const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree

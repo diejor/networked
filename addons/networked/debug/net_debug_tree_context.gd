@@ -18,8 +18,8 @@ signal clock_pong_captured(data: Dictionary)
 
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
-## The locally authoritative [ClientComponent] for this tree.
-var authority_client: ClientComponent:
+## The locally authoritative [SpawnerComponent] for this tree.
+var authority_client: SpawnerComponent:
 	get:
 		var mt := _mt_ref.get_ref() as MultiplayerTree
 		return mt.authority_client if mt else null
@@ -178,7 +178,7 @@ func _decorate_player(player: Node) -> void:
 
 	if should_have and not existing:
 		var client := \
-			player.get_node_or_null("%ClientComponent") as ClientComponent
+			player.get_node_or_null("%SpawnerComponent") as SpawnerComponent
 		if client:
 			var nameplate: DebugClient = load(_NAMEPLATE_SCENE).instantiate()
 			nameplate.name = "NetDebugNameplate"
@@ -193,7 +193,7 @@ func _decorate_player(player: Node) -> void:
 
 func _get_stable_id(node: Node) -> Variant:
 	var client := \
-		node.get_node_or_null("%ClientComponent") as ClientComponent
+		node.get_node_or_null("%SpawnerComponent") as SpawnerComponent
 	return node.get_multiplayer_authority() if client else str(node.get_path())
 
 
@@ -385,7 +385,7 @@ func _on_player_spawned(player: Node, lobby: Lobby) -> void:
 
 func _on_node_added(node: Node) -> void:
 	# Only decoration - topology is driven by lobby.synchronizer.spawned.
-	if node is ClientComponent:
+	if node is SpawnerComponent:
 		_on_client_added.call_deferred(node)
 
 
@@ -393,7 +393,7 @@ func _on_node_removed(_node: Node) -> void:
 	pass
 
 
-func _on_client_added(comp: ClientComponent) -> void:
+func _on_client_added(comp: SpawnerComponent) -> void:
 	if not is_instance_valid(comp) or not comp.is_inside_tree():
 		return
 	var mt := _mt_ref.get_ref() as MultiplayerTree
@@ -415,7 +415,7 @@ func _on_client_added(comp: ClientComponent) -> void:
 		r._on_player_spawned_logic(player, mt, null)
 
 
-func _on_authority_client_changed(_client: ClientComponent) -> void:
+func _on_authority_client_changed(_client: SpawnerComponent) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if mt and reporter:

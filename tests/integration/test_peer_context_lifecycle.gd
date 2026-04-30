@@ -4,7 +4,7 @@ extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
-const SPAWNER_PATH := "TestPlayerWithSave/ClientComponent"
+const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
 const LOBBY_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness
