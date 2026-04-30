@@ -209,13 +209,13 @@ func test_unwrap_returns_null_when_absent() -> void:
 
 func test_spawn_function_is_called_when_valid() -> void:
 	var spawner: SpawnerComponent = auto_free(SpawnerComponent.new())
-	var called := false
-	spawner.spawn_function = func(_ctx, _data): called = true
+	var state := {"called": false}
+	spawner.spawn_function = func(_ctx, _data): state.called = true
 
 	assert_that(spawner.spawn_function.is_valid()).is_true()
-	assert_that(called).is_false()
+	assert_that(state.called).is_false()
 	spawner.spawn_function.call(null, null)
-	assert_that(called).is_true()
+	assert_that(state.called).is_true()
 
 
 func test_spawn_function_is_invalid_by_default() -> void:

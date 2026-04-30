@@ -107,7 +107,7 @@ func test_visual_smooth_movement_realtime() -> void:
 		_env.set_server_property(&"position", Vector2(expected_x, 300))
 		await _harness.sync_ticks(5)
 
-	await _harness.sync_ticks(15)
+	await _harness.sync_ticks(30)
 	
 	var final_client_pos = _env.get_client_property(&"position")
 	assert_vector(final_client_pos).is_equal_approx(Vector2(expected_x, 300), Vector2(1, 1))

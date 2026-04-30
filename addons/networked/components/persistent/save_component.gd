@@ -204,7 +204,7 @@ func exists_in_db() -> bool:
 	var entity_id := _get_entity_id()
 	var out_error: Array[int] = [OK]
 	database.find_by_id(table_name, entity_id, out_error)
-	return out_error[0] == OK
+	return out_error[0] != ERR_FILE_NOT_FOUND
 
 
 # ── Scene ↔ entity transfer ────────────────────────────────────────────────────

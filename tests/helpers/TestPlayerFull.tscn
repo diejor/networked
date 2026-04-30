@@ -1,27 +1,15 @@
 [gd_scene format=3 uid="uid://c5tj2gqmrl0mg"]
 
-[ext_resource type="Script" uid="uid://bspawnrcomp001" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_2lw5h"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/components/spawner/spawner_component.gd" id="1_2lw5h"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/components/persistent/save_component.gd" id="2_pdren"]
-[ext_resource type="Script" uid="uid://d1mnum02gn0c0" path="res://addons/networked/components/persistent/dictionary_save.gd" id="3_s5wog"]
+[ext_resource type="Resource" uid="uid://bvmv6qjvcl56a" path="res://tests/test_db.tres" id="3_2lw5h"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/components/tp/tp_component.gd" id="3_tp"]
-[ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/core/database/file_system_backend.gd" id="4_g2jrq"]
-[ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/core/database/networked_database.gd" id="4_pdren"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
 
-[sub_resource type="Resource" id="Resource_g2jrq"]
-resource_local_to_scene = true
-script = ExtResource("3_s5wog")
-metadata/_custom_type_script = "uid://d1mnum02gn0c0"
-
-[sub_resource type="Resource" id="Resource_6l2ww"]
-script = ExtResource("4_g2jrq")
-base_dir = "res://tests/tmp_saves"
-metadata/_custom_type_script = "uid://dlsdsleg37hm1"
-
-[sub_resource type="Resource" id="Resource_y5ihg"]
-script = ExtResource("4_pdren")
-backend = SubResource("Resource_6l2ww")
-metadata/_custom_type_script = "uid://icayc7hx72vn"
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pdren"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
 
 [sub_resource type="Resource" id="Resource_7io2v"]
 script = ExtResource("5_1efga")
@@ -40,12 +28,17 @@ unique_name_in_owner = true
 script = ExtResource("1_2lw5h")
 metadata/_custom_type_script = "uid://bspawnrcomp001"
 
-[node name="SaveComponent" type="Node" parent="." unique_id=1774314061 groups=["persistent"]]
+[node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=1400490498 groups=["persistent"]]
+unique_name_in_owner = true
+replication_interval = 5.0
+delta_interval = 5.0
+replication_config = SubResource("SceneReplicationConfig_pdren")
+visibility_update_mode = 2
+public_visibility = false
 script = ExtResource("2_pdren")
-save_container = SubResource("Resource_g2jrq")
-database = SubResource("Resource_y5ihg")
+database = ExtResource("3_2lw5h")
 table_name = &"player"
-tracked_properties = {&"position": NodePath(".:position")}
+metadata/_custom_type_script = "uid://c72wanrudisxw"
 
 [node name="TPComponent" type="Node" parent="." unique_id=401292753]
 unique_name_in_owner = true

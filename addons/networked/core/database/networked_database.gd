@@ -326,6 +326,7 @@ func find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> D
 	record_loaded.emit(table, id, hit)
 
 	if not hit:
+		out_error[0] = ERR_FILE_NOT_FOUND
 		return {}
 
 	var diff := diff_record(table, id, record)

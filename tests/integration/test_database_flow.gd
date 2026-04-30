@@ -146,10 +146,10 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	assert_that(out_err[0]).is_equal(ERR_FILE_NOT_FOUND)
 	assert_that(record.is_empty()).is_true()
 
-	# Subsequent load must return empty (record was deleted).
+	# Subsequent load must return ERR_FILE_NOT_FOUND (record is truly gone).
 	var out2: Array[int] = [OK]
 	var after_purge: Dictionary = db_v2.find_by_id(&"players", &"charlie", out2)
-	assert_that(out2[0]).is_equal(OK)
+	assert_that(out2[0]).is_equal(ERR_FILE_NOT_FOUND)
 	assert_that(after_purge.is_empty()).is_true()
 
 

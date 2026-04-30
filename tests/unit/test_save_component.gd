@@ -241,8 +241,9 @@ func test_exists_in_db_returns_correct_state() -> void:
 
 	assert_that(save_comp.exists_in_db()).is_false()
 
+	db.register_schema(&"players", [&"created"])
 	db.transaction(func(tx: NetworkedDatabase.TransactionContext) -> void:
-		tx.queue_upsert(&"players", &"Dave", {})
+		tx.queue_upsert(&"players", &"Dave", {&"created": true})
 	)
 	await get_tree().process_frame
 
