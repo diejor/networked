@@ -12,9 +12,17 @@
 class_name FileSystemBackend
 extends NetworkedBackend
 
+
 # Static registry mapping globalized base_dir -> WeakRef(FileSystemBackend).
-# Ensures that only one backend instance manages a specific directory at a time.
+# Used to catch multiple instances trying to manage the same directory.
 static var _path_registry: Dictionary = {}
+
+
+# Clears the static registry of active backends.
+# Internal: used by testing infrastructure to prevent cross-test leakage.
+static func _clear_path_registry() -> void:
+	_path_registry.clear()
+
 
 ## Root directory for all table subdirectories.
 ## In exported builds you should point this at [code]user://saves[/code].
@@ -25,21 +33,33 @@ static var _path_registry: Dictionary = {}
 @export var use_text_format: bool = false
 
 
+# Returns the file extension based on the current format setting.
 func _get_extension() -> String:
 	return ".tdict" if use_text_format else ".dict"
 
 
+# Returns the full absolute path for a specific record.
 func _path_for(table: StringName, id: StringName) -> String:
 	return base_dir.path_join(String(table)).path_join(String(id) + _get_extension())
 
 
+# Returns the absolute path to a table's subdirectory.
 func _table_dir(table: StringName) -> String:
 	return base_dir.path_join(String(table))
 
 
 # ── NetworkedBackend overrides ────────────────────────────────────────────────
 
+# Initializes the storage directory and validates the schema.
 func _initialize(schema: Dictionary) -> Error:
+	# Purge stale entries from the registry (backends that have been freed).
+	var stale_paths: Array = []
+	for path in _path_registry:
+		if not _path_registry[path].get_ref():
+			stale_paths.append(path)
+	for path in stale_paths:
+		_path_registry.erase(path)
+
 	# Ensure the same base_dir isn't being used by multiple active backends.
 	var global_path := ProjectSettings.globalize_path(base_dir)
 	if _path_registry.has(global_path):
@@ -48,7 +68,8 @@ func _initialize(schema: Dictionary) -> Error:
 			assert(false, 
 				"FileSystemBackend: Multiple instances are pointing to the same " + \
 				"base_dir '%s'. This will cause data corruption and ghost-table " % [base_dir] + \
-				"warnings. Use a shared NetworkedDatabase instead."
+				"warnings. Consider using a shared NetworkedDatabase resource " + \
+				"or a different base_dir if they are conceptually different databases."
 			)
 	_path_registry[global_path] = weakref(self)
 
@@ -91,6 +112,7 @@ func _initialize(schema: Dictionary) -> Error:
 	return OK
 
 
+# Writes a record to disk, merging with existing data.
 func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	var path := _path_for(table, id)
 
@@ -112,6 +134,7 @@ func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	return ResourceSaver.save(record, path)
 
 
+# Reads a record from disk.
 func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
@@ -122,6 +145,7 @@ func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	return {}
 
 
+# Returns all matching records for a table.
 func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	var table_dir := _table_dir(table)
 	if not DirAccess.dir_exists_absolute(table_dir):
@@ -150,6 +174,7 @@ func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	return results
 
 
+# Permanently removes a record from disk.
 func _delete(table: StringName, id: StringName) -> Error:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
@@ -159,6 +184,7 @@ func _delete(table: StringName, id: StringName) -> Error:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+# Returns true if the record matches the provided filter dictionary.
 func _matches_filter(record: Dictionary, filter: Dictionary) -> bool:
 	for key: StringName in filter:
 		if not record.has(key) or record[key] != filter[key]:

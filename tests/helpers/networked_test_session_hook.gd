@@ -54,6 +54,8 @@ func _reset_debugger() -> void:
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
 
+	FileSystemBackend._clear_path_registry()
+
 
 func _assert_clean_state(event: GdUnitEvent) -> void:
 	var tree := Engine.get_main_loop() as SceneTree

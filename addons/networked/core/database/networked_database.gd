@@ -81,6 +81,24 @@ var _initialized: bool = false
 var _table_scripts: Dictionary[StringName, Script] = {}
 
 
+# ── Binding ───────────────────────────────────────────────────────────────────
+
+## Binds a [SaveComponent] to this database, registering its schema.
+## If [param span] is provided, steps are recorded for the initialization process.
+func bind(component: SaveComponent, span: NetSpan = null) -> void:
+	if component.table_name.is_empty():
+		return
+
+	var columns := component.get_virtual_properties()
+	register_schema(component.table_name, columns)
+
+	if span:
+		span.step("schema_registered", {
+			table = component.table_name,
+			columns = columns
+		})
+
+
 # ── Table access ──────────────────────────────────────────────────────────────
 
 ## Returns the [TableRepository] for [param table_name].
@@ -176,6 +194,7 @@ func get_registered_columns(table: StringName) -> Array[StringName]:
 	return (_schema.get(table, [] as Array[StringName]) as Array[StringName]).duplicate()
 
 
+# Initializes the backend and registers all known schemas.
 func _initialize_backend() -> void:
 	if _initialized:
 		return
@@ -330,6 +349,7 @@ func delete(table: StringName, id: StringName) -> Error:
 	return _delete_internal(table, id)
 
 
+# Deletes a record from the backend.
 func _delete_internal(table: StringName, id: StringName) -> Error:
 	if not backend:
 		Netw.dbg.error("NetworkedDatabase: delete called but no backend is set.", func(m): push_error(m))

@@ -33,3 +33,7 @@ func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
 static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 	for i in count:
 		await tree.process_frame
+
+
+func after_test() -> void:
+	clean_temp_dir()

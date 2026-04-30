@@ -26,11 +26,7 @@ func before_test() -> void:
 	db.backend = backend
 
 
-func after_test() -> void:
-	clean_temp_dir()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Helpers ───────────────────────────────────────────────────────────────────
 
 func _register_and_wait(table: StringName, columns: Array[StringName]) -> void:
 	db.register_schema(table, columns)
@@ -59,6 +55,11 @@ func test_load_flow_reads_from_disk() -> void:
 	db.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(&"players", &"bob", {&"position": Vector2(5, 15), &"health": 80})
 	)
+
+	# Null out the primary backend so the second one can use the same path.
+	db = null
+	backend = null
+	FileSystemBackend._clear_path_registry()
 
 	# Create a fresh database pointing at the same directory to simulate restart.
 	var db2: NetworkedDatabase = auto_free(NetworkedDatabase.new())
@@ -107,6 +108,10 @@ func test_ghost_table_warning_on_initialize() -> void:
 # ---------------------------------------------------------------------------
 
 func test_schema_mismatch_purge_in_full_flow() -> void:
+	# Null out the primary test backend.
+	db = null
+	backend = null
+
 	# === Schema v1: save a record with 'gold'. ===
 	var backend_v1: FileSystemBackend = auto_free(FileSystemBackend.new())
 	backend_v1.base_dir = test_dir
@@ -119,6 +124,11 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	db_v1.transaction(func(tx: NetworkedDatabase.TransactionContext):
 		tx.queue_upsert(&"players", &"charlie", {&"health": 70, &"gold": 99})
 	)
+
+	# Null out v1 to allow v2 to take the path.
+	db_v1 = null
+	backend_v1 = null
+	FileSystemBackend._clear_path_registry()
 
 	# === Schema v2: 'gold' is gone. ===
 	var backend_v2: FileSystemBackend = auto_free(FileSystemBackend.new())

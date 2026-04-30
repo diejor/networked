@@ -377,11 +377,8 @@ func instantiate() -> void:
 	_seed_entity_from_scene()
 	assert(_initialized)
 
-	if database and not table_name.is_empty():
-		var columns: Array[StringName] = _properties.keys()
-		database.register_schema(table_name, columns)
-		if _save_span:
-			_save_span.step("schema_registered", {table = table_name, columns = columns})
+	if database:
+		database.bind(self, _save_span)
 
 	instantiated.emit()
 
