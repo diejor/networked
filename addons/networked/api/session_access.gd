@@ -1,13 +1,13 @@
 ## Thin facade over [MultiplayerTree] exposing only session-service access.
 ##
-## Components obtain this via [method NetComponent.get_session] rather than
+## Components obtain this via [member NetwContext.session] rather than
 ## holding a direct reference to [MultiplayerTree]. This keeps component code
 ## off the concrete [MultiplayerTree] class (backend, multiplayer_api, etc.)
 ## while preserving the existing service API unchanged.
 ## [br][br]
 ## Holds a [WeakRef] so components that cache an instance survive tree
 ## teardown without keeping the [MultiplayerTree] alive.
-class_name NetSessionAccess
+class_name NetwSessionContext
 extends RefCounted
 
 var _mt_ref: WeakRef
@@ -39,8 +39,8 @@ func get_clock() -> NetworkClock:
 	return mt.get_service(NetworkClock)
 
 
-## Returns the [PeerContext] for [param peer_id].
-func get_peer_context(peer_id: int) -> PeerContext:
+## Returns the [NetwPeerContext] for [param peer_id].
+func get_peer_context(peer_id: int) -> NetwPeerContext:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	return mt.get_peer_context(peer_id) if mt else null
 

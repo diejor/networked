@@ -6,9 +6,9 @@
 extends EditorPlugin
 
 const SceneNodePathPlugin = preload("uid://dtj5ucl1iy3ug")
-const NetwLogEditor = preload("res://addons/networked/utils/editor/netw_log_editor.gd")
+const NetwLogEditor = preload("uid://uesyjc4dyxqn")
 const DebuggerPlugin = preload("uid://b2lc6aalf32kx")
-const DEBUG_REPORTER_PATH = "res://addons/networked/debug/networked_debug_reporter.gd"
+const DEBUG_REPORTER_PATH = "res://addons/networked/debug/core/reporter.gd"
 
 ## Reference to the SceneNodePath editor plugin instance.
 var scene_node_path_plugin: EditorPlugin

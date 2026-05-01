@@ -1,5 +1,5 @@
 class_name TPComponent
-extends NetComponent
+extends NetwComponent
 
 ## Manages cross-lobby teleportation for a player in a multiplayer session.
 ##
@@ -19,7 +19,7 @@ signal _teleport_committed
 
 ## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
 ##
-## TODO: move to NetComponent
+## TODO: move to NetwComponent
 signal client_synchronized
 
 ## The default scene path assigned when the component enters the tree if no scene 
@@ -67,7 +67,7 @@ class TeleportPromise extends RefCounted:
 
 
 func _init() -> void:
-	## TODO: move name conventions to NetComponent
+	## TODO: move name conventions to NetwComponent
 	name = "TPComponent"
 	unique_name_in_owner = true
 

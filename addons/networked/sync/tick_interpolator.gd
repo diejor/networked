@@ -1,7 +1,7 @@
 ## Smoothly interpolates a node's properties between network snapshots.
 @tool
 class_name TickInterpolator
-extends NetComponent
+extends NetwComponent
 
 
 #region ── Enums ───────────────────────────────────────────────────────────────

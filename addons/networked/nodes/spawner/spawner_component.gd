@@ -1,6 +1,6 @@
 @tool
 class_name SpawnerComponent
-extends NetComponent
+extends NetwComponent
 ## The authoritative bridge between a connecting peer and their in-world
 ## representation.
 ##
@@ -225,7 +225,7 @@ func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	var slot := get_session().get_spawn_slot(client_data.spawner_path)
+	var slot := get_context().get_spawn_slot(client_data.spawner_path)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active world or lobby for scene '%s'.",
@@ -234,7 +234,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		)
 		return
 
-	var ctx := SpawnContext.new(self, slot, get_session())
+	var ctx := SpawnContext.new(self, slot, get_context())
 	if spawn_function.is_valid():
 		spawn_function.call(ctx, client_data)
 	else:

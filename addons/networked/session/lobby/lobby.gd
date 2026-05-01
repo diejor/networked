@@ -20,15 +20,20 @@ var level: Node:
 		hook_spawn_signals(level)
 		level.owner = self
 
-var _context: NetLobbyContext
-## Active [NetLobbyReadiness] gates registered via [method NetLobbyContext.create_readiness_gate].
+var _context: NetwContext
+## Active [NetwLobbyReadiness] gates registered via [method NetwLobbyContext.create_readiness_gate].
 var _readiness_gates: Array[WeakRef] = []
 
 
-## Returns the [NetLobbyContext] for this lobby, creating it on first access.
-func get_context() -> NetLobbyContext:
+## Returns the [NetwContext] for this lobby, creating it on first access.
+func get_context() -> NetwContext:
 	if not _context or not _context.is_valid():
-		_context = NetLobbyContext.new(self)
+		var mt := MultiplayerTree.for_node(self)
+		if not mt:
+			Netw.dbg.error("Lobby.get_context(): MultiplayerTree not found.", func(m): push_error(m))
+			return null
+		var lobby_ctx := NetwLobbyContext.new(self)
+		_context = NetwContext.new(mt, lobby_ctx)
 	return _context
 
 
@@ -58,33 +63,33 @@ func add_player(player: Node) -> void:
 # Readiness gate helpers
 # ---------------------------------------------------------------------------
 
-## Registers a [NetLobbyReadiness] gate to receive peer join/leave and
-## readiness-change updates. Called internally by [NetLobbyContext].
-func _register_readiness_gate(gate: NetLobbyReadiness) -> void:
+## Registers a [NetwLobbyReadiness] gate to receive peer join/leave and
+## readiness-change updates. Called internally by [NetwLobbyContext].
+func _register_readiness_gate(gate: NetwLobbyReadiness) -> void:
 	_cleanup_dead_gates()
 	_readiness_gates.append(weakref(gate))
 
 
 ## Applies a readiness change from the server and broadcasts to all peers.
-## Called directly when the server/host calls [method NetLobbyReadiness.set_ready].
+## Called directly when the server/host calls [method NetwLobbyReadiness.set_ready].
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 	_rpc_receive_ready_changed.rpc(peer_id, is_ready)
 
 
 ## Notifies all registered gates that a player entered the lobby.
-## Called by [NetLobbyContext] from [code]_on_spawned[/code].
+## Called by [NetwLobbyContext] from [code]_on_spawned[/code].
 func _notify_gates_player_added(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var gate := wr.get_ref() as NetLobbyReadiness
+		var gate := wr.get_ref() as NetwLobbyReadiness
 		if is_instance_valid(gate):
 			gate._add_peer(peer_id)
 
 
 ## Notifies all registered gates that a player left the lobby.
-## Called by [NetLobbyContext] from [code]_on_despawned[/code].
+## Called by [NetwLobbyContext] from [code]_on_despawned[/code].
 func _notify_gates_player_removed(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var gate := wr.get_ref() as NetLobbyReadiness
+		var gate := wr.get_ref() as NetwLobbyReadiness
 		if is_instance_valid(gate):
 			gate._remove_peer(peer_id)
 	_cleanup_dead_gates()
@@ -135,8 +140,8 @@ func _rpc_receive_resume() -> void:
 
 
 ## Sent by a client to ask the server to suspend the lobby.
-## The server emits [signal NetLobbyContext.suspend_requested]; game code decides
-## whether to honour the request by calling [method NetLobbyContext.suspend].
+## The server emits [signal NetwContext.suspend_requested]; game code decides
+## whether to honour the request by calling [method NetwContext.suspend].
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_suspend(reason: String) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
@@ -154,8 +159,8 @@ func _rpc_receive_kicked(reason: String) -> void:
 
 
 ## Sent by a client to ask the server to kick another peer.
-## The server emits [signal NetLobbyContext.kick_requested]; game code decides
-## whether to honour the request by calling [method NetLobbyContext.kick].
+## The server emits [signal NetwContext.kick_requested]; game code decides
+## whether to honour the request by calling [method NetwContext.kick].
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 	var requester_id := multiplayer.get_remote_sender_id()
@@ -206,7 +211,7 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var gate := wr.get_ref() as NetLobbyReadiness
+		var gate := wr.get_ref() as NetwLobbyReadiness
 		if is_instance_valid(gate):
 			gate._receive_ready_changed(peer_id, is_ready)
 	_cleanup_dead_gates()

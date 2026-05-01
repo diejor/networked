@@ -1,4 +1,4 @@
-## Integration tests for NetLobbyContext.
+## Integration tests for NetwContext.
 ##
 ## Exercises the full game-facing API across real in-process multiplayer peers:
 ## player queries, wait_for_players, suspend/resume, pause/unpause, kick,
@@ -7,7 +7,7 @@
 ##
 ## Each test gets a fresh harness (before_test / after_test).
 ## Two clients are connected and two player nodes spawned before every test.
-class_name TestNetLobbyContext
+class_name TestNetwContext
 extends NetworkedTestSuite
 
 const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
@@ -18,9 +18,9 @@ var harness: NetworkTestHarness
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 
-var server_ctx:  NetLobbyContext
-var client0_ctx: NetLobbyContext
-var client1_ctx: NetLobbyContext
+var server_ctx:  NetwContext
+var client0_ctx: NetwContext
+var client1_ctx: NetwContext
 
 ## player0 lives in the server lobby; authority belongs to client0.
 var player0: Node
@@ -106,7 +106,7 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	await h.setup(LOBBY_MANAGER_SCENE)
 	h._get_lobby_manager(h.get_server()).add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 	var c: MultiplayerTree = await h.add_client()
-	var ctx: NetLobbyContext = h.get_server_lobby().get_context()
+	var ctx: NetwContext = h.get_server_lobby().get_context()
 
 	var results := { "resolved": false }
 	(func():

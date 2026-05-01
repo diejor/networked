@@ -1,11 +1,11 @@
 ## Lobby-scoped facade providing player tracking, lifecycle signals, and
 ## server operations.
 ##
-## Access via [method NetComponent.get_lobby_context] or
-## [method NetLobbyContext.for_node]. Holds a [WeakRef] to the underlying
+## Access via [method NetwComponent.get_context] or
+## [method NetwLobbyContext.for_node]. Holds a [WeakRef] to the underlying
 ## [Lobby] - check [method is_valid] before use.
 ## [codeblock]
-## var ctx := get_lobby_context()
+## var ctx := get_context()
 ##
 ## # Wait for players then count down
 ## await ctx.wait_for_players(4)
@@ -17,7 +17,7 @@
 ## ctx.paused.connect(func(r): $PauseUI.show())
 ## ctx.unpaused.connect(func(): $PauseUI.hide())
 ## [/codeblock]
-class_name NetLobbyContext
+class_name NetwLobbyContext
 extends RefCounted
 
 # ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ signal countdown_cancelled()
 
 var _lobby_ref: WeakRef
 ## Held strongly while the countdown is running so the timer stays alive.
-var _active_countdown: NetLobbyCountdown
+var _active_countdown: NetwLobbyCountdown
 
 
 func _init(lobby: Lobby) -> void:
@@ -164,12 +164,12 @@ func wait_for_players(n: int) -> void:
 # Static access
 # ---------------------------------------------------------------------------
 
-## Returns the [NetLobbyContext] for [param node] by walking its ancestor chain.
+## Returns the [NetwLobbyContext] for [param node] by walking its ancestor chain.
 ##
 ## Returns [code]null[/code] if [param node] is not inside an active [Lobby].
-static func for_node(node: Node) -> NetLobbyContext:
-	var lobby := MultiplayerTree.lobby_for_node(node)
-	return lobby.get_context() if is_instance_valid(lobby) else null
+static func for_node(node: Node) -> NetwLobbyContext:
+	var ctx := NetwContext.for_node(node)
+	return ctx.lobby if ctx and ctx.has_lobby() else null
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ func pause(reason: String = "") -> void:
 	if not is_instance_valid(lobby):
 		return
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.pause() must be called on the server.")
+		"NetwLobbyContext.pause() must be called on the server.")
 	lobby._rpc_receive_pause.rpc(reason)
 
 
@@ -203,7 +203,7 @@ func unpause() -> void:
 	if not is_instance_valid(lobby):
 		return
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.unpause() must be called on the server.")
+		"NetwLobbyContext.unpause() must be called on the server.")
 	lobby._rpc_receive_unpause.rpc()
 
 
@@ -222,7 +222,7 @@ func suspend(reason: String = "") -> void:
 	if not is_instance_valid(lobby):
 		return
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.suspend() must be called on the server.")
+		"NetwLobbyContext.suspend() must be called on the server.")
 	lobby._rpc_receive_suspend.rpc(reason)
 	suspended.emit(reason)
 
@@ -248,7 +248,7 @@ func resume() -> void:
 	if not is_instance_valid(lobby):
 		return
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.resume() must be called on the server.")
+		"NetwLobbyContext.resume() must be called on the server.")
 	lobby._rpc_receive_resume.rpc()
 	resumed.emit()
 
@@ -267,7 +267,7 @@ func kick(peer_id: int, reason: String = "") -> void:
 	if not is_instance_valid(lobby):
 		return
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.kick() must be called on the server.")
+		"NetwLobbyContext.kick() must be called on the server.")
 	if not reason.is_empty():
 		lobby._rpc_receive_kicked.rpc_id(peer_id, reason)
 	var mt := MultiplayerTree.for_node(lobby)
@@ -292,22 +292,22 @@ func request_kick(peer_id: int, reason: String = "") -> void:
 
 ## Starts a server-driven countdown of [param seconds] seconds.
 ##
-## [b]Server-only.[/b] Returns a [NetLobbyCountdown] you can [code]await[/code].
+## [b]Server-only.[/b] Returns a [NetwLobbyCountdown] you can [code]await[/code].
 ## Clients receive [signal countdown_started] followed by [signal countdown_tick]
 ## each second, and finally [signal countdown_finished] (or
 ## [signal countdown_cancelled] if [method cancel_countdown] is called first).
 ## Any previously running countdown is cancelled automatically.
-func start_countdown(seconds: int) -> NetLobbyCountdown:
-	assert(seconds > 0, "NetLobbyContext.start_countdown(): seconds must be > 0.")
+func start_countdown(seconds: int) -> NetwLobbyCountdown:
+	assert(seconds > 0, "NetwLobbyContext.start_countdown(): seconds must be > 0.")
 	var lobby := _lobby_ref.get_ref() as Lobby
 	if not is_instance_valid(lobby):
 		return null
 	assert(lobby.multiplayer.is_server(),
-		"NetLobbyContext.start_countdown() must be called on the server.")
+		"NetwLobbyContext.start_countdown() must be called on the server.")
 
 	cancel_countdown()
 
-	var cd := NetLobbyCountdown.new(lobby, seconds)
+	var cd := NetwLobbyCountdown.new(lobby, seconds)
 	_active_countdown = cd
 
 	cd.tick.connect(_on_countdown_tick)
@@ -335,16 +335,16 @@ func cancel_countdown() -> void:
 # Readiness gate
 # ---------------------------------------------------------------------------
 
-## Creates and returns a new [NetLobbyReadiness] gate for this lobby.
+## Creates and returns a new [NetwLobbyReadiness] gate for this lobby.
 ##
 ## The gate is pre-populated with all currently connected players (all marked
 ## not-ready). Players that join or leave after creation are tracked
 ## automatically. Multiple independent gates can be active simultaneously.
-func create_readiness_gate() -> NetLobbyReadiness:
+func create_readiness_gate() -> NetwLobbyReadiness:
 	var lobby := _lobby_ref.get_ref() as Lobby
 	if not is_instance_valid(lobby):
 		return null
-	var gate := NetLobbyReadiness.new(lobby)
+	var gate := NetwLobbyReadiness.new(lobby)
 	lobby._register_readiness_gate(gate)
 	for player: Node in lobby.synchronizer.tracked_nodes:
 		gate._add_peer(player.get_multiplayer_authority())

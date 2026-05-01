@@ -457,7 +457,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 # ── Static helpers ─────────────────────────────────────────────────────────────
 
 ## Static entry point: saves all components registered in [param ctx].
-static func save_all_in(ctx: PeerContext) -> void:
+static func save_all_in(ctx: NetwPeerContext) -> void:
 	if not ctx:
 		return
 	var bucket := ctx.get_bucket(Bucket) as Bucket
@@ -474,14 +474,11 @@ static func save_all_in(ctx: PeerContext) -> void:
 
 # ── Session / bucket access ────────────────────────────────────────────────────
 
-func get_peer_context(peer_id: int = -1) -> PeerContext:
-	if peer_id == -1:
-		if not is_inside_tree() or not multiplayer:
-			return null
-		peer_id = multiplayer.get_unique_id()
+func get_peer_context() -> NetwPeerContext:
+	if not is_inside_tree() or not multiplayer:
+		return null
 	var mt := MultiplayerTree.resolve(self)
-	var s := NetSessionAccess.new(mt) if mt else null
-	return s.get_peer_context(peer_id) if s else null
+	return mt.get_peer_context(multiplayer.get_unique_id()) if mt else null
 
 
 func _get_bucket() -> Bucket:

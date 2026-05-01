@@ -229,7 +229,7 @@ func _get_affected_peers() -> Array[int]:
 static func _get_caller() -> Dictionary:
 	for frame: Dictionary in get_stack():
 		var src := frame.get("source", "") as String
-		# Skip only the span infrastructure and the base NetComponent helper.
+		# Skip only the span infrastructure and the base NetwComponent helper.
 		# Frames from the reporter or user code are the meaningful call site.
 		if src.contains("addons/networked/debug/net_span.gd") \
 				or src.contains("addons/networked/debug/net_peer_span.gd") \

@@ -14,7 +14,7 @@
 ## [/codeblock]
 @abstract
 class_name InputComponent
-extends NetComponent
+extends NetwComponent
 
 ## Emitted when a tracked action's pressed state changes.
 signal action_changed(action: StringName, pressed: bool)

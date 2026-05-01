@@ -1,6 +1,6 @@
 ## Per-lobby readiness gate — tracks which players have confirmed ready.
 ##
-## Obtain via [method NetLobbyContext.create_readiness_gate].
+## Obtain via [method NetwLobbyContext.create_readiness_gate].
 ## Clients call [method set_ready]; the server broadcasts the change to all peers.
 ## [codeblock]
 ## # Game lobby screen (runs on all peers):
@@ -11,7 +11,7 @@
 ## # Player clicks "Ready":
 ## gate.set_ready(true)
 ## [/codeblock]
-class_name NetLobbyReadiness
+class_name NetwLobbyReadiness
 extends RefCounted
 
 ## Emitted on all peers when a player's readiness state changes.

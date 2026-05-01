@@ -36,7 +36,7 @@ extends RefCounted
 signal tiling_requested
 
 
-## Creates a [NetwHandle] for O(1) debug access from a [NetComponent] or [Object].
+## Creates a [NetwHandle] for O(1) debug access from a [NetwComponent] or [Object].
 func handle(context: Object) -> NetwHandle:
 	return NetwHandle.new(context)
 

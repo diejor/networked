@@ -137,7 +137,7 @@ static func resolve(context: Object) -> MultiplayerTree:
 	return null
 
 
-var _peer_contexts: Dictionary[int, PeerContext] = {}
+var _peer_contexts: Dictionary[int, NetwPeerContext] = {}
 var _services: Dictionary[Script, Node] = {}
 
 
@@ -184,10 +184,10 @@ func dispose() -> void:
 	_peer_contexts.clear()
 
 
-## Returns the [PeerContext] for [param peer_id], creating one on first access.
-func get_peer_context(peer_id: int) -> PeerContext:
+## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
+func get_peer_context(peer_id: int) -> NetwPeerContext:
 	if peer_id not in _peer_contexts:
-		_peer_contexts[peer_id] = PeerContext.new()
+		_peer_contexts[peer_id] = NetwPeerContext.new()
 	return _peer_contexts[peer_id]
 
 

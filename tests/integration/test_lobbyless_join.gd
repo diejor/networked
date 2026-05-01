@@ -108,6 +108,6 @@ func test_lobby_context_accessible_from_level_node() -> void:
 	)
 	assert_that(level).is_not_null()
 
-	var ctx := NetLobbyContext.for_node(level)
+	var ctx := NetwContext.for_node(level)
 	assert_that(ctx).is_not_null()
 	assert_that(ctx.is_valid()).is_true()

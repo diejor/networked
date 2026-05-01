@@ -1,4 +1,4 @@
-## Integration tests for PeerContext lifecycle within a real multiplayer session.
+## Integration tests for NetwPeerContext lifecycle within a real multiplayer session.
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 

@@ -1,37 +1,42 @@
 ## Base class for all networked addon components.
 ##
 ## Provides ergonomic instance-method access to the session's services via
-## [NetSessionAccess] — replacing the old [code]NetworkedAPI[/code] static helper.
+## [NetwContext] — replacing the old [code]NetworkedAPI[/code] static helper.
 ##
 ## The lookup chain is: [code]node.multiplayer[/code] (session-scoped [SceneMultiplayer])
 ## → metadata key [code]_multiplayer_tree[/code] → [MultiplayerTree] instance.
 ## This is path-independent and safe across node renames.
-class_name NetComponent
+class_name NetwComponent
 extends Node
 
-var _session: NetSessionAccess
+var _context: NetwContext
 
 
-## Returns a [NetSessionAccess] for this component's multiplayer session.
+## Returns a [NetwContext] for this component's multiplayer session.
 ## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
 ## [method MultiplayerTree.join] completes, or in the editor.
-func get_session() -> NetSessionAccess:
-	if _session == null or not _session.is_valid():
-		var mt := MultiplayerTree.resolve(self)
-		_session = NetSessionAccess.new(mt) if mt else null
-	return _session
+func get_context() -> NetwContext:
+	var lobby := MultiplayerTree.lobby_for_node(self)
+	if is_instance_valid(lobby):
+		return lobby.get_context()
+	var mt := MultiplayerTree.resolve(self)
+	if not mt:
+		return null
+	if _context == null or not _context.is_valid():
+		_context = NetwContext.new(mt)
+	return _context
 
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
-## Prefer [method get_session] for new code; this shim exists for compatibility.
+## Prefer [method get_context] for new code; this shim exists for compatibility.
 func get_multiplayer_tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
 
 
 ## Returns the [MultiplayerLobbyManager] for this session.
 func get_lobby_manager() -> MultiplayerLobbyManager:
-	var s: NetSessionAccess = get_session()
-	return s.get_lobby_manager() if s else null
+	var ctx := get_context()
+	return ctx.get_lobby_manager() if ctx else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local client.
@@ -39,32 +44,22 @@ func get_lobby_manager() -> MultiplayerLobbyManager:
 func get_tp_layer() -> TPLayerAPI:
 	if not is_inside_tree() or not multiplayer or multiplayer.is_server():
 		return null
-	var s: NetSessionAccess = get_session()
-	if not s: return null
-	var tp_layer: TPLayerAPI = s.get_service(TPLayerAPI)
+	var ctx := get_context()
+	if not ctx: return null
+	var tp_layer: TPLayerAPI = ctx.session.get_service(TPLayerAPI)
 	return tp_layer
 
 
 ## Returns the [NetworkClock] for this session.
 func get_network_clock() -> NetworkClock:
-	var s: NetSessionAccess = get_session()
-	return s.get_clock() if s else null
+	var ctx := get_context()
+	return ctx.get_clock() if ctx else null
 
 
-## Returns the [PeerContext] for [param peer_id], defaulting to the local peer.
-func get_peer_context(peer_id: int = -1) -> PeerContext:
-	if peer_id == -1:
-		if not is_inside_tree() or not multiplayer:
-			return null
-		peer_id = multiplayer.get_unique_id()
-	var s := get_session()
-	return s.get_peer_context(peer_id) if s else null
-
-
-## Returns the [NetLobbyContext] for the lobby containing this component.
-## Works in both lobby and lobbyless mode.
-func get_lobby_context() -> NetLobbyContext:
-	return NetLobbyContext.for_node(self)
+## Returns the [NetwPeerContext] for the local peer.
+func get_peer_context() -> NetwPeerContext:
+	var ctx := get_context()
+	return ctx.get_peer_context() if ctx else null
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.

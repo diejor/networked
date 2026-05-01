@@ -1,9 +1,9 @@
 ## Server-driven countdown that ticks once per second.
 ##
-## Obtain via [method NetLobbyContext.start_countdown] — do not construct directly.
+## Obtain via [method NetwLobbyContext.start_countdown] — do not construct directly.
 ## Clients do not receive a return value; they listen to
-## [signal NetLobbyContext.countdown_started] and the subsequent
-## [signal NetLobbyContext.countdown_tick] / [signal NetLobbyContext.countdown_finished]
+## [signal NetwLobbyContext.countdown_started] and the subsequent
+## [signal NetwLobbyContext.countdown_tick] / [signal NetwLobbyContext.countdown_finished]
 ## signals, which are broadcast automatically.
 ## [codeblock]
 ## # Server:
@@ -16,7 +16,7 @@
 ## ctx.countdown_tick.connect(func(n): $Timer.text = str(n))
 ## ctx.countdown_finished.connect(start_match)
 ## [/codeblock]
-class_name NetLobbyCountdown
+class_name NetwLobbyCountdown
 extends RefCounted
 
 ## Emitted each second with the remaining seconds (including 0 at the very end).
@@ -55,7 +55,7 @@ func cancel() -> void:
 	cancelled.emit()
 
 
-## Starts ticking. Called internally by [method NetLobbyContext.start_countdown].
+## Starts ticking. Called internally by [method NetwLobbyContext.start_countdown].
 func _start() -> void:
 	_running = true
 	_schedule_tick()

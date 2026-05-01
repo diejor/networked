@@ -1,6 +1,6 @@
 @tool
 class_name ClientComponent
-extends NetComponent
+extends NetwComponent
 ## The authoritative bridge between a connecting peer and their in-world 
 ## representation.
 ##
@@ -143,7 +143,7 @@ static func parse_authority(node_name: String) -> int:
 
 
 func _init() -> void:
-	## TODO: move name conventions to NetComponent
+	## TODO: move name conventions to NetwComponent
 	name = "ClientComponent"
 	unique_name_in_owner = true
 	
@@ -163,7 +163,7 @@ func _ready() -> void:
 		if mt:
 			mt.authority_client = self
 	
-	# TODO: move client_synchronized signal to NetComponent
+	# TODO: move client_synchronized signal to NetwComponent
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
 			sync.delta_synchronized.connect(client_synchronized.emit)
@@ -235,7 +235,7 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	var ctx := get_session().get_spawn_context(client_data.spawner_path)
+	var ctx := get_context().get_spawn_slot(client_data.spawner_path)
 	if not ctx.is_valid():
 		_dbg.error("Player join failed: no active world or lobby for scene '%s'.",
 			[client_data.spawner_path.get_scene_name()], func(m): push_error(m))
@@ -266,7 +266,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		save_component.spawn(owner, span)
 
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
-	var lobby_manager := get_session().get_lobby_manager()
+	var lobby_manager := get_context().get_lobby_manager()
 
 	if tp_component and save_component and lobby_manager:
 		_dbg.debug("Using TPComponent to spawn player `%s`.",
