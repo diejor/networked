@@ -14,7 +14,15 @@ extends Serde
 ## [b]Note:[/b] The target [SpawnerComponent] must reside in a scene that
 ## tracks the owner scene correctly.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
-var spawner_path: SceneNodePath
+var spawner_component_path: SceneNodePath
+
+## Optional path to a [MultiplayerSpawner] that will receive the spawn
+## payload instead of a [SpawnerComponent].
+##
+## When set, the framework calls [method MultiplayerSpawner.spawn] with
+## the gathered payload after activating the target scene.
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
+var multiplayer_spawner_path: SceneNodePath
 
 ## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a
 ## local session.
@@ -25,20 +33,25 @@ var spawner_path: SceneNodePath
 ## [b]Note:[/b] This is not set by the client.
 var peer_id: int
 
-## When [code]true[/code], indicates this connection was initiated using debug 
+## When [code]true[/code], indicates this connection was initiated using debug
 ## initialization data.
 var is_debug: bool = false
 
 
 ## Serializes the client data into a [PackedByteArray] for network transmission.
 func serialize() -> PackedByteArray:
-	return var_to_bytes({
+	var dict: Dictionary = {
 		username = username,
-		spawner_path = spawner_path.as_uid(),
+		spawner_component_path = (
+			spawner_component_path.as_uid() if spawner_component_path else ""
+		),
 		url = url,
 		peer_id = peer_id,
-		is_debug = is_debug
-	})
+		is_debug = is_debug,
+	}
+	if multiplayer_spawner_path and multiplayer_spawner_path.is_valid():
+		dict.multiplayer_spawner_path = multiplayer_spawner_path.as_uid()
+	return var_to_bytes(dict)
 
 
 ## Populates this object from a serialized [PackedByteArray] produced by
@@ -48,7 +61,11 @@ func deserialize(bytes: PackedByteArray) -> void:
 	assert(data)
 
 	username = data.username
-	spawner_path = SceneNodePath.new(data.spawner_path)
+	spawner_component_path = SceneNodePath.new(data.spawner_component_path)
+	if data.get("multiplayer_spawner_path"):
+		multiplayer_spawner_path = SceneNodePath.new(
+			data.multiplayer_spawner_path
+		)
 	url = data.url
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)
@@ -63,4 +80,3 @@ static func parse_authority(node_name: String) -> int:
 	if parts.size() == 2:
 		return parts[1].to_int()
 	return 0
-

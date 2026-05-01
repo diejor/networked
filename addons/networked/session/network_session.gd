@@ -8,7 +8,7 @@
 ## # Minimal usage — assign via the inspector or at runtime:
 ## var data := MultiplayerClientData.new()
 ## data.username = "Alice"
-## data.spawner_path = spawner_node_path
+## data.spawner_component_path = spawner_node_path
 ## data.url = "192.168.1.5"
 ## await network.connect_player(data)
 ## [/codeblock]
@@ -68,9 +68,15 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 			func(m): push_error(m)
 		)
 		return
-	if not client_data.spawner_path or not client_data.spawner_path.is_valid():
+	var has_spawner := (
+		(client_data.spawner_component_path
+			and client_data.spawner_component_path.is_valid())
+		or (client_data.multiplayer_spawner_path
+			and client_data.multiplayer_spawner_path.is_valid())
+	)
+	if not has_spawner:
 		Netw.dbg.error(
-			"connect_player: spawner_path is invalid or missing.",
+			"connect_player: no valid spawner path configured.",
 			func(m): push_error(m)
 		)
 		return

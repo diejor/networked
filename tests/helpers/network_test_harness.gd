@@ -151,20 +151,20 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
 
-	var spawner_path := SceneNodePath.new()
-	spawner_path.scene_path = level_scene_path
-	spawner_path.node_path = spawner_node_path
+	var spawner_component_path := SceneNodePath.new()
+	spawner_component_path.scene_path = level_scene_path
+	spawner_component_path.node_path = spawner_node_path
 
 	var client_data := MultiplayerClientData.new()
 	client_data.username = username
-	client_data.spawner_path = spawner_path
+	client_data.spawner_component_path = spawner_component_path
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		client_data.serialize()
 	)
 
-	var scene_name: StringName = spawner_path.get_scene_name()
+	var scene_name: StringName = spawner_component_path.get_scene_name()
 	var scene := get_server_scene(scene_name)
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var player_name := "%s|%d" % [username, peer_id]

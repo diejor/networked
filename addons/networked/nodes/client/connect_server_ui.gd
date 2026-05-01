@@ -17,5 +17,5 @@ func _ready() -> void:
 
 func _on_connect_player(client_data: MultiplayerClientData) -> void:
 	assert(spawner_node.is_valid(), "Spawner must be valid to connect.")
-	client_data.spawner_path = spawner_node
+	client_data.spawner_component_path = spawner_node
 	connect_player.emit(client_data)

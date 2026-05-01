@@ -148,7 +148,7 @@ func _ready() -> void:
 	if is_multiplayer_authority():
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
-			mt.authority_client = self
+			mt.authority_client = self.owner
 
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -218,11 +218,11 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if not ctx:
 		return
 	
-	var slot := ctx.tree.get_spawn_slot(client_data.spawner_path)
+	var slot := ctx.tree.get_spawn_slot(client_data.spawner_component_path)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active scene for '%s'.",
-			[client_data.spawner_path.get_scene_name()],
+			[client_data.spawner_component_path.get_scene_name()],
 			func(m): push_error(m)
 		)
 		return

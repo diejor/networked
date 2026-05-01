@@ -87,18 +87,25 @@ var multiplayer_peer: MultiplayerPeer:
 
 var _tree_name: String = ""
 
-## The [SpawnerComponent] representing the local player identity for this tree.
+## The local player node for this tree.
 ## [br][br]
 ## [b]Note:[/b] This is [code]null[/code] on dedicated servers or before the
 ## player has spawned.
-var authority_client: SpawnerComponent:
+var authority_client: Node:
 	set(value):
 		if authority_client != value:
 			authority_client = value
 			authority_client_changed.emit(value)
 
 ## Emitted when [member authority_client] is assigned or cleared.
-signal authority_client_changed(client: SpawnerComponent)
+signal authority_client_changed(client: Node)
+
+## Emitted after a player's target scene has been activated and the spawner
+## has been dispatched. Useful for custom spawn flows that need to react
+## after scene readiness is guaranteed.
+signal player_scene_ready(
+	client_data: MultiplayerClientData, scene: MultiplayerScene
+)
 
 
 ## Returns the original name of the tree, even if renamed for embedded use.
@@ -451,26 +458,31 @@ func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
 		var client := SpawnerComponent.unwrap(player)
 		if client:
 			existing_names.append(client.username)
-	
+		else:
+			var parsed := player.name.get_slice("|", 0)
+			if not parsed.is_empty():
+				existing_names.append(StringName(parsed))
+
 	var original_name := client_data.username
 	if not original_name in existing_names:
 		return
-		
+
 	if client_data.is_debug:
 		var suffix := 1
 		var new_name := StringName(str(original_name) + str(suffix))
 		while new_name in existing_names:
 			suffix += 1
 			new_name = StringName(str(original_name) + str(suffix))
-		
+
 		Netw.dbg.info(
-			"Debug name collision: renaming %s to %s" % [original_name, new_name]
+			"Debug name collision: renaming %s to %s"
+			% [original_name, new_name]
 		)
 		client_data.username = new_name
 	else:
 		Netw.dbg.warn(
-			"Username collision detected for '%s'. " + \
-			"Topology nameplates may break." % original_name, 
+			"Username collision detected for '%s'. "
+			+ "Topology nameplates may break." % original_name,
 			func(m): push_warning(m)
 		)
 

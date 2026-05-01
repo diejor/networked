@@ -235,10 +235,15 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	var ctx := get_context().tree.get_spawn_slot(client_data.spawner_path)
+	var ctx := get_context().tree.get_spawn_slot(
+		client_data.spawner_component_path
+	)
 	if not ctx.is_valid():
-		_dbg.error("Player join failed: no active world or scene for scene '%s'.",
-			[client_data.spawner_path.get_scene_name()], func(m): push_error(m))
+		_dbg.error(
+			"Player join failed: no active world or scene for scene '%s'.",
+			[client_data.spawner_component_path.get_scene_name()],
+			func(m): push_error(m)
+		)
 		return
 
 	var span: NetSpan = _dbg.span("player_join", {
@@ -247,13 +252,20 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		"authority_mode": authority_mode,
 	})
 	span.step("joined")
-	_dbg.info("Player joined: %s (ID: %d)", 
-		[client_data.username, client_data.peer_id])
+	_dbg.info(
+		"Player joined: %s (ID: %d)",
+		[client_data.username, client_data.peer_id]
+	)
 
-	if not client_data.peer_id or not client_data.spawner_path or \
-			client_data.username.is_empty():
-		_dbg.error("Player join failed: invalid client data.", 
-			[], func(m): push_error(m))
+	if (
+		not client_data.peer_id
+		or not client_data.spawner_component_path
+		or client_data.username.is_empty()
+	):
+		_dbg.error(
+			"Player join failed: invalid client data.",
+			[], func(m): push_error(m)
+		)
 		span.end()
 		return
 

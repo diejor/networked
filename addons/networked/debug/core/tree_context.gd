@@ -18,8 +18,8 @@ signal clock_pong_captured(data: Dictionary)
 
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
-## The locally authoritative [SpawnerComponent] for this tree.
-var authority_client: SpawnerComponent:
+## The local player node for this tree.
+var authority_client: Node:
 	get:
 		var mt := _mt_ref.get_ref() as MultiplayerTree
 		return mt.authority_client if mt else null
@@ -177,12 +177,21 @@ func _decorate_player(player: Node) -> void:
 	var should_have := is_enabled("nameplate", player)
 
 	if should_have and not existing:
-		var client := \
-			player.get_node_or_null("%SpawnerComponent") as SpawnerComponent
+		var client := (
+			player.get_node_or_null("%SpawnerComponent")
+			as SpawnerComponent
+		)
+		var username := ""
 		if client:
-			var nameplate: DebugClient = load(_NAMEPLATE_SCENE).instantiate()
+			username = client.username
+		else:
+			username = player.name.get_slice("|", 0)
+		if not username.is_empty():
+			var nameplate: DebugClient = load(
+				_NAMEPLATE_SCENE
+			).instantiate()
 			nameplate.name = "NetDebugNameplate"
-			nameplate.follow_client(client)
+			nameplate.follow_target(player, username)
 			player.add_child(nameplate)
 	elif not should_have and existing:
 		existing.name = "Nameplate_Deleting"
@@ -192,9 +201,15 @@ func _decorate_player(player: Node) -> void:
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func _get_stable_id(node: Node) -> Variant:
-	var client := \
+	if not is_instance_valid(node):
+		return ""
+	var client := (
 		node.get_node_or_null("%SpawnerComponent") as SpawnerComponent
-	return node.get_multiplayer_authority() if client else str(node.get_path())
+	)
+	if client:
+		return node.get_multiplayer_authority()
+	var parsed := MultiplayerClientData.parse_authority(node.name)
+	return parsed if parsed != 0 else str(node.get_path())
 
 
 func _get_stable_id_from_path(path: String) -> Variant:
@@ -212,10 +227,6 @@ func _ready() -> void:
 	var mt: MultiplayerTree = _mt_ref.get_ref()
 	if not mt:
 		return
-
-	# Decoration observer - safe to connect at any time.
-	get_tree().node_added.connect(_on_node_added)
-	get_tree().node_removed.connect(_on_node_removed)
 
 	# Peer events: notify reporter (spans, topology) and refresh decoration.
 	mt.peer_connected.connect(_on_mt_peer_connected)
@@ -241,11 +252,7 @@ func _exit_tree() -> void:
 
 func _disconnect_all() -> void:
 	var mt: MultiplayerTree = _mt_ref.get_ref()
-	
-	if is_inside_tree():
-		get_tree().node_added.disconnect(_on_node_added)
-		get_tree().node_removed.disconnect(_on_node_removed)
-	
+
 	if mt:
 		if mt.peer_connected.is_connected(_on_mt_peer_connected):
 			mt.peer_connected.disconnect(_on_mt_peer_connected)
@@ -381,41 +388,7 @@ func _on_player_spawned(player: Node, scene: MultiplayerScene) -> void:
 	_decorate_player(player)
 
 
-# ─── Node Observer (Decoration Only) ─────────────────────────────────────────
-
-func _on_node_added(node: Node) -> void:
-	# Only decoration - topology is driven by scene.synchronizer.spawned.
-	if node is SpawnerComponent:
-		_on_client_added.call_deferred(node)
-
-
-func _on_node_removed(_node: Node) -> void:
-	pass
-
-
-func _on_client_added(comp: SpawnerComponent) -> void:
-	if not is_instance_valid(comp) or not comp.is_inside_tree():
-		return
-	var mt := _mt_ref.get_ref() as MultiplayerTree
-	if not mt or not mt.is_ancestor_of(comp):
-		return
-	
-	var player := comp.owner
-	if not is_instance_valid(player):
-		return
-	_decorate_player(player)
-
-	# Notify reporter for topology and spans.
-	# In sceneless mode, this is our only trigger. In scene mode, this might be
-	# redundant with scene.synchronizer.spawned, but 
-	# reporter._on_player_spawned_logic is idempotent for spans (deduped by 
-	# node path) and snapshots (just replaces latest).
-	var r := _reporter_ref.get_ref() as NetworkedDebugReporter
-	if r:
-		r._on_player_spawned_logic(player, mt, null)
-
-
-func _on_authority_client_changed(_client: SpawnerComponent) -> void:
+func _on_authority_client_changed(_client: Node) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if mt and reporter:
@@ -425,5 +398,9 @@ func _on_authority_client_changed(_client: SpawnerComponent) -> void:
 func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if is_instance_valid(mt) and mt.authority_client:
-		data["username"] = mt.authority_client.username
+		var client := SpawnerComponent.unwrap(mt.authority_client)
+		if client:
+			data["username"] = client.username
+		else:
+			data["username"] = mt.authority_client.name.get_slice("|", 0)
 	clock_pong_captured.emit(data)

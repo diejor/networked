@@ -66,10 +66,14 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 	var username := data.get("username", "")
 	if username.is_empty():
 		if is_instance_valid(mt) and mt.authority_client:
-			username = mt.authority_client.username
+			var client := SpawnerComponent.unwrap(mt.authority_client)
+			if client:
+				username = client.username
+			else:
+				username = mt.authority_client.name.get_slice("|", 0)
 		else:
 			username = data.get("tree_name", "Unknown")
-	
+
 	return "Clock %s" % username
 
 

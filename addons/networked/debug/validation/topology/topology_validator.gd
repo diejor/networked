@@ -72,6 +72,7 @@ static func validate_node(node: Node) -> Dictionary:
 		errors.append_array(_check_spawner_component(client_comp))
 
 	errors.append_array(_check_authority(node))
+	errors.append_array(_check_server_authority_synchronizer(node))
 
 	return {
 		"ok": errors.is_empty(),
@@ -176,11 +177,31 @@ static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
 	var expected := MultiplayerClientData.parse_authority(node.name)
 	var actual := node.get_multiplayer_authority()
-	
+
 	if expected != 0 and actual != expected:
 		errs.append(
 			"Authority mismatch on '%s': expected=%d actual=%d. " % \
 			[node.name, expected, actual] + \
 			"Multiplayer authority was not correctly assigned during spawn."
+		)
+	return errs
+
+
+static func _check_server_authority_synchronizer(
+	node: Node
+) -> Array[String]:
+	var errs: Array[String] = []
+	var has_server_sync := false
+	for sync: MultiplayerSynchronizer in \
+			SynchronizersCache.get_synchronizers(node):
+		if sync.get_multiplayer_authority() == 1:
+			has_server_sync = true
+			break
+	if not has_server_sync:
+		errs.append(
+			"No server-authoritative MultiplayerSynchronizer on '%s'. " % \
+			[node.name] + \
+			"Scene visibility requires at least one synchronizer " + \
+			"with authority=1 so the server can control replication."
 		)
 	return errs

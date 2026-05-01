@@ -82,6 +82,21 @@ static func configure(
 	if save:
 		save.spawn_from_data(payload.save_state, caller)
 
+	assert(
+		MultiplayerClientData.parse_authority(node.name) != 0,
+		"Node name must follow 'username|peer_id' after configure()."
+	)
+	var has_sync := false
+	for child in node.get_children():
+		if child is MultiplayerSynchronizer:
+			has_sync = true
+			break
+	if not has_sync:
+		Netw.dbg.warn(
+			"Node '%s' has no MultiplayerSynchronizer children. "
+			+ "Scene visibility may not work correctly.", [node.name]
+		)
+
 
 ## Creates a player [Node] from [param scene_template] and applies
 ## [param payload] via [method configure].

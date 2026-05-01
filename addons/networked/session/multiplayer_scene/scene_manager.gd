@@ -295,11 +295,13 @@ func destroy_scene(name: StringName) -> void:
 func get_all_players() -> Array[Node]:
 	var players: Array[Node] = []
 	for scene: MultiplayerScene in active_scenes.values():
-		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+		if not is_instance_valid(scene) or not is_instance_valid(
+			scene.synchronizer
+		):
 			continue
-		for c in scene.level.find_children("*", "SpawnerComponent", true, false):
-			if is_instance_valid(c.owner):
-				players.append(c.owner)
+		for node: Node in scene.synchronizer.tracked_nodes.keys():
+			if is_instance_valid(node):
+				players.append(node)
 	return players
 
 
@@ -374,9 +376,14 @@ func activate_scene_for(
 	Netw.dbg.info(
 		"Received join request from peer %d." % peer_id
 	)
-	var scene_name := StringName(
-		client_data.spawner_path.get_scene_name()
-	)
+	var path := _resolve_scene_path(client_data)
+	if not path or not path.is_valid():
+		Netw.dbg.error(
+			"Join failed: no valid spawner path.", []
+		)
+		return null
+
+	var scene_name := StringName(path.get_scene_name())
 	await activate_scene(scene_name)
 
 	var scene := active_scenes.get(scene_name) as MultiplayerScene
@@ -390,22 +397,91 @@ func activate_scene_for(
 	return scene
 
 
+## Resolves the scene path from [param client_data]'s spawner fields.
+func _resolve_scene_path(
+	client_data: MultiplayerClientData
+) -> SceneNodePath:
+	if (
+		client_data.spawner_component_path
+		and client_data.spawner_component_path.is_valid()
+	):
+		return client_data.spawner_component_path
+	if (
+		client_data.multiplayer_spawner_path
+		and client_data.multiplayer_spawner_path.is_valid()
+	):
+		return client_data.multiplayer_spawner_path
+	return null
+
+
 ## Called by [MultiplayerTree] to handle a player entry request.
 ##
-## Activates the target scene and emits
-## [signal SpawnerComponent.player_joined].
+## Activates the target scene, dispatches to the configured spawner, and
+## emits [signal MultiplayerTree.player_scene_ready].
 func handle_join_request(client_data: MultiplayerClientData) -> void:
 	var scene := await activate_scene_for(client_data)
 	if not scene:
 		return
 
-	var spawner_client: SpawnerComponent = (
-		scene.level.get_node_or_null(
-			client_data.spawner_path.node_path
-		) as SpawnerComponent
-	)
-	assert(spawner_client, "Player needs a `SpawnerComponent`.")
-	spawner_client.player_joined.emit(client_data)
+	var dispatched := false
+
+	if (
+		client_data.spawner_component_path
+		and client_data.spawner_component_path.is_valid()
+	):
+		var spawner_client: SpawnerComponent = (
+			scene.level.get_node_or_null(
+				client_data.spawner_component_path.node_path
+			) as SpawnerComponent
+		)
+		if spawner_client:
+			spawner_client.player_joined.emit(client_data)
+			dispatched = true
+		else:
+			Netw.dbg.error(
+				"SpawnerComponent not found at '%s'.",
+				[client_data.spawner_component_path.node_path]
+			)
+
+	if (
+		client_data.multiplayer_spawner_path
+		and client_data.multiplayer_spawner_path.is_valid()
+	):
+		var spawner: MultiplayerSpawner = (
+			scene.level.get_node_or_null(
+				client_data.multiplayer_spawner_path.node_path
+			) as MultiplayerSpawner
+		)
+		if spawner:
+			var payload := Netw.spawn.gather(client_data)
+			spawner.spawn(payload.to_variant())
+			dispatched = true
+		else:
+			Netw.dbg.error(
+				"MultiplayerSpawner not found at '%s'.",
+				[client_data.multiplayer_spawner_path.node_path]
+			)
+
+	if dispatched and (
+		client_data.spawner_component_path
+		and client_data.spawner_component_path.is_valid()
+		and client_data.multiplayer_spawner_path
+		and client_data.multiplayer_spawner_path.is_valid()
+	):
+		Netw.dbg.warn(
+			"Both spawner_component_path and multiplayer_spawner_path are "
+			+ "set. Both spawners will fire.", []
+		)
+
+	var tree := MultiplayerTree.for_node(self)
+	if tree:
+		tree.player_scene_ready.emit(client_data, scene)
+
+	if not dispatched:
+		Netw.dbg.error(
+			"No valid spawner configured for player '%s'.",
+			[client_data.username]
+		)
 
 
 func _apply_empty_action_if_needed(name: StringName) -> void:

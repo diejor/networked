@@ -42,13 +42,13 @@ func test_player_spawns_in_level_after_join() -> void:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
 
-	var spawner_path := SceneNodePath.new()
-	spawner_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_path.node_path = "TestPlayerFull/SpawnerComponent"
+	var spawner_component_path := SceneNodePath.new()
+	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
 
 	var client_data := MultiplayerClientData.new()
 	client_data.username = username
-	client_data.spawner_path = spawner_path
+	client_data.spawner_component_path = spawner_component_path
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -73,13 +73,13 @@ func test_spawned_player_has_correct_username() -> void:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
 
-	var spawner_path := SceneNodePath.new()
-	spawner_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_path.node_path = "TestPlayerFull/SpawnerComponent"
+	var spawner_component_path := SceneNodePath.new()
+	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
 
 	var client_data := MultiplayerClientData.new()
 	client_data.username = username
-	client_data.spawner_path = spawner_path
+	client_data.spawner_component_path = spawner_component_path
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,

@@ -62,6 +62,15 @@ var _pending_zombie_checks: Array[SceneTreeTimer] = []
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
+static func _get_username(node: Node) -> String:
+	if not is_instance_valid(node):
+		return ""
+	var client := SpawnerComponent.unwrap(node)
+	if client:
+		return client.username
+	return node.name.get_slice("|", 0)
+
+
 ## Resets all debug registries, history, and telemetry.
 ## [br][br]
 ## This performs a deep reset, freeing all internal [NetDebugTreeContext]
@@ -211,7 +220,7 @@ func report_session_registered(mt: MultiplayerTree) -> void:
 		
 	var event := NetSessionEvent.new()
 	event.tree_name = mt.get_tree_name()
-	event.username = mt.authority_client.username if mt.authority_client else ""
+	event.username = _get_username(mt.authority_client) if mt.authority_client else ""
 	event.is_server = mt.is_server
 	event.backend_class = backend_class
 	event.rid = reporter_id
@@ -570,12 +579,14 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	
 	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
 	
-	# Clients only emit topology for their 'owned' player. 
+	# Clients only emit topology for their 'owned' player.
 	# Servers emit for everyone (to populate the server's topology view).
 	if not mt.is_server:
-		if not is_instance_valid(ctx) or \
-				not is_instance_valid(ctx.authority_client) or \
-				ctx.authority_client.owner != player:
+		if (
+			not is_instance_valid(ctx)
+			or not is_instance_valid(ctx.authority_client)
+			or ctx.authority_client != player
+		):
 			return
 		
 	var tree_name := mt.get_tree_name()
@@ -667,26 +678,27 @@ func _emit_current_state() -> void:
 			
 		var event := NetSessionEvent.new()
 		event.tree_name = tree_name
-		event.username = mt.authority_client.username if mt.authority_client else ""
+		event.username = (
+			_get_username(mt.authority_client) if mt.authority_client else ""
+		)
 		event.is_server = mt.is_server
 		event.backend_class = backend_class
 		event.rid = reporter_id
 		event.peer_id = mt.multiplayer_api.get_unique_id() if \
 			mt.multiplayer_api else 0
 		_queue("networked:session_registered", event.to_dict(), mt)
-		
+
 		var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
 		if not is_instance_valid(ctx):
 			continue
-			
+
 		if mt.is_server:
 			# Server sends topology for all active players.
 			for player in mt.get_all_players():
 				_send_topology_snapshot(player, mt)
-		elif is_instance_valid(ctx.authority_client) and \
-				is_instance_valid(ctx.authority_client.owner):
+		elif is_instance_valid(ctx.authority_client):
 			# Client only sends its own.
-			_send_topology_snapshot(ctx.authority_client.owner, mt)
+			_send_topology_snapshot(ctx.authority_client, mt)
 
 
 # --- Demand-Driven Replication Watch ------------------------------------------

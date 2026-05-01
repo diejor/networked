@@ -231,12 +231,9 @@ static func _get_caller() -> Dictionary:
 		var src := frame.get("source", "") as String
 		# Skip only the span infrastructure and the base NetwComponent helper.
 		# Frames from the reporter or user code are the meaningful call site.
-		if src.contains("addons/networked/debug/net_span.gd") \
-				or src.contains("addons/networked/debug/net_peer_span.gd") \
-				or src.contains("addons/networked/debug/net_trace.gd") \
-				or src.contains("addons/networked/components/net_component.gd") \
-				or src.contains("addons/networked/core/netw_dbg.gd") \
-				or src.contains("addons/networked/core/netw_handle.gd"):
+		if src.contains("addons/networked/debug/telemetry") \
+				or src.contains("addons/networked/nodes/net_component.gd") \
+				or src.contains("addons/networked/api"):
 			continue
 		return frame
 	return {}

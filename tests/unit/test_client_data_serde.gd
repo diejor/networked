@@ -7,7 +7,7 @@ func test_round_trip_preserves_username() -> void:
 	original.username = "alice"
 	original.url = "localhost"
 	original.peer_id = 7
-	original.spawner_path = SceneNodePath.new()
+	original.spawner_component_path = SceneNodePath.new()
 
 	var bytes: PackedByteArray = original.serialize()
 	assert_that(bytes.size()).is_greater(0)
@@ -25,7 +25,7 @@ func test_round_trip_preserves_url() -> void:
 	data.username = "bob"
 	data.url = "ws://example.com:4433"
 	data.peer_id = 0
-	data.spawner_path = SceneNodePath.new()
+	data.spawner_component_path = SceneNodePath.new()
 
 	var bytes: PackedByteArray = data.serialize()
 	var restored: MultiplayerClientData = auto_free(MultiplayerClientData.new())
@@ -39,7 +39,7 @@ func test_serialize_returns_nonempty_bytes() -> void:
 	data.username = "test"
 	data.url = ""
 	data.peer_id = 0
-	data.spawner_path = SceneNodePath.new()
+	data.spawner_component_path = SceneNodePath.new()
 
 	assert_that(data.serialize().size()).is_greater(0)
 
@@ -49,7 +49,7 @@ func test_deserialize_does_not_crash_on_valid_bytes() -> void:
 	data.username = "carol"
 	data.url = "localhost"
 	data.peer_id = 42
-	data.spawner_path = SceneNodePath.new()
+	data.spawner_component_path = SceneNodePath.new()
 
 	var bytes: PackedByteArray = data.serialize()
 

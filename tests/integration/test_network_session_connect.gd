@@ -147,12 +147,12 @@ func _setup_network() -> void:
 
 
 func _client_data(username: String) -> MultiplayerClientData:
-	var spawner_path := SceneNodePath.new()
-	spawner_path.scene_path = TEST_LEVEL_SCENE.resource_path
-	spawner_path.node_path = SPAWNER_PATH
+	var spawner_component_path := SceneNodePath.new()
+	spawner_component_path.scene_path = TEST_LEVEL_SCENE.resource_path
+	spawner_component_path.node_path = SPAWNER_PATH
 
 	var data := MultiplayerClientData.new()
 	data.username = username
 	data.url = "localhost"
-	data.spawner_path = spawner_path
+	data.spawner_component_path = spawner_component_path
 	return data
