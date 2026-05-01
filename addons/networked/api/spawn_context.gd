@@ -26,7 +26,7 @@ var _dbg: NetwHandle
 ##
 ## [param p_spawner] is the [SpawnerComponent] template that owns the player
 ## scene. [param slot] is the resolved [MultiplayerTree.SpawnSlot].
-## [param context] provides lobby and clock access.
+## [param context] provides scene and clock access.
 func _init(
 	p_spawner: SpawnerComponent,
 	slot: MultiplayerTree.SpawnSlot,
@@ -50,7 +50,7 @@ func _init(
 ## Emits [signal player_instantiated], [signal state_loaded], and
 ## [signal player_placed] at each phase boundary.
 func spawn_player(client_data: MultiplayerClientData) -> void:
-	if not _context.is_server():
+	if not _context.tree.is_server():
 		push_error(
 			"SpawnContext.spawn_player must only be called on the server."
 		)
@@ -84,7 +84,7 @@ func spawn_player(client_data: MultiplayerClientData) -> void:
 	state_loaded.emit(player)
 
 	var tp: TPComponent = player.get_node_or_null("%TPComponent")
-	var lobby_mgr := _context.get_lobby_manager()
+	var lobby_mgr := _context.tree.get_scene_manager()
 
 	if tp and save and lobby_mgr:
 		tp.spawn(lobby_mgr)

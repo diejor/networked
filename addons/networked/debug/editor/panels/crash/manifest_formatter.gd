@@ -66,16 +66,16 @@ static func _format_preflight(snapshot: Array, alias_map: Dictionary) -> Array:
 			var path_str: String = _alias_path(raw_path, alias_map)
 			var auth_val: int = s.get("auth", 0)
 			var auth_color: String = "green" if s.get("is_auth", false) else ("red" if auth_val == 0 else "yellow")
-			var lobby_tag: String = (" lobby=%s" % s["lobby"]) if s.has("lobby") else ""
+			var scene_tag: String = (" scene=%s" % s["scene"]) if s.has("scene") else ""
 			out.append({
 				"type": s.get("type", "?"),
 				"path": path_str,
 				"auth": auth_val,
 				"auth_color": auth_color,
-				"lobby": lobby_tag,
+				"scene": scene_tag,
 				"broadcast": broadcast,
 				"label": "%s  %s" % [s.get("type", "?"), path_str],
-				"tooltip": "auth=%d%s%s" % [auth_val, lobby_tag,
+				"tooltip": "auth=%d%s%s" % [auth_val, scene_tag,
 					" (engine broadcast)" if broadcast else ""],
 			})
 		else:
@@ -86,7 +86,7 @@ static func _format_preflight(snapshot: Array, alias_map: Dictionary) -> Array:
 				"path": s.get("name", "?"),
 				"auth": 0,
 				"auth_color": "green" if ok else "red",
-				"lobby": "",
+				"scene": "",
 				"broadcast": false,
 				"label": "%s (Save Audit)" % s.get("name", "?"),
 				"tooltip": "parent=%s  owner=%s  root_path=%s" % [
@@ -123,8 +123,8 @@ static func _format_telemetry(slice: Array) -> Array:
 	return out
 
 
-## Substitutes known lobby level [param path] with a readable [param alias_map] 
-## (e.g. [code]"/root/.../Level1" → "[Lobby:Level1]"[/code]).
+## Substitutes known scene level [param path] with a readable [param alias_map] 
+## (e.g. [code]"/root/.../Level1" → "[Scene:Level1]"[/code]).
 static func _alias_path(path: String, alias_map: Dictionary) -> String:
 	for prefix: String in alias_map:
 		if path.begins_with(prefix):

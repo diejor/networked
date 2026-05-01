@@ -10,7 +10,6 @@
 class_name TestNetworkSessionConnect
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
 ## Path from the level root to the [SpawnerComponent] that acts as the spawn template.
@@ -69,20 +68,20 @@ func test_client_is_online_after_connect_player() -> void:
 	#assert_that(connected_ids.size()).is_equal(1)
 #
 #
-#func test_player_spawns_in_server_lobby_after_connect() -> void:
+#func test_player_spawns_in_server_scene_after_connect() -> void:
 	#network.connect_player(_client_data("alice"))
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
-	#var lm: MultiplayerLobbyManager = server.get_service(MultiplayerLobbyManager)
+	#var sm: MultiplayerSceneManager = server.get_service(MultiplayerSceneManager)
 	#await wait_until(func():
 		#@warning_ignore("confusable_local_declaration")
-		#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
-		#return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
+		#var scene: MultiplayerScene = sm.active_scenes.get(&"TestLevel")
+		#return scene and scene.level.get_node_or_null("alice|%d" % peer_id) != null
 	#, 5.0)
 #
-	#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
-	#var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
+	#var scene: MultiplayerScene = sm.active_scenes.get(&"TestLevel")
+	#var player := scene.level.get_node_or_null("alice|%d" % peer_id)
 	#assert_that(player).is_not_null()
 #
 #
@@ -91,15 +90,15 @@ func test_client_is_online_after_connect_player() -> void:
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
-	#var lm: MultiplayerLobbyManager = server.get_service(MultiplayerLobbyManager)
+	#var sm: MultiplayerSceneManager = server.get_service(MultiplayerSceneManager)
 	#await wait_until(func():
 		#@warning_ignore("confusable_local_declaration")
-		#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
-		#return lobby and lobby.level.get_node_or_null("alice|%d" % peer_id) != null
+		#var scene: MultiplayerScene = sm.active_scenes.get(&"TestLevel")
+		#return scene and scene.level.get_node_or_null("alice|%d" % peer_id) != null
 	#, 5.0)
 #
-	#var lobby: Lobby = lm.active_lobbies.get(&"TestLevel")
-	#var player := lobby.level.get_node_or_null("alice|%d" % peer_id)
+	#var scene: MultiplayerScene = sm.active_scenes.get(&"TestLevel")
+	#var player := scene.level.get_node_or_null("alice|%d" % peer_id)
 	#assert_that(player.get_multiplayer_authority()).is_equal(peer_id)
 
 
@@ -118,7 +117,7 @@ func _setup_server() -> void:
 	backend.session = session
 	server.backend = backend
 
-	var mgr: MultiplayerLobbyManager = LOBBY_MANAGER_SCENE.instantiate()
+	var mgr: MultiplayerSceneManager = NetworkedTestSuite.create_scene_manager()
 	server.add_child(mgr)
 	# Scenes must be registered before host() because spawn_lobbies() runs
 	# synchronously inside _on_configured(), which fires during host().
@@ -139,7 +138,7 @@ func _setup_network() -> void:
 	backend.session = session
 	client_tree.backend = backend
 
-	var mgr: MultiplayerLobbyManager = LOBBY_MANAGER_SCENE.instantiate()
+	var mgr: MultiplayerSceneManager = NetworkedTestSuite.create_scene_manager()
 	client_tree.add_child(mgr)
 
 	# Assigning client triggers signal wiring inside NetworkSession.

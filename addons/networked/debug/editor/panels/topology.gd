@@ -6,7 +6,7 @@
 ##
 ## Layout (top to bottom):
 ##   [cache banner]      — hidden unless snapshot is stale
-##   identity rows       — username / peer_id, lobby / mode
+##   identity rows       — username / peer_id, scene / mode
 ##   node button         — opens the node in the editor scene inspector
 ##   synchronizer tree   — Name / Mode / Flags / Source columns
 @tool
@@ -120,7 +120,7 @@ func _update_cache_visuals(cache_info: Dictionary) -> void:
 func _apply_identity(d: Dictionary) -> void:
 	var node_path: String = d.get("node_path", "")
 	var peer_id: int = d.get("peer_id", 0)
-	var lobby: String = d.get("lobby_name", "—")
+	var scene: String = d.get("scene_name", "—")
 	var is_server: bool = d.get("is_server", false)
 	var mode_str: String = "SERVER" if is_server else "CLIENT"
 
@@ -128,7 +128,7 @@ func _apply_identity(d: Dictionary) -> void:
 
 	_username_label.text = username
 	_peer_id_label.text = str(peer_id) if peer_id != 0 else "—"
-	_lobby_label.text = lobby
+	_lobby_label.text = scene
 	_mode_label.text = "[%s]" % mode_str
 
 	_last_node_path = node_path
@@ -236,7 +236,7 @@ func _build_identity_section() -> void:
 	row2.add_theme_constant_override("separation", 12)
 	vbox.add_child(row2)
 
-	var lb_lbl := Label.new(); lb_lbl.text = "Lobby:"
+	var lb_lbl := Label.new(); lb_lbl.text = "Scene:"
 	lb_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(lb_lbl)
 	_lobby_label = Label.new(); _lobby_label.text = "—"

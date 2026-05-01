@@ -7,7 +7,7 @@ extends Node
 var _session: LocalLoopbackSession
 var _server: MultiplayerTree
 var _clients: Array[MultiplayerTree] = []
-var _lobby_manager_scene: PackedScene
+var _scene_manager_src: Variant
 var _world_scene: PackedScene
 
 
@@ -26,10 +26,17 @@ func wait_for(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> bool:
 
 
 ## Creates a fresh session and a server node. Does NOT host yet — register
-## spawnable scenes on _get_lobby_manager(get_server()) before calling add_client().
+## spawnable scenes on [method _get_scene_manager] before calling add_client().
 ## Must be awaited — waits one frame for _ready() to fire before returning.
-func setup(lobby_manager_scene: PackedScene = null, world_scene: PackedScene = null) -> void:
-	_lobby_manager_scene = lobby_manager_scene
+##
+## [param scene_manager_src] accepts:
+## [br]- [PackedScene]: instantiated to produce a [MultiplayerSceneManager].
+## [br]- [Callable]: called to produce a [MultiplayerSceneManager] (e.g.
+##   [method NetworkedTestSuite.create_scene_manager]).
+## [br]- [code]null[/code]: no scene manager is created (used by sceneless
+##   join tests).
+func setup(scene_manager_src: Variant = null, world_scene: PackedScene = null) -> void:
+	_scene_manager_src = scene_manager_src
 	_world_scene = world_scene
 	_session = LocalLoopbackSession.new()
 	_setup_server()
@@ -61,9 +68,10 @@ func add_client() -> MultiplayerTree:
 	backend.session = _session
 	client.backend = backend
 
-	if _lobby_manager_scene:
-		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()
-		client.add_child(mgr)
+	if _scene_manager_src:
+		var sm := _instantiate_scene_manager()
+		if sm:
+			client.add_child(sm)
 
 	_clients.append(client)
 
@@ -73,13 +81,13 @@ func add_client() -> MultiplayerTree:
 	# Wait for server to register this peer
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var server_api := _server.multiplayer_api
-	
+
 	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
 	while not peer_id in server_api.get_peers():
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
 			assert(false, "Timed out waiting for server to register peer %d" % peer_id)
-			
+
 	await get_tree().process_frame
 
 	return client
@@ -89,10 +97,10 @@ func add_client() -> MultiplayerTree:
 ## Should be called in after_test().
 func teardown() -> void:
 	NetwLog.pop_settings()
-	
+
 	if _session:
 		_session.reset()
-	
+
 	if is_instance_valid(_server):
 		_server.queue_free()
 
@@ -125,13 +133,13 @@ func get_session() -> LocalLoopbackSession:
 	return _session
 
 
-## Returns a lobby from the server's lobby manager by name,
-## or the first lobby if name is empty.
-func get_server_lobby(lobby_name: StringName = "") -> Lobby:
-	var server_mgr := _get_lobby_manager(_server)
-	if lobby_name.is_empty():
-		return server_mgr.active_lobbies.values()[0]
-	return server_mgr.active_lobbies.get(lobby_name)
+## Returns a scene from the server's scene manager by name,
+## or the first scene if name is empty.
+func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
+	var server_sm := _get_scene_manager(_server)
+	if scene_name.is_empty():
+		return server_sm.active_scenes.values()[0]
+	return server_sm.active_scenes.get(scene_name)
 
 
 ## Sends the real request_join_player RPC from a client to the server,
@@ -139,7 +147,7 @@ func get_server_lobby(lobby_name: StringName = "") -> Lobby:
 ## level_scene_path must be a registered spawnable scene whose filename (no extension)
 ## matches the level root node name (e.g. "TestLevel.tscn" → root "TestLevel").
 ## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/SpawnerComponent").
-## Returns the spawned player node from the server lobby after one process frame.
+## Returns the spawned player node from the server scene after one process frame.
 func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
 
@@ -156,24 +164,24 @@ func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node
 		client_data.serialize()
 	)
 
-	var lobby_name: StringName = spawner_path.get_scene_name()
-	var lobby := get_server_lobby(lobby_name)
+	var scene_name: StringName = spawner_path.get_scene_name()
+	var scene := get_server_scene(scene_name)
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var player_name := "%s|%d" % [username, peer_id]
 
 	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
-	while lobby.level.get_node_or_null(player_name) == null:
+	while scene.level.get_node_or_null(player_name) == null:
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
-			assert(false, "Timed out waiting for player '%s' to spawn in lobby '%s'." % [player_name, lobby_name])
+			assert(false, "Timed out waiting for player '%s' to spawn in scene '%s'." % [player_name, scene_name])
 			return null
 
-	return lobby.level.get_node_or_null(player_name)
+	return scene.level.get_node_or_null(player_name)
 
 
-## Spawns a player into a server lobby, bypassing the RPC chain.
+## Spawns a player into a server scene, bypassing the RPC chain.
 ## Returns the spawned player node.
-func spawn_player(client: MultiplayerTree, player_scene: PackedScene, lobby_name: StringName = "") -> Node:
+func spawn_player(client: MultiplayerTree, player_scene: PackedScene, scene_name: StringName = "") -> Node:
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var username: String = client.get_meta(&"_harness_username")
 
@@ -182,8 +190,8 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, lobby_name
 	var client_comp: SpawnerComponent = player.get_node("%SpawnerComponent")
 	client_comp.username = username
 
-	var lobby := get_server_lobby(lobby_name)
-	lobby.add_player(player)
+	var scene := get_server_scene(scene_name)
+	scene.add_player(player)
 	return player
 
 
@@ -191,8 +199,18 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, lobby_name
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-func _get_lobby_manager(mt: MultiplayerTree) -> MultiplayerLobbyManager:
-	return mt.get_service(MultiplayerLobbyManager)
+func _get_scene_manager(mt: MultiplayerTree) -> MultiplayerSceneManager:
+	return mt.get_service(MultiplayerSceneManager)
+
+
+func _instantiate_scene_manager() -> MultiplayerSceneManager:
+	if _scene_manager_src is PackedScene:
+		return (_scene_manager_src as PackedScene).instantiate()
+	elif _scene_manager_src is Callable:
+		return (_scene_manager_src as Callable).call()
+	elif _scene_manager_src is MultiplayerSceneManager:
+		return _scene_manager_src as MultiplayerSceneManager
+	return null
 
 
 func _setup_server() -> void:
@@ -209,27 +227,28 @@ func _setup_server() -> void:
 	backend.session = _session
 	_server.backend = backend
 
-	if _lobby_manager_scene:
-		var mgr: MultiplayerLobbyManager = _lobby_manager_scene.instantiate()
-		_server.add_child(mgr)
+	if _scene_manager_src:
+		var sm := _instantiate_scene_manager()
+		if sm:
+			_server.add_child(sm)
 
 
-func wait_for_client_lobby_spawn(client: MultiplayerTree, lobby_name: StringName) -> Lobby:
-	var mgr := _get_lobby_manager(client)
+func wait_for_client_scene_spawn(client: MultiplayerTree, scene_name: StringName) -> MultiplayerScene:
+	var sm := _get_scene_manager(client)
 	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
-	while not mgr.active_lobbies.has(lobby_name):
+	while not sm.active_scenes.has(scene_name):
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
-			assert(false, "Timed out waiting for lobby '%s' to spawn on client." % [lobby_name])
-	return mgr.active_lobbies.get(lobby_name)
+			assert(false, "Timed out waiting for scene '%s' to spawn on client." % [scene_name])
+	return sm.active_scenes.get(scene_name)
 
 
-func wait_for_client_player_spawn(client: MultiplayerTree, lobby_name: StringName) -> Node:
-	var lobby := await wait_for_client_lobby_spawn(client, lobby_name)
-	if lobby.synchronizer.tracked_nodes.size() > 0:
-		return lobby.synchronizer.tracked_nodes.keys()[0]
-	
-	if await wait_for(lobby.synchronizer.spawned):
-		assert(false, "Timed out waiting for player to spawn in lobby '%s'." % lobby_name)
-		
-	return lobby.synchronizer.tracked_nodes.keys()[0]
+func wait_for_client_player_spawn(client: MultiplayerTree, scene_name: StringName) -> Node:
+	var scene := await wait_for_client_scene_spawn(client, scene_name)
+	if scene.synchronizer.tracked_nodes.size() > 0:
+		return scene.synchronizer.tracked_nodes.keys()[0]
+
+	if await wait_for(scene.synchronizer.spawned):
+		assert(false, "Timed out waiting for player to spawn in scene '%s'." % scene_name)
+
+	return scene.synchronizer.tracked_nodes.keys()[0]

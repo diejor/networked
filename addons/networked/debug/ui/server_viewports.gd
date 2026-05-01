@@ -1,4 +1,4 @@
-## Debug [CanvasLayer] that renders a tab bar allowing in-editor switching between server lobby viewports.
+## Debug [CanvasLayer] that renders a tab bar allowing in-editor switching between server scene viewports.
 ##
 ## Only shown in debug builds with collision hints enabled (see [DebugFeature]).
 class_name ViewportDebug
@@ -6,13 +6,13 @@ extends CanvasLayer
 
 @onready var lobbies_tab: TabBar = %LobbiesTab
 
-## Stores world references per lobby name.
+## Stores world references per scene name.
 ## Each value is a Dictionary with keys [code]world_2d[/code] and [code]world_3d[/code].
 var lobbies: Dictionary[StringName, Dictionary]
 
 var client_lobbies: Array:
 	get:
-		for managers in get_tree().get_nodes_in_group("lobby_managers"):
+		for managers in get_tree().get_nodes_in_group("scene_managers"):
 			if not is_instance_valid(managers.multiplayer) or not managers.multiplayer.has_multiplayer_peer():
 				continue
 			
@@ -71,15 +71,15 @@ func _on_tab_changed(tab: int) -> void:
 	if not lobby_name == "Client":
 		for child in client_lobbies:
 			child.process_mode = Node.PROCESS_MODE_DISABLED
-			var lobby := child as Lobby
-			if lobby and is_instance_valid(lobby.level):
-				lobby.level.set("visible", false)
+			var scene := child as MultiplayerScene
+			if scene and is_instance_valid(scene.level):
+				scene.level.set("visible", false)
 	else:
 		for child in client_lobbies:
 			child.process_mode = Node.PROCESS_MODE_INHERIT
-			var lobby := child as Lobby
-			if lobby and is_instance_valid(lobby.level):
-				lobby.level.set("visible", true)
+			var scene := child as MultiplayerScene
+			if scene and is_instance_valid(scene.level):
+				scene.level.set("visible", true)
 
 	var entry: Dictionary = lobbies[lobby_name]
 	get_tree().root.world_2d = entry.world_2d

@@ -2,7 +2,6 @@
 class_name TestSaveFlow
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
 
 ## Node path from level root to the [SpawnerComponent] spawner.
@@ -24,9 +23,9 @@ func before_test() -> void:
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(LOBBY_MANAGER_SCENE)
+	await harness.setup(NetworkedTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_lobby_manager(harness.get_server())
+	var server_mgr := harness._get_scene_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
 
 	client0 = await harness.add_client()

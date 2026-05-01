@@ -1,7 +1,7 @@
 ## Orchestrates debug signals and visuals for a single [MultiplayerTree] instance.
 ##
-## Owns the full lifecycle of all per-tree debug connections: lobby events,
-## per-lobby synchronizer hooks, peer events, and visual decorations
+## Owns the full lifecycle of all per-tree debug connections: scene events,
+## per-scene synchronizer hooks, peer events, and visual decorations
 ## (nameplates).
 ## [br][br]
 ## State is isolated to this instance to support multi-window Embedded Server.
@@ -38,15 +38,15 @@ var _reporter_ref: WeakRef
 ## default.
 var _visualizers: Dictionary = {}
 
-## Lobby -> [CheckpointToken] captured from the [code]lobby_spawn[/code] span,
+## Scene -> [CheckpointToken] captured from the [code]scene_spawn[/code] span,
 ## used for causal linking.
-var _lobby_tokens: Dictionary = {}
+var _scene_tokens: Dictionary = {}
 
-## Lobby -> [Callable] connected to [member Lobby.synchronizer.spawned], for
+## Scene -> [Callable] connected to [member Scene.synchronizer.spawned], for
 ## disconnect-on-cleanup.
-var _hooked_lobbies: Dictionary = {}
+var _hooked_scenes: Dictionary = {}
 
-var _lobby_wired: bool = false
+var _scene_wired: bool = false
 
 
 func _init(mt: MultiplayerTree, reporter: NetworkedDebugReporter) -> void:
@@ -94,7 +94,7 @@ func apply_command(d: Dictionary) -> void:
 ## [br][br]
 ## Prefers the span's explicit target node (if set via [method NetSpan.with_node]).
 ## Falls back to a "Session Snapshot" of the tree root, enriched with high-level
-## state from the [MultiplayerLobbyManager].
+## state from the [MultiplayerSceneManager].
 func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -107,8 +107,8 @@ func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 	
 	# Priority 2: Session fallback (Tree Root)
 	var snap := NetNodeSnapshot.from_node(mt)
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	
+	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+
 	# Manually enrich the tree root's snapshot with service-level data.
 	# This keeps the MultiplayerTree core clean while providing rich context.
 	var session_state: Dictionary = {
@@ -117,8 +117,8 @@ func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 			mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
 		"connected_peers": \
 			mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
-		"active_lobbies": \
-			lm.active_lobbies.keys() if lm else [],
+		"active_scenes": \
+			sm.active_scenes.keys() if sm else [],
 		"backend": \
 			mt.backend.get_script().get_global_name() if mt.backend else "None",
 		"active_scene": get_active_scene_path(),
@@ -224,19 +224,19 @@ func _ready() -> void:
 	# Identity changes: notify reporter to re-emit session registration.
 	mt.authority_client_changed.connect(_on_authority_client_changed)
 
-	# Debug signal wiring for lobby/clock requires configured state.
+	# Debug signal wiring for scene/clock requires configured state.
 	mt.configured.connect(_on_configured)
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if lm:
+	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+	if sm:
 		_on_configured()
 
 
 func _exit_tree() -> void:
 	_disconnect_all()
-	for lobby: Lobby in _hooked_lobbies.keys():
-		_unhook_synchronizer(lobby)
-	_hooked_lobbies.clear()
-	_lobby_tokens.clear()
+	for scene: MultiplayerScene in _hooked_scenes.keys():
+		_unhook_synchronizer(scene)
+	_hooked_scenes.clear()
+	_scene_tokens.clear()
 
 
 func _disconnect_all() -> void:
@@ -260,12 +260,12 @@ func _disconnect_all() -> void:
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
 			
-		var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-		if is_instance_valid(lm):
-			if lm.lobby_spawned.is_connected(_on_lobby_spawned):
-				lm.lobby_spawned.disconnect(_on_lobby_spawned)
-			if lm.lobby_despawned.is_connected(_on_lobby_despawned):
-				lm.lobby_despawned.disconnect(_on_lobby_despawned)
+		var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+		if is_instance_valid(sm):
+			if sm.scene_spawned.is_connected(_on_scene_spawned):
+				sm.scene_spawned.disconnect(_on_scene_spawned)
+			if sm.scene_despawned.is_connected(_on_scene_despawned):
+				sm.scene_despawned.disconnect(_on_scene_despawned)
 
 
 func _on_mt_peer_connected(id: int) -> void:
@@ -288,94 +288,94 @@ func _on_configured() -> void:
 	_refresh_all()
 	var mt: MultiplayerTree = _mt_ref.get_ref()
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
-	if not mt or not reporter or _lobby_wired:
+	if not mt or not reporter or _scene_wired:
 		return
-	
+
 	mt.register_service(self, NetDebugTreeContext)
-	_lobby_wired = true
+	_scene_wired = true
 
 	var clock: NetworkClock = mt.get_service(NetworkClock)
 	if clock:
 		clock.pong_received.connect(_on_clock_pong)
 
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if is_instance_valid(lm):
-		lm.lobby_spawned.connect(_on_lobby_spawned)
-		lm.lobby_despawned.connect(_on_lobby_despawned)
+	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+	if is_instance_valid(sm):
+		sm.scene_spawned.connect(_on_scene_spawned)
+		sm.scene_despawned.connect(_on_scene_despawned)
 
-		# Retroactively hook lobbies that spawned before this context was ready
+		# Retroactively hook scenes that spawned before this context was ready
 		# (e.g. ON_STARTUP).
-		for lobby: Lobby in lm.active_lobbies.values():
-			if not is_instance_valid(lobby) or _hooked_lobbies.has(lobby):
+		for scene: MultiplayerScene in sm.active_scenes.values():
+			if not is_instance_valid(scene) or _hooked_scenes.has(scene):
 				continue
-			_lobby_tokens[lobby] = null # no causal token
-			_hook_synchronizer(lobby)
+			_scene_tokens[scene] = null # no causal token
+			_hook_synchronizer(scene)
 
 		# Emit topology for players already present.
 		for player in mt.get_all_players():
 			reporter._on_player_spawned_logic(player, mt, null)
 	else:
-		# Lobbyless mode: emit topology for all current players.
+		# Sceneless mode: emit topology for all current players.
 		for player in mt.get_all_players():
 			reporter._on_player_spawned_logic(player, mt, null)
 			
 	tree_ready.emit.call_deferred()
 
 
-# ─── Lobby Lifecycle ──────────────────────────────────────────────────────────
+# ─── Scene Lifecycle ────────────────────────────────────────────────────
 
-func _on_lobby_spawned(lobby: Lobby) -> void:
+func _on_scene_spawned(scene: MultiplayerScene) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if not mt or not reporter:
 		return
 
-	var token: CheckpointToken = reporter._on_lobby_spawned_logic(lobby, mt)
-	_lobby_tokens[lobby] = token
-	if is_instance_valid(lobby):
-		lobby.set_meta(&"_net_lobby_token", token)
-	_hook_synchronizer(lobby)
+	var token: CheckpointToken = reporter._on_scene_spawned_logic(scene, mt)
+	_scene_tokens[scene] = token
+	if is_instance_valid(scene):
+		scene.set_meta(&"_net_scene_token", token)
+	_hook_synchronizer(scene)
 
 
-func _on_lobby_despawned(lobby: Lobby) -> void:
+func _on_scene_despawned(scene: MultiplayerScene) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if mt and reporter:
-		reporter._on_lobby_despawned_logic(lobby, mt)
-	_unhook_synchronizer(lobby)
-	_lobby_tokens.erase(lobby)
+		reporter._on_scene_despawned_logic(scene, mt)
+	_unhook_synchronizer(scene)
+	_scene_tokens.erase(scene)
 
 
-func _hook_synchronizer(lobby: Lobby) -> void:
-	if not is_instance_valid(lobby) or \
-			not is_instance_valid(lobby.synchronizer):
+func _hook_synchronizer(scene: MultiplayerScene) -> void:
+	if not is_instance_valid(scene) or \
+			not is_instance_valid(scene.synchronizer):
 		return
-	if _hooked_lobbies.has(lobby):
+	if _hooked_scenes.has(scene):
 		return
 
-	var cb := func(node: Node): _on_player_spawned(node, lobby)
-	lobby.synchronizer.spawned.connect(cb)
-	_hooked_lobbies[lobby] = cb
+	var cb := func(node: Node): _on_player_spawned(node, scene)
+	scene.synchronizer.spawned.connect(cb)
+	_hooked_scenes[scene] = cb
 
 
-func _unhook_synchronizer(lobby: Lobby) -> void:
-	var cb: Callable = _hooked_lobbies.get(lobby, Callable())
-	if cb.is_valid() and is_instance_valid(lobby) and \
-			is_instance_valid(lobby.synchronizer):
-		if lobby.synchronizer.spawned.is_connected(cb):
-			lobby.synchronizer.spawned.disconnect(cb)
-	_hooked_lobbies.erase(lobby)
+func _unhook_synchronizer(scene: MultiplayerScene) -> void:
+	var cb: Callable = _hooked_scenes.get(scene, Callable())
+	if cb.is_valid() and is_instance_valid(scene) and \
+			is_instance_valid(scene.synchronizer):
+		if scene.synchronizer.spawned.is_connected(cb):
+			scene.synchronizer.spawned.disconnect(cb)
+	_hooked_scenes.erase(scene)
 
 
-func _on_player_spawned(player: Node, lobby: Lobby) -> void:
+func _on_player_spawned(player: Node, scene: MultiplayerScene) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if not mt or not reporter:
 		return
 
-	var token: CheckpointToken = _lobby_tokens.get(lobby, null)
-	if not token and not lobby:
-		token = mt.get_lobbyless_session_token()
+	var token: CheckpointToken = _scene_tokens.get(scene, null)
+	if not token and not scene:
+		token = mt.get_sceneless_session_token()
 
 	reporter._on_player_spawned_logic(player, mt, token)
 	_decorate_player(player)
@@ -384,7 +384,7 @@ func _on_player_spawned(player: Node, lobby: Lobby) -> void:
 # ─── Node Observer (Decoration Only) ─────────────────────────────────────────
 
 func _on_node_added(node: Node) -> void:
-	# Only decoration - topology is driven by lobby.synchronizer.spawned.
+	# Only decoration - topology is driven by scene.synchronizer.spawned.
 	if node is SpawnerComponent:
 		_on_client_added.call_deferred(node)
 
@@ -406,8 +406,8 @@ func _on_client_added(comp: SpawnerComponent) -> void:
 	_decorate_player(player)
 
 	# Notify reporter for topology and spans.
-	# In lobbyless mode, this is our only trigger. In lobby mode, this might be
-	# redundant with lobby.synchronizer.spawned, but 
+	# In sceneless mode, this is our only trigger. In scene mode, this might be
+	# redundant with scene.synchronizer.spawned, but 
 	# reporter._on_player_spawned_logic is idempotent for spans (deduped by 
 	# node path) and snapshots (just replaces latest).
 	var r := _reporter_ref.get_ref() as NetworkedDebugReporter

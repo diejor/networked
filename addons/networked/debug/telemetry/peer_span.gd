@@ -1,6 +1,6 @@
 ## Peer-aware extension of [NetSpan] for multi-client operations.
 ##
-## Tracks which peer IDs are affected by a specific operation (e.g., a lobby
+## Tracks which peer IDs are affected by a specific operation (e.g., a scene
 ## spawn intended for peers 2 and 3).
 class_name NetPeerSpan
 extends NetSpan

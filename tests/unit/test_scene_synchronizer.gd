@@ -1,16 +1,16 @@
-## Unit tests for LobbySynchronizer.scene_visibility_filter().
+## Unit tests for SceneSynchronizer.scene_visibility_filter().
 ##
 ## scene_visibility_filter() is pure GDScript logic that reads connected_clients.
 ## These tests set connected_clients directly rather than going through
 ## connect_client() / disconnect_client(), which call set_visibility_for() — a
 ## C++ MultiplayerSynchronizer method that requires a real peer registered in the
 ## engine's replication interface. That requirement belongs in integration tests.
-class_name TestLobbySynchronizer
+class_name TestSceneSynchronizer
 extends NetworkedTestSuite
 
 const SYNCHRONIZER_SCENE = preload("uid://by6v45orjo182")
 
-var sync: LobbySynchronizer
+var sync: SceneSynchronizer
 
 
 func before_test() -> void:

@@ -7,20 +7,20 @@ class_name NetRaceDetector
 extends RefCounted
 
 
-## Returns a list of potential races when a lobby/level is spawned.
-static func find_lobby_races(
-	lobby: Lobby,
+## Returns a list of potential races when a scene/level is spawned.
+static func find_scene_races(
+	scene: MultiplayerScene,
 	mt: MultiplayerTree
 ) -> Array[Dictionary]:
 	if not mt.is_server or not mt.multiplayer_api:
 		return []
-	
+
 	var peers := mt.multiplayer_api.get_peers()
 	if peers.is_empty():
 		return []
 
 	var races: Array[Dictionary] = []
-	for child in lobby.level.find_children(
+	for child in scene.level.find_children(
 		"*", "MultiplayerSynchronizer", true, false
 	):
 		var sync := child as MultiplayerSynchronizer
@@ -40,17 +40,17 @@ static func find_connect_races(
 	if not mt or not mt.multiplayer_api:
 		return []
 
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if not lm:
+	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+	if not sm:
 		return []
 
 	var races: Array[Dictionary] = []
-	for lobby_name: StringName in lm.active_lobbies:
-		var lobby: Lobby = lm.active_lobbies[lobby_name]
-		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+	for scene_name: StringName in sm.active_scenes:
+		var scene: MultiplayerScene = sm.active_scenes[scene_name]
+		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 			continue
-		
-		for child in lobby.level.find_children(
+
+		for child in scene.level.find_children(
 			"*", "MultiplayerSynchronizer", true, false
 		):
 			var sync := child as MultiplayerSynchronizer
@@ -58,12 +58,12 @@ static func find_connect_races(
 					sync.is_multiplayer_authority() and \
 					_has_delta_replication(sync):
 				var r := _format_race(sync, mt)
-				r["lobby"] = str(lobby_name)
+				r["scene"] = str(scene_name)
 				races.append(r)
 	return races
 
 
-## Returns a list of potential races when a player node is added to a lobby.
+## Returns a list of potential races when a player node is added to a scene.
 static func find_player_races(
 	player: Node,
 	mt: MultiplayerTree

@@ -235,9 +235,9 @@ func _instantiate_player(client_data: MultiplayerClientData) -> Node:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	var ctx := get_context().get_spawn_slot(client_data.spawner_path)
+	var ctx := get_context().tree.get_spawn_slot(client_data.spawner_path)
 	if not ctx.is_valid():
-		_dbg.error("Player join failed: no active world or lobby for scene '%s'.",
+		_dbg.error("Player join failed: no active world or scene for scene '%s'.",
 			[client_data.spawner_path.get_scene_name()], func(m): push_error(m))
 		return
 
@@ -266,7 +266,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		save_component.spawn(owner, span)
 
 	var tp_component: TPComponent = player.get_node_or_null("%TPComponent")
-	var lobby_manager := get_context().get_lobby_manager()
+	var lobby_manager := get_context().tree.get_scene_manager()
 
 	if tp_component and save_component and lobby_manager:
 		_dbg.debug("Using TPComponent to spawn player `%s`.",

@@ -1,10 +1,10 @@
 class_name TPComponent
 extends NetwComponent
 
-## Manages cross-lobby teleportation for a player in a multiplayer session.
+## Manages cross-scene teleportation for a player in a multiplayer session.
 ##
 ## Coordinates a multi-step handshake: the client requests a teleport via 
-## [method teleport], the server reparents the player to the destination lobby, 
+## [method teleport], the server reparents the player to the destination scene, 
 ## and then confirms with [signal TeleportPromise.completed]. Requires a 
 ## [TPLayerAPI] in the scene for visual transition animations.
 ## 
@@ -30,14 +30,14 @@ var starting_scene_path: SceneNodePath
 ## The UID or file path of the scene the player currently resides in.
 ##
 ## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
-## Replicated on change so clients can track which lobby their player  is in.
+## Replicated on change so clients can track which scene their player is in.
 @export var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
 
 ## The root node name of the [member current_scene_path], used to look up the 
-## active lobby.
+## active scene.
 var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
@@ -177,36 +177,36 @@ func request_teleport(username: String, from_scene_name: String, to_scene_path: 
 	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
 
-	var lobby_manager := get_lobby_manager()
-	if not lobby_manager:
-		_dbg.error("Cannot teleport, lobby manager not found.", func(m): push_error(m))
-		span.fail("no_lobby_manager")
+	var scene_manager := get_scene_manager()
+	if not scene_manager:
+		_dbg.error("Cannot teleport, scene manager not found.", func(m): push_error(m))
+		span.fail("no_scene_manager")
 		return
 
-	var from_lobby: Lobby = lobby_manager.active_lobbies.get(from_scene_name)
-	if not from_lobby:
-		_dbg.error("Source lobby '%s' not found." % [from_scene_name], func(m): push_error(m))
-		span.fail("source_lobby_not_found", {"lobby": from_scene_name})
+	var from_scene: MultiplayerScene = scene_manager.active_scenes.get(from_scene_name)
+	if not from_scene:
+		_dbg.error("Source scene '%s' not found." % [from_scene_name], func(m): push_error(m))
+		span.fail("source_scene_not_found", {"scene": from_scene_name})
 		return
 
-	var player: Node = from_lobby.level.get_node_or_null(username)
+	var player: Node = from_scene.level.get_node_or_null(username)
 	if not player:
-		_dbg.error("Player '%s' not found in source lobby." % [username], func(m): push_error(m))
+		_dbg.error("Player '%s' not found in source scene." % [username], func(m): push_error(m))
 		span.fail("player_not_found")
 		return
 
 	_flush_player_position(player)
-	
+
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	tp_component.current_scene_path = to_scene_path
-	
+
 	await _sync_client_state(player, span)
 
-	var to_lobby := await _activate_destination(to_scene_path, span)
-	if not to_lobby:
+	var to_scene_node := await _activate_destination(to_scene_path, span)
+	if not to_scene_node:
 		return
 
-	_reparent_player(player, from_lobby, to_lobby, tp_path)
+	_reparent_player(player, from_scene, to_scene_node, tp_path)
 	span.end()
 
 
@@ -229,46 +229,46 @@ func _sync_client_state(player: Node, span: NetSpan) -> void:
 		span.step("client_synced")
 
 
-func _activate_destination(to_scene_path: String, span: NetSpan) -> Lobby:
-	var lobby_manager := get_lobby_manager()
+func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerScene:
+	var scene_manager := get_scene_manager()
 	var to_scene_name := _resolve_scene_name(to_scene_path)
-	span.step("activating_lobby", {"lobby": to_scene_name})
-	await lobby_manager.activate_lobby(StringName(to_scene_name))
-	var to_lobby: Lobby = lobby_manager.active_lobbies.get(StringName(to_scene_name))
-	if not to_lobby:
-		_dbg.error("Destination lobby '%s' could not be activated." % [to_scene_name], func(m): push_error(m))
-		span.fail("dest_lobby_activation_failed", {"lobby": to_scene_name})
+	span.step("activating_scene", {"scene": to_scene_name})
+	await scene_manager.activate_scene(StringName(to_scene_name))
+	var to_scene: MultiplayerScene = scene_manager.active_scenes.get(StringName(to_scene_name))
+	if not to_scene:
+		_dbg.error("Destination scene '%s' could not be activated." % [to_scene_name], func(m): push_error(m))
+		span.fail("dest_scene_activation_failed", {"scene": to_scene_name})
 		return null
-	return to_lobby
+	return to_scene
 
 
-func _reparent_player(player: Node, from_lobby: Lobby, to_lobby: Lobby, tp_path: String) -> void:
+func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: MultiplayerScene, tp_path: String) -> void:
 	var username := player.name
-	var to_lobby_name := to_lobby.level.name
+	var to_scene_name := to_scene.level.name
 	var tp_component: TPComponent = player.get_node("%TPComponent")
-	
-	_dbg.info("Reparenting player %s to lobby %s" % [username, to_lobby_name])
-	
+
+	_dbg.info("Reparenting player %s to scene %s" % [username, to_scene_name])
+
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
 		event.connect(to.bind(player))
 		if event == player.tree_exiting:
 			player.request_ready()
-			tp_component.teleported(to_lobby.level, tp_path)
+			tp_component.teleported(to_scene.level, tp_path)
 
-	var from_spawn := from_lobby.synchronizer._on_spawned
-	var to_spawn := to_lobby.synchronizer._on_spawned
-	var from_despawn := from_lobby.synchronizer._on_despawned
-	var to_despawn := to_lobby.synchronizer._on_despawned
+	var from_spawn := from_scene.synchronizer._on_spawned
+	var to_spawn := to_scene.synchronizer._on_spawned
+	var from_despawn := from_scene.synchronizer._on_despawned
+	var to_despawn := to_scene.synchronizer._on_despawned
 
 	flip.call(player.tree_entered, from_spawn, to_spawn)
 	player.tree_entered.connect(flip.bind(player.tree_exiting, from_despawn, to_despawn))
 
-	player.reparent(to_lobby.level)
+	player.reparent(to_scene.level)
 	player.tree_entered.disconnect(flip)
 
 
-## Server-side callback invoked after the entity safely enters the destination lobby.
+## Server-side callback invoked after the entity safely enters the destination scene.
 ## Sets position on the server and forwards the snap coordinates to the client.
 func teleported(scene: Node, _tp_path: String) -> void:
 	_dbg.trace("`teleported` callback on server.")
@@ -326,18 +326,18 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 		_tp_span = null
 
 
-## Registers the entity with the specified lobby manager and spawns it into the active scene level.
-func spawn(lobby_mgr: MultiplayerLobbyManager) -> void:
+## Registers the entity with the specified scene manager and spawns it into the active scene level.
+func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	_dbg.trace("spawn called.")
 	_ensure_current_scene_path()
-	
+
 	if current_scene_path.is_empty():
 		_dbg.error("Does not have a scene to tp into.", func(m): push_error(m))
 		return
 
-	var lobby: Lobby = lobby_mgr.active_lobbies.get(current_scene_name)
-	if lobby:
-		_dbg.info("Spawning player into lobby %s", [current_scene_name])
-		lobby.synchronizer.track_player(owner)
-		lobby.level.add_child(owner)
-		owner.owner = lobby.level
+	var scene: MultiplayerScene = scene_mgr.active_scenes.get(current_scene_name)
+	if scene:
+		_dbg.info("Spawning player into scene %s", [current_scene_name])
+		scene.synchronizer.track_player(owner)
+		scene.level.add_child(owner)
+		owner.owner = scene.level

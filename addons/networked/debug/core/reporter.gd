@@ -368,17 +368,17 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	if not _debug_build() or not is_instance_valid(mt):
 		return
 		
-	var lm: MultiplayerLobbyManager = mt.get_service(MultiplayerLobbyManager)
-	if not lm:
+	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+	if not sm:
 		return
-		
+
 	var zombies: Array[String] = []
-	for lobby_name: StringName in lm.active_lobbies:
-		var lobby: Lobby = lm.active_lobbies[lobby_name]
-		if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+	for scene_name: StringName in sm.active_scenes:
+		var scene: MultiplayerScene = sm.active_scenes[scene_name]
+		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 			continue
-			
-		for node: Node in lobby.level.find_children("*", "Node", true, false):
+
+		for node: Node in scene.level.find_children("*", "Node", true, false):
 			if is_instance_valid(node) and \
 					node.get_multiplayer_authority() == peer_id:
 				zombies.append(str(node.get_path()))
@@ -393,38 +393,38 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	_send_manifest(m, mt)
 
 
-## Called by [NetDebugTreeContext] when a lobby spawns.
-func _on_lobby_spawned_logic(
-	lobby: Lobby, mt: MultiplayerTree
+## Called by [NetDebugTreeContext] when a scene spawns.
+func _on_scene_spawned_logic(
+	scene: MultiplayerScene, mt: MultiplayerTree
 ) -> CheckpointToken:
 	var tree_name := mt.get_tree_name()
-	var event := NetLobbyEvent.new()
+	var event := NetSceneEvent.new()
 	event.tree_name = tree_name
 	event.event = "spawned"
-	event.lobby_name = str(lobby.level.name)
-	_queue("networked:lobby_event", event.to_dict(), mt)
+	event.scene_name = str(scene.level.name)
+	_queue("networked:scene_event", event.to_dict(), mt)
 
-	var lobby_span: NetPeerSpan = null
+	var scene_span: NetPeerSpan = null
 	if mt.is_server:
 		var peers: Array = []
 		if mt.multiplayer_api:
 			peers = mt.multiplayer_api.get_peers()
 
-		lobby_span = Netw.dbg.peer_span(
-			mt, "lobby_spawn", peers,
-			{"lobby_name": str(lobby.level.name), "tree": tree_name}
+		scene_span = Netw.dbg.peer_span(
+			mt, "scene_spawn", peers,
+			{"scene_name": str(scene.level.name), "tree": tree_name}
 		)
-		lobby_span.step("spawners_registering")
+		scene_span.step("spawners_registering")
 
-	var lobby_token: CheckpointToken = \
-		lobby_span.checkpoint() if lobby_span else null
-	_check_simplify_path_race_lobby(lobby, mt, lobby_span)
-	return lobby_token
+	var scene_token: CheckpointToken = \
+		scene_span.checkpoint() if scene_span else null
+	_check_simplify_path_race_scene(scene, mt, scene_span)
+	return scene_token
 
 
-## Called by [NetDebugTreeContext] when a player spawns inside a lobby.
+## Called by [NetDebugTreeContext] when a player spawns inside a scene.
 func _on_player_spawned_logic(
-	player: Node, mt: MultiplayerTree, lobby_token: CheckpointToken
+	player: Node, mt: MultiplayerTree, scene_token: CheckpointToken
 ) -> void:
 	var tree_name := mt.get_tree_name()
 	_send_topology_snapshot(player, mt)
@@ -437,28 +437,28 @@ func _on_player_spawned_logic(
 			mt, "player_spawn", peers, {
 				"player": player.name,
 				"tree": tree_name,
-			}, lobby_token).with_node(player)
+			}, scene_token).with_node(player)
 		spawn_span.step("player_entered_tree")
 		_check_simplify_path_race_player_spawn(player, mt, spawn_span)
 		_check_player_topology_validation(player, mt, spawn_span)
 
 
-## Called by [NetDebugTreeContext] when a lobby despawns.
-func _on_lobby_despawned_logic(lobby: Lobby, mt: MultiplayerTree) -> void:
+## Called by [NetDebugTreeContext] when a scene despawns.
+func _on_scene_despawned_logic(scene: MultiplayerScene, mt: MultiplayerTree) -> void:
 	var tree_name := mt.get_tree_name()
-	var event := NetLobbyEvent.new()
+	var event := NetSceneEvent.new()
 	event.tree_name = tree_name
 	event.event = "despawned"
-	event.lobby_name = str(lobby.level.name)
-	_queue("networked:lobby_event", event.to_dict(), mt)
+	event.scene_name = str(scene.level.name)
+	_queue("networked:scene_event", event.to_dict(), mt)
 
 
-## Emits a crash manifest when a lobby is spawned on the server while peers are
+## Emits a crash manifest when a scene is spawned on the server while peers are
 ## already connected.
-func _check_simplify_path_race_lobby(
-	lobby: Lobby, mt: MultiplayerTree, span: NetPeerSpan
+func _check_simplify_path_race_scene(
+	scene: MultiplayerScene, mt: MultiplayerTree, span: NetPeerSpan
 ) -> void:
-	var races := NetRaceDetector.find_lobby_races(lobby, mt)
+	var races := NetRaceDetector.find_scene_races(scene, mt)
 	if races.is_empty():
 		if span:
 			span.step("no_race_detected")
@@ -475,8 +475,8 @@ func _check_simplify_path_race_lobby(
 		mt.multiplayer_api.get_peers() if mt.multiplayer_api else []
 	m.errors = _races_to_strings(races)
 	m.preflight_snapshot = races
-	m.player_name = lobby.level.name
-	m.in_tree = lobby.level.is_inside_tree()
+	m.player_name = scene.level.name
+	m.in_tree = scene.level.is_inside_tree()
 	_send_manifest(m, mt)
 
 
@@ -506,7 +506,7 @@ func _check_simplify_path_race_on_connect(
 	_send_manifest(m, mt)
 
 
-## Emits a crash manifest when a player is added to a lobby on the server.
+## Emits a crash manifest when a player is added to a scene on the server.
 func _check_simplify_path_race_player_spawn(
 	player: Node, mt: MultiplayerTree, span: NetSpan
 ) -> void:

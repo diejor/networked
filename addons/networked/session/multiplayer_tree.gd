@@ -7,8 +7,8 @@ extends Node
 ##
 ## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]), then call
 ## [method host] or [method join] to start a session. Add a
-## [MultiplayerLobbyManager] as a child to manage multiple lobbies, or drop a
-## world scene directly as a child to use a single auto-configured lobby.
+## [MultiplayerSceneManager] as a child to manage multiple scenes, or drop a
+## world scene directly as a child to use a single auto-configured scene.
 ## [codeblock]
 ## # Server
 ## await multiplayer_tree.host()
@@ -19,7 +19,7 @@ extends Node
 ##     push_error("Join failed: %s" % error_string(err))
 ## [/codeblock]
 
-## Emitted when the multiplayer API and lobby manager have been configured.
+## Emitted when the multiplayer API and scene manager have been configured.
 signal configured()
 
 ## Emitted when a new peer connects to the server.
@@ -197,20 +197,20 @@ func get_peer_context(peer_id: int) -> NetwPeerContext:
 class SpawnSlot extends RefCounted:
 	## Causal [CheckpointToken] for span tracing. May be [code]null[/code].
 	var token: CheckpointToken
-	var _lobby: Lobby
+	var _scene: MultiplayerScene
 	var _parent_node: Node
 
 	func is_valid() -> bool:
-		return is_instance_valid(_lobby) or is_instance_valid(_parent_node)
+		return is_instance_valid(_scene) or is_instance_valid(_parent_node)
 
-	func has_lobby() -> bool:
-		return is_instance_valid(_lobby)
+	func has_scene() -> bool:
+		return is_instance_valid(_scene)
 
-	## Adds [param player] to the lobby via [method Lobby.add_player],
-	## or directly to [member _parent_node] if no lobby is set.
+	## Adds [param player] to the scene via [method Scene.add_player],
+	## or directly to [member _parent_node] if no scene is set.
 	func place_player(player: Node) -> void:
-		if is_instance_valid(_lobby):
-			_lobby.add_player(player)
+		if is_instance_valid(_scene):
+			_scene.add_player(player)
 		elif is_instance_valid(_parent_node):
 			_parent_node.add_child(player)
 
@@ -218,34 +218,34 @@ class SpawnSlot extends RefCounted:
 ## Resolves the correct spawn location and causal token for a new player.
 func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 	var slot := SpawnSlot.new()
-	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
+	var sm: MultiplayerSceneManager = get_service(MultiplayerSceneManager)
 
-	if lm:
+	if sm:
 		var scene_name := StringName(spawner_path.get_scene_name())
-		var lobby: Lobby = lm.active_lobbies.get(scene_name)
-		if is_instance_valid(lobby):
-			slot._lobby = lobby
-			if lobby.has_meta(&"_net_lobby_token"):
-				slot.token = lobby.get_meta(&"_net_lobby_token")
+		var scene: MultiplayerScene = sm.active_scenes.get(scene_name)
+		if is_instance_valid(scene):
+			slot._scene = scene
+			if scene.has_meta(&"_net_scene_token"):
+				slot.token = scene.get_meta(&"_net_scene_token")
 
 	return slot
 
 
-## Returns an array of all active player nodes across all lobbies.
+## Returns an array of all active player nodes across all scenes.
 func get_all_players() -> Array[Node]:
-	var lm: MultiplayerLobbyManager = get_service(MultiplayerLobbyManager)
-	if lm:
-		return lm.get_all_players()
+	var sm: MultiplayerSceneManager = get_service(MultiplayerSceneManager)
+	if sm:
+		return sm.get_all_players()
 	return []
 
 
-## Finds the [Lobby] node that contains [param node] by walking its ancestor
-## chain. Returns [code]null[/code] if [param node] is not inside any [Lobby].
-static func lobby_for_node(node: Node) -> Lobby:
+## Finds the [Scene] node that contains [param node] by walking its ancestor
+## chain. Returns [code]null[/code] if [param node] is not inside any [Scene].
+static func scene_for_node(node: Node) -> MultiplayerScene:
 	var p := node.get_parent()
 	while p:
-		if p is Lobby:
-			return p as Lobby
+		if p is MultiplayerScene:
+			return p as MultiplayerScene
 		p = p.get_parent()
 	return null
 
@@ -266,20 +266,20 @@ func _get_configuration_warnings() -> PackedStringArray:
 	elif backend:
 		warnings.append_array(backend._get_backend_warnings(self))
 		
-	var has_lobby_manager := false
-	var has_lobbyless_world := false
+	var has_scene_manager := false
+	var has_sceneless_world := false
 	for child in get_children():
-		if child is MultiplayerLobbyManager:
-			has_lobby_manager = true
+		if child is MultiplayerSceneManager:
+			has_scene_manager = true
 			break
 		if _has_spawner_component(child):
-			has_lobbyless_world = true
+			has_sceneless_world = true
 			break
-			
-	if not has_lobby_manager and not has_lobbyless_world:
+
+	if not has_scene_manager and not has_sceneless_world:
 		warnings.append(
 			"No world scene (containing a SpawnerComponent) or " +
-			"MultiplayerLobbyManager found as a child. " +
+			"MultiplayerSceneManager found as a child. " +
 			"No replication will happen."
 		)
 		
@@ -296,7 +296,7 @@ func _enter_tree() -> void:
 		_config_api()
 	
 	for child in get_children():
-		if child is MultiplayerLobbyManager:
+		if child is MultiplayerSceneManager:
 			return
 
 	for child in get_children():
@@ -308,12 +308,12 @@ func _enter_tree() -> void:
 				)
 				return
 			Netw.dbg.info(
-				"Default lobby: using '%s' as the session world.", [child.name]
+				"Default scene: using '%s' as the session world.", [child.name]
 			)
 			remove_child(child)
 			child.queue_free()
-			var manager := MultiplayerLobbyManager.new()
-			manager.name = &"LobbyManager"
+			var manager := MultiplayerSceneManager.new()
+			manager.name = &"SceneManager"
 			add_child(manager)
 			manager._configure_default(scene_path)
 			return
@@ -424,10 +424,10 @@ func is_online() -> bool:
 		and multiplayer_api.has_multiplayer_peer())
 
 
-## Entry point for a client to request entry into the game world.
+	## Entry point for a client to request entry into the game world.
 ##
 ## Deserializes [param bytes] into a [MultiplayerClientData] and emits
-## [signal player_join_requested] for the [MultiplayerLobbyManager] to handle.
+## [signal player_join_requested] for the [MultiplayerSceneManager] to handle.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()

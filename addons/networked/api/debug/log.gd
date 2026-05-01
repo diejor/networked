@@ -435,7 +435,7 @@ static func warn(
 ## call [code]push_error[/code] itself so the engine records the caller's
 ## file/line.
 ## [codeblock]
-## NetwLog.error("Critical: lobby '%s' not found.", [lobby_name], func(m): push_error(m))
+## NetwLog.error("Critical: scene '%s' not found.", [scene_name], func(m): push_error(m))
 ## [/codeblock]
 static func error(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()

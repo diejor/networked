@@ -25,6 +25,21 @@ func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
 			return
 
 
+## Factory that creates a default [MultiplayerSceneManager] for tests.
+## [br][br]
+## Returns a fresh instance with no pre-configured exported properties,
+## equivalent to instantiating the deleted scene manager [code].tscn[/code]
+## that was previously referenced by UID.
+## [codeblock]
+## var mgr := NetworkedTestSuite.create_scene_manager()
+## harness.setup(mgr)
+## [/codeblock]
+static func create_scene_manager() -> MultiplayerSceneManager:
+	var mgr := MultiplayerSceneManager.new()
+	mgr.name = &"SceneManager"
+	return mgr
+
+
 ## Drains the [SceneTree] of pending [code]queue_free[/code] calls and 
 ## [code]call_deferred[/code] operations by awaiting multiple frames.
 ## [br][br]

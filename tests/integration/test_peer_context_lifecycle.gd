@@ -2,10 +2,9 @@
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE = preload("uid://d3ag2052swfwd")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
 const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
-const LOBBY_NAME := &"TestLevelSave"
+const SCENE_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
@@ -23,9 +22,9 @@ func before_test() -> void:
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(LOBBY_MANAGER_SCENE)
+	await harness.setup(NetworkedTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_lobby_manager(harness.get_server())
+	var server_mgr := harness._get_scene_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
 
 	client0 = await harness.add_client()
@@ -70,7 +69,7 @@ func _spawn_save_player() -> void:
 
 	# Wait for the replicated player to appear on the client side so both
 	# buckets are populated before any assertions run.
-	await harness.wait_for_client_player_spawn(client0, LOBBY_NAME)
+	await harness.wait_for_client_player_spawn(client0, SCENE_NAME)
 
 
 func test_server_context_does_not_contain_client_peer_id() -> void:

@@ -5,7 +5,7 @@
 ## constraint checks.
 ## [br][br]
 ## [b]Never import this file from production components.[/b]
-## (SaveComponent, LobbySynchronizer, SpawnerComponent, etc.)
+## (SaveComponent, SceneSynchronizer, SpawnerComponent, etc.)
 ## [br][br]
 ## Use from: tests, [code]@tool[/code] scripts, debugger panels.
 class_name TopologyValidator

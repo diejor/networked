@@ -1,32 +1,32 @@
-## Lobby-scoped facade providing player tracking, lifecycle signals, and
+## Scene-scoped facade providing player tracking, lifecycle signals, and
 ## server operations.
 ##
 ## Access via [method NetwComponent.get_context] or
-## [method NetwLobbyContext.for_node]. Holds a [WeakRef] to the underlying
-## [Lobby] - check [method is_valid] before use.
+## [method NetwScene.for_node]. Holds a [WeakRef] to the underlying
+## [Scene] - check [method is_valid] before use.
 ## [codeblock]
 ## var ctx := get_context()
 ##
 ## # Wait for players then count down
-## await ctx.wait_for_players(4)
-## var cd := ctx.start_countdown(10)
+## await ctx.scene.wait_for_players(4)
+## var cd := ctx.scene.start_countdown(10)
 ## await cd.finished
 ## start_match()
 ##
 ## # React to a networked pause (get_tree().paused on all peers)
-## ctx.paused.connect(func(r): $PauseUI.show())
-## ctx.unpaused.connect(func(): $PauseUI.hide())
+## ctx.scene.paused.connect(func(r): $PauseUI.show())
+## ctx.scene.unpaused.connect(func(): $PauseUI.hide())
 ## [/codeblock]
-class_name NetwLobbyContext
+class_name NetwScene
 extends RefCounted
 
 # ---------------------------------------------------------------------------
 # Player lifecycle signals
 # ---------------------------------------------------------------------------
 
-## Emitted when a player enters this lobby.
+## Emitted when a player enters this scene.
 signal player_entered(player: Node)
-## Emitted when a player leaves this lobby.
+## Emitted when a player leaves this scene.
 signal player_left(player: Node)
 
 # ---------------------------------------------------------------------------
@@ -80,64 +80,64 @@ signal countdown_cancelled()
 # Internal state
 # ---------------------------------------------------------------------------
 
-var _lobby_ref: WeakRef
+var _scene_ref: WeakRef
 ## Held strongly while the countdown is running so the timer stays alive.
-var _active_countdown: NetwLobbyCountdown
+var _active_countdown: NetwSceneCountdown
 
 
-func _init(lobby: Lobby) -> void:
-	_lobby_ref = weakref(lobby)
-	lobby.synchronizer.spawned.connect(_on_spawned)
-	lobby.synchronizer.despawned.connect(_on_despawned)
+func _init(scene: MultiplayerScene) -> void:
+	_scene_ref = weakref(scene)
+	scene.synchronizer.spawned.connect(_on_spawned)
+	scene.synchronizer.despawned.connect(_on_despawned)
 
 
 # ---------------------------------------------------------------------------
 # Validity / identity queries
 # ---------------------------------------------------------------------------
 
-## Returns [code]true[/code] while the underlying [Lobby] is still alive.
+## Returns [code]true[/code] while the underlying [Scene] is still alive.
 func is_valid() -> bool:
-	return is_instance_valid(_lobby_ref.get_ref())
+	return is_instance_valid(_scene_ref.get_ref())
 
 
-## Returns the level scene root name for this lobby.
-## Returns [code]""[/code] if the lobby or its level is not valid.
-func get_lobby_name() -> StringName:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby) or not is_instance_valid(lobby.level):
+## Returns the level scene root name for this scene.
+## Returns [code]""[/code] if the scene or its level is not valid.
+func get_scene_name() -> StringName:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 		return &""
-	return StringName(lobby.level.name)
+	return StringName(scene.level.name)
 
 
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
 
-## Returns all player nodes currently in this lobby.
+## Returns all player nodes currently in this scene.
 func get_players() -> Array[Node]:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return []
 	var result: Array[Node] = []
-	result.assign(lobby.synchronizer.tracked_nodes.keys())
+	result.assign(scene.synchronizer.tracked_nodes.keys())
 	return result
 
 
-## Returns the number of players currently in this lobby.
+## Returns the number of players currently in this scene.
 func get_player_count() -> int:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return 0
-	return lobby.synchronizer.tracked_nodes.size()
+	return scene.synchronizer.tracked_nodes.size()
 
 
 ## Returns the player node owned by the local peer, or [code]null[/code].
 func get_local_player() -> Node:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return null
-	var local_id := lobby.multiplayer.get_unique_id()
-	for player: Node in lobby.synchronizer.tracked_nodes:
+	var local_id := scene.multiplayer.get_unique_id()
+	for player: Node in scene.synchronizer.tracked_nodes:
 		if player.get_multiplayer_authority() == local_id:
 			return player
 	return null
@@ -145,10 +145,10 @@ func get_local_player() -> Node:
 
 ## Returns the player node owned by [param peer_id], or [code]null[/code].
 func get_player_by_peer_id(peer_id: int) -> Node:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return null
-	for player: Node in lobby.synchronizer.tracked_nodes:
+	for player: Node in scene.synchronizer.tracked_nodes:
 		if player.get_multiplayer_authority() == peer_id:
 			return player
 	return null
@@ -164,12 +164,12 @@ func wait_for_players(n: int) -> void:
 # Static access
 # ---------------------------------------------------------------------------
 
-## Returns the [NetwLobbyContext] for [param node] by walking its ancestor chain.
+## Returns the [NetwScene] for [param node] by walking its ancestor chain.
 ##
-## Returns [code]null[/code] if [param node] is not inside an active [Lobby].
-static func for_node(node: Node) -> NetwLobbyContext:
+## Returns [code]null[/code] if [param node] is not inside an active [Scene].
+static func for_node(node: Node) -> NetwScene:
 	var ctx := NetwContext.for_node(node)
-	return ctx.lobby if ctx and ctx.has_lobby() else null
+	return ctx.scene if ctx and ctx.has_scene() else null
 
 
 # ---------------------------------------------------------------------------
@@ -183,28 +183,28 @@ static func for_node(node: Node) -> NetwLobbyContext:
 ## code can show a pause UI or disable input. Nodes with
 ## [constant Node.PROCESS_MODE_ALWAYS] (e.g. pause menus) continue to run.
 ## [br][br]
-## In multi-lobby setups this pauses [i]all[/i] lobbies on each peer, because
-## it operates on the [SceneTree]. If you need a lobby-scoped process disable
-## without touching other lobbies, use [method suspend] instead.
+## In multi-scene setups this pauses [i]all[/i] scenes on each peer, because
+## it operates on the [SceneTree]. If you need a scene-scoped process disable
+## without touching other scenes, use [method suspend] instead.
 func pause(reason: String = "") -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.pause() must be called on the server.")
-	lobby._rpc_receive_pause.rpc(reason)
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.pause() must be called on the server.")
+	scene._rpc_receive_pause.rpc(reason)
 
 
 ## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
 ##
 ## [b]Server-only.[/b]
 func unpause() -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.unpause() must be called on the server.")
-	lobby._rpc_receive_unpause.rpc()
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.unpause() must be called on the server.")
+	scene._rpc_receive_unpause.rpc()
 
 
 # ---------------------------------------------------------------------------
@@ -218,24 +218,24 @@ func unpause() -> void:
 ## (show a banner, lock input, wait for a cutscene, …).
 ## Call [method pause] afterwards if you also want to stop processing.
 func suspend(reason: String = "") -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.suspend() must be called on the server.")
-	lobby._rpc_receive_suspend.rpc(reason)
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.suspend() must be called on the server.")
+	scene._rpc_receive_suspend.rpc(reason)
 	suspended.emit(reason)
 
 
-## Asks the server to suspend the lobby.
+## Asks the server to suspend the scene.
 ##
 ## [b]Client-only.[/b] The server emits [signal suspend_requested]; game code
 ## decides whether to honour it.
 func request_suspend(reason: String = "") -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	lobby._rpc_request_suspend.rpc_id(1, reason)
+	scene._rpc_request_suspend.rpc_id(1, reason)
 
 
 ## Broadcasts a resume notification to all peers.
@@ -244,12 +244,12 @@ func request_suspend(reason: String = "") -> void:
 ## [code]get_tree().paused[/code]. Call [method unpause] to also unfreeze
 ## the tree.
 func resume() -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.resume() must be called on the server.")
-	lobby._rpc_receive_resume.rpc()
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.resume() must be called on the server.")
+	scene._rpc_receive_resume.rpc()
 	resumed.emit()
 
 
@@ -263,14 +263,14 @@ func resume() -> void:
 ## [signal kicked] before the connection is closed. The normal
 ## [signal player_left] flow follows naturally via the disconnect.
 func kick(peer_id: int, reason: String = "") -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.kick() must be called on the server.")
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.kick() must be called on the server.")
 	if not reason.is_empty():
-		lobby._rpc_receive_kicked.rpc_id(peer_id, reason)
-	var mt := MultiplayerTree.for_node(lobby)
+		scene._rpc_receive_kicked.rpc_id(peer_id, reason)
+	var mt := MultiplayerTree.for_node(scene)
 	if mt and mt.multiplayer_peer:
 		mt.multiplayer_peer.disconnect_peer(peer_id)
 
@@ -280,10 +280,10 @@ func kick(peer_id: int, reason: String = "") -> void:
 ## [b]Client-only.[/b] The server emits [signal kick_requested]; game code
 ## decides whether to honour it.
 func request_kick(peer_id: int, reason: String = "") -> void:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return
-	lobby._rpc_request_kick.rpc_id(1, peer_id, reason)
+	scene._rpc_request_kick.rpc_id(1, peer_id, reason)
 
 
 # ---------------------------------------------------------------------------
@@ -292,22 +292,22 @@ func request_kick(peer_id: int, reason: String = "") -> void:
 
 ## Starts a server-driven countdown of [param seconds] seconds.
 ##
-## [b]Server-only.[/b] Returns a [NetwLobbyCountdown] you can [code]await[/code].
+## [b]Server-only.[/b] Returns a [NetwSceneCountdown] you can [code]await[/code].
 ## Clients receive [signal countdown_started] followed by [signal countdown_tick]
 ## each second, and finally [signal countdown_finished] (or
 ## [signal countdown_cancelled] if [method cancel_countdown] is called first).
 ## Any previously running countdown is cancelled automatically.
-func start_countdown(seconds: int) -> NetwLobbyCountdown:
-	assert(seconds > 0, "NetwLobbyContext.start_countdown(): seconds must be > 0.")
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+func start_countdown(seconds: int) -> NetwSceneCountdown:
+	assert(seconds > 0, "NetwScene.start_countdown(): seconds must be > 0.")
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return null
-	assert(lobby.multiplayer.is_server(),
-		"NetwLobbyContext.start_countdown() must be called on the server.")
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.start_countdown() must be called on the server.")
 
 	cancel_countdown()
 
-	var cd := NetwLobbyCountdown.new(lobby, seconds)
+	var cd := NetwSceneCountdown.new(scene, seconds)
 	_active_countdown = cd
 
 	cd.tick.connect(_on_countdown_tick)
@@ -315,7 +315,7 @@ func start_countdown(seconds: int) -> NetwLobbyCountdown:
 	cd.cancelled.connect(_on_countdown_cancelled)
 
 	# Notify clients before the first tick so they can prepare UI
-	lobby._rpc_receive_countdown_started.rpc(seconds)
+	scene._rpc_receive_countdown_started.rpc(seconds)
 	countdown_started.emit(seconds)
 
 	cd._start()
@@ -335,18 +335,18 @@ func cancel_countdown() -> void:
 # Readiness gate
 # ---------------------------------------------------------------------------
 
-## Creates and returns a new [NetwLobbyReadiness] gate for this lobby.
+## Creates and returns a new [NetwSceneReadiness] gate for this scene.
 ##
 ## The gate is pre-populated with all currently connected players (all marked
 ## not-ready). Players that join or leave after creation are tracked
 ## automatically. Multiple independent gates can be active simultaneously.
-func create_readiness_gate() -> NetwLobbyReadiness:
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if not is_instance_valid(lobby):
+func create_readiness_gate() -> NetwSceneReadiness:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
 		return null
-	var gate := NetwLobbyReadiness.new(lobby)
-	lobby._register_readiness_gate(gate)
-	for player: Node in lobby.synchronizer.tracked_nodes:
+	var gate := NetwSceneReadiness.new(scene)
+	scene._register_readiness_gate(gate)
+	for player: Node in scene.synchronizer.tracked_nodes:
 		gate._add_peer(player.get_multiplayer_authority())
 	return gate
 
@@ -357,36 +357,36 @@ func create_readiness_gate() -> NetwLobbyReadiness:
 
 func _on_spawned(player: Node) -> void:
 	player_entered.emit(player)
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if is_instance_valid(lobby):
-		lobby._notify_gates_player_added(player.get_multiplayer_authority())
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene._notify_gates_player_added(player.get_multiplayer_authority())
 
 
 func _on_despawned(player: Node) -> void:
 	player_left.emit(player)
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if is_instance_valid(lobby):
-		lobby._notify_gates_player_removed(player.get_multiplayer_authority())
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene._notify_gates_player_removed(player.get_multiplayer_authority())
 
 
 func _on_countdown_tick(seconds_left: int) -> void:
 	countdown_tick.emit(seconds_left)
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if is_instance_valid(lobby):
-		lobby._rpc_receive_countdown_tick.rpc(seconds_left)
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene._rpc_receive_countdown_tick.rpc(seconds_left)
 
 
 func _on_countdown_finished() -> void:
 	countdown_finished.emit()
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if is_instance_valid(lobby):
-		lobby._rpc_receive_countdown_finished.rpc()
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene._rpc_receive_countdown_finished.rpc()
 	_active_countdown = null
 
 
 func _on_countdown_cancelled() -> void:
 	countdown_cancelled.emit()
-	var lobby := _lobby_ref.get_ref() as Lobby
-	if is_instance_valid(lobby):
-		lobby._rpc_receive_countdown_cancelled.rpc()
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene._rpc_receive_countdown_cancelled.rpc()
 	_active_countdown = null

@@ -225,20 +225,23 @@ func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
 
 
 func _on_player_joined(client_data: MultiplayerClientData) -> void:
-	var slot := get_context().get_spawn_slot(client_data.spawner_path)
+	var ctx := get_context()
+	if not ctx:
+		return
+	var slot: MultiplayerTree.SpawnSlot = ctx.tree.get_spawn_slot(client_data.spawner_path)
 	if not slot.is_valid():
 		_dbg.error(
-			"Player join failed: no active world or lobby for scene '%s'.",
+			"Player join failed: no active world or scene for scene '%s'.",
 			[client_data.spawner_path.get_scene_name()],
 			func(m): push_error(m)
 		)
 		return
 
-	var ctx := SpawnContext.new(self, slot, get_context())
+	var sp_ctx := SpawnContext.new(self, slot, get_context())
 	if spawn_function.is_valid():
-		spawn_function.call(ctx, client_data)
+		spawn_function.call(sp_ctx, client_data)
 	else:
-		ctx.spawn_player(client_data)
+		sp_ctx.spawn_player(client_data)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

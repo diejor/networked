@@ -210,17 +210,17 @@ func _host_server() -> String:
 	if OS.has_feature("web") and not is_webrtc():
 		client.backend = LocalLoopbackBackend.new()
 
-	var client_lm := client.get_service(MultiplayerLobbyManager) \
-		as MultiplayerLobbyManager
+	var client_sm := client.get_service(MultiplayerSceneManager) \
+		as MultiplayerSceneManager
 	server = client.duplicate()
 	server.is_server = true
 	server.name = "Server"
 	add_child(server)
-	if client_lm:
-		var server_lm := server.get_service(MultiplayerLobbyManager) \
-			as MultiplayerLobbyManager
-		for path in client_lm._get_configured_paths():
-			server_lm._configure_default(path)
+	if client_sm:
+		var server_sm := server.get_service(MultiplayerSceneManager) \
+			as MultiplayerSceneManager
+		for path in client_sm._get_configured_paths():
+			server_sm._configure_default(path)
 
 	Netw.dbg.info("Starting embedded server...")
 	# quiet=true: ERR_ALREADY_IN_USE is expected in multi-client scenarios.

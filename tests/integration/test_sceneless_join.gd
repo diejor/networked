@@ -1,6 +1,6 @@
-## Integration test for the default-lobby join flow.
+## Integration test for the default-scene join flow.
 ## Verifies that dropping a Level as a direct child of MultiplayerTree
-## automatically routes joins and spawns players via a managed lobby.
+## automatically routes joins and spawns players via a managed scene.
 class_name TestLobbylessJoin
 extends NetworkedTestSuite
 
@@ -23,16 +23,16 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-func test_default_lobby_created_on_server() -> void:
+func test_default_scene_created_on_server() -> void:
 	var server := harness.get_server()
-	var lobby := server.get_node_or_null("LobbyManager/TestLevelLobby")
-	assert_that(lobby).is_not_null()
+	var scene := server.get_node_or_null("SceneManager/TestLevelScene")
+	assert_that(scene).is_not_null()
 
 
-func test_level_inside_lobby_on_server() -> void:
+func test_level_inside_scene_on_server() -> void:
 	var server := harness.get_server()
 	var level := server.get_node_or_null(
-		"LobbyManager/TestLevelLobby/TestLevel"
+		"SceneManager/TestLevelScene/TestLevel"
 	)
 	assert_that(level).is_not_null()
 
@@ -57,7 +57,7 @@ func test_player_spawns_in_level_after_join() -> void:
 
 	var player_name := "%s|%d" % [username, peer_id]
 	var level := server.get_node_or_null(
-		"LobbyManager/TestLevelLobby/TestLevel"
+		"SceneManager/TestLevelScene/TestLevel"
 	)
 
 	await wait_until(
@@ -88,7 +88,7 @@ func test_spawned_player_has_correct_username() -> void:
 
 	var player_name := "%s|%d" % [username, peer_id]
 	var level := server.get_node_or_null(
-		"LobbyManager/TestLevelLobby/TestLevel"
+		"SceneManager/TestLevelScene/TestLevel"
 	)
 	await wait_until(
 		func(): return level != null \
@@ -101,13 +101,13 @@ func test_spawned_player_has_correct_username() -> void:
 	assert_that(str(client_comp.username)).is_equal(username)
 
 
-func test_lobby_context_accessible_from_level_node() -> void:
+func test_scene_context_accessible_from_level_node() -> void:
 	var server := harness.get_server()
 	var level := server.get_node_or_null(
-		"LobbyManager/TestLevelLobby/TestLevel"
+		"SceneManager/TestLevelScene/TestLevel"
 	)
 	assert_that(level).is_not_null()
 
-	var ctx := NetwContext.for_node(level)
+	var ctx := Netw.ctx(level)
 	assert_that(ctx).is_not_null()
 	assert_that(ctx.is_valid()).is_true()
