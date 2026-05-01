@@ -5,12 +5,8 @@ extends NetwComponent
 ## representation.
 ##
 ## Add this node to your player scene. The component handles multiplayer
-## authority setup and player teardown on disconnect.
-## [br][br]
-## [b]Spawn customisation:[/b] assign [member spawn_function] to override the
-## default spawn sequence, or use [method SpawnContext.make_spawn_function]
-## for ergonomic hook insertion.
-## [br][br]
+## authority setup and player teardown on disconnect. Player spawning is
+## orchestrated by [NetwSpawn] automatically.
 ## [codeblock]
 ## # Retrieve from any node in the player scene:
 ## var spawner := SpawnerComponent.unwrap(player_node)
@@ -36,13 +32,6 @@ enum AuthorityMode {
 
 ## How multiplayer authority is assigned to the player node on tree entry.
 @export var authority_mode: AuthorityMode = AuthorityMode.CLIENT
-
-## Override the default spawn sequence.
-##
-## When valid, called instead of [method SpawnContext.spawn_player] with
-## signature [code]func(ctx: SpawnContext, data: MultiplayerClientData)[/code].
-## Use [method SpawnContext.make_spawn_function] to wrap a hook.
-var spawn_function: Callable
 
 ## The username of the player associated with this component.
 var username: String = ""
@@ -202,20 +191,20 @@ func _validate_editor() -> void:
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
-
+	
 	if owner.get_multiplayer_authority() != 1:
 		return
-
+	
 	_dbg.trace("Spawner `%s` entering tree.", [owner.name])
 	assert(owner.name != "|")
-
+	
 	var authority := MultiplayerClientData.parse_authority(owner.name)
 	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
 		_dbg.debug(
 			"Setting authority for %s to %d", [owner.name, authority]
 		)
 		owner.set_multiplayer_authority(authority)
-
+	
 	_setup_spawn_sync(spawn_sync)
 
 
@@ -228,20 +217,76 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	var ctx := get_context()
 	if not ctx:
 		return
-	var slot: MultiplayerTree.SpawnSlot = ctx.tree.get_spawn_slot(client_data.spawner_path)
+	
+	var slot := ctx.tree.get_spawn_slot(client_data.spawner_path)
 	if not slot.is_valid():
 		_dbg.error(
-			"Player join failed: no active world or scene for scene '%s'.",
+			"Player join failed: no active scene for '%s'.",
 			[client_data.spawner_path.get_scene_name()],
 			func(m): push_error(m)
 		)
 		return
-
-	var sp_ctx := SpawnContext.new(self, slot, get_context())
-	if spawn_function.is_valid():
-		spawn_function.call(sp_ctx, client_data)
+	
+	var span := _dbg.span("player_join", {
+		"username": client_data.username,
+		"peer_id": client_data.peer_id,
+		"authority_mode": authority_mode,
+	})
+	_dbg.info(
+		"Player joined: %s (ID: %d)",
+		[client_data.username, client_data.peer_id]
+	)
+	
+	var player_save: SaveComponent = (
+		owner.get_node_or_null("%SaveComponent") as SaveComponent
+	)
+	var payload := Netw.spawn.gather(
+		client_data,
+		player_save.database if player_save else null,
+		player_save.table_name if player_save else &"",
+	)
+	var player := Netw.spawn.instantiate(
+		payload, load(owner.scene_file_path), owner
+	)
+	span.step("instantiated")
+	
+	var scene := _resolve_target_scene(player, slot)
+	if scene:
+		Netw.spawn.place(player, scene)
+	elif slot.is_valid():
+		slot.place_player(player)
 	else:
-		sp_ctx.spawn_player(client_data)
+		_dbg.error("Cannot place player: no scene available.", [])
+
+	span.end()
+
+
+func _resolve_target_scene(
+	player: Node, slot: MultiplayerTree.SpawnSlot
+) -> MultiplayerScene:
+	var ctx := get_context()
+	if not ctx:
+		return null
+	
+	var scene_mgr := ctx.tree.get_scene_manager()
+	var level_save: SaveComponent = (
+		owner.get_node_or_null("%SaveComponent") as SaveComponent
+	)
+	var tp: TPComponent = player.get_node_or_null("%TPComponent")
+	
+	if tp and level_save and scene_mgr:
+		tp.ensure_current_scene_path()
+		if not tp.current_scene_path.is_empty():
+			var scene := scene_mgr.active_scenes.get(
+				tp.current_scene_name
+			)
+			if scene:
+				return scene
+	
+	if slot.has_scene():
+		return slot.get_scene()
+	
+	return null
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

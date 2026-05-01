@@ -383,8 +383,17 @@ func instantiate() -> void:
 	instantiated.emit()
 
 
-## Initializes the synchronizer and loads saved state.
-func spawn(caller: Node, parent_span: NetSpan = null) -> void:
+## Initializes the synchronizer and applies a pre-loaded save record.
+##
+## Mirrors [method spawn] but takes a [Dictionary] (from
+## [method try_load_entity] or [member SpawnPayload.save_state])
+## instead of querying the database. When [param save_record] is empty
+## and [param caller] has a [code]%SaveComponent[/code], falls back to
+## the caller's scene defaults.
+func spawn_from_data(
+	save_record: Dictionary, caller: Node = null,
+	parent_span: NetSpan = null,
+) -> void:
 	_save_span = parent_span
 	var local_span: NetSpan = null
 	if not _save_span:
@@ -395,19 +404,38 @@ func spawn(caller: Node, parent_span: NetSpan = null) -> void:
 	instantiate()
 	_save_span.step("instantiated")
 
-	var load_err: Error = load_state()
-	_save_span.step("loaded", {found = (load_err == OK)})
-	assert(load_err == OK or load_err == ERR_FILE_NOT_FOUND or load_err == ERR_UNCONFIGURED,
-		"Something failed while trying to load player. Error: %s." % error_string(load_err))
+	if not save_record.is_empty():
+		bound_entity.from_dict(save_record)
+		push_to_scene()
+		_save_span.step("loaded", {found = true})
+	elif caller:
+		var caller_save: SaveComponent = (
+			caller.get_node_or_null("%SaveComponent") as SaveComponent
+		)
+		if caller_save and caller_save._initialized:
+			_dbg.debug("Loading data from caller.")
+			_deserialize_scene(caller_save._serialize_scene())
+			_save_span.step("loaded", {found = false, fallback = true})
+		else:
+			_save_span.step("loaded", {found = false})
+	else:
+		_save_span.step("loaded", {found = false})
 
-	if load_err == ERR_FILE_NOT_FOUND:
-		var spawner_save: SaveComponent = caller.get_node_or_null("%SaveComponent")
-		if spawner_save and spawner_save._initialized:
-			_dbg.debug("Loading data from spawner.")
-			_deserialize_scene(spawner_save._serialize_scene())
+	loaded.emit()
 
 	if local_span:
 		local_span.end()
+
+
+## Initializes the synchronizer and loads saved state from the database.
+##
+## Loads the entity record via [method try_load_entity] and delegates to
+## [method spawn_from_data].
+func spawn(caller: Node, parent_span: NetSpan = null) -> void:
+	var record := SaveComponent.try_load_entity(
+		database, table_name, _get_entity_id()
+	)
+	spawn_from_data(record, caller, parent_span)
 
 
 func _notification(what: int) -> void:
@@ -470,6 +498,26 @@ static func save_all_in(ctx: NetwPeerContext) -> void:
 			component.save_state()
 		else:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+
+
+## Loads an entity record from [param db] without a [SaveComponent]
+## instance.
+##
+## Returns the raw [Dictionary] from the database, or an empty
+## [Dictionary] if no record was found or [param db] is [code]null[/code].
+## Used by [method NetwSpawn.gather] and by [method spawn].
+static func try_load_entity(
+	db: NetworkedDatabase, table_name: StringName, entity_id: StringName
+) -> Dictionary:
+	if not db or table_name.is_empty():
+		return {}
+	var out_error: Array[int] = [OK]
+	var record: Dictionary = db.find_by_id(
+		table_name, entity_id, out_error
+	)
+	if out_error[0] != OK or record.is_empty():
+		return {}
+	return record
 
 
 # ── Session / bucket access ────────────────────────────────────────────────────

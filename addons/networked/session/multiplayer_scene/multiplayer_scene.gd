@@ -1,9 +1,10 @@
+class_name MultiplayerScene
+extends Node
+
 ## Container node representing a single game scene (server or client variant).
 ##
 ## Created by [MultiplayerSceneManager] via its spawn function. Holds the instantiated
 ## level scene and wires up spawn/despawn signals to the [SceneSynchronizer].
-class_name MultiplayerScene
-extends Node
 
 ## The [SceneSynchronizer] that manages peer visibility for this scene.
 @export var synchronizer: SceneSynchronizer

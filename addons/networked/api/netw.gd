@@ -10,6 +10,10 @@ extends Object
 static var dbg := NetwDbg.new()
 
 
+## Static entry point for player spawn helpers.
+static var spawn := NetwSpawn.new()
+
+
 ## Returns a [NetwContext] for [param node] by walking its ancestor chain.
 ##
 ## Shorthand for [method NetwContext.for_node].

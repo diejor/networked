@@ -78,7 +78,11 @@ func _ready() -> void:
 			sync.synchronized.connect(client_synchronized.emit)
 
 
-func _ensure_current_scene_path() -> void:
+## Ensures [member current_scene_path] is set, copying from
+## [member starting_scene_path] when empty. Called automatically on
+## tree entry; call manually when resolving the scene before the player
+## node enters the tree (e.g. for custom spawn flows).
+func ensure_current_scene_path() -> void:
 	if current_scene_path.is_empty() and starting_scene_path:
 		current_scene_path = starting_scene_path.scene_path
 
@@ -87,7 +91,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	_ensure_current_scene_path()
+	ensure_current_scene_path()
 
 
 static func _resolve_scene_name(path_or_uid: String) -> String:
@@ -326,10 +330,11 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 		_tp_span = null
 
 
-## Registers the entity with the specified scene manager and spawns it into the active scene level.
+## Registers the entity with the specified scene manager and spawns it
+## into the active scene level.
 func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	_dbg.trace("spawn called.")
-	_ensure_current_scene_path()
+	ensure_current_scene_path()
 
 	if current_scene_path.is_empty():
 		_dbg.error("Does not have a scene to tp into.", func(m): push_error(m))

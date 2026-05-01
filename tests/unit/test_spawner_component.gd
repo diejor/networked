@@ -203,21 +203,4 @@ func test_unwrap_returns_null_when_absent() -> void:
 	assert_that(SpawnerComponent.unwrap(root)).is_null()
 
 
-# ---------------------------------------------------------------------------
-# spawn_function - called when set, skipped when invalid
-# ---------------------------------------------------------------------------
 
-func test_spawn_function_is_called_when_valid() -> void:
-	var spawner: SpawnerComponent = auto_free(SpawnerComponent.new())
-	var state := {"called": false}
-	spawner.spawn_function = func(_ctx, _data): state.called = true
-
-	assert_that(spawner.spawn_function.is_valid()).is_true()
-	assert_that(state.called).is_false()
-	spawner.spawn_function.call(null, null)
-	assert_that(state.called).is_true()
-
-
-func test_spawn_function_is_invalid_by_default() -> void:
-	var spawner: SpawnerComponent = auto_free(SpawnerComponent.new())
-	assert_that(spawner.spawn_function.is_valid()).is_false()

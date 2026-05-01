@@ -206,6 +206,10 @@ class SpawnSlot extends RefCounted:
 	func has_scene() -> bool:
 		return is_instance_valid(_scene)
 
+	## Returns the resolved [MultiplayerScene], or [code]null[/code].
+	func get_scene() -> MultiplayerScene:
+		return _scene if is_instance_valid(_scene) else null
+
 	## Adds [param player] to the scene via [method Scene.add_player],
 	## or directly to [member _parent_node] if no scene is set.
 	func place_player(player: Node) -> void:

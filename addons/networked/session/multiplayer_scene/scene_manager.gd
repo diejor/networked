@@ -352,26 +352,58 @@ func _spawn_scene_node(data: Variant) -> Node:
 	return scene
 
 
-## Called by [MultiplayerTree] to handle a player entry request.
-func handle_join_request(client_data: MultiplayerClientData) -> void:
+## Activates the target scene for [param client_data] and returns it.
+##
+## Checks for duplicate connections. Returns the active
+## [MultiplayerScene], or [code]null[/code] on failure.
+## [br][br]
+## Use for custom spawn flows that don't use [SpawnerComponent].
+func activate_scene_for(
+	client_data: MultiplayerClientData
+) -> MultiplayerScene:
 	var peer_id := client_data.peer_id
 	for scene: MultiplayerScene in active_scenes.values():
 		var sync := scene.synchronizer
 		if is_instance_valid(sync) and peer_id in sync.connected_clients:
-			Netw.dbg.warn("Duplicate join from peer %d — ignored." % peer_id, func(m): push_warning(m))
-			return
+			Netw.dbg.warn(
+				"Duplicate join from peer %d — ignored." % peer_id,
+				func(m): push_warning(m)
+			)
+			return null
 
-	Netw.dbg.info("Received join request from peer %d." % peer_id)
-	var scene_name := StringName(client_data.spawner_path.get_scene_name())
+	Netw.dbg.info(
+		"Received join request from peer %d." % peer_id
+	)
+	var scene_name := StringName(
+		client_data.spawner_path.get_scene_name()
+	)
 	await activate_scene(scene_name)
 
 	var scene := active_scenes.get(scene_name) as MultiplayerScene
 	if not scene:
-		Netw.dbg.error("Join failed: Scene '%s' not registered." % scene_name, func(m): push_error(m))
+		Netw.dbg.error(
+			"Join failed: Scene '%s' not registered." % scene_name,
+			func(m): push_error(m)
+		)
+		return null
+
+	return scene
+
+
+## Called by [MultiplayerTree] to handle a player entry request.
+##
+## Activates the target scene and emits
+## [signal SpawnerComponent.player_joined].
+func handle_join_request(client_data: MultiplayerClientData) -> void:
+	var scene := await activate_scene_for(client_data)
+	if not scene:
 		return
 
 	var spawner_client: SpawnerComponent = (
-		scene.level.get_node_or_null(client_data.spawner_path.node_path) as SpawnerComponent)
+		scene.level.get_node_or_null(
+			client_data.spawner_path.node_path
+		) as SpawnerComponent
+	)
 	assert(spawner_client, "Player needs a `SpawnerComponent`.")
 	spawner_client.player_joined.emit(client_data)
 
