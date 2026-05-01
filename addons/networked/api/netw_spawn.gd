@@ -35,23 +35,24 @@ extends RefCounted
 ## Gathers spawn data for [param client_data].
 ##
 ## When [param db] and [param table_name] are provided, loads the player's
-## entity record via [method SaveComponent.try_load_entity].
-## [param extras] is merged into [member SpawnPayload.extras] and
-## serialised with [method SpawnPayload.to_variant].
+## entity record directly from the database via
+## [method NetwDatabase.TableRepository.fetch]. [param extras] is merged into
+## [member SpawnPayload.extras] and serialised with
+## [method SpawnPayload.to_variant].
 ## [br][br]
 ## [b]Note:[/b] Values in [param extras] must be Godot-serializable if
 ## they travel through a [MultiplayerSpawner].
 static func gather(
 	client_data: MultiplayerClientData,
-	db: NetworkedDatabase = null,
+	db: NetwDatabase = null,
 	table_name: StringName = &"",
 	extras: Dictionary = {},
 ) -> SpawnPayload:
 	var save_record: Dictionary = {}
 	if db and not table_name.is_empty():
-		save_record = SaveComponent.try_load_entity(
-			db, table_name, StringName(client_data.username)
-		)
+		var entity := db.table(table_name).fetch(StringName(client_data.username))
+		if entity:
+			save_record = entity.to_dict()
 	return SpawnPayload.new(
 		client_data.username, client_data.peer_id, save_record, extras
 	)
@@ -59,16 +60,14 @@ static func gather(
 
 ## Configures an existing [param node] from [param payload].
 ##
-## Sets [member SpawnerComponent.username] and the node name, initialises
-## the [SaveComponent] via [method SaveComponent.spawn_from_data], and
+## Sets [member SpawnerComponent.username] and the node name, hydrates
+## the [SaveComponent] via [method SaveComponent.hydrate], and
 ## applies any extra state carried in [param payload].
 ## [br][br]
 ## Works on both server and client — call this inside your
 ## [code]spawn_function[/code] after instantiating the node.
 ## [br][br]
-## [param caller] is the spawner's owner node, used as the fallback source
-## for default [SaveComponent] values when
-## [member SpawnPayload.save_state] is empty.
+## [param caller] is kept for API compatibility but no longer used.
 static func configure(
 	payload: SpawnPayload, node: Node, caller: Node = null
 ) -> void:
@@ -77,11 +76,11 @@ static func configure(
 		spawner.username = String(payload.username)
 	if not payload.username.is_empty() and payload.peer_id != 0:
 		node.name = "%s|%s" % [payload.username, payload.peer_id]
-
+	
 	var save: SaveComponent = node.get_node_or_null("%SaveComponent")
 	if save:
-		save.spawn_from_data(payload.save_state, caller)
-
+		save.hydrate(payload.save_state)
+	
 	assert(
 		MultiplayerClientData.parse_authority(node.name) != 0,
 		"Node name must follow 'username|peer_id' after configure()."

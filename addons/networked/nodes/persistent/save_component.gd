@@ -3,25 +3,27 @@
 ##
 ## Attach this node (with unique name [code]%SaveComponent[/code]) to your player scene.
 ## Assign [member database] and [member table_name] to define where data is persisted.
-## On spawn, [method spawn] loads saved state from the database, falling back to the
-## spawner's current state on first play.
 ##
 ## [b]How it works:[/b]
 ## [br]- [SaveComponent] extends [ProxySynchronizer].
-## [br]- Properties picked in the Editor's Replication panel are automatically virtualized
-## at runtime using their leaf name (e.g., [code].:position[/code] becomes [code]&"position"[/code]).
-## [br]- Reads are forwarded to the live scene node; writes land in [member bound_entity]
-## and are flushed to the database once per frame via [method _save_once].
+## [br]- Properties picked in the Editor's Replication panel are automatically
+## virtualized at runtime using their leaf name (e.g., [code].:position[/code]
+## becomes [code]&"position"[/code]).
+## [br]- Reads are forwarded to the live scene node; writes land in
+## [member bound_entity] and are flushed to the database once per frame via
+## [method _save_once].
 ##
 ## [b]Declaring Persistent Properties:[/b]
-## [br]1. Select the [SaveComponent] node in the Editor.
-## [br]2. In the "Replication" bottom panel, set "Root Node" to your player root (e.g. [code]..[/code]).
-## [br]3. Add properties you want to save (e.g., [code].:position[/code] or [code]Stats:health[/code]).
-## [br]4. The component will automatically virtualize them at runtime.
+## [br]- Select the [SaveComponent] node in the Editor.
+## [br]- In the "Replication" bottom panel, set "Root Node" to your player root
+## (e.g. [code]..[/code]).
+## [br]- Add properties you want to save (e.g., [code].:position[/code] or
+## [code]Stats:health[/code]).
+## [br]- The component will automatically virtualize them at runtime.
 class_name SaveComponent
 extends ProxySynchronizer
 
-## Emitted after [method instantiate] completes and the synchronizer is ready.
+## Emitted after sync setup completes and the synchronizer is ready.
 signal instantiated
 ## Emitted after a save state is loaded (even if the record was not found).
 signal loaded
@@ -46,8 +48,8 @@ class Bucket extends RefCounted:
 ## The entity whose data is tracked and persisted.
 var bound_entity: Entity = DictionaryEntity.new()
 
-## The [NetworkedDatabase] to read/write this entity's state.
-@export var database: NetworkedDatabase:
+## The [NetwDatabase] to read/write this entity's state.
+@export var database: NetwDatabase:
 	set(v):
 		database = v
 		update_configuration_warnings()
@@ -71,13 +73,13 @@ func _init() -> void:
 
 func _enter_tree() -> void:
 	if not _initialized and not Engine.is_editor_hint():
-		_setup_sync()
+		_instantiate_sync()
 
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-
+	
 	get_tree().set_auto_accept_quit(false)
 	_register()
 	if not delta_synchronized.is_connected(client_synchronized.emit):
@@ -134,30 +136,30 @@ func _setup_sync() -> void:
 	if _initialized:
 		return
 	_initialized = true
-
+	
 	assert(bound_entity, "SaveComponent: bound_entity must not be null.")
 	assert(
 		bound_entity.resource_local_to_scene,
 		"SaveComponent: bound_entity '%s' is not local to scene." % bound_entity,
 	)
-
+	
 	if database:
 		var path := database.resource_path
 		assert(not path.contains("::"),
 			"SaveComponent: 'database' must be a saved .tres file, not an embedded resource.")
-
+	
 	finalize()
-
+	
 	for entity_key: StringName in _properties:
 		var scene_path: NodePath = _properties[entity_key]
 		if scene_path.is_empty():
 			continue
-
+		
 		if owner and not bound_entity.has_value(entity_key):
 			var value = _read_property(entity_key, scene_path)
 			if value != null:
 				bound_entity.set_value(entity_key, value)
-
+	
 	notify_property_list_changed()
 
 
@@ -197,16 +199,6 @@ func get_value(key: StringName, default: Variant = null) -> Variant:
 	return bound_entity.get_value(key, default)
 
 
-## Returns [code]true[/code] if a record for this entity exists in the database.
-func exists_in_db() -> bool:
-	if not database or table_name.is_empty():
-		return false
-	var entity_id := _get_entity_id()
-	var out_error: Array[int] = [OK]
-	database.find_by_id(table_name, entity_id, out_error)
-	return out_error[0] != ERR_FILE_NOT_FOUND
-
-
 # ── Scene ↔ entity transfer ────────────────────────────────────────────────────
 
 ## Writes entity values for all tracked properties into the live scene nodes.
@@ -241,7 +233,7 @@ func _write_scene(entity_key: StringName, value: Variant) -> void:
 	
 	if not root:
 		return
-		
+	
 	var path := _properties.get(entity_key, NodePath(""))
 	if path.is_empty():
 		return
@@ -286,65 +278,64 @@ func _get_entity_id() -> StringName:
 		root = get_node_or_null(root_path)
 	else:
 		root = owner
-		
+	
 	if not root:
 		return &""
-		
+	
 	var client: SpawnerComponent = root.get_node_or_null("%SpawnerComponent")
 	if client and not client.username.is_empty():
 		return StringName(client.username)
 	return StringName(root.name)
 
 
-## Writes the current entity state to [member database].
-func save_state() -> Error:
+## Flushes the current entity state to [member database] immediately.
+func flush() -> Error:
+	return _flush()
+
+
+# Internal flush implementation.
+func _flush() -> Error:
 	if not database or table_name.is_empty():
-		_dbg.warn("Cannot save state; database or table_name is missing.", func(m): push_warning(m))
+		_dbg.warn("Cannot flush; database or table_name is missing.",
+				func(m): push_warning(m))
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
-	var db_err := database.transaction(func(tx: NetworkedDatabase.TransactionContext) -> void:
+	var db_err := database.transaction(func(tx: NetwDatabase.TransactionContext) -> void:
 		tx.queue_upsert(table_name, entity_id, bound_entity.to_dict())
 	)
 	if db_err == OK:
-		_dbg.trace("State saved (table=%s, id=%s)." % [table_name, entity_id])
+		_dbg.trace("State flushed (table=%s, id=%s).", [table_name, entity_id])
 	else:
-		_dbg.warn("Database upsert failed. Error: %s" % [error_string(db_err)], func(m): push_warning(m))
+		_dbg.warn("Database upsert failed. Error: %s", [error_string(db_err)],
+				func(m): push_warning(m))
 	return db_err
 
 
-## Loads saved state from [member database] and pushes it to the scene.
-func load_state() -> Error:
-	if not database or table_name.is_empty():
-		_dbg.warn("Cannot load state; database or table_name is missing.", func(m): push_warning(m))
-		loaded.emit()
-		return ERR_UNCONFIGURED
-	var entity_id := _get_entity_id()
-	_dbg.trace("Loading state (table=%s, id=%s)", [table_name, entity_id])
-
-	var out_error: Array[int] = [OK]
-	var record: Dictionary = database.find_by_id(table_name, entity_id, out_error)
-
-	if out_error[0] == ERR_FILE_NOT_FOUND:
-		loaded.emit()
-		return ERR_FILE_NOT_FOUND
-	if out_error[0] == ERR_UNCONFIGURED:
-		loaded.emit()
-		return ERR_UNCONFIGURED
-	if record.is_empty():
-		_dbg.debug("No record found (table=%s, id=%s)." % [table_name, entity_id])
-		loaded.emit()
-		return ERR_FILE_NOT_FOUND
-
-	bound_entity.from_dict(record)
-	push_to_scene()
-	_dbg.info("State loaded (table=%s, id=%s)." % [table_name, entity_id])
+## Hydrates this component from [param record].
+##
+## Applies the dictionary to [member bound_entity] and pushes it to the scene.
+## When [param record] is empty, seeds from scene defaults instead.
+## Called by [method NetwSpawn.configure] before the node enters the tree.
+func hydrate(record: Dictionary) -> void:
+	if not _initialized:
+		_instantiate_sync()
+	_seed_entity_from_scene()
+	
+	if not record.is_empty():
+		bound_entity.from_dict(record)
+		push_to_scene()
+		_dbg.info("State hydrated (table=%s, id=%s).",
+				[table_name, _get_entity_id()])
+	else:
+		_dbg.debug("No record found (table=%s, id=%s); using scene defaults.",
+				[table_name, _get_entity_id()])
+	
 	loaded.emit()
-	return OK
 
 
 # Deserializes a network byte array into the entity and pushes the result to the scene.
 func _deserialize_scene(bytes: PackedByteArray) -> void:
-	_dbg.trace("deserializing scene (%d bytes)." % [bytes.size()])
+	_dbg.trace("deserializing scene (%d bytes).", [bytes.size()])
 	bound_entity.deserialize(bytes)
 	push_to_scene()
 
@@ -360,82 +351,27 @@ func _serialize_scene() -> PackedByteArray:
 
 # Handles a state change event: saves to database and emits network sync signals.
 func _on_state_changed() -> void:
-	save_state()
+	_flush()
 	state_changed.emit()
 	client_synchronized.emit()
 
 
-## Initializes the synchronizer and registers the entity schema with [member database].
-func instantiate() -> void:
+# Initializes the synchronizer and registers the entity schema with [member database].
+func _instantiate_sync() -> void:
 	if _save_span:
 		_save_span.step("instantiate_begin", {
 			in_tree = is_inside_tree(),
 			tracked_count = _properties.size(),
 		})
-
+	
 	_setup_sync()
 	_seed_entity_from_scene()
 	assert(_initialized)
-
+	
 	if database:
 		database.bind(self, _save_span)
-
+	
 	instantiated.emit()
-
-
-## Initializes the synchronizer and applies a pre-loaded save record.
-##
-## Mirrors [method spawn] but takes a [Dictionary] (from
-## [method try_load_entity] or [member SpawnPayload.save_state])
-## instead of querying the database. When [param save_record] is empty
-## and [param caller] has a [code]%SaveComponent[/code], falls back to
-## the caller's scene defaults.
-func spawn_from_data(
-	save_record: Dictionary, caller: Node = null,
-	parent_span: NetSpan = null,
-) -> void:
-	_save_span = parent_span
-	var local_span: NetSpan = null
-	if not _save_span:
-		local_span = _dbg.span("save_spawn")
-		_save_span = local_span
-
-	_save_span.step("spawn_begin")
-	instantiate()
-	_save_span.step("instantiated")
-
-	if not save_record.is_empty():
-		bound_entity.from_dict(save_record)
-		push_to_scene()
-		_save_span.step("loaded", {found = true})
-	elif caller:
-		var caller_save: SaveComponent = (
-			caller.get_node_or_null("%SaveComponent") as SaveComponent
-		)
-		if caller_save and caller_save._initialized:
-			_dbg.debug("Loading data from caller.")
-			_deserialize_scene(caller_save._serialize_scene())
-			_save_span.step("loaded", {found = false, fallback = true})
-		else:
-			_save_span.step("loaded", {found = false})
-	else:
-		_save_span.step("loaded", {found = false})
-
-	loaded.emit()
-
-	if local_span:
-		local_span.end()
-
-
-## Initializes the synchronizer and loads saved state from the database.
-##
-## Loads the entity record via [method try_load_entity] and delegates to
-## [method spawn_from_data].
-func spawn(caller: Node, parent_span: NetSpan = null) -> void:
-	var record := SaveComponent.try_load_entity(
-		database, table_name, _get_entity_id()
-	)
-	spawn_from_data(record, caller, parent_span)
 
 
 func _notification(what: int) -> void:
@@ -456,18 +392,18 @@ func _get_configuration_warnings() -> PackedStringArray:
 		var path := database.resource_path
 		if path.is_empty() or path.contains("::"):
 			warnings.append(
-				"'database' is an embedded resource. Save it as a .tres file to avoid "
-				+ "resource-path conflicts and data loss."
+				"'database' is an embedded resource. Save it as a .tres file "
+				+ "to avoid resource-path conflicts and data loss."
 			)
-			
+		
 		if table_name.is_empty():
 			warnings.append("'table_name' must be set when 'database' is assigned.")
 		elif database.has_method("has_table") and not database.has_table(table_name):
 			warnings.append(
 				"Table [code]%s[/code] is not yet registered. " % [table_name] + \
-				"Run the game once to register the schema and enable autocomplete."
+				"Declare it on the database resource or bind a [SaveComponent]."
 			)
-
+	
 	var config := replication_config
 	if not config or config.get_properties().is_empty():
 		warnings.append("No properties are tracked. Pick properties in the Replication panel.")
@@ -484,8 +420,8 @@ func _get_configuration_warnings() -> PackedStringArray:
 
 # ── Static helpers ─────────────────────────────────────────────────────────────
 
-## Static entry point: saves all components registered in [param ctx].
-static func save_all_in(ctx: NetwPeerContext) -> void:
+# Internal entry point: saves all components registered in [param ctx].
+static func _save_all_in(ctx: NetwPeerContext) -> void:
 	if not ctx:
 		return
 	var bucket := ctx.get_bucket(Bucket) as Bucket
@@ -495,29 +431,9 @@ static func save_all_in(ctx: NetwPeerContext) -> void:
 		if not component.is_multiplayer_authority():
 			continue
 		if component.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER:
-			component.save_state()
+			component._flush()
 		else:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
-
-
-## Loads an entity record from [param db] without a [SaveComponent]
-## instance.
-##
-## Returns the raw [Dictionary] from the database, or an empty
-## [Dictionary] if no record was found or [param db] is [code]null[/code].
-## Used by [method NetwSpawn.gather] and by [method spawn].
-static func try_load_entity(
-	db: NetworkedDatabase, table_name: StringName, entity_id: StringName
-) -> Dictionary:
-	if not db or table_name.is_empty():
-		return {}
-	var out_error: Array[int] = [OK]
-	var record: Dictionary = db.find_by_id(
-		table_name, entity_id, out_error
-	)
-	if out_error[0] != OK or record.is_empty():
-		return {}
-	return record
 
 
 # ── Session / bucket access ────────────────────────────────────────────────────
@@ -548,6 +464,6 @@ func _unregister() -> void:
 
 func _handle_shutdown() -> void:
 	_dbg.info("Beginning graceful shutdown...")
-	SaveComponent.save_all_in(get_peer_context())
+	SaveComponent._save_all_in(get_peer_context())
 	_dbg.info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

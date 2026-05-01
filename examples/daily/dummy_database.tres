@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="NetworkedDatabase" format=3 uid="uid://yv4uuygdxogs"]
+[gd_resource type="Resource" script_class="NetwDatabase" format=3 uid="uid://yv4uuygdxogs"]
 
 [ext_resource type="Script" uid="uid://dlsdsleg37hm1" path="res://addons/networked/sync/database/backends/file_system.gd" id="1_320wj"]
 [ext_resource type="Script" uid="uid://icayc7hx72vn" path="res://addons/networked/sync/database/database.gd" id="2_b2p21"]

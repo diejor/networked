@@ -1,19 +1,21 @@
 ## Cached lookup helpers for [MultiplayerSynchronizer] nodes.
 ##
-## Tree traversals are expensive; results are stored on the target node's metadata
-## under [code]"cached_synchronizers"[/code] and reused until explicitly invalidated.
+## Tree traversals are expensive; results are stored on the target node's
+## metadata under [code]"cached_synchronizers"[/code] and reused until
+## explicitly invalidated.
 class_name SynchronizersCache
 extends RefCounted
 
 const META_KEY := &"cached_synchronizers"
 
 
-## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code] points to [param target_node].
+## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code]
+## points to [param target_node].
 static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
 	var synchronizers: Array[MultiplayerSynchronizer] = []
 	if not target_node:
 		return synchronizers
-		
+	
 	if not Engine.is_editor_hint():
 		if target_node.has_meta(META_KEY):
 			var cached: Array[MultiplayerSynchronizer] = []
@@ -27,28 +29,31 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 					or sync.get_node(sync.root_path) != target_node:
 					is_cache_valid = false
 					break
-					
+			
 			if is_cache_valid:
 				return cached
-				
+	
 	synchronizers.assign(target_node.find_children("*", "MultiplayerSynchronizer"))
-
+	
 	var filtered_syncs: Array[MultiplayerSynchronizer] = []
 	filtered_syncs.assign(synchronizers.filter(func(sync: MultiplayerSynchronizer):
 		return sync.root_path and sync.has_node(sync.root_path) \
 			and sync.get_node(sync.root_path) == target_node
 	))
-
+	
 	var result: Array[MultiplayerSynchronizer] = []
 	result.assign(filtered_syncs)
-
+	
 	if target_node.is_inside_tree():
 		if not Engine.is_editor_hint():
 			target_node.set_meta(META_KEY, result)
 			_connect_invalidation(target_node)
 	elif not Engine.is_editor_hint():
-		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String: return s.name)
-		Netw.dbg.debug("SynchronizersCache: '%s' is off-tree; cache not written. Synchronizers found: [%s]" % [target_node.name, ", ".join(type_names)])
+		var type_names := result.map(func(s: MultiplayerSynchronizer) -> String:
+				return s.name)
+		Netw.dbg.debug("SynchronizersCache: '%s' is off-tree; cache not " + \
+				"written. Synchronizers found: [%s]",
+				[target_node.name, ", ".join(type_names)])
 	
 	return result
 
@@ -68,16 +73,16 @@ static func get_all_synchronized_properties(target_node: Node) -> Dictionary[Str
 	var result: Dictionary[StringName, NodePath] = {}
 	if not target_node:
 		return result
-		
+	
 	for sync in get_client_synchronizers(target_node):
 		if not sync.replication_config:
 			continue
-			
+		
 		for path in sync.replication_config.get_properties():
 			var clean_name := _extract_clean_name(path)
 			if clean_name != &"":
 				result[clean_name] = path
-				
+	
 	return result
 
 
@@ -86,14 +91,14 @@ static func get_all_synchronized_properties(target_node: Node) -> Dictionary[Str
 static func resolve_value(target: Node, path: NodePath) -> Variant:
 	if not target or path.is_empty():
 		return null
-		
+	
 	var res := target.get_node_and_resource(path)
 	var obj: Object = res[0]
 	var remaining_path: NodePath = res[2]
 	
 	if not obj or remaining_path.is_empty():
 		return null
-		
+	
 	return obj.get_indexed(remaining_path)
 
 
@@ -101,7 +106,7 @@ static func resolve_value(target: Node, path: NodePath) -> Variant:
 static func assign_value(target: Node, path: NodePath, value: Variant) -> void:
 	if not target or path.is_empty():
 		return
-		
+	
 	var res := target.get_node_and_resource(path)
 	var obj: Object = res[0]
 	var remaining_path: NodePath = res[2]
@@ -113,7 +118,7 @@ static func assign_value(target: Node, path: NodePath, value: Variant) -> void:
 static func _extract_clean_name(path: NodePath) -> StringName:
 	if path.get_subname_count() == 0:
 		return &""
-		
+	
 	var s := str(path)
 	if s.begins_with(".:"):
 		return StringName(s.trim_prefix(".:"))

@@ -13,14 +13,14 @@ var harness: NetworkTestHarness
 var client0: MultiplayerTree
 var test_dir: String
 var backend: FileSystemBackend
-var db: NetworkedDatabase
+var db: NetwDatabase
 
 
 func before_test() -> void:
 	test_dir = create_temp_dir("tp_flow_test")
 	backend = auto_free(FileSystemBackend.new())
 	backend.base_dir = test_dir
-	db = auto_free(NetworkedDatabase.new())
+	db = auto_free(NetwDatabase.new())
 	db.backend = backend
 
 	harness = auto_free(NetworkTestHarness.new())

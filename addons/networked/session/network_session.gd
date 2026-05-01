@@ -151,7 +151,7 @@ func disconnect_player() -> void:
 	
 	Netw.dbg.trace("NetworkSession: disconnect_player called.")
 	Netw.dbg.info("Disconnecting player.")
-	SaveComponent.save_all_in(
+	SaveComponent._save_all_in(
 		client.get_peer_context(client.multiplayer_api.get_unique_id())
 	)
 	client.multiplayer_peer.close()

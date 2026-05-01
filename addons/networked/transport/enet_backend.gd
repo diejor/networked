@@ -17,22 +17,22 @@ func host() -> Error:
 	
 	if err == OK:
 		api.multiplayer_peer = peer
-		Netw.dbg.info("ENet server ready on port %d" % [port])
+		Netw.dbg.info("ENet server ready on port %d", [port])
 	
 	return err
 
 func join(server_address: String, _username: String = "") -> Error:
-	Netw.dbg.trace("ENetBackend: join called at %s" % [server_address])
+	Netw.dbg.trace("ENetBackend: join called at %s", [server_address])
 	var peer := ENetMultiplayerPeer.new()
 	if server_address.is_empty():
 		server_address = "localhost"
-		
+	
 	var err := peer.create_client(server_address, port)
 	
 	if err == OK:
 		api.multiplayer_peer = peer
-		Netw.dbg.info("ENet client connecting to %s:%d" % [server_address, port])
-		
+		Netw.dbg.info("ENet client connecting to %s:%d", [server_address, port])
+	
 	return err
 
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
