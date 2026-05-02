@@ -6,10 +6,8 @@
 ## every subsequent [method _set] call within the same deserialization pass can read
 ## [member _pending_tick] to know which tick the data belongs to.
 ##
-## Subclasses ([code]RollbackSynchronizer[/code], [code]NetworkInputSynchronizer[/code]) use
-## [member _pending_tick] to write received values into a [HistoryBuffer] at the correct tick.
-##
 ## [b]Setup[/b]: call [method finalize_with_tick] instead of [method ProxySynchronizer.finalize].
+## @experimental
 class_name TickAwareSynchronizer
 extends ProxySynchronizer
 

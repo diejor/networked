@@ -4,10 +4,6 @@ extends NetworkedTestSuite
 var session: LocalLoopbackSession
 
 
-func after():
-	NetwLog.pop_settings()
-
-
 func before_test() -> void:
 	session = auto_free(LocalLoopbackSession.new())
 

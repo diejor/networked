@@ -96,8 +96,6 @@ func add_client() -> MultiplayerTree:
 ## Cleans up all server/client instances and removes nodes from the tree.
 ## Should be called in after_test().
 func teardown() -> void:
-	NetwLog.pop_settings()
-
 	if _session:
 		_session.reset()
 

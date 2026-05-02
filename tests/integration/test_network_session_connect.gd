@@ -32,7 +32,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	NetwLog.pop_settings()
 	session = null
 
 
