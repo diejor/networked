@@ -27,6 +27,10 @@ func join(_server_address: String, _username: String = "") -> Error:
 	if not session:
 		session = LocalLoopbackSession.get_shared_session()
 		
+	if not session.has_live_server():
+		Netw.dbg.warn("LocalLoopbackBackend: No server running.")
+		return ERR_CANT_CONNECT
+	
 	api.multiplayer_peer = session.create_client_peer()
 	Netw.dbg.info("Local loopback client ready.")
 	return OK
