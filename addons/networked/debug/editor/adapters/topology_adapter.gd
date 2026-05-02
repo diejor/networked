@@ -1,3 +1,4 @@
+## Processes network topology snapshots for display in the debugger's Topology panel.
 @tool
 class_name TopologyAdapter
 extends PanelDataAdapter

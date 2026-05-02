@@ -1,14 +1,14 @@
-## Topology panel — shows synchronizer tree and identity for one player peer.
+## Topology panel - shows synchronizer tree and identity for one player peer.
 ##
 ## Displays the latest [NetTopologySnapshot] received from the reporter.
 ## Topology is current-state (not time-series), so [method populate] shows only
 ## the most recent entry and [method on_new_entry] replaces rather than appends.
 ##
 ## Layout (top to bottom):
-##   [cache banner]      — hidden unless snapshot is stale
-##   identity rows       — username / peer_id, scene / mode
-##   node button         — opens the node in the editor scene inspector
-##   synchronizer tree   — Name / Mode / Flags / Source columns
+##   [cache banner]      - hidden unless snapshot is stale
+##   identity rows       - username / peer_id, scene / mode
+##   node button         - opens the node in the editor scene inspector
+##   synchronizer tree   - Name / Mode / Flags / Source columns
 @tool
 class_name PanelTopology
 extends DebugPanel
@@ -24,7 +24,7 @@ var on_refresh_requested: Callable
 ## Signature: func(node_path: String, enabled: bool, peer_id: int) -> void
 var on_nameplate_toggled: Callable
 
-# ─── Widgets ──────────────────────────────────────────────────────────────────
+# --- Widgets ------------------------------------------------------------------
 
 var _username_label: Label
 var _peer_id_label: Label
@@ -36,13 +36,13 @@ var _nameplate_btn: CheckButton
 
 var _sync_tree: Tree
 
-# ─── State ────────────────────────────────────────────────────────────────────
+# --- State --------------------------------------------------------------------
 
 var _stale_since_usec: int = -1
 var _last_node_path: String = ""
 var _last_peer_id: int = 0
 
-# Replication mode int → short string
+# Replication mode int -> short string
 const _MODE_LABELS: Dictionary = {
 	0: "Never",
 	1: "Always",
@@ -55,17 +55,17 @@ func _ready() -> void:
 	_build_layout()
 
 
-# ─── Panel interface ──────────────────────────────────────────────────────────
+# --- Panel interface ----------------------------------------------------------
 
 func clear() -> void:
 	_last_node_path = ""
 	_last_peer_id = 0
 	_stale_since_usec = -1
 	if _username_label:
-		_username_label.text = "—"
-		_peer_id_label.text = "—"
-		_lobby_label.text = "—"
-		_mode_label.text = "—"
+		_username_label.text = "-"
+		_peer_id_label.text = "-"
+		_lobby_label.text = "-"
+		_mode_label.text = "-"
 	if _node_btn:
 		_node_btn.disabled = true
 	if _sync_tree:
@@ -73,7 +73,7 @@ func clear() -> void:
 		_sync_tree.create_item()
 
 
-## Shows only the latest entry — topology is current-state, not time-series.
+## Shows only the latest entry - topology is current-state, not time-series.
 func populate(buffer: Array) -> void:
 	clear()
 	if not buffer.is_empty():
@@ -115,19 +115,19 @@ func _update_cache_visuals(cache_info: Dictionary) -> void:
 	_sync_tree.add_theme_color_override("font_title_color", status_color)
 
 
-# ─── Identity rows ────────────────────────────────────────────────────────────
+# --- Identity rows ------------------------------------------------------------
 
 func _apply_identity(d: Dictionary) -> void:
 	var node_path: String = d.get("node_path", "")
 	var peer_id: int = d.get("peer_id", 0)
-	var scene: String = d.get("scene_name", "—")
+	var scene: String = d.get("scene_name", "-")
 	var is_server: bool = d.get("is_server", false)
 	var mode_str: String = "SERVER" if is_server else "CLIENT"
 
-	var username: String = d.get("username", "—")
+	var username: String = d.get("username", "-")
 
 	_username_label.text = username
-	_peer_id_label.text = str(peer_id) if peer_id != 0 else "—"
+	_peer_id_label.text = str(peer_id) if peer_id != 0 else "-"
 	_lobby_label.text = scene
 	_mode_label.text = "[%s]" % mode_str
 
@@ -137,7 +137,7 @@ func _apply_identity(d: Dictionary) -> void:
 		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
 
 
-# ─── Synchronizer tree ────────────────────────────────────────────────────────
+# --- Synchronizer tree --------------------------------------------------------
 
 func _populate_sync_tree(d: Dictionary) -> void:
 	_sync_tree.clear()
@@ -148,13 +148,6 @@ func _populate_sync_tree(d: Dictionary) -> void:
 	var hooked: bool = cache_info.get("hooked", false)
 
 	var sync_icon := get_theme_icon("MultiplayerSynchronizer", "EditorIcons")
-	var cache_icon := get_theme_icon("InstanceOptions", "EditorIcons")
-
-	var status_color: Color = get_theme_color("success_color", "Editor")
-	if not hooked:
-		status_color = get_theme_color("error_color", "Editor")
-	elif not hit:
-		status_color = get_theme_color("warning_color", "Editor")
 
 	for sd: Dictionary in d.get("synchronizers", []):
 		var sync_item := _sync_tree.create_item(_sync_tree.get_root())
@@ -176,7 +169,6 @@ func _populate_sync_tree(d: Dictionary) -> void:
 			prop_item.set_text(0, pd.get("path", "?"))
 			prop_item.set_text(1, mode_str)
 			
-			# Property Class/Type Icon (e.g. String, int, Vector2, or specific Resource)
 			var type_name: String = pd.get("target_class", "")
 			if not type_name.is_empty() and has_theme_icon(type_name, "EditorIcons"):
 				prop_item.set_icon(0, get_theme_icon(type_name, "EditorIcons"))
@@ -189,7 +181,7 @@ func _populate_sync_tree(d: Dictionary) -> void:
 			prop_item.set_selectable(1, false)
 
 
-# ─── Layout construction ──────────────────────────────────────────────────────
+# --- Layout construction ------------------------------------------------------
 
 func _build_layout() -> void:
 	add_theme_constant_override("separation", 6)
@@ -221,7 +213,7 @@ func _build_identity_section() -> void:
 	var un_lbl := Label.new(); un_lbl.text = "Username:"
 	un_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(un_lbl)
-	_username_label = Label.new(); _username_label.text = "—"
+	_username_label = Label.new(); _username_label.text = "-"
 	_username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_username_label.add_theme_font_size_override("font_size", 14)
 	row1.add_child(_username_label)
@@ -229,7 +221,7 @@ func _build_identity_section() -> void:
 	var pid_lbl := Label.new(); pid_lbl.text = "Peer ID:"
 	pid_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(pid_lbl)
-	_peer_id_label = Label.new(); _peer_id_label.text = "—"
+	_peer_id_label = Label.new(); _peer_id_label.text = "-"
 	row1.add_child(_peer_id_label)
 
 	var row2 := HBoxContainer.new()
@@ -239,14 +231,14 @@ func _build_identity_section() -> void:
 	var lb_lbl := Label.new(); lb_lbl.text = "Scene:"
 	lb_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(lb_lbl)
-	_lobby_label = Label.new(); _lobby_label.text = "—"
+	_lobby_label = Label.new(); _lobby_label.text = "-"
 	_lobby_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row2.add_child(_lobby_label)
 
 	var mode_hdr := Label.new(); mode_hdr.text = "Mode:"
 	mode_hdr.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(mode_hdr)
-	_mode_label = Label.new(); _mode_label.text = "—"
+	_mode_label = Label.new(); _mode_label.text = "-"
 	_mode_label.add_theme_color_override("font_color", get_theme_color("warning_color", "Editor"))
 	row2.add_child(_mode_label)
 

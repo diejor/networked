@@ -124,7 +124,7 @@ static func _format_telemetry(slice: Array) -> Array:
 
 
 ## Substitutes known scene level [param path] with a readable [param alias_map] 
-## (e.g. [code]"/root/.../Level1" → "[Scene:Level1]"[/code]).
+## (e.g. [code]"/root/.../Level1" -> "[Scene:Level1]"[/code]).
 static func _alias_path(path: String, alias_map: Dictionary) -> String:
 	for prefix: String in alias_map:
 		if path.begins_with(prefix):

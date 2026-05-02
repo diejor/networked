@@ -1,25 +1,26 @@
 @tool
 ## Handles saving, loading, and network synchronization of an entity's persistent state.
 ##
-## Attach this node (with unique name [code]%SaveComponent[/code]) to your player scene.
-## Assign [member database] and [member table_name] to define where data is persisted.
+## [SaveComponent] acts as a bridging layer between the live scene state and a 
+## [NetwDatabase]. It automatically virtualizes properties selected in the 
+## Editor's "Replication" panel, synchronizing changes across the network and 
+## persisting them to the database once per frame.
 ##
-## [b]How it works:[/b]
-## [br]- [SaveComponent] extends [ProxySynchronizer].
-## [br]- Properties picked in the Editor's Replication panel are automatically
-## virtualized at runtime using their leaf name (e.g., [code].:position[/code]
-## becomes [code]&"position"[/code]).
-## [br]- Reads are forwarded to the live scene node; writes land in
-## [member bound_entity] and are flushed to the database once per frame via
-## [method _save_once].
+## [b]How to use:[/b]
+## [br]1. Attach [SaveComponent] to your player or persistent entity scene.
+## [br]2. In the "Replication" panel, set "Root Node" (e.g., [code]..[/code]).
+## [br]3. Add properties to save (e.g., [code].:position[/code] or [code]Stats:health[/code]).
+## [br]4. Assign a [member database] and [member table_name].
+## [br]5. Call [method hydrate] to load existing data into the scene on spawn.
 ##
-## [b]Declaring Persistent Properties:[/b]
-## [br]- Select the [SaveComponent] node in the Editor.
-## [br]- In the "Replication" bottom panel, set "Root Node" to your player root
-## (e.g. [code]..[/code]).
-## [br]- Add properties you want to save (e.g., [code].:position[/code] or
-## [code]Stats:health[/code]).
-## [br]- The component will automatically virtualize them at runtime.
+## [codeblock]
+## # Accessing data programmatically:
+## var save := %SaveComponent
+## # Set a value (marks dirty and saves deferred):
+## save.set_value(&"gold", 500)
+## # Get a value from the tracked state:
+## var gold = save.get_value(&"gold", 0)
+## [/codeblock]
 class_name SaveComponent
 extends ProxySynchronizer
 
@@ -62,7 +63,7 @@ var bound_entity: Entity = DictionaryEntity.new()
 
 
 func _init() -> void:
-	# Keep save-data replication low-frequency — it is not latency-sensitive.
+	# Keep save-data replication low-frequency - it is not latency-sensitive.
 	name = "SaveComponent"
 	unique_name_in_owner = true
 	delta_interval = 5.0
@@ -438,6 +439,7 @@ static func _save_all_in(ctx: NetwPeerContext) -> void:
 
 # ── Session / bucket access ────────────────────────────────────────────────────
 
+## Returns the [NetwPeerContext] for the local peer.
 func get_peer_context() -> NetwPeerContext:
 	if not is_inside_tree() or not multiplayer:
 		return null

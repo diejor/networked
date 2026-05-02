@@ -2,7 +2,7 @@
 ## TubeClient node.
 ##
 ## Assign a [code]NodePath[/code] to a TubeClient node in the scene. Call
-## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal —
+## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal -
 ## this backend will create or join a Tube session and copy its
 ## [MultiplayerAPI] into [member BackendPeer.api].
 @tool

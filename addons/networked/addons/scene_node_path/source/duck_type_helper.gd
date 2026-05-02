@@ -1,3 +1,4 @@
+## Utility for safe property access and method calls across different object types.
 class_name DuckTypeHelper
 extends Object
 

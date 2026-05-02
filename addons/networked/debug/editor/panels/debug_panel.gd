@@ -2,7 +2,7 @@
 ##
 ## Defines the interface contract that [PanelWrapper] relies on for peer-context
 ## hooks and data lifecycle. Panels that do not extend this are treated as 
-## opaque [Control] nodes by the wrapper — they simply don't participate 
+## opaque [Control] nodes by the wrapper - they simply don't participate 
 ## in the hook protocol.
 @tool
 class_name DebugPanel

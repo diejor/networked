@@ -202,7 +202,7 @@ func phase(phase_name: String) -> NetSpanPhase:
 ## [method NetTrace.begin_peer] via the [param follows_from] parameter to
 ## declare an explicit causal relationship between this span and the new one.
 ## [br][br]
-## [param step_label] is optional — use it when the token represents a specific
+## [param step_label] is optional - use it when the token represents a specific
 ## step within this span rather than the span as a whole.
 func checkpoint(step_label: String = "") -> CheckpointToken:
 	var t := CheckpointToken.new()

@@ -42,7 +42,7 @@ func finalize_with_tick() -> void:
 	var tick_path := NodePath(":__tick")
 
 	var ordered := SceneReplicationConfig.new()
-	# __tick first — always ALWAYS replicated so the receiver can correlate the packet.
+	# __tick first - always ALWAYS replicated so the receiver can correlate the packet.
 	ordered.add_property(tick_path)
 	ordered.property_set_replication_mode(tick_path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 	ordered.property_set_spawn(tick_path, false)

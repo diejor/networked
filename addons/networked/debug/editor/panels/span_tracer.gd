@@ -1,8 +1,8 @@
 ## Span Tracer panel.
 ##
 ## Shows Span rows opened via [Netw.dbg] by the addon's own systems.
-## They have an explicit lifecycle indicator: ◉ open (yellow), ✓ closed (green),
-## ✗ failed (red). Each step is a child row with elapsed-ms timing.
+## They have an explicit lifecycle indicator: (o) open (yellow), [V] closed (green),
+## [X] failed (red). Each step is a child row with elapsed-ms timing.
 ##
 ## [br][b]Breakpoint gutter[/b] ([constant COL_BP]): click the breakpoint icon on any row that has
 ## caller info to toggle a GDScript breakpoint at that call site. The icon stays in
@@ -32,16 +32,16 @@ var _matching_spans: Dictionary = {}
 # span_id -> aggregated lower-case searchable text for fuzzy matching.
 var _span_text_cache: Dictionary = {}
 
-# span_id → TreeItem (span lifecycle rows)
+# span_id -> TreeItem (span lifecycle rows)
 var _span_items: Dictionary[String, TreeItem] = {}
-# span_id → open timestamp_usec (elapsed calculation for steps)
+# span_id -> open timestamp_usec (elapsed calculation for steps)
 var _span_start_usec: Dictionary[String, int] = {}
 
 # Active breakpoints received from _breakpoint_set_in_tree callbacks.
 # Key: "source:line". Preserved across clear().
 var _active_breakpoints: Dictionary = {}
 
-# "source:line" → Array[TreeItem]. Rebuilt on each push_*; cleared on clear().
+# "source:line" -> Array[TreeItem]. Rebuilt on each push_*; cleared on clear().
 var _caller_rows: Dictionary = {}
 
 # Column indices
@@ -66,7 +66,7 @@ func _ready() -> void:
 	header_row.add_child(clear_btn)
 
 	_filter_edit = LineEdit.new()
-	_filter_edit.placeholder_text = "Filter events…"
+	_filter_edit.placeholder_text = "Filter events..."
 	_filter_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_filter_edit.clear_button_enabled = true
 	_filter_edit.text_changed.connect(_on_filter_changed)
@@ -247,7 +247,7 @@ func _clear_highlights() -> void:
 		item = item.get_next()
 
 
-# ─── Breakpoint Sync (called from NetworkedDebuggerUI) ────────────────────────
+# --- Breakpoint Sync (called from NetworkedDebuggerUI) ------------------------
 
 ## Updates gutter state for all rows at [param source]:[param line].
 ## Called whenever the script editor adds or removes a breakpoint.
@@ -269,9 +269,9 @@ func sync_breakpoints_cleared() -> void:
 			_refresh_bp_cell(item, false)
 
 
-# ─── Span Lifecycle (NetTrace) ────────────────────────────────────────────────
+# --- Span Lifecycle (NetTrace) ------------------------------------------------
 
-## Creates a top-level span row with an open-state indicator (yellow ◉).
+## Creates a top-level span row with an open-state indicator (yellow (o)).
 func push_span_open(d: Dictionary) -> void:
 	var span_id: String = d.get("id", "")
 	if span_id.is_empty():
@@ -285,7 +285,7 @@ func push_span_open(d: Dictionary) -> void:
 
 	var label: String = d.get("label", "span")
 	var item := _tree.create_item(_tree.get_root())
-	item.set_text(COL_NAME, "◉ %s" % label)
+	item.set_text(COL_NAME, "(o) %s" % label)
 	item.set_text(COL_ELAPSED, "f%d" % d.get("frame", 0))
 	item.set_custom_color(COL_NAME, Color(1.0, 0.85, 0.2))  # yellow = open
 
@@ -299,8 +299,8 @@ func push_span_open(d: Dictionary) -> void:
 	var follows: Dictionary = d.get("follows_from", {})
 	if not follows.is_empty():
 		var f_row := _tree.create_item(item)
-		var step_part: String = ("  · %s" % follows["step_label"]) if not follows.get("step_label", "").is_empty() else ""
-		f_row.set_text(COL_NAME, "  ↖ follows: %s%s" % [follows.get("span_label", "?"), step_part])
+		var step_part: String = ("  . %s" % follows["step_label"]) if not follows.get("step_label", "").is_empty() else ""
+		f_row.set_text(COL_NAME, "  <- follows: %s%s" % [follows.get("span_label", "?"), step_part])
 		f_row.set_custom_color(COL_NAME, Color(0.55, 0.55, 0.55))
 		f_row.set_metadata(COL_NAME, {"follows_span_id": follows.get("span_id", "")})
 
@@ -337,7 +337,7 @@ func push_span_step(d: Dictionary) -> void:
 	item.set_collapsed(false)
 
 
-## Appends a warning step child row to an existing span row (orange ⚠).
+## Appends a warning step child row to an existing span row (orange !).
 func push_span_step_warn(d: Dictionary) -> void:
 	var span_id: String = d.get("id", "")
 	var item: TreeItem = _span_items.get(span_id)
@@ -350,7 +350,7 @@ func push_span_step_warn(d: Dictionary) -> void:
 	var message: String = s.get("message", "")
 
 	var row := _tree.create_item(item)
-	var display := "   ⚠ %s" % step_label
+	var display := "   ! %s" % step_label
 	if not message.is_empty():
 		display += "  [%s]" % message
 	row.set_text(COL_NAME, display)
@@ -367,35 +367,35 @@ func push_span_step_warn(d: Dictionary) -> void:
 	item.set_collapsed(false)
 
 
-## Updates a span row to a clean-close state (green ✓).
+## Updates a span row to a clean-close state (green [V]).
 func push_span_close(d: Dictionary) -> void:
 	var span_id: String = d.get("id", "")
 	var item: TreeItem = _span_items.get(span_id)
 	if not item:
 		return
-	item.set_text(COL_NAME, "✓ %s" % d.get("label", item.get_text(COL_NAME).substr(2)))
+	item.set_text(COL_NAME, "[V] %s" % d.get("label", item.get_text(COL_NAME).substr(4)))
 	item.set_custom_color(COL_NAME, Color(0.3, 0.85, 0.4))  # green = ok
 	var elapsed_usec: int = d.get("elapsed_usec", 0)
 	if elapsed_usec > 0:
 		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
 
 
-## Updates a span row to a failed state (red ✗) and appends the failure reason.
+## Updates a span row to a failed state (red [X]) and appends the failure reason.
 func push_span_fail(d: Dictionary) -> void:
 	var span_id: String = d.get("id", "")
 	var item: TreeItem = _span_items.get(span_id)
 	if not item:
 		return
-	var label: String = d.get("label", item.get_text(COL_NAME).substr(2))
+	var label: String = d.get("label", item.get_text(COL_NAME).substr(4))
 	var reason: String = d.get("reason", "?")
-	item.set_text(COL_NAME, "✗ %s  [%s]" % [label, reason])
+	item.set_text(COL_NAME, "[X] %s  [%s]" % [label, reason])
 	item.set_custom_color(COL_NAME, Color(1.0, 0.35, 0.35))  # red = failed
 	var elapsed_usec: int = d.get("elapsed_usec", 0)
 	if elapsed_usec > 0:
 		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
 
 	var r := _tree.create_item(item)
-	r.set_text(COL_NAME, "  ✗ %s" % reason)
+	r.set_text(COL_NAME, "  [X] %s" % reason)
 	r.set_custom_color(COL_NAME, Color(1.0, 0.45, 0.45))
 	var fail_caller: Dictionary = d.get("caller", {})
 	r.set_metadata(COL_NAME, {"caller": fail_caller})
@@ -405,7 +405,7 @@ func push_span_fail(d: Dictionary) -> void:
 	item.set_collapsed(false)
 
 
-# ─── Internal ─────────────────────────────────────────────────────────────────
+# --- Internal -----------------------------------------------------------------
 
 func _on_copy() -> void:
 	if _span_items.is_empty():

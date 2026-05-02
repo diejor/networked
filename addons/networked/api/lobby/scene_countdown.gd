@@ -1,6 +1,6 @@
 ## Server-driven countdown that ticks once per second.
 ##
-## Obtain via [method NetwScene.start_countdown] — do not construct directly.
+## Obtain via [method NetwScene.start_countdown] - do not construct directly.
 ## Clients do not receive a return value; they listen to
 ## [signal NetwScene.countdown_started] and the subsequent
 ## [signal NetwScene.countdown_tick] / [signal NetwScene.countdown_finished]

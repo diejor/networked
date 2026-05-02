@@ -27,14 +27,14 @@ func _enter_tree() -> void:
 	active_path = NetwLog._fix_profile_path(active_path)
 
 	if not ResourceLoader.exists(active_path):
-		Netw.dbg.warn("NetwLog: Active profile no longer exists: '%s'\n  → Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		Netw.dbg.warn("NetwLog: Active profile no longer exists: '%s'\n  -> Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
 		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return
 
 	var res = ResourceLoader.load(active_path)
 	if not res is NetwLogSettings:
-		Netw.dbg.warn("NetwLog: '%s' is not a NetwLogSettings resource.\n  → Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		Netw.dbg.warn("NetwLog: '%s' is not a NetwLogSettings resource.\n  -> Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
 		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
 		ProjectSettings.save()
 		return

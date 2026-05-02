@@ -1,4 +1,4 @@
-## Crash Manifest panel — the Orchestrator Peak.
+## Crash Manifest panel - the Orchestrator Peak.
 ##
 ## Displays received [NetDebugManifest] entries as an interactive [Tree].
 ## Selecting a row calls back into [NetworkedDebuggerUI] to synchronize
@@ -24,13 +24,13 @@ var _clear_btn: Button
 # Manifest entry dicts in insertion order (for copy/export).
 var _entries: Array = []
 
-# cid → group TreeItem. Each unique CID gets a collapsible "Validation Cycle" header.
+# cid -> group TreeItem. Each unique CID gets a collapsible "Validation Cycle" header.
 var _cid_groups: Dictionary[String, TreeItem] = {}
 
-# "cid:trigger" → top-level row TreeItem. Used for merging related errors.
+# "cid:trigger" -> top-level row TreeItem. Used for merging related errors.
 var _top_rows: Dictionary[String, TreeItem] = {}
 
-# "cid:trigger" → "Intercepted Error" parent TreeItem.
+# "cid:trigger" -> "Intercepted Error" parent TreeItem.
 var _error_parents: Dictionary[String, TreeItem] = {}
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
@@ -161,10 +161,10 @@ func push_entry(entry: Dictionary) -> void:
 	if not _tree.get_root():
 		_tree.create_item()
 
-	# ── CID group header ───────────────────────────────────────────────────────
+	# --- CID group header ------------------------------------------------------
 	if cid not in _cid_groups:
 		var group := _tree.create_item(_tree.get_root())
-		var cid_display := cid.substr(0, 24) + ("…" if cid.length() > 24 else "")
+		var cid_display := cid.substr(0, 24) + ("..." if cid.length() > 24 else "")
 		group.set_text(0, "Validation Cycle  %s" % cid_display)
 		group.set_custom_color(0, Color(0.55, 0.75, 1.0))
 		group.set_selectable(0, false)
@@ -174,30 +174,30 @@ func push_entry(entry: Dictionary) -> void:
 
 	var parent_group: TreeItem = _cid_groups[cid]
 
-	# ── Top-level row ──────────────────────────────────────────────────────────
+	# --- Top-level row ---------------------------------------------------------
 	var top := _tree.create_item(parent_group)
 	_top_rows[key] = top
-	top.set_text(0, "⚠ " + entry.get("label", "UNKNOWN"))
+	top.set_text(0, "! " + entry.get("label", "UNKNOWN"))
 	top.set_text(1, str(entry.get("frame", 0)))
 	var cid_short: String = entry.get("cid", "?")
 	if cid_short.length() > 20:
-		cid_short = cid_short.substr(0, 20) + "…"
+		cid_short = cid_short.substr(0, 20) + "..."
 	top.set_text(2, cid_short)
 	top.set_custom_color(0, Color(1.0, 0.4, 0.4))
 	top.set_custom_color(2, Color(0.4, 0.9, 1.0))
 	top.set_metadata(0, entry)
 
-	# ── CID Timeline ──────────────────────────────────────────────────────────
+	# --- CID Timeline ---------------------------------------------------------
 	var timeline: Array = entry.get("cid_timeline", [])
 	if not timeline.is_empty():
 		var tl_row := _tree.create_item(top)
-		tl_row.set_text(0, "Timeline: " + " ← ".join(timeline))
+		tl_row.set_text(0, "Timeline: " + " <- ".join(timeline))
 		tl_row.set_custom_color(0, Color(0.5, 0.8, 0.9))
 		tl_row.set_selectable(0, false)
 		tl_row.set_selectable(1, false)
 		tl_row.set_selectable(2, false)
 
-	# ── Network State ─────────────────────────────────────────────────────────
+	# --- Network State --------------------------------------------------------
 	var net: Dictionary = entry.get("network_state", {})
 	if not net.is_empty():
 		var ns_row := _tree.create_item(top)
@@ -207,12 +207,12 @@ func push_entry(entry: Dictionary) -> void:
 		ns_row.set_selectable(1, false)
 		ns_row.set_selectable(2, false)
 
-	# ── Error Text ────────────────────────────────────────────────────────────
+	# --- Error Text -----------------------------------------------------------
 	var error_text: String = entry.get("error_text", "")
 	if not error_text.is_empty():
 		_append_error_lines(key, error_text)
 
-	# ── Preflight Snapshot ────────────────────────────────────────────────────
+	# --- Preflight Snapshot ---------------------------------------------------
 	var preflight: Array = entry.get("preflight", [])
 	if not preflight.is_empty():
 		var pf_parent := _tree.create_item(top)
@@ -234,7 +234,7 @@ func push_entry(entry: Dictionary) -> void:
 			else:
 				pf_row.set_custom_color(0, Color(1.0, 0.5, 0.5))
 
-	# ── Telemetry Slice ───────────────────────────────────────────────────────
+	# --- Telemetry Slice ------------------------------------------------------
 	var telemetry: Array = entry.get("telemetry", [])
 	if not telemetry.is_empty():
 		var telem_parent := _tree.create_item(top)
@@ -252,7 +252,7 @@ func push_entry(entry: Dictionary) -> void:
 			tl_row.set_selectable(1, false)
 			tl_row.set_selectable(2, false)
 
-	# ── Node Snapshot ─────────────────────────────────────────────────────────
+	# --- Node Snapshot --------------------------------------------------------
 	var snap: Dictionary = entry.get("node_snapshot", {})
 	if not snap.is_empty():
 		var snap_parent := _tree.create_item(top)
@@ -281,6 +281,7 @@ func push_entry(entry: Dictionary) -> void:
 	parent_group.set_collapsed(false)
 	_copy_btn.disabled = false
 	call_deferred("_scroll_to_bottom")
+
 
 
 func _append_error_lines(key: String, error_text: String) -> void:

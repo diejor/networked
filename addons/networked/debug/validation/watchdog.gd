@@ -20,7 +20,7 @@ func _ready() -> void:
 	):
 		_dbg.error(
 			"ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF " + \
-			"— enable it in Project Settings → Debug → File Logging.",
+			"- enable it in Project Settings -> Debug -> File Logging.",
 			func(m): push_error(m)
 		)
 		return

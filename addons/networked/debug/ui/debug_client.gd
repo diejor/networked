@@ -1,3 +1,7 @@
+## A world-space nameplate for visualizing player network identity and authority.
+##
+## Automatically tracks a [SpawnerComponent] or [Node] and displays its 
+## [member multiplayer.get_unique_id] and username in world-space using unprojection.
 class_name DebugClient
 extends Control
 

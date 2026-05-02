@@ -2,7 +2,7 @@
 ##
 ## A [CheckpointToken] captures a point in time within a [NetSpan] so that a
 ## subsequent, causally-related span can declare an explicit [code]follows_from[/code]
-## relationship — without touching production node metadata.
+## relationship - without touching production node metadata.
 ## [br][br]
 ## [b]Usage:[/b]
 ## [codeblock]

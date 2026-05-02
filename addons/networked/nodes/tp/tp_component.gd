@@ -164,9 +164,9 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	owner.set_physics_process(false)
 	owner.set_process_input(false)
 
-	_dbg.trace("Sending request_teleport RPC to server.")
+	_dbg.trace("Sending _request_teleport RPC to server.")
 	_tp_span.step("rpc_sent")
-	request_teleport.rpc_id(
+	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		owner.name,
 		from_scene,
@@ -175,8 +175,9 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		_tp_span.checkpoint()
 	)
 
+# Internal RPC called by the client to request a teleport from the server.
 @rpc("any_peer", "call_remote", "reliable")
-func request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
+func _request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
 	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
@@ -258,7 +259,7 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 		event.connect(to.bind(player))
 		if event == player.tree_exiting:
 			player.request_ready()
-			tp_component.teleported(to_scene.level, tp_path)
+			tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene.synchronizer._on_spawned
 	var to_spawn := to_scene.synchronizer._on_spawned
@@ -272,12 +273,12 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 	player.tree_entered.disconnect(flip)
 
 
-## Server-side callback invoked after the entity safely enters the destination scene.
-## Sets position on the server and forwards the snap coordinates to the client.
-func teleported(scene: Node, _tp_path: String) -> void:
-	_dbg.trace("`teleported` callback on server.")
+# Server-side callback invoked after the entity safely enters the destination scene.
+# Sets position on the server and forwards the snap coordinates to the client.
+func _teleported(scene: Node, _tp_path: String) -> void:
+	_dbg.trace("`_teleported` callback on server.")
 	var teleport_success := func() -> void:
-		assert(is_inside_tree(), "TPComponent: `teleported` was called when `is_inside_tree = false`.")
+		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
 		var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
 		if scene:
 			var tp_node: Node = scene.get_node_or_null(_tp_path)

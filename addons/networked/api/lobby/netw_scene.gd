@@ -45,8 +45,8 @@ signal unpaused()
 # ---------------------------------------------------------------------------
 
 ## Emitted on all peers when the server calls [method suspend].
-## Game code decides what to do (show a banner, disable input, …).
-## Does not affect [code]get_tree().paused[/code] — use [method pause] for that.
+## Game code decides what to do (show a banner, disable input, ...).
+## Does not affect [code]get_tree().paused[/code] - use [method pause] for that.
 signal suspended(reason: String)
 ## Emitted on all peers when the server calls [method resume].
 signal resumed()
@@ -178,7 +178,7 @@ static func for_node(node: Node) -> NetwScene:
 
 ## Pauses the game on every peer via [code]get_tree().paused = true[/code].
 ##
-## [b]Server-only.[/b] The pause is broadcast immediately — all peers execute
+## [b]Server-only.[/b] The pause is broadcast immediately - all peers execute
 ## it in the same network pass. [signal paused] fires on every peer so game
 ## code can show a pause UI or disable input. Nodes with
 ## [constant Node.PROCESS_MODE_ALWAYS] (e.g. pause menus) continue to run.
@@ -213,9 +213,9 @@ func unpause() -> void:
 
 ## Broadcasts a soft-suspend notification to all peers.
 ##
-## [b]Server-only.[/b] Does [b]not[/b] touch [code]get_tree().paused[/code] —
+## [b]Server-only.[/b] Does [b]not[/b] touch [code]get_tree().paused[/code] -
 ## each peer receives [signal suspended] and game code decides the response
-## (show a banner, lock input, wait for a cutscene, …).
+## (show a banner, lock input, wait for a cutscene, ...).
 ## Call [method pause] afterwards if you also want to stop processing.
 func suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene

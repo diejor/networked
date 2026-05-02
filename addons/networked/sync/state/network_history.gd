@@ -9,7 +9,7 @@ extends RefCounted
 ## How many ticks of history to retain before trimming.
 var history_limit: int
 
-# node → {StringName → HistoryBuffer}
+# node -> {StringName -> HistoryBuffer}
 var _state_buffers: Dictionary = {}
 var _input_buffers: Dictionary = {}
 

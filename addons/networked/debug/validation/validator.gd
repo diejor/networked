@@ -37,7 +37,7 @@ var phase: int = STRUCTURAL
 ## [param ctx] is a raw [Dictionary] whose keys depend on [param trigger]:
 ## [br]
 ## [codeblock]
-## "player_spawn" → { player: Node, mt: MultiplayerTree }
+## "player_spawn" -> { player: Node, mt: MultiplayerTree }
 ## [/codeblock]
 ## [br]
 ## Return an empty array to indicate the check passed.

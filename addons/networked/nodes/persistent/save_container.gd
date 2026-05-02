@@ -1,9 +1,9 @@
 ## Abstract dual-interface data model for the persistence layer.
 ##
 ## [b]Two interfaces, one class:[/b]
-## [br]- [b]Database interface[/b] — [method to_dict] / [method from_dict] for schema mapping
+## [br]- [b]Database interface[/b] - [method to_dict] / [method from_dict] for schema mapping
 ##   and Inspector visibility.
-## [br]- [b]Network / Storage interface[/b] — [method serialize] / [method deserialize] for
+## [br]- [b]Network / Storage interface[/b] - [method serialize] / [method deserialize] for
 ##   binary transport. Defaults to dictionary round-trip; override for custom binary packing.
 ##
 ## Assign a concrete subclass (e.g. [DictionaryEntity]) to [member SaveComponent.bound_entity]

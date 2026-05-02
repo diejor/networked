@@ -23,7 +23,7 @@ signal player_ready_changed(peer_id: int, is_ready: bool)
 signal all_ready()
 
 var _scene_ref: WeakRef
-## Peer ID → ready state. Populated as players enter/leave the scene.
+## Peer ID -> ready state. Populated as players enter/leave the scene.
 var _readiness: Dictionary[int, bool] = {}
 
 

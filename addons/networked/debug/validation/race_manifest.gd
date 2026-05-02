@@ -6,7 +6,7 @@ extends NetManifest
 ## [method @GlobalScope.push_error]).
 var errors: Array[String]
 
-## Raw race detail dicts from [NetRaceDetector] — consumed by
+## Raw race detail dicts from [NetRaceDetector] - consumed by
 ## [code]ManifestFormatter[/code] for the Preflight Snapshot section of the
 ## editor panel.
 var preflight_snapshot: Array

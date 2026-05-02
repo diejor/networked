@@ -3,8 +3,8 @@
 ## Recognized class_name: [DictionaryEntity] (file [code]dictionary_save.gd[/code]).
 ##
 ## Supports two extensions:
-## - [code].tdict[/code] — JSON text, loaded with [method JSON.parse].
-## - [code].dict[/code] — binary [code]store_var()[/code] dictionary.
+## - [code].tdict[/code] - JSON text, loaded with [method JSON.parse].
+## - [code].dict[/code] - binary [code]store_var()[/code] dictionary.
 @tool
 class_name DictionarySaveFormatLoader
 extends ResourceFormatLoader

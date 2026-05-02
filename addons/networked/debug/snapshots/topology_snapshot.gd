@@ -2,7 +2,7 @@
 ##
 ## Sent by [NetworkedDebugReporter] on every player spawn.
 ## [br][br]
-## The topology panel treats the latest entry as ground truth — it always shows
+## The topology panel treats the latest entry as ground truth - it always shows
 ## the most recent snapshot, not a time-series.
 class_name NetTopologySnapshot
 extends RefCounted

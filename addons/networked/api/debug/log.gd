@@ -42,8 +42,8 @@ const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 ## Initializes the logging system and loads the active profile.
 ##
 ## Call this explicitly from [code]plugin.gd[/code] (editor) or a runtime entry
-## point. [param addon_root] — path such as [code]"res://addons/networked"[/code]
-## — makes module paths relative to the addon root so saved overrides survive
+## point. [param addon_root] - path such as [code]"res://addons/networked"[/code]
+## - makes module paths relative to the addon root so saved overrides survive
 ## directory renames.
 static func initialize(addon_root: String = "") -> void:
 	if not addon_root.is_empty():
@@ -52,7 +52,7 @@ static func initialize(addon_root: String = "") -> void:
 	if _runtime_initialized:
 		_recompute_min_level()
 		return
-
+	
 	_ensure_initialized()
 
 
@@ -72,7 +72,7 @@ static func _ensure_initialized() -> void:
 		# Robust fallback if stack trace is unavailable (e.g. release builds)
 		if _addon_root.is_empty():
 			_addon_root = "addons/networked"
-
+	
 	_runtime_initialized = true
 	
 	var test_override := _detect_test_log_override()
@@ -93,21 +93,21 @@ static func _load_active_profile() -> void:
 	var raw: String = ProjectSettings.get_setting(SETTING_ACTIVE_PROFILE)
 	if raw.is_empty():
 		return
-
+	
 	var path := _fix_profile_path(raw)
 	if path != raw:
 		ProjectSettings.set_setting(SETTING_ACTIVE_PROFILE, path)
 		ProjectSettings.save()
-
+	
 	if not ResourceLoader.exists(path):
 		push_warning(
 			"NetwLog: Active profile not found: '%s'\n" % path + \
-			"  → The resource may have been deleted or moved.\n" + \
-			"  → Clear or reassign it at Project Settings > %s" \
+			"  -> The resource may have been deleted or moved.\n" + \
+			"  -> Clear or reassign it at Project Settings > %s" \
 			% SETTING_ACTIVE_PROFILE
 		)
 		return
-
+	
 	var res = ResourceLoader.load(path)
 	if res is NetwLogSettings:
 		current_level = res.global_level
@@ -115,7 +115,7 @@ static func _load_active_profile() -> void:
 	else:
 		push_warning(
 			"NetwLog: '%s' is not a NetwLogSettings resource.\n" % path + \
-			"  → Reassign it at Project Settings > %s" \
+			"  -> Reassign it at Project Settings > %s" \
 			% SETTING_ACTIVE_PROFILE
 		)
 
@@ -159,14 +159,14 @@ static func _stack_min_level() -> int:
 				m = top.global_level
 			found_global = true
 			break
-			
+	
 	if not found_global:
 		for l: int in module_levels.values():
 			if l != Level.INHERIT and l < m:
 				m = l
 		if current_level < m:
 			m = current_level
-			
+	
 	return m
 
 
@@ -214,7 +214,7 @@ static func get_effective_level(module_path: String) -> int:
 	_ensure_initialized()
 	if _settings_stack.is_empty() and module_levels.is_empty():
 		return current_level
-		
+	
 	var parts := module_path.split(".")
 	
 	for i in range(_settings_stack.size() - 1, -1, -1):
@@ -228,10 +228,10 @@ static func get_effective_level(module_path: String) -> int:
 				if lvl != Level.INHERIT:
 					return lvl
 			temp_parts.remove_at(temp_parts.size() - 1)
-			
+		
 		if top.global_level != Level.INHERIT:
 			return top.global_level
-
+	
 	if not module_path.is_empty():
 		var temp_parts_base := parts.duplicate()
 		while temp_parts_base.size() > 0:
@@ -241,7 +241,7 @@ static func get_effective_level(module_path: String) -> int:
 				if lvl != Level.INHERIT:
 					return lvl
 			temp_parts_base.remove_at(temp_parts_base.size() - 1)
-
+	
 	return current_level
 
 
@@ -258,7 +258,7 @@ static func parse_logl(logl_str: String) -> NetwLogSettings:
 	
 	if logl_str.strip_edges().is_empty():
 		return res
-		
+	
 	var directives := logl_str.split(",", false)
 	for d in directives:
 		var d_str := d.strip_edges()
@@ -274,7 +274,7 @@ static func parse_logl(logl_str: String) -> NetwLogSettings:
 			var mod_path := parts[0].strip_edges()
 			var lvl_str := parts[1].strip_edges().to_upper()
 			res.module_overrides[mod_path] = _string_to_level(lvl_str)
-			
+	
 	return res
 
 
@@ -283,12 +283,12 @@ static func to_logl(settings: NetwLogSettings) -> String:
 	var parts: Array = []
 	if settings.global_level != Level.INHERIT:
 		parts.append(_level_to_string(settings.global_level).to_lower())
-		
+	
 	for mod_path: String in settings.module_overrides.keys():
 		var lvl: int = settings.module_overrides[mod_path]
 		if lvl != Level.INHERIT:
 			parts.append("%s=%s" % [mod_path, _level_to_string(lvl).to_lower()])
-			
+	
 	return ",".join(parts)
 
 
@@ -342,14 +342,14 @@ static func dump_settings() -> void:
 		for mod in module_levels:
 			var lvl_str := _level_to_string(module_levels[mod])
 			print_rich("  [color=yellow]%s[/color] = %s" % [mod, lvl_str])
-			
+	
 	if not _settings_stack.is_empty():
 		var stack_size := _settings_stack.size()
 		print_rich("[color=gray]Settings Stack (%d layers):[/color]" % stack_size)
 		for i in range(_settings_stack.size() - 1, -1, -1):
 			var settings: NetwLogSettings = _settings_stack[i]
 			print_rich("  [Layer %d] %s" % [i, to_logl(settings)])
-			
+	
 	var min_lvl_str := _level_to_string(_effective_min_level)
 	print_rich("[color=gray]Effective Min Level:[/color] %s" % min_lvl_str)
 	print_rich("[color=cyan][b]---------------------------------[/b][/color]")
@@ -460,7 +460,7 @@ static func error(
 
 static func _get_context() -> Dictionary:
 	var stack := get_stack()
-
+	
 	for i in range(1, stack.size()):
 		var frame: Dictionary = stack[i]
 		var source: String = frame.source
@@ -518,7 +518,7 @@ static func _print(
 		header = "%s {%s} %s" % [prefix, display, site]
 	else:
 		header = "%s %s" % [prefix, site]
-
+	
 	match level:
 		Level.ERROR:
 			if not link_call.is_null():

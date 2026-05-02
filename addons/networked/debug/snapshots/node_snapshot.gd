@@ -109,7 +109,7 @@ static func _sanitize(d: Dictionary) -> Dictionary:
 		if typeof(v) in [TYPE_OBJECT, TYPE_RID, TYPE_CALLABLE, TYPE_SIGNAL]:
 			push_warning(
 				"NetNodeSnapshot: _get_net_debug_state() key '%s' has " + \
-				"non-serializable type %s — skipped" % \
+				"non-serializable type %s - skipped" % \
 				[str(k), type_string(typeof(v))]
 			)
 			continue

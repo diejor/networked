@@ -1,8 +1,8 @@
 ## [ResourceFormatSaver] that writes [DictionaryEntity] resources to custom file formats.
 ##
 ## Supports two extensions:
-## - [code].tdict[/code] — human-readable JSON text (uses [method JSON.from_native] to preserve Godot types).
-## - [code].dict[/code] — compact binary [code]store_var()[/code] format.
+## - [code].tdict[/code] - human-readable JSON text (uses [method JSON.from_native] to preserve Godot types).
+## - [code].dict[/code] - compact binary [code]store_var()[/code] format.
 @tool
 class_name DictionarySaveFormatSaver
 extends ResourceFormatSaver

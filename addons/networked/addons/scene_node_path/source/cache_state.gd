@@ -1,3 +1,4 @@
+## Internal state used to cache and validate the resolution of a [SceneNodePath].
 class_name CacheState
 extends RefCounted
 

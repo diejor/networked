@@ -37,7 +37,7 @@ extends RefCounted
 ## When [param db] and [param table_name] are provided, loads the player's
 ## entity record directly from the database via
 ## [method NetwDatabase.TableRepository.fetch]. [param extras] is merged into
-## [member SpawnPayload.extras] and serialised with
+## [member SpawnPayload.extras] and serialized with
 ## [method SpawnPayload.to_variant].
 ## [br][br]
 ## [b]Note:[/b] Values in [param extras] must be Godot-serializable if
@@ -64,7 +64,7 @@ static func gather(
 ## the [SaveComponent] via [method SaveComponent.hydrate], and
 ## applies any extra state carried in [param payload].
 ## [br][br]
-## Works on both server and client — call this inside your
+## Works on both server and client - call this inside your
 ## [code]spawn_function[/code] after instantiating the node.
 ## [br][br]
 ## [param caller] is kept for API compatibility but no longer used.
