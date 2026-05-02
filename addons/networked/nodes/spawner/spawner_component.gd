@@ -218,7 +218,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if not ctx:
 		return
 	
-	var slot := ctx.services.get_spawn_slot(client_data.spawner_component_path)
+	var slot := ctx.tree.get_spawn_slot(client_data.spawner_component_path)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active scene for '%s'.",
@@ -227,15 +227,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		)
 		return
 	
-	var span := _dbg.span("player_join", {
-		"username": client_data.username,
-		"peer_id": client_data.peer_id,
-		"authority_mode": authority_mode,
-	})
-	_dbg.info(
-		"Player joined: %s (ID: %d)",
-		[client_data.username, client_data.peer_id]
-	)
+	var span := Netw.spawn.begin_join(client_data, authority_mode, owner)
 	
 	var player_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
@@ -244,21 +236,22 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 		client_data,
 		player_save.database if player_save else null,
 		player_save.table_name if player_save else &"",
+		{},
+		span,
 	)
 	var player := Netw.spawn.instantiate(
-		payload, load(owner.scene_file_path), owner
+		payload, load(owner.scene_file_path), owner, span
 	)
-	span.step("instantiated")
 	
 	var scene := _resolve_target_scene(player, slot)
 	if scene:
-		Netw.spawn.place(player, scene)
+		Netw.spawn.place(player, scene, span)
 	elif slot.is_valid():
-		slot.place_player(player)
+		slot.place_player(player, span)
 	else:
 		_dbg.error("Cannot place player: no scene available.", [])
-
-	span.end()
+		if span:
+			span.fail("no_scene_available")
 
 
 func _resolve_target_scene(

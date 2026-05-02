@@ -231,11 +231,15 @@ class SpawnSlot extends RefCounted:
 	
 	## Adds [param player] to the scene via [method Scene.add_player],
 	## or directly to [member _parent_node] if no scene is set.
-	func place_player(player: Node) -> void:
+	##
+	## Closes [param span] with [method NetSpan.end] when provided.
+	func place_player(player: Node, span: NetSpan = null) -> void:
 		if is_instance_valid(_scene):
 			_scene.add_player(player)
 		elif is_instance_valid(_parent_node):
 			_parent_node.add_child(player)
+		if span:
+			span.end()
 
 
 ## Resolves the correct spawn location and causal token for a new player.
