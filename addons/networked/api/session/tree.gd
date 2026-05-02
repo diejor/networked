@@ -4,10 +4,7 @@
 ## holding a direct reference to [MultiplayerTree]. This keeps component code
 ## off the concrete [MultiplayerTree] class (backend, multiplayer_api, etc.)
 ## while preserving the existing session API unchanged.
-## [br][br]
-## Service access has been moved to [NetwServices]; use
-## [member NetwContext.services] for [method get_scene_manager],
-## [method get_clock], and related helpers.
+##
 ## [br][br]
 ## Holds a [WeakRef] so components that cache an instance survive tree
 ## teardown without keeping the [MultiplayerTree] alive.

@@ -75,7 +75,7 @@ func set_ready(ready: bool = true) -> void:
 		scene._rpc_request_set_ready.rpc_id(1, ready)
 
 
-## Called internally by [Scene] when the server broadcasts a readiness update.
+# Called internally by [Scene] when the server broadcasts a readiness update.
 func _receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	_readiness[peer_id] = is_ready
 	player_ready_changed.emit(peer_id, is_ready)
@@ -83,13 +83,13 @@ func _receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 		all_ready.emit()
 
 
-## Called internally when a player enters the scene (starts as not-ready).
+# Called internally when a player enters the scene (starts as not-ready).
 func _add_peer(peer_id: int) -> void:
 	if peer_id not in _readiness:
 		_readiness[peer_id] = false
 
 
-## Called internally when a player leaves the scene (removes their entry).
+# Called internally when a player leaves the scene (removes their entry).
 func _remove_peer(peer_id: int) -> void:
 	if _readiness.erase(peer_id) and are_all_ready():
 		all_ready.emit()

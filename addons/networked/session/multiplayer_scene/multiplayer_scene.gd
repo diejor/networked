@@ -22,7 +22,9 @@ var level: Node:
 		level.owner = self
 
 var _context: NetwContext
-## Emitted when a player is fully ready in this scene.
+## Emitted when a player toggles their ready state to [code]true[/code] via
+## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
+## automatic join event. See [signal player_entered] for spawn detection.
 signal player_ready(client_data: MultiplayerClientData)
 
 ## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].

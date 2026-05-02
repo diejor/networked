@@ -14,7 +14,7 @@ shared in the hope that it helps someone else get started with multiplayer.
 ## What It Does
 
 `networked` provides an opinionated layer on top of Godot's 
-(High-level multiplayer)[https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html]
+[High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html)
 
 - **Scene-aware spawning:** `MultiplayerSceneManager` + `SpawnerComponent` 
 handle player spawn and despawn.

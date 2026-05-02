@@ -3,7 +3,7 @@
 ##
 ## Access via [method NetwComponent.get_context] or
 ## [method NetwScene.for_node]. Holds a [WeakRef] to the underlying
-## [Scene] - check [method is_valid] before use.
+## [MultiplayerScene] - check [method is_valid] before use.
 ## [codeblock]
 ## var ctx := get_context()
 ##
@@ -20,11 +20,13 @@ extends RefCounted
 # Player lifecycle signals
 # ---------------------------------------------------------------------------
 
-## Emitted when a player enters this scene.
+## Emitted when a player's node is spawned into this scene.
 signal player_entered(player: Node)
-## Emitted when a player leaves this scene.
+## Emitted when a player's node is despawned from this scene.
 signal player_left(player: Node)
-## Emitted when a player is fully ready in this scene.
+## Emitted when a player toggles their ready state to [code]true[/code] via
+## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
+## automatic join event. See [signal player_entered] for spawn detection.
 signal player_ready(client_data: MultiplayerClientData)
 
 # ---------------------------------------------------------------------------
@@ -59,7 +61,7 @@ signal countdown_cancelled()
 # ---------------------------------------------------------------------------
 
 var _scene_ref: WeakRef
-## Held strongly while the countdown is running so the timer stays alive.
+# Held strongly while the countdown is running so the timer stays alive.
 var _active_countdown: NetwSceneCountdown
 
 
