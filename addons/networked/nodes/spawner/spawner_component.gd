@@ -255,7 +255,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 
 
 func _resolve_target_scene(
-	player: Node, slot: MultiplayerTree.SpawnSlot
+	player: Node, slot: SpawnSlot
 ) -> MultiplayerScene:
 	var ctx := get_context()
 	if not ctx:

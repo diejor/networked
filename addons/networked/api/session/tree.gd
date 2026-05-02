@@ -88,6 +88,14 @@ func get_authority_client() -> Node:
 	return mt.authority_client if mt else null
 
 
+## Resolves the correct spawn location and causal token for a new player.
+func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	if not mt:
+		return SpawnSlot.new()
+	return mt.get_spawn_slot(spawner_path)
+
+
 ## Pauses the game on every peer via [code]get_tree().paused = true[/code].
 ##
 ## [b]Server-only.[/b] The pause is sent to each connected peer individually.

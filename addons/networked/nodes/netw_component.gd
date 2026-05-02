@@ -56,6 +56,17 @@ func get_network_clock() -> NetworkClock:
 	return ctx.services.get_clock() if ctx else null
 
 
+## Returns the session service registered for [param type], or
+## [code]null[/code].
+##
+## The generic accessor for user-defined and built-in services.
+## Prefer the typed convenience methods ([method get_scene_manager],
+## [method get_network_clock]) for built-in services.
+func get_service(type: Script) -> Node:
+	var ctx := get_context()
+	return ctx.services.get_service(type) if ctx else null
+
+
 ## Returns the [NetwPeerContext] for the local peer.
 func get_peer_context() -> NetwPeerContext:
 	var ctx := get_context()
