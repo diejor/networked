@@ -175,6 +175,7 @@ func _generate_peer_id(godot_id: int) -> String:
 func _connect_trackers() -> Error:
 	_sockets.clear()
 	var connected_count := 0
+	var now := Time.get_ticks_usec()
 	
 	for url in trackers:
 		Netw.dbg.trace("Connecting to Tracker: %s", [url])
@@ -182,6 +183,7 @@ func _connect_trackers() -> Error:
 		if ws.connect_to_url(url) == OK:
 			_sockets.append(ws)
 			ws.set_meta("url", url)
+			ws.set_meta("connect_time", now)
 			connected_count += 1
 		else:
 			Netw.dbg.warn(
@@ -204,9 +206,45 @@ func _poll_trackers(dt: float) -> void:
 		should_reannounce = true
 		_announce_timer = 0.0
 	
+	const TRACKER_CONNECT_TIMEOUT_USEC := 10_000_000
+	
+	var had_sockets := not _sockets.is_empty()
+	var to_remove: Array[WebSocketPeer] = []
+	var now := Time.get_ticks_usec()
 	for ws in _sockets:
+		if ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+			var url: String = ws.get_meta("url", "Unknown")
+			Netw.dbg.warn(
+				"Tracker connection failed: %s", [url],
+				func(m): push_warning(m)
+			)
+			to_remove.append(ws)
+			continue
+		
+		if ws.get_ready_state() == WebSocketPeer.STATE_CONNECTING:
+			var connect_time: int = ws.get_meta("connect_time", 0)
+			if connect_time > 0 and \
+					now - connect_time > TRACKER_CONNECT_TIMEOUT_USEC:
+				var url: String = ws.get_meta("url", "Unknown")
+				Netw.dbg.warn(
+					"Tracker connection timed out: %s", [url],
+					func(m): push_warning(m)
+				)
+				ws.close()
+				to_remove.append(ws)
+				continue
+		
 		ws.poll()
 		var state := ws.get_ready_state()
+		
+		if state == WebSocketPeer.STATE_CLOSED:
+			var url: String = ws.get_meta("url", "Unknown")
+			Netw.dbg.warn(
+				"Tracker connection closed: %s", [url],
+				func(m): push_warning(m)
+			)
+			to_remove.append(ws)
+			continue
 		
 		if state == WebSocketPeer.STATE_OPEN:
 			any_open = true
@@ -217,7 +255,9 @@ func _poll_trackers(dt: float) -> void:
 						[ws.get_meta("url", "Unknown")]
 					)
 				elif should_reannounce:
-					Netw.dbg.trace("Re-announcing Client Offer to find Host...")
+					Netw.dbg.trace(
+						"Re-announcing Client Offer to find Host..."
+					)
 				
 				_announce_to_tracker(ws)
 				
@@ -228,8 +268,14 @@ func _poll_trackers(dt: float) -> void:
 			while ws.get_available_packet_count() > 0:
 				_parse_packet(ws.get_packet())
 	
-	if not any_open and not _sockets.is_empty() and _sockets.all(func(w): return w.get_ready_state() == WebSocketPeer.STATE_CLOSED):
-		Netw.dbg.info("All trackers closed. Signaling Disconnected.")
+	for ws in to_remove:
+		_sockets.erase(ws)
+	
+	if had_sockets and not any_open and _sockets.is_empty():
+		Netw.dbg.info(
+			"All trackers closed. Signaling Disconnected.",
+			func(m): push_warning(m)
+		)
 		signaling_disconnected.emit()
 
 func _announce_to_tracker(ws: WebSocketPeer) -> void:

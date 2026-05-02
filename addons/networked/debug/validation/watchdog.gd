@@ -85,7 +85,8 @@ func _tail_log() -> void:
 				var line := file.get_line()
 				if ("ERROR:" in line or "USER ERROR:" in line) \
 						and "remote_debugger_peer.cpp" not in line \
-						and "marshalls.cpp" not in line:
+						and "marshalls.cpp" not in line \
+						and "Reporter:" not in line:
 					var timestamp := Time.get_ticks_usec()
 					var lines: Array[String] = [line.strip_edges()]
 					for _i in range(10):
@@ -108,4 +109,3 @@ func _should_quit() -> bool:
 	var q := _quit
 	_mutex.unlock()
 	return q
-
