@@ -218,7 +218,7 @@ func _on_player_joined(client_data: MultiplayerClientData) -> void:
 	if not ctx:
 		return
 	
-	var slot := ctx.tree.get_spawn_slot(client_data.spawner_component_path)
+	var slot := ctx.services.get_spawn_slot(client_data.spawner_component_path)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active scene for '%s'.",
@@ -268,7 +268,7 @@ func _resolve_target_scene(
 	if not ctx:
 		return null
 	
-	var scene_mgr := ctx.tree.get_scene_manager()
+	var scene_mgr := ctx.services.get_scene_manager()
 	var level_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
 	)

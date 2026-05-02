@@ -12,10 +12,6 @@
 ## var cd := ctx.scene.start_countdown(10)
 ## await cd.finished
 ## start_match()
-##
-## # React to a networked pause (get_tree().paused on all peers)
-## ctx.scene.paused.connect(func(r): $PauseUI.show())
-## ctx.scene.unpaused.connect(func(): $PauseUI.hide())
 ## [/codeblock]
 class_name NetwScene
 extends RefCounted
@@ -28,17 +24,8 @@ extends RefCounted
 signal player_entered(player: Node)
 ## Emitted when a player leaves this scene.
 signal player_left(player: Node)
-
-# ---------------------------------------------------------------------------
-# Pause / unpause signals  (hard, get_tree().paused, all peers)
-# ---------------------------------------------------------------------------
-
-## Emitted on every peer (including the server) after [method pause] sets
-## [code]get_tree().paused = true[/code].
-signal paused(reason: String)
-## Emitted on every peer (including the server) after [method unpause] clears
-## [code]get_tree().paused[/code].
-signal unpaused()
+## Emitted when a player is fully ready in this scene.
+signal player_ready(client_data: MultiplayerClientData)
 
 # ---------------------------------------------------------------------------
 # Suspend / resume signals  (soft, signal-only, game code decides)
@@ -52,15 +39,6 @@ signal suspended(reason: String)
 signal resumed()
 ## Emitted on the server when a client calls [method request_suspend].
 signal suspend_requested(peer_id: int, reason: String)
-
-# ---------------------------------------------------------------------------
-# Kick signals
-# ---------------------------------------------------------------------------
-
-## Emitted on the kicked peer just before the server closes their connection.
-signal kicked(reason: String)
-## Emitted on the server when a client calls [method request_kick].
-signal kick_requested(requester_id: int, target_id: int, reason: String)
 
 # ---------------------------------------------------------------------------
 # Countdown signals
@@ -89,6 +67,7 @@ func _init(scene: MultiplayerScene) -> void:
 	_scene_ref = weakref(scene)
 	scene.synchronizer.spawned.connect(_on_spawned)
 	scene.synchronizer.despawned.connect(_on_despawned)
+	scene.player_ready.connect(_on_player_ready)
 
 
 # ---------------------------------------------------------------------------
@@ -173,57 +152,44 @@ static func for_node(node: Node) -> NetwScene:
 
 
 # ---------------------------------------------------------------------------
-# Pause / unpause  (hard, get_tree().paused, broadcast to all peers)
+# Lifecycle cleanup
 # ---------------------------------------------------------------------------
 
-## Pauses the game on every peer via [code]get_tree().paused = true[/code].
-##
-## [b]Server-only.[/b] The pause is broadcast immediately - all peers execute
-## it in the same network pass. [signal paused] fires on every peer so game
-## code can show a pause UI or disable input. Nodes with
-## [constant Node.PROCESS_MODE_ALWAYS] (e.g. pause menus) continue to run.
-## [br][br]
-## In multi-scene setups this pauses [i]all[/i] scenes on each peer, because
-## it operates on the [SceneTree]. If you need a scene-scoped process disable
-## without touching other scenes, use [method suspend] instead.
-func pause(reason: String = "") -> void:
+## Cleans up all internal state and signal connections.
+## Called automatically when the underlying [MultiplayerScene] exits the tree.
+func close() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.pause() must be called on the server.")
-	scene._rpc_receive_pause.rpc(reason)
-
-
-## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
-##
-## [b]Server-only.[/b]
-func unpause() -> void:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.unpause() must be called on the server.")
-	scene._rpc_receive_unpause.rpc()
+	if is_instance_valid(scene) and is_instance_valid(scene.synchronizer):
+		if scene.synchronizer.spawned.is_connected(_on_spawned):
+			scene.synchronizer.spawned.disconnect(_on_spawned)
+		if scene.synchronizer.despawned.is_connected(_on_despawned):
+			scene.synchronizer.despawned.disconnect(_on_despawned)
+		if scene.player_ready.is_connected(_on_player_ready):
+			scene.player_ready.disconnect(_on_player_ready)
+	if _active_countdown:
+		_active_countdown.cancel()
+		_active_countdown = null
+	_scene_ref = null
 
 
 # ---------------------------------------------------------------------------
 # Soft suspend / resume  (signal-only, game code decides)
 # ---------------------------------------------------------------------------
 
-## Broadcasts a soft-suspend notification to all peers.
+## Broadcasts a soft-suspend notification to scene peers.
 ##
 ## [b]Server-only.[/b] Does [b]not[/b] touch [code]get_tree().paused[/code] -
 ## each peer receives [signal suspended] and game code decides the response
 ## (show a banner, lock input, wait for a cutscene, ...).
-## Call [method pause] afterwards if you also want to stop processing.
 func suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.suspend() must be called on the server.")
-	scene._rpc_receive_suspend.rpc(reason)
+	for node: Node in scene.synchronizer.tracked_nodes:
+		var peer_id := node.get_multiplayer_authority()
+		scene._rpc_receive_suspend.rpc_id(peer_id, reason)
 	suspended.emit(reason)
 
 
@@ -238,52 +204,20 @@ func request_suspend(reason: String = "") -> void:
 	scene._rpc_request_suspend.rpc_id(1, reason)
 
 
-## Broadcasts a resume notification to all peers.
+## Broadcasts a resume notification to scene peers.
 ##
-## [b]Server-only.[/b] Mirrors [method suspend] — does not touch
-## [code]get_tree().paused[/code]. Call [method unpause] to also unfreeze
-## the tree.
+## [b]Server-only.[/b] Mirrors [method suspend] - does not touch
+## [code]get_tree().paused[/code].
 func resume() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.resume() must be called on the server.")
-	scene._rpc_receive_resume.rpc()
+	for node: Node in scene.synchronizer.tracked_nodes:
+		var peer_id := node.get_multiplayer_authority()
+		scene._rpc_receive_resume.rpc_id(peer_id)
 	resumed.emit()
-
-
-# ---------------------------------------------------------------------------
-# Kick
-# ---------------------------------------------------------------------------
-
-## Disconnects [param peer_id] from the session.
-##
-## [b]Server-only.[/b] If [param reason] is non-empty, the peer receives
-## [signal kicked] before the connection is closed. The normal
-## [signal player_left] flow follows naturally via the disconnect.
-func kick(peer_id: int, reason: String = "") -> void:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.kick() must be called on the server.")
-	if not reason.is_empty():
-		scene._rpc_receive_kicked.rpc_id(peer_id, reason)
-	var mt := MultiplayerTree.for_node(scene)
-	if mt and mt.multiplayer_peer:
-		mt.multiplayer_peer.disconnect_peer(peer_id)
-
-
-## Asks the server to kick [param peer_id].
-##
-## [b]Client-only.[/b] The server emits [signal kick_requested]; game code
-## decides whether to honour it.
-func request_kick(peer_id: int, reason: String = "") -> void:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	scene._rpc_request_kick.rpc_id(1, peer_id, reason)
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +249,9 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 	cd.cancelled.connect(_on_countdown_cancelled)
 
 	# Notify clients before the first tick so they can prepare UI
-	scene._rpc_receive_countdown_started.rpc(seconds)
+	for node: Node in scene.synchronizer.tracked_nodes:
+		var peer_id := node.get_multiplayer_authority()
+		scene._rpc_receive_countdown_started.rpc_id(peer_id, seconds)
 	countdown_started.emit(seconds)
 
 	cd._start()
@@ -373,14 +309,18 @@ func _on_countdown_tick(seconds_left: int) -> void:
 	countdown_tick.emit(seconds_left)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		scene._rpc_receive_countdown_tick.rpc(seconds_left)
+		for node: Node in scene.synchronizer.tracked_nodes:
+			var peer_id := node.get_multiplayer_authority()
+			scene._rpc_receive_countdown_tick.rpc_id(peer_id, seconds_left)
 
 
 func _on_countdown_finished() -> void:
 	countdown_finished.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		scene._rpc_receive_countdown_finished.rpc()
+		for node: Node in scene.synchronizer.tracked_nodes:
+			var peer_id := node.get_multiplayer_authority()
+			scene._rpc_receive_countdown_finished.rpc_id(peer_id)
 	_active_countdown = null
 
 
@@ -388,5 +328,11 @@ func _on_countdown_cancelled() -> void:
 	countdown_cancelled.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		scene._rpc_receive_countdown_cancelled.rpc()
+		for node: Node in scene.synchronizer.tracked_nodes:
+			var peer_id := node.get_multiplayer_authority()
+			scene._rpc_receive_countdown_cancelled.rpc_id(peer_id)
 	_active_countdown = null
+
+
+func _on_player_ready(client_data: MultiplayerClientData) -> void:
+	player_ready.emit(client_data)

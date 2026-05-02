@@ -107,6 +107,19 @@ signal player_scene_ready(
 	client_data: MultiplayerClientData, scene: MultiplayerScene
 )
 
+## Emitted on every peer when the game is paused via [method NetwTree.pause].
+signal tree_paused(reason: String)
+## Emitted on every peer when the game is unpaused via [method NetwTree.unpause].
+signal tree_unpaused()
+## Emitted on the server when a client requests to kick a peer.
+signal kick_requested(requester_id: int, target_id: int, reason: String)
+## Emitted on the kicked peer when the server kicks them.
+signal kicked(reason: String)
+## Emitted on the server when a client requests to disconnect.
+signal disconnect_requested(peer_id: int, reason: String)
+## Emitted on clients when the server notifies it is shutting down.
+signal server_disconnecting(reason: String)
+
 
 ## Returns the original name of the tree, even if renamed for embedded use.
 func get_tree_name() -> String:
@@ -432,9 +445,21 @@ func is_online() -> bool:
 		and not multiplayer_peer is OfflineMultiplayerPeer 
 		and multiplayer_api != null 
 		and multiplayer_api.has_multiplayer_peer())
-	
-	
-	## Entry point for a client to request entry into the game world.
+
+
+## Disconnects the local peer from the session.
+##
+## Saves all registered [SaveComponent] states for the local peer, then
+## closes the multiplayer peer.
+func disconnect_peer() -> void:
+	var peer_id := multiplayer_api.get_unique_id() if multiplayer_api else 0
+	if peer_id != 0:
+		SaveComponent._save_all_in(get_peer_context(peer_id))
+	if multiplayer_api and multiplayer_api.has_multiplayer_peer():
+		multiplayer_api.multiplayer_peer.close()
+
+
+## Entry point for a client to request entry into the game world.
 ##
 ## Deserializes [param bytes] into a [MultiplayerClientData] and emits
 ## [signal player_join_requested] for the [MultiplayerSceneManager] to handle.
@@ -449,6 +474,65 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	_resolve_username_collision(client_data)
 	
 	player_join_requested.emit(client_data)
+
+
+# ---------------------------------------------------------------------------
+# RPCs — pause / unpause (hard, SceneTree-level, moved from MultiplayerScene)
+# ---------------------------------------------------------------------------
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_receive_pause(reason: String) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender != 0:
+		return
+	get_tree().paused = true
+	tree_paused.emit(reason)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_receive_unpause() -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender != 0:
+		return
+	get_tree().paused = false
+	tree_unpaused.emit()
+
+
+# ---------------------------------------------------------------------------
+# RPCs — kick (session-level, moved from MultiplayerScene)
+# ---------------------------------------------------------------------------
+
+## Sent by the server to a specific peer to inform them they are being kicked.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_receive_kicked(reason: String) -> void:
+	kicked.emit(reason)
+
+
+## Sent by a client to ask the server to kick another peer.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
+	var requester_id := multiplayer.get_remote_sender_id()
+	kick_requested.emit(requester_id, target_peer_id, reason)
+
+
+# ---------------------------------------------------------------------------
+# RPCs — disconnect (session-level)
+# ---------------------------------------------------------------------------
+
+## Sent by a client to ask the server for permission to disconnect.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_disconnect(reason: String) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	disconnect_requested.emit(peer_id, reason)
+
+
+## Sent by the server to notify clients it is shutting down.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_notify_disconnect(reason: String) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender != 0:
+		return
+	server_disconnecting.emit(reason)
 
 
 func _resolve_username_collision(client_data: MultiplayerClientData) -> void:

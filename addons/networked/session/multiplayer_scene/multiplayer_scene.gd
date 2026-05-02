@@ -22,6 +22,9 @@ var level: Node:
 		level.owner = self
 
 var _context: NetwContext
+## Emitted when a player is fully ready in this scene.
+signal player_ready(client_data: MultiplayerClientData)
+
 ## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].
 var _readiness_gates: Array[WeakRef] = []
 
@@ -36,6 +39,11 @@ func get_context() -> NetwContext:
 		var scene_ctx := NetwScene.new(self)
 		_context = NetwContext.new(mt, scene_ctx)
 	return _context
+
+
+func _on_tree_exiting() -> void:
+	if _context and _context.has_scene():
+		_context.scene.close()
 
 
 ## Connects all root-level [MultiplayerSpawner]s in [param level] to the [member synchronizer].
@@ -71,10 +79,14 @@ func _register_readiness_gate(gate: NetwSceneReadiness) -> void:
 	_readiness_gates.append(weakref(gate))
 
 
-## Applies a readiness change from the server and broadcasts to all peers.
+## Applies a readiness change from the server and broadcasts to scene peers.
 ## Called directly when the server/host calls [method NetwSceneReadiness.set_ready].
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
-	_rpc_receive_ready_changed.rpc(peer_id, is_ready)
+	_rpc_receive_ready_changed(peer_id, is_ready)
+	for node: Node in synchronizer.tracked_nodes:
+		var target_peer_id := node.get_multiplayer_authority()
+		if target_peer_id != multiplayer.get_unique_id():
+			rpc_id(target_peer_id, "_rpc_receive_ready_changed", peer_id, is_ready)
 
 
 ## Notifies all registered gates that a player entered the scene.
@@ -103,28 +115,6 @@ func _cleanup_dead_gates() -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — pause / unpause  (hard, SceneTree-level, broadcast to all peers)
-# ---------------------------------------------------------------------------
-
-## Broadcast by the server to pause the game on every peer.
-##
-## Uses [code]call_local[/code] so the server pauses itself in the same pass.
-## Calls [code]get_tree().paused = true[/code] on each peer, which respects
-## [constant Node.PROCESS_MODE_ALWAYS] nodes (e.g. pause menus).
-@rpc("authority", "call_local", "reliable")
-func _rpc_receive_pause(reason: String) -> void:
-	get_tree().paused = true
-	get_context().scene.paused.emit(reason)
-
-
-## Broadcast by the server to unpause the game on every peer.
-@rpc("authority", "call_local", "reliable")
-func _rpc_receive_unpause() -> void:
-	get_tree().paused = false
-	get_context().scene.unpaused.emit()
-
-
-# ---------------------------------------------------------------------------
 # RPCs — suspend / resume  (soft, signal-only, game code decides what to do)
 # ---------------------------------------------------------------------------
 
@@ -147,25 +137,6 @@ func _rpc_receive_resume() -> void:
 func _rpc_request_suspend(reason: String) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
 	get_context().scene.suspend_requested.emit(peer_id, reason)
-
-
-# ---------------------------------------------------------------------------
-# RPCs — kick
-# ---------------------------------------------------------------------------
-
-## Sent by the server to a specific peer to inform them they are being kicked.
-@rpc("authority", "call_remote", "reliable")
-func _rpc_receive_kicked(reason: String) -> void:
-	get_context().scene.kicked.emit(reason)
-
-
-## Sent by a client to ask the server to kick another peer.
-## The server emits [signal NetwScene.kick_requested]; game code decides
-## whether to honour the request by calling [method NetwScene.kick].
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
-	var requester_id := multiplayer.get_remote_sender_id()
-	get_context().scene.kick_requested.emit(requester_id, target_peer_id, reason)
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +178,8 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 	_handle_set_ready(peer_id, is_ready)
 
 
-## Broadcast by the server to synchronise a readiness change on all peers.
-## [code]call_local[/code] ensures the server's own gates are also updated.
-@rpc("authority", "call_local", "reliable")
+## Broadcast by the server to synchronise a readiness change on scene peers.
+@rpc("authority", "call_remote", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
 		var gate := wr.get_ref() as NetwSceneReadiness

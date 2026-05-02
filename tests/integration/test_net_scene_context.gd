@@ -170,24 +170,24 @@ func test_resume_signal_reaches_client_context() -> void:
 
 func test_pause_sets_tree_paused_on_server_synchronously() -> void:
 	var results := { "paused_reason": "" }
-	server_ctx.scene.paused.connect(func(r): results.paused_reason = r)
+	server_ctx.tree.tree_paused.connect(func(r): results.paused_reason = r)
 
-	server_ctx.scene.pause("waiting")
+	server_ctx.tree.pause("waiting")
 
 	# call_local fires the method on the server in the same call frame.
 	assert_that(results.paused_reason).is_equal("waiting")
 	assert_that(get_tree().paused).is_true()
 
-	server_ctx.scene.unpause()  # restore before leaving test
+	server_ctx.tree.unpause()  # restore before leaving test
 
 
 func test_unpause_clears_tree_paused_and_emits_signal() -> void:
-	server_ctx.scene.pause("")
+	server_ctx.tree.pause("")
 	assert_that(get_tree().paused).is_true()
 
 	var results := { "unpaused_fired": false }
-	server_ctx.scene.unpaused.connect(func(): results.unpaused_fired = true)
-	server_ctx.scene.unpause()
+	server_ctx.tree.tree_unpaused.connect(func(): results.unpaused_fired = true)
+	server_ctx.tree.unpause()
 
 	assert_that(get_tree().paused).is_false()
 	assert_that(results.unpaused_fired).is_true()
@@ -204,7 +204,7 @@ func test_kick_disconnects_the_peer() -> void:
 	var results := { "disconnected_id": -1 }
 	server.peer_disconnected.connect(func(id): results.disconnected_id = id, CONNECT_ONE_SHOT)
 
-	server_ctx.scene.kick(peer0_id)
+	server_ctx.tree.kick(peer0_id)
 
 	await wait_until(func(): return results.disconnected_id != -1)
 	assert_that(results.disconnected_id).is_equal(peer0_id)
@@ -214,12 +214,12 @@ func test_request_kick_notifies_server() -> void:
 	var peer1_id := client1.multiplayer_peer.get_unique_id()
 
 	var results := { "received_requester": -1, "received_target": -1 }
-	server_ctx.scene.kick_requested.connect(func(requester, target, _r):
+	server_ctx.tree.kick_requested.connect(func(requester, target, _r):
 		results.received_requester = requester
 		results.received_target    = target)
 
 	# client0 asks the server to kick client1.
-	client0_ctx.scene.request_kick(peer1_id, "griefing")
+	client0_ctx.tree.request_kick(peer1_id, "griefing")
 
 	await wait_until(func(): return results.received_requester != -1)
 	assert_that(results.received_requester).is_equal(client0.multiplayer_peer.get_unique_id())

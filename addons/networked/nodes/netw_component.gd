@@ -36,7 +36,7 @@ func get_multiplayer_tree() -> MultiplayerTree:
 ## Returns the [MultiplayerSceneManager] for this session.
 func get_scene_manager() -> MultiplayerSceneManager:
 	var ctx := get_context()
-	return ctx.tree.get_scene_manager() if ctx else null
+	return ctx.services.get_scene_manager() if ctx else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local client.
@@ -46,14 +46,14 @@ func get_tp_layer() -> TPLayerAPI:
 		return null
 	var ctx := get_context()
 	if not ctx: return null
-	var tp_layer: TPLayerAPI = ctx.tree.get_service(TPLayerAPI)
+	var tp_layer: TPLayerAPI = ctx.services.get_service(TPLayerAPI)
 	return tp_layer
 
 
 ## Returns the [NetworkClock] for this session.
 func get_network_clock() -> NetworkClock:
 	var ctx := get_context()
-	return ctx.tree.get_clock() if ctx else null
+	return ctx.services.get_clock() if ctx else null
 
 
 ## Returns the [NetwPeerContext] for the local peer.
@@ -61,7 +61,7 @@ func get_peer_context() -> NetwPeerContext:
 	var ctx := get_context()
 	if not ctx:
 		return null
-	return ctx.tree.get_peer_context(ctx.tree.get_unique_id())
+	return ctx.services.get_peer_context(ctx.tree.get_unique_id())
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.
