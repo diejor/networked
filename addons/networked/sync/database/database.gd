@@ -329,13 +329,10 @@ func transaction(body: Callable) -> Error:
 # schema.
 func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> Dictionary:
 	if not _schema.has(table):
-		Netw.dbg.error(
-			"NetwDatabase: read on unregistered table '%s'. ", [table],
+		Netw.dbg.warn(
+			"NetwDatabase: read on unregistered table '%s'. " + \
+			"Declare the schema before querying.", [table],
 			func(m): push_error(m)
-		)
-		push_warning(
-			"NetwDatabase: read on unregistered table '%s'. " % [table]
-			+ "Declare the schema before querying."
 		)
 		out_error[0] = ERR_UNCONFIGURED
 		return {}
