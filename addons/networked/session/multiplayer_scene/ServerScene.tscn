@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dga0loylsa26i"]
 
 [ext_resource type="Script" uid="uid://c4f5du2mlwtyi" path="res://addons/networked/session/multiplayer_scene/multiplayer_scene.gd" id="1_b4l3b"]
-[ext_resource type="PackedScene" uid="uid://by6v45orjo182" path="res://addons/networked/session/multiplayer_scene/SceneSynchronizer.tscn" id="1_p8duo"]
+[ext_resource type="Script" uid="uid://c0xlvld8td501" path="res://addons/networked/session/multiplayer_scene/scene_synchronizer.gd" id="2_cauto"]
 
 [sub_resource type="GDScript" id="GDScript_hbugg"]
 resource_name = "world_server_fixer"
@@ -13,6 +13,11 @@ func _ready() -> void:
 	if not multiplayer.is_server():
 		world.world_2d = get_tree().root.world_2d
 "
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_adjto"]
+properties/0/path = NodePath("SceneSynchronizer:connected_peers")
+properties/0/spawn = true
+properties/0/replication_mode = 2
 
 [node name="Scene" type="SubViewport" unique_id=1753885499 node_paths=PackedStringArray("synchronizer")]
 disable_3d = true
@@ -31,6 +36,8 @@ synchronizer = NodePath("SceneSynchronizer")
 script = SubResource("GDScript_hbugg")
 world = NodePath("..")
 
-[node name="SceneSynchronizer" parent="." unique_id=719015563 instance=ExtResource("1_p8duo")]
+[node name="SceneSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=719015563]
 unique_name_in_owner = true
-root_path = NodePath("..")
+replication_config = SubResource("SceneReplicationConfig_adjto")
+public_visibility = false
+script = ExtResource("2_cauto")

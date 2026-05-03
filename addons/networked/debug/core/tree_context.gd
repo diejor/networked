@@ -19,10 +19,10 @@ signal clock_pong_captured(data: Dictionary)
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
 ## The local player node for this tree.
-var authority_client: Node:
+var local_player: Node:
 	get:
 		var mt := _mt_ref.get_ref() as MultiplayerTree
-		return mt.authority_client if mt else null
+		return mt.local_player if mt else null
 
 var _mt_ref: WeakRef
 var _reporter_ref: WeakRef
@@ -208,7 +208,7 @@ func _get_stable_id(node: Node) -> Variant:
 	)
 	if client:
 		return node.get_multiplayer_authority()
-	var parsed := MultiplayerClientData.parse_authority(node.name)
+	var parsed := JoinPayload.parse_authority(node.name)
 	return parsed if parsed != 0 else str(node.get_path())
 
 
@@ -233,7 +233,7 @@ func _ready() -> void:
 	mt.peer_disconnected.connect(_on_mt_peer_disconnected)
 
 	# Identity changes: notify reporter to re-emit session registration.
-	mt.authority_client_changed.connect(_on_authority_client_changed)
+	mt.local_player_changed.connect(_on_local_player_changed)
 
 	# Debug signal wiring for scene/clock requires configured state.
 	mt.configured.connect(_on_configured)
@@ -258,8 +258,8 @@ func _disconnect_all() -> void:
 			mt.peer_connected.disconnect(_on_mt_peer_connected)
 		if mt.peer_disconnected.is_connected(_on_mt_peer_disconnected):
 			mt.peer_disconnected.disconnect(_on_mt_peer_disconnected)
-		if mt.authority_client_changed.is_connected(_on_authority_client_changed):
-			mt.authority_client_changed.disconnect(_on_authority_client_changed)
+		if mt.local_player_changed.is_connected(_on_local_player_changed):
+			mt.local_player_changed.disconnect(_on_local_player_changed)
 		if mt.configured.is_connected(_on_configured):
 			mt.configured.disconnect(_on_configured)
 		
@@ -388,7 +388,7 @@ func _on_player_spawned(player: Node, scene: MultiplayerScene) -> void:
 	_decorate_player(player)
 
 
-func _on_authority_client_changed(_client: Node) -> void:
+func _on_local_player_changed(_player: Node) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	var reporter := _reporter_ref.get_ref() as NetworkedDebugReporter
 	if mt and reporter:
@@ -397,10 +397,10 @@ func _on_authority_client_changed(_client: Node) -> void:
 
 func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	if is_instance_valid(mt) and mt.authority_client:
-		var client := SpawnerComponent.unwrap(mt.authority_client)
-		if client:
-			data["username"] = client.username
+	if is_instance_valid(mt) and mt.local_player:
+		var player := SpawnerComponent.unwrap(mt.local_player)
+		if player:
+			data["username"] = player.username
 		else:
-			data["username"] = mt.authority_client.name.get_slice("|", 0)
+			data["username"] = mt.local_player.name.get_slice("|", 0)
 	clock_pong_captured.emit(data)

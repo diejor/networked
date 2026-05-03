@@ -172,7 +172,7 @@ func test_destroy_then_spawn_recreates_scene() -> void:
 
 # --- EmptyAction auto-trigger ---
 # These tests emit the SceneSynchronizer.despawned signal directly so they do
-# not require a real multiplayer player. The connected_clients dict is empty by
+# not require a real multiplayer player. The connected_peers dict is empty by
 # default (no players have joined in before_test), so every _apply call fires.
 
 func test_freeze_empty_action_disables_level_on_despawn() -> void:
@@ -222,7 +222,7 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 	await server_mgr.activate_scene(&"TestLevel")
 	var scene := server_mgr.active_scenes[&"TestLevel"]
 	# Simulate a connected client so the scene is considered non-empty.
-	scene.synchronizer.connected_clients[999] = true
+	scene.synchronizer.connected_peers[999] = true
 
 	var dummy := Node.new()
 	scene.synchronizer.despawned.emit(dummy)
@@ -230,4 +230,4 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	scene.synchronizer.connected_clients.erase(999)
+	scene.synchronizer.connected_peers.erase(999)

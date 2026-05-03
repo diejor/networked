@@ -6,7 +6,7 @@
 ## builds the server is started automatically.
 ## [codeblock]
 ## # Minimal usage — assign via the inspector or at runtime:
-## var data := MultiplayerClientData.new()
+## var data := JoinPayload.new()
 ## data.username = "Alice"
 ## data.spawner_component_path = spawner_node_path
 ## data.url = "192.168.1.5"
@@ -42,37 +42,37 @@ extends Node
 @export_group("Debug")
 ## When set, [method connect_player] is called automatically on [code]_ready[/code]
 ## with this data.
-@export var init_client_data: MultiplayerClientData
+@export var init_join_payload: JoinPayload
 @export_group("", "")
 
 ## The server-side [MultiplayerTree], created dynamically when hosting a local
 ## session.
 var server: MultiplayerTree
 
-## Disconnects any existing session, then connects using [param client_data].
+## Disconnects any existing session, then connects using [param join_payload].
 ##
-## Automatically spins up a local server when [member MultiplayerClientData.url]
+## Automatically spins up a local server when [member JoinPayload.url]
 ## is empty or localhost. On web builds, falls back to [LocalLoopbackBackend] for
 ## singleplayer when not using WebRTC.
-func connect_player(client_data: MultiplayerClientData) -> void:
+func connect_player(join_payload: JoinPayload) -> void:
 	Netw.dbg.trace("NetworkSession: connect_player called.")
-	if not client_data:
+	if not join_payload:
 		Netw.dbg.error(
-			"connect_player: client_data is null.",
+			"connect_player: join_payload is null.",
 			func(m): push_error(m)
 		)
 		return
-	if client_data.username.is_empty():
+	if join_payload.username.is_empty():
 		Netw.dbg.error(
 			"connect_player: username is empty.",
 			func(m): push_error(m)
 		)
 		return
 	var has_spawner := (
-		(client_data.spawner_component_path
-			and client_data.spawner_component_path.is_valid())
-		or (client_data.multiplayer_spawner_path
-			and client_data.multiplayer_spawner_path.is_valid())
+		(join_payload.spawner_component_path
+			and join_payload.spawner_component_path.is_valid())
+		or (join_payload.multiplayer_spawner_path
+			and join_payload.multiplayer_spawner_path.is_valid())
 	)
 	if not has_spawner:
 		Netw.dbg.error(
@@ -86,8 +86,8 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 	if manage_scene:
 		await _validate_current_scene()
 
-	var url := client_data.url
-	Netw.dbg.info("Connecting player %s to %s", [client_data.username, url])
+	var url := join_payload.url
+	Netw.dbg.info("Connecting player %s to %s", [join_payload.username, url])
 	
 	if manage_scene and _is_singleplayer(url):
 		# First attempt: Try to join an existing server on localhost.
@@ -100,12 +100,12 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		var quiet := true
 		var probe_err: Error = await client.join(
 			probe_url,
-			client_data.username,
+			join_payload.username,
 			1.0,
 			quiet
 		)
 		if probe_err == OK:
-			_request_join(client_data)
+			_request_join(join_payload)
 			return
 		
 		# Second attempt: If join failed (timeout or refused), try to host the
@@ -115,14 +115,14 @@ func connect_player(client_data: MultiplayerClientData) -> void:
 		if url.begins_with("ws"):
 			client.backend = WebSocketBackend.new()
 	
-	var client_err: Error = await client.join(url, client_data.username)
+	var client_err: Error = await client.join(url, join_payload.username)
 	if client_err == OK:
-		_request_join(client_data)
+		_request_join(join_payload)
 
-func _request_join(client_data: MultiplayerClientData) -> void:
+func _request_join(join_payload: JoinPayload) -> void:
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER, 
-		client_data.serialize()
+		join_payload.serialize()
 	)
 
 
@@ -178,9 +178,9 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 		
-	if init_client_data:
-		init_client_data.is_debug = true
-		connect_player(init_client_data)
+	if init_join_payload:
+		init_join_payload.is_debug = true
+		connect_player(init_join_payload)
 	
 	if manage_scene and DisplayServer.get_name() == "headless":
 		_host_server()

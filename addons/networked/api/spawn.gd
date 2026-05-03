@@ -35,32 +35,32 @@ extends RefCounted
 ## Creates a [NetSpan] for a player join operation, pre-filled with
 ## peer metadata, and logs the join event.
 ##
-## [param client_data] carries the joining peer's connection details.
+## [param join_payload] carries the joining peer's connection details.
 ## [param authority_mode] is the [member SpawnerComponent.authority_mode]
 ## for the owning spawner.
 ## [param context] is used to associate the span with a
 ## [MultiplayerTree]. When [code]null[/code], the span is tree-agnostic.
 static func begin_join(
-	client_data: MultiplayerClientData,
+	join_payload: JoinPayload,
 	authority_mode: int,
 	context: Object = null,
 ) -> NetSpan:
 	var span := Netw.dbg.span(
 		context, "player_join",
 		{
-			"username": client_data.username,
-			"peer_id": client_data.peer_id,
+			"username": join_payload.username,
+			"peer_id": join_payload.peer_id,
 			"authority_mode": authority_mode,
 		},
 	)
 	Netw.dbg.info(
 		"Player joined: %s (ID: %d)",
-		[client_data.username, client_data.peer_id],
+		[join_payload.username, join_payload.peer_id],
 	)
 	return span
 
 
-## Gathers spawn data for [param client_data].
+## Gathers spawn data for [param join_payload].
 ##
 ## When [param db] and [param table_name] are provided, loads the player's
 ## entity record directly from the database via
@@ -73,7 +73,7 @@ static func begin_join(
 ## [b]Note:[/b] Values in [param extras] must be Godot-serializable if
 ## they travel through a [MultiplayerSpawner].
 static func gather(
-	client_data: MultiplayerClientData,
+	join_payload: JoinPayload,
 	db: NetwDatabase = null,
 	table_name: StringName = &"",
 	extras: Dictionary = {},
@@ -81,11 +81,11 @@ static func gather(
 ) -> SpawnPayload:
 	var save_record: Dictionary = {}
 	if db and not table_name.is_empty():
-		var entity := db.table(table_name).fetch(StringName(client_data.username))
+		var entity := db.table(table_name).fetch(StringName(join_payload.username))
 		if entity:
 			save_record = entity.to_dict()
 	var payload := SpawnPayload.new(
-		client_data.username, client_data.peer_id, save_record, extras
+		join_payload.username, join_payload.peer_id, save_record, extras
 	)
 	if span:
 		span.step("gather", {
@@ -124,7 +124,7 @@ static func configure(
 		save.hydrate(payload.save_state)
 	
 	assert(
-		MultiplayerClientData.parse_authority(node.name) != 0,
+		JoinPayload.parse_authority(node.name) != 0,
 		"Node name must follow 'username|peer_id' after configure()."
 	)
 	var has_sync := false

@@ -15,7 +15,7 @@ extends NetwComponent
 ## [/codeblock]
 
 ## Emitted on the server when a peer requests to join.
-signal player_joined(client_data: MultiplayerClientData)
+signal player_joined(join_payload: JoinPayload)
 ## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a
 ## delta update.
 signal client_synchronized
@@ -148,7 +148,7 @@ func _ready() -> void:
 	if is_multiplayer_authority():
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
-			mt.authority_client = self.owner
+			mt.local_player = self.owner
 
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
 		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
@@ -198,7 +198,7 @@ func _on_owner_tree_entered() -> void:
 	_dbg.trace("Spawner `%s` entering tree.", [owner.name])
 	assert(owner.name != "|")
 	
-	var authority := MultiplayerClientData.parse_authority(owner.name)
+	var authority := JoinPayload.parse_authority(owner.name)
 	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
 		_dbg.debug(
 			"Setting authority for %s to %d", [owner.name, authority]
@@ -213,27 +213,27 @@ func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
 	spawn.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
-func _on_player_joined(client_data: MultiplayerClientData) -> void:
+func _on_player_joined(join_payload: JoinPayload) -> void:
 	var ctx := get_context()
 	if not ctx:
 		return
 	
-	var slot := ctx.tree.get_spawn_slot(client_data.spawner_component_path)
+	var slot := ctx.tree.get_spawn_slot(join_payload.spawner_component_path)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active scene for '%s'.",
-			[client_data.spawner_component_path.get_scene_name()],
+			[join_payload.spawner_component_path.get_scene_name()],
 			func(m): push_error(m)
 		)
 		return
 	
-	var span := Netw.spawn.begin_join(client_data, authority_mode, owner)
+	var span := Netw.spawn.begin_join(join_payload, authority_mode, owner)
 	
 	var player_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
 	)
 	var payload := Netw.spawn.gather(
-		client_data,
+		join_payload,
 		player_save.database if player_save else null,
 		player_save.table_name if player_save else &"",
 		{},
@@ -299,5 +299,5 @@ func _exit_tree() -> void:
 
 	if is_multiplayer_authority():
 		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.authority_client == self:
-			mt.authority_client = null
+		if mt and mt.local_player == self:
+			mt.local_player = null

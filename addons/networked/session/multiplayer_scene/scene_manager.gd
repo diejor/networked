@@ -370,19 +370,19 @@ func _spawn_scene_node(data: Variant) -> Node:
 	return scene
 
 
-## Activates the target scene for [param client_data] and returns it.
+## Activates the target scene for [param join_payload] and returns it.
 ##
 ## Checks for duplicate connections. Returns the active
 ## [MultiplayerScene], or [code]null[/code] on failure.
 ## [br][br]
 ## Use for custom spawn flows that don't use [SpawnerComponent].
 func activate_scene_for(
-	client_data: MultiplayerClientData
+	join_payload: JoinPayload
 ) -> MultiplayerScene:
-	var peer_id := client_data.peer_id
+	var peer_id := join_payload.peer_id
 	for scene: MultiplayerScene in active_scenes.values():
 		var sync := scene.synchronizer
-		if is_instance_valid(sync) and peer_id in sync.connected_clients:
+		if is_instance_valid(sync) and peer_id in sync.connected_peers:
 			Netw.dbg.warn(
 				"Duplicate join from peer %d - ignored.", [peer_id],
 				func(m): push_warning(m)
@@ -392,7 +392,7 @@ func activate_scene_for(
 	Netw.dbg.info(
 		"Received join request from peer %d.", [peer_id]
 	)
-	var path := _resolve_scene_path(client_data)
+	var path := _resolve_scene_path(join_payload)
 	if not path or not path.is_valid():
 		Netw.dbg.error(
 			"Join failed: no valid spawner path.", []
@@ -413,20 +413,20 @@ func activate_scene_for(
 	return scene
 
 
-# Resolves the scene path from [param client_data]'s spawner fields.
+# Resolves the scene path from [param join_payload]'s spawner fields.
 func _resolve_scene_path(
-	client_data: MultiplayerClientData
+	join_payload: JoinPayload
 ) -> SceneNodePath:
 	if (
-		client_data.spawner_component_path
-		and client_data.spawner_component_path.is_valid()
+		join_payload.spawner_component_path
+		and join_payload.spawner_component_path.is_valid()
 	):
-		return client_data.spawner_component_path
+		return join_payload.spawner_component_path
 	if (
-		client_data.multiplayer_spawner_path
-		and client_data.multiplayer_spawner_path.is_valid()
+		join_payload.multiplayer_spawner_path
+		and join_payload.multiplayer_spawner_path.is_valid()
 	):
-		return client_data.multiplayer_spawner_path
+		return join_payload.multiplayer_spawner_path
 	return null
 
 
@@ -434,55 +434,55 @@ func _resolve_scene_path(
 ##
 ## Activates the target scene, dispatches to the configured spawner, and
 ## emits [signal MultiplayerTree.player_scene_ready].
-func handle_join_request(client_data: MultiplayerClientData) -> void:
-	var scene := await activate_scene_for(client_data)
+func handle_join_request(join_payload: JoinPayload) -> void:
+	var scene := await activate_scene_for(join_payload)
 	if not scene:
 		return
 	
 	var dispatched := false
 	
 	if (
-		client_data.spawner_component_path
-		and client_data.spawner_component_path.is_valid()
+		join_payload.spawner_component_path
+		and join_payload.spawner_component_path.is_valid()
 	):
 		var spawner_client: SpawnerComponent = (
 			scene.level.get_node_or_null(
-				client_data.spawner_component_path.node_path
+				join_payload.spawner_component_path.node_path
 			) as SpawnerComponent
 		)
 		if spawner_client:
-			spawner_client.player_joined.emit(client_data)
+			spawner_client.player_joined.emit(join_payload)
 			dispatched = true
 		else:
 			Netw.dbg.error(
 				"SpawnerComponent not found at '%s'.",
-				[client_data.spawner_component_path.node_path]
+				[join_payload.spawner_component_path.node_path]
 			)
 	
 	if (
-		client_data.multiplayer_spawner_path
-		and client_data.multiplayer_spawner_path.is_valid()
+		join_payload.multiplayer_spawner_path
+		and join_payload.multiplayer_spawner_path.is_valid()
 	):
 		var spawner: MultiplayerSpawner = (
 			scene.level.get_node_or_null(
-				client_data.multiplayer_spawner_path.node_path
+				join_payload.multiplayer_spawner_path.node_path
 			) as MultiplayerSpawner
 		)
 		if spawner:
-			var payload := Netw.spawn.gather(client_data)
+			var payload := Netw.spawn.gather(join_payload)
 			spawner.spawn(payload.to_variant())
 			dispatched = true
 		else:
 			Netw.dbg.error(
 				"MultiplayerSpawner not found at '%s'.",
-				[client_data.multiplayer_spawner_path.node_path]
+				[join_payload.multiplayer_spawner_path.node_path]
 			)
 	
 	if dispatched and (
-		client_data.spawner_component_path
-		and client_data.spawner_component_path.is_valid()
-		and client_data.multiplayer_spawner_path
-		and client_data.multiplayer_spawner_path.is_valid()
+		join_payload.spawner_component_path
+		and join_payload.spawner_component_path.is_valid()
+		and join_payload.multiplayer_spawner_path
+		and join_payload.multiplayer_spawner_path.is_valid()
 	):
 		Netw.dbg.warn(
 			"Both spawner_component_path and multiplayer_spawner_path are "
@@ -491,18 +491,18 @@ func handle_join_request(client_data: MultiplayerClientData) -> void:
 	
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
-		tree.player_scene_ready.emit(client_data, scene)
+		tree.player_scene_ready.emit(join_payload, scene)
 	
 	if not dispatched:
 		Netw.dbg.error(
 			"No valid spawner configured for player '%s'.",
-			[client_data.username]
+			[join_payload.username]
 		)
 
 
 func _apply_empty_action_if_needed(name: StringName) -> void:
 	var scene := active_scenes.get(name) as MultiplayerScene
-	if not scene or not scene.synchronizer.connected_clients.is_empty():
+	if not scene or not scene.synchronizer.connected_peers.is_empty():
 		return
 	var config := _get_config(name)
 	match config["empty_action"]:

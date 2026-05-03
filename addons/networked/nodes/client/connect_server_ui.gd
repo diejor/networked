@@ -1,11 +1,11 @@
-## Overlay UI that relays a [MultiplayerClientData] from a child [ConnectToServerUI] to a [NetworkSession].
+## Overlay UI that relays a [JoinPayload] from a child [ConnectToServerUI] to a [NetworkSession].
 ##
 ## Wire [signal connect_player] to [method NetworkSession.connect_player], then assign
 ## [member spawner_node] so that the spawner path is stamped into the client data automatically.
 extends CanvasLayer
 
 ## Emitted when the player submits connection details. Connect to [method NetworkSession.connect_player].
-signal connect_player(client_data: MultiplayerClientData)
+signal connect_player(join_payload: JoinPayload)
 
 ## [SceneNodePath] pointing to the target [SpawnerComponent] spawner.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
@@ -15,7 +15,7 @@ func _ready() -> void:
 	if not spawner_node:
 		queue_free()
 
-func _on_connect_player(client_data: MultiplayerClientData) -> void:
+func _on_connect_player(join_payload: JoinPayload) -> void:
 	assert(spawner_node.is_valid(), "Spawner must be valid to connect.")
-	client_data.spawner_component_path = spawner_node
-	connect_player.emit(client_data)
+	join_payload.spawner_component_path = spawner_node
+	connect_player.emit(join_payload)

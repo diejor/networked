@@ -40,19 +40,19 @@ func after_test() -> void:
 # ---------------------------------------------------------------------------
 
 func test_client_is_online_after_connect_player() -> void:
-	network.connect_player(_client_data("alice"))
+	network.connect_player(_create_join_payload("alice"))
 	await timeout_await(network.client.connected_to_server)
 	assert_that(network.client.is_online()).is_true()
 
 #
 #func test_client_peer_id_is_not_server_id() -> void:
-	#network.connect_player(_client_data("alice"))
+	#network.connect_player(_create_join_payload("alice"))
 	#await timeout_await(network.client.connected_to_server)
 	#assert_that(network.client.multiplayer_peer.get_unique_id()).is_not_equal(1)
 #
 #
 #func test_server_registers_peer_after_connect() -> void:
-	#network.connect_player(_client_data("alice"))
+	#network.connect_player(_create_join_payload("alice"))
 	#await timeout_await(network.client.connected_to_server)
 	#assert_that(server.multiplayer_api.get_peers().size()).is_equal(1)
 #
@@ -61,14 +61,14 @@ func test_client_is_online_after_connect_player() -> void:
 	#var connected_ids: Array[int] = []
 	#server.peer_connected.connect(func(id: int) -> void: connected_ids.append(id))
 #
-	#network.connect_player(_client_data("alice"))
+	#network.connect_player(_create_join_payload("alice"))
 	#await timeout_await(network.client.connected_to_server)
 #
 	#assert_that(connected_ids.size()).is_equal(1)
 #
 #
 #func test_player_spawns_in_server_scene_after_connect() -> void:
-	#network.connect_player(_client_data("alice"))
+	#network.connect_player(_create_join_payload("alice"))
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
@@ -85,7 +85,7 @@ func test_client_is_online_after_connect_player() -> void:
 #
 #
 #func test_spawned_player_has_correct_multiplayer_authority() -> void:
-	#network.connect_player(_client_data("alice"))
+	#network.connect_player(_create_join_payload("alice"))
 	#await timeout_await(network.client.connected_to_server)
 	#
 	#var peer_id := network.client.multiplayer_api.get_unique_id()
@@ -145,12 +145,12 @@ func _setup_network() -> void:
 	add_child(network)
 
 
-func _client_data(username: String) -> MultiplayerClientData:
+func _create_join_payload(username: String) -> JoinPayload:
 	var spawner_component_path := SceneNodePath.new()
 	spawner_component_path.scene_path = TEST_LEVEL_SCENE.resource_path
 	spawner_component_path.node_path = SPAWNER_PATH
 
-	var data := MultiplayerClientData.new()
+	var data := JoinPayload.new()
 	data.username = username
 	data.url = "localhost"
 	data.spawner_component_path = spawner_component_path

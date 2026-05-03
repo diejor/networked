@@ -1,9 +1,9 @@
 ## Serializable data bag describing a player attempting to connect to a session.
 ##
-## Pass a populated instance to [method MultiplayerNetwork.connect_player] to
+## Pass a populated instance to [method NetworkSession.connect_player] to
 ## authenticate and spawn a player, or serialize it for transmission via
 ## [method serialize].
-class_name MultiplayerClientData
+class_name JoinPayload
 extends Serde
 
 ## The player's display name, used as the spawned node name prefix.
@@ -38,7 +38,8 @@ var peer_id: int
 var is_debug: bool = false
 
 
-## Serializes the client data into a [PackedByteArray] for network transmission.
+## Serializes the join payload into a [PackedByteArray] for network
+## transmission.
 func serialize() -> PackedByteArray:
 	var dict: Dictionary = {
 		username = username,

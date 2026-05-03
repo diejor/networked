@@ -175,7 +175,7 @@ static func _check_spawner_component(spawner: SpawnerComponent) -> Array[String]
 
 static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var expected := MultiplayerClientData.parse_authority(node.name)
+	var expected := JoinPayload.parse_authority(node.name)
 	var actual := node.get_multiplayer_authority()
 
 	if expected != 0 and actual != expected:

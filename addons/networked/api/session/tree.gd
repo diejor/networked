@@ -14,7 +14,7 @@ extends RefCounted
 ## Emitted when the multiplayer API and scene manager have been configured.
 signal configured()
 ## Emitted after a player's target scene has been activated.
-signal player_scene_ready(client_data: MultiplayerClientData, netw_scene: NetwScene)
+signal player_scene_ready(join_payload: JoinPayload, netw_scene: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
 signal server_disconnecting(reason: String)
 ## Emitted on the server when a client requests to kick a peer.
@@ -80,9 +80,9 @@ func is_online() -> bool:
 
 
 ## Returns the local player node for this tree, or [code]null[/code].
-func get_authority_client() -> Node:
+func get_local_player() -> Node:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.authority_client if mt else null
+	return mt.local_player if mt else null
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -178,9 +178,9 @@ func notify_disconnect(reason: String = "") -> void:
 
 
 func _on_player_scene_ready(
-	client_data: MultiplayerClientData, scene: MultiplayerScene
+	join_payload: JoinPayload, scene: MultiplayerScene
 ) -> void:
 	var netw_scene := NetwScene.new(scene) if is_instance_valid(scene) else null
-	player_scene_ready.emit(client_data, netw_scene)
+	player_scene_ready.emit(join_payload, netw_scene)
 	if is_instance_valid(scene):
-		scene.player_ready.emit(client_data)
+		scene.player_ready.emit(join_payload)

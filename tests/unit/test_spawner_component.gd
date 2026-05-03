@@ -1,6 +1,6 @@
 ## Tests for [SpawnerComponent].
 ##
-## Covers [method MultiplayerClientData.parse_authority],
+## Covers [method JoinPayload.parse_authority],
 ## [method SpawnerComponent.SpawnSynchronizer.config_spawn_properties],
 ## and [enum SpawnerComponent.AuthorityMode] behaviour in
 ## [method SpawnerComponent._on_owner_tree_entered].
@@ -13,36 +13,36 @@ extends NetworkedTestSuite
 # ---------------------------------------------------------------------------
 
 func test_parse_authority_with_valid_name() -> void:
-	assert_that(MultiplayerClientData.parse_authority("alice|42")).is_equal(42)
+	assert_that(JoinPayload.parse_authority("alice|42")).is_equal(42)
 
 
 func test_parse_authority_with_large_peer_id() -> void:
 	assert_that(
-		MultiplayerClientData.parse_authority("player|2147483647")
+		JoinPayload.parse_authority("player|2147483647")
 	).is_equal(2147483647)
 
 
 func test_parse_authority_without_separator_returns_zero() -> void:
 	assert_that(
-		MultiplayerClientData.parse_authority("no_separator")
+		JoinPayload.parse_authority("no_separator")
 	).is_equal(0)
 
 
 func test_parse_authority_with_empty_string_returns_zero() -> void:
-	assert_that(MultiplayerClientData.parse_authority("")).is_equal(0)
+	assert_that(JoinPayload.parse_authority("")).is_equal(0)
 
 
 func test_parse_authority_with_only_separator_returns_zero() -> void:
-	assert_that(MultiplayerClientData.parse_authority("|")).is_equal(0)
+	assert_that(JoinPayload.parse_authority("|")).is_equal(0)
 
 
 func test_parse_authority_with_multiple_separators_returns_zero() -> void:
-	assert_that(MultiplayerClientData.parse_authority("a|b|c")).is_equal(0)
+	assert_that(JoinPayload.parse_authority("a|b|c")).is_equal(0)
 
 
 func test_parse_authority_with_non_numeric_peer_returns_zero() -> void:
 	assert_that(
-		MultiplayerClientData.parse_authority("user|abc")
+		JoinPayload.parse_authority("user|abc")
 	).is_equal(0)
 
 

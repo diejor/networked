@@ -65,12 +65,12 @@ func remove_relayed_clock(envelope: NetEnvelope) -> void:
 func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 	var username := data.get("username", "")
 	if username.is_empty():
-		if is_instance_valid(mt) and mt.authority_client:
-			var client := SpawnerComponent.unwrap(mt.authority_client)
-			if client:
-				username = client.username
+		if is_instance_valid(mt) and mt.local_player:
+			var player := SpawnerComponent.unwrap(mt.local_player)
+			if player:
+				username = player.username
 			else:
-				username = mt.authority_client.name.get_slice("|", 0)
+				username = mt.local_player.name.get_slice("|", 0)
 		else:
 			username = data.get("tree_name", "Unknown")
 

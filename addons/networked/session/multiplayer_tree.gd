@@ -35,7 +35,7 @@ signal connected_to_server()
 signal server_disconnected()
 
 ## Emitted on the server when a peer requests to join.
-signal player_join_requested(client_data: MultiplayerClientData)
+signal player_join_requested(join_payload: JoinPayload)
 
 
 ## Set to [code]true[/code] to configure this instance as the server.
@@ -91,20 +91,20 @@ var _tree_name: String = ""
 ## [br][br]
 ## [b]Note:[/b] This is [code]null[/code] on dedicated servers or before the
 ## player has spawned.
-var authority_client: Node:
+var local_player: Node:
 	set(value):
-		if authority_client != value:
-			authority_client = value
-			authority_client_changed.emit(value)
+		if local_player != value:
+			local_player = value
+			local_player_changed.emit(value)
 
-## Emitted when [member authority_client] is assigned or cleared.
-signal authority_client_changed(client: Node)
+## Emitted when [member local_player] is assigned or cleared.
+signal local_player_changed(player: Node)
 
 ## Emitted after a player's target scene has been activated and the spawner
 ## has been dispatched. Useful for custom spawn flows that need to react
 ## after scene readiness is guaranteed.
 signal player_scene_ready(
-	client_data: MultiplayerClientData, scene: MultiplayerScene
+	join_payload: JoinPayload, scene: MultiplayerScene
 )
 
 ## Emitted on every peer when the game is paused via [method NetwTree.pause].
@@ -433,19 +433,19 @@ func disconnect_peer() -> void:
 
 ## Entry point for a client to request entry into the game world.
 ##
-## Deserializes [param bytes] into a [MultiplayerClientData] and emits
+## Deserializes [param bytes] into a [JoinPayload] and emits
 ## [signal player_join_requested] for the [MultiplayerSceneManager] to handle.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
 	
-	var client_data: MultiplayerClientData = MultiplayerClientData.new()
-	client_data.deserialize(bytes)
-	client_data.peer_id = peer_id
+	var join_payload: JoinPayload = JoinPayload.new()
+	join_payload.deserialize(bytes)
+	join_payload.peer_id = peer_id
 	
-	_resolve_username_collision(client_data)
+	_resolve_username_collision(join_payload)
 	
-	player_join_requested.emit(client_data)
+	player_join_requested.emit(join_payload)
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +507,7 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 	server_disconnecting.emit(reason)
 
 
-func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
+func _resolve_username_collision(join_payload: JoinPayload) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
 		var client := SpawnerComponent.unwrap(player)
@@ -518,11 +518,11 @@ func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
 			if not parsed.is_empty():
 				existing_names.append(StringName(parsed))
 	
-	var original_name := client_data.username
+	var original_name := join_payload.username
 	if not original_name in existing_names:
 		return
 	
-	if client_data.is_debug:
+	if join_payload.is_debug:
 		var suffix := 1
 		var new_name := StringName(str(original_name) + str(suffix))
 		while new_name in existing_names:
@@ -533,7 +533,7 @@ func _resolve_username_collision(client_data: MultiplayerClientData) -> void:
 			"Debug name collision: renaming %s to %s",
 			[original_name, new_name]
 		)
-		client_data.username = new_name
+		join_payload.username = new_name
 	else:
 		Netw.dbg.warn(
 			"Username collision detected for '%s'. "

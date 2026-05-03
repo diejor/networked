@@ -220,7 +220,7 @@ func report_session_registered(mt: MultiplayerTree) -> void:
 		
 	var event := NetSessionEvent.new()
 	event.tree_name = mt.get_tree_name()
-	event.username = _get_username(mt.authority_client) if mt.authority_client else ""
+	event.username = _get_username(mt.local_player) if mt.local_player else ""
 	event.is_server = mt.is_server
 	event.backend_class = backend_class
 	event.rid = reporter_id
@@ -584,8 +584,8 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	if not mt.is_server:
 		if (
 			not is_instance_valid(ctx)
-			or not is_instance_valid(ctx.authority_client)
-			or ctx.authority_client != player
+			or not is_instance_valid(ctx.local_player)
+			or ctx.local_player != player
 		):
 			return
 		
@@ -679,7 +679,7 @@ func _emit_current_state() -> void:
 		var event := NetSessionEvent.new()
 		event.tree_name = tree_name
 		event.username = (
-			_get_username(mt.authority_client) if mt.authority_client else ""
+			_get_username(mt.local_player) if mt.local_player else ""
 		)
 		event.is_server = mt.is_server
 		event.backend_class = backend_class
@@ -696,9 +696,9 @@ func _emit_current_state() -> void:
 			# Server sends topology for all active players.
 			for player in mt.get_all_players():
 				_send_topology_snapshot(player, mt)
-		elif is_instance_valid(ctx.authority_client):
+		elif is_instance_valid(ctx.local_player):
 			# Client only sends its own.
-			_send_topology_snapshot(ctx.authority_client, mt)
+			_send_topology_snapshot(ctx.local_player, mt)
 
 
 # --- Demand-Driven Replication Watch ------------------------------------------

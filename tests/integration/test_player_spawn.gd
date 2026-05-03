@@ -64,13 +64,13 @@ func test_spawned_player_name_format() -> void:
 	assert_that(player.name).is_equal("test_player_0|%d" % peer_id)
 
 
-func test_connect_client_called_on_spawn() -> void:
+func test_connect_peer_called_on_spawn() -> void:
 	var _player := harness.spawn_player(client0, TEST_PLAYER_SCENE)
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
 	var scene := harness.get_server_scene()
 	var peer_id := client0.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_clients.has(peer_id)).is_true()
+	assert_that(scene.synchronizer.connected_peers.has(peer_id)).is_true()
 
 
 func test_two_players_in_same_scene() -> void:
@@ -84,5 +84,5 @@ func test_two_players_in_same_scene() -> void:
 
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_clients.has(peer_id_0)).is_true()
-	assert_that(scene.synchronizer.connected_clients.has(peer_id_1)).is_true()
+	assert_that(scene.synchronizer.connected_peers.has(peer_id_0)).is_true()
+	assert_that(scene.synchronizer.connected_peers.has(peer_id_1)).is_true()
