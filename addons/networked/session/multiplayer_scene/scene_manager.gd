@@ -46,24 +46,6 @@ enum EmptyAction {
 	DESTROY = 2,
 }
 
-## [b]Optional.[/b] The [TPLayerAPI] used for visual screen transitions.
-@export var tp_layer: TPLayerAPI:
-	set(layer):
-		if not Engine.is_editor_hint():
-			if tp_layer and configured.is_connected(tp_layer.configured.emit):
-				configured.disconnect(tp_layer.configured.emit)
-			
-			tp_layer = layer
-			
-			if tp_layer and not configured.is_connected(
-				tp_layer.configured.emit
-			):
-				configured.connect(tp_layer.configured.emit)
-		else:
-			tp_layer = layer
-		
-		update_configuration_warnings()
-
 ## Helper property to add level scenes to the spawn list via the inspector.
 @export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
 var add_to_spawn_list: SceneNodePath:

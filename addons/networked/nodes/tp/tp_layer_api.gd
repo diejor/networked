@@ -1,13 +1,13 @@
 ## Abstract base class for client-side teleport transition overlays.
 ##
-## Assign a concrete subclass instance to [member MultiplayerSceneManager.tp_layer].
+## Automatically registers itself with [NetwServices] when added to the tree.
 ## Subclasses implement [method teleport_out] (fade/cover outgoing scene) and
 ## [method teleport_in] (reveal incoming scene). Both methods are awaitable.
 @abstract
 class_name TPLayerAPI
 extends CanvasLayer
 
-## Forwarded from [MultiplayerSceneManager.configured]; used to free this node on the server.
+## Forwarded from [MultiplayerTree.configured]; used to free this node on the server.
 signal configured
 
 ## Progress bar driven by the transition animation.
