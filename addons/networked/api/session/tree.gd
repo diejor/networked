@@ -56,7 +56,7 @@ func get_all_players() -> Array[Node]:
 ## Returns [code]true[/code] if the current session is hosting as a server.
 func is_server() -> bool:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.is_server if mt else false
+	return mt.is_host if mt else false
 
 
 ## Returns the unique peer ID for this session.
@@ -77,6 +77,28 @@ func get_tree_name() -> String:
 func is_online() -> bool:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.is_online() if mt else false
+
+
+## Connects the local player to a session using [param join_payload].
+##
+## Probes localhost when [param join_payload.url] is empty or localhost,
+## then either joins an existing server or spins up an embedded server
+## by duplicating this tree into a sibling node.
+func connect_player(join_payload: JoinPayload) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return await mt.connect_player(join_payload) if mt else ERR_UNCONFIGURED
+
+
+## Returns the current connection state.
+func get_state() -> MultiplayerTree.State:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.state if mt else MultiplayerTree.State.OFFLINE
+
+
+## Returns the current role in the session.
+func get_role() -> MultiplayerTree.Role:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.role if mt else MultiplayerTree.Role.NONE
 
 
 ## Returns the local player node for this tree, or [code]null[/code].
@@ -144,15 +166,13 @@ func request_kick(peer_id: int, reason: String = "") -> void:
 	mt._rpc_request_kick.rpc_id(1, peer_id, reason)
 
 
-## Disconnects the local peer from the session.
-##
-## Saves all registered states for the local peer, then closes the
-## multiplayer peer.
-func disconnect_peer() -> void:
+## Saves game state, closes the multiplayer peer, and waits for the server
+## to acknowledge disconnection.
+func disconnect_player() -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return
-	mt.disconnect_peer()
+	await mt.disconnect_player()
 
 
 ## Asks the server for permission to disconnect.

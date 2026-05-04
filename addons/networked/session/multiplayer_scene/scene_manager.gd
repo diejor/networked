@@ -18,6 +18,9 @@ extends MultiplayerSpawner
 ## Emitted when the manager has been initialized by the [MultiplayerTree].
 signal configured()
 
+## Emitted after [method spawn_scenes] has finished executing.
+signal startup_scenes_spawned()
+
 ## Emitted when a new [Scene] has been instantiated and entered the tree.
 signal scene_spawned(scene: MultiplayerScene)
 
@@ -540,6 +543,11 @@ func _on_configured() -> void:
 		add_child(debug_viewports)
 		
 		spawn_scenes.call_deferred()
+		_emit_startup_scenes_spawned.call_deferred()
+
+
+func _emit_startup_scenes_spawned() -> void:
+	startup_scenes_spawned.emit()
 
 
 func _build_scene_paths() -> void:

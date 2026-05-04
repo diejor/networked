@@ -1,6 +1,6 @@
 ## Serializable data bag describing a player attempting to connect to a session.
 ##
-## Pass a populated instance to [method NetworkSession.connect_player] to
+## Pass a populated instance to [method MultiplayerTree.connect_player] to
 ## authenticate and spawn a player, or serialize it for transmission via
 ## [method serialize].
 class_name JoinPayload

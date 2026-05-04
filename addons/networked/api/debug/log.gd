@@ -25,7 +25,7 @@ enum Level {
 static var current_level: int = Level.NONE
 
 ## Per-module level overrides keyed by dot-separated module path.
-## Example: [code]"core.network_session"[/code].
+## Example: [code]"core.multiplayer_tree"[/code].
 static var module_levels: Dictionary = {}
 
 static var _min_active_level: int = Level.NONE

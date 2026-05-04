@@ -1,6 +1,6 @@
 ## [BackendPeer] that routes packets through an in-process [LocalLoopbackSession].
 ##
-## Used automatically by [NetworkSession] when running on the web with a non-WebRTC backend,
+## Used automatically by [MultiplayerTree] when running on the web with a non-WebRTC backend,
 ## ensuring a fast, allocation-free loopback without any real network sockets.
 @tool
 class_name LocalLoopbackBackend
@@ -28,7 +28,6 @@ func join(_server_address: String, _username: String = "") -> Error:
 		session = LocalLoopbackSession.get_shared_session()
 		
 	if not session.has_live_server():
-		Netw.dbg.warn("LocalLoopbackBackend: No server running.")
 		return ERR_CANT_CONNECT
 	
 	api.multiplayer_peer = session.create_client_peer()

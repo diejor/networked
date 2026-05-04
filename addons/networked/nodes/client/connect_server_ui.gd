@@ -1,10 +1,10 @@
-## Overlay UI that relays a [JoinPayload] from a child [ConnectToServerUI] to a [NetworkSession].
+## Overlay UI that relays a [JoinPayload] from a child [ConnectToServerUI] to a [MultiplayerTree].
 ##
-## Wire [signal connect_player] to [method NetworkSession.connect_player], then assign
+## Wire [signal connect_player] to [method MultiplayerTree.connect_player], then assign
 ## [member spawner_node] so that the spawner path is stamped into the client data automatically.
 extends CanvasLayer
 
-## Emitted when the player submits connection details. Connect to [method NetworkSession.connect_player].
+## Emitted when the player submits connection details. Connect to [method MultiplayerTree.connect_player].
 signal connect_player(join_payload: JoinPayload)
 
 ## [SceneNodePath] pointing to the target [SpawnerComponent] spawner.
