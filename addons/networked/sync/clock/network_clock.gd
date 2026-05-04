@@ -260,15 +260,15 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	
-	var mt := get_parent() as MultiplayerTree
-	if is_instance_valid(mt):
-		mt.register_service(self, NetworkClock)
-		
-		if not mt.configured.is_connected(_on_tree_configured):
-			mt.configured.connect(_on_tree_configured)
-		
-		if not mt.configured.is_connected(configured.emit):
-			mt.configured.connect(configured.emit)
+	var mt := NetwServices.register(self, NetworkClock)
+	if not is_instance_valid(mt):
+		return
+	
+	if not mt.configured.is_connected(_on_tree_configured):
+		mt.configured.connect(_on_tree_configured)
+	
+	if not mt.configured.is_connected(configured.emit):
+		mt.configured.connect(configured.emit)
 
 
 func _ready() -> void:
@@ -278,16 +278,16 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	
+	var mt := NetwServices.unregister(self, NetworkClock)
+	if not is_instance_valid(mt):
+		return
+	
+	if mt.configured.is_connected(_on_tree_configured):
+		mt.configured.disconnect(_on_tree_configured)
 		
-	var mt := get_parent() as MultiplayerTree
-	if is_instance_valid(mt):
-		mt.unregister_service(self, NetworkClock)
-		
-		if mt.configured.is_connected(_on_tree_configured):
-			mt.configured.disconnect(_on_tree_configured)
-			
-		if mt.configured.is_connected(configured.emit):
-			mt.configured.disconnect(configured.emit)
+	if mt.configured.is_connected(configured.emit):
+		mt.configured.disconnect(configured.emit)
 
 
 func _physics_process(delta: float) -> void:

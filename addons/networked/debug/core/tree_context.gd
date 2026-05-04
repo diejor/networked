@@ -244,6 +244,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_disconnect_all()
+	NetwServices.unregister(self, NetDebugTreeContext)
 	for scene: MultiplayerScene in _hooked_scenes.keys():
 		_unhook_synchronizer(scene)
 	_hooked_scenes.clear()
@@ -298,7 +299,7 @@ func _on_configured() -> void:
 	if not mt or not reporter or _scene_wired:
 		return
 
-	mt.register_service(self, NetDebugTreeContext)
+	NetwServices.register(self, NetDebugTreeContext)
 	_scene_wired = true
 
 	var clock: NetworkClock = mt.get_service(NetworkClock)

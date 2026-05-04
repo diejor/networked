@@ -86,14 +86,18 @@ func get_service(type: Script) -> Node:
 ## Call this in [code]_enter_tree[/code]:
 ## [codeblock]
 ## func _enter_tree() -> void:
-##     NetwServices.register(self)
+##     var mt := NetwServices.register(self)
 ## [/codeblock]
 ## If [param type] is [code]null[/code], the service's script class is
 ## used as the registration key.
-static func register(service: Node, type: Script = null) -> void:
+## [br][br]
+## Returns the owning [MultiplayerTree], or [code]null[/code] if
+## [param service] is not a descendant of one.
+static func register(service: Node, type: Script = null) -> MultiplayerTree:
 	var mt := MultiplayerTree.resolve(service)
 	if is_instance_valid(mt):
 		mt.register_service(service, type)
+	return mt
 
 
 ## Unregisters [param service] from the session.
@@ -103,7 +107,11 @@ static func register(service: Node, type: Script = null) -> void:
 ## func _exit_tree() -> void:
 ##     NetwServices.unregister(self)
 ## [/codeblock]
-static func unregister(service: Node, type: Script = null) -> void:
+## [br][br]
+## Returns the owning [MultiplayerTree], or [code]null[/code] if
+## [param service] is not a descendant of one.
+static func unregister(service: Node, type: Script = null) -> MultiplayerTree:
 	var mt := MultiplayerTree.resolve(service)
 	if is_instance_valid(mt):
 		mt.unregister_service(service, type)
+	return mt

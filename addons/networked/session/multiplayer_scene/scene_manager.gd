@@ -187,12 +187,11 @@ func _enter_tree() -> void:
 	spawn_path = "."
 	add_to_group("scene_managers")
 	
-	var mt: MultiplayerTree = get_parent()
+	var mt := NetwServices.register(self, MultiplayerSceneManager)
 	assert(
 		is_instance_valid(mt),
-		"SceneManager must be a direct child of MultiplayerTree"
+		"SceneManager must be a descendant of a MultiplayerTree"
 	)
-	mt.register_service(self, MultiplayerSceneManager)
 	
 	if not mt.player_join_requested.is_connected(handle_join_request):
 		mt.player_join_requested.connect(handle_join_request)
@@ -205,15 +204,17 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	
-	var mt: MultiplayerTree = get_parent()
-	if is_instance_valid(mt):
-		mt.unregister_service(self, MultiplayerSceneManager)
-		
-		if mt.player_join_requested.is_connected(handle_join_request):
-			mt.player_join_requested.disconnect(handle_join_request)
-		
-		if mt.configured.is_connected(configured.emit):
-			mt.configured.disconnect(configured.emit)
+	var mt := NetwServices.unregister(self, MultiplayerSceneManager)
+	assert(
+		is_instance_valid(mt),
+		"SceneManager must be a descendant of a MultiplayerTree"
+	)
+	
+	if mt.player_join_requested.is_connected(handle_join_request):
+		mt.player_join_requested.disconnect(handle_join_request)
+	
+	if mt.configured.is_connected(configured.emit):
+		mt.configured.disconnect(configured.emit)
 	
 	active_scenes.clear()
 
