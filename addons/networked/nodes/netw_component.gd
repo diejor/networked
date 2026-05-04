@@ -15,13 +15,22 @@ var _context: NetwContext
 ## Returns a [NetwContext] for this component's multiplayer session.
 ## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
 ## [method MultiplayerTree.join] completes, or in the editor.
+##
+## [br][br]
+## [b]Custom RPCs:[/b] Use the returned context to check
+## [method NetwTree.is_listen_server] before calling [code]rpc_id(1)[/code].
+## See [method Netw.ctx] for the guard pattern.
 func get_context() -> NetwContext:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if is_instance_valid(scene):
 		return scene.get_context()
-	var mt := MultiplayerTree.resolve(self)
+	
+	var mt := MultiplayerTree.for_node(self)
+	if not mt:
+		mt = MultiplayerTree.resolve(self)
 	if not mt:
 		return null
+	
 	if _context == null or not _context.is_valid():
 		_context = NetwContext.new(mt)
 	return _context

@@ -137,6 +137,9 @@ func _rpc_receive_resume() -> void:
 ## whether to honour the request by calling [method NetwScene.suspend].
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_suspend(reason: String) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_suspend received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	get_context().scene.suspend_requested.emit(peer_id, reason)
 
@@ -176,6 +179,9 @@ func _rpc_receive_countdown_cancelled() -> void:
 ## Sent by a client to report their ready state to the server.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_set_ready(is_ready: bool) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_set_ready received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	_handle_set_ready(peer_id, is_ready)
 

@@ -215,6 +215,7 @@ func _setup_server() -> void:
 	_server = MultiplayerTree.new()
 	_server.name = "HarnessServer"
 	_server.is_server = true
+	_server.auto_host_headless = false
 
 	if _world_scene:
 		_server.add_child(_world_scene.instantiate())

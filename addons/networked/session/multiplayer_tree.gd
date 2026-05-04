@@ -628,7 +628,8 @@ func _ready() -> void:
 		init_join_payload.is_debug = true
 		connect_player(init_join_payload)
 	
-	if auto_host_headless and DisplayServer.get_name() == "headless":
+	if auto_host_headless and DisplayServer.get_name() == "headless" \
+			and is_server:
 		host()
 
 
@@ -638,6 +639,9 @@ func _ready() -> void:
 ## [signal player_join_requested] for the [MultiplayerSceneManager] to handle.
 @rpc("any_peer", "call_remote", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("request_join_player received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	
 	var join_payload: JoinPayload = JoinPayload.new()
@@ -684,6 +688,9 @@ func _rpc_receive_kicked(reason: String) -> void:
 ## Sent by a client to ask the server to kick another peer.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_kick received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var requester_id := multiplayer.get_remote_sender_id()
 	kick_requested.emit(requester_id, target_peer_id, reason)
 
@@ -695,6 +702,9 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 ## Sent by a client to ask the server for permission to disconnect.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_disconnect(reason: String) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_disconnect received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	disconnect_requested.emit(peer_id, reason)
 

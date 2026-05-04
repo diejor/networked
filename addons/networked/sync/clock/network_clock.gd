@@ -360,6 +360,9 @@ func _on_server_disconnect() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_handshake() -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_request_handshake received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	_respond_handshake.rpc_id(multiplayer.get_remote_sender_id(), tickrate)
 
 
@@ -385,6 +388,8 @@ func _respond_handshake(server_tickrate: int) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _ping(client_usec: int) -> void:
+	if not multiplayer.is_server():
+		return
 	_pong.rpc_id(multiplayer.get_remote_sender_id(), client_usec, tick)
 
 

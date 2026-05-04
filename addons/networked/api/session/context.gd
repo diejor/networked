@@ -8,6 +8,10 @@
 ## if ctx.has_scene():
 ##     await ctx.scene.wait_for_players(4)
 ## [/codeblock]
+##
+## [b]Listen-Server checks:[/b]
+## Access [member tree] to check [method NetwTree.is_listen_server] when
+## writing custom RPCs. See [method Netw.ctx] for the full pattern.
 class_name NetwContext
 extends RefCounted
 
@@ -73,10 +77,18 @@ func has_scene() -> bool:
 # Static access
 # ---------------------------------------------------------------------------
 
-## Returns a [NetwContext] for [param node] by walking its ancestor chain.
+## Returns a [NetwContext] for [param node].
 ##
-## Returns [code]null[/code] if [param node] is not inside a multiplayer
-## session.
+## Tries the fast metadata path first (via [method MultiplayerTree.for_node]),
+## then falls back to walking the ancestor chain. Returns [code]null[/code] if
+## [param node] is not inside a multiplayer session.
 static func for_node(node: Node) -> NetwContext:
+	var mt := MultiplayerTree.for_node(node)
+	if mt:
+		var scene := MultiplayerTree.scene_for_node(node)
+		if is_instance_valid(scene):
+			return scene.get_context()
+		return NetwContext.new(mt)
+	
 	var scene := MultiplayerTree.scene_for_node(node)
 	return scene.get_context() if is_instance_valid(scene) else null

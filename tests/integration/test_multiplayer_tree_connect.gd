@@ -52,6 +52,7 @@ func _setup_server() -> void:
 	server = MultiplayerTree.new()
 	server.name = "Server"
 	server.is_server = true
+	server.auto_host_headless = false
 	add_child(server)
 	auto_free(server)
 

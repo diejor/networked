@@ -63,6 +63,7 @@ signal countdown_cancelled()
 var _scene_ref: WeakRef
 # Held strongly while the countdown is running so the timer stays alive.
 var _active_countdown: NetwSceneCountdown
+var _tree: NetwTree
 
 
 func _init(scene: MultiplayerScene) -> void:
@@ -88,6 +89,36 @@ func get_scene_name() -> StringName:
 	if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 		return &""
 	return StringName(scene.level.name)
+
+
+## Returns the [NetwTree] that owns this scene, or [code]null[/code].
+##
+## Use this to access tree-level APIs (e.g., [method NetwTree.is_listen_server])
+## from scene-scoped code.
+func tree() -> NetwTree:
+	if _tree == null or not _tree.is_valid():
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if is_instance_valid(scene):
+			var mt := MultiplayerTree.for_node(scene)
+			if mt:
+				_tree = NetwTree.new(mt)
+	return _tree
+
+
+## Returns the peer IDs currently connected to this scene.
+##
+## Use this to enumerate peers when sending custom broadcast RPCs:
+## [codeblock]
+## for peer_id in ctx.scene.get_peers():
+##     _rpc_notify.rpc_id(peer_id, message)
+## [/codeblock]
+func get_peers() -> Array[int]:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene) or not is_instance_valid(scene.synchronizer):
+		return []
+	var result: Array[int] = []
+	result.assign(scene.synchronizer.connected_peers.keys())
+	return result
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +220,14 @@ func suspend(reason: String = "") -> void:
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.suspend() must be called on the server.")
+	var t := tree()
+	var is_listen := t.is_listen_server() if t else false
 	for node: Node in scene.synchronizer.tracked_nodes:
 		var peer_id := node.get_multiplayer_authority()
+		if peer_id == 1:
+			if is_listen:
+				scene._rpc_receive_suspend(reason)
+			continue
 		scene._rpc_receive_suspend.rpc_id(peer_id, reason)
 	suspended.emit(reason)
 
@@ -203,7 +240,11 @@ func request_suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
-	scene._rpc_request_suspend.rpc_id(1, reason)
+	var t := tree()
+	if t and t.is_listen_server():
+		scene._rpc_request_suspend(reason)
+	else:
+		scene._rpc_request_suspend.rpc_id(1, reason)
 
 
 ## Broadcasts a resume notification to scene peers.
@@ -216,8 +257,14 @@ func resume() -> void:
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.resume() must be called on the server.")
+	var t := tree()
+	var is_listen := t.is_listen_server() if t else false
 	for node: Node in scene.synchronizer.tracked_nodes:
 		var peer_id := node.get_multiplayer_authority()
+		if peer_id == 1:
+			if is_listen:
+				scene._rpc_receive_resume()
+			continue
 		scene._rpc_receive_resume.rpc_id(peer_id)
 	resumed.emit()
 
@@ -251,8 +298,14 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 	cd.cancelled.connect(_on_countdown_cancelled)
 
 	# Notify clients before the first tick so they can prepare UI
+	var t := tree()
+	var is_listen := t.is_listen_server() if t else false
 	for node: Node in scene.synchronizer.tracked_nodes:
 		var peer_id := node.get_multiplayer_authority()
+		if peer_id == 1:
+			if is_listen:
+				scene._rpc_receive_countdown_started(seconds)
+			continue
 		scene._rpc_receive_countdown_started.rpc_id(peer_id, seconds)
 	countdown_started.emit(seconds)
 
@@ -311,8 +364,14 @@ func _on_countdown_tick(seconds_left: int) -> void:
 	countdown_tick.emit(seconds_left)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
+		var t := tree()
+		var is_listen := t.is_listen_server() if t else false
 		for node: Node in scene.synchronizer.tracked_nodes:
 			var peer_id := node.get_multiplayer_authority()
+			if peer_id == 1:
+				if is_listen:
+					scene._rpc_receive_countdown_tick(seconds_left)
+				continue
 			scene._rpc_receive_countdown_tick.rpc_id(peer_id, seconds_left)
 
 
@@ -320,8 +379,14 @@ func _on_countdown_finished() -> void:
 	countdown_finished.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
+		var t := tree()
+		var is_listen := t.is_listen_server() if t else false
 		for node: Node in scene.synchronizer.tracked_nodes:
 			var peer_id := node.get_multiplayer_authority()
+			if peer_id == 1:
+				if is_listen:
+					scene._rpc_receive_countdown_finished()
+				continue
 			scene._rpc_receive_countdown_finished.rpc_id(peer_id)
 	_active_countdown = null
 
@@ -330,8 +395,14 @@ func _on_countdown_cancelled() -> void:
 	countdown_cancelled.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
+		var t := tree()
+		var is_listen := t.is_listen_server() if t else false
 		for node: Node in scene.synchronizer.tracked_nodes:
 			var peer_id := node.get_multiplayer_authority()
+			if peer_id == 1:
+				if is_listen:
+					scene._rpc_receive_countdown_cancelled()
+				continue
 			scene._rpc_receive_countdown_cancelled.rpc_id(peer_id)
 	_active_countdown = null
 

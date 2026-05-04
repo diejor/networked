@@ -256,10 +256,14 @@ func _save_once() -> void:
 
 # ── Network transfer ───────────────────────────────────────────────────────────
 
-## Packages the current scene state and sends it to [param peer_id] over the network.
+	## Packages the current scene state and sends it to [param peer_id] over the network.
 func push_to(peer_id: int) -> void:
 	pull_from_scene()
-	_request_push.rpc_id(peer_id, bound_entity.serialize())
+	var ctx := Netw.ctx(self)
+	if peer_id == 1 and ctx and ctx.tree.is_listen_server():
+		_request_push(bound_entity.serialize())
+	else:
+		_request_push.rpc_id(peer_id, bound_entity.serialize())
 
 
 # RPC called by a client to push its serialized entity state to this peer.
