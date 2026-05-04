@@ -72,7 +72,7 @@ func get_peer_context() -> NetwPeerContext:
 	var ctx := get_context()
 	if not ctx:
 		return null
-	return ctx.services.get_peer_context(ctx.tree.get_unique_id())
+	return ctx.services.get_peer_context(self.multiplayer.get_unique_id())
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's context.

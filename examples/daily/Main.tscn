@@ -3,14 +3,14 @@
 [ext_resource type="Script" uid="uid://bu4t1igemybop" path="res://addons/networked/session/join_payload.gd" id="2_03owx"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
-[ext_resource type="Script" uid="uid://bp177r3yltt54" path="res://addons/networked/transport/local/local_backend.gd" id="5_7ue45"]
+[ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="5_7ue45"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/nodes/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 
 [sub_resource type="Resource" id="Resource_bd7kh"]
 script = ExtResource("5_7ue45")
-metadata/_custom_type_script = "uid://bp177r3yltt54"
+metadata/_custom_type_script = "uid://dqd358q7xpmeq"
 
 [sub_resource type="Resource" id="Resource_20pc6"]
 script = ExtResource("3_lgr22")

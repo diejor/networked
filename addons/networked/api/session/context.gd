@@ -20,7 +20,7 @@ extends RefCounted
 ## [br][br]
 ## Provides gameplay APIs such as [method NetwTree.pause],
 ## [method NetwTree.kick], and session introspection
-## ([method NetwTree.is_server], [method NetwTree.get_unique_id]).
+## ([method NetwTree.is_server], [method NetwTree.get_state]).
 var tree: NetwTree
 
 ## Service locator for backend systems registered on the

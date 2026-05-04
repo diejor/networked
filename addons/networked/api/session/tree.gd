@@ -11,8 +11,6 @@
 class_name NetwTree
 extends RefCounted
 
-## Emitted when the multiplayer API and scene manager have been configured.
-signal configured()
 ## Emitted after a player's target scene has been activated.
 signal player_scene_ready(join_payload: JoinPayload, netw_scene: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
@@ -31,7 +29,6 @@ var _tree_ref: WeakRef
 
 func _init(mt: MultiplayerTree) -> void:
 	_tree_ref = weakref(mt)
-	mt.configured.connect(func(): configured.emit())
 	mt.player_scene_ready.connect(_on_player_scene_ready)
 	mt.server_disconnecting.connect(func(reason: String): server_disconnecting.emit(reason))
 	mt.kick_requested.connect(func(requester, target, reason: String): kick_requested.emit(requester, target, reason))
@@ -57,14 +54,6 @@ func get_all_players() -> Array[Node]:
 func is_server() -> bool:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.is_host if mt else false
-
-
-## Returns the unique peer ID for this session.
-func get_unique_id() -> int:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if mt and mt.multiplayer_api:
-		return mt.multiplayer_api.get_unique_id()
-	return 0
 
 
 ## Returns the original name of the [MultiplayerTree] node.

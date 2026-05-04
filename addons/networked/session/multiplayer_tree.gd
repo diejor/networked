@@ -179,6 +179,12 @@ static func for_node(node: Node) -> MultiplayerTree:
 	return api.get_meta(&"_multiplayer_tree") as MultiplayerTree
 
 
+## Returns the [member role] of the [MultiplayerTree] associated with [param node].
+static func get_role_for(node: Node) -> Role:
+	var mt := for_node(node)
+	return mt.role if mt else Role.NONE
+
+
 ## Global resolver that finds a [MultiplayerTree] from any context.
 ##
 ## Handles [MultiplayerTree] instances, [Node]s (via metadata or hierarchy),
