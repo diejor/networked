@@ -1,15 +1,16 @@
 @tool
 ## Handles saving, loading, and network synchronization of an entity's persistent state.
 ##
-## [SaveComponent] acts as a bridging layer between the live scene state and a 
-## [NetwDatabase]. It automatically virtualizes properties selected in the 
-## Editor's "Replication" panel, synchronizing changes across the network and 
+## [SaveComponent] acts as a bridging layer between the live scene state and a
+## [NetwDatabase]. It automatically virtualizes properties selected in the
+## Editor's "Replication" panel, synchronizing changes across the network and
 ## persisting them to the database once per frame.
 ##
 ## [b]How to use:[/b]
 ## [br]1. Attach [SaveComponent] to your player or persistent entity scene.
-## [br]2. In the "Replication" panel, set "Root Node" (e.g., [code]..[/code]).
-## [br]3. Add properties to save (e.g., [code].:position[/code] or [code]Stats:health[/code]).
+## [br]2. In the "Replication" panel, set "Root Node" to [code].[/code] (self).
+## [br]3. Add properties to save using paths relative to SaveComponent
+##     (e.g., [code]..:position[/code] for the owner's position).
 ## [br]4. Assign a [member database] and [member table_name].
 ## [br]5. Call [method hydrate] to load existing data into the scene on spawn.
 ##
@@ -65,12 +66,12 @@ var bound_entity: Entity = DictionaryEntity.new()
 func _init() -> void:
 	# Keep save-data replication low-frequency - it is not latency-sensitive.
 	name = "SaveComponent"
+	root_path = "."
 	unique_name_in_owner = true
 	delta_interval = 5.0
 	replication_interval = 5.0
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 	public_visibility = false
-
 
 func _enter_tree() -> void:
 	if not _initialized and not Engine.is_editor_hint():
@@ -95,14 +96,9 @@ func _exit_tree() -> void:
 
 # ── ProxySynchronizer overrides ────────────────────────────────────────────────
 
-# Reads the live value of path from the scene owner.
+# Reads the live value of path from the node at [member _target_root].
 func _read_property(_name: StringName, path: NodePath) -> Variant:
-	var root: Node = null
-	if Engine.is_editor_hint():
-		root = get_node_or_null(root_path)
-	else:
-		root = owner
-	
+	var root := get_node_or_null(_target_root)
 	if not root:
 		return null
 	
@@ -226,12 +222,7 @@ func pull_from_scene() -> void:
 
 # Writes value for entity_key directly into the live scene node.
 func _write_scene(entity_key: StringName, value: Variant) -> void:
-	var root: Node = null
-	if Engine.is_editor_hint():
-		root = get_node_or_null(root_path)
-	else:
-		root = owner
-	
+	var root := get_node_or_null(_target_root)
 	if not root:
 		return
 	
@@ -391,6 +382,12 @@ func _notification(what: int) -> void:
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings: PackedStringArray = []
 	
+	if root_path != NodePath("."):
+		warnings.append(
+			"SaveComponent requires [code]root_path[/code] to be set to "
+			+ "[code].[/code] (self) for proper sync resolution."
+		)
+	
 	if not database:
 		warnings.append("'database' must be assigned for persistence.")
 	else:
@@ -413,12 +410,15 @@ func _get_configuration_warnings() -> PackedStringArray:
 	if not config or config.get_properties().is_empty():
 		warnings.append("No properties are tracked. Pick properties in the Replication panel.")
 	else:
-		var root := get_node_or_null(root_path)
-		if root:
-			for prop in config.get_properties():
-				var res := root.get_node_and_resource(prop)
-				if not res[0] or res[2].is_empty():
-					warnings.append("Property [code]%s[/code] not found on target node." % [str(prop)])
+		var validation_root := self
+		for prop in config.get_properties():
+			var res := validation_root.get_node_and_resource(prop)
+			if not res[0] or res[2].is_empty():
+				warnings.append(
+					"Property [code]%s[/code] not found on SaveComponent. " % [str(prop)]
+					+ "Paths are resolved relative to SaveComponent; use [code]..:position[/code] "
+					+ "to reference the owner node."
+				)
 	
 	return warnings
 

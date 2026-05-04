@@ -117,6 +117,13 @@ var is_server: bool:
 ## [code]_ready[/code].
 @export var auto_host_headless: bool = true
 
+## [b]Deprecated.[/b] Temporary opt-in for true listen-server mode.
+## When [code]true[/code], localhost connections host directly on this
+## tree instead of duplicating into a sibling server node.
+## TODO: Remove once listen-server is fully validated and becomes the
+## default behavior.
+@export var use_listen_server: bool = false
+
 ## The active [SceneMultiplayer] instance provided by the current
 ## [member backend].
 var multiplayer_api: SceneMultiplayer:
@@ -560,6 +567,23 @@ func connect_player(join_payload: JoinPayload) -> Error:
 			submit_join(join_payload)
 			return OK
 		
+		if use_listen_server:
+			var host_err := host(true)
+			if host_err == OK:
+				role = Role.LISTEN_SERVER
+				await host_ready
+				submit_join(join_payload)
+				return OK
+			elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
+				var join_err := await join(
+					backend.get_join_address(), join_payload.username
+				)
+				if join_err == OK:
+					submit_join(join_payload)
+				return join_err
+			else:
+				return host_err
+		
 		var server := duplicate() as MultiplayerTree
 		server.is_server = true
 		server.name = "Server"
@@ -628,9 +652,12 @@ func _ready() -> void:
 		init_join_payload.is_debug = true
 		connect_player(init_join_payload)
 	
-	if auto_host_headless and DisplayServer.get_name() == "headless" \
-			and is_server:
-		host()
+	if auto_host_headless and DisplayServer.get_name() == "headless":
+		if use_listen_server:
+			host()
+			role = Role.LISTEN_SERVER
+		elif is_server:
+			host()
 
 
 ## Entry point for a client to request entry into the game world.

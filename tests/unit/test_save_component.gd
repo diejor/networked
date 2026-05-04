@@ -146,7 +146,7 @@ func test_push_to_scene_writes_tracked_property_to_node() -> void:
 	save_comp.database = db
 	save_comp.table_name = &"players"
 	save_comp.bound_entity = entity
-	save_comp.track(&"position", NodePath(".:position"))
+	save_comp.track(&"position", NodePath("..:position"))
 	root.add_child(save_comp)
 	save_comp.owner = root
 
@@ -170,7 +170,7 @@ func test_pull_from_scene_reads_node_into_entity() -> void:
 	save_comp.database = db
 	save_comp.table_name = &"players"
 	save_comp.bound_entity = entity
-	save_comp.track(&"position", NodePath(".:position"))
+	save_comp.track(&"position", NodePath("..:position"))
 	root.add_child(save_comp)
 	save_comp.owner = root
 
@@ -193,7 +193,7 @@ func test_untracked_entity_keys_do_not_affect_scene() -> void:
 	save_comp.database = db
 	save_comp.table_name = &"players"
 	save_comp.bound_entity = entity
-	save_comp.track(&"position", NodePath(".:position"))
+	save_comp.track(&"position", NodePath("..:position"))
 	root.add_child(save_comp)
 	save_comp.owner = root
 
@@ -210,7 +210,7 @@ func test_is_dirty_reflects_network_and_manual_writes() -> void:
 	var save_comp: SaveComponent = auto_free(SaveComponent.new())
 	root.add_child(save_comp)
 	save_comp.owner = root
-	save_comp.track(&"health", NodePath(".:modulate"))
+	save_comp.track(&"health", NodePath("..:modulate"))
 
 	assert_that(save_comp.is_dirty()).is_false()
 

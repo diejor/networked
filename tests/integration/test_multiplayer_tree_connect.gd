@@ -44,6 +44,42 @@ func test_client_is_online_after_connect_player() -> void:
 	assert_that(client_tree.is_online()).is_true()
 
 
+func test_listen_server_connect_player_spawns_player() -> void:
+	var tree := MultiplayerTree.new()
+	tree.name = "ListenServer"
+	tree.use_listen_server = true
+	tree.auto_host_headless = false
+	add_child(tree)
+	auto_free(tree)
+
+	var ls_session := LocalLoopbackSession.new()
+	var backend := LocalLoopbackBackend.new()
+	backend.session = ls_session
+	tree.backend = backend
+
+	var mgr: MultiplayerSceneManager = (
+		NetworkedTestSuite.create_scene_manager()
+	)
+	tree.add_child(mgr)
+	mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+
+	var err := await tree.connect_player(_create_join_payload("alice"))
+	assert_that(err).is_equal(OK)
+	assert_that(tree.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
+
+	var scene := mgr.active_scenes.values()[0] as MultiplayerScene
+	assert_that(scene).is_not_null()
+
+	var timeout_timer := get_tree().create_timer(1.0)
+	while scene.level.get_node_or_null("alice|1") == null:
+		await get_tree().process_frame
+		if timeout_timer.time_left <= 0:
+			assert(false, "Timed out waiting for player 'alice|1' to spawn")
+			return
+
+	assert_that(scene.level.get_node_or_null("alice|1")).is_not_null()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

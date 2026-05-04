@@ -205,6 +205,8 @@ func _on_owner_tree_entered() -> void:
 		)
 		owner.set_multiplayer_authority(authority)
 	
+	var existing := owner.get_node_or_null("SpawnerComponent/SpawnSynchronizer")
+	_dbg.debug("_on_owner_tree_entered: existing SpawnSynchronizer=%s, spawn_sync var=%s", [existing, spawn_sync])
 	_setup_spawn_sync(spawn_sync)
 
 
