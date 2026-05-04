@@ -6,9 +6,9 @@
 extends EditorPlugin
 
 const SceneNodePathPlugin = preload("uid://dtj5ucl1iy3ug")
-const NetwLogEditor = preload("res://addons/networked/utils/editor/netw_log_editor.gd")
+const NetwLogEditor = preload("uid://uesyjc4dyxqn")
 const DebuggerPlugin = preload("uid://b2lc6aalf32kx")
-const DEBUG_REPORTER_PATH = "res://addons/networked/debug/networked_debug_reporter.gd"
+const DEBUG_REPORTER_PATH = "res://addons/networked/debug/core/reporter.gd"
 
 ## Reference to the SceneNodePath editor plugin instance.
 var scene_node_path_plugin: EditorPlugin
@@ -68,16 +68,4 @@ func _register_settings() -> void:
 		"name": setting_name,
 		"type": TYPE_BOOL,
 		"hint": PROPERTY_HINT_NONE,
-	})
-
-	var scale_name := "networked/debug/window_scale"
-	if not ProjectSettings.has_setting(scale_name):
-		ProjectSettings.set_setting(scale_name, 0.6)
-	
-	ProjectSettings.set_initial_value(scale_name, 0.6)
-	ProjectSettings.add_property_info({
-		"name": scale_name,
-		"type": TYPE_FLOAT,
-		"hint": PROPERTY_HINT_RANGE,
-		"hint_string": "0.1,1.0,0.1",
 	})

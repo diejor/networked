@@ -1,3 +1,4 @@
+## Configuration for filtering nodes in the [SceneNodePath] picker dialog.
 class_name FilterConfig
 extends RefCounted
 

@@ -20,6 +20,7 @@ extends NetworkedTestSuite
 
 ## [ProxySynchronizer] subclass that stores properties in memory instead of reading
 ## from the scene tree. Allows testing dispatch without a live node hierarchy.
+@warning_ignore("missing_tool")
 class StubProxy extends ProxySynchronizer:
 	var _store: Dictionary[StringName, Variant] = {}
 

@@ -13,13 +13,13 @@ extends Resource
 ## @export var portal_destination: SceneNodePath
 ##
 ## func setup_level() -> void:
-##     # 1. Instantiates the scene. Returns a Result object with handles to the root and target.
+##     # Instantiates the scene. Returns a Result object with handles to the root and target.
 ##     var result = portal_destination.instantiate()
 ##     if result:
 ##         add_child(result.root)
 ##         var portal = result.node
 ##
-##     # 2. Pulls the node out and deletes the rest of the scene automatically.
+##     # Pulls the node out and deletes the rest of the scene automatically.
 ##     var isolated_boss = SceneNodePath.new("uid://b4x8...::%Boss").extract()
 ##     add_child(isolated_boss)
 ## [/codeblock]

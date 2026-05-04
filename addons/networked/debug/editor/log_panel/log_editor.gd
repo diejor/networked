@@ -1,0 +1,340 @@
+@tool
+extends Control
+
+var _tree: Tree
+var _picker: EditorResourcePicker
+var _settings: NetwLogSettings
+var _search_box: LineEdit
+var _overrides_only_btn: CheckBox
+var _search_filter: String = ""
+var _overrides_only: bool = false
+
+var _module_cache: Array = []
+var _cache_valid: bool = false
+
+const LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "NONE", "INHERIT"]
+const ROOT_PATH = "res://"
+const IGNORE_DIRS = [".godot", ".git", ".jj"]
+
+func _enter_tree() -> void:
+	if not _tree:
+		_build_ui()
+
+	var active_path: String = ProjectSettings.get_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
+	if active_path.is_empty():
+		return
+
+	active_path = NetwLog._fix_profile_path(active_path)
+
+	if not ResourceLoader.exists(active_path):
+		Netw.dbg.warn("NetwLog: Active profile no longer exists: '%s'\n  -> Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
+		ProjectSettings.save()
+		return
+
+	var res = ResourceLoader.load(active_path)
+	if not res is NetwLogSettings:
+		Netw.dbg.warn("NetwLog: '%s' is not a NetwLogSettings resource.\n  -> Select a new profile in the NetwLog panel." % [active_path], func(m): push_warning(m))
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
+		ProjectSettings.save()
+		return
+
+	_picker.edited_resource = res
+	_on_resource_changed(res)
+
+func _build_ui() -> void:
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(vb)
+
+	var hb := HBoxContainer.new()
+	vb.add_child(hb)
+
+	var label := Label.new()
+	label.text = "Active Profile:"
+	hb.add_child(label)
+
+	_picker = EditorResourcePicker.new()
+	_picker.base_type = "NetwLogSettings"
+	_picker.custom_minimum_size.x = 250
+	_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_picker.resource_changed.connect(_on_resource_changed)
+	hb.add_child(_picker)
+
+	var refresh_btn := Button.new()
+	refresh_btn.text = "Refresh"
+	refresh_btn.tooltip_text = "Re-scan the filesystem for new scripts"
+	refresh_btn.pressed.connect(_on_refresh_pressed)
+	hb.add_child(refresh_btn)
+
+	var dump_btn := Button.new()
+	dump_btn.text = "Dump"
+	dump_btn.tooltip_text = "Dump current settings to console"
+	dump_btn.pressed.connect(NetwLog.dump_settings)
+	hb.add_child(dump_btn)
+
+	var search_hb := HBoxContainer.new()
+	vb.add_child(search_hb)
+	
+	_search_box = LineEdit.new()
+	_search_box.placeholder_text = "Filter modules..."
+	_search_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_search_box.clear_button_enabled = true
+	_search_box.text_changed.connect(_on_search_changed)
+	search_hb.add_child(_search_box)
+	
+	_overrides_only_btn = CheckBox.new()
+	_overrides_only_btn.text = "Overrides Only"
+	_overrides_only_btn.toggled.connect(_on_overrides_only_toggled)
+	search_hb.add_child(_overrides_only_btn)
+
+	_tree = Tree.new()
+	_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tree.columns = 2
+	_tree.set_column_title(0, "Module")
+	_tree.set_column_title(1, "Log Level")
+	_tree.column_titles_visible = true
+	_tree.item_edited.connect(_on_item_edited)
+	vb.add_child(_tree)
+
+# --- Profile management ---
+
+func _on_resource_changed(res: Resource) -> void:
+	if res is NetwLogSettings:
+		_settings = res
+		if not _settings.resource_path.is_empty():
+			var uid_int := ResourceLoader.get_resource_uid(_settings.resource_path)
+			var profile_ref: String = (
+				ResourceUID.id_to_text(uid_int)
+				if uid_int != ResourceUID.INVALID_ID
+				else _settings.resource_path
+			)
+			ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, profile_ref)
+			ProjectSettings.save()
+		
+		var addon_root := NetwLog._addon_root
+		NetwLog.initialize(addon_root)
+		_refresh_tree()
+	else:
+		_settings = null
+		ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, "")
+		ProjectSettings.save()
+		_tree.clear()
+
+func _on_search_changed(new_text: String) -> void:
+	_search_filter = new_text
+	_refresh_tree()
+
+func _on_overrides_only_toggled(pressed: bool) -> void:
+	_overrides_only = pressed
+	_refresh_tree()
+
+func _on_refresh_pressed() -> void:
+	_cache_valid = false
+	_refresh_tree()
+
+func _refresh_tree() -> void:
+	if not _settings:
+		return
+	_tree.clear()
+
+	var cache := _get_module_cache()
+	_prune_stale_overrides(cache)
+
+	var root := _tree.create_item()
+	var profile_label := _settings.resource_path if not _settings.resource_path.is_empty() else "Unsaved"
+	root.set_text(0, "Profile: %s" % profile_label)
+
+	var global_item := _tree.create_item(root)
+	global_item.set_text(0, "Global Level")
+	_setup_level_cell(global_item, _settings.global_level, false)
+
+	var project_root := _tree.create_item(root)
+	project_root.set_text(0, "res://")
+	project_root.set_selectable(0, false)
+	project_root.set_selectable(1, false)
+
+	for entry: Dictionary in cache:
+		_add_tree_entry(entry, project_root, _search_filter, _overrides_only)
+
+func _entry_matches_filter(entry: Dictionary, filter: String, overrides_only: bool) -> bool:
+	if overrides_only:
+		if _settings.module_overrides.has(entry.module_path):
+			return true
+		# Dirs match if any child has an override
+		for child in entry.children:
+			if _entry_matches_filter(child, "", true):
+				return true
+		return false
+		
+	if filter.is_empty():
+		return true
+	if filter.to_lower() in entry.name.to_lower():
+		return true
+	for child: Dictionary in entry.children:
+		if _entry_matches_filter(child, filter, false):
+			return true
+	return false
+
+func _add_tree_entry(entry: Dictionary, parent: TreeItem, filter: String, overrides_only: bool) -> void:
+	if not _entry_matches_filter(entry, filter, overrides_only):
+		return
+		
+	var item := _tree.create_item(parent)
+	item.set_text(0, entry.name + ("/" if entry.is_dir else ""))
+	var level: int = _settings.module_overrides.get(entry.module_path, -1)
+	_setup_level_cell(item, level, true)
+	item.set_metadata(0, entry.module_path)
+	
+	for child: Dictionary in entry.children:
+		_add_tree_entry(child, item, filter, overrides_only)
+		
+	if (not filter.is_empty() or overrides_only) and item.get_child_count() > 0:
+		item.set_collapsed(false)
+
+func _setup_level_cell(item: TreeItem, current_level: int, can_inherit: bool) -> void:
+	item.set_cell_mode(1, TreeItem.CELL_MODE_RANGE)
+	var opts: Array = LEVELS if can_inherit else LEVELS.slice(0, LEVELS.size() - 1)
+	item.set_text(1, ",".join(opts))
+	item.set_range(1, LEVELS.size() - 1 if current_level == -1 else current_level)
+	item.set_editable(1, true)
+	
+	if can_inherit and current_level != -1:
+		item.set_custom_color(0, Color(0.8, 0.8, 0.2))
+		item.set_custom_color(1, Color(0.8, 0.8, 0.2))
+	else:
+		item.clear_custom_color(0)
+		item.clear_custom_color(1)
+
+# --- Edit handler ---
+
+func _on_item_edited() -> void:
+	if not _settings:
+		return
+	var item := _tree.get_edited()
+	if _tree.get_edited_column() != 1:
+		return
+
+	var val := int(item.get_range(1))
+	var level_name: String = LEVELS[val]
+
+	if item.get_parent() == _tree.get_root() and item.get_index() == 0:
+		_settings.global_level = val
+		NetwLog.current_level = val
+		NetwLog._recompute_min_level()
+		_setup_level_cell(item, val, false)
+	else:
+		var mod_path = item.get_metadata(0)
+		if mod_path:
+			if level_name == "INHERIT":
+				_settings.module_overrides.erase(mod_path)
+				NetwLog.module_levels.erase(mod_path)
+				_setup_level_cell(item, -1, true)
+			else:
+				_settings.module_overrides[mod_path] = val
+				NetwLog.module_levels[mod_path] = val
+				_setup_level_cell(item, val, true)
+			NetwLog._recompute_min_level()
+
+	if not _settings.resource_path.is_empty():
+		ResourceSaver.save(_settings, _settings.resource_path)
+
+func _get_module_cache() -> Array:
+	if not _cache_valid:
+		_module_cache = _scan_dir(ROOT_PATH)
+		_cache_valid = true
+	return _module_cache
+
+## Recursively scans a directory and returns a list of entry dicts.
+## Each entry: {name: String, module_path: String, is_dir: bool, children: Array}
+## Dirs with no .gd files anywhere in their subtree are omitted.
+func _scan_dir(path: String) -> Array:
+	var dir := DirAccess.open(path)
+	if not dir:
+		return []
+
+	var subdirs: Array = []
+	var files: Array = []
+
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		if entry != "." and entry != "..":
+			if dir.current_is_dir():
+				if not entry in IGNORE_DIRS:
+					subdirs.append(entry)
+			elif entry.ends_with(".gd"):
+				files.append(entry)
+		entry = dir.get_next()
+
+	subdirs.sort()
+	files.sort()
+
+	var result: Array = []
+
+	for d: String in subdirs:
+		var full_path := path + d + "/"
+		var children := _scan_dir(full_path)
+		if children.is_empty():
+			continue  # skip dirs with no GD files in the subtree
+		result.append({
+			"name": d,
+			"module_path": _to_module_path(full_path),
+			"is_dir": true,
+			"children": children
+		})
+
+	for f: String in files:
+		result.append({
+			"name": f,
+			"module_path": _to_module_path(path + f),
+			"is_dir": false,
+			"children": []
+		})
+
+	return result
+
+func _to_module_path(path: String) -> String:
+	var p := path.replace(ROOT_PATH, "").trim_suffix("/")
+	if p.ends_with(".gd"):
+		p = p.left(p.length() - 3)
+	var addon_root := NetwLog._addon_root
+	if not addon_root.is_empty() and p.begins_with(addon_root + "/"):
+		p = p.substr(addon_root.length() + 1)
+	return p.replace("/", ".")
+
+## Removes module_overrides entries whose paths no longer exist in the filesystem.
+## Called after every cache build so stale keys from renamed/deleted scripts are cleaned up.
+func _prune_stale_overrides(cache: Array) -> void:
+	if not _settings or _settings.module_overrides.is_empty():
+		return
+
+	var valid_paths := _collect_module_paths(cache)
+	var stale: Array = []
+	for path: String in _settings.module_overrides.keys():
+		if not valid_paths.has(path):
+			stale.append(path)
+
+	if stale.is_empty():
+		return
+
+	for path: String in stale:
+		_settings.module_overrides.erase(path)
+		NetwLog.module_levels.erase(path)
+
+	Netw.dbg.warn("NetwLog: Pruned %d stale override(s) from '%s': %s" % [stale.size(), _settings.resource_path, ", ".join(stale)], func(m): push_warning(m))
+
+	NetwLog._recompute_min_level()
+
+	if not _settings.resource_path.is_empty():
+		ResourceSaver.save(_settings, _settings.resource_path)
+
+## Flattens the cache into a set of all known module paths (dirs and files).
+func _collect_module_paths(entries: Array) -> Dictionary:
+	var result := {}
+	for entry: Dictionary in entries:
+		result[entry.module_path] = true
+		if not entry.children.is_empty():
+			result.merge(_collect_module_paths(entry.children))
+	return result

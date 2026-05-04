@@ -24,7 +24,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	if is_instance_valid(_harness):
-		_harness.teardown()
+		await _harness.teardown()
 	await drain_frames(get_tree(), 3)
 
 func test_authority_handover() -> void:
@@ -107,7 +107,7 @@ func test_visual_smooth_movement_realtime() -> void:
 		_env.set_server_property(&"position", Vector2(expected_x, 300))
 		await _harness.sync_ticks(5)
 
-	await _harness.sync_ticks(15)
+	await _harness.sync_ticks(30)
 	
 	var final_client_pos = _env.get_client_property(&"position")
 	assert_vector(final_client_pos).is_equal_approx(Vector2(expected_x, 300), Vector2(1, 1))

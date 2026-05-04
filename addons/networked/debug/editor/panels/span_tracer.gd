@@ -1,0 +1,510 @@
+## Span Tracer panel.
+##
+## Shows Span rows opened via [Netw.dbg] by the addon's own systems.
+## They have an explicit lifecycle indicator: (o) open (yellow), [V] closed (green),
+## [X] failed (red). Each step is a child row with elapsed-ms timing.
+##
+## [br][b]Breakpoint gutter[/b] ([constant COL_BP]): click the breakpoint icon on any row that has
+## caller info to toggle a GDScript breakpoint at that call site. The icon stays in
+## sync with the script editor via [method sync_breakpoint] /
+## [method sync_breakpoints_cleared], driven by
+## [method NetworkedDebuggerPlugin._breakpoint_set_in_tree].
+##
+## [br][b]Jump to source[/b]: double-click any row (or press Enter while selected) to open
+## the script at the call site in the editor.
+@tool
+class_name PanelSpanTracer
+extends DebugPanel
+
+## Injected by [NetworkedDebuggerUI] after construction.
+## Signature: [code]func(source: String, line: int) -> void[/code]
+var toggle_breakpoint: Callable
+
+var _tree: Tree
+var _filter_edit: LineEdit
+var _copy_btn: Button
+var _filter_text: String = ""
+
+var _is_remote: bool = false
+var _full_buffer: Array = []
+# Set of span_ids that match the current filter (including matches in steps).
+var _matching_spans: Dictionary = {}
+# span_id -> aggregated lower-case searchable text for fuzzy matching.
+var _span_text_cache: Dictionary = {}
+
+# span_id -> TreeItem (span lifecycle rows)
+var _span_items: Dictionary[String, TreeItem] = {}
+# span_id -> open timestamp_usec (elapsed calculation for steps)
+var _span_start_usec: Dictionary[String, int] = {}
+
+# Active breakpoints received from _breakpoint_set_in_tree callbacks.
+# Key: "source:line". Preserved across clear().
+var _active_breakpoints: Dictionary = {}
+
+# "source:line" -> Array[TreeItem]. Rebuilt on each push_*; cleared on clear().
+var _caller_rows: Dictionary = {}
+
+# Column indices
+const COL_BP      := 0  # breakpoint gutter (narrow)
+const COL_NAME    := 1  # Operation / Step
+const COL_ELAPSED := 2
+
+
+func _ready() -> void:
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 4)
+	add_child(header_row)
+
+	_copy_btn = Button.new()
+	_copy_btn.text = "Copy"
+	_copy_btn.pressed.connect(_on_copy)
+	header_row.add_child(_copy_btn)
+
+	var clear_btn := Button.new()
+	clear_btn.text = "Clear"
+	clear_btn.pressed.connect(clear)
+	header_row.add_child(clear_btn)
+
+	_filter_edit = LineEdit.new()
+	_filter_edit.placeholder_text = "Filter events..."
+	_filter_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_filter_edit.clear_button_enabled = true
+	_filter_edit.text_changed.connect(_on_filter_changed)
+	header_row.add_child(_filter_edit)
+
+	_tree = Tree.new()
+	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tree.columns = 3
+	_tree.set_column_title(COL_BP, "")
+	_tree.set_column_title(COL_NAME, "Operation / Step")
+	_tree.set_column_title(COL_ELAPSED, "Elapsed")
+	_tree.column_titles_visible = true
+	_tree.hide_root = true
+	_tree.set_column_expand(COL_BP, false)
+	_tree.set_column_expand(COL_NAME, true)
+	_tree.set_column_expand(COL_ELAPSED, false)
+	_tree.set_column_custom_minimum_width(COL_BP, 24)
+	_tree.set_column_custom_minimum_width(COL_ELAPSED, 70)
+	_tree.item_activated.connect(_on_item_activated)
+	_tree.item_selected.connect(_on_item_selected)
+	_tree.button_clicked.connect(_on_bp_button_clicked)
+	add_child(_tree)
+
+
+func clear() -> void:
+	_full_buffer.clear()
+	_span_text_cache.clear()
+	_clear_tree_only()
+
+
+func _clear_tree_only() -> void:
+	_tree.clear()
+	_span_items.clear()
+	_span_start_usec.clear()
+	_caller_rows.clear()
+	_matching_spans.clear()
+	# _active_breakpoints intentionally preserved - configuration survives tree.
+
+
+## Called by [NetworkedDebuggerUI] once, right after the panel enters the scene tree.
+## Stores the flag and rebuilds the tree.
+func set_peer_remote(is_remote: bool) -> void:
+	if _is_remote == is_remote:
+		return
+	_is_remote = is_remote
+	clear()
+
+
+## Populates the panel from [param buffer] all at once (called on checkbox toggle-on).
+## Each entry is [code]{"type": String, "data": Dictionary}[/code] as stored by [SpanAdapter].
+func populate(buffer: Array) -> void:
+	_full_buffer = buffer.duplicate()
+	_rebuild_span_text_cache()
+	_rebuild_from_buffer()
+
+
+## Pushes a single new entry (called per [signal PanelDataAdapter.data_changed]).
+func on_new_entry(entry: Variant) -> void:
+	var d := entry as Dictionary
+	_full_buffer.append(d)
+	if _full_buffer.size() > 1000:
+		_full_buffer.pop_front()
+		# If we pop from history, ideally we should rebuild cache, but for 1k items
+		# and ring buffer behavior, stale cache entries for dead IDs are harmless.
+
+	var data: Dictionary = d.get("data", {})
+	var span_id: String = data.get("id", "")
+	if not span_id.is_empty():
+		var new_text := _get_entry_searchable_text(d)
+		if not new_text.is_empty():
+			_span_text_cache[span_id] = _span_text_cache.get(span_id, "") + " " + new_text
+
+	if not _filter_text.is_empty():
+		if not span_id.is_empty() and not _matching_spans.has(span_id):
+			if _check_span_match(span_id, _filter_text):
+				_rebuild_from_buffer()
+				return
+			else:
+				# Span doesn't match and wasn't matching, skip it.
+				return
+
+	_dispatch_span_entry(d)
+
+
+func _dispatch_span_entry(entry: Dictionary) -> void:
+	var d: Dictionary = entry.get("data", {})
+	match entry.get("type", ""):
+		"open":      push_span_open(d)
+		"step":      push_span_step(d)
+		"step_warn": push_span_step_warn(d)
+		"close":     push_span_close(d)
+		"fail":      push_span_fail(d)
+
+
+func _on_filter_changed(new_text: String) -> void:
+	_filter_text = new_text
+	_rebuild_from_buffer()
+
+
+func _rebuild_span_text_cache() -> void:
+	_span_text_cache.clear()
+	for entry: Dictionary in _full_buffer:
+		var data: Dictionary = entry.get("data", {})
+		var span_id: String = data.get("id", "")
+		if span_id.is_empty(): continue
+		var txt := _get_entry_searchable_text(entry)
+		if not txt.is_empty():
+			_span_text_cache[span_id] = _span_text_cache.get(span_id, "") + " " + txt
+
+
+func _rebuild_from_buffer() -> void:
+	_clear_tree_only()
+	_matching_spans.clear()
+
+	if not _filter_text.is_empty():
+		for span_id: String in _span_text_cache:
+			if _check_span_match(span_id, _filter_text):
+				_matching_spans[span_id] = true
+
+	for entry: Dictionary in _full_buffer:
+		_dispatch_span_entry(entry)
+
+
+func _check_span_match(span_id: String, filter: String) -> bool:
+	var text: String = _span_text_cache.get(span_id, "")
+	if text.is_empty():
+		return false
+
+	var tokens := filter.to_lower().split(" ", false)
+	for t in tokens:
+		if not text.contains(t):
+			return false
+	return true
+
+
+func _get_entry_searchable_text(entry: Dictionary) -> String:
+	var type: String = entry.get("type", "")
+	var d: Dictionary = entry.get("data", {})
+	var out := ""
+
+	match type:
+		"open", "close":
+			out = d.get("label", "")
+		"step", "step_warn":
+			var s: Dictionary = d.get("step", {})
+			out = s.get("label", "") + " " + s.get("message", "")
+		"fail":
+			out = d.get("label", "") + " " + d.get("reason", "")
+	
+	return out.to_lower()
+
+
+## Scroll to and highlight the span row matching [param cid].
+## Called by the Orchestrator Bus when the user selects a manifest entry.
+func highlight_cid(cid: String) -> void:
+	if cid.is_empty():
+		return
+	_clear_highlights()
+	var target: TreeItem = _span_items.get(cid)
+	if not target:
+		for k: String in _span_items:
+			if k.begins_with(cid) or cid.begins_with(k):
+				target = _span_items[k]
+				break
+	if target:
+		target.set_custom_bg_color(COL_NAME, Color(0.2, 0.4, 0.2), false)
+		target.select(COL_NAME)
+		_tree.scroll_to_item(target)
+
+
+func _clear_highlights() -> void:
+	var root := _tree.get_root()
+	if not root:
+		return
+	var item := root.get_first_child()
+	while item:
+		item.clear_custom_bg_color(COL_NAME)
+		item = item.get_next()
+
+
+# --- Breakpoint Sync (called from NetworkedDebuggerUI) ------------------------
+
+## Updates gutter state for all rows at [param source]:[param line].
+## Called whenever the script editor adds or removes a breakpoint.
+func sync_breakpoint(source: String, line: int, enabled: bool) -> void:
+	var key := "%s:%d" % [source, line]
+	if enabled:
+		_active_breakpoints[key] = true
+	else:
+		_active_breakpoints.erase(key)
+	for item: TreeItem in _caller_rows.get(key, []):
+		_refresh_bp_cell(item, enabled)
+
+
+## Clears all gutter indicators. Called when the editor removes all breakpoints.
+func sync_breakpoints_cleared() -> void:
+	_active_breakpoints.clear()
+	for key: String in _caller_rows:
+		for item: TreeItem in _caller_rows[key]:
+			_refresh_bp_cell(item, false)
+
+
+# --- Span Lifecycle (NetTrace) ------------------------------------------------
+
+## Creates a top-level span row with an open-state indicator (yellow (o)).
+func push_span_open(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	if span_id.is_empty():
+		return
+
+	if not _filter_text.is_empty() and not _matching_spans.has(span_id):
+		return
+
+	if not _tree.get_root():
+		_tree.create_item()
+
+	var label: String = d.get("label", "span")
+	var item := _tree.create_item(_tree.get_root())
+	item.set_text(COL_NAME, "(o) %s" % label)
+	item.set_text(COL_ELAPSED, "f%d" % d.get("frame", 0))
+	item.set_custom_color(COL_NAME, Color(1.0, 0.85, 0.2))  # yellow = open
+
+	var caller: Dictionary = d.get("caller", {})
+	item.set_metadata(COL_NAME, {"span_id": span_id, "caller": caller})
+	_register_caller_row(item, caller)
+
+	_span_items[span_id] = item
+	_span_start_usec[span_id] = d.get("timestamp_usec", Time.get_ticks_usec())
+
+	var follows: Dictionary = d.get("follows_from", {})
+	if not follows.is_empty():
+		var f_row := _tree.create_item(item)
+		var step_part: String = ("  . %s" % follows["step_label"]) if not follows.get("step_label", "").is_empty() else ""
+		f_row.set_text(COL_NAME, "  <- follows: %s%s" % [follows.get("span_label", "?"), step_part])
+		f_row.set_custom_color(COL_NAME, Color(0.55, 0.55, 0.55))
+		f_row.set_metadata(COL_NAME, {"follows_span_id": follows.get("span_id", "")})
+
+	var peers: Array = d.get("affected_peers", [])
+	if not peers.is_empty():
+		var p_row := _tree.create_item(item)
+		p_row.set_text(COL_NAME, "  peers: %s" % str(peers))
+		p_row.set_custom_color(COL_NAME, Color(0.55, 0.55, 0.55))
+		_set_unselectable(p_row)
+
+
+## Appends a step child row to an existing span row.
+func push_span_step(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	var item: TreeItem = _span_items.get(span_id)
+	if not item:
+		return
+	var s: Dictionary = d.get("step", {})
+	var step_label: String = s.get("label", "?")
+	var step_usec: int = s.get("usec", 0)
+	var elapsed_ms: float = (step_usec - _span_start_usec.get(span_id, step_usec)) / 1000.0
+
+	var row := _tree.create_item(item)
+	row.set_text(COL_NAME, "   %s" % step_label)
+	row.set_text(COL_ELAPSED, "+%.1f ms" % elapsed_ms)
+	var step_data: Dictionary = s.get("data", {})
+	if not step_data.is_empty():
+		row.set_tooltip_text(COL_NAME, str(step_data))
+
+	var caller: Dictionary = s.get("caller", {})
+	row.set_metadata(COL_NAME, {"caller": caller})
+	_register_caller_row(row, caller)
+
+	item.set_collapsed(false)
+
+
+## Appends a warning step child row to an existing span row (orange !).
+func push_span_step_warn(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	var item: TreeItem = _span_items.get(span_id)
+	if not item:
+		return
+	var s: Dictionary = d.get("step", {})
+	var step_label: String = s.get("label", "?")
+	var step_usec: int = s.get("usec", 0)
+	var elapsed_ms: float = (step_usec - _span_start_usec.get(span_id, step_usec)) / 1000.0
+	var message: String = s.get("message", "")
+
+	var row := _tree.create_item(item)
+	var display := "   ! %s" % step_label
+	if not message.is_empty():
+		display += "  [%s]" % message
+	row.set_text(COL_NAME, display)
+	row.set_text(COL_ELAPSED, "+%.1f ms" % elapsed_ms)
+	row.set_custom_color(COL_NAME, Color(1.0, 0.65, 0.1))  # orange = warned step
+
+	var step_data: Dictionary = s.get("data", {})
+	if not step_data.is_empty():
+		row.set_tooltip_text(COL_NAME, str(step_data))
+
+	var caller: Dictionary = s.get("caller", {})
+	row.set_metadata(COL_NAME, {"caller": caller})
+	_register_caller_row(row, caller)
+	item.set_collapsed(false)
+
+
+## Updates a span row to a clean-close state (green [V]).
+func push_span_close(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	var item: TreeItem = _span_items.get(span_id)
+	if not item:
+		return
+	item.set_text(COL_NAME, "[V] %s" % d.get("label", item.get_text(COL_NAME).substr(4)))
+	item.set_custom_color(COL_NAME, Color(0.3, 0.85, 0.4))  # green = ok
+	var elapsed_usec: int = d.get("elapsed_usec", 0)
+	if elapsed_usec > 0:
+		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
+
+
+## Updates a span row to a failed state (red [X]) and appends the failure reason.
+func push_span_fail(d: Dictionary) -> void:
+	var span_id: String = d.get("id", "")
+	var item: TreeItem = _span_items.get(span_id)
+	if not item:
+		return
+	var label: String = d.get("label", item.get_text(COL_NAME).substr(4))
+	var reason: String = d.get("reason", "?")
+	item.set_text(COL_NAME, "[X] %s  [%s]" % [label, reason])
+	item.set_custom_color(COL_NAME, Color(1.0, 0.35, 0.35))  # red = failed
+	var elapsed_usec: int = d.get("elapsed_usec", 0)
+	if elapsed_usec > 0:
+		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
+
+	var r := _tree.create_item(item)
+	r.set_text(COL_NAME, "  [X] %s" % reason)
+	r.set_custom_color(COL_NAME, Color(1.0, 0.45, 0.45))
+	var fail_caller: Dictionary = d.get("caller", {})
+	r.set_metadata(COL_NAME, {"caller": fail_caller})
+	_register_caller_row(r, fail_caller)
+	if fail_caller.is_empty():
+		_set_unselectable(r)
+	item.set_collapsed(false)
+
+
+# --- Internal -----------------------------------------------------------------
+
+func _on_copy() -> void:
+	if _span_items.is_empty():
+		return
+	var lines: PackedStringArray = []
+	for span_id: String in _span_items:
+		var item: TreeItem = _span_items[span_id]
+		var elapsed := item.get_text(COL_ELAPSED)
+		var header := item.get_text(COL_NAME)
+		lines.append("%s  [%s]" % [header, elapsed] if not elapsed.is_empty() else header)
+		var child := item.get_first_child()
+		while child:
+			var child_name := child.get_text(COL_NAME)
+			var child_elapsed := child.get_text(COL_ELAPSED)
+			if not child_name.is_empty():
+				lines.append("%s  %s" % [child_name, child_elapsed] if not child_elapsed.is_empty() else child_name)
+			child = child.get_next()
+		lines.append("")
+	DisplayServer.clipboard_set("\n".join(lines))
+
+
+## Registers [param item] in [member _caller_rows] and adds the breakpoint button.
+## Does nothing if [param caller] is empty (no source info available).
+func _register_caller_row(item: TreeItem, caller: Dictionary) -> void:
+	if caller.is_empty():
+		return
+	var source: String = caller.get("source", "")
+	var line: int = caller.get("line", 0)
+	if source.is_empty():
+		return
+
+	var key := "%s:%d" % [source, line]
+	if key not in _caller_rows:
+		_caller_rows[key] = []
+	(_caller_rows[key] as Array).append(item)
+
+	var icon := EditorInterface.get_base_control().get_theme_icon("Breakpoint", "EditorIcons")
+	item.add_button(COL_BP, icon, 0, false, "")
+	_refresh_bp_cell(item, _active_breakpoints.get(key, false))
+
+	item.set_tooltip_text(COL_NAME, "%s:%d" % [source.get_file(), line])
+
+
+func _refresh_bp_cell(item: TreeItem, active: bool) -> void:
+	if item.get_button_count(COL_BP) == 0:
+		return
+	item.set_button_color(COL_BP, 0,
+		Color(1.0, 1.0, 1.0, 1.0) if active else Color(1.0, 1.0, 1.0, 0.3))
+
+
+func _on_item_selected() -> void:
+	var item := _tree.get_selected()
+	if not item:
+		return
+	var meta = item.get_metadata(COL_NAME)
+	var follows_id: String = (meta as Dictionary).get("follows_span_id", "") if meta is Dictionary else ""
+	if follows_id.is_empty():
+		return
+	var target: TreeItem = _span_items.get(follows_id)
+	if not target:
+		for k: String in _span_items:
+			if k.begins_with(follows_id) or follows_id.begins_with(k):
+				target = _span_items[k]
+				break
+	if target:
+		target.select(COL_NAME)
+		_tree.scroll_to_item(target)
+
+
+func _on_item_activated() -> void:
+	var item := _tree.get_selected()
+	if not item:
+		return
+	var meta = item.get_metadata(COL_NAME)
+	if not meta is Dictionary:
+		return
+	var caller: Dictionary = (meta as Dictionary).get("caller", {})
+	var source: String = caller.get("source", "")
+	if source.is_empty():
+		return
+	var script = load(source)
+	if script is Script:
+		EditorInterface.set_main_screen_editor("Script")
+		EditorInterface.edit_script(script, caller.get("line", 0))
+
+
+func _on_bp_button_clicked(item: TreeItem, column: int, id: int, _mouse_button_index: int) -> void:
+	if column != COL_BP or id != 0:
+		return
+	var meta = item.get_metadata(COL_NAME)
+	if not meta is Dictionary:
+		return
+	var caller: Dictionary = (meta as Dictionary).get("caller", {})
+	var source: String = caller.get("source", "")
+	if source.is_empty() or not toggle_breakpoint.is_valid():
+		return
+	toggle_breakpoint.call(source, caller.get("line", 0))
+
+
+func _set_unselectable(item: TreeItem) -> void:
+	for col in range(_tree.columns):
+		item.set_selectable(col, false)

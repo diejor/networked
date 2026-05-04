@@ -23,7 +23,7 @@ var _sync: MultiplayerSynchronizer
 # ---------------------------------------------------------------------------
 
 func before_test() -> void:
-	# Tree — required for NetComponent bucket lookups.
+	# Tree — required for NetwComponent bucket lookups.
 	_tree = MultiplayerTree.new()
 	add_child(_tree)
 	auto_free(_tree)

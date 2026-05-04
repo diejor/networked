@@ -1,3 +1,4 @@
+## Validates that a node path exists within a specific packed scene.
 class_name ScenePathValidator
 extends Object
 

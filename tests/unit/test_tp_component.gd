@@ -1,7 +1,7 @@
 ## Tests TPComponent's pure GDScript logic: scene name resolution and path caching.
 ##
 ## These tests do NOT invoke any multiplayer or RPC methods. The teleport flow
-## itself (request_teleport, _reparent_to_lobby) requires real peers and belongs
+## itself (request_teleport, _reparent_to_scene) requires real peers and belongs
 ## in integration tests.
 class_name TestTPComponent
 extends NetworkedTestSuite
@@ -49,11 +49,11 @@ func test_spawn_initializes_current_scene_path_from_starting_scene() -> void:
 	var tp: TPComponent = auto_free(TPComponent.new())
 	tp.starting_scene_path = SceneNodePath.new(TEST_LEVEL + "::")
 	
-	# We need a LobbyManager for spawn()
-	var lobby_mgr: MultiplayerLobbyManager = auto_free(MultiplayerLobbyManager.new())
+	# We need a SceneManager for spawn()
+	var scene_mgr: MultiplayerSceneManager = auto_free(MultiplayerSceneManager.new())
 	
 	# Manually call spawn without it being in tree
-	tp.spawn(lobby_mgr)
+	tp.spawn(scene_mgr)
 	
 	# It should have initialized current_scene_path from starting_scene_path
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)

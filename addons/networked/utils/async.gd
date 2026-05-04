@@ -12,25 +12,49 @@ extends Object
 ##     push_error("Timed out waiting for my_signal.")
 ## [/codeblock]
 static func timeout(target_signal: Signal, timer: SceneTreeTimer) -> bool:
-	var dummy := RefCounted.new()
-	dummy.add_user_signal("resolved")
-	var resolved_signal := Signal(dummy, "resolved")
+	var resolver := _Resolver.new()
+	resolver.setup(target_signal, timer)
 	
-	var on_signal = func(_a1=null, _a2=null, _a3=null, _a4=null, _a5=null):
-		resolved_signal.emit(false)
-	
-	var on_timeout = func():
-		resolved_signal.emit(true)
-	
-	target_signal.connect(on_signal, CONNECT_ONE_SHOT)
-	timer.timeout.connect(on_timeout, CONNECT_ONE_SHOT)
-	
-	assert(timer.time_left > 0.0, "Timer already fired before await.")
-	var did_timeout: bool = await resolved_signal
-	
-	if did_timeout:
-		var obj := target_signal.get_object()
-		if is_instance_valid(obj) and target_signal.is_connected(on_signal):
-			target_signal.disconnect(on_signal)
-	
+	var did_timeout: bool = await resolver.resolved
+	resolver.cleanup()
 	return did_timeout
+
+
+class _Resolver extends RefCounted:
+	signal resolved(is_timeout: bool)
+
+	var _target: Signal
+	var _timer: SceneTreeTimer
+	var _on_signal: Callable
+	var _on_timeout: Callable
+
+	func setup(target: Signal, timer: SceneTreeTimer) -> void:
+		_target = target
+		_timer = timer
+
+		_on_signal = func(): resolved.emit(false)
+		_on_timeout = func(): resolved.emit(true)
+
+		var count := 0
+		var signals := _target.get_object().get_signal_list()
+		for s in signals:
+			if s.name == _target.get_name():
+				count = s.args.size()
+				break
+
+		if count > 0:
+			_target.connect(_on_signal.unbind(count), CONNECT_ONE_SHOT)
+		else:
+			_target.connect(_on_signal, CONNECT_ONE_SHOT)
+
+		_timer.timeout.connect(_on_timeout, CONNECT_ONE_SHOT)
+
+	func cleanup() -> void:
+		var obj = _target.get_object()
+		if is_instance_valid(obj):
+			for conn in _target.get_connections():
+				if conn.callable.get_object() == _on_signal.get_object():
+					_target.disconnect(conn.callable)
+
+		if is_instance_valid(_timer) and _timer.timeout.is_connected(_on_timeout):
+			_timer.timeout.disconnect(_on_timeout)

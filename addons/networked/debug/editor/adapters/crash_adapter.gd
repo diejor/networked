@@ -1,3 +1,4 @@
+## Transforms raw crash manifest data for display in the debugger's Crash Panel.
 @tool
 class_name CrashAdapter
 extends PanelDataAdapter

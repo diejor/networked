@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="NetwLogSettings" format=3 uid="uid://44kyyxwgimkd"]
+
+[ext_resource type="Script" uid="uid://df08q81gaomy3" path="res://addons/networked/debug/editor/log_panel/netw_log_settings.gd" id="1_aghgm"]
+
+[resource]
+script = ExtResource("1_aghgm")
+module_overrides = {
+"addons.networked.core.tick_interpolator": 5
+}
+metadata/_custom_type_script = "uid://df08q81gaomy3"

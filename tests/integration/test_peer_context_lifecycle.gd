@@ -1,31 +1,30 @@
-## Integration tests for PeerContext lifecycle within a real multiplayer session.
+## Integration tests for NetwPeerContext lifecycle within a real multiplayer session.
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
-const LOBBY_MANAGER_SCENE := preload("res://addons/networked/core/lobby/LobbyManager.tscn")
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
-const SPAWNER_PATH := "TestPlayerWithSave/ClientComponent"
-const LOBBY_NAME := &"TestLevelSave"
+const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
+const SCENE_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
 var test_dir: String
 var backend: FileSystemBackend
-var db: NetworkedDatabase
+var db: NetwDatabase
 
 
 func before_test() -> void:
 	test_dir = create_temp_dir("peer_context_lifecycle")
 	backend = auto_free(FileSystemBackend.new())
 	backend.base_dir = test_dir
-	db = auto_free(NetworkedDatabase.new())
+	db = auto_free(NetwDatabase.new())
 	db.backend = backend
 
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(LOBBY_MANAGER_SCENE)
+	await harness.setup(NetworkedTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_lobby_manager(harness.get_server())
+	var server_mgr := harness._get_scene_manager(harness.get_server())
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
 
 	client0 = await harness.add_client()
@@ -33,7 +32,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	if is_instance_valid(harness):
-		harness.teardown()
+		await harness.teardown()
 	await drain_frames(get_tree(), 3)
 
 
@@ -70,7 +69,7 @@ func _spawn_save_player() -> void:
 
 	# Wait for the replicated player to appear on the client side so both
 	# buckets are populated before any assertions run.
-	await harness.wait_for_client_player_spawn(client0, LOBBY_NAME)
+	await harness.wait_for_client_player_spawn(client0, SCENE_NAME)
 
 
 func test_server_context_does_not_contain_client_peer_id() -> void:

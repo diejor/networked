@@ -1,3 +1,4 @@
+## The UI component for the [SceneNodePath] editor property.
 @tool
 class_name PropertyPickerUI
 extends HBoxContainer
