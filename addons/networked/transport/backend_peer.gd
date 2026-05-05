@@ -73,6 +73,15 @@ func get_join_address() -> String:
 	return "localhost"
 
 
+## Returns [code]true[/code] if this backend supports spinning up an embedded 
+## server on a local machine (e.g. ENet, WebSocket). 
+##
+## Return [code]false[/code] for backends that rely on external lobby systems 
+## (e.g. Steam) where "localhost" is not a valid address.
+func supports_embedded_server() -> bool:
+	return true
+
+
 ## Called after this backend is duplicated by [MultiplayerTree]'s backend setter.
 ##
 ## Override to preserve shared references that [method Resource.duplicate] would reset

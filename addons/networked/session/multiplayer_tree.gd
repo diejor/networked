@@ -37,6 +37,9 @@ signal server_disconnected()
 ## Emitted on the server when a peer requests to join.
 signal player_join_requested(join_payload: JoinPayload)
 
+## Emitted when an external invitation is received (e.g. Steam Join Requested).
+signal invite_received(address: String, sender: int)
+
 
 ## Emitted after the host's startup scenes have been spawned and the server
 ## is ready to accept the local player. Only relevant for listen-server hosts.
@@ -443,7 +446,7 @@ func host(quiet: bool = false) -> Error:
 				)
 			return setup_err
 	
-	var connection_code: Error = backend.host()
+	var connection_code: Error = await backend.host()
 	
 	if connection_code == OK:
 		role = Role.DEDICATED_SERVER
@@ -489,7 +492,7 @@ func join(
 				)
 			return setup_err
 	
-	var connection_code: Error = backend.join(server_address, username)
+	var connection_code: Error = await backend.join(server_address, username)
 	if connection_code != OK:
 		state = State.OFFLINE
 		if not quiet:
@@ -587,22 +590,56 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	)
 	
 	if _is_local_url(url):
-		var probe_url := url if not url.is_empty() else "localhost"
-		var probe_err: Error = await join(
-			probe_url, join_payload.username, 1.0, true
-		)
-		if probe_err == OK:
-			submit_join(join_payload)
-			return OK
-		
-		if use_listen_server:
-			var host_err := host(true)
-			if host_err == OK:
-				role = Role.LISTEN_SERVER
-				await host_ready
+		if backend.supports_embedded_server():
+			var probe_url := url if not url.is_empty() else "localhost"
+			var probe_err: Error = await join(
+				probe_url, join_payload.username, 1.0, true
+			)
+			if probe_err == OK:
 				submit_join(join_payload)
 				return OK
+			
+			if use_listen_server:
+				var host_err := await host(true)
+				if host_err == OK:
+					role = Role.LISTEN_SERVER
+					await host_ready
+					submit_join(join_payload)
+					return OK
+				elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
+					var join_err := await join(
+						backend.get_join_address(), join_payload.username
+					)
+					if join_err == OK:
+						submit_join(join_payload)
+					return join_err
+				else:
+					return host_err
+			
+			var server := duplicate() as MultiplayerTree
+			server.is_server = true
+			server.name = "Server"
+			server.init_join_payload = null
+			server.auto_host_headless = false
+			get_parent().add_child.call_deferred(server)
+			await get_tree().process_frame
+			
+			var client_sm := get_service(MultiplayerSceneManager)
+			if client_sm:
+				var server_sm := server.get_service(MultiplayerSceneManager)
+				for path in client_sm._get_configured_paths():
+					server_sm._configure_default(path)
+			
+			var host_err := await server.host(true)
+			if host_err == OK:
+				var join_err := await join(
+					server.backend.get_join_address(), join_payload.username
+				)
+				if join_err == OK:
+					submit_join(join_payload)
+				return join_err
 			elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
+				server.queue_free.call_deferred()
 				var join_err := await join(
 					backend.get_join_address(), join_payload.username
 				)
@@ -610,40 +647,17 @@ func connect_player(join_payload: JoinPayload) -> Error:
 					submit_join(join_payload)
 				return join_err
 			else:
+				server.queue_free.call_deferred()
 				return host_err
-		
-		var server := duplicate() as MultiplayerTree
-		server.is_server = true
-		server.name = "Server"
-		server.init_join_payload = null
-		server.auto_host_headless = false
-		get_parent().add_child.call_deferred(server)
-		await get_tree().process_frame
-		
-		var client_sm := get_service(MultiplayerSceneManager)
-		if client_sm:
-			var server_sm := server.get_service(MultiplayerSceneManager)
-			for path in client_sm._get_configured_paths():
-				server_sm._configure_default(path)
-		
-		var host_err := server.host(true)
-		if host_err == OK:
-			var join_err := await join(
-				server.backend.get_join_address(), join_payload.username
-			)
-			if join_err == OK:
-				submit_join(join_payload)
-			return join_err
-		elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
-			server.queue_free.call_deferred()
-			var join_err := await join(
-				backend.get_join_address(), join_payload.username
-			)
-			if join_err == OK:
-				submit_join(join_payload)
-			return join_err
 		else:
-			server.queue_free.call_deferred()
+			# For backends that don't support embedded servers (like Steam),
+			# local URL means we should just host a lobby.
+			var host_err := await host(true)
+			if host_err == OK:
+				role = Role.LISTEN_SERVER
+				await host_ready
+				submit_join(join_payload)
+				return OK
 			return host_err
 	
 	if OS.has_feature("web") and url.begins_with("ws"):
@@ -682,10 +696,10 @@ func _ready() -> void:
 	
 	if auto_host_headless and DisplayServer.get_name() == "headless":
 		if use_listen_server:
-			host()
+			await host()
 			role = Role.LISTEN_SERVER
 		elif is_server:
-			host()
+			await host()
 
 
 ## Entry point for a client to request entry into the game world.
