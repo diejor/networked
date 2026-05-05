@@ -27,6 +27,14 @@ signal scene_spawned(scene: MultiplayerScene)
 ## Emitted when a [Scene] is removed from the tree.
 signal scene_despawned(scene: MultiplayerScene)
 
+## Emitted on the listen-server host when the local player's active scene
+## changes (initial spawn, teleport, or scene destruction). Pass [code]null[/code]
+## when the player no longer has an active scene.
+##
+## [ActiveSceneView] subscribes to this to retarget itself; HUDs and audio
+## systems may also hook it.
+signal active_scene_changed(scene: MultiplayerScene)
+
 const SERVER_SCENE = preload("uid://dga0loylsa26i")
 const CLIENT_SCENE = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
@@ -88,6 +96,12 @@ var scene_paths: Array[String]:
 var _scene_configs: Dictionary = {}
 var _scene_cache: Dictionary[String, PackedScene] = {}
 var _scene_paths: Dictionary[StringName, String] = {}
+
+# The scene currently exposed via active_scene_changed; used to detect changes
+# and to suppress duplicate signal emissions.
+var _active_scene: MultiplayerScene = null
+# Set once we've warned about a missing ActiveSceneView so we don't spam logs.
+var _warned_missing_view: bool = false
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -201,6 +215,7 @@ func _exit_tree() -> void:
 	if mt.configured.is_connected(configured.emit):
 		mt.configured.disconnect(configured.emit)
 	
+	_unbind_listen_server_swap()
 	active_scenes.clear()
 
 
@@ -521,10 +536,13 @@ func _on_scene_despawned(node: Node) -> void:
 	var scene := node as MultiplayerScene
 	Netw.dbg.info("Scene despawned: %s", [scene.level.name])
 	active_scenes.erase(scene.level.name)
+	if scene == _active_scene:
+		_set_active_scene(null)
 
 
 func _on_server_disconnected() -> void:
 	Netw.dbg.info("Server disconnected. Cleaning up scenes.")
+	_set_active_scene(null)
 	for scene: MultiplayerScene in active_scenes.values():
 		if scene.is_inside_tree():
 			scene.get_parent().remove_child(scene)
@@ -544,10 +562,102 @@ func _on_configured() -> void:
 		
 		spawn_scenes.call_deferred()
 		_emit_startup_scenes_spawned.call_deferred()
+		_bind_listen_server_swap()
 
 
 func _emit_startup_scenes_spawned() -> void:
 	startup_scenes_spawned.emit()
+
+
+# Binds listen-server active-scene tracking. The actual scene resolution is
+# deferred until the tree role becomes LISTEN_SERVER and a local player
+# spawns, because connect_player changes the role after configured emits.
+func _bind_listen_server_swap() -> void:
+	var mt := MultiplayerTree.for_node(self)
+	if not mt:
+		return
+	if not mt.local_player_changed.is_connected(
+		_on_listen_server_player_changed
+	):
+		mt.local_player_changed.connect(_on_listen_server_player_changed)
+	_on_listen_server_player_changed(mt.local_player)
+
+
+# Unbinds listen-server active-scene tracking.
+func _unbind_listen_server_swap() -> void:
+	var mt := MultiplayerTree.for_node(self)
+	if mt and mt.local_player_changed.is_connected(
+		_on_listen_server_player_changed
+	):
+		mt.local_player_changed.disconnect(
+			_on_listen_server_player_changed
+		)
+
+
+# Called when the local player changes. Connects [code]tree_entered[/code] on
+# the new player and re-resolves the active scene immediately.
+func _on_listen_server_player_changed(player: Node) -> void:
+	if is_instance_valid(player):
+		var bound := _on_listen_server_player_entered.bind(player)
+		if not player.tree_entered.is_connected(bound):
+			player.tree_entered.connect(bound)
+	_resolve_active_scene_from_local_player()
+
+
+# Called when the tracked player enters the tree. Self-guards against stale
+# connections.
+func _on_listen_server_player_entered(player: Node) -> void:
+	var ctx := Netw.ctx(self)
+	if not ctx or not ctx.tree.is_listen_server():
+		return
+	if player != ctx.tree.get_local_player():
+		return
+	_resolve_active_scene_from_local_player()
+
+
+# Resolves the local player's containing scene and routes it through
+# _set_active_scene. No-ops on non-listen-server contexts.
+func _resolve_active_scene_from_local_player() -> void:
+	if not is_inside_tree():
+		return
+	var ctx := Netw.ctx(self)
+	if not ctx or not ctx.tree.is_listen_server():
+		return
+	var player := ctx.tree.get_local_player()
+	if not is_instance_valid(player):
+		_set_active_scene(null)
+		return
+	var scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
+	_set_active_scene(scene)
+
+
+# Updates the active scene, retargets the ActiveSceneView service, and emits
+# active_scene_changed. Idempotent.
+func _set_active_scene(scene: MultiplayerScene) -> void:
+	if scene == _active_scene:
+		return
+	_active_scene = scene
+
+	var view := _resolve_active_scene_view()
+	if view:
+		var viewport := scene as Node as SubViewport if scene else null
+		view.set_target(viewport)
+	elif scene and not _warned_missing_view:
+		Netw.dbg.warn(
+			"Listen-server has no ActiveSceneView registered. The host will " +
+			"not see scene '%s'. Add an ActiveSceneView node under the " +
+			"MultiplayerTree.", [scene.name], func(m): push_warning(m)
+		)
+		_warned_missing_view = true
+
+	active_scene_changed.emit(scene)
+
+
+func _resolve_active_scene_view() -> ActiveSceneView:
+	var mt := MultiplayerTree.for_node(self)
+	if not mt:
+		return null
+	return mt.get_service(ActiveSceneView) as ActiveSceneView
 
 
 func _build_scene_paths() -> void:

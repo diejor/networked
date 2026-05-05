@@ -155,13 +155,14 @@ func _ready() -> void:
 			sync.delta_synchronized.connect(client_synchronized.emit)
 
 	if username.is_empty():
+		owner.process_mode = Node.PROCESS_MODE_DISABLED
+		owner.visible = false
 		if not multiplayer.is_server():
 			_dbg.trace(
 				"Freeing spawner node `%s` because we are in client.",
 				[owner.name]
 			)
 			owner.queue_free()
-
 		SynchronizersCache.sync_only_server(owner)
 
 	assert(
@@ -171,7 +172,8 @@ the authority will not be set correctly. Reload the player scene to connect \
 automatically." % [owner.name, _on_owner_tree_entered]
 	)
 
-	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	if not multiplayer.peer_disconnected.is_connected(_on_peer_disconnected):
+		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 	var tp_layer := get_tp_layer()
 	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:

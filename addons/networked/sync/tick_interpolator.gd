@@ -159,6 +159,13 @@ var _peer_batcher: _Batcher
 var _was_starving: bool = false
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
+# Persists the visual_root's design-time local offset so it survives _ready
+# re-runs (e.g. after a teleport reparent that calls request_ready). Without
+# this, _refresh_property_states/reset would re-capture the visual_root's
+# current local position, which already contains the last frame's smoothing
+# correction, baking that correction into the new baseline.
+var _cached_initial_offsets: Dictionary[StringName, Variant] = {}
+
 #endregion
 
 
@@ -311,7 +318,11 @@ func _refresh_property_states() -> void:
 			state.target_prop = state.source_prop
 			state.is_relative = owner.is_ancestor_of(v_root)
 			if state.is_relative:
-				state.initial_offset = v_root.get(state.target_prop)
+				if prop in _cached_initial_offsets:
+					state.initial_offset = _cached_initial_offsets[prop]
+				else:
+					state.initial_offset = v_root.get(state.target_prop)
+					_cached_initial_offsets[prop] = state.initial_offset
 		else:
 			state.target_obj = state.source_obj
 			state.target_prop = state.source_prop
@@ -562,8 +573,9 @@ class _PropertyState:
 		cached_prev_tick = -1
 		is_sleeping = false
 		
-		if is_relative and target_obj:
-			initial_offset = target_obj.get(target_prop)
+		if is_relative and target_obj and interpolator \
+				and name in interpolator._cached_initial_offsets:
+			initial_offset = interpolator._cached_initial_offsets[name]
 
 	func update_snapshot() -> void:
 		var current_val = source_obj.get(source_prop)

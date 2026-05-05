@@ -188,7 +188,11 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		await tp_layer.teleport_out()
 		phase.done()
 
-	SynchronizersCache.sync_only_server(owner)
+	# Don't restrict visibility on the server (listen-server case): doing so
+	# kills public_visibility on the canonical synchronizers and the player
+	# becomes permanently invisible to remote clients after reparent.
+	if not multiplayer.is_server():
+		SynchronizersCache.sync_only_server(owner)
 
 	# Clean Lock: disable physics and input on the player node during transition.
 	# This does NOT affect components (children), so the TP handshake continues.
@@ -268,6 +272,13 @@ func _flush_player_position(player: Node) -> void:
 
 func _sync_client_state(player: Node, span: NetSpan) -> void:
 	var tp_component: TPComponent = player.get_node("%TPComponent")
+	var authority := player.get_multiplayer_authority()
+	var ctx := get_context()
+	if authority == 1 and ctx and ctx.tree.is_listen_server():
+		span.step("client_synced")
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		return
 	span.step("awaiting_client_sync")
 	var timer := get_tree().create_timer(5.0)
 	if await Async.timeout(tp_component.client_synchronized, timer):
@@ -302,7 +313,10 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 		event.disconnect(from)
 		event.connect(to.bind(player))
 		if event == player.tree_exiting:
-			player.request_ready()
+			# request_ready does NOT cascade to children, so child components
+			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
+			# never re-init. Reset the ready flag for the whole subtree.
+			_request_ready_recursive(player)
 			tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene.synchronizer._on_spawned
@@ -317,20 +331,34 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 	player.tree_entered.disconnect(flip)
 
 
+static func _request_ready_recursive(node: Node) -> void:
+	node.request_ready()
+	for child in node.get_children():
+		_request_ready_recursive(child)
+
+
 # Server-side callback invoked after the entity safely enters the destination scene.
 # Sets position on the server and forwards the snap coordinates to the client.
 func _teleported(scene: Node, _tp_path: String) -> void:
 	_dbg.trace("`_teleported` callback on server.")
-	var teleport_success := func() -> void:
-		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
-		var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
-		if scene:
-			var tp_node: Node = scene.get_node_or_null(_tp_path)
-			if tp_node:
-				snap_pos = tp_node.get("global_position")
 
-		_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
-		owner.set("global_position", snap_pos)
+	# Snap synchronously: child _ready re-runs (triggered by the recursive
+	# request_ready in _reparent_player) fire AFTER this lambda returns but
+	# BEFORE any deferred call. Camera2D.reset_smoothing in particular reads
+	# owner.global_position; if the snap is deferred, smoothing baselines on
+	# the (99999, 99999) flush position from _flush_player_position.
+	var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
+	if scene:
+		var tp_node: Node = scene.get_node_or_null(_tp_path)
+		if tp_node:
+			snap_pos = tp_node.get("global_position")
+	_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
+	owner.set("global_position", snap_pos)
+
+	# Defer only the client notification — the original assert wanted to
+	# guarantee the player is fully in tree, which is now true synchronously.
+	var notify_client := func() -> void:
+		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
 		var authority := owner.get_multiplayer_authority()
 		var ctx := get_context()
 		if authority == 1 and ctx and ctx.tree.is_listen_server():
@@ -338,7 +366,7 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 		else:
 			_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
-	teleport_success.call_deferred()
+	notify_client.call_deferred()
 
 
 @rpc("any_peer", "call_remote", "reliable")

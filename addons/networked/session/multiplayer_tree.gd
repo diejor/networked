@@ -122,7 +122,10 @@ var is_server: bool:
 ## tree instead of duplicating into a sibling server node.
 ## TODO: Remove once listen-server is fully validated and becomes the
 ## default behavior.
-@export var use_listen_server: bool = false
+@export var use_listen_server: bool = false:
+	set(value):
+		use_listen_server = value
+		update_configuration_warnings()
 
 ## The active [SceneMultiplayer] instance provided by the current
 ## [member backend].
@@ -254,6 +257,22 @@ func get_service(type: Script) -> Node:
 	return _services.get(type)
 
 
+## Scans descendant nodes for one whose type matches [param type].
+## Works in the editor, unlike [method get_service] which only reflects
+## nodes that have already called [method register_service].
+func find_service_node(type: Script) -> Node:
+	var type_name := type.get_global_name()
+	if not type_name.is_empty():
+		var matches := find_children("*", type_name, true)
+		if not matches.is_empty():
+			return matches[0]
+	else:
+		for child in find_children("*", "", true):
+			if child.get_script() == type:
+				return child
+	return null
+
+
 ## Forcefully clears all internal states and services to break circular
 ## references during teardown.
 func dispose() -> void:
@@ -335,6 +354,15 @@ func _get_configuration_warnings() -> PackedStringArray:
 			"MultiplayerSceneManager found as a child. " +
 			"No replication will happen."
 		)
+	
+	if use_listen_server:
+		if not find_service_node(ActiveSceneView):
+			warnings.append(
+				"use_listen_server is enabled but no ActiveSceneView was " +
+				"found as a descendant. The listen-server host will not " +
+				"be able to see the SubViewport the server-player is " +
+				"currently in."
+			)
 	
 	return warnings
 

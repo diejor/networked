@@ -15,6 +15,10 @@ script/source = "extends Camera2D
 func _ready() -> void:
 	if not is_multiplayer_authority():
 		queue_free()
+		return
+	# Force this camera to win over the level's placeholder Player camera,
+	# which spawns first and would otherwise keep 'current' status forever.
+	make_current()
 	reset_smoothing()
 "
 
@@ -25,9 +29,6 @@ size = Vector2(84, 20)
 properties/0/path = NodePath("..:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
-properties/1/path = NodePath("../TPComponent:current_scene_path")
-properties/1/spawn = true
-properties/1/replication_mode = 2
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
@@ -35,9 +36,12 @@ scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
-properties/0/path = NodePath("..:position")
+properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
+properties/1/path = NodePath("TPComponent:current_scene_path")
+properties/1/spawn = true
+properties/1/replication_mode = 2
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1

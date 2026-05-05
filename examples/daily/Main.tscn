@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/nodes/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
+[ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="8_asv01"]
 
 [sub_resource type="Resource" id="Resource_7ue45"]
 script = ExtResource("2_bd7kh")
@@ -33,7 +34,6 @@ node_path = "Player/%SpawnerComponent"
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_7ue45")
 init_join_payload = SubResource("Resource_5vvyt")
-use_listen_server = true
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
@@ -49,6 +49,14 @@ scene_config/Level1/empty_action = 1
 scene_config/Level2/load_mode = 1
 scene_config/Level2/empty_action = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
+
+[node name="ActiveSceneView" type="Control" parent="Client" unique_id=388107522]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("8_asv01")
+metadata/_custom_type_script = "uid://dfoggo64snch3"
 
 [node name="ConnectServerUI" parent="." unique_id=99213129 instance=ExtResource("7_lgr22")]
 spawner_node = SubResource("Resource_wkp8b")
