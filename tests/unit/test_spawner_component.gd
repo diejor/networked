@@ -1,7 +1,7 @@
 ## Tests for [SpawnerComponent].
 ##
 ## Covers [method JoinPayload.parse_authority],
-## [method SpawnerComponent.SpawnSynchronizer.config_spawn_properties],
+## [method SpawnSynchronizer.config_spawn_properties],
 ## and [enum SpawnerComponent.AuthorityMode] behaviour in
 ## [method SpawnerComponent._on_owner_tree_entered].
 class_name TestSpawnerComponent
@@ -59,7 +59,7 @@ func test_config_spawn_properties_aggregates_syncs() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	SpawnerComponent.SpawnSynchronizer.new(spawner)
+	SpawnSynchronizer.new(spawner)
 
 	var player_sync := MultiplayerSynchronizer.new()
 	player_sync.name = "PlayerSync"
@@ -89,7 +89,7 @@ func test_config_spawn_properties_skips_spawn_sync() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	var spawn_sync := SpawnerComponent.SpawnSynchronizer.new(spawner)
+	var spawn_sync := SpawnSynchronizer.new(spawner)
 
 	var spawn_config := SceneReplicationConfig.new()
 	spawn_config.add_property(NodePath(":visible"))
@@ -109,7 +109,7 @@ func test_config_spawn_properties_includes_username() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	SpawnerComponent.SpawnSynchronizer.new(spawner)
+	SpawnSynchronizer.new(spawner)
 
 	spawner.spawn_sync.config_spawn_properties(spawner)
 	var spawn_config := spawner.spawn_sync.replication_config
@@ -136,7 +136,7 @@ func _make_player_root(peer_id: int) -> Array:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	SpawnerComponent.SpawnSynchronizer.new(spawner)
+	SpawnSynchronizer.new(spawner)
 
 	return [root, spawner]
 
@@ -175,7 +175,7 @@ func test_client_mode_with_no_peer_in_name_leaves_authority_unchanged() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	SpawnerComponent.SpawnSynchronizer.new(spawner)
+	SpawnSynchronizer.new(spawner)
 
 	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
 	spawner._on_owner_tree_entered()

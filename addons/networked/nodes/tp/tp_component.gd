@@ -414,6 +414,6 @@ func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	var scene: MultiplayerScene = scene_mgr.active_scenes.get(current_scene_name)
 	if scene:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
-		scene.synchronizer.track_player(owner)
+		scene.synchronizer.track_node(owner)
 		scene.level.add_child(owner)
 		owner.owner = scene.level

@@ -65,7 +65,7 @@ func get_spawners(node: Node) -> Array[MultiplayerSpawner]:
 
 ## Registers [param player] with the synchronizer and adds it to the level scene.
 func add_player(player: Node) -> void:
-	synchronizer.track_player(player)
+	synchronizer.track_node(player)
 	level.add_child(player)
 	player.owner = level
 

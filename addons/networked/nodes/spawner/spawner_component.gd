@@ -1,12 +1,14 @@
 @tool
 class_name SpawnerComponent
-extends NetwComponent
+extends EntityComponent
 ## The authoritative bridge between a connecting peer and their in-world
 ## representation.
 ##
-## Add this node to your player scene. The component handles multiplayer
-## authority setup and player teardown on disconnect. Player spawning is
-## orchestrated by [NetwSpawn] automatically.
+## A specialization of [EntityComponent] for the player flow: the entity
+## scene is instantiated by the [JoinPayload] orchestrator,
+## [member username] participates in the [code]username|peer_id[/code]
+## node-name convention, and authority is parsed from the node name on
+## tree entry. Spawn-only state replication is built unconditionally.
 ## [codeblock]
 ## # Retrieve from any node in the player scene:
 ## var spawner := SpawnerComponent.unwrap(player_node)
@@ -36,94 +38,17 @@ enum AuthorityMode {
 ## The username of the player associated with this component.
 var username: String = ""
 
-var _dbg: NetwHandle = Netw.dbg.handle(self)
-
 
 ## The [MultiplayerSynchronizer] used for initial spawn state replication.
+##
+## Lazily constructed on first access. Always returns the
+## [code]%SpawnSynchronizer[/code] unique-name node so subsequent
+## accesses return the same instance.
 var spawn_sync: SpawnSynchronizer:
 	get:
 		if not spawn_sync:
 			spawn_sync = SpawnSynchronizer.new(self)
 		return %SpawnSynchronizer
-
-## Allows the server to control visibility of client-authoritative players.
-class SpawnSynchronizer extends MultiplayerSynchronizer:
-	func _init(spawner: SpawnerComponent) -> void:
-		name = "SpawnSynchronizer"
-		unique_name_in_owner = true
-		visibility_update_mode = \
-			MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
-		spawner.add_child(self)
-		owner = spawner
-		root_path = get_path_to(spawner.owner)
-
-	## Builds a [SceneReplicationConfig] collecting spawn-only properties from
-	## all client synchronizers of [param target_node].
-	##
-	## Marks each property as spawn-only
-	## ([code]REPLICATION_MODE_NEVER[/code] with spawn enabled) so initial
-	## state transfers on spawn without ongoing delta replication.
-	## [br][br]
-	## [b]How spawn discovery works:[/b]
-	## [br]- [method SynchronizersCache.get_client_synchronizers] finds all
-	##   [MultiplayerSynchronizer] nodes whose root_path points to the player.
-	## [br]- Each synchronizer's replication_config properties are added as
-	##   spawn-only.
-	## [br]- [SaveComponent] pivots its root_path to [code]"."[/code] after
-	##   baking, but spawn config paths were already resolved.
-	func config_spawn_properties(target_node: Node) -> void:
-		Netw.dbg.trace(
-			"Configuring spawn properties for %s", [target_node.name]
-		)
-		replication_config = SceneReplicationConfig.new()
-
-		if target_node.owner:
-			var comp_path := target_node.owner.get_path_to(target_node)
-			var uname_path := NodePath(str(comp_path) + ":username")
-			_add_spawn_property(uname_path)
-
-			var tp := target_node.owner.get_node_or_null("%TPComponent")
-			if tp:
-				var tp_path := target_node.owner.get_path_to(tp)
-				var scene_path := NodePath(
-					str(tp_path) + ":current_scene_path"
-				)
-				_add_spawn_property(scene_path)
-
-		var syncs := SynchronizersCache.get_client_synchronizers(
-			target_node.owner
-			if target_node is SpawnerComponent else target_node
-		)
-
-		var sync_names := syncs.map(func(s): return s.name)
-		Netw.dbg.debug(
-			"Found %d synchronizers for spawn: [%s]",
-			[syncs.size(), ", ".join(sync_names)]
-		)
-
-		for sync: MultiplayerSynchronizer in syncs:
-			if sync == self or not sync.replication_config:
-				continue
-
-			var source: SceneReplicationConfig = sync.replication_config
-			Netw.dbg.trace(
-				"Adding %d properties from %s",
-				[source.get_properties().size(), sync.name]
-			)
-
-			for property: NodePath in source.get_properties():
-				if replication_config.has_property(property):
-					continue
-				_add_spawn_property(property)
-
-	func _add_spawn_property(property: NodePath) -> void:
-		replication_config.add_property(property)
-		replication_config.property_set_replication_mode(
-			property, SceneReplicationConfig.REPLICATION_MODE_NEVER
-		)
-		replication_config.property_set_spawn(property, true)
-		replication_config.property_set_sync(property, false)
-		replication_config.property_set_watch(property, false)
 
 
 ## Returns the [SpawnerComponent] with unique name [code]%SpawnerComponent[/code]
@@ -135,15 +60,18 @@ static func unwrap(node: Node) -> SpawnerComponent:
 func _init() -> void:
 	name = "SpawnerComponent"
 	unique_name_in_owner = true
-	player_joined.connect(_on_player_joined)
+	build_spawn_sync = true
+	auto_track_in_scene = false
+	if not player_joined.is_connected(_on_player_joined):
+		player_joined.connect(_on_player_joined)
 
 
 func _ready() -> void:
-	_dbg.trace("_ready for %s", [owner.name])
-
 	if Engine.is_editor_hint():
 		_validate_editor()
 		return
+
+	_dbg.trace("_ready for %s", [owner.name])
 
 	if is_multiplayer_authority():
 		var mt := MultiplayerTree.resolve(self)
@@ -182,46 +110,54 @@ automatically." % [owner.name, _on_owner_tree_entered]
 		)
 		tp_layer.teleport_in()
 
-
-func _validate_editor() -> void:
-	if owner and not owner.tree_entered.is_connected(_on_owner_tree_entered):
-		owner.tree_entered.connect(
-			_on_owner_tree_entered, ConnectFlags.CONNECT_PERSIST
-		)
+	spawned.emit()
 
 
-func _on_owner_tree_entered() -> void:
-	if Engine.is_editor_hint():
-		return
-	
+# Override: parse authority from `username|peer_id` node name when
+# `authority_mode == CLIENT`. Skip when owner already differs from peer 1
+# (a previous frame already configured authority).
+func _apply_authority() -> void:
 	if owner.get_multiplayer_authority() != 1:
 		return
-	
-	_dbg.trace("Spawner `%s` entering tree.", [owner.name])
+
 	assert(owner.name != "|")
-	
+
 	var authority := JoinPayload.parse_authority(owner.name)
 	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
 		_dbg.debug(
 			"Setting authority for %s to %d", [owner.name, authority]
 		)
 		owner.set_multiplayer_authority(authority)
-	
-	var existing := owner.get_node_or_null("SpawnerComponent/SpawnSynchronizer")
-	_dbg.debug("_on_owner_tree_entered: existing SpawnSynchronizer=%s, spawn_sync var=%s", [existing, spawn_sync])
-	_setup_spawn_sync(spawn_sync)
 
 
-func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
-	spawn.config_spawn_properties(self)
-	spawn.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+# Override: the player flow always builds a SpawnSynchronizer; the
+# `spawn_sync` getter ensures one exists.
+func _setup_spawn_sync() -> void:
+	var existing := owner.get_node_or_null(
+		"SpawnerComponent/SpawnSynchronizer"
+	)
+	_dbg.debug(
+		"_on_owner_tree_entered: existing SpawnSynchronizer=%s, "
+		+ "spawn_sync var=%s", [existing, spawn_sync]
+	)
+	spawn_sync.config_spawn_properties(self)
+	spawn_sync.set_multiplayer_authority(
+		MultiplayerPeer.TARGET_PEER_SERVER
+	)
+
+
+# Override: the player flow registers via scene.add_player, which
+# already calls SceneSynchronizer.track_node. Skip the
+# EntityComponent default registration to avoid double-tracking.
+func _register_with_scene() -> void:
+	pass
 
 
 func _on_player_joined(join_payload: JoinPayload) -> void:
 	var ctx := get_context()
 	if not ctx:
 		return
-	
+
 	var slot := ctx.tree.get_spawn_slot(join_payload.spawner_component_path)
 	if not slot.is_valid():
 		_dbg.error(
@@ -230,9 +166,9 @@ func _on_player_joined(join_payload: JoinPayload) -> void:
 			func(m): push_error(m)
 		)
 		return
-	
+
 	var span := Netw.spawn.begin_join(join_payload, authority_mode, owner)
-	
+
 	var player_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
 	)
@@ -246,7 +182,7 @@ func _on_player_joined(join_payload: JoinPayload) -> void:
 	var player := Netw.spawn.instantiate(
 		payload, load(owner.scene_file_path), owner, span
 	)
-	
+
 	var scene := _resolve_target_scene(player, slot)
 	if scene:
 		Netw.spawn.place(player, scene, span)
@@ -264,13 +200,13 @@ func _resolve_target_scene(
 	var ctx := get_context()
 	if not ctx:
 		return null
-	
+
 	var scene_mgr := ctx.services.get_scene_manager()
 	var level_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
 	)
 	var tp: TPComponent = player.get_node_or_null("%TPComponent")
-	
+
 	if tp and level_save and scene_mgr:
 		tp.ensure_current_scene_path()
 		if not tp.current_scene_path.is_empty():
@@ -279,10 +215,10 @@ func _resolve_target_scene(
 			)
 			if scene:
 				return scene
-	
+
 	if slot.has_scene():
 		return slot.get_scene()
-	
+
 	return null
 
 
@@ -290,11 +226,12 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if (multiplayer and multiplayer.is_server()
 			and get_multiplayer_authority() == peer_id):
 		_dbg.info(
-			"Peer %d disconnected. Freeing owned player %s.",
+			"Peer %d disconnected. Despawning owned player %s.",
 			[peer_id, owner.name]
 		)
-		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
-		owner.queue_free.call_deferred()
+		var opts := DespawnOpts.new()
+		opts.reason = &"peer_disconnected"
+		Netw.spawn.despawn(owner, opts)
 
 
 func _exit_tree() -> void:
@@ -305,3 +242,4 @@ func _exit_tree() -> void:
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.local_player == self:
 			mt.local_player = null
+	super()

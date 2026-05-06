@@ -1,6 +1,6 @@
 ## Manages per-scene synchronization visibility so each peer only receives data for their scene.
 ##
-## Attach this synchronizer to a [Scene] node. Call [method track_player] for each player node
+## Attach this synchronizer to a [Scene] node. Call [method track_node] for each entity node
 ## to register it; the synchronizer will then restrict replication so only peers inside this
 ## scene receive updates. Peer membership is tracked in [member connected_peers].
 class_name SceneSynchronizer
@@ -48,29 +48,47 @@ func _ready() -> void:
 	replication_config = config
 
 
-## Binds a player's lifecycle to the scene's visibility filters.
+## Binds a node's lifecycle to the scene's visibility filters.
+##
+## When [param node] is already in the tree (e.g., a preplaced entity
+## registering during its own [signal Node.tree_entered] handler), the
+## spawn-side bookkeeping fires immediately so visibility filters are
+## applied without waiting for the next tree-entry.
+func track_node(node: Node) -> void:
+	var on_spawned_bound := _on_spawned.bind(node)
+	if not node.tree_entered.is_connected(on_spawned_bound):
+		node.tree_entered.connect(on_spawned_bound)
+
+	var on_despawned_bound := _on_despawned.bind(node)
+	if not node.tree_exiting.is_connected(on_despawned_bound):
+		node.tree_exiting.connect(on_despawned_bound)
+
+	if node.is_inside_tree() and not tracked_nodes.has(node):
+		_on_spawned(node)
+
+
+## Removes a node from the scene's lifecycle tracking and visibility filters.
+func untrack_node(node: Node) -> void:
+	var on_spawned_bound := _on_spawned.bind(node)
+	if node.tree_entered.is_connected(on_spawned_bound):
+		node.tree_entered.disconnect(on_spawned_bound)
+
+	var on_despawned_bound := _on_despawned.bind(node)
+	if node.tree_exiting.is_connected(on_despawned_bound):
+		node.tree_exiting.disconnect(on_despawned_bound)
+
+	if node in tracked_nodes:
+		_on_despawned(node)
+
+
+## Deprecated: alias for [method track_node].
 func track_player(player: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(player)
-	if not player.tree_entered.is_connected(on_spawned_bound):
-		player.tree_entered.connect(on_spawned_bound)
-
-	var on_despawned_bound := _on_despawned.bind(player)
-	if not player.tree_exiting.is_connected(on_despawned_bound):
-		player.tree_exiting.connect(on_despawned_bound)
+	track_node(player)
 
 
-## Removes a player from the scene's lifecycle tracking and visibility filters.
+## Deprecated: alias for [method untrack_node].
 func untrack_player(player: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(player)
-	if player.tree_entered.is_connected(on_spawned_bound):
-		player.tree_entered.disconnect(on_spawned_bound)
-
-	var on_despawned_bound := _on_despawned.bind(player)
-	if player.tree_exiting.is_connected(on_despawned_bound):
-		player.tree_exiting.disconnect(on_despawned_bound)
-
-	if player in tracked_nodes:
-		_on_despawned(player)
+	untrack_node(player)
 
 
 ## Forces a visibility update for all synchronizers belonging to tracked nodes in this scene.

@@ -23,6 +23,6 @@ func test_setup_creates_service() -> void:
 
 func test_copy_from() -> void:
 	var backend := SteamBackend.new()
-	var duplicate := backend.duplicate()
-	assert_object(duplicate).is_not_null()
-	assert_int(duplicate.max_clients).is_equal(backend.max_clients)
+	var dup := backend.duplicate()
+	assert_object(dup).is_not_null()
+	assert_int(dup.max_clients).is_equal(backend.max_clients)

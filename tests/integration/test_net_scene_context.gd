@@ -326,7 +326,7 @@ func test_player_leave_removes_entry_from_gate() -> void:
 
 	# Untracks the player from the synchronizer, firing context._on_despawned,
 	# which calls _notify_gates_player_removed for registered gates.
-	harness.get_server_scene().synchronizer.untrack_player(player0)
+	harness.get_server_scene().synchronizer.untrack_node(player0)
 	await get_tree().process_frame
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_false()
