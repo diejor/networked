@@ -8,13 +8,11 @@
 class_name TestSceneSynchronizer
 extends NetworkedTestSuite
 
-const SYNCHRONIZER_SCENE = preload("uid://by6v45orjo182")
-
 var sync: SceneSynchronizer
 
 
 func before_test() -> void:
-	sync = SYNCHRONIZER_SCENE.instantiate()
+	sync = SceneSynchronizer.new()
 	add_child(sync)
 	auto_free(sync)
 

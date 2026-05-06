@@ -48,7 +48,7 @@ func setup(scene_manager_src: Variant = null, world_scene: PackedScene = null) -
 ## giving tests a chance to register spawnable scenes first).
 func add_client() -> MultiplayerTree:
 	if not _server.is_online():
-		var host_err: Error = _server.host()
+		var host_err: Error = await _server.host()
 		assert(host_err == OK, "Server host() failed: %s" % error_string(host_err))
 
 	var index := _clients.size()

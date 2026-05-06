@@ -38,6 +38,10 @@ signal server_disconnected()
 signal player_join_requested(join_payload: JoinPayload)
 
 ## Emitted when an external invitation is received (e.g. Steam Join Requested).
+## [br][br]
+## [b]Steam Context:[/b]
+## [br]- [param address]: The 64-bit Steam Lobby ID as a [String].
+## [br]- [param sender]: The 64-bit Steam ID of the inviting friend.
 signal invite_received(address: String, sender: int)
 
 

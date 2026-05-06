@@ -76,7 +76,7 @@ static func ctx(node: Node) -> NetwContext:
 ## returns [code]0[/code]) as the local peer ID. Use this in custom [code]@rpc[/code]
 ## handlers to avoid the [code]0[/code] sender gotcha on listen servers.
 ## [codeblock]
-## @rpc("any_peer", "call_remote", "reliable")
+## @rpc("any_peer", "call_local", "reliable")
 ## func _rpc_handle(data):
 ##     var peer_id := Netw.sender_id(self)
 ##     # peer_id is always a valid peer ID, never 0
