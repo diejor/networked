@@ -733,7 +733,8 @@ func request_join_player(bytes: PackedByteArray) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_pause(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	if sender != 1 and sender != 0:
+	if sender != 1:
+		Netw.dbg.warn("_rpc_receive_pause received from non-server peer %d", [sender])
 		return
 	get_tree().paused = true
 	tree_paused.emit(reason)
@@ -742,7 +743,8 @@ func _rpc_receive_pause(reason: String) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_unpause() -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	if sender != 1 and sender != 0:
+	if sender != 1:
+		Netw.dbg.warn("_rpc_receive_unpause received from non-server peer %d", [sender])
 		return
 	get_tree().paused = false
 	tree_unpaused.emit()
@@ -753,13 +755,13 @@ func _rpc_receive_unpause() -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to a specific peer to inform them they are being kicked.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_kicked(reason: String) -> void:
 	kicked.emit(reason)
 
 
 ## Sent by a client to ask the server to kick another peer.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn("_rpc_request_kick received on non-server peer %d", [multiplayer.get_unique_id()])
@@ -773,7 +775,7 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to ask the server for permission to disconnect.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_disconnect(reason: String) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn("_rpc_request_disconnect received on non-server peer %d", [multiplayer.get_unique_id()])
@@ -783,10 +785,11 @@ func _rpc_request_disconnect(reason: String) -> void:
 
 
 ## Sent by the server to notify clients it is shutting down.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_notify_disconnect(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	if sender != 1 and sender != 0:
+	if sender != 1:
+		Netw.dbg.warn("_rpc_receive_notify_disconnect received from non-server peer %d", [sender])
 		return
 	server_disconnecting.emit(reason)
 

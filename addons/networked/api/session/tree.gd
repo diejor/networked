@@ -60,15 +60,6 @@ func is_server() -> bool:
 ##
 ## Use this as the single source of truth for all listen-server checks
 ## instead of comparing [member MultiplayerTree.role] directly.
-##
-## [br][br]
-## [b]Custom RPC pattern:[/b]
-## [codeblock]
-## if ctx.tree.is_listen_server():
-##     _rpc_handle(data)
-## else:
-##     _rpc_handle.rpc_id(1, data)
-## [/codeblock]
 func is_listen_server() -> bool:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.role == MultiplayerTree.Role.LISTEN_SERVER if mt else false
@@ -158,10 +149,7 @@ func kick(peer_id: int, reason: String = "") -> void:
 		return
 	assert(mt.is_server, "NetwTree.kick() must be called on the server.")
 	if not reason.is_empty():
-		if peer_id == 1 and is_listen_server():
-			mt._rpc_receive_kicked(reason)
-		else:
-			mt._rpc_receive_kicked.rpc_id(peer_id, reason)
+		mt._rpc_receive_kicked.rpc_id(peer_id, reason)
 	if mt.multiplayer_peer:
 		mt.multiplayer_peer.disconnect_peer(peer_id)
 
@@ -169,18 +157,11 @@ func kick(peer_id: int, reason: String = "") -> void:
 ## Asks the server to kick [param peer_id].
 ##
 ## [b]Client-only.[/b]
-##
-## [br][br]
-## [b]Note:[/b] This uses the listen-server guard internally. When writing
-## your own request RPCs, follow the same pattern shown in [method Netw.ctx].
 func request_kick(peer_id: int, reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return
-	if is_listen_server():
-		mt._rpc_request_kick(peer_id, reason)
-	else:
-		mt._rpc_request_kick.rpc_id(1, peer_id, reason)
+	mt._rpc_request_kick.rpc_id(1, peer_id, reason)
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server
@@ -195,18 +176,11 @@ func disconnect_player() -> void:
 ## Asks the server for permission to disconnect.
 ##
 ## [b]Client-only.[/b]
-##
-## [br][br]
-## [b]Note:[/b] This uses the listen-server guard internally. When writing
-## your own request RPCs, follow the same pattern shown in [method Netw.ctx].
 func request_disconnect(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return
-	if is_listen_server():
-		mt._rpc_request_disconnect(reason)
-	else:
-		mt._rpc_request_disconnect.rpc_id(1, reason)
+	mt._rpc_request_disconnect.rpc_id(1, reason)
 
 
 ## Notifies all clients that the server is shutting down.
@@ -218,10 +192,8 @@ func notify_disconnect(reason: String = "") -> void:
 		return
 	assert(mt.is_server, "NetwTree.notify_disconnect() must be called on the server.")
 	for peer_id: int in mt.multiplayer_api.get_peers():
-		if peer_id != 1:
-			mt._rpc_receive_notify_disconnect.rpc_id(peer_id, reason)
-	if is_listen_server():
-		mt._rpc_receive_notify_disconnect(reason)
+		mt._rpc_receive_notify_disconnect.rpc_id(peer_id, reason)
+	mt._rpc_receive_notify_disconnect.rpc_id(1, reason)
 
 
 func _on_player_scene_ready(

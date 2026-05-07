@@ -121,13 +121,13 @@ func _cleanup_dead_gates() -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to notify all clients that the scene has been suspended.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_suspend(reason: String) -> void:
 	get_context().scene.suspended.emit(reason)
 
 
 ## Sent by the server to notify all clients that the scene has been resumed.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_resume() -> void:
 	get_context().scene.resumed.emit()
 
@@ -135,7 +135,7 @@ func _rpc_receive_resume() -> void:
 ## Sent by a client to ask the server to suspend the scene.
 ## The server emits [signal NetwScene.suspend_requested]; game code decides
 ## whether to honour the request by calling [method NetwScene.suspend].
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_suspend(reason: String) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn("_rpc_request_suspend received on non-server peer %d", [multiplayer.get_unique_id()])
@@ -149,25 +149,25 @@ func _rpc_request_suspend(reason: String) -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by the server when a new countdown starts.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_started(seconds: int) -> void:
 	get_context().scene.countdown_started.emit(seconds)
 
 
 ## Sent by the server on each countdown tick.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_tick(seconds_left: int) -> void:
 	get_context().scene.countdown_tick.emit(seconds_left)
 
 
 ## Sent by the server when the countdown reaches zero.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_finished() -> void:
 	get_context().scene.countdown_finished.emit()
 
 
 ## Sent by the server when a running countdown is cancelled.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_cancelled() -> void:
 	get_context().scene.countdown_cancelled.emit()
 
@@ -177,7 +177,7 @@ func _rpc_receive_countdown_cancelled() -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to report their ready state to the server.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_set_ready(is_ready: bool) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn("_rpc_request_set_ready received on non-server peer %d", [multiplayer.get_unique_id()])
@@ -187,7 +187,7 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 
 
 ## Broadcast by the server to synchronise a readiness change on scene peers.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
 		var gate := wr.get_ref() as NetwSceneReadiness

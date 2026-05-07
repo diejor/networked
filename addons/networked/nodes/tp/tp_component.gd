@@ -200,27 +200,17 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	owner.set_process_input(false)
 
 	_step("rpc_sent")
-	var ctx := get_context()
-	if ctx and ctx.tree.is_listen_server():
-		_request_teleport(
-			owner.name,
-			from_scene,
-			target_tp.scene_path,
-			target_tp.node_path,
-			_tp_span.checkpoint()
-		)
-	else:
-		_request_teleport.rpc_id(
-			MultiplayerPeer.TARGET_PEER_SERVER,
-			owner.name,
-			from_scene,
-			target_tp.scene_path,
-			target_tp.node_path,
-			_tp_span.checkpoint()
-		)
+	_request_teleport.rpc_id(
+		MultiplayerPeer.TARGET_PEER_SERVER,
+		owner.name,
+		from_scene,
+		target_tp.scene_path,
+		target_tp.node_path,
+		_tp_span.checkpoint()
+	)
 
 # Internal RPC called by the client to request a teleport from the server.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
 	if not multiplayer.is_server():
 		_dbg.warn("_request_teleport received on non-server peer %d", [multiplayer.get_unique_id()])
@@ -360,17 +350,17 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 	var notify_client := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
 		var authority := owner.get_multiplayer_authority()
-		var ctx := get_context()
-		if authority == 1 and ctx and ctx.tree.is_listen_server():
-			_rpc_teleport_committed(snap_pos)
-		else:
-			_rpc_teleport_committed.rpc_id(authority, snap_pos)
+		_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
 	notify_client.call_deferred()
 
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_teleport_committed(snap_pos: Variant) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1:
+		_dbg.warn("_rpc_teleport_committed received from non-server peer %d", [sender])
+		return
 	var peer_id := multiplayer.get_unique_id()
 
 	_recover_tp_span()
