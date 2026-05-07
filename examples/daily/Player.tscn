@@ -63,6 +63,7 @@ shape = SubResource("RectangleShape2D_tdg3f")
 [node name="SpawnerComponent" type="Node" parent="." unique_id=1442925740]
 unique_name_in_owner = true
 script = ExtResource("3_kne1u")
+class_id = &""
 build_spawn_sync = true
 auto_track_in_scene = false
 metadata/_custom_type_script = "uid://bspawnrcomp001"

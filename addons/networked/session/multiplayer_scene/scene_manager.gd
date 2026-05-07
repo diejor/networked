@@ -414,7 +414,7 @@ func activate_scene_for(
 	return scene
 
 
-# Resolves the scene path from [param join_payload]'s spawner fields.
+# Resolves the scene path from [param join_payload]'s spawner field.
 func _resolve_scene_path(
 	join_payload: JoinPayload
 ) -> SceneNodePath:
@@ -423,11 +423,6 @@ func _resolve_scene_path(
 		and join_payload.spawner_component_path.is_valid()
 	):
 		return join_payload.spawner_component_path
-	if (
-		join_payload.multiplayer_spawner_path
-		and join_payload.multiplayer_spawner_path.is_valid()
-	):
-		return join_payload.multiplayer_spawner_path
 	return null
 
 
@@ -459,37 +454,7 @@ func handle_join_request(join_payload: JoinPayload) -> void:
 				"SpawnerComponent not found at '%s'.",
 				[join_payload.spawner_component_path.node_path]
 			)
-	
-	if (
-		join_payload.multiplayer_spawner_path
-		and join_payload.multiplayer_spawner_path.is_valid()
-	):
-		var spawner: MultiplayerSpawner = (
-			scene.level.get_node_or_null(
-				join_payload.multiplayer_spawner_path.node_path
-			) as MultiplayerSpawner
-		)
-		if spawner:
-			var payload := Netw.spawn.gather(join_payload)
-			spawner.spawn(payload.to_variant())
-			dispatched = true
-		else:
-			Netw.dbg.error(
-				"MultiplayerSpawner not found at '%s'.",
-				[join_payload.multiplayer_spawner_path.node_path]
-			)
-	
-	if dispatched and (
-		join_payload.spawner_component_path
-		and join_payload.spawner_component_path.is_valid()
-		and join_payload.multiplayer_spawner_path
-		and join_payload.multiplayer_spawner_path.is_valid()
-	):
-		Netw.dbg.warn(
-			"Both spawner_component_path and multiplayer_spawner_path are "
-			+ "set. Both spawners will fire.", []
-		)
-	
+
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
 		tree.player_scene_ready.emit(join_payload, scene)

@@ -150,8 +150,8 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 			)
 			if not only_tracked.is_empty() or not only_registered.is_empty():
 				errs.append(
-					"Schema drift on '%s' table='%s': only_in_sync=%s " + \
-					"only_in_db=%s" % [
+					("Schema drift on '%s' table='%s': only_in_sync=%s " + \
+					"only_in_db=%s") % [
 						save_comp.owner.name if save_comp.owner else "?",
 						save_comp.table_name,
 						str(only_tracked), str(only_registered),

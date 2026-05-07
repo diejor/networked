@@ -146,11 +146,34 @@ func _setup_spawn_sync() -> void:
 	)
 
 
-# Override: the player flow registers via scene.add_player, which
-# already calls SceneSynchronizer.track_node. Skip the
-# EntityComponent default registration to avoid double-tracking.
+# Override: the player flow registers via MultiplayerScene.add_player,
+# which calls SceneSynchronizer.track_node. Let the default
+# EntityComponent registration handle the track.
 func _register_with_scene() -> void:
-	pass
+	super()
+
+
+## Server-only. Duplicates the owner scene, sets the
+## [code]username|peer_id[/code] node name and [member username]
+## for DB hydration, then calls [method MultiplayerScene.add_player]
+## on [param scene].
+##
+## All remaining configuration (authority, DB hydration, spawn-sync)
+## runs automatically in [method _on_owner_tree_entered] when the
+## copy enters the tree.
+func spawn_player(
+	jp: JoinPayload, scene: MultiplayerScene
+) -> Node:
+	assert(multiplayer.is_server())
+	var copy: Node = load(owner.scene_file_path).instantiate()
+	copy.name = "%s|%d" % [jp.username, jp.peer_id]
+	var copy_spawner: SpawnerComponent = (
+		copy.get_node_or_null("%SpawnerComponent")
+	)
+	if copy_spawner:
+		copy_spawner.username = jp.username
+	scene.add_player(copy)
+	return copy
 
 
 func _on_player_joined(join_payload: JoinPayload) -> void:
@@ -158,7 +181,9 @@ func _on_player_joined(join_payload: JoinPayload) -> void:
 	if not ctx:
 		return
 
-	var slot := ctx.tree.get_spawn_slot(join_payload.spawner_component_path)
+	var slot := ctx.tree.get_spawn_slot(
+		join_payload.spawner_component_path
+	)
 	if not slot.is_valid():
 		_dbg.error(
 			"Player join failed: no active scene for '%s'.",
@@ -167,54 +192,60 @@ func _on_player_joined(join_payload: JoinPayload) -> void:
 		)
 		return
 
-	var span := Netw.spawn.begin_join(join_payload, authority_mode, owner)
+	# Resolve target scene: prefer TP-routed scene from saved
+	# state, fall back to the slot's default scene.
+	var scene := _resolve_target_scene(join_payload, slot)
 
-	var player_save: SaveComponent = (
-		owner.get_node_or_null("%SaveComponent") as SaveComponent
-	)
-	var payload := Netw.spawn.gather(
-		join_payload,
-		player_save.database if player_save else null,
-		player_save.table_name if player_save else &"",
-		{},
-		span,
-	)
-	var player := Netw.spawn.instantiate(
-		payload, load(owner.scene_file_path), owner, span
-	)
-
-	var scene := _resolve_target_scene(player, slot)
 	if scene:
-		Netw.spawn.place(player, scene, span)
+		spawn_player(join_payload, scene)
 	elif slot.is_valid():
-		slot.place_player(player, span)
+		var copy: Node = owner.duplicate()
+		copy.name = "%s|%d" % [join_payload.username, join_payload.peer_id]
+		var copy_spawner: SpawnerComponent = (
+			copy.get_node_or_null("%SpawnerComponent")
+		)
+		if copy_spawner:
+			copy_spawner.username = join_payload.username
+		slot.place_player(copy)
 	else:
 		_dbg.error("Cannot place player: no scene available.", [])
-		if span:
-			span.fail("no_scene_available")
 
 
 func _resolve_target_scene(
-	player: Node, slot: SpawnSlot
+	jp: JoinPayload, slot: SpawnSlot
 ) -> MultiplayerScene:
 	var ctx := get_context()
 	if not ctx:
 		return null
 
-	var scene_mgr := ctx.services.get_scene_manager()
 	var level_save: SaveComponent = (
 		owner.get_node_or_null("%SaveComponent") as SaveComponent
 	)
-	var tp: TPComponent = player.get_node_or_null("%TPComponent")
-
-	if tp and level_save and scene_mgr:
-		tp.ensure_current_scene_path()
-		if not tp.current_scene_path.is_empty():
-			var scene := scene_mgr.active_scenes.get(
-				tp.current_scene_name
+	if (
+		level_save
+		and level_save.database
+		and not level_save.table_name.is_empty()
+	):
+		var entity := level_save.database.table(
+			level_save.table_name
+		).fetch(StringName(jp.username))
+		if entity:
+			var path: String = entity.get_value(
+				&"current_scene_path", ""
 			)
-			if scene:
-				return scene
+			if not path.is_empty():
+				var scene_mgr := (
+					ctx.services.get_scene_manager()
+				)
+				if scene_mgr:
+					var name := StringName(
+						path.get_file().get_basename()
+					)
+					var scene := (
+						scene_mgr.active_scenes.get(name)
+					)
+					if scene:
+						return scene
 
 	if slot.has_scene():
 		return slot.get_scene()
@@ -231,7 +262,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		)
 		var opts := DespawnOpts.new()
 		opts.reason = &"peer_disconnected"
-		Netw.spawn.despawn(owner, opts)
+		despawn(opts)
 
 
 func _exit_tree() -> void:

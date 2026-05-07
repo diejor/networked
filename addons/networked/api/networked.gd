@@ -16,7 +16,6 @@
 ##
 ## [br]- [member dbg] -- structured logging and causal tracing. See
 ##   [NetwDbg].
-## [br]- [member spawn] -- player spawn primitives. See [NetwSpawn].
 ##
 ## [br][br]
 ## [b]Listen-Server and Custom RPCs[/b]
@@ -57,10 +56,6 @@ extends Object
 
 ## Static entry point for all debug and logging functionality.
 static var dbg := NetwDbg.new()
-
-
-## Static entry point for player spawn helpers.
-static var spawn := NetwSpawn.new()
 
 
 ## Returns a [NetwContext] for [param node] by walking its ancestor chain.

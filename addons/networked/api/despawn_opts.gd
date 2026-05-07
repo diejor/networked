@@ -1,4 +1,4 @@
-## Options bag for [method NetwSpawn.despawn].
+## Options bag for [method EntityComponent.despawn].
 ##
 ## Carries the knobs that control teardown behavior. Built as a
 ## [RefCounted] so future options (e.g., delayed-free for death

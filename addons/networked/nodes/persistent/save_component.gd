@@ -307,11 +307,22 @@ func _flush() -> Error:
 	return db_err
 
 
+## Hydrates this component from [member database], fetching the record
+## for the entity ID returned by [method _get_entity_id].
+##
+## Applies the result to [member bound_entity] and pushes it to the scene.
+## No-op when [member database] or [member table_name] is missing.
+func hydrate_from_db() -> void:
+	if not database or table_name.is_empty():
+		return
+	var entity := database.table(table_name).fetch(_get_entity_id())
+	hydrate(entity.to_dict() if entity else {})
+
+
 ## Hydrates this component from [param record].
 ##
 ## Applies the dictionary to [member bound_entity] and pushes it to the scene.
 ## When [param record] is empty, seeds from scene defaults instead.
-## Called by [method NetwSpawn.configure] before the node enters the tree.
 func hydrate(record: Dictionary) -> void:
 	if not _initialized:
 		_instantiate_sync()

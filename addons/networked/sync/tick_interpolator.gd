@@ -373,7 +373,8 @@ func _cache_sync_intervals() -> void:
 			state.uses_signal = true
 				
 	_has_explicit_sync_interval = max_interval > 0.0
-	_expected_interval_ticks = maxi(1, ceili(max_interval * _clock.tickrate))
+	if _clock:
+		_expected_interval_ticks = maxi(1, ceili(max_interval * _clock.tickrate))
 
 
 func _on_synced() -> void:

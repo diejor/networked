@@ -2,6 +2,18 @@
 class_name EntityComponent
 extends NetwComponent
 ## Wakeup contract for any networked entity that is not a player.
+
+## How the spawned node's multiplayer authority is decided.
+enum AuthorityPolicy {
+	## Authority stays at the server peer ([code]1[/code]).
+	SERVER,
+	## Authority is set to [member authority_peer]. Used by the player
+	## flow via [SpawnerComponent.AuthorityMode.CLIENT].
+	FIXED_PEER,
+	## Authority is left untouched. The caller (or an
+	## [EntityComponent] subclass) is expected to set it elsewhere.
+	INHERIT,
+}
 ##
 ## Add this component to a scene that should participate in the network
 ## session as a runtime-spawned entity (NPC, enemy, pickup, drop) or as
@@ -32,13 +44,13 @@ extends NetwComponent
 ## [br]- [code]INHERIT[/code]: leave authority untouched.
 ##
 ## [br][br]
-## [b]Hydrate timing:[/b] [SaveComponent] hydration is the
-## responsibility of the spawn orchestrator
-## ([NetwSpawn.spawn_entity] or a custom [code]spawn_function[/code]
-## via [method NetwSpawn.hydrate_save]). [EntityComponent] never
-## hydrates from [code]_ready[/code] because that runs after sibling
-## components have already entered the tree, breaking ordering
-## contracts (e.g., [TPComponent] reading
+## [b]Hydrate timing:[/b] [SaveComponent] hydration runs
+## automatically from [method _on_owner_tree_entered] on the
+## server when a [SaveComponent] sibling with an assigned
+## [member SaveComponent.database] is present. [EntityComponent]
+## never hydrates from [code]_ready[/code] because that runs
+## after sibling components have already entered the tree,
+## breaking ordering contracts (e.g., [TPComponent] reading
 ## [code]current_scene_path[/code]).
 ##
 ## [codeblock]
@@ -47,32 +59,27 @@ extends NetwComponent
 ## # only handles authority + SceneSynchronizer registration.
 ##
 ## # On a runtime-spawned enemy:
-## #     Netw.spawn.spawn_entity(scene, level, payload)
-## # The orchestrator hydrates BEFORE add_child; EntityComponent
-## # picks up authority on owner.tree_entered.
+## #     entity.spawn_under(parent)
+## # The entity hydrates automatically on tree entry.
 ## [/codeblock]
 
 ## Emitted on the server after the entity has been configured.
 signal spawned
 
 ## Emitted right before the entity is despawned via
-## [method NetwSpawn.despawn], with the despawn reason.
+## [method despawn], with the despawn reason.
 signal despawning(reason: StringName)
 
 ## Emitted from [method _exit_tree] after teardown.
 signal despawned
 
 ## How multiplayer authority is decided.
-@export var authority_policy: ConfigureOpts.AuthorityPolicy = (
-	ConfigureOpts.AuthorityPolicy.SERVER
+@export var authority_policy: AuthorityPolicy = (
+	AuthorityPolicy.SERVER
 )
 
 ## Peer id used when [member authority_policy] is [code]FIXED_PEER[/code].
 @export var authority_peer: int = 1
-
-## Stable identifier for this entity class. Used for save-table routing
-## and debug labels. Optional.
-@export var class_id: StringName
 
 ## When [code]true[/code], a [SpawnSynchronizer] is built on tree entry
 ## that captures sibling synchronizers' properties as spawn-only state.
@@ -108,11 +115,7 @@ func _ready() -> void:
 		_validate_editor()
 		return
 	_dbg.trace("_ready for %s", [owner.name if owner else "<no owner>"])
-
-	assert(
-		owner != null,
-		"EntityComponent must be a child of an entity scene root."
-	)
+	
 	assert(
 		owner.tree_entered.is_connected(_on_owner_tree_entered),
 		"Signal `tree_entered` of `%s` must be connected to `%s` "
@@ -145,6 +148,7 @@ func _on_owner_tree_entered() -> void:
 		return
 	_dbg.trace("Entity '%s' entering tree.", [owner.name])
 	_apply_authority()
+	_hydrate_save()
 	_setup_spawn_sync()
 	_register_with_scene()
 
@@ -156,14 +160,25 @@ func _on_owner_tree_entered() -> void:
 ## from the node name).
 func _apply_authority() -> void:
 	match authority_policy:
-		ConfigureOpts.AuthorityPolicy.SERVER:
+		AuthorityPolicy.SERVER:
 			owner.set_multiplayer_authority(
 				MultiplayerPeer.TARGET_PEER_SERVER
 			)
-		ConfigureOpts.AuthorityPolicy.FIXED_PEER:
+		AuthorityPolicy.FIXED_PEER:
 			owner.set_multiplayer_authority(authority_peer)
-		ConfigureOpts.AuthorityPolicy.INHERIT:
+		AuthorityPolicy.INHERIT:
 			pass
+
+
+# Server-only: hydrates a [SaveComponent] sibling from the database,
+# fetching the entity record by ID. Runs before spawn-sync so
+# captured spawn properties include hydrated values.
+func _hydrate_save() -> void:
+	if not multiplayer or not multiplayer.is_server():
+		return
+	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+	if save:
+		save.hydrate_from_db()
 
 
 ## Builds a [SpawnSynchronizer] when [member build_spawn_sync] is on.
@@ -194,3 +209,52 @@ func _register_with_scene() -> void:
 		)
 		return
 	scene.synchronizer.track_node(owner)
+
+
+## Server-only. Duplicates [member Node.owner] as a sibling of
+## [param parent] (or [member Node.owner]'s own parent when
+## [param parent] is [code]null[/code]) and adds it to the tree.
+##
+## All configuration (authority, DB hydration, spawn-sync,
+## [SceneSynchronizer] tracking) runs automatically in
+## [method _on_owner_tree_entered] when the copy enters the tree.
+func spawn_under(parent: Node = null) -> Node:
+	assert(
+		not multiplayer or multiplayer.is_server(),
+		"spawn_under is server-only"
+	)
+	var p := parent if parent else owner.get_parent()
+	var copy: Node = load(owner.scene_file_path).instantiate()
+	p.add_child(copy)
+	return copy
+
+
+## Server-only. Tears down [member Node.owner] in the canonical
+## order: emit [signal despawning], flush [SaveComponent], revert
+## authority to the server, then [method Node.queue_free].
+##
+## Despawn is infallible from the caller's perspective. A
+## [SaveComponent.flush] failure is logged at error level and the
+## despawn proceeds. Callers needing transactional semantics should
+## flush themselves first and pass [code]flush_save: false[/code]
+## in [param opts].
+func despawn(opts: DespawnOpts = null) -> void:
+	assert(multiplayer.is_server(), "despawn is server-only")
+	if opts == null:
+		opts = DespawnOpts.new()
+	despawning.emit(opts.reason)
+	if opts.flush_save:
+		var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+		if save:
+			save.flush()
+	if (
+		owner.get_multiplayer_authority()
+		!= MultiplayerPeer.TARGET_PEER_SERVER
+	):
+		owner.set_multiplayer_authority(
+			MultiplayerPeer.TARGET_PEER_SERVER
+		)
+	if opts.defer_free:
+		owner.queue_free.call_deferred()
+	else:
+		owner.queue_free()
