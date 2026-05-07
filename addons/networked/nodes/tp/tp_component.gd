@@ -150,6 +150,7 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## completes. Safe to [operator await] even if this node is destroyed and respawned during 
 ## the handshake.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
+	_flush_player_position(owner)
 	var promise := TeleportPromise.new()
 	_begin_tp_span(target_tp.scene_path, promise)
 	_do_teleport(target_tp, promise)
@@ -160,7 +161,8 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	_step("awaiting_mutex")
 	await _tp_mutex.lock()
 	_step("mutex_acquired")
-
+	
+	
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 	if bucket:
@@ -173,8 +175,13 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
-		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+		save_component.push_to.call_deferred(MultiplayerPeer.TARGET_PEER_SERVER, true)
 		_step("save_pushed")
+		var timer := get_tree().create_timer(5.0)
+		if await Async.timeout(save_component.push_acknowledged, timer):
+			_step("save_ack_timeout")
+	else:
+		_step("save_push_skipped")
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -188,11 +195,10 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	if not multiplayer.is_server():
 		SynchronizersCache.sync_only_server(owner)
 
-	# Clean Lock: disable physics and input on the player node during transition.
-	# This does NOT affect components (children), so the TP handshake continues.
+	# disable physics and input on the player node during transition.
 	owner.set_physics_process(false)
 	owner.set_process_input(false)
-
+	
 	_step("rpc_sent")
 	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -205,43 +211,52 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 # Internal RPC called by the client to request a teleport from the server.
 @rpc("any_peer", "call_local", "reliable")
-func _request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
+func _request_teleport(username: String, 
+	from_scene_name: String, 
+	to_scene_path: String, 
+	tp_path: String, 
+	token: Variant
+) -> void:
 	if not multiplayer.is_server():
 		_dbg.warn("_request_teleport received on non-server peer %d", [multiplayer.get_unique_id()])
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
 	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
-
+	
 	var scene_manager := get_scene_manager()
 	if not scene_manager:
 		_fail_span(span, "no_scene_manager", "Cannot teleport, scene manager not found.")
 		return
-
+	
 	var from_scene: MultiplayerScene = scene_manager.active_scenes.get(from_scene_name)
 	if not from_scene:
 		_fail_span(span, "source_scene_not_found",
 			"Source scene '%s' not found.", [from_scene_name],
 			{"scene": from_scene_name})
 		return
-
+	
 	var player: Node = from_scene.level.get_node_or_null(username)
 	if not player:
 		_fail_span(span, "player_not_found",
 			"Player '%s' not found in source scene.", [username])
 		return
-
-	_flush_player_position(player)
-
+	
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	tp_component.current_scene_path = to_scene_path
-
-	await _sync_client_state(player, span)
-
+	
+	var authority := player.get_multiplayer_authority()
+	var ctx := get_context()
+	
+	if authority == 1 and ctx and ctx.tree.is_listen_server():
+		span.step("client_synced")
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+	
 	var to_scene_node := await _activate_destination(to_scene_path, span)
 	if not to_scene_node:
 		return
-
+	
 	_reparent_player(player, from_scene, to_scene_node, tp_path)
 	span.end()
 
@@ -252,32 +267,6 @@ func _flush_player_position(player: Node) -> void:
 	# This prevents the "!E" condition crash.
 	var far_away: Variant = Vector3(99999, 99999, 99999) if player is Node3D else Vector2(99999, 99999)
 	player.set("global_position", far_away)
-
-
-func _sync_client_state(player: Node, span: NetSpan) -> void:
-	var authority := player.get_multiplayer_authority()
-	var ctx := get_context()
-	if authority == 1 and ctx and ctx.tree.is_listen_server():
-		span.step("client_synced")
-		await get_tree().physics_frame
-		await get_tree().physics_frame
-		return
-
-	# The client called save.push_to(SERVER) before this RPC. Wait for the
-	# corresponding RPC to land — SaveComponent.client_synchronized fires on
-	# the server side from _on_state_changed after _request_push completes.
-	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
-	if not save:
-		span.step("client_sync_skipped_no_save")
-		return
-
-	span.step("awaiting_client_sync")
-	var timer := get_tree().create_timer(5.0)
-	if await Async.timeout(save.client_synchronized, timer):
-		_fail_span(span, "client_sync_timeout",
-			"Client save flush did not arrive while teleporting.")
-	else:
-		span.step("client_synced")
 
 
 func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerScene:
@@ -303,7 +292,9 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
-		event.connect(to.bind(player))
+		var bound := to.bind(player)
+		if not event.is_connected(bound):
+			event.connect(bound)
 		if event == player.tree_exiting:
 			# request_ready does NOT cascade to children, so child components
 			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
@@ -355,6 +346,16 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 		_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
 	notify_client.call_deferred()
+
+
+# Relays a push acknowledgment from the server back to the client's SaveComponent.
+# Safe to send through TPComponent (unlike SaveComponent which has visibility
+# restrictions that block server -> client RPCs).
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_push_ack() -> void:
+	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+	if save:
+		save.push_acknowledged.emit()
 
 
 @rpc("any_peer", "call_local", "reliable")

@@ -545,7 +545,9 @@ func _bind_listen_server_swap() -> void:
 		_on_listen_server_player_changed
 	):
 		mt.local_player_changed.connect(_on_listen_server_player_changed)
-	_on_listen_server_player_changed(mt.local_player)
+	
+	if mt.local_player:
+		_on_listen_server_player_changed(mt.local_player)
 
 
 # Unbinds listen-server active-scene tracking.

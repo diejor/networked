@@ -33,6 +33,8 @@ signal loaded
 signal state_changed(caller: Node)
 ## Emitted each time this synchronizer delivers a delta update.
 signal client_synchronized
+## Emitted when a [method push_to] acknowledgment arrives from the remote peer.
+signal push_acknowledged
 
 
 var _save_span: NetSpan
@@ -248,17 +250,30 @@ func _save_once() -> void:
 # ── Network transfer ───────────────────────────────────────────────────────────
 
 	## Packages the current scene state and sends it to [param peer_id] over the network.
-func push_to(peer_id: int) -> void:
+	##
+	## When [param ack] is [code]true[/code], the remote peer responds with
+	## [signal push_acknowledged] after processing the push. The caller should
+	## await that signal before taking actions that depend on the remote state
+	## being up-to-date.
+func push_to(peer_id: int, ack: bool = false) -> void:
 	pull_from_scene()
-	_request_push.rpc_id(peer_id, bound_entity.serialize())
+	_request_push.rpc_id(peer_id, bound_entity.serialize(), ack)
 
 
 # RPC called by a client to push its serialized entity state to this peer.
 @rpc("any_peer", "call_local", "reliable")
-func _request_push(bytes: PackedByteArray) -> void:
+func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 	bound_entity.deserialize(bytes)
 	push_to_scene()
 	_on_state_changed()
+	if ack:
+		var sender_id := multiplayer.get_remote_sender_id()
+		if sender_id == multiplayer.get_unique_id():
+			push_acknowledged.emit()
+		else:
+			var tp: TPComponent = owner.get_node_or_null("%TPComponent")
+			if tp:
+				tp._rpc_push_ack.rpc_id(sender_id)
 
 
 # ── Database persistence ───────────────────────────────────────────────────────
@@ -285,8 +300,7 @@ func _get_entity_id() -> StringName:
 # Server-side hydrate happens here so TPComponent can read current_scene_path
 # from a hydrated bound_entity during its own _enter_tree.
 func _on_entity_spawning(_spawner: SpawnerComponent) -> void:
-	if multiplayer and multiplayer.is_server():
-		hydrate_from_db()
+	hydrate_from_db()
 
 
 ## Flushes the current entity state to [member database] immediately.
@@ -451,7 +465,8 @@ static func _save_all_in(ctx: NetwPeerContext) -> void:
 	for component in bucket.registered:
 		if not component.is_multiplayer_authority():
 			continue
-		if component.get_multiplayer_authority() == MultiplayerPeer.TARGET_PEER_SERVER:
+		if component.multiplayer.is_server():
+			component.pull_from_scene()
 			component._flush()
 		else:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)

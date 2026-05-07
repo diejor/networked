@@ -39,11 +39,9 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	if Engine.is_editor_hint():
-		_validate_editor()
-		return
-
-	if is_multiplayer_authority():
+	super._ready()
+	
+	if owner.is_multiplayer_authority() and not is_template:
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
 			mt.local_player = self.owner
@@ -65,8 +63,6 @@ func _ready() -> void:
 					[username]
 				)
 				tp_layer.teleport_in()
-
-	super._ready()
 
 
 # Override: derive entity_id from username instead of owner name.

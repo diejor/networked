@@ -26,7 +26,8 @@ extends MultiplayerSynchronizer
 ## entity's authority/identity to be settled implement
 ## [code]_on_entity_spawning(spawner: SpawnerComponent)[/code]. The dispatch
 ## is eager (a method call, not a signal) so siblings don't have to solve
-## the connect-before-emit ordering puzzle.
+## the connect-before-emit ordering puzzle. Note that Node.multiplayer is not 
+## defined when siblings receive this dispatch.
 ##
 ## [codeblock]
 ## # Save sibling reacting to spawning:
@@ -52,10 +53,6 @@ enum AuthorityMode {
 ## [code]_on_entity_spawning(spawner)[/code] instead — the timing guarantee
 ## only holds for that dispatch.
 signal spawning
-
-## Emitted on the server from [code]_ready[/code] after the entity has been
-## fully configured.
-signal spawned
 
 ## Emitted right before the entity is despawned via [method despawn], with
 ## the despawn reason.
@@ -192,7 +189,6 @@ func _ready() -> void:
 	if is_template:
 		_apply_template_state()
 		return
-	spawned.emit()
 
 
 func _validate_editor() -> void:
@@ -208,11 +204,11 @@ func _exit_tree() -> void:
 	despawned.emit()
 
 
-## Runs in the unique window after [member Node.owner] enters the tree
-## but before any sibling component's [code]_enter_tree[/code] fires.
-## Subclasses override the policy hooks
-## ([method _apply_authority], [method _resolve_identity]) to specialize
-## behavior; siblings react via [code]_on_entity_spawning(spawner)[/code].
+# Runs in the unique window after [member Node.owner] enters the tree
+# but before any sibling component's [code]_enter_tree[/code] fires.
+# Subclasses override the policy hooks
+# ([method _apply_authority], [method _resolve_identity]) to specialize
+# behavior; siblings react via [code]_on_entity_spawning(spawner)[/code].
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -222,12 +218,13 @@ func _on_owner_tree_entered() -> void:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
-	_register_with_scene()
 	_dispatch_spawning()
+	_register_with_scene()
+	
 	spawning.emit()
 
 
-## Applies [member authority_mode] to [member Node.owner].
+# Applies [member authority_mode] to [member Node.owner].
 func _apply_authority() -> void:
 	match authority_mode:
 		AuthorityMode.SERVER:
@@ -235,8 +232,6 @@ func _apply_authority() -> void:
 				MultiplayerPeer.TARGET_PEER_SERVER
 			)
 		AuthorityMode.CLIENT:
-			if owner.get_multiplayer_authority() != 1:
-				return
 			var authority := parse_authority(owner.name)
 			if authority != 0:
 				_dbg.debug(
@@ -244,12 +239,13 @@ func _apply_authority() -> void:
 					[owner.name, authority]
 				)
 				owner.set_multiplayer_authority(authority)
+				set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
-## Returns [code]true[/code] when [member Node.owner] is bound to a concrete
-## peer. Trivially true for [code]SERVER[/code] mode (always peer 1); for
-## [code]CLIENT[/code] mode, requires [code]username|peer_id[/code] in the
-## owner's node name.
+# Returns [code]true[/code] when [member Node.owner] is bound to a concrete
+# peer. Trivially true for [code]SERVER[/code] mode (always peer 1); for
+# [code]CLIENT[/code] mode, requires [code]username|peer_id[/code] in the
+# owner's node name.
 func _has_authority_binding() -> bool:
 	match authority_mode:
 		AuthorityMode.SERVER:
@@ -266,9 +262,9 @@ func _resolve_identity() -> StringName:
 	return &""
 
 
-## Disables a template owner so its placeholder scene doesn't process or
-## render. The server keeps the template visible only to itself; the
-## client frees its copy entirely.
+# Disables a template owner so its placeholder scene doesn't process or
+# render. The server keeps the template visible only to itself; the
+# client frees its copy entirely.
 func _apply_template_state() -> void:
 	if authority_mode != AuthorityMode.CLIENT:
 		return
@@ -280,18 +276,11 @@ func _apply_template_state() -> void:
 	SynchronizersCache.sync_only_server(owner)
 
 
-## Walks [member Node.owner]'s children and calls
-## [code]_on_entity_spawning(self)[/code] on each one that defines the hook.
-## This is the canonical extension point for sibling components — they get
-## a settled authority + identity and a registered scene before their own
-## [code]_enter_tree[/code] runs.
 func _dispatch_spawning() -> void:
-	for child in owner.get_children():
-		if child.has_method("_on_entity_spawning"):
-			child._on_entity_spawning(self)
+	owner.propagate_call("_on_entity_spawning", [self])
 
 
-## Adds [param prop] to [param cfg] as a spawn-only property.
+# Adds [param prop] to [param cfg] as a spawn-only property.
 func _add_spawn_property_into(
 	cfg: SceneReplicationConfig, prop: NodePath
 ) -> void:
@@ -306,15 +295,11 @@ func _add_spawn_property_into(
 	cfg.property_set_watch(prop, false)
 
 
-## Builds [member replication_config] from sibling synchronizers' replication
-## configs. Spawn-only: properties are tagged [code]REPLICATION_MODE_NEVER[/code]
-## with spawn enabled, so the initial value transfers on spawn without ongoing
-## delta replication. Subclasses extend via
-## [method _populate_extra_spawn_properties].
-##
-## [br][br]
-## [b]Editor-time only.[/b] Invoked by the [b]Rebuild Spawn Properties[/b]
-## tool button or directly from tests; the runtime path no longer rebuilds.
+# Builds [member replication_config] from sibling synchronizers' replication
+# configs. Spawn-only: properties are tagged [code]REPLICATION_MODE_NEVER[/code]
+# with spawn enabled, so the initial value transfers on spawn without ongoing
+# delta replication. Subclasses extend via
+# [method _populate_extra_spawn_properties].
 func _build_spawn_config() -> void:
 	if not auto_track_properties:
 		return
@@ -336,8 +321,8 @@ func _populate_extra_spawn_properties(_cfg: SceneReplicationConfig) -> void:
 	pass
 
 
-## Tool-button entry point: rebuilds [member replication_config] from the
-## current scene state. Safe to call repeatedly.
+# Tool-button entry point: rebuilds [member replication_config] from the
+# current scene state. Safe to call repeatedly.
 func _rebuild_spawn_properties() -> void:
 	if not Engine.is_editor_hint() or not owner:
 		return
@@ -363,8 +348,8 @@ func _get_configuration_warnings() -> PackedStringArray:
 	return w
 
 
-## Registers the entity with the enclosing [SceneSynchronizer] so per-peer
-## scene visibility filters apply.
+# Registers the entity with the enclosing [SceneSynchronizer] so per-peer
+# scene visibility filters apply.
 func _register_with_scene() -> void:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if not scene:
