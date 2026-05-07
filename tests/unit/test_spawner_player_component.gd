@@ -1,10 +1,10 @@
-## Tests for [SpawnerComponent].
+## Tests for [SpawnerPlayerComponent].
 ##
-## Covers [method JoinPayload.parse_authority],
+## Covers [method SpawnerComponent.parse_authority],
 ## [method SpawnSynchronizer.config_spawn_properties],
-## and [enum SpawnerComponent.AuthorityMode] behaviour in
-## [method SpawnerComponent._on_owner_tree_entered].
-class_name TestSpawnerComponent
+## and [enum SpawnerPlayerComponent.AuthorityMode] behaviour in
+## [method SpawnerPlayerComponent._on_owner_tree_entered].
+class_name TestSpawnerPlayerComponent
 extends NetworkedTestSuite
 
 
@@ -13,36 +13,36 @@ extends NetworkedTestSuite
 # ---------------------------------------------------------------------------
 
 func test_parse_authority_with_valid_name() -> void:
-	assert_that(JoinPayload.parse_authority("alice|42")).is_equal(42)
+	assert_that(SpawnerComponent.parse_authority("alice|42")).is_equal(42)
 
 
 func test_parse_authority_with_large_peer_id() -> void:
 	assert_that(
-		JoinPayload.parse_authority("player|2147483647")
+		SpawnerComponent.parse_authority("player|2147483647")
 	).is_equal(2147483647)
 
 
 func test_parse_authority_without_separator_returns_zero() -> void:
 	assert_that(
-		JoinPayload.parse_authority("no_separator")
+		SpawnerComponent.parse_authority("no_separator")
 	).is_equal(0)
 
 
 func test_parse_authority_with_empty_string_returns_zero() -> void:
-	assert_that(JoinPayload.parse_authority("")).is_equal(0)
+	assert_that(SpawnerComponent.parse_authority("")).is_equal(0)
 
 
 func test_parse_authority_with_only_separator_returns_zero() -> void:
-	assert_that(JoinPayload.parse_authority("|")).is_equal(0)
+	assert_that(SpawnerComponent.parse_authority("|")).is_equal(0)
 
 
 func test_parse_authority_with_multiple_separators_returns_zero() -> void:
-	assert_that(JoinPayload.parse_authority("a|b|c")).is_equal(0)
+	assert_that(SpawnerComponent.parse_authority("a|b|c")).is_equal(0)
 
 
 func test_parse_authority_with_non_numeric_peer_returns_zero() -> void:
 	assert_that(
-		JoinPayload.parse_authority("user|abc")
+		SpawnerComponent.parse_authority("user|abc")
 	).is_equal(0)
 
 
@@ -54,8 +54,8 @@ func test_config_spawn_properties_aggregates_syncs() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "TestPlayer"
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
 
@@ -84,8 +84,8 @@ func test_config_spawn_properties_skips_spawn_sync() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "TestPlayer"
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
 
@@ -104,8 +104,8 @@ func test_config_spawn_properties_includes_username() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "TestPlayer"
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
 
@@ -114,7 +114,7 @@ func test_config_spawn_properties_includes_username() -> void:
 	spawner.spawn_sync.config_spawn_properties(spawner)
 	var spawn_config := spawner.spawn_sync.replication_config
 
-	var expected_path := NodePath("SpawnerComponent:username")
+	var expected_path := NodePath("SpawnerPlayerComponent:username")
 	assert_that(spawn_config.has_property(expected_path)).is_true()
 	assert_that(spawn_config.property_get_spawn(expected_path)).is_true()
 	assert_that(
@@ -130,8 +130,8 @@ func _make_player_root(peer_id: int) -> Array:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Alice|%d" % peer_id
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
@@ -144,9 +144,9 @@ func _make_player_root(peer_id: int) -> Array:
 func test_client_mode_sets_authority_from_name() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
-	var spawner: SpawnerComponent = parts[1]
+	var spawner: SpawnerPlayerComponent = parts[1]
 
-	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
+	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.CLIENT
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
@@ -155,11 +155,11 @@ func test_client_mode_sets_authority_from_name() -> void:
 func test_server_authoritative_mode_does_not_change_authority() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
-	var spawner: SpawnerComponent = parts[1]
+	var spawner: SpawnerPlayerComponent = parts[1]
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
 
-	spawner.authority_mode = SpawnerComponent.AuthorityMode.SERVER_AUTHORITATIVE
+	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.SERVER_AUTHORITATIVE
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -169,15 +169,15 @@ func test_client_mode_with_no_peer_in_name_leaves_authority_unchanged() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "NoSeparator"
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
 
 	SpawnSynchronizer.new(spawner)
 
-	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
+	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.CLIENT
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -189,18 +189,17 @@ func test_client_mode_with_no_peer_in_name_leaves_authority_unchanged() -> void:
 
 func test_unwrap_returns_spawner_component() -> void:
 	var root: Node2D = auto_free(Node2D.new())
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
 	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
 
-	assert_that(SpawnerComponent.unwrap(root)).is_equal(spawner)
+	assert_that(SpawnerPlayerComponent.unwrap(root)).is_equal(spawner)
 
 
 func test_unwrap_returns_null_when_absent() -> void:
 	var root: Node2D = auto_free(Node2D.new())
-	assert_that(SpawnerComponent.unwrap(root)).is_null()
-
+	assert_that(SpawnerPlayerComponent.unwrap(root)).is_null()
 
 

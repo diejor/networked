@@ -65,7 +65,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 static func _get_username(node: Node) -> String:
 	if not is_instance_valid(node):
 		return ""
-	var client := SpawnerComponent.unwrap(node)
+	var client := SpawnerPlayerComponent.unwrap(node)
 	if client:
 		return client.username
 	return node.name.get_slice("|", 0)

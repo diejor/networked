@@ -16,7 +16,7 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 [sub_resource type="Resource" id="Resource_20pc6"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/%SpawnerComponent"
+node_path = "Player/%SpawnerPlayerComponent"
 
 [sub_resource type="Resource" id="Resource_5vvyt"]
 script = ExtResource("2_03owx")
@@ -26,7 +26,7 @@ spawner_component_path = SubResource("Resource_20pc6")
 [sub_resource type="Resource" id="Resource_wkp8b"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/%SpawnerComponent"
+node_path = "Player/%SpawnerPlayerComponent"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 

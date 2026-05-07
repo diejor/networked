@@ -794,7 +794,7 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 func _resolve_username_collision(join_payload: JoinPayload) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
-		var client := SpawnerComponent.unwrap(player)
+		var client := SpawnerPlayerComponent.unwrap(player)
 		if client:
 			existing_names.append(client.username)
 		else:

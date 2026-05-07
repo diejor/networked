@@ -4,12 +4,12 @@
 ## Walks the owning entity's sibling [MultiplayerSynchronizer]s, collects
 ## their replication-config properties, and re-adds them as spawn-only
 ## (mode [code]REPLICATION_MODE_NEVER[/code] with [code]spawn = true[/code]).
-## Also adds a baseline [member SpawnerComponent.username] property when
+## Also adds a baseline [member SpawnerPlayerComponent.username] property when
 ## the parent component carries one and a [TPComponent.current_scene_path]
 ## property when present.
 ## [br][br]
-## Used by [SpawnerComponent] for player spawning and by
-## [EntityComponent] when [member EntityComponent.build_spawn_sync] is
+## Used by [SpawnerPlayerComponent] for player spawning and by
+## [SpawnerComponent] when [member SpawnerComponent.build_spawn_sync] is
 ## enabled.
 class_name SpawnSynchronizer
 extends MultiplayerSynchronizer
@@ -80,9 +80,9 @@ func config_spawn_properties(target_node: Node) -> void:
 
 
 func _add_optional_username_property(target_node: Node) -> void:
-	var spawner := target_node as SpawnerComponent
+	var spawner := target_node as SpawnerPlayerComponent
 	if not spawner:
-		spawner = target_node.owner.get_node_or_null("%SpawnerComponent")
+		spawner = SpawnerPlayerComponent.unwrap(target_node.owner)
 	if not spawner:
 		return
 	var comp_path := target_node.owner.get_path_to(spawner)

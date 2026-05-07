@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://bpnpmprpg6p6b"]
 
-[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_6f1h7"]
+[ext_resource type="Script" uid="uid://b1263q5vu7cht" path="res://addons/networked/nodes/spawner/spawner_player_component.gd" id="1_6f1h7"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 
 [node name="TestPlayerMinimal" type="Node2D" unique_id=1890415094]
 
-[node name="SpawnerComponent" type="Node" parent="." unique_id=1744312890]
+[node name="SpawnerPlayerComponent" type="Node" parent="." unique_id=1744312890]
 unique_name_in_owner = true
 script = ExtResource("1_6f1h7")
 metadata/_custom_type_script = "uid://bspawnrcomp001"
@@ -14,4 +14,4 @@ metadata/_custom_type_script = "uid://bspawnrcomp001"
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1398009418]
 replication_config = SubResource("SceneReplicationConfig_1")
 
-[connection signal="tree_entered" from="." to="SpawnerComponent" method="_on_owner_tree_entered"]
+[connection signal="tree_entered" from="." to="SpawnerPlayerComponent" method="_on_owner_tree_entered"]

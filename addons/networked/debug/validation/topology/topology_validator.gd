@@ -5,7 +5,7 @@
 ## constraint checks.
 ## [br][br]
 ## [b]Never import this file from production components.[/b]
-## (SaveComponent, SceneSynchronizer, SpawnerComponent, etc.)
+## (SaveComponent, SceneSynchronizer, SpawnerPlayerComponent, etc.)
 ## [br][br]
 ## Use from: tests, [code]@tool[/code] scripts, debugger panels.
 class_name TopologyValidator
@@ -15,12 +15,12 @@ extends RefCounted
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
-## [br]- [SpawnerComponent] -> 1 (SpawnSynchronizer)
+## [br]- [SpawnerPlayerComponent] -> 1 (SpawnSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
 	var n := 0
-	if node.get_node_or_null("%SpawnerComponent"):
+	if SpawnerPlayerComponent.unwrap(node) != null:
 		n += 1
 	return n
 
@@ -66,8 +66,7 @@ static func validate_node(node: Node) -> Dictionary:
 	if save_comp:
 		errors.append_array(_check_save_component(save_comp))
 
-	var client_comp: SpawnerComponent = \
-		node.get_node_or_null("%SpawnerComponent")
+	var client_comp := SpawnerPlayerComponent.unwrap(node)
 	if client_comp:
 		errors.append_array(_check_spawner_component(client_comp))
 
@@ -161,7 +160,7 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	return errs
 
 
-static func _check_spawner_component(spawner: SpawnerComponent) -> Array[String]:
+static func _check_spawner_component(spawner: SpawnerPlayerComponent) -> Array[String]:
 	var errs: Array[String] = []
 	if spawner.spawn_sync and spawner.spawn_sync.root_path == NodePath(""):
 		errs.append(
@@ -175,7 +174,7 @@ static func _check_spawner_component(spawner: SpawnerComponent) -> Array[String]
 
 static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var expected := JoinPayload.parse_authority(node.name)
+	var expected := SpawnerComponent.parse_authority(node.name)
 	var actual := node.get_multiplayer_authority()
 
 	if expected != 0 and actual != expected:

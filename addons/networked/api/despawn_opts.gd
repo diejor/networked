@@ -1,4 +1,4 @@
-## Options bag for [method EntityComponent.despawn].
+## Options bag for [method SpawnerComponent.despawn].
 ##
 ## Carries the knobs that control teardown behavior. Built as a
 ## [RefCounted] so future options (e.g., delayed-free for death
@@ -7,7 +7,7 @@ class_name DespawnOpts
 extends RefCounted
 
 ## Recorded on the despawn span and forwarded to the
-## [signal EntityComponent.despawning] signal so user code can branch
+## [signal SpawnerComponent.despawning] signal so user code can branch
 ## on the cause. Common values: [code]&"peer_disconnected"[/code],
 ## [code]&"killed"[/code], [code]&"collected"[/code],
 ## [code]&"timeout"[/code].

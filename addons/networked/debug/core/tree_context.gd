@@ -177,10 +177,7 @@ func _decorate_player(player: Node) -> void:
 	var should_have := is_enabled("nameplate", player)
 
 	if should_have and not existing:
-		var client := (
-			player.get_node_or_null("%SpawnerComponent")
-			as SpawnerComponent
-		)
+		var client := SpawnerPlayerComponent.unwrap(player)
 		var username := ""
 		if client:
 			username = client.username
@@ -203,12 +200,10 @@ func _decorate_player(player: Node) -> void:
 func _get_stable_id(node: Node) -> Variant:
 	if not is_instance_valid(node):
 		return ""
-	var client := (
-		node.get_node_or_null("%SpawnerComponent") as SpawnerComponent
-	)
+	var client := SpawnerPlayerComponent.unwrap(node)
 	if client:
 		return node.get_multiplayer_authority()
-	var parsed := JoinPayload.parse_authority(node.name)
+	var parsed := SpawnerComponent.parse_authority(node.name)
 	return parsed if parsed != 0 else str(node.get_path())
 
 
@@ -399,7 +394,7 @@ func _on_local_player_changed(_player: Node) -> void:
 func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if is_instance_valid(mt) and mt.local_player:
-		var player := SpawnerComponent.unwrap(mt.local_player)
+		var player := SpawnerPlayerComponent.unwrap(mt.local_player)
 		if player:
 			data["username"] = player.username
 		else:

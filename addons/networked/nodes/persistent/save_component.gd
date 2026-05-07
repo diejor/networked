@@ -278,7 +278,7 @@ func _get_entity_id() -> StringName:
 	if not root:
 		return &""
 	
-	var client: SpawnerComponent = root.get_node_or_null("%SpawnerComponent")
+	var client := SpawnerPlayerComponent.unwrap(root)
 	if client and not client.username.is_empty():
 		return StringName(client.username)
 	return StringName(root.name)

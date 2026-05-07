@@ -44,7 +44,7 @@ func test_player_spawns_in_level_after_join() -> void:
 
 	var spawner_component_path := SceneNodePath.new()
 	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerPlayerComponent"
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
@@ -75,7 +75,7 @@ func test_spawned_player_has_correct_username() -> void:
 
 	var spawner_component_path := SceneNodePath.new()
 	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerPlayerComponent"
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
@@ -96,7 +96,7 @@ func test_spawned_player_has_correct_username() -> void:
 	)
 
 	var player := level.get_node(player_name)
-	var client_comp := SpawnerComponent.unwrap(player)
+	var client_comp := SpawnerPlayerComponent.unwrap(player)
 	assert_that(client_comp).is_not_null()
 	assert_that(str(client_comp.username)).is_equal(username)
 

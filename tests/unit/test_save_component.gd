@@ -25,8 +25,8 @@ func test_get_entity_id_uses_username_when_client_present() -> void:
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	var client: SpawnerComponent = auto_free(SpawnerComponent.new())
-	client.name = "SpawnerComponent"
+	var client: SpawnerPlayerComponent = auto_free(SpawnerPlayerComponent.new())
+	client.name = "SpawnerPlayerComponent"
 	client.unique_name_in_owner = true
 	client.username = "alice"
 	root.add_child(client)
