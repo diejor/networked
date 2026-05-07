@@ -25,6 +25,17 @@ func _ready() -> void:
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_5h0xu"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath("SpawnerPlayerComponent:username")
+properties/1/spawn = true
+properties/1/replication_mode = 0
+properties/2/path = NodePath("TPComponent:current_scene_path")
+properties/2/spawn = true
+properties/2/replication_mode = 0
+
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
 properties/0/path = NodePath("..:position")
 properties/0/spawn = true
@@ -39,9 +50,6 @@ node_path = "MultiplayerSpawner"
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
-properties/1/path = NodePath("TPComponent:current_scene_path")
-properties/1/spawn = true
-properties/1/replication_mode = 2
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
@@ -60,13 +68,11 @@ texture = ExtResource("2_kpjcp")
 position = Vector2(2, 60)
 shape = SubResource("RectangleShape2D_tdg3f")
 
-[node name="SpawnerPlayerComponent" type="Node" parent="." unique_id=1442925740]
+[node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1442925740]
 unique_name_in_owner = true
+replication_config = SubResource("SceneReplicationConfig_5h0xu")
 script = ExtResource("3_kne1u")
-authority_policy = null
-authority_peer = null
-build_spawn_sync = true
-auto_track_in_scene = false
+authority_mode = 1
 metadata/_custom_type_script = "uid://bspawnrcomp001"
 
 [node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=2118460329]

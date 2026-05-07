@@ -270,14 +270,23 @@ func _get_entity_id() -> StringName:
 		root = get_node_or_null(root_path)
 	else:
 		root = owner
-	
+
 	if not root:
 		return &""
-	
-	var client := SpawnerPlayerComponent.unwrap(root)
-	if client and not client.username.is_empty():
-		return StringName(client.username)
+
+	var spawner := SpawnerComponent.unwrap(root)
+	if spawner and not spawner.entity_id.is_empty():
+		return spawner.entity_id
 	return StringName(root.name)
+
+
+# Sibling hook: SpawnerComponent dispatches this in the unique window before
+# any other component's _enter_tree, with authority + identity already settled.
+# Server-side hydrate happens here so TPComponent can read current_scene_path
+# from a hydrated bound_entity during its own _enter_tree.
+func _on_entity_spawning(_spawner: SpawnerComponent) -> void:
+	if multiplayer and multiplayer.is_server():
+		hydrate_from_db()
 
 
 ## Flushes the current entity state to [member database] immediately.

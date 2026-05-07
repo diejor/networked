@@ -1,9 +1,9 @@
 ## Tests for [SpawnerPlayerComponent].
 ##
 ## Covers [method SpawnerComponent.parse_authority],
-## [method SpawnSynchronizer.config_spawn_properties],
-## and [enum SpawnerPlayerComponent.AuthorityMode] behaviour in
-## [method SpawnerPlayerComponent._on_owner_tree_entered].
+## [method SpawnerComponent._build_spawn_config] (the tool-time build path),
+## and [enum SpawnerComponent.AuthorityMode] behaviour in
+## [method SpawnerComponent._on_owner_tree_entered].
 class_name TestSpawnerPlayerComponent
 extends NetworkedTestSuite
 
@@ -47,7 +47,7 @@ func test_parse_authority_with_non_numeric_peer_returns_zero() -> void:
 
 
 # ---------------------------------------------------------------------------
-# config_spawn_properties() - builds SceneReplicationConfig from sibling syncs
+# _build_spawn_config() - builds SceneReplicationConfig from sibling syncs
 # ---------------------------------------------------------------------------
 
 func test_config_spawn_properties_aggregates_syncs() -> void:
@@ -58,29 +58,28 @@ func test_config_spawn_properties_aggregates_syncs() -> void:
 	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
-
-	SpawnSynchronizer.new(spawner)
+	spawner.root_path = spawner.get_path_to(root)
 
 	var player_sync := MultiplayerSynchronizer.new()
 	player_sync.name = "PlayerSync"
-	player_sync.root_path = NodePath("..")
+	root.add_child(player_sync)
+	player_sync.owner = root
+	player_sync.root_path = player_sync.get_path_to(root)
 	var config := SceneReplicationConfig.new()
 	config.add_property(NodePath(":position"))
 	config.property_set_replication_mode(
 		NodePath(":position"),
 		SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 	player_sync.replication_config = config
-	root.add_child(player_sync)
-	player_sync.owner = root
 
-	spawner.spawn_sync.config_spawn_properties(spawner)
-	var spawn_config := spawner.spawn_sync.replication_config
+	spawner._build_spawn_config()
+	var spawn_config := spawner.replication_config
 	assert_that(spawn_config.has_property(NodePath(":position"))).is_true()
 	assert_that(spawn_config.property_get_spawn(NodePath(":position"))).is_true()
 	assert_that(spawn_config.property_get_sync(NodePath(":position"))).is_false()
 
 
-func test_config_spawn_properties_skips_spawn_sync() -> void:
+func test_config_spawn_properties_skips_self() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "TestPlayer"
 
@@ -88,15 +87,14 @@ func test_config_spawn_properties_skips_spawn_sync() -> void:
 	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
-
-	var spawn_sync := SpawnSynchronizer.new(spawner)
+	spawner.root_path = spawner.get_path_to(root)
 
 	var spawn_config := SceneReplicationConfig.new()
 	spawn_config.add_property(NodePath(":visible"))
-	spawn_sync.replication_config = spawn_config
+	spawner.replication_config = spawn_config
 
-	spawner.spawn_sync.config_spawn_properties(spawner)
-	var config := spawner.spawn_sync.replication_config
+	spawner._build_spawn_config()
+	var config := spawner.replication_config
 	assert_that(config.has_property(NodePath(":visible"))).is_false()
 
 
@@ -108,11 +106,10 @@ func test_config_spawn_properties_includes_username() -> void:
 	spawner.name = "SpawnerPlayerComponent"
 	root.add_child(spawner)
 	spawner.owner = root
+	spawner.root_path = spawner.get_path_to(root)
 
-	SpawnSynchronizer.new(spawner)
-
-	spawner.spawn_sync.config_spawn_properties(spawner)
-	var spawn_config := spawner.spawn_sync.replication_config
+	spawner._build_spawn_config()
+	var spawn_config := spawner.replication_config
 
 	var expected_path := NodePath("SpawnerPlayerComponent:username")
 	assert_that(spawn_config.has_property(expected_path)).is_true()
@@ -132,11 +129,9 @@ func _make_player_root(peer_id: int) -> Array:
 
 	var spawner := SpawnerPlayerComponent.new()
 	spawner.name = "SpawnerPlayerComponent"
-	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
-
-	SpawnSynchronizer.new(spawner)
+	spawner.root_path = spawner.get_path_to(root)
 
 	return [root, spawner]
 
@@ -146,20 +141,20 @@ func test_client_mode_sets_authority_from_name() -> void:
 	var root: Node2D = parts[0]
 	var spawner: SpawnerPlayerComponent = parts[1]
 
-	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.CLIENT
+	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
 
 
-func test_server_authoritative_mode_does_not_change_authority() -> void:
+func test_server_mode_does_not_change_authority() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var spawner: SpawnerPlayerComponent = parts[1]
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
 
-	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.SERVER_AUTHORITATIVE
+	spawner.authority_mode = SpawnerComponent.AuthorityMode.SERVER
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -171,13 +166,11 @@ func test_client_mode_with_no_peer_in_name_leaves_authority_unchanged() -> void:
 
 	var spawner := SpawnerPlayerComponent.new()
 	spawner.name = "SpawnerPlayerComponent"
-	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
+	spawner.root_path = spawner.get_path_to(root)
 
-	SpawnSynchronizer.new(spawner)
-
-	spawner.authority_mode = SpawnerPlayerComponent.AuthorityMode.CLIENT
+	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
 	spawner._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -191,7 +184,6 @@ func test_unwrap_returns_spawner_component() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	var spawner := SpawnerPlayerComponent.new()
 	spawner.name = "SpawnerPlayerComponent"
-	spawner.unique_name_in_owner = true
 	root.add_child(spawner)
 	spawner.owner = root
 
@@ -201,5 +193,3 @@ func test_unwrap_returns_spawner_component() -> void:
 func test_unwrap_returns_null_when_absent() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	assert_that(SpawnerPlayerComponent.unwrap(root)).is_null()
-
-

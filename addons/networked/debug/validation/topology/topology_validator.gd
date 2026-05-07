@@ -15,7 +15,7 @@ extends RefCounted
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
-## [br]- [SpawnerPlayerComponent] -> 1 (SpawnSynchronizer)
+## [br]- [SpawnerPlayerComponent] -> 1 (extends MultiplayerSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
@@ -162,9 +162,9 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 
 static func _check_spawner_component(spawner: SpawnerPlayerComponent) -> Array[String]:
 	var errs: Array[String] = []
-	if spawner.spawn_sync and spawner.spawn_sync.root_path == NodePath(""):
+	if spawner.root_path == NodePath(""):
 		errs.append(
-			"SpawnSynchronizer.root_path is empty on '%s'. " % \
+			"SpawnerPlayerComponent.root_path is empty on '%s'. " % \
 			[spawner.owner.name] + \
 			"get_path_to(spawner.owner) was likely called before the " + \
 			"player entered the scene tree."

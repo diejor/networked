@@ -34,7 +34,6 @@ node_path = "Player/%SpawnerPlayerComponent"
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
 init_join_payload = SubResource("Resource_5vvyt")
-use_listen_server = true
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]

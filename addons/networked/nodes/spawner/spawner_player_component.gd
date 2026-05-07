@@ -18,37 +18,9 @@ extends SpawnerComponent
 
 ## Emitted on the server when a peer requests to join.
 signal player_joined(join_payload: JoinPayload)
-## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a
-## delta update.
-signal client_synchronized
-
-## Controls how multiplayer authority is assigned to the spawned player.
-enum AuthorityMode {
-	## Authority is set to the player peer ID. Default. Use for
-	## client-authoritative movement.
-	CLIENT,
-	## Authority stays at [code]1[/code]. Use when the server drives
-	## all simulation.
-	SERVER_AUTHORITATIVE,
-}
-
-## How multiplayer authority is assigned to the player node on tree entry.
-@export var authority_mode: AuthorityMode = AuthorityMode.CLIENT
 
 ## The username of the player associated with this component.
 var username: String = ""
-
-
-## The [MultiplayerSynchronizer] used for initial spawn state replication.
-##
-## Lazily constructed on first access. Always returns the
-## [code]%SpawnSynchronizer[/code] unique-name node so subsequent
-## accesses return the same instance.
-var spawn_sync: SpawnSynchronizer:
-	get:
-		if not spawn_sync:
-			spawn_sync = SpawnSynchronizer.new(self)
-		return %SpawnSynchronizer
 
 
 ## Returns the [SpawnerPlayerComponent] with unique name
@@ -61,8 +33,7 @@ static func unwrap(node: Node) -> SpawnerPlayerComponent:
 func _init() -> void:
 	name = "SpawnerPlayerComponent"
 	unique_name_in_owner = true
-	build_spawn_sync = true
-	auto_track_in_scene = false
+	authority_mode = AuthorityMode.CLIENT
 	if not player_joined.is_connected(_on_player_joined):
 		player_joined.connect(_on_player_joined)
 
@@ -72,86 +43,48 @@ func _ready() -> void:
 		_validate_editor()
 		return
 
-	_dbg.trace("_ready for %s", [owner.name])
-
 	if is_multiplayer_authority():
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
 			mt.local_player = self.owner
 
-	for sync in SynchronizersCache.get_client_synchronizers(owner):
-		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
-			sync.delta_synchronized.connect(client_synchronized.emit)
-
-	if username.is_empty():
-		owner.process_mode = Node.PROCESS_MODE_DISABLED
-		owner.visible = false
-		if not multiplayer.is_server():
-			_dbg.trace(
-				"Freeing spawner node `%s` because we are in client.",
-				[owner.name]
-			)
-			owner.queue_free()
-		SynchronizersCache.sync_only_server(owner)
-
-	assert(
-		owner.tree_entered.is_connected(_on_owner_tree_entered),
-		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise \
-the authority will not be set correctly. Reload the player scene to connect \
-automatically." % [owner.name, _on_owner_tree_entered]
-	)
-
 	if not multiplayer.peer_disconnected.is_connected(_on_peer_disconnected):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
-	var tp_layer := get_tp_layer()
-	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
-		_dbg.info(
-			"Local player %s ready. Playing teleport transition.", [username]
+	if (
+		not multiplayer.is_server()
+		and is_multiplayer_authority()
+		and is_inside_tree()
+	):
+		var ctx := Netw.ctx(self)
+		if ctx:
+			var tp_layer := ctx.services.get_tp_layer()
+			if tp_layer:
+				_dbg.info(
+					"Local player %s ready. Playing teleport transition.",
+					[username]
+				)
+				tp_layer.teleport_in()
+
+	super._ready()
+
+
+# Override: derive entity_id from username instead of owner name.
+func _resolve_identity() -> StringName:
+	return StringName(username) if not username.is_empty() else &""
+
+
+# Override: add username + current_scene_path as spawn-only properties.
+func _populate_extra_spawn_properties(cfg: SceneReplicationConfig) -> void:
+	var comp_path := owner.get_path_to(self)
+	_add_spawn_property_into(cfg, NodePath(str(comp_path) + ":username"))
+
+	var tp := owner.get_node_or_null("%TPComponent")
+	if tp:
+		var tp_path := owner.get_path_to(tp)
+		_add_spawn_property_into(
+			cfg, NodePath(str(tp_path) + ":current_scene_path")
 		)
-		tp_layer.teleport_in()
-
-	spawned.emit()
-
-
-# Override: parse authority from `username|peer_id` node name when
-# `authority_mode == CLIENT`. Skip when owner already differs from peer 1
-# (a previous frame already configured authority).
-func _apply_authority() -> void:
-	if owner.get_multiplayer_authority() != 1:
-		return
-
-	assert(owner.name != "|")
-
-	var authority := SpawnerComponent.parse_authority(owner.name)
-	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
-		_dbg.debug(
-			"Setting authority for %s to %d", [owner.name, authority]
-		)
-		owner.set_multiplayer_authority(authority)
-
-
-# Override: the player flow always builds a SpawnSynchronizer; the
-# `spawn_sync` getter ensures one exists.
-func _setup_spawn_sync() -> void:
-	var existing := owner.get_node_or_null(
-		"SpawnerPlayerComponent/SpawnSynchronizer"
-	)
-	_dbg.debug(
-		"_on_owner_tree_entered: existing SpawnSynchronizer=%s, "
-		+ "spawn_sync var=%s", [existing, spawn_sync]
-	)
-	spawn_sync.config_spawn_properties(self)
-	spawn_sync.set_multiplayer_authority(
-		MultiplayerPeer.TARGET_PEER_SERVER
-	)
-
-
-# Override: the player flow registers via MultiplayerScene.add_player,
-# which calls SceneSynchronizer.track_node. Let the default
-# SpawnerComponent registration handle the track.
-func _register_with_scene() -> void:
-	super()
 
 
 ## Server-only. Duplicates the owner scene, sets the
@@ -159,26 +92,26 @@ func _register_with_scene() -> void:
 ## for DB hydration, then calls [method MultiplayerScene.add_player]
 ## on [param scene].
 ##
-## All remaining configuration (authority, DB hydration, spawn-sync)
-## runs automatically in [method _on_owner_tree_entered] when the
-## copy enters the tree.
-func spawn_player(
-	jp: JoinPayload, scene: MultiplayerScene
-) -> Node:
+## All remaining configuration (authority, DB hydration, scene tracking)
+## runs automatically in [method _on_owner_tree_entered] when the copy
+## enters the tree.
+func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
 	assert(multiplayer.is_server())
-	var copy: Node = load(owner.scene_file_path).instantiate()
-	copy.name = "%s|%d" % [jp.username, jp.peer_id]
-	var copy_spawner: SpawnerPlayerComponent = (
-		copy.get_node_or_null("%SpawnerPlayerComponent")
+	var copy := SpawnerComponent.instantiate_from(owner,
+		func(c: SpawnerComponent) -> void:
+			var pc := c as SpawnerPlayerComponent
+			if pc:
+				pc.username = jp.username
+			c.owner.name = SpawnerComponent.format_name(
+				jp.username, jp.peer_id
+			)
 	)
-	if copy_spawner:
-		copy_spawner.username = jp.username
 	scene.add_player(copy)
 	return copy
 
 
 func _on_player_joined(join_payload: JoinPayload) -> void:
-	var ctx := get_context()
+	var ctx := Netw.ctx(self)
 	if not ctx:
 		return
 
@@ -193,29 +126,17 @@ func _on_player_joined(join_payload: JoinPayload) -> void:
 		)
 		return
 
-	# Resolve target scene: prefer TP-routed scene from saved
-	# state, fall back to the slot's default scene.
 	var scene := _resolve_target_scene(join_payload, slot)
-
-	if scene:
-		spawn_player(join_payload, scene)
-	elif slot.is_valid():
-		var copy: Node = owner.duplicate()
-		copy.name = "%s|%d" % [join_payload.username, join_payload.peer_id]
-		var copy_spawner: SpawnerPlayerComponent = (
-			copy.get_node_or_null("%SpawnerPlayerComponent")
-		)
-		if copy_spawner:
-			copy_spawner.username = join_payload.username
-		slot.place_player(copy)
-	else:
+	if not scene:
 		_dbg.error("Cannot place player: no scene available.", [])
+		return
+	spawn_player(join_payload, scene)
 
 
 func _resolve_target_scene(
 	jp: JoinPayload, slot: SpawnSlot
 ) -> MultiplayerScene:
-	var ctx := get_context()
+	var ctx := Netw.ctx(self)
 	if not ctx:
 		return null
 
@@ -274,4 +195,4 @@ func _exit_tree() -> void:
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.local_player == self:
 			mt.local_player = null
-	super()
+	super._exit_tree()

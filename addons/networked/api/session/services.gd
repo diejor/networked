@@ -61,6 +61,15 @@ func get_clock() -> NetworkClock:
 	return mt.get_service(NetworkClock)
 
 
+## Returns the [TPLayerAPI] for visual teleport transitions on the local
+## client, or [code]null[/code].
+func get_tp_layer() -> TPLayerAPI:
+	var mt: MultiplayerTree = _tree_ref.get_ref()
+	if not mt:
+		return null
+	return mt.get_service(TPLayerAPI)
+
+
 ## Returns the [NetwPeerContext] for [param peer_id].
 func get_peer_context(peer_id: int) -> NetwPeerContext:
 	var mt := _tree_ref.get_ref() as MultiplayerTree

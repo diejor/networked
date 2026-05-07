@@ -204,14 +204,13 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _peer_batcher:
 		_peer_batcher.unregister(self)
-	
+
 	if owner:
-		var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
-		for sync in all_syncs:
-			if sync.delta_synchronized.is_connected(_on_synced):
-				sync.delta_synchronized.disconnect(_on_synced)
+		for sync in SynchronizersCache.get_client_synchronizers(owner):
 			if sync.synchronized.is_connected(_on_synced):
 				sync.synchronized.disconnect(_on_synced)
+			if sync.delta_synchronized.is_connected(_on_synced):
+				sync.delta_synchronized.disconnect(_on_synced)
 
 
 func _process(delta: float) -> void:
@@ -357,16 +356,14 @@ func _cache_sync_intervals() -> void:
 		
 	var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
 	var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
-	
+
 	for sync in all_syncs:
 		max_interval = maxf(max_interval, maxf(sync.replication_interval, sync.delta_interval))
-		
-		# Connect signals for immediate snapshot injection
-		if not sync.delta_synchronized.is_connected(_on_synced):
-			sync.delta_synchronized.connect(_on_synced)
 		if not sync.synchronized.is_connected(_on_synced):
 			sync.synchronized.connect(_on_synced)
-		
+		if not sync.delta_synchronized.is_connected(_on_synced):
+			sync.delta_synchronized.connect(_on_synced)
+
 	# Mark which properties are covered by signals
 	for state in _states:
 		if state.name in synced_props:

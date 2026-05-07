@@ -17,10 +17,7 @@ extends NetwComponent
 
 signal _teleport_committed
 
-## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
-##
-## TODO: move to NetwComponent
-signal client_synchronized
+
 
 ## The default scene path assigned when the component enters the tree if no scene 
 ## is currently set.
@@ -72,10 +69,7 @@ func _init() -> void:
 	unique_name_in_owner = true
 
 func _ready() -> void:
-	for sync in SynchronizersCache.get_client_synchronizers(owner):
-		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
-			sync.delta_synchronized.connect(client_synchronized.emit)
-			sync.synchronized.connect(client_synchronized.emit)
+	pass
 
 
 func _step(label: String, data: Dictionary = {}) -> void:
@@ -261,7 +255,6 @@ func _flush_player_position(player: Node) -> void:
 
 
 func _sync_client_state(player: Node, span: NetSpan) -> void:
-	var tp_component: TPComponent = player.get_node("%TPComponent")
 	var authority := player.get_multiplayer_authority()
 	var ctx := get_context()
 	if authority == 1 and ctx and ctx.tree.is_listen_server():
@@ -269,11 +262,20 @@ func _sync_client_state(player: Node, span: NetSpan) -> void:
 		await get_tree().physics_frame
 		await get_tree().physics_frame
 		return
+
+	# The client called save.push_to(SERVER) before this RPC. Wait for the
+	# corresponding RPC to land — SaveComponent.client_synchronized fires on
+	# the server side from _on_state_changed after _request_push completes.
+	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
+	if not save:
+		span.step("client_sync_skipped_no_save")
+		return
+
 	span.step("awaiting_client_sync")
 	var timer := get_tree().create_timer(5.0)
-	if await Async.timeout(tp_component.client_synchronized, timer):
+	if await Async.timeout(save.client_synchronized, timer):
 		_fail_span(span, "client_sync_timeout",
-			"Client couldn't synchronize while teleporting.")
+			"Client save flush did not arrive while teleporting.")
 	else:
 		span.step("client_synced")
 

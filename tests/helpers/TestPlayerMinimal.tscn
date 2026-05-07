@@ -6,7 +6,7 @@
 
 [node name="TestPlayerMinimal" type="Node2D" unique_id=1890415094]
 
-[node name="SpawnerPlayerComponent" type="Node" parent="." unique_id=1744312890]
+[node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1744312890]
 unique_name_in_owner = true
 script = ExtResource("1_6f1h7")
 metadata/_custom_type_script = "uid://bspawnrcomp001"
