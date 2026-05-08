@@ -1,20 +1,31 @@
-@tool
 class_name SpawnerComponent
 extends MultiplayerSynchronizer
 ## Orchestration point for a networked entity.
 ##
-## [member replication_config] bundles properties
-## into the spawn packet so initial state arrives with the entity.
-## 
+## [member replication_config] bundles properties into the spawn packet
+## so initial state arrives with the entity. Sibling components contribute
+## paths through the [signal NetwEntity.collecting_spawn_properties]
+## signal; the inspector's Replication panel can also pre-populate the
+## list (its flags are coerced to spawn-only at runtime).
+##
 ## [br][br]
 ## See [method instantiate_from], [method spawn_under], and
 ## [method despawn] for the spawn/despawn API.
 ##
-## Components on the same owner implement
-## [code]_on_entity_spawning(spawner: SpawnerComponent)[/code]
-## instead of relying on [code]_enter_tree[/code] ordering.
+## Siblings react to the spawn lifecycle via
+## [code]Netw.ctx(self).entity.spawning[/code] (replaces the older
+## [code]_on_entity_spawning[/code] propagate-call hook).
 ## [codeblock]
-## func _on_entity_spawning(spawner: SpawnerComponent) -> void:
+## func _notification(what: int) -> void:
+##     if what == NOTIFICATION_PARENTED:
+##         var entity := Netw.ctx(self).entity
+##         entity.spawning.connect(_on_spawning)
+##         entity.collecting_spawn_properties.connect(_on_collecting_spawn)
+##
+## func _on_collecting_spawn(spawner: SpawnerComponent) -> void:
+##     spawner.add_spawn_property(NodePath("..:my_property"))
+##
+## func _on_spawning() -> void:
 ##     if multiplayer.is_server():
 ##         hydrate_from_db()
 ## [/codeblock]
@@ -29,9 +40,8 @@ enum AuthorityMode {
 
 ## Emitted after [member entity_id] and multiplayer authority
 ## are resolved, but [b]before[/b] sibling [code]_enter_tree[/code].
-## Siblings needing settled identity should implement
-## [code]_on_entity_spawning(spawner)[/code] instead -- the timing
-## guarantee only holds for that dispatch.
+## Mirrors [signal NetwEntity.spawning] for callers that already hold a
+## [SpawnerComponent] reference.
 signal spawning
 
 ## Emitted right before [method despawn] runs, with the despawn reason.
@@ -46,14 +56,6 @@ signal despawned
 ## Explicit identity. When empty, [member entity_id] falls back
 ## to the default resolved by the authority policy.
 @export var entity_id_override: StringName = &""
-
-## When [code]true[/code], the editor's [b]Rebuild Spawn Properties[/b]
-## button populates [member replication_config] from sibling
-## [MultiplayerSynchronizer]s so their properties transfer on spawn.
-@export var auto_track_properties: bool = true
-
-@export_tool_button("Rebuild Spawn Properties") 
-var _rebuild_btn: Callable = _rebuild_spawn_properties
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -152,6 +154,19 @@ func _init() -> void:
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 
 
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED:
+		return
+	if Engine.is_editor_hint():
+		return
+	var entity := Netw.ctx(self).entity
+	if not entity:
+		return
+	entity.set_spawner(self)
+	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
+		entity.owner_tree_entered.connect(_on_owner_tree_entered)
+
+
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -162,28 +177,12 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
-		_validate_editor()
 		return
 	_dbg.trace("_ready for %s", [owner.name if owner else "<no owner>"])
 
-	assert(
-		owner.tree_entered.is_connected(_on_owner_tree_entered),
-		("SpawnerComponent: pre-init hook missing on '%s'. The signal "
-		+ "'tree_entered' on the owner is normally wired to "
-		+ "_on_owner_tree_entered via CONNECT_PERSIST in _validate_editor. "
-		+ "Open '%s' in the editor and re-save it to repair the connection.")
-		% [owner.name, owner.scene_file_path]
-	)
 	if is_template:
 		_apply_template_state()
 		return
-
-
-func _validate_editor() -> void:
-	if owner and not owner.tree_entered.is_connected(_on_owner_tree_entered):
-		owner.tree_entered.connect(
-			_on_owner_tree_entered, ConnectFlags.CONNECT_PERSIST
-		)
 
 
 func _exit_tree() -> void:
@@ -192,13 +191,25 @@ func _exit_tree() -> void:
 	despawned.emit()
 
 
-# Runs in the unique window after [member Node.owner] enters the tree
-# but before any sibling component's [code]_enter_tree[/code] fires.
-# Subclasses override the policy hooks
-# ([method _apply_authority], [method _resolve_identity]) to specialize
-# behavior; siblings react via [code]_on_entity_spawning(spawner)[/code].
+# Drives the entity's spawn lifecycle. Connected to
+# [signal NetwEntity.owner_tree_entered] in [method _notification].
+# [br][br]
+# Order:
+# [br]1. [method _apply_authority] - settle authority before any
+#     identity-dependent work.
+# [br]2. Emit [signal NetwEntity.collecting_spawn_properties] - siblings
+#     contribute paths via [method add_spawn_property].
+# [br]3. [method _sanitize_replication_config] - coerce all entries to
+#     spawn-only / [constant SceneReplicationConfig.REPLICATION_MODE_NEVER].
+# [br]4. Emit [signal NetwEntity.spawning] (and the local
+#     [signal spawning] mirror) - siblings react with hydration etc.
+# [br]5. [method _register_with_scene] - join the enclosing
+#     [MultiplayerScene]'s visibility filters.
+# [br]6. Emit [signal NetwEntity.spawned].
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
+		return
+	if not owner:
 		return
 	_dbg.trace("Entity '%s' entering tree.", [owner.name])
 	_apply_authority()
@@ -206,10 +217,16 @@ func _on_owner_tree_entered() -> void:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
-	_dispatch_spawning()
-	_register_with_scene()
-	
+	var entity := Netw.ctx(self).entity
+	if entity:
+		entity.collecting_spawn_properties.emit(self)
+	_sanitize_replication_config()
+	if entity:
+		entity.spawning.emit()
 	spawning.emit()
+	_register_with_scene()
+	if entity:
+		entity.spawned.emit()
 
 
 # Applies [member authority_mode] to [member Node.owner].
@@ -263,19 +280,36 @@ func _apply_template_state() -> void:
 	SynchronizersCache.sync_only_server(owner)
 
 
-func _dispatch_spawning() -> void:
-	owner.propagate_call("_on_entity_spawning", [self])
-
-
 # ── Spawn config ─────────────────────────────────────────────────────────
+
+## Adds [param prop] to [member replication_config] as a spawn-only entry
+## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
+## spawn flag set, sync/watch off).
+##
+## Intended for use from
+## [signal NetwEntity.collecting_spawn_properties] handlers. Idempotent --
+## adding the same path twice is a no-op.
+func add_spawn_property(prop: NodePath) -> void:
+	if not replication_config:
+		replication_config = SceneReplicationConfig.new()
+	_add_spawn_property_into(replication_config, prop)
+
 
 # Adds [param prop] to [param cfg] as spawn-only.
 func _add_spawn_property_into(
 	cfg: SceneReplicationConfig, prop: NodePath
 ) -> void:
 	if cfg.has_property(prop):
+		_coerce_to_spawn_only(cfg, prop)
 		return
 	cfg.add_property(prop)
+	_coerce_to_spawn_only(cfg, prop)
+
+
+# Forces [param prop] to spawn-only flags.
+func _coerce_to_spawn_only(
+	cfg: SceneReplicationConfig, prop: NodePath
+) -> void:
 	cfg.property_set_replication_mode(
 		prop, SceneReplicationConfig.REPLICATION_MODE_NEVER
 	)
@@ -284,52 +318,13 @@ func _add_spawn_property_into(
 	cfg.property_set_watch(prop, false)
 
 
-# Rebuilds [member replication_config] from sibling synchronizers.
-func _build_spawn_config() -> void:
-	if not auto_track_properties:
+# Coerces every property in [member replication_config] to spawn-only,
+# regardless of how it was originally configured (inspector or sibling).
+func _sanitize_replication_config() -> void:
+	if not replication_config:
 		return
-	var cfg := SceneReplicationConfig.new()
-	var syncs := SynchronizersCache.get_client_synchronizers(owner)
-	for sync in syncs:
-		if sync == self or not sync.replication_config:
-			continue
-		for prop: NodePath in sync.replication_config.get_properties():
-			_add_spawn_property_into(cfg, prop)
-	_populate_extra_spawn_properties(cfg)
-	replication_config = cfg
-
-
-## Virtual. Adds subclass properties to [param cfg] as
-## spawn-only state.
-func _populate_extra_spawn_properties(_cfg: SceneReplicationConfig) -> void:
-	pass
-
-
-# Tool-button entry point: rebuilds [member replication_config] from the
-# current scene state. Safe to call repeatedly.
-func _rebuild_spawn_properties() -> void:
-	if not Engine.is_editor_hint() or not owner:
-		return
-	_build_spawn_config()
-	notify_property_list_changed()
-	update_configuration_warnings()
-
-
-func _get_configuration_warnings() -> PackedStringArray:
-	var w := PackedStringArray()
-	if (
-		auto_track_properties
-		and (
-			not replication_config
-			or replication_config.get_properties().is_empty()
-		)
-	):
-		w.append(
-			"auto_track_properties is on but replication_config is empty. "
-			+ "Press 'Rebuild Spawn Properties' to bake sibling-synchronizer "
-			+ "properties into spawn-only state."
-		)
-	return w
+	for prop: NodePath in replication_config.get_properties():
+		_coerce_to_spawn_only(replication_config, prop)
 
 
 # Registers the entity with the enclosing [SceneSynchronizer] so per-peer

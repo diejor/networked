@@ -57,7 +57,6 @@ var bound_entity: Entity = DictionaryEntity.new()
 
 
 func _init() -> void:
-	# Keep save-data replication low-frequency - it is not latency-sensitive.
 	name = "SaveComponent"
 	root_path = "."
 	unique_name_in_owner = true
@@ -65,6 +64,23 @@ func _init() -> void:
 	replication_interval = 5.0
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 	public_visibility = false
+
+func _notification(what: int) -> void:
+	if Engine.is_editor_hint():
+		return
+	match what:
+		NOTIFICATION_PARENTED:
+			var entity := Netw.ctx(self).entity
+			if entity:
+				entity.set_save(self)
+				if not entity.spawning.is_connected(hydrate_from_db):
+					entity.spawning.connect(hydrate_from_db)
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			var bucket := _get_bucket()
+			if bucket and not bucket.shutting_down:
+				bucket.shutting_down = true
+				_handle_shutdown()
+
 
 func _enter_tree() -> void:
 	if not _initialized and not Engine.is_editor_hint():
@@ -175,6 +191,21 @@ func get_value(key: StringName, default: Variant = null) -> Variant:
 	return bound_entity.get_value(key, default)
 
 
+## Adds a tracked property. Intended for use from
+## [signal NetwEntity.collecting_save_properties] handlers; equivalent to
+## [method ProxySynchronizer.register_property] but exposes the same
+## flag layout as [method SpawnerComponent.add_spawn_property] for
+## symmetry. Idempotent on duplicate [param virtual_name].
+func add_save_property(
+		virtual_name: StringName,
+		real_path: NodePath,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		spawn: bool = false,
+		watch: bool = true,
+) -> void:
+	register_property(virtual_name, real_path, mode, spawn, watch)
+
+
 # ── Scene ↔ entity transfer ────────────────────────────────────────────────────
 
 ## Writes entity values for all tracked properties into the live scene nodes.
@@ -265,14 +296,6 @@ func _get_entity_id() -> StringName:
 	return StringName(root.name)
 
 
-# Sibling hook: SpawnerComponent dispatches this in the unique window before
-# any other component's _enter_tree, with authority + identity already settled.
-# Server-side hydrate happens here so TPComponent can read current_scene_path
-# from a hydrated bound_entity during its own _enter_tree.
-func _on_entity_spawning(_spawner: SpawnerComponent) -> void:
-	hydrate_from_db()
-
-
 ## Flushes the current entity state to [member database] immediately.
 func flush() -> Error:
 	return _flush()
@@ -348,13 +371,23 @@ func _on_state_changed() -> void:
 
 
 # Initializes the synchronizer and registers the entity schema with [member database].
+# Emits [signal NetwEntity.collecting_save_properties] before setup so
+# sibling components can contribute tracked paths regardless of whether
+# this is triggered by [method hydrate] (during the spawning phase) or
+# by [method _enter_tree] (sceneless / no-spawner path).
 func _instantiate_sync() -> void:
+	if _initialized:
+		return
 	if _save_span:
 		_save_span.step("instantiate_begin", {
 			in_tree = is_inside_tree(),
 			tracked_count = _properties.size(),
 		})
-	
+
+	var entity := Netw.ctx(self).entity
+	if entity:
+		entity.collecting_save_properties.emit(self)
+
 	_setup_sync()
 	_seed_entity_from_scene()
 	assert(_initialized)
@@ -363,14 +396,6 @@ func _instantiate_sync() -> void:
 		database.bind(self, _save_span)
 	
 	instantiated.emit()
-
-
-func _notification(what: int) -> void:
-	if not Engine.is_editor_hint() and what == NOTIFICATION_WM_CLOSE_REQUEST:
-		var bucket := _get_bucket()
-		if bucket and not bucket.shutting_down:
-			bucket.shutting_down = true
-			_handle_shutdown()
 
 
 # Returns editor warnings when the configuration is incomplete.

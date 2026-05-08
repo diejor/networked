@@ -61,6 +61,45 @@ func _init() -> void:
 	name = "TPComponent"
 	unique_name_in_owner = true
 
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
+		return
+	var entity := Netw.ctx(self).entity
+	if not entity:
+		return
+	if not entity.collecting_spawn_properties.is_connected(_on_collecting_spawn):
+		entity.collecting_spawn_properties.connect(_on_collecting_spawn)
+	if not entity.collecting_save_properties.is_connected(_on_collecting_save):
+		entity.collecting_save_properties.connect(_on_collecting_save)
+
+
+# Contributes [member current_scene_path] to the spawn packet so the
+# property arrives with the entity. Path is relative to the spawner's
+# [member MultiplayerSynchronizer.root_path] (the owner).
+func _on_collecting_spawn(spawner: SpawnerComponent) -> void:
+	if not is_instance_valid(owner):
+		return
+	var rel := owner.get_path_to(self)
+	spawner.add_spawn_property(NodePath("%s:current_scene_path" % rel))
+
+
+# Persists [member current_scene_path] across sessions and rides the
+# spawn packet so clients receive it on entity spawn. Path is relative
+# to [SaveComponent] (root_path = ".").
+func _on_collecting_save(save: SaveComponent) -> void:
+	if not is_instance_valid(owner):
+		return
+	var rel := owner.get_path_to(self)
+	save.add_save_property(
+		&"current_scene_path",
+		NodePath("../%s:current_scene_path" % rel),
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		true,
+		true,
+	)
+
+
 func _ready() -> void:
 	pass
 

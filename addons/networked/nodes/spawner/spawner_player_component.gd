@@ -1,4 +1,3 @@
-@tool
 class_name SpawnerPlayerComponent
 extends SpawnerComponent
 ## [SpawnerComponent] specialization for player entities.
@@ -36,6 +35,26 @@ func _init() -> void:
 		player_joined.connect(_on_player_joined)
 
 
+func _notification(what: int) -> void:
+	super(what)
+	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
+		return
+	var entity := Netw.ctx(self).entity
+	if not entity:
+		return
+	if not entity.collecting_spawn_properties.is_connected(_on_collecting_spawn):
+		entity.collecting_spawn_properties.connect(_on_collecting_spawn)
+
+
+# Contributes [member username] to the spawn packet. Save side is not
+# wired -- username is encoded in the entity_id so the row is keyed by it.
+func _on_collecting_spawn(spawner: SpawnerComponent) -> void:
+	if spawner != self or not is_instance_valid(owner):
+		return
+	var rel := owner.get_path_to(self)
+	add_spawn_property(NodePath("%s:username" % rel))
+
+
 func _ready() -> void:
 	super._ready()
 	
@@ -66,19 +85,6 @@ func _ready() -> void:
 # Override: derive entity_id from username instead of owner name.
 func _resolve_identity() -> StringName:
 	return StringName(username) if not username.is_empty() else &""
-
-
-# Override: add username + current_scene_path as spawn-only properties.
-func _populate_extra_spawn_properties(cfg: SceneReplicationConfig) -> void:
-	var comp_path := owner.get_path_to(self)
-	_add_spawn_property_into(cfg, NodePath(str(comp_path) + ":username"))
-
-	var tp := owner.get_node_or_null("%TPComponent")
-	if tp:
-		var tp_path := owner.get_path_to(tp)
-		_add_spawn_property_into(
-			cfg, NodePath(str(tp_path) + ":current_scene_path")
-		)
 
 
 ## Server-only. Spawns a player copy into [param scene] from

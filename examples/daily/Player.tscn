@@ -29,20 +29,11 @@ size = Vector2(84, 20)
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 0
-properties/1/path = NodePath("SpawnerPlayerComponent:username")
-properties/1/spawn = true
-properties/1/replication_mode = 0
-properties/2/path = NodePath("TPComponent:current_scene_path")
-properties/2/spawn = true
-properties/2/replication_mode = 0
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
 properties/0/path = NodePath("..:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
-properties/1/path = NodePath("../TPComponent:current_scene_path")
-properties/1/spawn = true
-properties/1/replication_mode = 2
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
 script = ExtResource("5_cxr5p")
@@ -110,5 +101,3 @@ metadata/_custom_type_script = "uid://b21bbqt166ive"
 replication_interval = 0.25
 delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_kne1u")
-
-[connection signal="tree_entered" from="." to="SpawnerPlayerComponent" method="_on_owner_tree_entered"]

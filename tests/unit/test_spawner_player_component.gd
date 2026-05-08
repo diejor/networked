@@ -1,8 +1,9 @@
 ## Tests for [SpawnerPlayerComponent].
 ##
-## Covers [method SpawnerComponent.parse_authority],
-## [method SpawnerComponent._build_spawn_config] (the tool-time build path),
-## and [enum SpawnerComponent.AuthorityMode] behaviour in
+## Covers [method SpawnerComponent.parse_authority], spawn-property
+## collection via [method SpawnerComponent.add_spawn_property] +
+## [signal NetwEntity.collecting_spawn_properties], and
+## [enum SpawnerComponent.AuthorityMode] behaviour in
 ## [method SpawnerComponent._on_owner_tree_entered].
 class_name TestSpawnerPlayerComponent
 extends NetworkedTestSuite
@@ -47,75 +48,64 @@ func test_parse_authority_with_non_numeric_peer_returns_zero() -> void:
 
 
 # ---------------------------------------------------------------------------
-# _build_spawn_config() - builds SceneReplicationConfig from sibling syncs
+# add_spawn_property() / sanitize / collector contributions
 # ---------------------------------------------------------------------------
 
-func test_config_spawn_properties_aggregates_syncs() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	root.name = "TestPlayer"
+func test_add_spawn_property_adds_with_spawn_only_flags() -> void:
+	var spawner: SpawnerPlayerComponent = auto_free(SpawnerPlayerComponent.new())
+	var path := NodePath(":position")
+	spawner.add_spawn_property(path)
 
-	var spawner := SpawnerPlayerComponent.new()
-	spawner.name = "SpawnerPlayerComponent"
-	root.add_child(spawner)
-	spawner.owner = root
-	spawner.root_path = spawner.get_path_to(root)
-
-	var player_sync := MultiplayerSynchronizer.new()
-	player_sync.name = "PlayerSync"
-	root.add_child(player_sync)
-	player_sync.owner = root
-	player_sync.root_path = player_sync.get_path_to(root)
-	var config := SceneReplicationConfig.new()
-	config.add_property(NodePath(":position"))
-	config.property_set_replication_mode(
-		NodePath(":position"),
-		SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
-	player_sync.replication_config = config
-
-	spawner._build_spawn_config()
-	var spawn_config := spawner.replication_config
-	assert_that(spawn_config.has_property(NodePath(":position"))).is_true()
-	assert_that(spawn_config.property_get_spawn(NodePath(":position"))).is_true()
-	assert_that(spawn_config.property_get_sync(NodePath(":position"))).is_false()
-
-
-func test_config_spawn_properties_skips_self() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	root.name = "TestPlayer"
-
-	var spawner := SpawnerPlayerComponent.new()
-	spawner.name = "SpawnerPlayerComponent"
-	root.add_child(spawner)
-	spawner.owner = root
-	spawner.root_path = spawner.get_path_to(root)
-
-	var spawn_config := SceneReplicationConfig.new()
-	spawn_config.add_property(NodePath(":visible"))
-	spawner.replication_config = spawn_config
-
-	spawner._build_spawn_config()
-	var config := spawner.replication_config
-	assert_that(config.has_property(NodePath(":visible"))).is_false()
-
-
-func test_config_spawn_properties_includes_username() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	root.name = "TestPlayer"
-
-	var spawner := SpawnerPlayerComponent.new()
-	spawner.name = "SpawnerPlayerComponent"
-	root.add_child(spawner)
-	spawner.owner = root
-	spawner.root_path = spawner.get_path_to(root)
-
-	spawner._build_spawn_config()
-	var spawn_config := spawner.replication_config
-
-	var expected_path := NodePath("SpawnerPlayerComponent:username")
-	assert_that(spawn_config.has_property(expected_path)).is_true()
-	assert_that(spawn_config.property_get_spawn(expected_path)).is_true()
+	var cfg := spawner.replication_config
+	assert_that(cfg.has_property(path)).is_true()
+	assert_that(cfg.property_get_spawn(path)).is_true()
+	assert_that(cfg.property_get_sync(path)).is_false()
+	assert_that(cfg.property_get_watch(path)).is_false()
 	assert_that(
-		spawn_config.property_get_replication_mode(expected_path)
+		cfg.property_get_replication_mode(path)
+	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
+
+
+func test_sanitize_coerces_inspector_picked_properties() -> void:
+	var spawner: SpawnerPlayerComponent = auto_free(SpawnerPlayerComponent.new())
+	var cfg := SceneReplicationConfig.new()
+	var path := NodePath(":visible")
+	cfg.add_property(path)
+	cfg.property_set_replication_mode(
+		path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+	)
+	cfg.property_set_spawn(path, false)
+	cfg.property_set_sync(path, true)
+	cfg.property_set_watch(path, true)
+	spawner.replication_config = cfg
+
+	spawner._sanitize_replication_config()
+
+	assert_that(cfg.property_get_spawn(path)).is_true()
+	assert_that(cfg.property_get_sync(path)).is_false()
+	assert_that(cfg.property_get_watch(path)).is_false()
+	assert_that(
+		cfg.property_get_replication_mode(path)
+	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
+
+
+func test_player_collector_contributes_username() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "TestPlayer"
+
+	var spawner := SpawnerPlayerComponent.new()
+	spawner.name = "SpawnerPlayerComponent"
+	root.add_child(spawner)
+	spawner.owner = root
+
+	spawner._on_collecting_spawn(spawner)
+
+	var expected := NodePath("SpawnerPlayerComponent:username")
+	var cfg := spawner.replication_config
+	assert_that(cfg.has_property(expected)).is_true()
+	assert_that(cfg.property_get_spawn(expected)).is_true()
+	assert_that(
+		cfg.property_get_replication_mode(expected)
 	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
 
 
