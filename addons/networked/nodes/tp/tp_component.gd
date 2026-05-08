@@ -1,40 +1,33 @@
 class_name TPComponent
 extends NetwComponent
 
-## Manages cross-scene teleportation for a player in a multiplayer session.
+## Cross-scene teleportation for a player-owned entity.
 ##
-## Coordinates a multi-step handshake: the client requests a teleport via 
-## [method teleport], the server reparents the player to the destination scene, 
-## and then confirms with [signal TeleportPromise.completed]. Requires a 
-## [TPLayerAPI] in the scene for visual transition animations.
-## 
+## [method teleport] returns a [TPComponent.TeleportPromise] that survives node
+## destruction, so [operator await] is safe across the delete+respawn
+## cycle. Requires a [TPLayerAPI] in the destination scene for
+## transition animations.
+##
 ## [codeblock]
-## # From a client-owned node:
-## var tp := %TPComponent.teleport(target_node_path)
+## var tp := %TPComponent.teleport(target_scene)
 ## await tp.completed
-## print("Teleport finished!")
 ## [/codeblock]
 
 signal _teleport_committed
 
 
 
-## The default scene path assigned when the component enters the tree if no scene 
-## is currently set.
+## Fallback scene when [member current_scene_path] is empty on tree entry.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
 var starting_scene_path: SceneNodePath
 
-## The UID or file path of the scene the player currently resides in.
-##
-## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
-## Replicated on change so clients can track which scene their player is in.
+## The scene the player currently resides in. Replicates on change.
 @export var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
 
-## The root node name of the [member current_scene_path], used to look up the 
-## active scene.
+## The root node name of [member current_scene_path]'s scene.
 var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
@@ -110,10 +103,9 @@ func _fail_span(
 		span.fail(reason, data)
 
 
-## Ensures [member current_scene_path] is set, copying from
-## [member starting_scene_path] when empty. Called automatically on
-## tree entry; call manually when resolving the scene before the player
-## node enters the tree (e.g. for custom spawn flows).
+## Copies [member starting_scene_path] into
+## [member current_scene_path] when the latter is empty.
+## Runs on tree entry; call explicitly for pre-tree-entry setup.
 func ensure_current_scene_path() -> void:
 	if current_scene_path.is_empty() and starting_scene_path:
 		current_scene_path = starting_scene_path.scene_path
@@ -145,10 +137,8 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 	return scene_state.get_node_name(0)
 
 
-## Initiates a teleport sequence from the client. Returns a [TPComponent.TeleportPromise] 
-##  that resolves once the server confirms the reparent and the visual transition 
-## completes. Safe to [operator await] even if this node is destroyed and respawned during 
-## the handshake.
+## Returns a [TPComponent.TeleportPromise] that resolves when the teleport
+## completes. Safe to [operator await] across the delete+respawn cycle.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	_flush_player_position(owner)
 	var promise := TeleportPromise.new()
@@ -394,8 +384,7 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_end_tp_span()
 
 
-## Registers the entity with the specified scene manager and spawns it
-## into the active scene level.
+## Adds [member owner] to the active scene in [param scene_mgr].
 func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	_dbg.trace("spawn called.")
 	ensure_current_scene_path()

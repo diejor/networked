@@ -1,11 +1,8 @@
 ## Base class for all networked addon components.
 ##
-## Provides ergonomic instance-method access to the session's services via
-## [NetwContext] — replacing the old [code]NetworkedAPI[/code] static helper.
-##
-## The lookup chain is: [code]node.multiplayer[/code] (session-scoped [SceneMultiplayer])
-## → metadata key [code]_multiplayer_tree[/code] → [MultiplayerTree] instance.
-## This is path-independent and safe across node renames.
+## Provides instance-method access to session services via
+## [method get_context], which returns a [NetwContext] safe
+## across node renames.
 class_name NetwComponent
 extends Node
 
@@ -13,13 +10,7 @@ var _context: NetwContext
 
 
 ## Returns a [NetwContext] for this component's multiplayer session.
-## Returns [code]null[/code] if called before [method MultiplayerTree.host] /
-## [method MultiplayerTree.join] completes, or in the editor.
-##
-## [br][br]
-## [b]Custom RPCs:[/b] Use the returned context to check
-## [method NetwTree.is_listen_server] before calling [code]rpc_id(1)[/code].
-## See [method Netw.ctx] for the guard pattern.
+## Returns [code]null[/code] if the session is not yet established.
 func get_context() -> NetwContext:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if is_instance_valid(scene):
@@ -67,10 +58,6 @@ func get_network_clock() -> NetworkClock:
 
 ## Returns the session service registered for [param type], or
 ## [code]null[/code].
-##
-## The generic accessor for user-defined and built-in services.
-## Prefer the typed convenience methods ([method get_scene_manager],
-## [method get_network_clock]) for built-in services.
 func get_service(type: Script) -> Node:
 	var ctx := get_context()
 	return ctx.services.get_service(type) if ctx else null

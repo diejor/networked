@@ -1,19 +1,16 @@
 @tool
 class_name SpawnerPlayerComponent
 extends SpawnerComponent
-## The authoritative bridge between a connecting peer and their in-world
-## representation.
+## [SpawnerComponent] specialization for player entities.
 ##
-## A specialization of [SpawnerComponent] for the player flow: the entity
-## scene is instantiated by the [JoinPayload] orchestrator,
-## [member username] participates in the [code]username|peer_id[/code]
-## node-name convention, and authority is parsed from the node name on
-## tree entry. Spawn-only state replication is built unconditionally.
+## Uses [member AuthorityMode.CLIENT] so authority is parsed from
+## the [code]username|peer_id[/code] node name.
+## [member username] is added as a spawn-only property.
+##
 ## [codeblock]
-## # Retrieve from any node in the player scene:
-## var spawner := SpawnerPlayerComponent.unwrap(player_node)
-## if spawner:
-##     print(spawner.username)
+## var s := SpawnerPlayerComponent.unwrap(player_node)
+## if s:
+##     print(s.username)
 ## [/codeblock]
 
 ## Emitted on the server when a peer requests to join.
@@ -33,6 +30,7 @@ static func unwrap(node: Node) -> SpawnerPlayerComponent:
 func _init() -> void:
 	name = "SpawnerPlayerComponent"
 	unique_name_in_owner = true
+	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 	authority_mode = AuthorityMode.CLIENT
 	if not player_joined.is_connected(_on_player_joined):
 		player_joined.connect(_on_player_joined)
@@ -83,14 +81,13 @@ func _populate_extra_spawn_properties(cfg: SceneReplicationConfig) -> void:
 		)
 
 
-## Server-only. Duplicates the owner scene, sets the
-## [code]username|peer_id[/code] node name and [member username]
-## for DB hydration, then calls [method MultiplayerScene.add_player]
-## on [param scene].
+## Server-only. Spawns a player copy into [param scene] from
+## [param jp]. Sets the node name to
+## [code]username|peer_id[/code] and [member username] on the copy.
 ##
-## All remaining configuration (authority, DB hydration, scene tracking)
-## runs automatically in [method _on_owner_tree_entered] when the copy
-## enters the tree.
+## [codeblock]
+## var player := spawner.spawn_player(join_payload, scene)
+## [/codeblock]
 func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
 	assert(multiplayer.is_server())
 	var copy := SpawnerComponent.instantiate_from(owner,

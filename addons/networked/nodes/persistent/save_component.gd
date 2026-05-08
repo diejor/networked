@@ -1,27 +1,18 @@
 @tool
-## Handles saving, loading, and network synchronization of an entity's persistent state.
+## Syncs and persists an entity's scene state to [member database].
 ##
-## [SaveComponent] acts as a bridging layer between the live scene state and a
-## [NetwDatabase]. It automatically virtualizes properties selected in the
-## Editor's "Replication" panel, synchronizing changes across the network and
-## persisting them to the database once per frame.
+## Properties picked in the Replication panel are synchronized
+## across the network and flushed on change.
 ##
-## [b]How to use:[/b]
-## [br]1. Attach [SaveComponent] to your player or persistent entity scene.
-## [br]2. In the "Replication" panel, set "Root Node" to [code].[/code] (self).
-## [br]3. Add properties to save using paths relative to SaveComponent
-##     (e.g., [code]..:position[/code] for the owner's position).
-## [br]4. Assign a [member database] and [member table_name].
-## [br]5. Call [method hydrate] to load existing data into the scene on spawn.
+## State bounces through [member database]: every write is persisted,
+## and [method hydrate] reloads from the database on spawn.
 ##
 ## [codeblock]
-## # Accessing data programmatically:
-## var save := %SaveComponent
-## # Set a value (marks dirty and saves deferred):
-## save.set_value(&"gold", 500)
-## # Get a value from the tracked state:
-## var gold = save.get_value(&"gold", 0)
+## %SaveComponent.set_value(&"gold", 500)
+## var gold := %SaveComponent.get_value(&"gold", 0)
 ## [/codeblock]
+##
+## See [method hydrate] and [method flush] for the load/save API.
 class_name SaveComponent
 extends ProxySynchronizer
 
@@ -230,12 +221,10 @@ func _save_once() -> void:
 
 # ── Network transfer ───────────────────────────────────────────────────────────
 
-	## Packages the current scene state and sends it to [param peer_id] over the network.
-	##
-	## When [param ack] is [code]true[/code], the remote peer responds with
-	## [signal push_acknowledged] after processing the push. The caller should
-	## await that signal before taking actions that depend on the remote state
-	## being up-to-date.
+## Sends the current entity state to [param peer_id].
+##
+## When [param ack] is [code]true[/code], [signal push_acknowledged]
+## fires after the remote peer applies the state.
 func push_to(peer_id: int, ack: bool = false) -> void:
 	pull_from_scene()
 	_request_push.rpc_id(peer_id, bound_entity.serialize(), ack)
@@ -307,11 +296,8 @@ func _flush() -> Error:
 	return db_err
 
 
-## Hydrates this component from [member database], fetching the record
-## for the entity ID returned by [method _get_entity_id].
-##
-## Applies the result to [member bound_entity] and pushes it to the scene.
-## No-op when [member database] or [member table_name] is missing.
+## Loads the database record for the current entity and pushes it
+## to the scene. Emits [signal loaded] even when no record exists.
 func hydrate_from_db() -> void:
 	if not database or table_name.is_empty():
 		return
@@ -319,10 +305,8 @@ func hydrate_from_db() -> void:
 	hydrate(entity.to_dict() if entity else {})
 
 
-## Hydrates this component from [param record].
-##
-## Applies the dictionary to [member bound_entity] and pushes it to the scene.
-## When [param record] is empty, seeds from scene defaults instead.
+## Loads [param record] into [member bound_entity] and pushes it to
+## the scene. Seeds from scene defaults when the record is empty.
 func hydrate(record: Dictionary) -> void:
 	if not _initialized:
 		_instantiate_sync()

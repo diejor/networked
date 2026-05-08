@@ -1,24 +1,19 @@
-## Abstract dual-interface data model for the persistence layer.
+## Abstract data model for the persistence layer.
 ##
-## [b]Two interfaces, one class:[/b]
-## [br]- [b]Database interface[/b] - [method to_dict] / [method from_dict] for schema mapping
-##   and Inspector visibility.
-## [br]- [b]Network / Storage interface[/b] - [method serialize] / [method deserialize] for
-##   binary transport. Defaults to dictionary round-trip; override for custom binary packing.
+## [method to_dict] / [method from_dict] map to the database schema.
+## [method serialize] / [method deserialize] round-trip through a
+## [PackedByteArray] for network transport.
 ##
-## Assign a concrete subclass (e.g. [DictionaryEntity]) to [member SaveComponent.bound_entity]
-## to give a component its persistent state.
+## Assign a concrete subclass (e.g. [DictionaryEntity]) to
+## [member SaveComponent.bound_entity].
 ##
-## [codeblock lang=gdscript]
-## # Fetch from the database and bind to a component:
+## [codeblock]
 ## var entity: Entity = db.table(&"players").fetch(username)
 ## save_comp.bound_entity = entity
 ##
-## # Read / write data directly:
 ## entity.set_value(&"health", 75)
 ## var hp: int = entity.get_value(&"health", 100)
 ##
-## # Iterate all stored keys:
 ## for key in entity:
 ##     print(key, " = ", entity.get_value(key))
 ## [/codeblock]

@@ -80,8 +80,7 @@ var is_template: bool:
 # ── Static helpers ───────────────────────────────────────────────────────
 
 ## Returns the [SpawnerComponent] under the unique name
-## [code]%SpawnerComponent[/code] or
-## [code]%SpawnerPlayerComponent[/code] from [param node],
+## [code]%SpawnerComponent[/code].
 ## or [code]null[/code].
 static func unwrap(node: Node) -> SpawnerComponent:
 	var sc := node.get_node_or_null("%SpawnerComponent")
