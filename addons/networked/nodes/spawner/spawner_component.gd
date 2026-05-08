@@ -1,86 +1,55 @@
 @tool
 class_name SpawnerComponent
 extends MultiplayerSynchronizer
-## Wakeup contract for any networked entity (player or otherwise).
+## Orchestration point for a networked entity.
 ##
+## [member replication_config] bundles properties
+## into the spawn packet so initial state arrives with the entity.
+## 
 ## [br][br]
-## [b]Lifecycle (this is load-bearing):[/b]
-## [br]1. [code]_init[/code] / [code]_enter_tree[/code] of this component.
-## [br]2. [signal Node.tree_entered] of [member Node.owner] fires
-##    [code]_on_owner_tree_entered[/code]. The connection is persisted
-##    into the [code].tscn[/code] via [constant Object.CONNECT_PERSIST] in
-##    [code]_validate_editor[/code]. This is the [b]only[/b] hook that runs
-##    before sibling components' [code]_enter_tree[/code]; authority and
-##    identity must be assigned here.
-## [br]3. Inside the handler: [method _apply_authority] →
-##    [member is_template] short-circuit → [method _register_with_scene] →
-##    [method _dispatch_spawning] (calls [code]_on_entity_spawning(self)[/code]
-##    on each sibling that defines it) → [signal spawning] (for external
-##    listeners).
-## [br]4. Sibling components' [code]_enter_tree[/code], then their
-##    [code]_ready[/code].
-## [br]5. This component's [code]_ready[/code] emits [signal spawned].
+## See [method instantiate_from], [method spawn_under], and
+## [method despawn] for the spawn/despawn API.
 ##
-## [br][br]
-## [b]Sibling integration:[/b] components on the same owner that need the
-## entity's authority/identity to be settled implement
-## [code]_on_entity_spawning(spawner: SpawnerComponent)[/code]. The dispatch
-## is eager (a method call, not a signal) so siblings don't have to solve
-## the connect-before-emit ordering puzzle. Note that Node.multiplayer is not 
-## defined when siblings receive this dispatch.
-##
+## Components on the same owner implement
+## [code]_on_entity_spawning(spawner: SpawnerComponent)[/code]
+## instead of relying on [code]_enter_tree[/code] ordering.
 ## [codeblock]
-## # Save sibling reacting to spawning:
 ## func _on_entity_spawning(spawner: SpawnerComponent) -> void:
 ##     if multiplayer.is_server():
 ##         hydrate_from_db()
 ## [/codeblock]
 
-## How the spawned node's multiplayer authority is decided.
 enum AuthorityMode {
 	## Authority stays at the server peer ([code]1[/code]).
 	SERVER,
-	## Authority is set via [method _apply_authority], typically by
-	## parsing [code]username|peer_id[/code] from the owner node name.
-	## Used by [SpawnerPlayerComponent].
+	## Authority is parsed from [code]username|peer_id[/code]
+	## in the owner's node name.
 	CLIENT,
 }
 
-## Emitted on non-template entities after authority + identity are settled
-## and scene registration is complete, but [b]before[/b] sibling components'
-## [code]_enter_tree[/code]. External listeners can connect to react to a
-## fresh entity coming online; siblings on the same owner should implement
-## [code]_on_entity_spawning(spawner)[/code] instead — the timing guarantee
-## only holds for that dispatch.
+## Emitted after [member entity_id] and multiplayer authority
+## are resolved, but [b]before[/b] sibling [code]_enter_tree[/code].
+## Siblings needing settled identity should implement
+## [code]_on_entity_spawning(spawner)[/code] instead -- the timing
+## guarantee only holds for that dispatch.
 signal spawning
 
-## Emitted right before the entity is despawned via [method despawn], with
-## the despawn reason.
+## Emitted right before [method despawn] runs, with the despawn reason.
 signal despawning(reason: StringName)
 
-## Emitted from [method _exit_tree] after teardown.
+## Emitted after teardown when the node leaves the tree.
 signal despawned
 
-## How multiplayer authority is assigned to the owner node on tree entry.
-## [br]- [code]SERVER[/code] (default): authority is [code]1[/code].
-##   Suitable for NPCs, enemies, and most preplaced entities.
-## [br]- [code]CLIENT[/code]: subclasses override [method _apply_authority].
+## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
-## Optional explicit identity. When empty, the component falls back to
-## [method _resolve_identity] (virtual, derived from subclass state).
-##
-## [br][br]
-## [b]Read[/b] via [member entity_id] (a getter that combines override +
-## derivation). [b]Write[/b] only this field — do not assign to
-## [member entity_id].
+## Explicit identity. When empty, [member entity_id] falls back
+## to the default resolved by the authority policy.
 @export var entity_id_override: StringName = &""
 
-## When [code]true[/code], the editor's [b]Rebuild Spawn Properties[/b] button
-## walks sibling [MultiplayerSynchronizer]s and bakes their replication-config
-## properties into [member replication_config] as spawn-only state, so initial
-## values reach remote clients on spawn. The build runs at edit time only —
-## the runtime path no longer rebuilds.
+## When [code]true[/code], the editor's [b]Rebuild Spawn Properties[/b]
+## button populates [member replication_config] from sibling
+## [MultiplayerSynchronizer]s so their properties transfer on spawn.
 @export var auto_track_properties: bool = true
 
 @export_tool_button("Rebuild Spawn Properties") 
@@ -89,9 +58,10 @@ var _rebuild_btn: Callable = _rebuild_spawn_properties
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
-## The entity's stable identifier, used by [SaveComponent] as the database
-## row key. Returns [member entity_id_override] when set, otherwise calls
-## [method _resolve_identity]. May be empty (see [member is_template]).
+# ── Public properties ────────────────────────────────────────────────────
+
+## Stable identifier for the entity. Empty for templates
+## (see [member is_template]).
 var entity_id: StringName:
 	get:
 		if not entity_id_override.is_empty():
@@ -99,14 +69,15 @@ var entity_id: StringName:
 		return _resolve_identity()
 
 
-## [code]true[/code] when this entity has not yet been bound to a concrete
-## identity or peer. Templates are editor-placed scenes acting as factories
-## via [method spawn_under] / [code]instantiate_from[/code]; they short-circuit
-## the spawning lifecycle. Read-only.
+## [code]true[/code] when [member entity_id] is empty or authority
+## is unresolved. Templates are editor-placed factory scenes;
+## they skip the spawning lifecycle. Read-only.
 var is_template: bool:
 	get:
 		return entity_id.is_empty() or not _has_authority_binding()
 
+
+# ── Static helpers ───────────────────────────────────────────────────────
 
 ## Returns the [SpawnerComponent] under the unique name
 ## [code]%SpawnerComponent[/code] or
@@ -135,11 +106,10 @@ static func format_name(username: String, peer_id: int) -> String:
 	return "%s|%d" % [username, peer_id]
 
 
-## Server-only. Returns an unparented duplicate of [param template]'s
-## owner scene. [param configure] runs on the copy's [SpawnerComponent]
-## immediately after instantiation — this is the only window in which
-## [member entity_id_override], the owner's node name, and any subclass
-## fields can be set before [method _on_owner_tree_entered] reads them.
+## Returns an unparented copy of [param template]'s scene.
+## [param configure] fires before the copy enters the tree,
+## receiving the copy's [SpawnerComponent] so you can set
+## [member entity_id_override] or the owner's node name.
 ##
 ## [codeblock]
 ## var npc := SpawnerComponent.instantiate_from(template, func(s):
@@ -151,12 +121,31 @@ static func instantiate_from(
 	template: Node, configure: Callable = Callable()
 ) -> Node:
 	var copy: Node = load(template.scene_file_path).instantiate()
+	collect_from(template, copy)
 	if configure.is_valid():
 		var copy_spawner := unwrap(copy)
 		if copy_spawner:
 			configure.call(copy_spawner)
 	return copy
 
+
+## Copies spawn-tagged [member replication_config] properties
+## from [param template] to [param copy].
+## No-op when the template has no config or is out-of-tree.
+static func collect_from(template: Node, copy: Node) -> void:
+	var spawner := unwrap(template)
+	if not spawner or not spawner.replication_config:
+		return
+	var cfg := spawner.replication_config
+	for prop: NodePath in cfg.get_properties():
+		if not cfg.property_get_spawn(prop):
+			continue
+		var value := SynchronizersCache.resolve_value(template, prop)
+		if value != null:
+			SynchronizersCache.assign_value(copy, prop, value)
+
+
+# ── Lifecycle ────────────────────────────────────────────────────────────
 
 func _init() -> void:
 	name = "SpawnerComponent"
@@ -242,9 +231,9 @@ func _apply_authority() -> void:
 				set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
-# Returns [code]true[/code] when [member Node.owner] is bound to a concrete
-# peer. Trivially true for [code]SERVER[/code] mode (always peer 1); for
-# [code]CLIENT[/code] mode, requires [code]username|peer_id[/code] in the
+# [code]true[/code] when [member authority_mode] can resolve to a
+# concrete peer. [code]SERVER[/code] is always bound;
+# [code]CLIENT[/code] requires [code]username|peer_id[/code] in the
 # owner's node name.
 func _has_authority_binding() -> bool:
 	match authority_mode:
@@ -255,16 +244,15 @@ func _has_authority_binding() -> bool:
 	return false
 
 
-## Virtual. Subclasses override to derive [member entity_id] from their own
-## state (e.g. [SpawnerPlayerComponent] returns [member username]). Returns
-## [code]&""[/code] in the base, meaning "no derived identity".
+## Virtual. Returns the entity id derived from subclass state.
+## The base returns [code]&""[/code] (no derived identity).
 func _resolve_identity() -> StringName:
 	return &""
 
 
-# Disables a template owner so its placeholder scene doesn't process or
-# render. The server keeps the template visible only to itself; the
-# client frees its copy entirely.
+# Disables the template owner's processing and rendering.
+# The server keeps the template visible only to itself;
+# clients remove it.
 func _apply_template_state() -> void:
 	if authority_mode != AuthorityMode.CLIENT:
 		return
@@ -280,7 +268,9 @@ func _dispatch_spawning() -> void:
 	owner.propagate_call("_on_entity_spawning", [self])
 
 
-# Adds [param prop] to [param cfg] as a spawn-only property.
+# ── Spawn config ─────────────────────────────────────────────────────────
+
+# Adds [param prop] to [param cfg] as spawn-only.
 func _add_spawn_property_into(
 	cfg: SceneReplicationConfig, prop: NodePath
 ) -> void:
@@ -295,11 +285,7 @@ func _add_spawn_property_into(
 	cfg.property_set_watch(prop, false)
 
 
-# Builds [member replication_config] from sibling synchronizers' replication
-# configs. Spawn-only: properties are tagged [code]REPLICATION_MODE_NEVER[/code]
-# with spawn enabled, so the initial value transfers on spawn without ongoing
-# delta replication. Subclasses extend via
-# [method _populate_extra_spawn_properties].
+# Rebuilds [member replication_config] from sibling synchronizers.
 func _build_spawn_config() -> void:
 	if not auto_track_properties:
 		return
@@ -314,9 +300,8 @@ func _build_spawn_config() -> void:
 	replication_config = cfg
 
 
-## Virtual. Subclasses add component-specific spawn-only properties to
-## [param cfg] (e.g. [SpawnerPlayerComponent] adds [code]username[/code]
-## and the player's [code]current_scene_path[/code]).
+## Virtual. Adds subclass properties to [param cfg] as
+## spawn-only state.
 func _populate_extra_spawn_properties(_cfg: SceneReplicationConfig) -> void:
 	pass
 
@@ -361,15 +346,19 @@ func _register_with_scene() -> void:
 	scene.synchronizer.track_node(owner)
 
 
-## Server-only. Convenience for the non-player case: clones [member Node.owner]
-## as a sibling of [param parent] (or [member Node.owner]'s own parent when
-## [param parent] is [code]null[/code]) and adds it to the tree.
+# ── Public spawn/despawn API ─────────────────────────────────────────────
+
+## Server-only. Spawns a copy of [member Node.owner]'s scene under
+## [param parent] (defaults to owner's parent).
+## [param id] sets [member entity_id_override] on the copy.
 ##
-## [param id] is assigned to the copy's [member entity_id_override] before
-## tree entry so [method _on_owner_tree_entered] sees a concrete identity.
+## [codeblock]
+## var mob := spawner.spawn_under($World/Mobs, &"skeleton_1")
+## var wild := spawner.spawn_under()   # same parent as template
+## [/codeblock]
 ##
-## For player flows or anything that needs richer pre-tree-entry configuration,
-## use [method instantiate_from] directly and place the copy yourself.
+## For richer pre-tree configuration, use [method instantiate_from]
+## directly so you can wire the copy before tree entry.
 func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	assert(
 		not multiplayer or multiplayer.is_server(),
@@ -384,15 +373,18 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	return copy
 
 
-## Server-only. Tears down [member Node.owner] in the canonical
-## order: emit [signal despawning], flush [SaveComponent], revert
-## authority to the server, then [method Node.queue_free].
+## Server-only. Frees [member Node.owner] after emitting
+## [signal despawning] and flushing the [SaveComponent].
 ##
-## Despawn is infallible from the caller's perspective. A
-## [SaveComponent.flush] failure is logged at error level and the
-## despawn proceeds. Callers needing transactional semantics should
-## flush themselves first and pass [code]flush_save: false[/code]
-## in [param opts].
+## [codeblock]
+## # Simple teardown with default options
+## spawner.despawn()
+##
+## # Skip the save flush and defer the free
+## var opts := DespawnOpts.new(&"killed")
+## opts.flush_save = false
+## spawner.despawn(opts)
+## [/codeblock]
 func despawn(opts: DespawnOpts = null) -> void:
 	assert(multiplayer.is_server(), "despawn is server-only")
 	if opts == null:

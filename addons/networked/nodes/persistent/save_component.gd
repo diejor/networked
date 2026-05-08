@@ -98,20 +98,6 @@ func _exit_tree() -> void:
 
 # ── ProxySynchronizer overrides ────────────────────────────────────────────────
 
-# Reads the live value of path from the node at [member _target_root].
-func _read_property(_name: StringName, path: NodePath) -> Variant:
-	var root := get_node_or_null(_target_root)
-	if not root:
-		return null
-	
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if not target or prop_path.is_empty():
-		return null
-	return target.get_indexed(prop_path)
-
-
 # Receives a replicated value from the network and stores it in bound_entity.
 func _write_property(name: StringName, _path: NodePath, value: Variant) -> void:
 	bound_entity.set_value(name, value)
@@ -227,15 +213,10 @@ func _write_scene(entity_key: StringName, value: Variant) -> void:
 	var root := get_node_or_null(_target_root)
 	if not root:
 		return
-	
 	var path := _properties.get(entity_key, NodePath(""))
 	if path.is_empty():
 		return
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if target and not prop_path.is_empty():
-		target.set_indexed(prop_path, value)
+	SynchronizersCache.assign_value(root, path, value)
 
 
 # ── Deferred dirty coalescing ──────────────────────────────────────────────────

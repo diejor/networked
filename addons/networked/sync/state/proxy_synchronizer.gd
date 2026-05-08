@@ -153,14 +153,7 @@ func _get_property_list() -> Array[Dictionary]:
 ## ([code]Body:velocity[/code], [code].:position[/code]).
 func _read_property(_name: StringName, path: NodePath) -> Variant:
 	var root := get_node_or_null(_target_root)
-	if not root:
-		return null
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if not target or prop_path.is_empty():
-		return null
-	return target.get_indexed(prop_path)
+	return SynchronizersCache.resolve_value(root, path) if root else null
 
 
 ## Override to redirect writes. Default writes to the node at [member MultiplayerSynchronizer.root_path].
@@ -170,13 +163,8 @@ func _read_property(_name: StringName, path: NodePath) -> Variant:
 ## ([code]Body:velocity[/code], [code].:position[/code]).
 func _write_property(_name: StringName, path: NodePath, value: Variant) -> void:
 	var root := get_node_or_null(_target_root)
-	if not root:
-		return
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if target and not prop_path.is_empty():
-		target.set_indexed(prop_path, value)
+	if root:
+		SynchronizersCache.assign_value(root, path, value)
 
 
 func _import_from_config(config: SceneReplicationConfig) -> void:
