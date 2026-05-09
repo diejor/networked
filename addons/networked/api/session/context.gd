@@ -98,7 +98,7 @@ func has_scene() -> bool:
 ## [code]null[/code] when their underlying source is unreachable from
 ## [param node]. See class docs for per-member rules.
 static func for_node(node: Node) -> NetwContext:
-	var mt := MultiplayerTree.for_node(node)
+	var mt := MultiplayerTree.resolve(node)
 	var scene_node := MultiplayerTree.scene_for_node(node)
 	var scene_ctx: NetwScene = null
 	if is_instance_valid(scene_node):

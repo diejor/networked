@@ -395,8 +395,8 @@ func activate_scene_for(
 	)
 	var path := _resolve_scene_path(join_payload)
 	if not path or not path.is_valid():
-		Netw.dbg.error(
-			"Join failed: no valid spawner path.", []
+		Netw.dbg.debug(
+			"Join: No valid spawner path.", []
 		)
 		return null
 	
@@ -608,6 +608,7 @@ func _set_active_scene(scene: MultiplayerScene) -> void:
 	var view := _resolve_active_scene_view()
 	if view:
 		var viewport := scene as Node as SubViewport if scene else null
+		
 		view.set_target(viewport)
 	elif scene and not _warned_missing_view:
 		Netw.dbg.warn(

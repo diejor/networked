@@ -464,11 +464,11 @@ static func _get_context() -> Dictionary:
 	for i in range(1, stack.size()):
 		var frame: Dictionary = stack[i]
 		var source: String = frame.source
-		if (source.ends_with("netw_log.gd") 
+		if (source.ends_with("log.gd") 
 				or source.ends_with("net_component.gd") 
 				or source.ends_with("tp_layer_api.gd")
-				or source.ends_with("netw_dbg.gd")
-				or source.ends_with("netw_handle.gd")):
+				or source.ends_with("debug.gd")
+				or source.ends_with("handle.gd")):
 			continue
 		return {
 			"module": _module_from_path(source),

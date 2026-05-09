@@ -190,6 +190,8 @@ func get_tree_name() -> String:
 
 ## Locates the [MultiplayerTree] registered on the node's [SceneMultiplayer].
 static func for_node(node: Node) -> MultiplayerTree:
+	if node is MultiplayerTree:
+		return node
 	var api := node.multiplayer as SceneMultiplayer
 	if not api or not api.has_meta(&"_multiplayer_tree"):
 		return null
@@ -510,7 +512,8 @@ func join(
 	if await Async.timeout(connected_to_server, timer):
 		state = State.OFFLINE
 		if not quiet:
-			Netw.dbg.error("Connection timed out.", func(m): push_error(m))
+			Netw.dbg.error("Connection timed out. Server probably is not up, \
+consider using `connect_player` instead of `join`.", func(m): push_error(m))
 		return ERR_CANT_CONNECT
 	
 	role = Role.CLIENT
@@ -580,11 +583,6 @@ func connect_player(join_payload: JoinPayload) -> Error:
 		or (join_payload.multiplayer_spawner_path
 			and join_payload.multiplayer_spawner_path.is_valid())
 	)
-	if not has_spawner:
-		Netw.dbg.error(
-			"connect_player: no valid spawner path.", func(m): push_error(m)
-		)
-		return ERR_INVALID_PARAMETER
 	
 	await disconnect_player()
 	

@@ -13,7 +13,7 @@
 ## Override anchors after adding it if you want a partial-screen view.
 class_name ActiveSceneView
 extends Control
-
+ 
 ## If [code]true[/code], the target [SubViewport]'s size is kept in sync with
 ## this control's size. Disable to render at a fixed (e.g. lower) resolution.
 @export var auto_resize_target: bool = true
@@ -29,7 +29,7 @@ func _enter_tree() -> void:
 		return
 	NetwServices.register(self, ActiveSceneView)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_PASS
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(_on_resized)
 
 

@@ -11,6 +11,16 @@
 class_name NetwTree
 extends RefCounted
 
+## Emitted when a new peer connects to the server.
+signal peer_connected(peer_id: int)
+## Emitted when a peer disconnects from the server.
+signal peer_disconnected(peer_id: int)
+## Emitted on the client when it successfully connects to the server.
+signal connected_to_server()
+## Emitted on the client when the server disconnects or crashes.
+signal server_disconnected()
+
+signal player_join_requested(join_payload: JoinPayload)
 ## Emitted after a player's target scene has been activated.
 signal player_scene_ready(join_payload: JoinPayload, netw_scene: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
@@ -29,6 +39,12 @@ var _tree_ref: WeakRef
 
 func _init(mt: MultiplayerTree) -> void:
 	_tree_ref = weakref(mt)
+	mt.peer_connected.connect(func(id): peer_connected.emit(id))
+	mt.peer_disconnected.connect(func(id): peer_disconnected.emit(id))
+	mt.connected_to_server.connect(func(): connected_to_server.emit())
+	mt.server_disconnected.connect(func(): server_disconnected.emit())
+	
+	mt.player_join_requested.connect(func(jp): player_join_requested.emit(jp))
 	mt.player_scene_ready.connect(_on_player_scene_ready)
 	mt.server_disconnecting.connect(func(reason: String): server_disconnecting.emit(reason))
 	mt.kick_requested.connect(func(requester, target, reason: String): kick_requested.emit(requester, target, reason))
