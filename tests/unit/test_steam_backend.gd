@@ -13,11 +13,13 @@ func test_setup_creates_service() -> void:
 	var err := backend.setup(tree)
 	var service := tree.get_service(SteamService)
 	assert_object(service).is_not_null()
-	# Result depends on whether Steam is available in the environment.
-	if Engine.has_singleton("Steam"):
+
+	# In CI runners, the Steam singleton may be present (GDExtension loaded)
+	# but initialization will fail because the Steam client isn't running.
+	if service.is_ready():
 		assert_int(err).is_equal(OK)
 	else:
-		assert_int(err).is_not_equal(OK)
+		assert_int(err).is_equal(ERR_CANT_CREATE)
 
 	tree.queue_free()
 
