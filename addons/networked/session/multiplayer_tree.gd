@@ -34,8 +34,11 @@ signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
 
-## Emitted on the server when a peer requests to join.
-signal player_join_requested(join_payload: JoinPayload)
+## Emitted on every peer after the server accepts a player join.
+signal player_joined(join_payload: JoinPayload)
+
+## Emitted when this peer's player join has been accepted by the server.
+signal local_player_joined(join_payload: JoinPayload)
 
 ## Emitted when an external invitation is received (e.g. Steam Join Requested).
 ## [br][br]
@@ -671,17 +674,12 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	return err
 
 
-## Submits a join request. On listen-server host, bypasses RPC.
+## Submits a join request to the server.
 func submit_join(join_payload: JoinPayload) -> void:
-	if role == Role.LISTEN_SERVER:
-		join_payload.peer_id = 1
-		_resolve_username_collision(join_payload)
-		player_join_requested.emit(join_payload)
-	else:
-		request_join_player.rpc_id(
-			MultiplayerPeer.TARGET_PEER_SERVER,
-			join_payload.serialize()
-		)
+	request_join_player.rpc_id(
+		MultiplayerPeer.TARGET_PEER_SERVER,
+		join_payload.serialize()
+	)
 
 
 func _is_local_url(url: String) -> bool:
@@ -706,12 +704,15 @@ func _ready() -> void:
 
 ## Entry point for a client to request entry into the game world.
 ##
-## Deserializes [param bytes] into a [JoinPayload] and emits
-## [signal player_join_requested] for the [MultiplayerSceneManager] to handle.
-@rpc("any_peer", "call_remote", "reliable")
+## Deserializes [param bytes] into a [JoinPayload], resolves server-authority
+## fields, and emits [signal player_joined] on every peer.
+@rpc("any_peer", "call_local", "reliable")
 func request_join_player(bytes: PackedByteArray) -> void:
 	if not multiplayer.is_server():
-		Netw.dbg.warn("request_join_player received on non-server peer %d", [multiplayer.get_unique_id()])
+		Netw.dbg.warn(
+			"request_join_player received on non-server peer %d",
+			[multiplayer.get_unique_id()]
+		)
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	
@@ -721,7 +722,32 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	
 	_resolve_username_collision(join_payload)
 	
-	player_join_requested.emit(join_payload)
+	_emit_player_joined(join_payload)
+	_rpc_notify_player_joined.rpc(join_payload.serialize())
+
+
+# Emits the accepted join notification on remote peers.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_notify_player_joined(bytes: PackedByteArray) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != MultiplayerPeer.TARGET_PEER_SERVER:
+		Netw.dbg.warn(
+			"_rpc_notify_player_joined received from non-server peer %d",
+			[sender]
+		)
+		return
+	
+	var join_payload: JoinPayload = JoinPayload.new()
+	join_payload.deserialize(bytes)
+	_emit_player_joined(join_payload)
+
+
+# Emits join signals derived from the accepted server-authority payload.
+func _emit_player_joined(join_payload: JoinPayload) -> void:
+	player_joined.emit(join_payload)
+	
+	if join_payload.peer_id == multiplayer.get_unique_id():
+		local_player_joined.emit(join_payload)
 
 
 # ---------------------------------------------------------------------------

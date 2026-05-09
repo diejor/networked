@@ -2,8 +2,7 @@
 ##
 ## Components obtain this via [member NetwContext.tree] rather than
 ## holding a direct reference to [MultiplayerTree]. This keeps component code
-## off the concrete [MultiplayerTree] class (backend, multiplayer_api, etc.)
-## while preserving the existing session API unchanged.
+## off the concrete [MultiplayerTree] class (backend, multiplayer_api, etc.).
 ##
 ## [br][br]
 ## Holds a [WeakRef] so components that cache an instance survive tree
@@ -20,7 +19,10 @@ signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
 
-signal player_join_requested(join_payload: JoinPayload)
+## Emitted on every peer after the server accepts a player join.
+signal player_joined(join_payload: JoinPayload)
+## Emitted when this peer's player join has been accepted by the server.
+signal local_player_joined(join_payload: JoinPayload)
 ## Emitted after a player's target scene has been activated.
 signal player_scene_ready(join_payload: JoinPayload, netw_scene: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
@@ -44,7 +46,8 @@ func _init(mt: MultiplayerTree) -> void:
 	mt.connected_to_server.connect(func(): connected_to_server.emit())
 	mt.server_disconnected.connect(func(): server_disconnected.emit())
 	
-	mt.player_join_requested.connect(func(jp): player_join_requested.emit(jp))
+	mt.player_joined.connect(func(jp): player_joined.emit(jp))
+	mt.local_player_joined.connect(func(jp): local_player_joined.emit(jp))
 	mt.player_scene_ready.connect(_on_player_scene_ready)
 	mt.server_disconnecting.connect(func(reason: String): server_disconnecting.emit(reason))
 	mt.kick_requested.connect(func(requester, target, reason: String): kick_requested.emit(requester, target, reason))

@@ -5,10 +5,7 @@ extends Control
 @onready var gamestate: BomberGamestate = \
 		ctx.services.get_service(BomberGamestate) if ctx.services else null
 
-func _ready() -> void:
-	# Called every time the node is added to the scene.
-	gamestate.setup_connections()
-	
+func _ready() -> void:	
 	gamestate.connection_failed.connect(_on_connection_failed)
 	gamestate.connection_succeeded.connect(_on_connection_success)
 	gamestate.player_list_changed.connect(refresh_lobby)

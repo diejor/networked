@@ -192,8 +192,8 @@ func _enter_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree"
 	)
 	
-	if not mt.player_join_requested.is_connected(handle_join_request):
-		mt.player_join_requested.connect(handle_join_request)
+	if not mt.player_joined.is_connected(handle_player_joined):
+		mt.player_joined.connect(handle_player_joined)
 	
 	if not mt.configured.is_connected(configured.emit):
 		mt.configured.connect(configured.emit)
@@ -209,8 +209,8 @@ func _exit_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree"
 	)
 	
-	if mt.player_join_requested.is_connected(handle_join_request):
-		mt.player_join_requested.disconnect(handle_join_request)
+	if mt.player_joined.is_connected(handle_player_joined):
+		mt.player_joined.disconnect(handle_player_joined)
 	
 	if mt.configured.is_connected(configured.emit):
 		mt.configured.disconnect(configured.emit)
@@ -426,11 +426,14 @@ func _resolve_scene_path(
 	return null
 
 
-## Called by [MultiplayerTree] to handle a player entry request.
+## Called by [MultiplayerTree] to handle an accepted player join.
 ##
 ## Activates the target scene, dispatches to the configured spawner, and
 ## emits [signal MultiplayerTree.player_scene_ready].
-func handle_join_request(join_payload: JoinPayload) -> void:
+func handle_player_joined(join_payload: JoinPayload) -> void:
+	if not multiplayer.is_server():
+		return
+	
 	var scene := await activate_scene_for(join_payload)
 	if not scene:
 		return

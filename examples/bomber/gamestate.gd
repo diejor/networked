@@ -27,8 +27,8 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	setup_connections()
 
-func _on_player_joined(join_payload: JoinPayload) -> void:
-	register_player.rpc_id(join_payload.peer_id, player_name)
+func _on_peer_connected(id: int) -> void:	
+	register_player.rpc_id(id, player_name)
 	player_list_changed.emit()
 
 
@@ -44,7 +44,6 @@ func _on_peer_disconnected(id: int) -> void:
 func _on_connected_ok() -> void:
 	connection_succeeded.emit()
 
-
 func _on_server_disconnected() -> void:
 	game_error.emit("Server disconnected")
 	end_game()
@@ -54,16 +53,18 @@ func _on_connected_fail() -> void:
 	connection_failed.emit()
 
 func join_game(ip: String, _player_name: String) -> void:
-	_player_name = player_name
+	player_name = _player_name
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 	jp.url = ip
+	
 	ctx.tree.connect_player(jp)
 
 func host_game(_player_name: String) -> void:
-	_player_name = player_name
+	player_name = _player_name
 	var jp := JoinPayload.new()
 	jp.username = _player_name
+	
 	ctx.tree.connect_player(jp)
 
 @rpc("any_peer", "call_local")
@@ -101,9 +102,7 @@ func end_game() -> void:
 
 
 func setup_connections() -> void:
-	if ctx.tree.player_join_requested.is_connected(_on_player_joined):
-		return
-	ctx.tree.player_join_requested.connect(_on_player_joined)
+	ctx.tree.peer_connected.connect(_on_peer_connected)
 	ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
 	ctx.tree.connected_to_server.connect(_on_connected_ok)
 	ctx.tree.server_disconnected.connect(_on_server_disconnected)
