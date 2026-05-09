@@ -16,7 +16,7 @@ extends SpawnerComponent
 signal player_joined(join_payload: JoinPayload)
 
 ## The username of the player associated with this component.
-var username: String = ""
+@export var username: String = ""
 
 
 ## Returns the [SpawnerPlayerComponent] with unique name
@@ -39,20 +39,13 @@ func _notification(what: int) -> void:
 	super(what)
 	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
 		return
+	
 	var entity := Netw.ctx(self).entity
-	if not entity:
+	if not (entity or entity.owner):
 		return
-	if not entity.collecting_spawn_properties.is_connected(_on_collecting_spawn):
-		entity.collecting_spawn_properties.connect(_on_collecting_spawn)
-
-
-# Contributes [member username] to the spawn packet. Save side is not
-# wired -- username is encoded in the entity_id so the row is keyed by it.
-func _on_collecting_spawn(spawner: SpawnerComponent) -> void:
-	if spawner != self or not is_instance_valid(owner):
-		return
-	var rel := owner.get_path_to(self)
-	add_spawn_property(NodePath("%s:username" % rel))
+	
+	var rel := entity.owner.get_path_to(self)
+	entity.contribute_spawn_property("%s:username" % rel)
 
 
 func _ready() -> void:

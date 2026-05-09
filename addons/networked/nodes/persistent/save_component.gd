@@ -193,17 +193,26 @@ func get_value(key: StringName, default: Variant = null) -> Variant:
 
 ## Adds a tracked property. Intended for use from
 ## [signal NetwEntity.collecting_save_properties] handlers; equivalent to
-## [method ProxySynchronizer.register_property] but exposes the same
-## flag layout as [method SpawnerComponent.add_spawn_property] for
-## symmetry. Idempotent on duplicate [param virtual_name].
+## [method ProxySynchronizer.register_property] but exposes the same flag layout
+## as [method SpawnerComponent.add_spawn_property] for symmetry. Idempotent on
+## duplicate [param virtual_name].
 func add_save_property(
 		virtual_name: StringName,
-		real_path: NodePath,
+		owner_relative_path: NodePath,
 		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
-		spawn: bool = false,
+		spawn: bool = true,
 		watch: bool = true,
 ) -> void:
-	register_property(virtual_name, real_path, mode, spawn, watch)
+	var path_str := str(owner_relative_path)
+	var translated := path_str
+	if owner:
+		var rel := str(get_path_to(owner))
+		if path_str.begins_with(":"):
+			translated = rel + path_str
+		elif rel != ".":
+			translated = rel + "/" + path_str
+	
+	register_property(virtual_name, NodePath(translated), mode, spawn, watch)
 
 
 # ── Scene ↔ entity transfer ────────────────────────────────────────────────────
@@ -383,11 +392,7 @@ func _instantiate_sync() -> void:
 			in_tree = is_inside_tree(),
 			tracked_count = _properties.size(),
 		})
-
-	var entity := Netw.ctx(self).entity
-	if entity:
-		entity.collecting_save_properties.emit(self)
-
+	
 	_setup_sync()
 	_seed_entity_from_scene()
 	assert(_initialized)

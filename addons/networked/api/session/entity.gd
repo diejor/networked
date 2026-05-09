@@ -29,16 +29,6 @@ const META_KEY := &"netw_entity"
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
 
-## Emitted by [SpawnerComponent] before it bakes its replication config.
-## Siblings handle this by calling
-## [method SpawnerComponent.add_spawn_property] on [param spawner].
-signal collecting_spawn_properties(spawner: SpawnerComponent)
-
-## Emitted by [SaveComponent] before it finalizes its tracked properties.
-## Siblings handle this by calling
-## [method SaveComponent.add_save_property] on [param save].
-signal collecting_save_properties(save: SaveComponent)
-
 ## Emitted by [SpawnerComponent] after authority and identity are resolved
 ## but before scene registration. Siblings react with hydration and
 ## other spawn-time work.
@@ -48,10 +38,12 @@ signal spawning
 signal spawned
 
 
-var _owner: Node
+var owner: Node
 var _spawner_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
+var _pending_spawn_props: Array[NodePath] = []
+var _pending_save_props: Array = []
 
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root,
@@ -88,7 +80,7 @@ static func _find_root(node: Node) -> Node:
 
 
 func _attach_to(root: Node) -> void:
-	_owner = root
+	owner = root
 	root.set_meta(META_KEY, self)
 	if root.is_inside_tree():
 		_handle_tree_entered.call_deferred()
@@ -103,23 +95,21 @@ func _handle_tree_entered() -> void:
 	owner_tree_entered.emit()
 
 
-## Returns the entity root (the node that hosts this [NetwEntity] as
-## metadata).
-func get_owner_node() -> Node:
-	return _owner
-
-
 ## Returns [code]true[/code] once [signal owner_tree_entered] has fired
 ## for this entity.
 func has_entered_tree() -> bool:
 	return _tree_entered_fired
 
 
-## Registers [param spawner] as the [SpawnerComponent] for this entity.
-## Called by [SpawnerComponent] from
+## Registers [param spawner] as the [SpawnerComponent] for this entity
+## and flushes any spawn-property contributions buffered before the
+## spawner was registered. Called by [SpawnerComponent] from
 ## [constant Node.NOTIFICATION_PARENTED].
 func set_spawner(spawner: SpawnerComponent) -> void:
 	_spawner_ref = weakref(spawner)
+	for path in _pending_spawn_props:
+		spawner.add_spawn_property(path)
+	_pending_spawn_props.clear()
 
 
 ## Returns the registered [SpawnerComponent], or [code]null[/code].
@@ -127,13 +117,48 @@ func get_spawner() -> SpawnerComponent:
 	return _spawner_ref.get_ref() as SpawnerComponent if _spawner_ref else null
 
 
-## Registers [param save] as the [SaveComponent] for this entity.
-## Called by [SaveComponent] from
+## Registers [param save] as the [SaveComponent] for this entity and
+## flushes any save-property contributions buffered before it
+## registered. Called by [SaveComponent] from
 ## [constant Node.NOTIFICATION_PARENTED].
 func set_save(save: SaveComponent) -> void:
 	_save_ref = weakref(save)
+	for c in _pending_save_props:
+		save.add_save_property(c[0], c[1], c[2], c[3], c[4])
+	_pending_save_props.clear()
 
 
 ## Returns the registered [SaveComponent], or [code]null[/code].
 func get_save() -> SaveComponent:
 	return _save_ref.get_ref() as SaveComponent if _save_ref else null
+
+
+## Contributes [param path] to the [SpawnerComponent]'s spawn-property
+## list. If the spawner is already registered, forwarded immediately;
+## otherwise buffered and flushed in [method set_spawner]. Either way,
+## contributions made from [constant Node.NOTIFICATION_PARENTED] land
+## before Godot's spawn-decode reads
+## [member MultiplayerSynchronizer.replication_config].
+func contribute_spawn_property(path: NodePath) -> void:
+	var spawner := get_spawner()
+	if spawner:
+		spawner.add_spawn_property(path)
+		return
+	if path not in _pending_spawn_props:
+		_pending_spawn_props.append(path)
+
+
+## Contributes a tracked property to the [SaveComponent]. Same buffer/
+## forward semantics as [method contribute_spawn_property].
+func contribute_save_property(
+		virtual_name: StringName,
+		real_path: NodePath,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		spawn: bool = false,
+		watch: bool = true,
+) -> void:
+	var save := get_save()
+	if save:
+		save.add_save_property(virtual_name, real_path, mode, spawn, watch)
+		return
+	_pending_save_props.append([virtual_name, real_path, mode, spawn, watch])

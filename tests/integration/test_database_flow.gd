@@ -26,6 +26,14 @@ func before_test() -> void:
 	db.backend = backend
 
 
+func after_test() -> void:
+	db = null
+	backend = null
+	FileSystemBackend._clear_path_registry()
+	await get_tree().process_frame
+	super.after_test()
+
+
 # Helpers ───────────────────────────────────────────────────────────────────
 
 func _register_and_wait(table: StringName, columns: Array[StringName]) -> void:

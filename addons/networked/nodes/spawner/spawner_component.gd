@@ -4,26 +4,30 @@ extends MultiplayerSynchronizer
 ##
 ## [member replication_config] bundles properties into the spawn packet
 ## so initial state arrives with the entity. Sibling components contribute
-## paths through the [signal NetwEntity.collecting_spawn_properties]
-## signal; the inspector's Replication panel can also pre-populate the
-## list (its flags are coerced to spawn-only at runtime).
+## paths through [method NetwEntity.contribute_spawn_property] from their
+## own [constant Node.NOTIFICATION_PARENTED]; the inspector's Replication
+## panel can also pre-populate the list (its flags are coerced to
+## spawn-only at runtime).
+##
+## [br][br]
+## Contributions [b]must[/b] happen at parented-time, not at
+## tree-entered: Godot reads [member replication_config] for spawn-decode
+## between PackedScene instantiation and tree entry, so anything added at
+## [signal NetwEntity.spawning] time is too late for the spawn packet.
 ##
 ## [br][br]
 ## See [method instantiate_from], [method spawn_under], and
 ## [method despawn] for the spawn/despawn API.
 ##
-## Siblings react to the spawn lifecycle via
-## [code]Netw.ctx(self).entity.spawning[/code] (replaces the older
-## [code]_on_entity_spawning[/code] propagate-call hook).
+## Siblings react to the spawn lifecycle via [signal NetwEntity.spawning]
+## (replaces the older [code]_on_entity_spawning[/code] propagate-call
+## hook).
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
 ##         var entity := Netw.ctx(self).entity
+##         entity.contribute_spawn_property(NodePath("..:my_property"))
 ##         entity.spawning.connect(_on_spawning)
-##         entity.collecting_spawn_properties.connect(_on_collecting_spawn)
-##
-## func _on_collecting_spawn(spawner: SpawnerComponent) -> void:
-##     spawner.add_spawn_property(NodePath("..:my_property"))
 ##
 ## func _on_spawning() -> void:
 ##     if multiplayer.is_server():
@@ -159,6 +163,7 @@ func _notification(what: int) -> void:
 		return
 	if Engine.is_editor_hint():
 		return
+	
 	var entity := Netw.ctx(self).entity
 	if not entity:
 		return
@@ -195,32 +200,31 @@ func _exit_tree() -> void:
 # [signal NetwEntity.owner_tree_entered] in [method _notification].
 # [br][br]
 # Order:
-# [br]1. [method _apply_authority] - settle authority before any
-#     identity-dependent work.
-# [br]2. Emit [signal NetwEntity.collecting_spawn_properties] - siblings
-#     contribute paths via [method add_spawn_property].
-# [br]3. [method _sanitize_replication_config] - coerce all entries to
+# [br]1. [method _sanitize_replication_config] - coerce all entries to
 #     spawn-only / [constant SceneReplicationConfig.REPLICATION_MODE_NEVER].
-# [br]4. Emit [signal NetwEntity.spawning] (and the local
+#     Sibling contributions have already landed during
+#     [constant Node.NOTIFICATION_PARENTED] via
+#     [method NetwEntity.contribute_spawn_property].
+# [br]2. [method _apply_authority] - settle authority.
+# [br]3. Emit [signal NetwEntity.spawning] (and the local
 #     [signal spawning] mirror) - siblings react with hydration etc.
-# [br]5. [method _register_with_scene] - join the enclosing
+# [br]4. [method _register_with_scene] - join the enclosing
 #     [MultiplayerScene]'s visibility filters.
-# [br]6. Emit [signal NetwEntity.spawned].
+# [br]5. Emit [signal NetwEntity.spawned].
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
 	if not owner:
 		return
 	_dbg.trace("Entity '%s' entering tree.", [owner.name])
+	_sanitize_replication_config()
 	_apply_authority()
 	if is_template:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
+
 	var entity := Netw.ctx(self).entity
-	if entity:
-		entity.collecting_spawn_properties.emit(self)
-	_sanitize_replication_config()
 	if entity:
 		entity.spawning.emit()
 	spawning.emit()
@@ -274,10 +278,11 @@ func _apply_template_state() -> void:
 		return
 	owner.process_mode = Node.PROCESS_MODE_DISABLED
 	owner.visible = false
-	if multiplayer and not multiplayer.is_server():
-		_dbg.trace("Freeing template node `%s` on client.", [owner.name])
-		owner.queue_free()
+	#if multiplayer and not multiplayer.is_server():
+		#_dbg.trace("Freeing template node `%s` on client.", [owner.name])
+		#owner.queue_free()
 	SynchronizersCache.sync_only_server(owner)
+	pass
 
 
 # ── Spawn config ─────────────────────────────────────────────────────────

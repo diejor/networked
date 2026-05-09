@@ -35,15 +35,15 @@ properties/0/path = NodePath("..:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
 
-[sub_resource type="Resource" id="Resource_tdg3f"]
-script = ExtResource("5_cxr5p")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "MultiplayerSpawner"
-
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
+
+[sub_resource type="Resource" id="Resource_tdg3f"]
+script = ExtResource("5_cxr5p")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "MultiplayerSpawner"
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
@@ -83,6 +83,11 @@ database = ExtResource("8_dgaqa")
 table_name = &"players"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
+replication_interval = 0.25
+delta_interval = 0.25
+replication_config = SubResource("SceneReplicationConfig_kne1u")
+
 [node name="TPComponent" type="Node" parent="." unique_id=1784597384]
 unique_name_in_owner = true
 script = ExtResource("4_e80uo")
@@ -96,8 +101,3 @@ property_modes = Dictionary[StringName, int]({
 })
 visual_root = NodePath("../Icon")
 metadata/_custom_type_script = "uid://b21bbqt166ive"
-
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
-replication_interval = 0.25
-delta_interval = 0.25
-replication_config = SubResource("SceneReplicationConfig_kne1u")

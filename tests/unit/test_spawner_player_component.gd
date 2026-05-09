@@ -98,8 +98,6 @@ func test_player_collector_contributes_username() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	spawner._on_collecting_spawn(spawner)
-
 	var expected := NodePath("SpawnerPlayerComponent:username")
 	var cfg := spawner.replication_config
 	assert_that(cfg.has_property(expected)).is_true()

@@ -733,7 +733,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_pause(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	if sender != 1:
+	if sender != 1 and sender != 0:
 		Netw.dbg.warn("_rpc_receive_pause received from non-server peer %d", [sender])
 		return
 	get_tree().paused = true
@@ -743,7 +743,7 @@ func _rpc_receive_pause(reason: String) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_unpause() -> void:
 	var sender := multiplayer.get_remote_sender_id()
-	if sender != 1:
+	if sender != 1 and sender != 0:
 		Netw.dbg.warn("_rpc_receive_unpause received from non-server peer %d", [sender])
 		return
 	get_tree().paused = false
