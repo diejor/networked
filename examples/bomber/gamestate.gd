@@ -27,10 +27,10 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	setup_connections()
 
-func _on_peer_connected(id: int) -> void:	
-	register_player.rpc_id(id, player_name)
-	player_list_changed.emit()
 
+func _on_player_joined(join_paylod: JoinPayload) -> void:
+	register_player.rpc_id(join_paylod.peer_id, player_name)
+	player_list_changed.emit()
 
 func _on_peer_disconnected(id: int) -> void:
 	if has_node(^"/root/World"):
@@ -102,7 +102,7 @@ func end_game() -> void:
 
 
 func setup_connections() -> void:
-	ctx.tree.peer_connected.connect(_on_peer_connected)
+	ctx.tree.player_joined.connect(_on_player_joined)
 	ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
 	ctx.tree.connected_to_server.connect(_on_connected_ok)
 	ctx.tree.server_disconnected.connect(_on_server_disconnected)

@@ -231,6 +231,7 @@ static func resolve(context: Object) -> MultiplayerTree:
 
 
 var _peer_contexts: Dictionary[int, NetwPeerContext] = {}
+var _joined_players: Dictionary[int, JoinPayload] = {}
 var _services: Dictionary[Script, Node] = {}
 
 
@@ -290,6 +291,7 @@ func find_service_node(type: Script) -> Node:
 func dispose() -> void:
 	_services.clear()
 	_peer_contexts.clear()
+	_joined_players.clear()
 
 
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
@@ -297,6 +299,21 @@ func get_peer_context(peer_id: int) -> NetwPeerContext:
 	if peer_id not in _peer_contexts:
 		_peer_contexts[peer_id] = NetwPeerContext.new()
 	return _peer_contexts[peer_id]
+
+
+## Returns accepted player join payloads known by this peer.
+func get_joined_players() -> Array[JoinPayload]:
+	var players: Array[JoinPayload] = []
+	for join_payload: JoinPayload in _joined_players.values():
+		players.append(_clone_join_payload(join_payload))
+	return players
+
+
+## Returns the accepted player payload for [param peer_id], or
+## [code]null[/code].
+func get_joined_player(peer_id: int) -> JoinPayload:
+	var join_payload := _joined_players.get(peer_id) as JoinPayload
+	return _clone_join_payload(join_payload) if join_payload else null
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -722,8 +739,10 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	
 	_resolve_username_collision(join_payload)
 	
-	_emit_player_joined(join_payload)
+	_remember_joined_player(join_payload)
 	_rpc_notify_player_joined.rpc(join_payload.serialize())
+	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
+		_rpc_sync_joined_players.rpc_id(peer_id, _serialize_joined_players())
 
 
 # Emits the accepted join notification on remote peers.
@@ -739,7 +758,24 @@ func _rpc_notify_player_joined(bytes: PackedByteArray) -> void:
 	
 	var join_payload: JoinPayload = JoinPayload.new()
 	join_payload.deserialize(bytes)
-	_emit_player_joined(join_payload)
+	_remember_joined_player(join_payload)
+
+
+# Sends all accepted player payloads to a newly joined peer.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_sync_joined_players(payloads: Array[PackedByteArray]) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != MultiplayerPeer.TARGET_PEER_SERVER:
+		Netw.dbg.warn(
+			"_rpc_sync_joined_players received from non-server peer %d",
+			[sender]
+		)
+		return
+	
+	for bytes: PackedByteArray in payloads:
+		var join_payload: JoinPayload = JoinPayload.new()
+		join_payload.deserialize(bytes)
+		_remember_joined_player(join_payload)
 
 
 # Emits join signals derived from the accepted server-authority payload.
@@ -748,6 +784,35 @@ func _emit_player_joined(join_payload: JoinPayload) -> void:
 	
 	if join_payload.peer_id == multiplayer.get_unique_id():
 		local_player_joined.emit(join_payload)
+
+
+# Stores an accepted player payload and emits it once on this peer.
+func _remember_joined_player(join_payload: JoinPayload) -> bool:
+	if _joined_players.has(join_payload.peer_id):
+		return false
+	
+	var stored_payload := _clone_join_payload(join_payload)
+	_joined_players[join_payload.peer_id] = stored_payload
+	_emit_player_joined(_clone_join_payload(stored_payload))
+	return true
+
+
+# Returns a defensive copy of an accepted join payload.
+func _clone_join_payload(join_payload: JoinPayload) -> JoinPayload:
+	if not join_payload:
+		return null
+	
+	var clone := JoinPayload.new()
+	clone.deserialize(join_payload.serialize())
+	return clone
+
+
+# Serializes the locally known accepted player roster.
+func _serialize_joined_players() -> Array[PackedByteArray]:
+	var payloads: Array[PackedByteArray] = []
+	for join_payload: JoinPayload in _joined_players.values():
+		payloads.append(join_payload.serialize())
+	return payloads
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +1009,7 @@ func _on_peer_connected(peer_id: int) -> void:
 func _on_peer_disconnected(peer_id: int) -> void:
 	Netw.dbg.info("Peer disconnected: %d", [peer_id])
 	_peer_contexts.erase(peer_id)
+	_joined_players.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 

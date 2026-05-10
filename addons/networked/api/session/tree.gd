@@ -69,6 +69,19 @@ func get_all_players() -> Array[Node]:
 	return mt.get_all_players() if mt else []
 
 
+## Returns accepted player join payloads known by this peer.
+func get_joined_players() -> Array[JoinPayload]:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.get_joined_players() if mt else []
+
+
+## Returns the accepted player payload for [param peer_id], or
+## [code]null[/code].
+func get_joined_player(peer_id: int) -> JoinPayload:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.get_joined_player(peer_id) if mt else null
+
+
 ## Returns [code]true[/code] if the current session is hosting as a server.
 func is_server() -> bool:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
