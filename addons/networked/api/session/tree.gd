@@ -41,19 +41,19 @@ var _tree_ref: WeakRef
 
 func _init(mt: MultiplayerTree) -> void:
 	_tree_ref = weakref(mt)
-	mt.peer_connected.connect(func(id): peer_connected.emit(id))
-	mt.peer_disconnected.connect(func(id): peer_disconnected.emit(id))
-	mt.connected_to_server.connect(func(): connected_to_server.emit())
-	mt.server_disconnected.connect(func(): server_disconnected.emit())
+	mt.peer_connected.connect(peer_connected.emit)
+	mt.peer_disconnected.connect(peer_disconnected.emit)
+	mt.connected_to_server.connect(connected_to_server.emit)
+	mt.server_disconnected.connect(server_disconnected.emit)
 	
-	mt.player_joined.connect(func(jp): player_joined.emit(jp))
-	mt.local_player_joined.connect(func(jp): local_player_joined.emit(jp))
+	mt.player_joined.connect(player_joined.emit)
+	mt.local_player_joined.connect(local_player_joined.emit)
 	mt.player_scene_ready.connect(_on_player_scene_ready)
-	mt.server_disconnecting.connect(func(reason: String): server_disconnecting.emit(reason))
-	mt.kick_requested.connect(func(requester, target, reason: String): kick_requested.emit(requester, target, reason))
-	mt.kicked.connect(func(reason: String): kicked.emit(reason))
-	mt.tree_paused.connect(func(reason: String): tree_paused.emit(reason))
-	mt.tree_unpaused.connect(func(): tree_unpaused.emit())
+	mt.server_disconnecting.connect(server_disconnecting.emit)
+	mt.kick_requested.connect(kick_requested.emit)
+	mt.kicked.connect(kicked.emit)
+	mt.tree_paused.connect(tree_paused.emit)
+	mt.tree_unpaused.connect(tree_unpaused.emit)
 
 
 ## Returns [code]true[/code] while the underlying [MultiplayerTree] is still
