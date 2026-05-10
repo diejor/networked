@@ -30,7 +30,7 @@ extends Object
 
 
 ## Static entry point for all debug and logging functionality.
-static var dbg := NetwDbg.new()
+static var dbg: NetwDbg = NetwDbg.new()
 
 
 ## Returns a [NetwContext] for [param node] by walking its ancestor chain.

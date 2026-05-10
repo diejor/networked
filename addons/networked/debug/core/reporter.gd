@@ -3,8 +3,7 @@
 ## This is a singleton (Autoload) node that collects telemetry from all active
 ## [MultiplayerTree] instances in the process and forwards them to the editor.
 ## [br][br]
-## [b]Note:[/b] All operations are guarded by [method _debug_build], ensuring
-## zero overhead in release exports or headless/test runs.
+## The bootstrap only creates this node when reporter policy allows it.
 extends Node
 class_name NetworkedDebugReporter
 
@@ -58,6 +57,7 @@ var _last_manifest_min_msec: Dictionary = {}
 var _is_sending_manifest: bool = false
 var _clock_monitor: NetClockMonitor = null
 var _pending_zombie_checks: Array[SceneTreeTimer] = []
+var _trace_sink: Callable
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -113,9 +113,7 @@ func reset_state() -> void:
 	_dbg.trace("Reporter: State reset (deep).")
 
 static func _get_instance() -> NetworkedDebugReporter:
-	if Engine.has_singleton("NetworkedDebugger"):
-		return Engine.get_singleton("NetworkedDebugger") as NetworkedDebugReporter
-	return null
+	return Netw.dbg.get_reporter() as NetworkedDebugReporter
 
 
 func _try_register_capture() -> void:
@@ -135,14 +133,17 @@ func _init() -> void:
 
 
 func _enter_tree() -> void:
+	Netw.dbg.register_reporter(self)
 	if not _debug_build():
 		return
+	Netw.dbg._set_enabled(true)
 
 	Netw.dbg.reset()
-	NetTrace.message_delegate = func(
+	_trace_sink = func(
 		msg: String, payload: Dictionary, mt: MultiplayerTree = null
 	) -> void:
 		_queue(msg, payload, mt)
+	Netw.dbg.install_trace_sink(_trace_sink)
 
 	_try_register_capture()
 
@@ -167,9 +168,12 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	if not _debug_build():
+		Netw.dbg.unregister_reporter(self)
 		return
 
-	NetTrace.message_delegate = Callable()
+	Netw.dbg.clear_trace_sink(_trace_sink)
+	_trace_sink = Callable()
+	Netw.dbg._set_enabled(false)
 
 	for mt: MultiplayerTree in _trees:
 		var event := NetSessionEvent.new()
@@ -177,6 +181,7 @@ func _exit_tree() -> void:
 		_queue("networked:session_unregistered", event.to_dict(), mt)
 
 	_flush_now()
+	Netw.dbg.unregister_reporter(self)
 
 
 ## Registers a [MultiplayerTree] for debug reporting.

@@ -9,10 +9,18 @@ const DEFAULT_TIMEOUT := 1.0
 ## [codeblock]
 ## await timeout_await(my_signal, 1.0)
 ## [/codeblock]
-func timeout_await(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> void:
+func timeout_await(
+	target_signal: Signal,
+	timeout: float = DEFAULT_TIMEOUT
+) -> void:
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(target_signal, timer):
-		fail("Timed out waiting for signal '%s' after %.1f seconds." % [target_signal.get_name(), timeout])
+		fail(
+			"Timed out waiting for signal '%s' after %.1f seconds." % [
+				target_signal.get_name(),
+				timeout,
+			]
+		)
 
 
 ## Awaits a condition to become true within a timeout.
@@ -48,6 +56,16 @@ static func create_scene_manager() -> MultiplayerSceneManager:
 static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 	for i in count:
 		await tree.process_frame
+
+
+## Enables [NetwLog] output for the current test case.
+func enable_logs(logl: String = "trace") -> void:
+	NetworkedTestSessionHook.enable_current_test_logs(logl)
+
+
+## Enables reporter-backed [NetTrace] output for the current test case.
+func enable_debugger() -> void:
+	NetworkedTestSessionHook.enable_current_test_debugger()
 
 
 func after_test() -> void:

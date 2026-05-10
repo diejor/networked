@@ -930,14 +930,7 @@ func _config_api() -> void:
 	backend.configure_tree(get_tree(), multiplayer_root)
 	multiplayer_api.set_meta(&"_multiplayer_tree", self)
 	
-	var debugger = null
-	if Engine.has_singleton("NetworkedDebugger"):
-		debugger = Engine.get_singleton("NetworkedDebugger")
-	elif get_tree().root.has_node("NetworkedDebugger"):
-		debugger = get_tree().root.get_node("NetworkedDebugger")
-	
-	if debugger:
-		debugger.register_tree(self)
+	Netw.dbg.register_tree(self)
 	
 	configured.emit()
 	
@@ -983,14 +976,7 @@ func _on_exiting() -> void:
 			backend.unregister_tree(get_tree())
 		return
 	
-	var debugger = null
-	if Engine.has_singleton("NetworkedDebugger"):
-		debugger = Engine.get_singleton("NetworkedDebugger")
-	elif get_tree().root.has_node("NetworkedDebugger"):
-		debugger = get_tree().root.get_node("NetworkedDebugger")
-	
-	if debugger:
-		debugger.unregister_tree(self)
+	Netw.dbg.unregister_tree(self)
 	
 	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
 		multiplayer_api.remove_meta(&"_multiplayer_tree")

@@ -35,6 +35,7 @@ static var _settings_stack: Array[NetwLogSettings] = []
 static var _addon_root: String = ""
 static var _runtime_initialized: bool = false
 static var _is_debug: bool = OS.is_debug_build()
+static var _test_hook_controls_overrides := false
 
 const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 
@@ -77,6 +78,11 @@ static func _ensure_initialized() -> void:
 	
 	var test_override := _detect_test_log_override()
 	if not test_override.is_empty():
+		if _test_hook_controls_overrides:
+			current_level = Level.INFO
+			_load_active_profile()
+			_recompute_min_level()
+			return
 		# Load profile first so overrides in the string can cascade over it
 		_load_active_profile()
 		push_setting_str(test_override)
@@ -198,12 +204,33 @@ static func push_settings(settings: NetwLogSettings) -> void:
 	_recompute_min_level()
 
 
+## Applies [param logl_str] until the returned [NetwLogScope] is closed.
+static func scoped(logl_str: String) -> NetwLogScope:
+	var settings := parse_logl(logl_str)
+	push_settings(settings)
+	return NetwLogScope.new(settings)
+
+
+## Marks test overrides as owned by [NetworkedTestSessionHook].
+static func set_test_hook_controls_overrides(enabled: bool) -> void:
+	_test_hook_controls_overrides = enabled
+
+
 ## Pops the topmost [NetwLogSettings] from the isolation stack.
 static func pop_settings() -> void:
 	if not _settings_stack.is_empty():
 		_settings_stack.pop_back()
 	
 	_recompute_min_level()
+
+
+static func _close_scope(settings: NetwLogSettings) -> void:
+	if not settings:
+		return
+	var index := _settings_stack.rfind(settings)
+	if index >= 0:
+		_settings_stack.remove_at(index)
+		_recompute_min_level()
 
 
 ## Returns the effective log level for [param module_path].
