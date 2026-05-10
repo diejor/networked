@@ -6,10 +6,10 @@
 class_name SceneSynchronizer
 extends MultiplayerSynchronizer
 
-## Emitted when a tracked player node enters the scene tree.
-signal spawned(player: Node)
-## Emitted when a tracked player node exits the scene tree.
-signal despawned(player: Node)
+## Emitted when a tracked node enters the scene tree.
+signal spawned(node: Node)
+## Emitted when a tracked node exits the scene tree.
+signal despawned(node: Node)
 
 ## Dictionary of peer IDs currently connected to this scene, mapped to [code]true[/code].
 ##
@@ -156,7 +156,6 @@ func _on_spawned(node: Node) -> void:
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 
-	connect_peer(_get_scene_peer_id(node))
 	spawned.emit(node)
 
 
@@ -168,8 +167,6 @@ func _on_despawned(node: Node) -> void:
 
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
-
-	disconnect_peer(_get_scene_peer_id(node))
 
 	despawned.emit(node)
 
@@ -186,10 +183,3 @@ func scene_visibility_filter(peer_id: int) -> bool:
 	
 	var res: bool = peer_id in connected_peers
 	return res
-
-
-func _get_scene_peer_id(node: Node) -> int:
-	var entity := NetwEntity.of(node)
-	if entity:
-		return entity.scene_peer_id
-	return node.get_multiplayer_authority()

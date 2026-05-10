@@ -66,11 +66,15 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 	var username := data.get("username", "")
 	if username.is_empty():
 		if is_instance_valid(mt) and mt.local_player:
-			var player := SpawnerPlayerComponent.unwrap(mt.local_player)
-			if player:
-				username = player.username
+			var entity := NetwEntity.of(mt.local_player)
+			if entity and not entity.identity_id.is_empty():
+				username = entity.identity_id
 			else:
-				username = mt.local_player.name.get_slice("|", 0)
+				var player := SpawnerPlayerComponent.unwrap(mt.local_player)
+				if player:
+					username = player.username
+				else:
+					username = mt.local_player.name.get_slice("|", 0)
 		else:
 			username = data.get("tree_name", "Unknown")
 

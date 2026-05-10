@@ -236,15 +236,17 @@ func _request_teleport(username: String,
 		_fail_span(span, "no_scene_manager", "Cannot teleport, scene manager not found.")
 		return
 	
-	var from_scene: MultiplayerScene = scene_manager.active_scenes.get(from_scene_name)
+	var player := owner
+	var from_scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
+	if not from_scene:
+		from_scene = scene_manager.active_scenes.get(from_scene_name)
 	if not from_scene:
 		_fail_span(span, "source_scene_not_found",
 			"Source scene '%s' not found.", [from_scene_name],
 			{"scene": from_scene_name})
 		return
 	
-	var player: Node = from_scene.level.get_node_or_null(username)
-	if not player:
+	if not is_instance_valid(player) or not from_scene.level.is_ancestor_of(player):
 		_fail_span(span, "player_not_found",
 			"Player '%s' not found in source scene.", [username])
 		return
@@ -307,6 +309,10 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
 			# never re-init. Reset the ready flag for the whole subtree.
 			_request_ready_recursive(player)
+			to_scene.register_player(player)
+			var scene_manager := get_scene_manager()
+			if scene_manager:
+				scene_manager._set_active_scene_for_player(player, to_scene)
 			tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene.synchronizer._on_spawned

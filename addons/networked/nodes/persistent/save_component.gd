@@ -299,6 +299,10 @@ func _get_entity_id() -> StringName:
 	if not root:
 		return &""
 
+	var entity := NetwEntity.of(root)
+	if entity and not entity.identity_id.is_empty():
+		return entity.identity_id
+
 	var spawner := SpawnerComponent.unwrap(root)
 	if spawner and not spawner.entity_id.is_empty():
 		return spawner.entity_id

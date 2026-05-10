@@ -2,9 +2,9 @@
 
 [ext_resource type="Script" uid="uid://d3hydnehhflk" path="res://examples/daily/player.gd" id="1_kne1u"]
 [ext_resource type="Texture2D" uid="uid://dbb6gk33m6anl" path="res://icon.svg" id="2_kpjcp"]
-[ext_resource type="Script" uid="uid://b1263q5vu7cht" path="res://addons/networked/nodes/spawner/spawner_player_component.gd" id="3_kne1u"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="5_dgaqa"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="7_0cf0o"]
 [ext_resource type="Resource" uid="uid://yv4uuygdxogs" path="res://examples/daily/dummy_database.tres" id="8_dgaqa"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/tick_interpolator.gd" id="9_wi0c6"]
@@ -25,15 +25,15 @@ func _ready() -> void:
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_5h0xu"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/replication_mode = 0
-
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
 properties/0/path = NodePath("..:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_5h0xu"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
 properties/0/path = NodePath(".:position")
@@ -62,14 +62,6 @@ texture = ExtResource("2_kpjcp")
 position = Vector2(2, 60)
 shape = SubResource("RectangleShape2D_tdg3f")
 
-[node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1442925740]
-unique_name_in_owner = true
-replication_config = SubResource("SceneReplicationConfig_5h0xu")
-visibility_update_mode = 2
-script = ExtResource("3_kne1u")
-authority_mode = 1
-metadata/_custom_type_script = "uid://bspawnrcomp001"
-
 [node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=2118460329]
 unique_name_in_owner = true
 root_path = NodePath(".")
@@ -82,6 +74,12 @@ script = ExtResource("7_0cf0o")
 database = ExtResource("8_dgaqa")
 table_name = &"players"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
+
+[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1181938780]
+replication_config = SubResource("SceneReplicationConfig_5h0xu")
+script = ExtResource("5_dgaqa")
+authority_mode = 1
+metadata/_custom_type_script = "uid://cgyly1efa3m53"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
 replication_interval = 0.25

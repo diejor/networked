@@ -39,6 +39,14 @@ signal spawned
 
 
 var owner: Node
+## Stable identifier for save/debug identity. Empty means callers should
+## fall back to their legacy identity source.
+var identity_id: StringName = &""
+
+## Peer this entity represents, independent from multiplayer authority.
+## Empty for non-player entities and server-owned world objects.
+var represented_peer_id := 0
+
 ## Peer this entity contributes to scene membership. When [code]0[/code],
 ## reads [method Node.get_multiplayer_authority] from [member owner].
 var scene_peer_id := 0:

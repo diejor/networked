@@ -9,15 +9,15 @@ extends Serde
 ## The player's display name, used as the spawned node name prefix.
 @export var username: StringName
 
-## Path to the [SpawnerPlayerComponent] node the player should enter.
+## Path to the [SpawnerComponent] node the player should enter.
 ##
-## [b]Note:[/b] The target [SpawnerPlayerComponent] must reside in a scene that
+## [b]Note:[/b] The target [SpawnerComponent] must reside in a scene that
 ## tracks the owner scene correctly.
-@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerPlayerComponent")
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
 var spawner_component_path: SceneNodePath
 
 ## Optional path to a [MultiplayerSpawner] that will receive the spawn
-## payload instead of a [SpawnerPlayerComponent].
+## payload instead of a [SpawnerComponent].
 ##
 ## When set, the framework calls [method MultiplayerSpawner.spawn] with
 ## the gathered payload after activating the target scene.
@@ -70,5 +70,4 @@ func deserialize(bytes: PackedByteArray) -> void:
 	url = data.url
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)
-
 

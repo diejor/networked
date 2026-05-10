@@ -54,12 +54,25 @@ signal despawning(reason: StringName)
 ## Emitted after teardown when the node leaves the tree.
 signal despawned
 
+## Emitted on the server when a peer requests to join this player template.
+signal player_joined(join_payload: JoinPayload)
+
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
 ## Explicit identity. When empty, [member entity_id] falls back
 ## to the default resolved by the authority policy.
 @export var entity_id_override: StringName = &""
+
+var identity_id: StringName = &"":
+	set(value):
+		identity_id = value
+		_sync_entity_identity()
+
+var represented_peer_id := 0:
+	set(value):
+		represented_peer_id = value
+		_sync_entity_identity()
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -72,6 +85,9 @@ var entity_id: StringName:
 	get:
 		if not entity_id_override.is_empty():
 			return entity_id_override
+		var entity := NetwEntity.of(self)
+		if entity and not entity.identity_id.is_empty():
+			return entity.identity_id
 		return _resolve_identity()
 
 
@@ -165,9 +181,13 @@ func _notification(what: int) -> void:
 		return
 	
 	var entity := Netw.ctx(self).entity
-	if not entity:
+	if not entity or not entity.owner:
 		return
 	entity.set_spawner(self)
+	var rel := entity.owner.get_path_to(self)
+	entity.contribute_spawn_property("%s:identity_id" % rel)
+	entity.contribute_spawn_property("%s:represented_peer_id" % rel)
+	_sync_entity_identity()
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
 		entity.owner_tree_entered.connect(_on_owner_tree_entered)
 
@@ -188,11 +208,36 @@ func _ready() -> void:
 	if is_template:
 		_apply_template_state()
 		return
+	if (
+		represented_peer_id != 0
+		and not multiplayer.peer_disconnected.is_connected(
+			_on_peer_disconnected
+		)
+	):
+		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	if (
+		not multiplayer.is_server()
+		and _is_local_represented_peer()
+		and is_inside_tree()
+	):
+		var ctx := Netw.ctx(self)
+		if ctx:
+			var tp_layer := ctx.services.get_tp_layer()
+			if tp_layer:
+				_dbg.info(
+					"Local player %s ready. Playing teleport transition.",
+					[identity_id]
+				)
+				tp_layer.teleport_in()
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	if _is_local_represented_peer():
+		var mt := MultiplayerTree.resolve(self)
+		if mt and mt.local_player == owner:
+			mt.local_player = null
 	despawned.emit()
 
 
@@ -235,6 +280,8 @@ func _on_owner_tree_entered() -> void:
 
 # Applies [member authority_mode] to [member Node.owner].
 func _apply_authority() -> void:
+	if not owner:
+		return
 	match authority_mode:
 		AuthorityMode.SERVER:
 			owner.set_multiplayer_authority(
@@ -248,7 +295,22 @@ func _apply_authority() -> void:
 					[owner.name, authority]
 				)
 				owner.set_multiplayer_authority(authority)
-				set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+				set_multiplayer_authority(
+					MultiplayerPeer.TARGET_PEER_SERVER
+				)
+
+
+func _sync_entity_identity() -> void:
+	if not owner:
+		return
+	var entity := NetwEntity.of(self)
+	if not entity:
+		return
+	if not identity_id.is_empty():
+		entity.identity_id = identity_id
+	if represented_peer_id != 0:
+		entity.represented_peer_id = represented_peer_id
+		entity.scene_peer_id = represented_peer_id
 
 
 # [code]true[/code] when [member authority_mode] can resolve to a
@@ -342,7 +404,40 @@ func _register_with_scene() -> void:
 			+ "SceneSynchronizer track.", [owner.name]
 		)
 		return
+	if represented_peer_id != 0:
+		scene.register_player(owner)
+		_assign_local_player_if_needed()
 	scene.synchronizer.track_node(owner)
+
+
+func _assign_local_player_if_needed() -> void:
+	if not _is_local_represented_peer():
+		return
+	var mt := MultiplayerTree.resolve(self)
+	if mt:
+		mt.local_player = owner
+
+
+func _is_local_represented_peer() -> bool:
+	if represented_peer_id == 0:
+		return false
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	return represented_peer_id == multiplayer.get_unique_id()
+
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not multiplayer or not multiplayer.is_server():
+		return
+	if represented_peer_id != peer_id:
+		return
+	_dbg.info(
+		"Peer %d disconnected. Despawning represented entity %s.",
+		[peer_id, owner.name]
+	)
+	var opts := DespawnOpts.new()
+	opts.reason = &"peer_disconnected"
+	despawn(opts)
 
 
 # ── Public spawn/despawn API ─────────────────────────────────────────────
@@ -369,6 +464,18 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	)
 	var p := parent if parent else owner.get_parent()
 	p.add_child(copy)
+	return copy
+
+
+## Server-only. Spawns a player copy into [param scene] from [param jp].
+func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
+	assert(multiplayer.is_server())
+	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
+		c.identity_id = jp.username
+		c.represented_peer_id = jp.peer_id
+		c.owner.name = format_name(jp.username, jp.peer_id)
+	)
+	scene.add_player(copy)
 	return copy
 
 

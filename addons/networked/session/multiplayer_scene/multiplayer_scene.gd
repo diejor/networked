@@ -29,6 +29,7 @@ signal player_ready(join_payload: JoinPayload)
 
 ## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].
 var _readiness_gates: Array[WeakRef] = []
+var _players_by_peer: Dictionary[int, WeakRef] = {}
 
 
 ## Returns the [NetwContext] for this scene, creating it on first access.
@@ -68,6 +69,60 @@ func add_player(player: Node) -> void:
 	synchronizer.track_node(player)
 	level.add_child(player)
 	player.owner = level
+	register_player(player)
+
+
+func register_player(player: Node) -> void:
+	var peer_id := _get_scene_peer_id(player)
+	if peer_id != 0:
+		var previous_peer := _find_peer_for_player(player)
+		if previous_peer != 0 and previous_peer != peer_id:
+			_players_by_peer.erase(previous_peer)
+			synchronizer.disconnect_peer(previous_peer)
+		_players_by_peer[peer_id] = weakref(player)
+		if not synchronizer.connected_peers.has(peer_id):
+			synchronizer.connect_peer(peer_id)
+		var bound := _on_player_exiting.bind(player)
+		if not player.tree_exiting.is_connected(bound):
+			player.tree_exiting.connect(bound)
+
+
+func get_players() -> Array[Node]:
+	var players: Array[Node] = []
+	var stale_peers: Array[int] = []
+	for peer_id: int in _players_by_peer:
+		var player := _players_by_peer[peer_id].get_ref() as Node
+		if is_instance_valid(player):
+			players.append(player)
+		else:
+			stale_peers.append(peer_id)
+	for peer_id: int in stale_peers:
+		_players_by_peer.erase(peer_id)
+	return players
+
+
+func _on_player_exiting(player: Node) -> void:
+	_remove_player(player)
+
+
+func _remove_player(player: Node) -> void:
+	var peer_id := _get_scene_peer_id(player)
+	if peer_id == 0:
+		peer_id = _find_peer_for_player(player)
+	if peer_id != 0:
+		_players_by_peer.erase(peer_id)
+	var bound := _on_player_exiting.bind(player)
+	if is_instance_valid(player) and player.tree_exiting.is_connected(bound):
+		player.tree_exiting.disconnect(bound)
+	if peer_id != 0:
+		synchronizer.disconnect_peer(peer_id)
+
+
+func _find_peer_for_player(player: Node) -> int:
+	for peer_id: int in _players_by_peer:
+		if _players_by_peer[peer_id].get_ref() == player:
+			return peer_id
+	return 0
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +140,7 @@ func _register_readiness_gate(gate: NetwSceneReadiness) -> void:
 ## Called directly when the server/host calls [method NetwSceneReadiness.set_ready].
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 	_rpc_receive_ready_changed(peer_id, is_ready)
-	for node: Node in synchronizer.tracked_nodes:
-		var target_peer_id := _get_scene_peer_id(node)
+	for target_peer_id: int in synchronizer.connected_peers:
 		if target_peer_id != multiplayer.get_unique_id():
 			rpc_id(target_peer_id, "_rpc_receive_ready_changed", peer_id, is_ready)
 

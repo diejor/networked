@@ -310,11 +310,9 @@ func destroy_scene(name: StringName) -> void:
 func get_all_players() -> Array[Node]:
 	var players: Array[Node] = []
 	for scene: MultiplayerScene in active_scenes.values():
-		if not is_instance_valid(scene) or not is_instance_valid(
-			scene.synchronizer
-		):
+		if not is_instance_valid(scene):
 			continue
-		for node: Node in scene.synchronizer.tracked_nodes.keys():
+		for node: Node in scene.get_players():
 			if is_instance_valid(node):
 				players.append(node)
 	return players
@@ -395,8 +393,10 @@ func activate_scene_for(
 	)
 	var path := _resolve_scene_path(join_payload)
 	if not path or not path.is_valid():
-		Netw.dbg.debug(
-			"Join: No valid spawner path.", []
+		Netw.dbg.error(
+			"Join failed for '%s': missing or invalid spawner path.",
+			[join_payload.username],
+			func(m): push_error(m)
 		)
 		return null
 	
@@ -440,23 +440,11 @@ func handle_player_joined(join_payload: JoinPayload) -> void:
 	
 	var dispatched := false
 	
-	if (
-		join_payload.spawner_component_path
-		and join_payload.spawner_component_path.is_valid()
-	):
-		var spawner_client: SpawnerComponent = (
-			scene.level.get_node_or_null(
-				join_payload.spawner_component_path.node_path
-			) as SpawnerComponent
-		)
-		if spawner_client:
-			spawner_client.player_joined.emit(join_payload)
-			dispatched = true
-		else:
-			Netw.dbg.error(
-				"SpawnerComponent not found at '%s'.",
-				[join_payload.spawner_component_path.node_path]
-			)
+	var spawner_client := _resolve_join_spawner(join_payload, scene)
+	if spawner_client:
+		spawner_client.spawn_player(join_payload, scene)
+		dispatched = true
+		_set_active_scene_for_local_peer(join_payload.peer_id, scene)
 
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
@@ -467,6 +455,48 @@ func handle_player_joined(join_payload: JoinPayload) -> void:
 			"No valid spawner configured for player '%s'.",
 			[join_payload.username]
 		)
+
+
+func _resolve_join_spawner(
+	join_payload: JoinPayload,
+	scene: MultiplayerScene
+) -> SpawnerComponent:
+	var path := join_payload.spawner_component_path
+	if not path or not path.is_valid():
+		Netw.dbg.error(
+			"Join failed for '%s': invalid spawner path resource.",
+			[join_payload.username],
+			func(m): push_error(m)
+		)
+		return null
+
+	if not is_instance_valid(scene.level):
+		Netw.dbg.error(
+			"Join failed for '%s': scene '%s' has no level node.",
+			[join_payload.username, path.get_scene_name()],
+			func(m): push_error(m)
+		)
+		return null
+
+	var node := scene.level.get_node_or_null(path.node_path)
+	if not node:
+		Netw.dbg.error(
+			"Join failed for '%s': no node at '%s' in scene '%s'.",
+			[join_payload.username, path.node_path, path.get_scene_name()],
+			func(m): push_error(m)
+		)
+		return null
+
+	var spawner := node as SpawnerComponent
+	if not spawner:
+		Netw.dbg.error(
+			"Join failed for '%s': node '%s' is '%s', not SpawnerComponent.",
+			[join_payload.username, path.node_path, node.get_class()],
+			func(m): push_error(m)
+		)
+		return null
+
+	return spawner
 
 
 func _apply_empty_action_if_needed(name: StringName) -> void:
@@ -488,16 +518,27 @@ func _on_scene_spawned(node: Node) -> void:
 	Netw.dbg.info("Scene spawned: %s", [scene.level.name])
 	active_scenes[scene.level.name] = scene
 	if multiplayer.is_server():
+		if not scene.synchronizer.spawned.is_connected(
+			_on_scene_node_spawned
+		):
+			scene.synchronizer.spawned.connect(_on_scene_node_spawned)
 		scene.synchronizer.despawned.connect(
 			_on_player_left_scene.bind(StringName(scene.level.name)))
 		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
 
 
-func _on_player_left_scene(_player: Node, scene_name: StringName) -> void:
+func _on_player_left_scene(player: Node, scene_name: StringName) -> void:
 	Netw.dbg.debug(
 		"Player left scene '%s'. Evaluating empty action.", [scene_name]
 	)
 	_apply_empty_action_if_needed(scene_name)
+	if _is_local_scene_peer(player):
+		_resolve_active_scene_from_local_player.call_deferred()
+
+
+func _on_scene_node_spawned(player: Node) -> void:
+	var scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
+	_set_active_scene_for_player.call_deferred(player, scene)
 
 
 func _on_scene_despawned(node: Node) -> void:
@@ -505,7 +546,7 @@ func _on_scene_despawned(node: Node) -> void:
 	Netw.dbg.info("Scene despawned: %s", [scene.level.name])
 	active_scenes.erase(scene.level.name)
 	if scene == _active_scene:
-		_set_active_scene(null)
+		_resolve_active_scene_from_local_player.call_deferred()
 
 
 func _on_server_disconnected() -> void:
@@ -599,6 +640,43 @@ func _resolve_active_scene_from_local_player() -> void:
 		return
 	var scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
 	_set_active_scene(scene)
+
+
+func _set_active_scene_for_local_peer(
+	peer_id: int,
+	scene: MultiplayerScene
+) -> void:
+	if peer_id != multiplayer.get_unique_id():
+		return
+	var ctx := Netw.ctx(self)
+	if not ctx or not ctx.tree.is_listen_server():
+		return
+	_set_active_scene(scene)
+
+
+func _set_active_scene_for_player(
+	player: Node,
+	scene: MultiplayerScene
+) -> void:
+	if not is_instance_valid(player):
+		return
+	_set_active_scene_for_local_peer(_get_scene_peer_id(player), scene)
+
+
+func _is_local_scene_peer(player: Node) -> bool:
+	if not is_instance_valid(player):
+		return false
+	if _get_scene_peer_id(player) != multiplayer.get_unique_id():
+		return false
+	var ctx := Netw.ctx(self)
+	return ctx and ctx.tree.is_listen_server()
+
+
+func _get_scene_peer_id(player: Node) -> int:
+	var entity := NetwEntity.of(player)
+	if entity and entity.scene_peer_id != 0:
+		return entity.scene_peer_id
+	return player.get_multiplayer_authority()
 
 
 # Updates the active scene, retargets the ActiveSceneView service, and emits

@@ -177,12 +177,16 @@ func _decorate_player(player: Node) -> void:
 	var should_have := is_enabled("nameplate", player)
 
 	if should_have and not existing:
-		var client := SpawnerPlayerComponent.unwrap(player)
 		var username := ""
-		if client:
-			username = client.username
+		var entity := NetwEntity.of(player)
+		if entity and not entity.identity_id.is_empty():
+			username = entity.identity_id
 		else:
-			username = player.name.get_slice("|", 0)
+			var client := SpawnerPlayerComponent.unwrap(player)
+			if client:
+				username = client.username
+			else:
+				username = player.name.get_slice("|", 0)
 		if not username.is_empty():
 			var nameplate: DebugClient = load(
 				_NAMEPLATE_SCENE
@@ -200,9 +204,9 @@ func _decorate_player(player: Node) -> void:
 func _get_stable_id(node: Node) -> Variant:
 	if not is_instance_valid(node):
 		return ""
-	var client := SpawnerPlayerComponent.unwrap(node)
-	if client:
-		return node.get_multiplayer_authority()
+	var entity := NetwEntity.of(node)
+	if entity and entity.represented_peer_id != 0:
+		return entity.represented_peer_id
 	var parsed := SpawnerComponent.parse_authority(node.name)
 	return parsed if parsed != 0 else str(node.get_path())
 
@@ -394,9 +398,13 @@ func _on_local_player_changed(_player: Node) -> void:
 func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if is_instance_valid(mt) and mt.local_player:
-		var player := SpawnerPlayerComponent.unwrap(mt.local_player)
-		if player:
-			data["username"] = player.username
+		var entity := NetwEntity.of(mt.local_player)
+		if entity and not entity.identity_id.is_empty():
+			data["username"] = entity.identity_id
 		else:
-			data["username"] = mt.local_player.name.get_slice("|", 0)
+			var player := SpawnerPlayerComponent.unwrap(mt.local_player)
+			if player:
+				data["username"] = player.username
+			else:
+				data["username"] = mt.local_player.name.get_slice("|", 0)
 	clock_pong_captured.emit(data)

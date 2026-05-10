@@ -886,13 +886,17 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 func _resolve_username_collision(join_payload: JoinPayload) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
-		var client := SpawnerPlayerComponent.unwrap(player)
-		if client:
-			existing_names.append(client.username)
+		var entity := NetwEntity.of(player)
+		if entity and not entity.identity_id.is_empty():
+			existing_names.append(entity.identity_id)
 		else:
-			var parsed := player.name.get_slice("|", 0)
-			if not parsed.is_empty():
-				existing_names.append(StringName(parsed))
+			var client := SpawnerPlayerComponent.unwrap(player)
+			if client:
+				existing_names.append(client.username)
+			else:
+				var parsed := player.name.get_slice("|", 0)
+				if not parsed.is_empty():
+					existing_names.append(StringName(parsed))
 	
 	var original_name := join_payload.username
 	if not original_name in existing_names:

@@ -14,9 +14,6 @@ extends SpawnerComponent
 ##     print(s.username)
 ## [/codeblock]
 
-## Emitted on the server when a peer requests to join.
-signal player_joined(join_payload: JoinPayload)
-
 ## The username of the player associated with this component.
 @export var username: String = ""
 
@@ -60,41 +57,12 @@ func _notification(what: int) -> void:
 	var rel := entity.owner.get_path_to(self)
 	entity.contribute_spawn_property("%s:username" % rel)
 	entity.contribute_spawn_property("%s:player_peer_id" % rel)
-	entity.scene_peer_id = get_player_peer_id()
+	_sync_legacy_identity()
 
 
 func _on_owner_tree_entered() -> void:
-	var entity := Netw.ctx(self).entity
-	if entity:
-		entity.scene_peer_id = get_player_peer_id()
+	_sync_legacy_identity()
 	super._on_owner_tree_entered()
-
-
-func _ready() -> void:
-	super._ready()
-	
-	if _is_local_player() and not is_template:
-		var mt := MultiplayerTree.resolve(self)
-		if mt:
-			mt.local_player = self.owner
-
-	if not multiplayer.peer_disconnected.is_connected(_on_peer_disconnected):
-		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-
-	if (
-		not multiplayer.is_server()
-		and _is_local_player()
-		and is_inside_tree()
-	):
-		var ctx := Netw.ctx(self)
-		if ctx:
-			var tp_layer := ctx.services.get_tp_layer()
-			if tp_layer:
-				_dbg.info(
-					"Local player %s ready. Playing teleport transition.",
-					[username]
-				)
-				tp_layer.teleport_in()
 
 
 # Override: derive entity_id from username instead of owner name.
@@ -113,6 +81,8 @@ func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
 	assert(multiplayer.is_server())
 	var copy := SpawnerComponent.instantiate_from(owner,
 		func(c: SpawnerComponent) -> void:
+			c.identity_id = jp.username
+			c.represented_peer_id = jp.peer_id
 			var pc := c as SpawnerPlayerComponent
 			if pc:
 				pc.username = jp.username
@@ -190,26 +160,9 @@ func _resolve_target_scene(
 	return null
 
 
-func _on_peer_disconnected(peer_id: int) -> void:
-	if (multiplayer and multiplayer.is_server()
-			and get_player_peer_id() == peer_id):
-		_dbg.info(
-			"Peer %d disconnected. Despawning owned player %s.",
-			[peer_id, owner.name]
-		)
-		var opts := DespawnOpts.new()
-		opts.reason = &"peer_disconnected"
-		despawn(opts)
-
-
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-
-	if _is_local_player():
-		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.local_player == owner:
-			mt.local_player = null
 	super._exit_tree()
 
 
@@ -217,3 +170,14 @@ func _is_local_player() -> bool:
 	if not multiplayer or multiplayer.multiplayer_peer == null:
 		return false
 	return get_player_peer_id() == multiplayer.get_unique_id()
+
+
+func _sync_legacy_identity() -> void:
+	var peer_id := get_player_peer_id()
+	if identity_id.is_empty() and not username.is_empty():
+		identity_id = StringName(username)
+	if represented_peer_id == 0 and peer_id != 0:
+		represented_peer_id = peer_id
+	var entity := Netw.ctx(self).entity
+	if entity and peer_id != 0:
+		entity.scene_peer_id = peer_id
