@@ -150,7 +150,7 @@ func get_local_player() -> Node:
 		return null
 	var local_id := scene.multiplayer.get_unique_id()
 	for player: Node in scene.synchronizer.tracked_nodes:
-		if player.get_multiplayer_authority() == local_id:
+		if _get_scene_peer_id(player) == local_id:
 			return player
 	return null
 
@@ -161,7 +161,7 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 	if not is_instance_valid(scene):
 		return null
 	for player: Node in scene.synchronizer.tracked_nodes:
-		if player.get_multiplayer_authority() == peer_id:
+		if _get_scene_peer_id(player) == peer_id:
 			return player
 	return null
 
@@ -221,7 +221,7 @@ func suspend(reason: String = "") -> void:
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.suspend() must be called on the server.")
 	for node: Node in scene.synchronizer.tracked_nodes:
-		var peer_id := node.get_multiplayer_authority()
+		var peer_id := _get_scene_peer_id(node)
 		scene._rpc_receive_suspend.rpc_id(peer_id, reason)
 	suspended.emit(reason)
 
@@ -248,7 +248,7 @@ func resume() -> void:
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.resume() must be called on the server.")
 	for node: Node in scene.synchronizer.tracked_nodes:
-		var peer_id := node.get_multiplayer_authority()
+		var peer_id := _get_scene_peer_id(node)
 		scene._rpc_receive_resume.rpc_id(peer_id)
 	resumed.emit()
 
@@ -283,7 +283,7 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 
 	# Notify clients before the first tick so they can prepare UI
 	for node: Node in scene.synchronizer.tracked_nodes:
-		var peer_id := node.get_multiplayer_authority()
+		var peer_id := _get_scene_peer_id(node)
 		scene._rpc_receive_countdown_started.rpc_id(peer_id, seconds)
 	countdown_started.emit(seconds)
 
@@ -316,7 +316,7 @@ func create_readiness_gate() -> NetwSceneReadiness:
 	var gate := NetwSceneReadiness.new(scene)
 	scene._register_readiness_gate(gate)
 	for player: Node in scene.synchronizer.tracked_nodes:
-		gate._add_peer(player.get_multiplayer_authority())
+		gate._add_peer(_get_scene_peer_id(player))
 	return gate
 
 
@@ -328,14 +328,14 @@ func _on_spawned(player: Node) -> void:
 	player_entered.emit(player)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		scene._notify_gates_player_added(player.get_multiplayer_authority())
+		scene._notify_gates_player_added(_get_scene_peer_id(player))
 
 
 func _on_despawned(player: Node) -> void:
 	player_left.emit(player)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		scene._notify_gates_player_removed(player.get_multiplayer_authority())
+		scene._notify_gates_player_removed(_get_scene_peer_id(player))
 
 
 func _on_countdown_tick(seconds_left: int) -> void:
@@ -343,7 +343,7 @@ func _on_countdown_tick(seconds_left: int) -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
 		for node: Node in scene.synchronizer.tracked_nodes:
-			var peer_id := node.get_multiplayer_authority()
+			var peer_id := _get_scene_peer_id(node)
 			scene._rpc_receive_countdown_tick.rpc_id(peer_id, seconds_left)
 
 
@@ -352,7 +352,7 @@ func _on_countdown_finished() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
 		for node: Node in scene.synchronizer.tracked_nodes:
-			var peer_id := node.get_multiplayer_authority()
+			var peer_id := _get_scene_peer_id(node)
 			scene._rpc_receive_countdown_finished.rpc_id(peer_id)
 	_active_countdown = null
 
@@ -362,10 +362,17 @@ func _on_countdown_cancelled() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
 		for node: Node in scene.synchronizer.tracked_nodes:
-			var peer_id := node.get_multiplayer_authority()
+			var peer_id := _get_scene_peer_id(node)
 			scene._rpc_receive_countdown_cancelled.rpc_id(peer_id)
 	_active_countdown = null
 
 
 func _on_player_ready(join_payload: JoinPayload) -> void:
 	player_ready.emit(join_payload)
+
+
+func _get_scene_peer_id(node: Node) -> int:
+	var entity := NetwEntity.of(node)
+	if entity:
+		return entity.scene_peer_id
+	return node.get_multiplayer_authority()

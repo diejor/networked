@@ -160,7 +160,9 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	return errs
 
 
-static func _check_spawner_component(spawner: SpawnerPlayerComponent) -> Array[String]:
+static func _check_spawner_component(
+	spawner: SpawnerPlayerComponent
+) -> Array[String]:
 	var errs: Array[String] = []
 	if spawner.root_path == NodePath(""):
 		errs.append(
@@ -174,16 +176,35 @@ static func _check_spawner_component(spawner: SpawnerPlayerComponent) -> Array[S
 
 static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var expected := SpawnerComponent.parse_authority(node.name)
+	var spawner := SpawnerComponent.unwrap(node)
+	var expected := _get_expected_authority(node, spawner)
+	if expected == 0:
+		return errs
+
 	var actual := node.get_multiplayer_authority()
 
-	if expected != 0 and actual != expected:
+	if actual != expected:
 		errs.append(
 			"Authority mismatch on '%s': expected=%d actual=%d. " % \
 			[node.name, expected, actual] + \
 			"Multiplayer authority was not correctly assigned during spawn."
 		)
 	return errs
+
+
+static func _get_expected_authority(
+	node: Node,
+	spawner: SpawnerComponent
+) -> int:
+	if not spawner:
+		return SpawnerComponent.parse_authority(node.name)
+
+	match spawner.authority_mode:
+		SpawnerComponent.AuthorityMode.SERVER:
+			return MultiplayerPeer.TARGET_PEER_SERVER
+		SpawnerComponent.AuthorityMode.CLIENT:
+			return SpawnerComponent.parse_authority(node.name)
+	return 0
 
 
 static func _check_server_authority_synchronizer(

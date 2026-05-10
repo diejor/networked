@@ -119,11 +119,29 @@ func connect_peer(peer_id: int) -> void:
 func disconnect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
 	connected_peers.erase(peer_id)
-	update_players()
 
+	# Skip visibility updates for peers the engine has already purged.
+	# `update_players()` would propagate filter results into
+	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
+	# `_update_spawn_visibility` — both assert when `peers_info` no longer
+	# contains the peer.
+	if not _peer_is_live(peer_id):
+		return
+
+	update_players()
 	# Very important the order in which the peer visibility is handled:
 	# `https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958`
 	set_visibility_for.call_deferred(peer_id, false)
+
+
+func _peer_is_live(peer_id: int) -> bool:
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return true
+	if peer_id == multiplayer.get_unique_id():
+		return true
+	return peer_id in multiplayer.get_peers()
 
 
 func _on_spawned(node: Node) -> void:
@@ -136,7 +154,7 @@ func _on_spawned(node: Node) -> void:
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 
-	connect_peer(node.get_multiplayer_authority())
+	connect_peer(_get_scene_peer_id(node))
 	spawned.emit(node)
 
 
@@ -147,7 +165,7 @@ func _on_despawned(node: Node) -> void:
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
 
-	disconnect_peer(node.get_multiplayer_authority())
+	disconnect_peer(_get_scene_peer_id(node))
 
 	despawned.emit(node)
 
@@ -164,3 +182,10 @@ func scene_visibility_filter(peer_id: int) -> bool:
 	
 	var res: bool = peer_id in connected_peers
 	return res
+
+
+func _get_scene_peer_id(node: Node) -> int:
+	var entity := NetwEntity.of(node)
+	if entity:
+		return entity.scene_peer_id
+	return node.get_multiplayer_authority()

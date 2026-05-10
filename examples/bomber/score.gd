@@ -25,6 +25,9 @@ func increase_score(for_who: int) -> void:
 
 
 func add_player(id: int, new_player_name: String) -> void:
+	if id in player_labels:
+		return
+	
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text = new_player_name + "\n" + "0"
@@ -34,7 +37,10 @@ func add_player(id: int, new_player_name: String) -> void:
 	if gamestate:
 		label.modulate = gamestate.get_player_color(new_player_name)
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
-	label.add_theme_font_override(&"font", preload("res://examples/bomber/montserrat.otf"))
+	label.add_theme_font_override(
+		&"font",
+		preload("res://examples/bomber/montserrat.otf")
+	)
 	label.add_theme_color_override(&"font_outline_color", Color.BLACK)
 	label.add_theme_constant_override(&"outline_size", 9)
 	label.add_theme_font_size_override(&"font_size", 18)
@@ -49,6 +55,13 @@ func add_player(id: int, new_player_name: String) -> void:
 
 func _ready() -> void:
 	$"../Winner".hide()
+	
+	var ctx := Netw.ctx(self)
+	if not ctx or not ctx.tree:
+		return
+	
+	for join_payload: JoinPayload in ctx.tree.get_joined_players():
+		add_player(join_payload.peer_id, str(join_payload.username))
 
 
 func _on_exit_game_pressed() -> void:

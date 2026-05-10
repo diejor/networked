@@ -39,6 +39,15 @@ signal spawned
 
 
 var owner: Node
+## Peer this entity contributes to scene membership. When [code]0[/code],
+## reads [method Node.get_multiplayer_authority] from [member owner].
+var scene_peer_id := 0:
+	get:
+		if scene_peer_id != 0:
+			return scene_peer_id
+		return owner.get_multiplayer_authority() if owner else 0
+	set(value):
+		scene_peer_id = value
 var _spawner_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
@@ -69,11 +78,15 @@ static func of(node: Node) -> NetwEntity:
 ## when [param node] is in-tree, otherwise the parent chain (which works
 ## on orphans, where [member Node.owner] is [code]null[/code]).
 static func _find_root(node: Node) -> Node:
+	if node.has_meta(META_KEY):
+		return node
 	if node.owner != null:
 		return node.owner
 	var n := node
 	while n.get_parent() != null:
 		n = n.get_parent()
+		if n.has_meta(META_KEY):
+			return n
 	if n is Window:
 		pass
 	return n

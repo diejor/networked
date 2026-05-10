@@ -2,9 +2,11 @@ class_name SpawnerPlayerComponent
 extends SpawnerComponent
 ## [SpawnerComponent] specialization for player entities.
 ##
-## Uses [member AuthorityMode.CLIENT] so authority is parsed from
-## the [code]username|peer_id[/code] node name.
-## [member username] is added as a spawn-only property.
+## Tracks the peer represented by this player independently from
+## [member authority_mode]. This lets server-authoritative player nodes
+## still drive [member MultiplayerTree.local_player].
+## [member username] and [member player_peer_id] are added as spawn-only
+## properties.
 ##
 ## [codeblock]
 ## var s := SpawnerPlayerComponent.unwrap(player_node)
@@ -18,6 +20,9 @@ signal player_joined(join_payload: JoinPayload)
 ## The username of the player associated with this component.
 @export var username: String = ""
 
+## Peer represented by this player entity. Assigned by the spawn flow.
+var player_peer_id := 0
+
 
 ## Returns the [SpawnerPlayerComponent] with unique name
 ## [code]%SpawnerPlayerComponent[/code] from [param node],
@@ -26,11 +31,19 @@ static func unwrap(node: Node) -> SpawnerPlayerComponent:
 	return node.get_node_or_null("%SpawnerPlayerComponent")
 
 
+## Returns the peer represented by this player entity. Falls back to the
+## [code]username|peer_id[/code] owner name when [member player_peer_id]
+## is [code]0[/code].
+func get_player_peer_id() -> int:
+	if player_peer_id != 0:
+		return player_peer_id
+	return SpawnerComponent.parse_authority(owner.name) if owner else 0
+
+
 func _init() -> void:
 	name = "SpawnerPlayerComponent"
 	unique_name_in_owner = true
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
-	authority_mode = AuthorityMode.CLIENT
 	if not player_joined.is_connected(_on_player_joined):
 		player_joined.connect(_on_player_joined)
 
@@ -41,17 +54,26 @@ func _notification(what: int) -> void:
 		return
 	
 	var entity := Netw.ctx(self).entity
-	if not (entity or entity.owner):
+	if not entity or not entity.owner:
 		return
 	
 	var rel := entity.owner.get_path_to(self)
 	entity.contribute_spawn_property("%s:username" % rel)
+	entity.contribute_spawn_property("%s:player_peer_id" % rel)
+	entity.scene_peer_id = get_player_peer_id()
+
+
+func _on_owner_tree_entered() -> void:
+	var entity := Netw.ctx(self).entity
+	if entity:
+		entity.scene_peer_id = get_player_peer_id()
+	super._on_owner_tree_entered()
 
 
 func _ready() -> void:
 	super._ready()
 	
-	if owner.is_multiplayer_authority() and not is_template:
+	if _is_local_player() and not is_template:
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
 			mt.local_player = self.owner
@@ -61,7 +83,7 @@ func _ready() -> void:
 
 	if (
 		not multiplayer.is_server()
-		and is_multiplayer_authority()
+		and _is_local_player()
 		and is_inside_tree()
 	):
 		var ctx := Netw.ctx(self)
@@ -94,6 +116,7 @@ func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
 			var pc := c as SpawnerPlayerComponent
 			if pc:
 				pc.username = jp.username
+				pc.player_peer_id = jp.peer_id
 			c.owner.name = SpawnerComponent.format_name(
 				jp.username, jp.peer_id
 			)
@@ -169,7 +192,7 @@ func _resolve_target_scene(
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if (multiplayer and multiplayer.is_server()
-			and get_multiplayer_authority() == peer_id):
+			and get_player_peer_id() == peer_id):
 		_dbg.info(
 			"Peer %d disconnected. Despawning owned player %s.",
 			[peer_id, owner.name]
@@ -183,8 +206,14 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if is_multiplayer_authority():
+	if _is_local_player():
 		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.local_player == self:
+		if mt and mt.local_player == owner:
 			mt.local_player = null
 	super._exit_tree()
+
+
+func _is_local_player() -> bool:
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	return get_player_peer_id() == multiplayer.get_unique_id()

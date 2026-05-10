@@ -9,6 +9,7 @@
 [node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1744312890]
 unique_name_in_owner = true
 script = ExtResource("1_6f1h7")
+authority_mode = 1
 metadata/_custom_type_script = "uid://bspawnrcomp001"
 
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=1398009418]

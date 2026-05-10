@@ -86,7 +86,7 @@ func _register_readiness_gate(gate: NetwSceneReadiness) -> void:
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 	_rpc_receive_ready_changed(peer_id, is_ready)
 	for node: Node in synchronizer.tracked_nodes:
-		var target_peer_id := node.get_multiplayer_authority()
+		var target_peer_id := _get_scene_peer_id(node)
 		if target_peer_id != multiplayer.get_unique_id():
 			rpc_id(target_peer_id, "_rpc_receive_ready_changed", peer_id, is_ready)
 
@@ -114,6 +114,13 @@ func _cleanup_dead_gates() -> void:
 	_readiness_gates = _readiness_gates.filter(
 		func(wr: WeakRef) -> bool: return is_instance_valid(wr.get_ref())
 	)
+
+
+func _get_scene_peer_id(node: Node) -> int:
+	var entity := NetwEntity.of(node)
+	if entity:
+		return entity.scene_peer_id
+	return node.get_multiplayer_authority()
 
 
 # ---------------------------------------------------------------------------

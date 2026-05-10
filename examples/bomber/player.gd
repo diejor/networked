@@ -14,33 +14,43 @@ var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
 
 @onready var inputs: Node = $Inputs
+@onready var player_spawner := SpawnerPlayerComponent.unwrap(self)
 
 func _ready() -> void:
 	stunned = false
 	position = synced_position
-	if str(name).is_valid_int():
-		$"Inputs/InputsSync".set_multiplayer_authority(str(name).to_int())
+	var peer_id := _get_player_peer_id()
+	if peer_id != 0:
+		$"Inputs/InputsSync".set_multiplayer_authority(peer_id)
 
 
 func _physics_process(delta: float) -> void:
-	if multiplayer.multiplayer_peer == null or str(multiplayer.get_unique_id()) == str(name):
-		# The client which this player represent will update the controls state, and notify it to everyone.
+	var peer_id := _get_player_peer_id()
+	if (
+		multiplayer.multiplayer_peer == null
+		or multiplayer.get_unique_id() == peer_id
+	):
+		# The represented client updates controls and replicates them.
 		inputs.update()
 
-	if multiplayer.multiplayer_peer == null or is_multiplayer_authority():
-		# The server updates the position that will be notified to the clients.
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
+		# The server updates the position replicated to clients.
 		synced_position = position
 		# And increase the bomb cooldown spawning one if the client wants to.
 		last_bomb_time += delta
-		if not stunned and is_multiplayer_authority() and inputs.bombing and last_bomb_time >= BOMB_RATE:
+		if (
+			not stunned
+			and inputs.bombing
+			and last_bomb_time >= BOMB_RATE
+		):
 			last_bomb_time = 0.0
-			$"../../BombSpawner".spawn([position, str(name).to_int()])
+			$"../../BombSpawner".spawn([position, peer_id])
 	else:
 		# The client simply updates the position to the last known one.
 		position = synced_position
 
 	if not stunned:
-		# Everybody runs physics. i.e. clients try to predict where they will be during the next frame.
+		# Everybody runs physics. Clients predict their next frame.
 		velocity = inputs.motion * MOTION_SPEED
 		move_and_slide()
 
@@ -83,3 +93,9 @@ func exploded(_by_who: int) -> void:
 
 	stunned = true
 	$anim.play(&"stunned")
+
+
+func _get_player_peer_id() -> int:
+	if player_spawner:
+		return player_spawner.get_player_peer_id()
+	return SpawnerComponent.parse_authority(name)
