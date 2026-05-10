@@ -82,6 +82,19 @@ func is_valid() -> bool:
 	return is_instance_valid(_scene_ref.get_ref())
 
 
+## Returns the underlying [MultiplayerScene], or [code]null[/code].
+func unwrap() -> MultiplayerScene:
+	return _scene_ref.get_ref() as MultiplayerScene
+
+
+## Returns the scene level root, or [code]null[/code].
+func get_level() -> Node:
+	var scene := unwrap()
+	if not is_instance_valid(scene):
+		return null
+	return scene.level
+
+
 ## Returns the level scene root name for this scene.
 ## Returns [code]""[/code] if the scene or its level is not valid.
 func get_scene_name() -> StringName:

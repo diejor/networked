@@ -1,10 +1,11 @@
 [gd_scene format=4 uid="uid://l523ox2awhi6"]
 
-[ext_resource type="TileSet" uid="uid://yrsot2k3h8rd" path="res://examples/bomber/tileset.tres" id="1"]
-[ext_resource type="PackedScene" uid="uid://cwchcyc0t4cgv" path="res://examples/bomber/rock.tscn" id="2"]
-[ext_resource type="Script" uid="uid://dk6qtetpr4m5x" path="res://examples/bomber/score.gd" id="3"]
-[ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/montserrat.otf" id="4"]
-[ext_resource type="Script" uid="uid://85l33mfdd6fq" path="res://examples/bomber/bomb_spawner.gd" id="6_ac5ja"]
+[ext_resource type="TileSet" uid="uid://yrsot2k3h8rd" path="res://examples/bomber/game/tileset.tres" id="1"]
+[ext_resource type="PackedScene" uid="uid://cwchcyc0t4cgv" path="res://examples/bomber/game/rock.tscn" id="2"]
+[ext_resource type="Script" uid="uid://dk6qtetpr4m5x" path="res://examples/bomber/game/score.gd" id="3"]
+[ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="4"]
+[ext_resource type="Script" uid="uid://85l33mfdd6fq" path="res://examples/bomber/game/bomb_spawner.gd" id="6_ac5ja"]
+[ext_resource type="Script" uid="uid://eaxify1esc2x" path="res://examples/bomber/game/player_spawner.gd" id="7_t87ow"]
 
 [node name="World" type="Node2D" unique_id=567359237]
 
@@ -308,9 +309,9 @@ process_callback = 0
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=165151297]
 _spawnable_scenes = PackedStringArray("uid://df8f82vhvgtfm")
 spawn_path = NodePath("../Players")
+script = ExtResource("7_t87ow")
 
 [node name="BombSpawner" type="MultiplayerSpawner" parent="." unique_id=1836509659]
-_spawnable_scenes = PackedStringArray("")
 spawn_path = NodePath("..")
 script = ExtResource("6_ac5ja")
 

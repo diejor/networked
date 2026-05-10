@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://df8f82vhvgtfm"]
 
-[ext_resource type="Script" uid="uid://dp7rkde2v5iw3" path="res://examples/bomber/player.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bnrgd1mws2s35" path="res://examples/bomber/charwalk.png" id="2"]
-[ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/montserrat.otf" id="3"]
-[ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/player_controls.gd" id="4_k1vfr"]
+[ext_resource type="Script" uid="uid://dp7rkde2v5iw3" path="res://examples/bomber/game/player.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bnrgd1mws2s35" path="res://examples/bomber/game/charwalk.png" id="2"]
+[ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
+[ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
 [ext_resource type="Script" uid="uid://b1263q5vu7cht" path="res://addons/networked/nodes/spawner/spawner_player_component.gd" id="5_p4qid"]
 
 [sub_resource type="CircleShape2D" id="1"]
@@ -215,4 +215,3 @@ replication_config = SubResource("SceneReplicationConfig_w53uu")
 [node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
 replication_config = SubResource("SceneReplicationConfig_pu4sp")
 script = ExtResource("5_p4qid")
-authority_mode = 0

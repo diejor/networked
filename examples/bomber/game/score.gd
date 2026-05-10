@@ -2,6 +2,8 @@ extends HBoxContainer
 
 var player_labels := {}
 
+const MONTSERRAT = preload("uid://bqb7l2e05u3j0")
+
 func _process(_delta: float) -> void:
 	var rocks_left := $"../Rocks".get_child_count()
 	if rocks_left == 0:
@@ -39,7 +41,7 @@ func add_player(id: int, new_player_name: String) -> void:
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
 	label.add_theme_font_override(
 		&"font",
-		preload("res://examples/bomber/montserrat.otf")
+		MONTSERRAT
 	)
 	label.add_theme_color_override(&"font_outline_color", Color.BLACK)
 	label.add_theme_constant_override(&"outline_size", 9)

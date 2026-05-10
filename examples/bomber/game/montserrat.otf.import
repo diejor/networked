@@ -3,12 +3,12 @@
 importer="font_data_dynamic"
 type="FontFile"
 uid="uid://bqb7l2e05u3j0"
-path="res://.godot/imported/montserrat.otf-1f9c091f18235b24ac5f1207a18d5c63.fontdata"
+path="res://.godot/imported/montserrat.otf-8b9a22a5b5516f971b92a1fa2d5eca1b.fontdata"
 
 [deps]
 
-source_file="res://examples/bomber/montserrat.otf"
-dest_files=["res://.godot/imported/montserrat.otf-1f9c091f18235b24ac5f1207a18d5c63.fontdata"]
+source_file="res://examples/bomber/game/montserrat.otf"
+dest_files=["res://.godot/imported/montserrat.otf-8b9a22a5b5516f971b92a1fa2d5eca1b.fontdata"]
 
 [params]
 

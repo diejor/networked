@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cedlo7fhabr54"
-path="res://.godot/imported/brickfloor.png-561fe16459eea8764195965a300dc3c2.ctex"
+uid="uid://cip0ni1w78e3r"
+path="res://.godot/imported/explosion.png-3e3912310347600d0b97777e10f67d00.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://examples/bomber/brickfloor.png"
-dest_files=["res://.godot/imported/brickfloor.png-561fe16459eea8764195965a300dc3c2.ctex"]
+source_file="res://examples/bomber/game/explosion.png"
+dest_files=["res://.godot/imported/explosion.png-3e3912310347600d0b97777e10f67d00.ctex"]
 
 [params]
 

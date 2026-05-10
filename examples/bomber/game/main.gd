@@ -1,9 +1,7 @@
 extends Control
 
 @onready var multiplayer_tree: MultiplayerTree = $MultiplayerTree
-@onready var ctx: NetwContext = Netw.ctx(multiplayer_tree)
-@onready var gamestate: BomberGamestate = \
-		ctx.services.get_service(BomberGamestate) if ctx.services else null
+@onready var gamestate: BomberGamestate = %Gamestate
 
 func _ready() -> void:	
 	gamestate.connection_failed.connect(_on_connection_failed)
@@ -86,7 +84,7 @@ func refresh_lobby() -> void:
 	for p: String in players:
 		$Players/List.add_item(p)
 
-	$Players/Start.disabled = not ctx.tree.is_server()
+	$Players/Start.disabled = not multiplayer_tree.multiplayer.is_server()
 
 
 func _on_start_pressed() -> void:

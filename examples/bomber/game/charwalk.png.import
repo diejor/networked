@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c5btj6x06q0lr"
-path="res://.godot/imported/icon.webp-4a8de41f591b42902c18570c34c61d14.ctex"
+uid="uid://bnrgd1mws2s35"
+path="res://.godot/imported/charwalk.png-6a701dccda0d6ac55d826abb5a592a88.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://examples/bomber/icon.webp"
-dest_files=["res://.godot/imported/icon.webp-4a8de41f591b42902c18570c34c61d14.ctex"]
+source_file="res://examples/bomber/game/charwalk.png"
+dest_files=["res://.godot/imported/charwalk.png-6a701dccda0d6ac55d826abb5a592a88.ctex"]
 
 [params]
 

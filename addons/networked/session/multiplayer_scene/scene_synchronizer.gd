@@ -145,6 +145,8 @@ func _peer_is_live(peer_id: int) -> bool:
 
 
 func _on_spawned(node: Node) -> void:
+	if tracked_nodes.has(node):
+		return
 	Netw.dbg.debug("%s spawned." % node.name)
 
 	tracked_nodes[node] = true
@@ -159,6 +161,8 @@ func _on_spawned(node: Node) -> void:
 
 
 func _on_despawned(node: Node) -> void:
+	if not tracked_nodes.has(node):
+		return
 	Netw.dbg.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
 
