@@ -1,26 +1,17 @@
 ## [Entity] backed by a plain [Dictionary].
 ##
-## The go-to choice for rapid prototyping and schema-less data. Stores arbitrary
-## [Variant] values keyed by [StringName] and round-trips them as a
-## [PackedByteArray] via [code]var_to_bytes[/code] / [code]bytes_to_var[/code],
-## preserving all Godot types (e.g. [Vector2], [Color]).
+## Stores arbitrary [Variant] values keyed by [StringName].
+## Round-trips through [PackedByteArray] via
+## [code]var_to_bytes[/code] / [code]bytes_to_var[/code].
 ##
-## Files can be saved to disk as [code].tres[/code], [code].dict[/code] (binary),
-## or [code].tdict[/code] (JSON) via the custom format loaders bundled with this addon.
-##
-## [codeblock lang=gdscript]
+## [codeblock]
 ## var entity := DictionaryEntity.new()
-## entity.set_value(&"health",   100)
+## entity.set_value(&"health", 100)
 ## entity.set_value(&"position", Vector2(10, 20))
 ##
-## # Binary round-trip (network / storage):
 ## var bytes := entity.serialize()
-## var copy  := DictionaryEntity.new()
+## var copy := DictionaryEntity.new()
 ## copy.deserialize(bytes)
-##
-## # Database round-trip:
-## var dict := entity.to_dict()
-## entity.from_dict(dict)
 ## [/codeblock]
 @tool
 class_name DictionaryEntity

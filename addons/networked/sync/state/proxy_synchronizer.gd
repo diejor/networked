@@ -1,12 +1,11 @@
 @tool
-## [MultiplayerSynchronizer] that virtualizes arbitrary node properties behind a stable name map.
+## [MultiplayerSynchronizer] that virtualizes arbitrary node properties
+## behind a stable name map.
 ##
-## Instead of pointing [member MultiplayerSynchronizer.replication_config] directly at node
-## properties, subclasses call [method register_property] to create virtual property names that
-## [MultiplayerSynchronizer] replicates, then override [method _read_property] /
-## [method _write_property] to redirect reads and writes wherever they need to go.
+## Subclasses call [method register_property] to create virtual names
+## and [method finalize] to apply the config. [method _read_property] and
+## [method _write_property] redirect reads and writes through those names.
 ##
-## [b]Usage[/b]
 ## [codeblock]
 ## func _ready() -> void:
 ##     register_property(&"velocity", NodePath("Character:velocity"))
@@ -25,16 +24,11 @@ var _config: SceneReplicationConfig = SceneReplicationConfig.new()
 var _target_root: NodePath = NodePath(".")
 
 
-## Registers [param virtual_name] as a replicated property backed by [param real_path].
+## Registers [param virtual_name] as a replicated property backed by
+## [param real_path]. Must be called before [method finalize].
 ##
-## [br][br]
-## [b]Timing and Resolution:[/b]
-## [br]- Must be called before [method finalize].
-## [br]- [param real_path] is resolved relative to the node returned by
-## [member MultiplayerSynchronizer.root_path] at the time [method finalize] runs.
-## [br]- At runtime, [method finalize] pivots [member root_path] to [code]"."[/code]
-## to enable interception, but [param real_path] continues to resolve against the
-## original target node.
+## [param real_path] is resolved relative to
+## [member MultiplayerSynchronizer.root_path] at [method finalize] time.
 func register_property(
 		virtual_name: StringName,
 		real_path: NodePath,
@@ -63,18 +57,12 @@ func track(
 	register_property(virtual_name, real_path, mode, spawn, watch)
 
 
-## Applies the built config to [member MultiplayerSynchronizer.replication_config].
+## Applies the built config to
+## [member MultiplayerSynchronizer.replication_config].
+## Converts Inspector-set paths to virtual names automatically.
 ##
-## [b]Capture and Pivot:[/b]
-## [br]- If [member replication_config] contains standard property paths (set via
-## the Inspector), they are automatically converted to virtual names (using the
-## property's leaf name) and registered.
-## [br]- Stores the current [member root_path] as the "Target Root".
-## [br]- At runtime, pivots [member root_path] to [code]"."[/code] (self) so Godot
-## routes replication traffic through this node's [method _get] and [method _set].
-##
-## [br][br][b]Note:[/b] For tick-aware subclasses, call
-## [method TickAwareSynchronizer.finalize_with_tick] instead.
+## Pivots [member root_path] to [code]"."[/code] so Godot routes
+## replication through [method _get] and [method _set].
 func finalize() -> void:
 	if Engine.is_editor_hint():
 		# In editor, just track what the root WOULD be for internal lookups.
@@ -92,22 +80,13 @@ func finalize() -> void:
 	replication_config = _config
 
 
-## Returns a list of all registered virtual property names.
-##
-## [b]Output Format:[/b]
-## [br]- Returns an [code]Array[StringName][/code] (e.g., [code][&"position",
-## &"health"][/code]).
-## [br]- These names correspond to the virtual keys used in network packets
-## and [method _read_property]/[method _write_property] calls.
+## Returns all registered virtual property names.
 func get_virtual_properties() -> Array[StringName]:
 	return _properties.keys()
 
 
-## Returns the [NodePath] associated with the given [param virtual_name].
-##
-## [b]Output Format:[/b]
-## [br]- Returns a [NodePath] relative to the original "Target Root" node.
-## [br]- Returns an empty path if the property is not registered.
+## Returns the [NodePath] backing [param virtual_name],
+## or an empty path if not registered.
 func get_real_path(virtual_name: StringName) -> NodePath:
 	return _properties.get(virtual_name, NodePath(""))
 
@@ -153,14 +132,7 @@ func _get_property_list() -> Array[Dictionary]:
 ## ([code]Body:velocity[/code], [code].:position[/code]).
 func _read_property(_name: StringName, path: NodePath) -> Variant:
 	var root := get_node_or_null(_target_root)
-	if not root:
-		return null
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if not target or prop_path.is_empty():
-		return null
-	return target.get_indexed(prop_path)
+	return SynchronizersCache.resolve_value(root, path) if root else null
 
 
 ## Override to redirect writes. Default writes to the node at [member MultiplayerSynchronizer.root_path].
@@ -170,13 +142,8 @@ func _read_property(_name: StringName, path: NodePath) -> Variant:
 ## ([code]Body:velocity[/code], [code].:position[/code]).
 func _write_property(_name: StringName, path: NodePath, value: Variant) -> void:
 	var root := get_node_or_null(_target_root)
-	if not root:
-		return
-	var node_res := root.get_node_and_resource(path)
-	var target: Object = node_res[0]
-	var prop_path: NodePath = node_res[2]
-	if target and not prop_path.is_empty():
-		target.set_indexed(prop_path, value)
+	if root:
+		SynchronizersCache.assign_value(root, path, value)
 
 
 func _import_from_config(config: SceneReplicationConfig) -> void:

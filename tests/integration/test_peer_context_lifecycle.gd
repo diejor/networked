@@ -3,7 +3,7 @@ class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
-const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
+const SPAWNER_PATH := "TestPlayerWithSave/SpawnerPlayerComponent"
 const SCENE_NAME := &"TestLevelSave"
 
 var harness: NetworkTestHarness

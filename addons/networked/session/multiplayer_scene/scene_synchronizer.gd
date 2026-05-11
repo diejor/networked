@@ -1,15 +1,15 @@
 ## Manages per-scene synchronization visibility so each peer only receives data for their scene.
 ##
-## Attach this synchronizer to a [Scene] node. Call [method track_player] for each player node
+## Attach this synchronizer to a [Scene] node. Call [method track_node] for each entity node
 ## to register it; the synchronizer will then restrict replication so only peers inside this
 ## scene receive updates. Peer membership is tracked in [member connected_peers].
 class_name SceneSynchronizer
 extends MultiplayerSynchronizer
 
-## Emitted when a tracked player node enters the scene tree.
-signal spawned(player: Node)
-## Emitted when a tracked player node exits the scene tree.
-signal despawned(player: Node)
+## Emitted when a tracked node enters the scene tree.
+signal spawned(node: Node)
+## Emitted when a tracked node exits the scene tree.
+signal despawned(node: Node)
 
 ## Dictionary of peer IDs currently connected to this scene, mapped to [code]true[/code].
 ##
@@ -48,29 +48,47 @@ func _ready() -> void:
 	replication_config = config
 
 
-## Binds a player's lifecycle to the scene's visibility filters.
+## Binds a node's lifecycle to the scene's visibility filters.
+##
+## When [param node] is already in the tree (e.g., a preplaced entity
+## registering during its own [signal Node.tree_entered] handler), the
+## spawn-side bookkeeping fires immediately so visibility filters are
+## applied without waiting for the next tree-entry.
+func track_node(node: Node) -> void:
+	var on_spawned_bound := _on_spawned.bind(node)
+	if not node.tree_entered.is_connected(on_spawned_bound):
+		node.tree_entered.connect(on_spawned_bound)
+
+	var on_despawned_bound := _on_despawned.bind(node)
+	if not node.tree_exiting.is_connected(on_despawned_bound):
+		node.tree_exiting.connect(on_despawned_bound)
+
+	if node.is_inside_tree() and not tracked_nodes.has(node):
+		_on_spawned(node)
+
+
+## Removes a node from the scene's lifecycle tracking and visibility filters.
+func untrack_node(node: Node) -> void:
+	var on_spawned_bound := _on_spawned.bind(node)
+	if node.tree_entered.is_connected(on_spawned_bound):
+		node.tree_entered.disconnect(on_spawned_bound)
+
+	var on_despawned_bound := _on_despawned.bind(node)
+	if node.tree_exiting.is_connected(on_despawned_bound):
+		node.tree_exiting.disconnect(on_despawned_bound)
+
+	if node in tracked_nodes:
+		_on_despawned(node)
+
+
+## Deprecated: alias for [method track_node].
 func track_player(player: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(player)
-	if not player.tree_entered.is_connected(on_spawned_bound):
-		player.tree_entered.connect(on_spawned_bound)
-
-	var on_despawned_bound := _on_despawned.bind(player)
-	if not player.tree_exiting.is_connected(on_despawned_bound):
-		player.tree_exiting.connect(on_despawned_bound)
+	track_node(player)
 
 
-## Removes a player from the scene's lifecycle tracking and visibility filters.
+## Deprecated: alias for [method untrack_node].
 func untrack_player(player: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(player)
-	if player.tree_entered.is_connected(on_spawned_bound):
-		player.tree_entered.disconnect(on_spawned_bound)
-
-	var on_despawned_bound := _on_despawned.bind(player)
-	if player.tree_exiting.is_connected(on_despawned_bound):
-		player.tree_exiting.disconnect(on_despawned_bound)
-
-	if player in tracked_nodes:
-		_on_despawned(player)
+	untrack_node(player)
 
 
 ## Forces a visibility update for all synchronizers belonging to tracked nodes in this scene.
@@ -101,14 +119,34 @@ func connect_peer(peer_id: int) -> void:
 func disconnect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
 	connected_peers.erase(peer_id)
-	update_players()
 
+	# Skip visibility updates for peers the engine has already purged.
+	# `update_players()` would propagate filter results into
+	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
+	# `_update_spawn_visibility` — both assert when `peers_info` no longer
+	# contains the peer.
+	if not _peer_is_live(peer_id):
+		return
+
+	update_players()
 	# Very important the order in which the peer visibility is handled:
 	# `https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958`
 	set_visibility_for.call_deferred(peer_id, false)
 
 
+func _peer_is_live(peer_id: int) -> bool:
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return true
+	if peer_id == multiplayer.get_unique_id():
+		return true
+	return peer_id in multiplayer.get_peers()
+
+
 func _on_spawned(node: Node) -> void:
+	if tracked_nodes.has(node):
+		return
 	Netw.dbg.debug("%s spawned." % node.name)
 
 	tracked_nodes[node] = true
@@ -118,18 +156,17 @@ func _on_spawned(node: Node) -> void:
 	for sync in syncs:
 		sync.add_visibility_filter(scene_visibility_filter)
 
-	connect_peer(node.get_multiplayer_authority())
 	spawned.emit(node)
 
 
 func _on_despawned(node: Node) -> void:
+	if not tracked_nodes.has(node):
+		return
 	Netw.dbg.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
 
 	for sync in SynchronizersCache.get_synchronizers(node):
 		sync.remove_visibility_filter(scene_visibility_filter)
-
-	disconnect_peer(node.get_multiplayer_authority())
 
 	despawned.emit(node)
 

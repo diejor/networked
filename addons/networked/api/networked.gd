@@ -16,8 +16,11 @@
 ##
 ## [br]- [member dbg] -- structured logging and causal tracing. See
 ##   [NetwDbg].
-## [br]- [member spawn] -- player spawn primitives. See [NetwSpawn].
 ##
+## [br][br]
+## [b]Security note:[/b] [code]any_peer[/code] RPCs broadcast to every peer
+## when called with [code].rpc()[/code]. Always use [code].rpc_id(1)[/code]
+## for client-to-server requests and validate the sender inside the handler.
 ## [br][br]
 ## [b]Note:[/b] Always check [method NetwContext.is_valid] before caching a
 ## context reference. The underlying [MultiplayerTree] may be freed during
@@ -27,11 +30,7 @@ extends Object
 
 
 ## Static entry point for all debug and logging functionality.
-static var dbg := NetwDbg.new()
-
-
-## Static entry point for player spawn helpers.
-static var spawn := NetwSpawn.new()
+static var dbg: NetwDbg = NetwDbg.new()
 
 
 ## Returns a [NetwContext] for [param node] by walking its ancestor chain.

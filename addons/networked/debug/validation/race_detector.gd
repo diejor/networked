@@ -56,6 +56,7 @@ static func find_connect_races(
 			var sync := child as MultiplayerSynchronizer
 			if sync.is_inside_tree() and sync.public_visibility and \
 					sync.is_multiplayer_authority() and \
+					sync.get_multiplayer_authority() != 1 and \
 					_has_delta_replication(sync):
 				var r := _format_race(sync, mt)
 				r["scene"] = str(scene_name)

@@ -1,303 +1,513 @@
-@tool
 class_name SpawnerComponent
-extends NetwComponent
-## The authoritative bridge between a connecting peer and their in-world
-## representation.
+extends MultiplayerSynchronizer
+## Orchestration point for a networked entity.
 ##
-## Add this node to your player scene. The component handles multiplayer
-## authority setup and player teardown on disconnect. Player spawning is
-## orchestrated by [NetwSpawn] automatically.
+## [member replication_config] bundles properties into the spawn packet
+## so initial state arrives with the entity. Sibling components contribute
+## paths through [method NetwEntity.contribute_spawn_property] from their
+## own [constant Node.NOTIFICATION_PARENTED]; the inspector's Replication
+## panel can also pre-populate the list (its flags are coerced to
+## spawn-only at runtime).
+##
+## [br][br]
+## Contributions [b]must[/b] happen at parented-time, not at
+## tree-entered: Godot reads [member replication_config] for spawn-decode
+## between PackedScene instantiation and tree entry, so anything added at
+## [signal NetwEntity.spawning] time is too late for the spawn packet.
+##
+## [br][br]
+## See [method instantiate_from], [method spawn_under], and
+## [method despawn] for the spawn/despawn API.
+##
+## Siblings react to the spawn lifecycle via [signal NetwEntity.spawning]
+## (replaces the older [code]_on_entity_spawning[/code] propagate-call
+## hook).
 ## [codeblock]
-## # Retrieve from any node in the player scene:
-## var spawner := SpawnerComponent.unwrap(player_node)
-## if spawner:
-##     print(spawner.username)
+## func _notification(what: int) -> void:
+##     if what == NOTIFICATION_PARENTED:
+##         var entity := Netw.ctx(self).entity
+##         entity.contribute_spawn_property(NodePath("..:my_property"))
+##         entity.spawning.connect(_on_spawning)
+##
+## func _on_spawning() -> void:
+##     if multiplayer.is_server():
+##         hydrate_from_db()
 ## [/codeblock]
 
-## Emitted on the server when a peer requests to join.
-signal player_joined(join_payload: JoinPayload)
-## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a
-## delta update.
-signal client_synchronized
-
-## Controls how multiplayer authority is assigned to the spawned player.
 enum AuthorityMode {
-	## Authority is set to the player peer ID. Default. Use for
-	## client-authoritative movement.
+	## Authority stays at the server peer ([code]1[/code]).
+	SERVER,
+	## Authority is parsed from [code]username|peer_id[/code]
+	## in the owner's node name.
 	CLIENT,
-	## Authority stays at [code]1[/code]. Use when the server drives
-	## all simulation.
-	SERVER_AUTHORITATIVE,
 }
 
-## How multiplayer authority is assigned to the player node on tree entry.
-@export var authority_mode: AuthorityMode = AuthorityMode.CLIENT
+## Emitted after [member entity_id] and multiplayer authority
+## are resolved, but [b]before[/b] sibling [code]_enter_tree[/code].
+## Mirrors [signal NetwEntity.spawning] for callers that already hold a
+## [SpawnerComponent] reference.
+signal spawning
 
-## The username of the player associated with this component.
-var username: String = ""
+## Emitted right before [method despawn] runs, with the despawn reason.
+signal despawning(reason: StringName)
+
+## Emitted after teardown when the node leaves the tree.
+signal despawned
+
+## Emitted on the server when a peer requests to join this player template.
+signal player_joined(join_payload: JoinPayload)
+
+## Which peer gets multiplayer authority over [member Node.owner].
+@export var authority_mode: AuthorityMode = AuthorityMode.SERVER
+
+## Explicit identity. When empty, [member entity_id] falls back
+## to the default resolved by the authority policy.
+@export var entity_id_override: StringName = &""
+
+var identity_id: StringName = &"":
+	set(value):
+		identity_id = value
+		_sync_entity_identity()
+
+var represented_peer_id := 0:
+	set(value):
+		represented_peer_id = value
+		_sync_entity_identity()
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
-## The [MultiplayerSynchronizer] used for initial spawn state replication.
-var spawn_sync: SpawnSynchronizer:
+# ── Public properties ────────────────────────────────────────────────────
+
+## Stable identifier for the entity. Empty for templates
+## (see [member is_template]).
+var entity_id: StringName:
 	get:
-		if not spawn_sync:
-			spawn_sync = SpawnSynchronizer.new(self)
-		return %SpawnSynchronizer
-
-## Allows the server to control visibility of client-authoritative players.
-class SpawnSynchronizer extends MultiplayerSynchronizer:
-	func _init(spawner: SpawnerComponent) -> void:
-		name = "SpawnSynchronizer"
-		unique_name_in_owner = true
-		visibility_update_mode = \
-			MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
-		spawner.add_child(self)
-		owner = spawner
-		root_path = get_path_to(spawner.owner)
-
-	## Builds a [SceneReplicationConfig] collecting spawn-only properties from
-	## all client synchronizers of [param target_node].
-	##
-	## Marks each property as spawn-only
-	## ([code]REPLICATION_MODE_NEVER[/code] with spawn enabled) so initial
-	## state transfers on spawn without ongoing delta replication.
-	## [br][br]
-	## [b]How spawn discovery works:[/b]
-	## [br]- [method SynchronizersCache.get_client_synchronizers] finds all
-	##   [MultiplayerSynchronizer] nodes whose root_path points to the player.
-	## [br]- Each synchronizer's replication_config properties are added as
-	##   spawn-only.
-	## [br]- [SaveComponent] pivots its root_path to [code]"."[/code] after
-	##   baking, but spawn config paths were already resolved.
-	func config_spawn_properties(target_node: Node) -> void:
-		Netw.dbg.trace(
-			"Configuring spawn properties for %s", [target_node.name]
-		)
-		replication_config = SceneReplicationConfig.new()
-
-		if target_node.owner:
-			var comp_path := target_node.owner.get_path_to(target_node)
-			var uname_path := NodePath(str(comp_path) + ":username")
-			_add_spawn_property(uname_path)
-
-			var tp := target_node.owner.get_node_or_null("%TPComponent")
-			if tp:
-				var tp_path := target_node.owner.get_path_to(tp)
-				var scene_path := NodePath(
-					str(tp_path) + ":current_scene_path"
-				)
-				_add_spawn_property(scene_path)
-
-		var syncs := SynchronizersCache.get_client_synchronizers(
-			target_node.owner
-			if target_node is SpawnerComponent else target_node
-		)
-
-		var sync_names := syncs.map(func(s): return s.name)
-		Netw.dbg.debug(
-			"Found %d synchronizers for spawn: [%s]",
-			[syncs.size(), ", ".join(sync_names)]
-		)
-
-		for sync: MultiplayerSynchronizer in syncs:
-			if sync == self or not sync.replication_config:
-				continue
-
-			var source: SceneReplicationConfig = sync.replication_config
-			Netw.dbg.trace(
-				"Adding %d properties from %s",
-				[source.get_properties().size(), sync.name]
-			)
-
-			for property: NodePath in source.get_properties():
-				if replication_config.has_property(property):
-					continue
-				_add_spawn_property(property)
-
-	func _add_spawn_property(property: NodePath) -> void:
-		replication_config.add_property(property)
-		replication_config.property_set_replication_mode(
-			property, SceneReplicationConfig.REPLICATION_MODE_NEVER
-		)
-		replication_config.property_set_spawn(property, true)
-		replication_config.property_set_sync(property, false)
-		replication_config.property_set_watch(property, false)
+		if not entity_id_override.is_empty():
+			return entity_id_override
+		var entity := NetwEntity.of(self)
+		if entity and not entity.identity_id.is_empty():
+			return entity.identity_id
+		return _resolve_identity()
 
 
-## Returns the [SpawnerComponent] with unique name [code]%SpawnerComponent[/code]
-## from [param node], or [code]null[/code].
+## [code]true[/code] when [member entity_id] is empty or authority
+## is unresolved. Templates are editor-placed factory scenes;
+## they skip the spawning lifecycle. Read-only.
+var is_template: bool:
+	get:
+		return entity_id.is_empty() or not _has_authority_binding()
+
+
+# ── Static helpers ───────────────────────────────────────────────────────
+
+## Returns the [SpawnerComponent] under the unique name
+## [code]%SpawnerComponent[/code].
+## or [code]null[/code].
 static func unwrap(node: Node) -> SpawnerComponent:
-	return node.get_node_or_null("%SpawnerComponent")
+	var sc := node.get_node_or_null("%SpawnerComponent")
+	if sc:
+		return sc
+	return node.get_node_or_null("%SpawnerPlayerComponent")
 
+
+## Parses the multiplayer authority from a node name formatted as
+## [code]username|peer_id[/code].
+## Returns [param peer_id] as an [int], or [code]0[/code] if the name does
+## not contain the separator.
+static func parse_authority(node_name: String) -> int:
+	var parts := node_name.split("|")
+	if parts.size() == 2:
+		return parts[1].to_int()
+	return 0
+
+
+## Formats a node name in the [code]username|peer_id[/code] convention.
+static func format_name(username: String, peer_id: int) -> String:
+	return "%s|%d" % [username, peer_id]
+
+
+## Returns an unparented copy of [param template]'s scene.
+## [param configure] fires before the copy enters the tree,
+## receiving the copy's [SpawnerComponent] so you can set
+## [member entity_id_override] or the owner's node name.
+##
+## [codeblock]
+## var npc := SpawnerComponent.instantiate_from(template, func(s):
+##     s.entity_id_override = &"goblin_42"
+## )
+## parent.add_child(npc)
+## [/codeblock]
+static func instantiate_from(
+	template: Node, configure: Callable = Callable()
+) -> Node:
+	var copy: Node = load(template.scene_file_path).instantiate()
+	collect_from(template, copy)
+	if configure.is_valid():
+		var copy_spawner := unwrap(copy)
+		if copy_spawner:
+			configure.call(copy_spawner)
+	return copy
+
+
+## Copies spawn-tagged [member replication_config] properties
+## from [param template] to [param copy].
+## No-op when the template has no config or is out-of-tree.
+static func collect_from(template: Node, copy: Node) -> void:
+	var spawner := unwrap(template)
+	if not spawner or not spawner.replication_config:
+		return
+	var cfg := spawner.replication_config
+	for prop: NodePath in cfg.get_properties():
+		if not cfg.property_get_spawn(prop):
+			continue
+		var value := SynchronizersCache.resolve_value(template, prop)
+		if value != null:
+			SynchronizersCache.assign_value(copy, prop, value)
+
+
+# ── Lifecycle ────────────────────────────────────────────────────────────
 
 func _init() -> void:
 	name = "SpawnerComponent"
 	unique_name_in_owner = true
-	player_joined.connect(_on_player_joined)
+	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED:
+		return
+	if Engine.is_editor_hint():
+		return
+	
+	var entity := Netw.ctx(self).entity
+	if not entity or not entity.owner:
+		return
+	entity.set_spawner(self)
+	var rel := entity.owner.get_path_to(self)
+	entity.contribute_spawn_property("%s:identity_id" % rel)
+	entity.contribute_spawn_property("%s:represented_peer_id" % rel)
+	_sync_entity_identity()
+	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
+		entity.owner_tree_entered.connect(_on_owner_tree_entered)
+
+
+func _enter_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	if owner:
+		root_path = get_path_to(owner)
+	set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
 func _ready() -> void:
-	_dbg.trace("_ready for %s", [owner.name])
-
-	if Engine.is_editor_hint():
-		_validate_editor()
-		return
-
-	if is_multiplayer_authority():
-		var mt := MultiplayerTree.resolve(self)
-		if mt:
-			mt.local_player = self.owner
-
-	for sync in SynchronizersCache.get_client_synchronizers(owner):
-		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
-			sync.delta_synchronized.connect(client_synchronized.emit)
-
-	if username.is_empty():
-		if not multiplayer.is_server():
-			_dbg.trace(
-				"Freeing spawner node `%s` because we are in client.",
-				[owner.name]
-			)
-			owner.queue_free()
-
-		SynchronizersCache.sync_only_server(owner)
-
-	assert(
-		owner.tree_entered.is_connected(_on_owner_tree_entered),
-		"Signal `tree_entered` of `%s` must be connected to `%s`, otherwise \
-the authority will not be set correctly. Reload the player scene to connect \
-automatically." % [owner.name, _on_owner_tree_entered]
-	)
-
-	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-
-	var tp_layer := get_tp_layer()
-	if not multiplayer.is_server() and is_multiplayer_authority() and tp_layer:
-		_dbg.info(
-			"Local player %s ready. Playing teleport transition.", [username]
-		)
-		tp_layer.teleport_in()
-
-
-func _validate_editor() -> void:
-	if owner and not owner.tree_entered.is_connected(_on_owner_tree_entered):
-		owner.tree_entered.connect(
-			_on_owner_tree_entered, ConnectFlags.CONNECT_PERSIST
-		)
-
-
-func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
-	
-	if owner.get_multiplayer_authority() != 1:
+	_dbg.trace("_ready for %s", [owner.name if owner else "<no owner>"])
+
+	if is_template:
+		_apply_template_state()
 		return
-	
-	_dbg.trace("Spawner `%s` entering tree.", [owner.name])
-	assert(owner.name != "|")
-	
-	var authority := JoinPayload.parse_authority(owner.name)
-	if authority != 0 and authority_mode == AuthorityMode.CLIENT:
-		_dbg.debug(
-			"Setting authority for %s to %d", [owner.name, authority]
+	if (
+		represented_peer_id != 0
+		and not multiplayer.peer_disconnected.is_connected(
+			_on_peer_disconnected
 		)
-		owner.set_multiplayer_authority(authority)
-	
-	_setup_spawn_sync(spawn_sync)
-
-
-func _setup_spawn_sync(spawn: SpawnSynchronizer) -> void:
-	spawn.config_spawn_properties(self)
-	spawn.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
-
-
-func _on_player_joined(join_payload: JoinPayload) -> void:
-	var ctx := get_context()
-	if not ctx:
-		return
-	
-	var slot := ctx.tree.get_spawn_slot(join_payload.spawner_component_path)
-	if not slot.is_valid():
-		_dbg.error(
-			"Player join failed: no active scene for '%s'.",
-			[join_payload.spawner_component_path.get_scene_name()],
-			func(m): push_error(m)
-		)
-		return
-	
-	var span := Netw.spawn.begin_join(join_payload, authority_mode, owner)
-	
-	var player_save: SaveComponent = (
-		owner.get_node_or_null("%SaveComponent") as SaveComponent
-	)
-	var payload := Netw.spawn.gather(
-		join_payload,
-		player_save.database if player_save else null,
-		player_save.table_name if player_save else &"",
-		{},
-		span,
-	)
-	var player := Netw.spawn.instantiate(
-		payload, load(owner.scene_file_path), owner, span
-	)
-	
-	var scene := _resolve_target_scene(player, slot)
-	if scene:
-		Netw.spawn.place(player, scene, span)
-	elif slot.is_valid():
-		slot.place_player(player, span)
-	else:
-		_dbg.error("Cannot place player: no scene available.", [])
-		if span:
-			span.fail("no_scene_available")
-
-
-func _resolve_target_scene(
-	player: Node, slot: SpawnSlot
-) -> MultiplayerScene:
-	var ctx := get_context()
-	if not ctx:
-		return null
-	
-	var scene_mgr := ctx.services.get_scene_manager()
-	var level_save: SaveComponent = (
-		owner.get_node_or_null("%SaveComponent") as SaveComponent
-	)
-	var tp: TPComponent = player.get_node_or_null("%TPComponent")
-	
-	if tp and level_save and scene_mgr:
-		tp.ensure_current_scene_path()
-		if not tp.current_scene_path.is_empty():
-			var scene := scene_mgr.active_scenes.get(
-				tp.current_scene_name
-			)
-			if scene:
-				return scene
-	
-	if slot.has_scene():
-		return slot.get_scene()
-	
-	return null
-
-
-func _on_peer_disconnected(peer_id: int) -> void:
-	if (multiplayer and multiplayer.is_server()
-			and get_multiplayer_authority() == peer_id):
-		_dbg.info(
-			"Peer %d disconnected. Freeing owned player %s.",
-			[peer_id, owner.name]
-		)
-		owner.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
-		owner.queue_free.call_deferred()
+	):
+		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	if (
+		not multiplayer.is_server()
+		and _is_local_represented_peer()
+		and is_inside_tree()
+	):
+		var ctx := Netw.ctx(self)
+		if ctx:
+			var tp_layer := ctx.services.get_tp_layer()
+			if tp_layer:
+				_dbg.info(
+					"Local player %s ready. Playing teleport transition.",
+					[identity_id]
+				)
+				tp_layer.teleport_in()
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-
-	if is_multiplayer_authority():
+	if _is_local_represented_peer():
 		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.local_player == self:
+		if mt and mt.local_player == owner:
 			mt.local_player = null
+	despawned.emit()
+
+
+# Drives the entity's spawn lifecycle. Connected to
+# [signal NetwEntity.owner_tree_entered] in [method _notification].
+# [br][br]
+# Order:
+# [br]1. [method _sanitize_replication_config] - coerce all entries to
+#     spawn-only / [constant SceneReplicationConfig.REPLICATION_MODE_NEVER].
+#     Sibling contributions have already landed during
+#     [constant Node.NOTIFICATION_PARENTED] via
+#     [method NetwEntity.contribute_spawn_property].
+# [br]2. [method _apply_authority] - settle authority.
+# [br]3. Emit [signal NetwEntity.spawning] (and the local
+#     [signal spawning] mirror) - siblings react with hydration etc.
+# [br]4. [method _register_with_scene] - join the enclosing
+#     [MultiplayerScene]'s visibility filters.
+# [br]5. Emit [signal NetwEntity.spawned].
+func _on_owner_tree_entered() -> void:
+	if Engine.is_editor_hint():
+		return
+	if not owner:
+		return
+	_dbg.trace("Entity '%s' entering tree.", [owner.name])
+	_sanitize_replication_config()
+	_apply_authority()
+	if is_template:
+		# Template-state setup (process disable, sync visibility) needs
+		# sibling synchronizers in-tree, so it runs in _ready, not here.
+		return
+
+	var entity := Netw.ctx(self).entity
+	if entity:
+		entity.spawning.emit()
+	spawning.emit()
+	_register_with_scene()
+	if entity:
+		entity.spawned.emit()
+
+
+# Applies [member authority_mode] to [member Node.owner].
+func _apply_authority() -> void:
+	if not owner:
+		return
+	match authority_mode:
+		AuthorityMode.SERVER:
+			owner.set_multiplayer_authority(
+				MultiplayerPeer.TARGET_PEER_SERVER
+			)
+		AuthorityMode.CLIENT:
+			var authority := parse_authority(owner.name)
+			if authority != 0:
+				_dbg.debug(
+					"Setting authority for %s to %d",
+					[owner.name, authority]
+				)
+				owner.set_multiplayer_authority(authority)
+				set_multiplayer_authority(
+					MultiplayerPeer.TARGET_PEER_SERVER
+				)
+
+
+func _sync_entity_identity() -> void:
+	if not owner:
+		return
+	var entity := NetwEntity.of(self)
+	if not entity:
+		return
+	if not identity_id.is_empty():
+		entity.identity_id = identity_id
+	if represented_peer_id != 0:
+		entity.represented_peer_id = represented_peer_id
+		entity.scene_peer_id = represented_peer_id
+
+
+# [code]true[/code] when [member authority_mode] can resolve to a
+# concrete peer. [code]SERVER[/code] is always bound;
+# [code]CLIENT[/code] requires [code]username|peer_id[/code] in the
+# owner's node name.
+func _has_authority_binding() -> bool:
+	match authority_mode:
+		AuthorityMode.SERVER:
+			return true
+		AuthorityMode.CLIENT:
+			return parse_authority(owner.name) != 0
+	return false
+
+
+## Virtual. Returns the entity id derived from subclass state.
+## The base returns [code]&""[/code] (no derived identity).
+func _resolve_identity() -> StringName:
+	return &""
+
+
+# Disables the template owner's processing and rendering.
+# The server keeps the template visible only to itself;
+# clients remove it.
+func _apply_template_state() -> void:
+	if authority_mode != AuthorityMode.CLIENT:
+		return
+	owner.process_mode = Node.PROCESS_MODE_DISABLED
+	owner.visible = false
+	#if multiplayer and not multiplayer.is_server():
+		#_dbg.trace("Freeing template node `%s` on client.", [owner.name])
+		#owner.queue_free()
+	SynchronizersCache.sync_only_server(owner)
+	pass
+
+
+# ── Spawn config ─────────────────────────────────────────────────────────
+
+## Adds [param prop] to [member replication_config] as a spawn-only entry
+## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
+## spawn flag set, sync/watch off).
+##
+## Intended for use from
+## [signal NetwEntity.collecting_spawn_properties] handlers. Idempotent --
+## adding the same path twice is a no-op.
+func add_spawn_property(prop: NodePath) -> void:
+	if not replication_config:
+		replication_config = SceneReplicationConfig.new()
+	_add_spawn_property_into(replication_config, prop)
+
+
+# Adds [param prop] to [param cfg] as spawn-only.
+func _add_spawn_property_into(
+	cfg: SceneReplicationConfig, prop: NodePath
+) -> void:
+	if cfg.has_property(prop):
+		_coerce_to_spawn_only(cfg, prop)
+		return
+	cfg.add_property(prop)
+	_coerce_to_spawn_only(cfg, prop)
+
+
+# Forces [param prop] to spawn-only flags.
+func _coerce_to_spawn_only(
+	cfg: SceneReplicationConfig, prop: NodePath
+) -> void:
+	cfg.property_set_replication_mode(
+		prop, SceneReplicationConfig.REPLICATION_MODE_NEVER
+	)
+	cfg.property_set_spawn(prop, true)
+	cfg.property_set_sync(prop, false)
+	cfg.property_set_watch(prop, false)
+
+
+# Coerces every property in [member replication_config] to spawn-only,
+# regardless of how it was originally configured (inspector or sibling).
+func _sanitize_replication_config() -> void:
+	if not replication_config:
+		return
+	for prop: NodePath in replication_config.get_properties():
+		_coerce_to_spawn_only(replication_config, prop)
+
+
+# Registers the entity with the enclosing [SceneSynchronizer] so per-peer
+# scene visibility filters apply.
+func _register_with_scene() -> void:
+	var scene := MultiplayerTree.scene_for_node(self)
+	if not scene:
+		_dbg.trace(
+			"No enclosing MultiplayerScene for '%s'; skipping "
+			+ "SceneSynchronizer track.", [owner.name]
+		)
+		return
+	if represented_peer_id != 0:
+		scene.register_player(owner)
+		_assign_local_player_if_needed()
+	scene.synchronizer.track_node(owner)
+
+
+func _assign_local_player_if_needed() -> void:
+	if not _is_local_represented_peer():
+		return
+	var mt := MultiplayerTree.resolve(self)
+	if mt:
+		mt.local_player = owner
+
+
+func _is_local_represented_peer() -> bool:
+	if represented_peer_id == 0:
+		return false
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	return represented_peer_id == multiplayer.get_unique_id()
+
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not multiplayer or not multiplayer.is_server():
+		return
+	if represented_peer_id != peer_id:
+		return
+	_dbg.info(
+		"Peer %d disconnected. Despawning represented entity %s.",
+		[peer_id, owner.name]
+	)
+	var opts := DespawnOpts.new()
+	opts.reason = &"peer_disconnected"
+	despawn(opts)
+
+
+# ── Public spawn/despawn API ─────────────────────────────────────────────
+
+## Server-only. Spawns a copy of [member Node.owner]'s scene under
+## [param parent] (defaults to owner's parent).
+## [param id] sets [member entity_id_override] on the copy.
+##
+## [codeblock]
+## var mob := spawner.spawn_under($World/Mobs, &"skeleton_1")
+## var wild := spawner.spawn_under()   # same parent as template
+## [/codeblock]
+##
+## For richer pre-tree configuration, use [method instantiate_from]
+## directly so you can wire the copy before tree entry.
+func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
+	assert(
+		not multiplayer or multiplayer.is_server(),
+		"spawn_under is server-only"
+	)
+	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
+		if not id.is_empty():
+			c.entity_id_override = id
+	)
+	var p := parent if parent else owner.get_parent()
+	p.add_child(copy)
+	return copy
+
+
+## Server-only. Spawns a player copy into [param scene] from [param jp].
+func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
+	assert(multiplayer.is_server())
+	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
+		c.identity_id = jp.username
+		c.represented_peer_id = jp.peer_id
+		c.owner.name = format_name(jp.username, jp.peer_id)
+	)
+	scene.add_player(copy)
+	return copy
+
+
+## Server-only. Frees [member Node.owner] after emitting
+## [signal despawning] and flushing the [SaveComponent].
+##
+## [codeblock]
+## # Simple teardown with default options
+## spawner.despawn()
+##
+## # Skip the save flush and defer the free
+## var opts := DespawnOpts.new(&"killed")
+## opts.flush_save = false
+## spawner.despawn(opts)
+## [/codeblock]
+func despawn(opts: DespawnOpts = null) -> void:
+	assert(multiplayer.is_server(), "despawn is server-only")
+	if opts == null:
+		opts = DespawnOpts.new()
+	despawning.emit(opts.reason)
+	if opts.flush_save:
+		var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+		if save:
+			save.flush()
+	if (
+		owner.get_multiplayer_authority()
+		!= MultiplayerPeer.TARGET_PEER_SERVER
+	):
+		owner.set_multiplayer_authority(
+			MultiplayerPeer.TARGET_PEER_SERVER
+		)
+	if opts.defer_free:
+		owner.queue_free.call_deferred()
+	else:
+		owner.queue_free()

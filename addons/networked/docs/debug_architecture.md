@@ -8,9 +8,10 @@ developers extending the addon or diagnosing its internals.
 
 ## Overview
 
-The debugger is a three-layer system that keeps failure detection, telemetry
+The debugger is a three-layer system that keeps failure detection, trace
 collection, and failure reporting as separate concerns. Production components
-know nothing about it; the debugger attaches to them from the outside.
+only talk to `Netw.dbg`; reporter and trace sink policy live behind that
+facade.
 
 ```
 Static Validators          NetRaceDetector, TopologyValidator
@@ -22,6 +23,8 @@ Editor / Fallback          EngineDebugger  ·  push_error
 
 The reporter is the only layer that touches `EngineDebugger`. Validators and
 detectors are pure functions that return data and have no side effects.
+`NetTrace` remains the primitive span system; the reporter is the default
+visible trace sink.
 
 ---
 
@@ -68,15 +71,20 @@ The reporter is a singleton `Node` (Autoload) that knows *when* to check and
 
 ### Lifecycle
 
-The reporter only activates when `EngineDebugger.is_active()` is true and no
-headless/test flags are present. In exported builds it is entirely inert,
-costing nothing.
+The `NetworkedDebugger` autoload is a lightweight bootstrap. It only creates
+the heavy reporter when debug policy allows it, or when a test explicitly
+requests reporter-backed tracing.
 
 When a `MultiplayerTree` calls `register_tree`, the reporter connects to its
-signals and begins observing. All signal handlers are guarded by
-`_should_report()`.
+signals and begins observing. Reporter work is guarded by the debug policy
+owned by `Netw.dbg`.
 
 ### Span Tracing
+
+`NetTrace` owns the active span stack. The reporter is the visible sink today,
+and `Netw.dbg` owns installing or clearing that sink. Spans are no-ops when no
+sink is active, but expensive log arguments still evaluate before `Netw.dbg`
+receives them.
 
 Every significant network operation (lobby spawn, peer connect, player spawn)
 opens a [code]NetSpan[/code] or [code]NetPeerSpan[/code] via

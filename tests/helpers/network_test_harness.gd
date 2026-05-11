@@ -48,7 +48,7 @@ func setup(scene_manager_src: Variant = null, world_scene: PackedScene = null) -
 ## giving tests a chance to register spawnable scenes first).
 func add_client() -> MultiplayerTree:
 	if not _server.is_online():
-		var host_err: Error = _server.host()
+		var host_err: Error = await _server.host()
 		assert(host_err == OK, "Server host() failed: %s" % error_string(host_err))
 
 	var index := _clients.size()
@@ -144,7 +144,7 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 ## triggering the full _on_player_joined production chain.
 ## level_scene_path must be a registered spawnable scene whose filename (no extension)
 ## matches the level root node name (e.g. "TestLevel.tscn" → root "TestLevel").
-## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/SpawnerComponent").
+## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/SpawnerPlayerComponent").
 ## Returns the spawned player node from the server scene after one process frame.
 func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
@@ -185,7 +185,7 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, scene_name
 
 	var player := player_scene.instantiate()
 	player.name = "%s|%d" % [username, peer_id]
-	var client_comp: SpawnerComponent = player.get_node("%SpawnerComponent")
+	var client_comp := SpawnerPlayerComponent.unwrap(player)
 	client_comp.username = username
 
 	var scene := get_server_scene(scene_name)
@@ -215,6 +215,7 @@ func _setup_server() -> void:
 	_server = MultiplayerTree.new()
 	_server.name = "HarnessServer"
 	_server.is_server = true
+	_server.auto_host_headless = false
 
 	if _world_scene:
 		_server.add_child(_world_scene.instantiate())

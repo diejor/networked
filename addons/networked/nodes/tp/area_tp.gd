@@ -51,7 +51,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 
 func _on_body_entered(body: Node2D) -> void:
 	var tp: TPComponent = body.get_node_or_null("%TPComponent")
-	if tp == null or multiplayer.is_server() or not tp.is_multiplayer_authority():
+	if tp == null or not tp.is_multiplayer_authority():
 		return
 	
 	assert(target_tp and target_tp.is_valid(), "AreaTP2D: `target_tp` is not valid.")

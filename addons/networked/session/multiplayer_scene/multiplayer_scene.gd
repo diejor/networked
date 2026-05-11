@@ -29,6 +29,7 @@ signal player_ready(join_payload: JoinPayload)
 
 ## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].
 var _readiness_gates: Array[WeakRef] = []
+var _players_by_peer: Dictionary[int, WeakRef] = {}
 
 
 ## Returns the [NetwContext] for this scene, creating it on first access.
@@ -65,9 +66,63 @@ func get_spawners(node: Node) -> Array[MultiplayerSpawner]:
 
 ## Registers [param player] with the synchronizer and adds it to the level scene.
 func add_player(player: Node) -> void:
-	synchronizer.track_player(player)
+	synchronizer.track_node(player)
 	level.add_child(player)
 	player.owner = level
+	register_player(player)
+
+
+func register_player(player: Node) -> void:
+	var peer_id := _get_scene_peer_id(player)
+	if peer_id != 0:
+		var previous_peer := _find_peer_for_player(player)
+		if previous_peer != 0 and previous_peer != peer_id:
+			_players_by_peer.erase(previous_peer)
+			synchronizer.disconnect_peer(previous_peer)
+		_players_by_peer[peer_id] = weakref(player)
+		if not synchronizer.connected_peers.has(peer_id):
+			synchronizer.connect_peer(peer_id)
+		var bound := _on_player_exiting.bind(player)
+		if not player.tree_exiting.is_connected(bound):
+			player.tree_exiting.connect(bound)
+
+
+func get_players() -> Array[Node]:
+	var players: Array[Node] = []
+	var stale_peers: Array[int] = []
+	for peer_id: int in _players_by_peer:
+		var player := _players_by_peer[peer_id].get_ref() as Node
+		if is_instance_valid(player):
+			players.append(player)
+		else:
+			stale_peers.append(peer_id)
+	for peer_id: int in stale_peers:
+		_players_by_peer.erase(peer_id)
+	return players
+
+
+func _on_player_exiting(player: Node) -> void:
+	_remove_player(player)
+
+
+func _remove_player(player: Node) -> void:
+	var peer_id := _get_scene_peer_id(player)
+	if peer_id == 0:
+		peer_id = _find_peer_for_player(player)
+	if peer_id != 0:
+		_players_by_peer.erase(peer_id)
+	var bound := _on_player_exiting.bind(player)
+	if is_instance_valid(player) and player.tree_exiting.is_connected(bound):
+		player.tree_exiting.disconnect(bound)
+	if peer_id != 0:
+		synchronizer.disconnect_peer(peer_id)
+
+
+func _find_peer_for_player(player: Node) -> int:
+	for peer_id: int in _players_by_peer:
+		if _players_by_peer[peer_id].get_ref() == player:
+			return peer_id
+	return 0
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +140,7 @@ func _register_readiness_gate(gate: NetwSceneReadiness) -> void:
 ## Called directly when the server/host calls [method NetwSceneReadiness.set_ready].
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 	_rpc_receive_ready_changed(peer_id, is_ready)
-	for node: Node in synchronizer.tracked_nodes:
-		var target_peer_id := node.get_multiplayer_authority()
+	for target_peer_id: int in synchronizer.connected_peers:
 		if target_peer_id != multiplayer.get_unique_id():
 			rpc_id(target_peer_id, "_rpc_receive_ready_changed", peer_id, is_ready)
 
@@ -116,18 +170,25 @@ func _cleanup_dead_gates() -> void:
 	)
 
 
+func _get_scene_peer_id(node: Node) -> int:
+	var entity := NetwEntity.of(node)
+	if entity:
+		return entity.scene_peer_id
+	return node.get_multiplayer_authority()
+
+
 # ---------------------------------------------------------------------------
 # RPCs — suspend / resume  (soft, signal-only, game code decides what to do)
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to notify all clients that the scene has been suspended.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_suspend(reason: String) -> void:
 	get_context().scene.suspended.emit(reason)
 
 
 ## Sent by the server to notify all clients that the scene has been resumed.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_resume() -> void:
 	get_context().scene.resumed.emit()
 
@@ -135,8 +196,11 @@ func _rpc_receive_resume() -> void:
 ## Sent by a client to ask the server to suspend the scene.
 ## The server emits [signal NetwScene.suspend_requested]; game code decides
 ## whether to honour the request by calling [method NetwScene.suspend].
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_suspend(reason: String) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_suspend received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	get_context().scene.suspend_requested.emit(peer_id, reason)
 
@@ -146,25 +210,25 @@ func _rpc_request_suspend(reason: String) -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by the server when a new countdown starts.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_started(seconds: int) -> void:
 	get_context().scene.countdown_started.emit(seconds)
 
 
 ## Sent by the server on each countdown tick.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_tick(seconds_left: int) -> void:
 	get_context().scene.countdown_tick.emit(seconds_left)
 
 
 ## Sent by the server when the countdown reaches zero.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_finished() -> void:
 	get_context().scene.countdown_finished.emit()
 
 
 ## Sent by the server when a running countdown is cancelled.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_cancelled() -> void:
 	get_context().scene.countdown_cancelled.emit()
 
@@ -174,14 +238,17 @@ func _rpc_receive_countdown_cancelled() -> void:
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to report their ready state to the server.
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_request_set_ready(is_ready: bool) -> void:
+	if not multiplayer.is_server():
+		Netw.dbg.warn("_rpc_request_set_ready received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	_handle_set_ready(peer_id, is_ready)
 
 
 ## Broadcast by the server to synchronise a readiness change on scene peers.
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
 		var gate := wr.get_ref() as NetwSceneReadiness

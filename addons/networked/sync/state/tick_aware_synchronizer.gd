@@ -1,12 +1,14 @@
-## [ProxySynchronizer] that prepends a [code]__tick[/code] property to every replication packet.
+## [ProxySynchronizer] that prepends a [code]__tick[/code] property to
+## every replication packet so receivers know which tick the data belongs to.
 ##
-## The sender writes the current [NetworkClock] tick as the first property in the replication
-## config. Because Godot packs and unpacks properties in config-declaration order, the receiver's
-## [method _set] sees [code]__tick[/code] first, caches it in [member _pending_tick], and then
-## every subsequent [method _set] call within the same deserialization pass can read
-## [member _pending_tick] to know which tick the data belongs to.
+## Call [method finalize_with_tick] instead of
+## [method ProxySynchronizer.finalize].
 ##
-## [b]Setup[/b]: call [method finalize_with_tick] instead of [method ProxySynchronizer.finalize].
+## [codeblock]
+## func _ready() -> void:
+##     register_property(&"position", NodePath(":position"))
+##     finalize_with_tick()
+## [/codeblock]
 ## @experimental
 class_name TickAwareSynchronizer
 extends ProxySynchronizer
@@ -31,9 +33,8 @@ func _set(property: StringName, value: Variant) -> bool:
 
 
 ## Call instead of [method ProxySynchronizer.finalize].
-##
-## Inserts [code]__tick[/code] as the FIRST property in the replication config so that
-## [member _pending_tick] is populated before any other [method _write_property] call.
+## Inserts [code]__tick[/code] as the first property so
+## [member _pending_tick] is set before any other property arrives.
 func finalize_with_tick() -> void:
 	# Ensure UI properties are imported first
 	if replication_config and replication_config != _config:

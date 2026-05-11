@@ -1,6 +1,6 @@
 ## Serializable data bag describing a player attempting to connect to a session.
 ##
-## Pass a populated instance to [method NetworkSession.connect_player] to
+## Pass a populated instance to [method MultiplayerTree.connect_player] to
 ## authenticate and spawn a player, or serialize it for transmission via
 ## [method serialize].
 class_name JoinPayload
@@ -71,13 +71,3 @@ func deserialize(bytes: PackedByteArray) -> void:
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)
 
-
-## Parses the multiplayer authority from a node name formatted as
-## [code]username|peer_id[/code].
-## Returns [param peer_id] as an [int], or [code]0[/code] if the name does
-## not contain the separator.
-static func parse_authority(node_name: String) -> int:
-	var parts := node_name.split("|")
-	if parts.size() == 2:
-		return parts[1].to_int()
-	return 0

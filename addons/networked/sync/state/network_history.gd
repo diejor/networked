@@ -1,8 +1,7 @@
 ## Stores per-node state and input history for rollback.
 ##
-## Used by [code]RollbackManager[/code] (Phase 2). Records both authoritative state snapshots
-## (from [code]RollbackSynchronizer[/code]) and input snapshots (from [code]NetworkInputSynchronizer[/code])
-## so the rollback loop can restore any past tick and replay from there.
+## Snapshots are keyed by tick so a rollback loop can restore
+## any past tick and replay from there.
 class_name NetworkHistory
 extends RefCounted
 

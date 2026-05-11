@@ -1,43 +1,33 @@
 class_name TPComponent
 extends NetwComponent
 
-## Manages cross-scene teleportation for a player in a multiplayer session.
+## Cross-scene teleportation for a player-owned entity.
 ##
-## Coordinates a multi-step handshake: the client requests a teleport via 
-## [method teleport], the server reparents the player to the destination scene, 
-## and then confirms with [signal TeleportPromise.completed]. Requires a 
-## [TPLayerAPI] in the scene for visual transition animations.
-## 
+## [method teleport] returns a [TPComponent.TeleportPromise] that survives node
+## destruction, so [operator await] is safe across the delete+respawn
+## cycle. Requires a [TPLayerAPI] in the destination scene for
+## transition animations.
+##
 ## [codeblock]
-## # From a client-owned node:
-## var tp := %TPComponent.teleport(target_node_path)
+## var tp := %TPComponent.teleport(target_scene)
 ## await tp.completed
-## print("Teleport finished!")
 ## [/codeblock]
 
 signal _teleport_committed
 
-## Emitted each time a client-owned [MultiplayerSynchronizer] delivers a delta update.
-##
-## TODO: move to NetwComponent
-signal client_synchronized
 
-## The default scene path assigned when the component enters the tree if no scene 
-## is currently set.
+
+## Fallback scene when [member current_scene_path] is empty on tree entry.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
 var starting_scene_path: SceneNodePath
 
-## The UID or file path of the scene the player currently resides in.
-##
-## Automatically resolves to a valid path via [method ResourceUID.ensure_path].
-## Replicated on change so clients can track which scene their player is in.
+## The scene the player currently resides in. Replicates on change.
 @export var current_scene_path: String = "":
 	get: return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
 
-## The root node name of the [member current_scene_path], used to look up the 
-## active scene.
+## The root node name of [member current_scene_path]'s scene.
 var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
@@ -71,11 +61,25 @@ func _init() -> void:
 	name = "TPComponent"
 	unique_name_in_owner = true
 
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
+		return
+	
+	var entity := Netw.ctx(self).entity
+	if not (entity or entity.owner):
+		return
+	
+	var rel := entity.owner.get_path_to(self)
+	entity.contribute_spawn_property("%s:current_scene_path" % rel)
+	entity.contribute_save_property(
+		&"current_scene_path",
+		"%s:current_scene_path" % rel,
+	)
+
+
 func _ready() -> void:
-	for sync in SynchronizersCache.get_client_synchronizers(owner):
-		if not sync.delta_synchronized.is_connected(client_synchronized.emit):
-			sync.delta_synchronized.connect(client_synchronized.emit)
-			sync.synchronized.connect(client_synchronized.emit)
+	pass
 
 
 func _step(label: String, data: Dictionary = {}) -> void:
@@ -116,10 +120,9 @@ func _fail_span(
 		span.fail(reason, data)
 
 
-## Ensures [member current_scene_path] is set, copying from
-## [member starting_scene_path] when empty. Called automatically on
-## tree entry; call manually when resolving the scene before the player
-## node enters the tree (e.g. for custom spawn flows).
+## Copies [member starting_scene_path] into
+## [member current_scene_path] when the latter is empty.
+## Runs on tree entry; call explicitly for pre-tree-entry setup.
 func ensure_current_scene_path() -> void:
 	if current_scene_path.is_empty() and starting_scene_path:
 		current_scene_path = starting_scene_path.scene_path
@@ -151,11 +154,10 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 	return scene_state.get_node_name(0)
 
 
-## Initiates a teleport sequence from the client. Returns a [TPComponent.TeleportPromise] 
-##  that resolves once the server confirms the reparent and the visual transition 
-## completes. Safe to [operator await] even if this node is destroyed and respawned during 
-## the handshake.
+## Returns a [TPComponent.TeleportPromise] that resolves when the teleport
+## completes. Safe to [operator await] across the delete+respawn cycle.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
+	_flush_player_position(owner)
 	var promise := TeleportPromise.new()
 	_begin_tp_span(target_tp.scene_path, promise)
 	_do_teleport(target_tp, promise)
@@ -166,7 +168,8 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	_step("awaiting_mutex")
 	await _tp_mutex.lock()
 	_step("mutex_acquired")
-
+	
+	
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 	if bucket:
@@ -179,8 +182,13 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save_component:
-		save_component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
+		save_component.push_to.call_deferred(MultiplayerPeer.TARGET_PEER_SERVER, true)
 		_step("save_pushed")
+		var timer := get_tree().create_timer(5.0)
+		if await Async.timeout(save_component.push_acknowledged, timer):
+			_step("save_ack_timeout")
+	else:
+		_step("save_push_skipped")
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -188,13 +196,16 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		await tp_layer.teleport_out()
 		phase.done()
 
-	SynchronizersCache.sync_only_server(owner)
+	# Don't restrict visibility on the server (listen-server case): doing so
+	# kills public_visibility on the canonical synchronizers and the player
+	# becomes permanently invisible to remote clients after reparent.
+	if not multiplayer.is_server():
+		SynchronizersCache.sync_only_server(owner)
 
-	# Clean Lock: disable physics and input on the player node during transition.
-	# This does NOT affect components (children), so the TP handshake continues.
+	# disable physics and input on the player node during transition.
 	owner.set_physics_process(false)
 	owner.set_process_input(false)
-
+	
 	_step("rpc_sent")
 	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -206,41 +217,55 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	)
 
 # Internal RPC called by the client to request a teleport from the server.
-@rpc("any_peer", "call_remote", "reliable")
-func _request_teleport(username: String, from_scene_name: String, to_scene_path: String, tp_path: String, token: Variant) -> void:
+@rpc("any_peer", "call_local", "reliable")
+func _request_teleport(username: String, 
+	from_scene_name: String, 
+	to_scene_path: String, 
+	tp_path: String, 
+	token: Variant
+) -> void:
+	if not multiplayer.is_server():
+		_dbg.warn("_request_teleport received on non-server peer %d", [multiplayer.get_unique_id()])
+		return
 	var sender_id := multiplayer.get_remote_sender_id()
 	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
-
+	
 	var scene_manager := get_scene_manager()
 	if not scene_manager:
 		_fail_span(span, "no_scene_manager", "Cannot teleport, scene manager not found.")
 		return
-
-	var from_scene: MultiplayerScene = scene_manager.active_scenes.get(from_scene_name)
+	
+	var player := owner
+	var from_scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
+	if not from_scene:
+		from_scene = scene_manager.active_scenes.get(from_scene_name)
 	if not from_scene:
 		_fail_span(span, "source_scene_not_found",
 			"Source scene '%s' not found.", [from_scene_name],
 			{"scene": from_scene_name})
 		return
-
-	var player: Node = from_scene.level.get_node_or_null(username)
-	if not player:
+	
+	if not is_instance_valid(player) or not from_scene.level.is_ancestor_of(player):
 		_fail_span(span, "player_not_found",
 			"Player '%s' not found in source scene.", [username])
 		return
-
-	_flush_player_position(player)
-
+	
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	tp_component.current_scene_path = to_scene_path
-
-	await _sync_client_state(player, span)
-
+	
+	var authority := player.get_multiplayer_authority()
+	var ctx := get_context()
+	
+	if authority == 1 and ctx and ctx.tree.is_listen_server():
+		span.step("client_synced")
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+	
 	var to_scene_node := await _activate_destination(to_scene_path, span)
 	if not to_scene_node:
 		return
-
+	
 	_reparent_player(player, from_scene, to_scene_node, tp_path)
 	span.end()
 
@@ -251,17 +276,6 @@ func _flush_player_position(player: Node) -> void:
 	# This prevents the "!E" condition crash.
 	var far_away: Variant = Vector3(99999, 99999, 99999) if player is Node3D else Vector2(99999, 99999)
 	player.set("global_position", far_away)
-
-
-func _sync_client_state(player: Node, span: NetSpan) -> void:
-	var tp_component: TPComponent = player.get_node("%TPComponent")
-	span.step("awaiting_client_sync")
-	var timer := get_tree().create_timer(5.0)
-	if await Async.timeout(tp_component.client_synchronized, timer):
-		_fail_span(span, "client_sync_timeout",
-			"Client couldn't synchronize while teleporting.")
-	else:
-		span.step("client_synced")
 
 
 func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerScene:
@@ -287,9 +301,18 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 
 	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
 		event.disconnect(from)
-		event.connect(to.bind(player))
+		var bound := to.bind(player)
+		if not event.is_connected(bound):
+			event.connect(bound)
 		if event == player.tree_exiting:
-			player.request_ready()
+			# request_ready does NOT cascade to children, so child components
+			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
+			# never re-init. Reset the ready flag for the whole subtree.
+			_request_ready_recursive(player)
+			to_scene.register_player(player)
+			var scene_manager := get_scene_manager()
+			if scene_manager:
+				scene_manager._set_active_scene_for_player(player, to_scene)
 			tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene.synchronizer._on_spawned
@@ -304,27 +327,56 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 	player.tree_entered.disconnect(flip)
 
 
+static func _request_ready_recursive(node: Node) -> void:
+	node.request_ready()
+	for child in node.get_children():
+		_request_ready_recursive(child)
+
+
 # Server-side callback invoked after the entity safely enters the destination scene.
 # Sets position on the server and forwards the snap coordinates to the client.
 func _teleported(scene: Node, _tp_path: String) -> void:
 	_dbg.trace("`_teleported` callback on server.")
-	var teleport_success := func() -> void:
+
+	# Snap synchronously: child _ready re-runs (triggered by the recursive
+	# request_ready in _reparent_player) fire AFTER this lambda returns but
+	# BEFORE any deferred call. Camera2D.reset_smoothing in particular reads
+	# owner.global_position; if the snap is deferred, smoothing baselines on
+	# the (99999, 99999) flush position from _flush_player_position.
+	var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
+	if scene:
+		var tp_node: Node = scene.get_node_or_null(_tp_path)
+		if tp_node:
+			snap_pos = tp_node.get("global_position")
+	_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
+	owner.set("global_position", snap_pos)
+
+	# Defer only the client notification — the original assert wanted to
+	# guarantee the player is fully in tree, which is now true synchronously.
+	var notify_client := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
-		var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
-		if scene:
-			var tp_node: Node = scene.get_node_or_null(_tp_path)
-			if tp_node:
-				snap_pos = tp_node.get("global_position")
+		var authority := owner.get_multiplayer_authority()
+		_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
-		_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
-		owner.set("global_position", snap_pos)
-		_rpc_teleport_committed.rpc_id(owner.get_multiplayer_authority(), snap_pos)
-
-	teleport_success.call_deferred()
+	notify_client.call_deferred()
 
 
+# Relays a push acknowledgment from the server back to the client's SaveComponent.
+# Safe to send through TPComponent (unlike SaveComponent which has visibility
+# restrictions that block server -> client RPCs).
 @rpc("any_peer", "call_remote", "reliable")
+func _rpc_push_ack() -> void:
+	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+	if save:
+		save.push_acknowledged.emit()
+
+
+@rpc("any_peer", "call_local", "reliable")
 func _rpc_teleport_committed(snap_pos: Variant) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1:
+		_dbg.warn("_rpc_teleport_committed received from non-server peer %d", [sender])
+		return
 	var peer_id := multiplayer.get_unique_id()
 
 	_recover_tp_span()
@@ -355,8 +407,7 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_end_tp_span()
 
 
-## Registers the entity with the specified scene manager and spawns it
-## into the active scene level.
+## Adds [member owner] to the active scene in [param scene_mgr].
 func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	_dbg.trace("spawn called.")
 	ensure_current_scene_path()
@@ -368,6 +419,6 @@ func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	var scene: MultiplayerScene = scene_mgr.active_scenes.get(current_scene_name)
 	if scene:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
-		scene.synchronizer.track_player(owner)
+		scene.synchronizer.track_node(owner)
 		scene.level.add_child(owner)
 		owner.owner = scene.level

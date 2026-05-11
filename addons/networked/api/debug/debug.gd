@@ -1,30 +1,18 @@
 @tool
-## Static access point for Networked debug functionality.
+## Access point for Networked debug functionality.
 ##
-## Provides consolidated logging, span creation, and component handles.
-## All state is static; do not instantiate directly.
-## [br][br]
-## [b]Performance Best Practices:[/b]
-## [br]To avoid expensive string formatting in release builds or when levels are 
-## suppressed, always pass arguments as an [Array] instead of using [code]%[/code]
-## directly in the message.
+## [Netw.dbg] owns logging, span creation, trace sink policy, reporter
+## discovery, and component handles.
 ## [codeblock]
-## # Correct (Optimized)
 ## Netw.dbg.info("Player %s connected", [player_name])
-## # Incorrect (Expensive)
-## Netw.dbg.info("Player %s connected" % [player_name])
+## var span := Netw.dbg.peer_span(self, "spawn", peers)
 ## [/codeblock]
 ## [br][br]
-## [b]Testing & Log Suppression:[/b]
-## [br]Logging is automatically set to [code]NONE[/code] in GdUnit4 environments 
-## to prevent console spam. To enable logging during a test run, use:
-## [br]- [b]CLI:[/b] Pass [code]--netw-log=<logl_string>[/code] after [code]--[/code].
-## [br]- [b]Env:[/b] Set the [code]NETW_TEST_LOG[/code] environment variable.
-## [br]- [b]Format:[/b] [code]"info,core.network=trace"[/code] (Module overrides supported).
+## Pass log arguments as an [Array] to defer string formatting. Guard hot paths
+## with [method is_level_active] before constructing expensive arguments.
 ## [br][br]
-## [b]Preserving Editor Jump-Click:[/b]
-## [br]To make [method warn] or [method error] jump to your script instead of the 
-## logger when clicked in the console, pass a lambda that calls the global method:
+## Pass a lambda to [method warn] or [method error] to preserve editor
+## jump-click behaviour.
 ## [codeblock]
 ## Netw.dbg.error("Critical failure", [], func(m): push_error(m))
 ## [/codeblock]
@@ -34,6 +22,9 @@ extends RefCounted
 
 ## Emitted when the editor requests all instances to re-calculate their tiling.
 signal tiling_requested
+
+var _reporter_ref: WeakRef
+var _debug_enabled := false
 
 
 ## Creates a [NetwHandle] for O(1) debug access from a [NetwComponent] or [Object].
@@ -131,6 +122,92 @@ func active_span() -> NetSpan:
 ## Resets the [NetTrace] system, clearing all active spans.
 func reset() -> void:
 	NetTrace.reset()
+
+
+## Returns [code]true[/code] when debug reporter features are enabled.
+func is_enabled() -> bool:
+	return _debug_enabled
+
+
+func _set_enabled(enabled: bool) -> void:
+	_debug_enabled = enabled
+
+
+## Returns [code]true[/code] when [param level] is active for [param path].
+func is_level_active(level: int, path: String = "") -> bool:
+	if path.is_empty():
+		NetwLog._ensure_initialized()
+		return level >= NetwLog._effective_min_level
+	return NetwLog.is_level_active(level, path)
+
+
+## Returns the active debug reporter or [code]null[/code].
+func get_reporter() -> Node:
+	if not _reporter_ref:
+		return null
+	var reporter := _reporter_ref.get_ref() as Node
+	return reporter if is_instance_valid(reporter) else null
+
+
+## Registers [param reporter] as the current debug reporter endpoint.
+func register_reporter(reporter: Node) -> void:
+	if is_instance_valid(reporter):
+		_reporter_ref = weakref(reporter)
+
+
+## Clears [param reporter] if it owns the current reporter endpoint.
+func unregister_reporter(reporter: Node) -> void:
+	if get_reporter() == reporter:
+		_reporter_ref = null
+
+
+## Registers [param mt] with the active reporter if one is available.
+func register_tree(mt: MultiplayerTree) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"register_tree"):
+		reporter.register_tree(mt)
+
+
+## Unregisters [param mt] from the active reporter if one is available.
+func unregister_tree(mt: MultiplayerTree) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"unregister_tree"):
+		reporter.unregister_tree(mt)
+
+
+## Installs [param sink] as the active trace telemetry sink.
+func install_trace_sink(sink: Callable) -> void:
+	NetTrace.message_delegate = sink
+
+
+## Clears the active trace telemetry sink.
+func clear_trace_sink(expected_sink: Callable = Callable()) -> void:
+	if expected_sink.is_valid() and NetTrace.message_delegate != expected_sink:
+		return
+	NetTrace.message_delegate = Callable()
+
+
+## Enables reporter-backed tracing until the returned scope is closed.
+func enable_for_test() -> NetwDbgScope:
+	var scope := NetwDbgScope.new(_debug_enabled, NetTrace.message_delegate)
+	_debug_enabled = true
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"set_enabled"):
+		reporter.set_enabled(true)
+	return scope
+
+
+func _close_scope(previous_enabled: bool, previous_sink: Callable) -> void:
+	_debug_enabled = previous_enabled
+	NetTrace.message_delegate = previous_sink
+	if not _debug_enabled:
+		var reporter := get_reporter()
+		if reporter and reporter.get_parent() \
+				and reporter.get_parent().has_method(&"set_enabled"):
+			reporter.get_parent().set_enabled(false)
+		elif reporter and reporter.has_method(&"set_enabled"):
+			reporter.set_enabled(false)
+		NetTrace.reset()
 
 
 func _log(
