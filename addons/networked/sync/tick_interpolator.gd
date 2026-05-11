@@ -13,6 +13,15 @@ enum Mode {
 	ANGLE = 2, ## Angular interpolation (shortest path).
 }
 
+
+## Defines how interpolated values are written to [member visual_root].
+enum VisualOutputMode {
+	AUTO = 0, ## Choose the safest mode from source and target properties.
+	PROPERTY_VALUE = 1, ## Write the interpolated value directly.
+	SOURCE_DELTA = 2, ## Apply the smooth source delta to the initial value.
+	OWNER_TRANSFORM_COMPENSATED = 3, ## Keep the visual at the smooth owner pose.
+}
+
 #endregion
 
 
@@ -34,6 +43,34 @@ enum Mode {
 @export var visual_root: NodePath = NodePath(""):
 	set(v):
 		visual_root = v
+		_refresh_property_states()
+		update_configuration_warnings()
+		notify_property_list_changed()
+
+
+## Maps source property names to target property names on the
+## [member visual_root].
+## [br]Use when the interpolated property on the owner has a different name
+## than the property on the visual root.
+## [br]Example: [code]{ "synced_position": "position" }[/code] writes
+## smoothed values to the visual root's [code]position[/code] instead of
+## [code]synced_position[/code].
+@export var visual_root_property_map: Dictionary[StringName, StringName] = {}:
+	set(v):
+		visual_root_property_map = v
+		_refresh_property_states()
+		update_configuration_warnings()
+		notify_property_list_changed()
+
+
+## Controls how values are written when [member visual_root] is set.
+## [br][br]
+## [enum VisualOutputMode.AUTO] makes child [code]position[/code] targets
+## compensate against the owner's actual transform, which is the usual
+## server-authoritative character setup.
+@export var visual_output_mode: VisualOutputMode = VisualOutputMode.AUTO:
+	set(v):
+		visual_output_mode = v
 		_refresh_property_states()
 		update_configuration_warnings()
 
@@ -165,6 +202,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 # current local position, which already contains the last frame's smoothing
 # correction, baking that correction into the new baseline.
 var _cached_initial_offsets: Dictionary[StringName, Variant] = {}
+var _cached_initial_global_offsets: Dictionary[StringName, Variant] = {}
 
 #endregion
 
@@ -314,28 +352,108 @@ func _refresh_property_states() -> void:
 		
 		if v_root:
 			state.target_obj = v_root
-			state.target_prop = state.source_prop
+			state.target_prop = visual_root_property_map.get(prop, state.source_prop)
 			state.is_relative = owner.is_ancestor_of(v_root)
+			state.output_mode = _resolve_visual_output_mode(state, v_root)
 			if state.is_relative:
 				if prop in _cached_initial_offsets:
 					state.initial_offset = _cached_initial_offsets[prop]
 				else:
 					state.initial_offset = v_root.get(state.target_prop)
-					_cached_initial_offsets[prop] = state.initial_offset
+					if typeof(state.initial_offset) == TYPE_NIL:
+						state.is_relative = false
+						state.target_obj = state.source_obj
+						state.target_prop = state.source_prop
+					else:
+						_cached_initial_offsets[prop] = state.initial_offset
 		else:
 			state.target_obj = state.source_obj
 			state.target_prop = state.source_prop
 			state.is_relative = false
+			state.output_mode = VisualOutputMode.PROPERTY_VALUE
 			
 		var initial_val = state.source_obj.get(state.source_prop)
 		state.last_written = initial_val
 		state.pending_snapshot = initial_val
 		state.last_recorded = initial_val
+		if state.output_mode == VisualOutputMode.OWNER_TRANSFORM_COMPENSATED:
+			if prop in _cached_initial_global_offsets:
+				state.initial_global_offset = _cached_initial_global_offsets[prop]
+			else:
+				state.initial_global_offset = _calculate_initial_global_offset(
+					v_root
+				)
+				_cached_initial_global_offsets[prop] = \
+						state.initial_global_offset
 		state._has_recorded = false
 		state.is_sleeping = false
 		_states.append(state)
 	
 	_cache_sync_intervals()
+
+
+func _resolve_visual_output_mode(
+	state: _PropertyState,
+	v_root: Node
+) -> VisualOutputMode:
+	if visual_output_mode != VisualOutputMode.AUTO:
+		return visual_output_mode
+	if (
+		state.is_relative
+		and state.target_prop == &"position"
+		and _is_owner_position_source(state)
+		and _can_compensate_owner_transform(v_root)
+	):
+		return VisualOutputMode.OWNER_TRANSFORM_COMPENSATED
+	if state.is_relative:
+		return VisualOutputMode.SOURCE_DELTA
+	return VisualOutputMode.PROPERTY_VALUE
+
+
+func _is_owner_position_source(state: _PropertyState) -> bool:
+	if state.source_obj != owner:
+		return false
+	if state.source_prop in [&"position", &"global_position"]:
+		return true
+	return state.target_prop == &"position"
+
+
+func _can_compensate_owner_transform(v_root: Node) -> bool:
+	return (
+		owner is Node2D
+		and v_root is Node2D
+		and v_root.get_parent() is Node2D
+	) or (
+		owner is Node3D
+		and v_root is Node3D
+		and v_root.get_parent() is Node3D
+	)
+
+
+func _calculate_initial_global_offset(v_root: Node) -> Variant:
+	if v_root is Node2D and owner is Node2D:
+		return v_root.global_position - (owner as Node2D).global_position
+	if v_root is Node3D and owner is Node3D:
+		return v_root.global_position - (owner as Node3D).global_position
+	return null
+
+
+func _source_to_global_2d(source_prop: StringName, value: Vector2) -> Vector2:
+	if source_prop == &"global_position":
+		return value
+	var parent := owner.get_parent()
+	if parent is Node2D:
+		return (parent as Node2D).to_global(value)
+	return value
+
+
+func _source_to_global_3d(source_prop: StringName, value: Vector3) -> Vector3:
+	if source_prop == &"global_position":
+		return value
+	var parent := owner.get_parent()
+	if parent is Node3D:
+		return (parent as Node3D).to_global(value)
+	return value
 
 
 func _calculate_min_lag() -> float:
@@ -431,7 +549,63 @@ func _get_configuration_warnings() -> PackedStringArray:
 				"visual child will be smooth."
 			)
 
+	if not visual_root.is_empty():
+		var v_root := get_node_or_null(visual_root)
+		if v_root:
+			for state in _states:
+				if _uses_risky_source_delta(state):
+					warnings.append(
+						"[code]visual_output_mode[/code] is " + \
+						"[code]SOURCE_DELTA[/code] for '%s'. " % state.name + \
+						"If the owner also moves locally, the visual child " + \
+						"can fight the owner transform. Use " + \
+						"[code]AUTO[/code] or " + \
+						"[code]OWNER_TRANSFORM_COMPENSATED[/code] for " + \
+						"server-authoritative character visuals."
+					)
+				if (
+					state.output_mode == \
+							VisualOutputMode.OWNER_TRANSFORM_COMPENSATED
+					and state.initial_global_offset == null
+				):
+					warnings.append(
+						"Property '%s' requested owner-transform " % state.name + \
+						"compensation, but the source and visual target are " + \
+						"not compatible. TickInterpolator will fall back to " + \
+						"[code]SOURCE_DELTA[/code]."
+					)
+				var target_name := visual_root_property_map.get(
+					state.name, state.name
+				)
+				var target_val = v_root.get(target_name)
+				if typeof(target_val) == TYPE_NIL:
+					warnings.append(
+						"Property '%s' is interpolated but the visual " % str(state.name) + \
+						"root '%s' has no matching property '%s'. " % [v_root.name, target_name] + \
+						"Set a mapping in the 'Visual Root Mappings' section."
+					)
+
 	return warnings
+
+
+func _uses_risky_source_delta(state: _PropertyState) -> bool:
+	return (
+		state.output_mode == VisualOutputMode.SOURCE_DELTA
+		and state.target_prop == &"position"
+		and _is_owner_position_source(state)
+		and (
+			owner is CharacterBody2D
+			or owner is RigidBody2D
+			or (
+				ClassDB.class_exists("CharacterBody3D")
+				and owner.is_class("CharacterBody3D")
+			)
+			or (
+				ClassDB.class_exists("RigidBody3D")
+				and owner.is_class("RigidBody3D")
+			)
+		)
+	)
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -449,12 +623,41 @@ func _get_property_list() -> Array[Dictionary]:
 			"hint": PROPERTY_HINT_ENUM,
 			"hint_string": "None,Lerp,Angle"
 		})
+
+	var v_root := get_node_or_null(visual_root) \
+		if not visual_root.is_empty() else null
+	if v_root:
+		props.append({"name": "Visual Root Mappings", "type": TYPE_NIL, "usage": PROPERTY_USAGE_GROUP, "hint_string": "mapping/"})
+
+		for prop_path_str in _get_tracked_properties(owner):
+			if (
+				not property_modes.has(prop_path_str)
+				or property_modes[prop_path_str] == Mode.NONE
+			):
+				continue
+			var source_type := _get_property_type(prop_path_str)
+			var compatible := _get_compatible_target_properties(
+				v_root, source_type, prop_path_str
+			)
+			if compatible.is_empty():
+				continue
+			props.append({
+				"name": "mapping/" + prop_path_str,
+				"type": TYPE_STRING,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_ENUM,
+				"hint_string": ",".join(compatible)
+			})
+
 	return props
 
 
 func _get(property: StringName) -> Variant:
 	if property.begins_with("interpolation/"):
 		return property_modes.get(StringName(property.trim_prefix("interpolation/")), Mode.NONE)
+	if property.begins_with("mapping/"):
+		var prop_name := StringName(property.trim_prefix("mapping/"))
+		return visual_root_property_map.get(prop_name, prop_name)
 	return null
 
 
@@ -467,11 +670,23 @@ func _set(property: StringName, value: Variant) -> bool:
 		update_configuration_warnings()
 		notify_property_list_changed()
 		return true
+	if property.begins_with("mapping/"):
+		var prop_name := StringName(property.trim_prefix("mapping/"))
+		if value == prop_name or str(value) == "":
+			visual_root_property_map.erase(prop_name)
+		else:
+			visual_root_property_map[prop_name] = value
+		_refresh_property_states()
+		update_configuration_warnings()
+		return true
 	return false
 
 
 func _validate_property(property: Dictionary) -> void:
-	if property.name == "property_modes": property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+	if property.name == "property_modes":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+	if property.name == "visual_root_property_map":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
 
 
 func _get_tracked_properties(target: Node) -> Array[StringName]:
@@ -484,6 +699,31 @@ func _get_tracked_properties(target: Node) -> Array[StringName]:
 		var value := SynchronizersCache.resolve_value(target, props[clean_name])
 		if value != null and typeof(value) in [TYPE_INT, TYPE_FLOAT, TYPE_VECTOR2, TYPE_VECTOR3, TYPE_COLOR, TYPE_QUATERNION]:
 			result.append(clean_name)
+	return result
+
+
+func _get_property_type(prop_name: StringName) -> int:
+	if not owner:
+		return TYPE_NIL
+	var props := SynchronizersCache.get_all_synchronized_properties(owner)
+	var path: NodePath = props.get(prop_name, NodePath())
+	if path.is_empty():
+		return TYPE_NIL
+	var value := SynchronizersCache.resolve_value(owner, path)
+	return typeof(value)
+
+
+func _get_compatible_target_properties(
+	v_root: Node, source_type: int, source_name: StringName
+) -> Array[StringName]:
+	var result: Array[StringName] = [source_name]
+	for prop_dict in v_root.get_property_list():
+		if (
+			prop_dict["type"] == source_type
+			and (prop_dict["usage"] & PROPERTY_USAGE_EDITOR)
+			and StringName(prop_dict["name"]) != source_name
+		):
+			result.append(StringName(prop_dict["name"]))
 	return result
 
 #endregion
@@ -549,7 +789,9 @@ class _PropertyState:
 	
 	var uses_signal: bool = false
 	var is_relative: bool = false
+	var output_mode: VisualOutputMode = VisualOutputMode.PROPERTY_VALUE
 	var initial_offset: Variant
+	var initial_global_offset: Variant
 	
 	var last_written: Variant
 	var pending_snapshot: Variant
@@ -621,18 +863,71 @@ class _PropertyState:
 				[name, dt, lag, result]
 			)
 
-		if is_relative:
-			var current_raw = source_obj.get(source_prop)
-			var type = typeof(result)
-			# Apply the smooth-raw difference as an offset to the initial local state
-			if type in [TYPE_VECTOR2, TYPE_VECTOR3, TYPE_FLOAT, TYPE_INT]:
-				target_obj.set(target_prop, initial_offset + (result - current_raw))
-			else:
+		match output_mode:
+			VisualOutputMode.OWNER_TRANSFORM_COMPENSATED:
+				if not _apply_owner_transform_compensated(result):
+					_apply_source_delta(result)
+			VisualOutputMode.SOURCE_DELTA:
+				_apply_source_delta(result)
+			_:
 				target_obj.set(target_prop, result)
-		else:
-			target_obj.set(target_prop, result)
 			
 		last_written = result
+
+
+	func _apply_source_delta(result: Variant) -> void:
+		var current_raw = source_obj.get(source_prop)
+		var type = typeof(result)
+		if (
+			type in [TYPE_VECTOR2, TYPE_VECTOR3, TYPE_FLOAT, TYPE_INT]
+			and not initial_offset == null
+			and typeof(initial_offset) == type
+		):
+			target_obj.set(target_prop, initial_offset + (result - current_raw))
+		else:
+			target_obj.set(target_prop, result)
+
+
+	func _apply_owner_transform_compensated(result: Variant) -> bool:
+		if not _has_recorded:
+			return true
+		if target_prop != &"position":
+			return false
+		if target_obj is Node2D and interpolator.owner is Node2D:
+			return _apply_owner_transform_compensated_2d(result)
+		if target_obj is Node3D and interpolator.owner is Node3D:
+			return _apply_owner_transform_compensated_3d(result)
+		return false
+
+
+	func _apply_owner_transform_compensated_2d(result: Variant) -> bool:
+		if typeof(result) != TYPE_VECTOR2:
+			return false
+		var visual := target_obj as Node2D
+		var visual_parent := visual.get_parent() as Node2D
+		if not visual_parent or typeof(initial_global_offset) != TYPE_VECTOR2:
+			return false
+		var desired_global := interpolator._source_to_global_2d(
+			source_prop,
+			result
+		)
+		visual.global_position = desired_global + initial_global_offset
+		return true
+
+
+	func _apply_owner_transform_compensated_3d(result: Variant) -> bool:
+		if typeof(result) != TYPE_VECTOR3:
+			return false
+		var visual := target_obj as Node3D
+		var visual_parent := visual.get_parent() as Node3D
+		if not visual_parent or typeof(initial_global_offset) != TYPE_VECTOR3:
+			return false
+		var desired_global := interpolator._source_to_global_3d(
+			source_prop,
+			result
+		)
+		visual.global_position = desired_global + initial_global_offset
+		return true
 
 
 	func _resolve_value(dt: int, factor: float, snap_dist: float) -> Variant:

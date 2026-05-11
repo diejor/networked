@@ -15,7 +15,7 @@ extends SpawnerComponent
 ## [/codeblock]
 
 ## The username of the player associated with this component.
-@export var username: String = ""
+var username: String = ""
 
 ## Peer represented by this player entity. Assigned by the spawn flow.
 var player_peer_id := 0

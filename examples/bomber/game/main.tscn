@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://3a3852p4fypv"]
+[gd_scene format=3 uid="uid://dmi7oy5cfoqaq"]
 
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="1_qie3u"]
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="2_r4mmr"]

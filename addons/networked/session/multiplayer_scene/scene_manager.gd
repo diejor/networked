@@ -393,8 +393,8 @@ func activate_scene_for(
 	)
 	var path := _resolve_scene_path(join_payload)
 	if not path or not path.is_valid():
-		Netw.dbg.error(
-			"Join failed for '%s': missing or invalid spawner path.",
+		Netw.dbg.debug(
+			"Join for '%s': missing or invalid spawner path.",
 			[join_payload.username],
 			func(m): push_error(m)
 		)

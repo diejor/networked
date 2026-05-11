@@ -15,6 +15,7 @@ var current_anim: String = ""
 
 @onready var inputs: Node = $Inputs
 @onready var player_spawner := SpawnerPlayerComponent.unwrap(self)
+@onready var label: Label = %label
 
 func _ready() -> void:
 	stunned = false
@@ -76,13 +77,13 @@ func _physics_process(delta: float) -> void:
 
 @rpc("call_local")
 func set_player_name(value: String) -> void:
-	$label.text = value
+	label.text = value
 	# Assign a random color to the player based on its name.
 	var ctx := Netw.ctx(self)
 	var gamestate: BomberGamestate = \
 			ctx.services.get_service(BomberGamestate) if ctx.services else null
 	if gamestate:
-		$label.modulate = gamestate.get_player_color(value)
+		label.modulate = gamestate.get_player_color(value)
 		$sprite.modulate = Color(0.5, 0.5, 0.5) + gamestate.get_player_color(value)
 
 

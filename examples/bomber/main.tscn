@@ -1,17 +1,18 @@
 [gd_scene format=3 uid="uid://ca6gwo0u2m4y2"]
 
-[ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/main.gd" id="1_mrsco"]
+[ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="3_d22dq"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="6_ej8d4"]
+[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_wto4k"]
 
 [sub_resource type="Resource" id="Resource_mrsco"]
 script = ExtResource("3_d22dq")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
-[node name="Main" type="Control" unique_id=125506540]
+[node name="Lobby" type="Control" unique_id=125506540]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -45,6 +46,10 @@ offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("6_ej8d4")
 metadata/_custom_type_script = "uid://dfoggo64snch3"
+
+[node name="NetworkClock" type="Node" parent="MultiplayerTree" unique_id=1298520482]
+script = ExtResource("7_wto4k")
+metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
 [node name="Players" type="Panel" parent="." unique_id=1013754916]
 visible = false

@@ -56,9 +56,8 @@ func _spawn_player(data: Variant) -> Node:
 	var spawn_position := _get_spawn_position(spawn_index)
 	player.set("synced_position", spawn_position)
 	
-	var label := player.get_node_or_null("label") as Label
-	if label:
-		label.text = username
+	var label := player.get_node("%label") as Label
+	label.text = username
 	
 	return player
 

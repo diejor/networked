@@ -5,6 +5,11 @@
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
 [ext_resource type="Script" uid="uid://b1263q5vu7cht" path="res://addons/networked/nodes/spawner/spawner_player_component.gd" id="5_p4qid"]
+[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/tick_interpolator.gd" id="6_3dwf2"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_5huhx"]
+outline_size = 8
+outline_color = Color(0, 0, 0, 1)
 
 [sub_resource type="CircleShape2D" id="1"]
 radius = 16.0
@@ -143,31 +148,27 @@ _data = {
 &"walk_up": SubResource("7")
 }
 
-[sub_resource type="LabelSettings" id="LabelSettings_5huhx"]
-outline_size = 8
-outline_color = Color(0, 0, 0, 1)
-
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_sh64w"]
 properties/0/path = NodePath(".:synced_position")
 properties/0/spawn = true
-properties/0/replication_mode = 1
-properties/1/path = NodePath("label:text")
+properties/0/replication_mode = 2
+properties/1/path = NodePath("sprite/label:text")
 properties/1/spawn = true
-properties/1/replication_mode = 0
+properties/1/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_w53uu"]
 properties/0/path = NodePath(".:motion")
 properties/0/spawn = true
-properties/0/replication_mode = 1
+properties/0/replication_mode = 2
 properties/1/path = NodePath(".:bombing")
 properties/1/spawn = true
-properties/1/replication_mode = 1
+properties/1/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pu4sp"]
-properties/0/path = NodePath("label:text")
+properties/0/path = NodePath(".:synced_position")
 properties/0/spawn = true
 properties/0/replication_mode = 0
-properties/1/path = NodePath(".:synced_position")
+properties/1/path = NodePath("sprite/label:text")
 properties/1/spawn = true
 properties/1/replication_mode = 0
 
@@ -184,17 +185,12 @@ offset = Vector2(-0.0750351, -6.23615)
 hframes = 4
 vframes = 4
 
-[node name="shape" type="CollisionShape2D" parent="." unique_id=1082045004]
-shape = SubResource("1")
-
-[node name="anim" type="AnimationPlayer" parent="." unique_id=365298786]
-libraries/ = SubResource("AnimationLibrary_yb83i")
-
-[node name="label" type="Label" parent="." unique_id=1237995107]
-offset_left = -82.0
-offset_top = -35.0
-offset_right = 85.0
-offset_bottom = -14.0
+[node name="label" type="Label" parent="sprite" unique_id=1237995107]
+unique_name_in_owner = true
+offset_left = -82.07485
+offset_top = -41.236515
+offset_right = 84.92515
+offset_bottom = -20.236515
 size_flags_horizontal = 2
 size_flags_vertical = 0
 theme_override_fonts/font = ExtResource("3")
@@ -203,7 +199,15 @@ text = "Player 1"
 label_settings = SubResource("LabelSettings_5huhx")
 horizontal_alignment = 1
 
+[node name="shape" type="CollisionShape2D" parent="." unique_id=1082045004]
+shape = SubResource("1")
+
+[node name="anim" type="AnimationPlayer" parent="." unique_id=365298786]
+libraries/ = SubResource("AnimationLibrary_yb83i")
+
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1095522834]
+replication_interval = 0.25
+delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_sh64w")
 
 [node name="Inputs" type="Node" parent="." unique_id=531290523]
@@ -215,3 +219,14 @@ replication_config = SubResource("SceneReplicationConfig_w53uu")
 [node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
 replication_config = SubResource("SceneReplicationConfig_pu4sp")
 script = ExtResource("5_p4qid")
+
+[node name="TickInterpolator" type="Node" parent="." unique_id=1650089841]
+script = ExtResource("6_3dwf2")
+property_modes = Dictionary[StringName, int]({
+&"synced_position": 1
+})
+visual_root = NodePath("../sprite")
+visual_root_property_map = Dictionary[StringName, StringName]({
+&"synced_position": &"position"
+})
+metadata/_custom_type_script = "uid://b21bbqt166ive"

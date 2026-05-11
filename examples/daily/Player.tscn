@@ -97,5 +97,4 @@ script = ExtResource("9_wi0c6")
 property_modes = Dictionary[StringName, int]({
 &"position": 1
 })
-visual_root = NodePath("../Icon")
 metadata/_custom_type_script = "uid://b21bbqt166ive"
