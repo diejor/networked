@@ -10,14 +10,21 @@ extends MultiplayerSynchronizer
 ## spawn-only at runtime).
 ##
 ## [br][br]
+## The synchronizer itself always has multiplayer authority [code]1[/code]
+## (server), regardless of the [member owner]'s authority mode. This
+## guarantees the server can always issue spawn and despawn commands,
+## even for client-authoritative entities whose owner has a peer-specific
+## authority.
+##
+## [br][br]
 ## Contributions [b]must[/b] happen at parented-time, not at
 ## tree-entered: Godot reads [member replication_config] for spawn-decode
 ## between PackedScene instantiation and tree entry, so anything added at
 ## [signal NetwEntity.spawning] time is too late for the spawn packet.
 ##
 ## [br][br]
-## See [method instantiate_from], [method spawn_under], and
-## [method despawn] for the spawn/despawn API.
+## See [method instantiate_from], [method spawn_under],
+## [method spawn_player], and [method despawn] for the spawn/despawn API.
 ##
 ## Siblings react to the spawn lifecycle via [signal NetwEntity.spawning]
 ## (replaces the older [code]_on_entity_spawning[/code] propagate-call
@@ -64,11 +71,17 @@ signal player_joined(join_payload: JoinPayload)
 ## to the default resolved by the authority policy.
 @export var entity_id_override: StringName = &""
 
+## Human-readable identity propagated to [member NetwEntity.identity_id].
+## Set at spawn time and used by save/debug subsystems for display.
 var identity_id: StringName = &"":
 	set(value):
 		identity_id = value
 		_sync_entity_identity()
 
+## Peer this entity represents, propagated to
+## [member NetwEntity.represented_peer_id]. Drives auto-despawn on
+## disconnect, [member MultiplayerTree.local_player] tracking, and
+## scene registration. [code]0[/code] for non-player entities.
 var represented_peer_id := 0:
 	set(value):
 		represented_peer_id = value
@@ -102,19 +115,19 @@ var is_template: bool:
 # ── Static helpers ───────────────────────────────────────────────────────
 
 ## Returns the [SpawnerComponent] under the unique name
-## [code]%SpawnerComponent[/code].
-## or [code]null[/code].
+## [code]%SpawnerComponent[/code], or [code]null[/code].
 static func unwrap(node: Node) -> SpawnerComponent:
-	var sc := node.get_node_or_null("%SpawnerComponent")
-	if sc:
-		return sc
-	return node.get_node_or_null("%SpawnerPlayerComponent")
+	return node.get_node_or_null("%SpawnerComponent")
 
 
-## Parses the multiplayer authority from a node name formatted as
+## Legacy fallback. Parses a peer id from a node name formatted as
 ## [code]username|peer_id[/code].
-## Returns [param peer_id] as an [int], or [code]0[/code] if the name does
-## not contain the separator.
+##
+## Returns the [int] peer id, or [code]0[/code] if the name does
+## not contain the separator. Prefer [member represented_peer_id] or
+## [member NetwEntity.represented_peer_id] for new code; this helper
+## remains for [enum AuthorityMode].[code]CLIENT[/code] templates
+## and debug tooling that inspects raw node names.
 static func parse_authority(node_name: String) -> int:
 	var parts := node_name.split("|")
 	if parts.size() == 2:
@@ -172,6 +185,8 @@ func _init() -> void:
 	name = "SpawnerComponent"
 	unique_name_in_owner = true
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
+	if not player_joined.is_connected(_on_player_joined):
+		player_joined.connect(_on_player_joined)
 
 
 func _notification(what: int) -> void:
@@ -399,7 +414,7 @@ func _sanitize_replication_config() -> void:
 func _register_with_scene() -> void:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if not scene:
-		_dbg.trace(
+		_dbg.debug(
 			"No enclosing MultiplayerScene for '%s'; skipping "
 			+ "SceneSynchronizer track.", [owner.name]
 		)
@@ -438,6 +453,71 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	var opts := DespawnOpts.new()
 	opts.reason = &"peer_disconnected"
 	despawn(opts)
+
+
+func _on_player_joined(join_payload: JoinPayload) -> void:
+	var ctx := Netw.ctx(self)
+	if not ctx:
+		return
+
+	var slot := ctx.tree.get_spawn_slot(
+		join_payload.spawner_component_path
+	)
+	if not slot.is_valid():
+		_dbg.error(
+			"Player join failed: no active scene for '%s'.",
+			[join_payload.spawner_component_path.get_scene_name()],
+			func(m): push_error(m)
+		)
+		return
+
+	var scene := _resolve_target_scene(join_payload, slot)
+	if not scene:
+		_dbg.error("Cannot place player: no scene available.", [])
+		return
+	spawn_player(join_payload, scene)
+
+
+func _resolve_target_scene(
+	jp: JoinPayload, slot: SpawnSlot
+) -> MultiplayerScene:
+	var ctx := Netw.ctx(self)
+	if not ctx:
+		return null
+
+	var level_save: SaveComponent = (
+		owner.get_node_or_null("%SaveComponent") as SaveComponent
+	)
+	if (
+		level_save
+		and level_save.database
+		and not level_save.table_name.is_empty()
+	):
+		var entity := level_save.database.table(
+			level_save.table_name
+		).fetch(StringName(jp.username))
+		if entity:
+			var path: String = entity.get_value(
+				&"current_scene_path", ""
+			)
+			if not path.is_empty():
+				var scene_mgr := (
+					ctx.services.get_scene_manager()
+				)
+				if scene_mgr:
+					var name := StringName(
+						path.get_file().get_basename()
+					)
+					var scene := (
+						scene_mgr.active_scenes.get(name)
+					)
+					if scene:
+						return scene
+
+	if slot.has_scene():
+		return slot.get_scene()
+
+	return null
 
 
 # ── Public spawn/despawn API ─────────────────────────────────────────────

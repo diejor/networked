@@ -1,26 +1,35 @@
-## Per-owner orchestration hub for networked entities.
+## Bundles spawn lifecycle signals, identity tracking, and property
+## contributions for one entity root.
 ##
-## A [NetwEntity] is attached as metadata on the entity root (the
-## [code]Node[/code] that hosts [SpawnerComponent], [SaveComponent], and
-## sibling networked components). It exposes the parented-time signals
-## those components and their siblings use to coordinate spawn-time
-## property collection and lifecycle handoff.
+## A [NetwEntity] is attached as metadata on the owner node that hosts
+## [SpawnerComponent] and [SaveComponent]. Access it from any node inside
+## the entity with [code]Netw.ctx(self).entity[/code].
 ##
-## Access via [code]Netw.ctx(self).entity[/code] from any node inside the
-## entity. The lookup walks to the entity root using [member Node.owner]
-## when in-tree, or the parent chain when orphan (e.g. reacting to
-## [constant Node.NOTIFICATION_PARENTED] before tree entry).
+## [br][br]
+## [member identity_id] is the display / save / debug label for the
+## entity (e.g. a username). [member represented_peer_id] is the peer
+## this entity belongs to -- it drives [member MultiplayerTree.local_player],
+## auto-despawn on disconnect, and peer-specific identity lookups.
+## [member scene_peer_id] controls which peer gate the entity uses for
+## [SceneSynchronizer] visibility; it defaults to
+## [method Node.get_multiplayer_authority] when [code]0[/code].
 ##
-## [b]Signal order during the spawn phase[/b] (driven by
-## [SpawnerComponent] when one is registered):
-## [br]1. [signal collecting_spawn_properties] - siblings call
-##     [method SpawnerComponent.add_spawn_property] to contribute paths.
-## [br]2. [signal spawning] - siblings react with side effects
-##     (e.g. [method SaveComponent.hydrate_from_db]).
-## [br]3. [signal spawned] - emitted after scene registration.
+## [br][br]
+## The spawn phase (driven by [SpawnerComponent]) emits
+## [signal spawning] before scene registration and [signal spawned]
+## after. Siblings use [method contribute_spawn_property] from
+## [constant Node.NOTIFICATION_PARENTED] to inject spawn-synced paths.
+## [codeblock]
+## func _notification(what: int) -> void:
+##     if what == NOTIFICATION_PARENTED:
+##         var entity := Netw.ctx(self).entity
+##         entity.contribute_spawn_property(NodePath("..:health"))
+##         entity.spawning.connect(_on_spawning)
 ##
-## [signal collecting_save_properties] is emitted by [SaveComponent] in
-## its own [code]_enter_tree[/code], independent of the spawn phase.
+## func _on_spawning() -> void:
+##     if multiplayer.is_server():
+##         restore_saved_state()
+## [/codeblock]
 class_name NetwEntity
 extends RefCounted
 
@@ -39,16 +48,21 @@ signal spawned
 
 
 var owner: Node
-## Stable identifier for save/debug identity. Empty means callers should
-## fall back to their legacy identity source.
+## Display / save / debug label for this entity (e.g. a username).
+## Empty means callers should fall back to their legacy identity source.
+## Set by [member SpawnerComponent.identity_id] via
+## [method SpawnerComponent._sync_entity_identity].
 var identity_id: StringName = &""
 
-## Peer this entity represents, independent from multiplayer authority.
-## Empty for non-player entities and server-owned world objects.
+## Peer this entity belongs to. Drives [member MultiplayerTree.local_player],
+## auto-despawn on disconnect, and [method MultiplayerScene.register_player]
+## registration. [code]0[/code] for non-player entities and server-owned
+## world objects.
 var represented_peer_id := 0
 
-## Peer this entity contributes to scene membership. When [code]0[/code],
-## reads [method Node.get_multiplayer_authority] from [member owner].
+## Peer whose connection gate this entity uses for
+## [SceneSynchronizer] visibility. When [code]0[/code], reads
+## [method Node.get_multiplayer_authority] from [member owner].
 var scene_peer_id := 0:
 	get:
 		if scene_peer_id != 0:

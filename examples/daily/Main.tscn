@@ -26,7 +26,7 @@ spawner_component_path = SubResource("Resource_20pc6")
 [sub_resource type="Resource" id="Resource_wkp8b"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/%SpawnerPlayerComponent"
+node_path = "Player/%SpawnerComponent"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 

@@ -182,9 +182,9 @@ func _decorate_player(player: Node) -> void:
 		if entity and not entity.identity_id.is_empty():
 			username = entity.identity_id
 		else:
-			var client := SpawnerPlayerComponent.unwrap(player)
+			var client := SpawnerComponent.unwrap(player)
 			if client:
-				username = client.username
+				username = client.identity_id
 			else:
 				username = player.name.get_slice("|", 0)
 		if not username.is_empty():
@@ -402,9 +402,9 @@ func _on_clock_pong(data: Dictionary) -> void:
 		if entity and not entity.identity_id.is_empty():
 			data["username"] = entity.identity_id
 		else:
-			var player := SpawnerPlayerComponent.unwrap(mt.local_player)
+			var player := SpawnerComponent.unwrap(mt.local_player)
 			if player:
-				data["username"] = player.username
+				data["username"] = player.identity_id
 			else:
 				data["username"] = mt.local_player.name.get_slice("|", 0)
 	clock_pong_captured.emit(data)

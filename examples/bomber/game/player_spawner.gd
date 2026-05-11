@@ -49,9 +49,9 @@ func _spawn_player(data: Variant) -> Node:
 	var player := PLAYER_SCENE.instantiate()
 	player.name = SpawnerComponent.format_name(username, peer_id)
 	
-	var player_spawner := SpawnerPlayerComponent.unwrap(player)
-	player_spawner.username = username
-	player_spawner.player_peer_id = peer_id
+	var player_spawner := SpawnerComponent.unwrap(player)
+	player_spawner.identity_id = StringName(username)
+	player_spawner.represented_peer_id = peer_id
 	
 	var spawn_position := _get_spawn_position(spawn_index)
 	player.set("synced_position", spawn_position)

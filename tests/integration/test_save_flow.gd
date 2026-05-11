@@ -4,8 +4,8 @@ extends NetworkedTestSuite
 
 const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
 
-## Node path from level root to the [SpawnerPlayerComponent] spawner.
-const SPAWNER_PATH := "TestPlayerWithSave/SpawnerPlayerComponent"
+## Node path from level root to the [SpawnerComponent] spawner.
+const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree

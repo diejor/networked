@@ -11,8 +11,8 @@ extends NetworkedTestSuite
 
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
-## Path from the level root to the [SpawnerPlayerComponent] that acts as the spawn template.
-const SPAWNER_PATH := "TestPlayerFull/SpawnerPlayerComponent"
+## Path from the level root to the [SpawnerComponent] that acts as the spawn template.
+const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
 var session: LocalLoopbackSession
 var server: MultiplayerTree

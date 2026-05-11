@@ -5,7 +5,7 @@
 ## constraint checks.
 ## [br][br]
 ## [b]Never import this file from production components.[/b]
-## (SaveComponent, SceneSynchronizer, SpawnerPlayerComponent, etc.)
+## (SaveComponent, SceneSynchronizer, SpawnerComponent, etc.)
 ## [br][br]
 ## Use from: tests, [code]@tool[/code] scripts, debugger panels.
 class_name TopologyValidator
@@ -15,12 +15,12 @@ extends RefCounted
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
-## [br]- [SpawnerPlayerComponent] -> 1 (extends MultiplayerSynchronizer)
+## [br]- [SpawnerComponent] -> 1 (extends MultiplayerSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
 	var n := 0
-	if SpawnerPlayerComponent.unwrap(node) != null:
+	if SpawnerComponent.unwrap(node) != null:
 		n += 1
 	return n
 
@@ -66,7 +66,7 @@ static func validate_node(node: Node) -> Dictionary:
 	if save_comp:
 		errors.append_array(_check_save_component(save_comp))
 
-	var client_comp := SpawnerPlayerComponent.unwrap(node)
+	var client_comp := SpawnerComponent.unwrap(node)
 	if client_comp:
 		errors.append_array(_check_spawner_component(client_comp))
 
@@ -161,12 +161,12 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 
 
 static func _check_spawner_component(
-	spawner: SpawnerPlayerComponent
+	spawner: SpawnerComponent
 ) -> Array[String]:
 	var errs: Array[String] = []
 	if spawner.root_path == NodePath(""):
 		errs.append(
-			"SpawnerPlayerComponent.root_path is empty on '%s'. " % \
+			"SpawnerComponent.root_path is empty on '%s'. " % \
 			[spawner.owner.name] + \
 			"get_path_to(spawner.owner) was likely called before the " + \
 			"player entered the scene tree."

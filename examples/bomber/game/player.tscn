@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://bnrgd1mws2s35" path="res://examples/bomber/game/charwalk.png" id="2"]
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
-[ext_resource type="Script" uid="uid://b1263q5vu7cht" path="res://addons/networked/nodes/spawner/spawner_player_component.gd" id="5_p4qid"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="5_p4qid"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/tick_interpolator.gd" id="6_3dwf2"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_5huhx"]
@@ -216,7 +216,7 @@ script = ExtResource("4_k1vfr")
 [node name="InputsSync" type="MultiplayerSynchronizer" parent="Inputs" unique_id=1701054962]
 replication_config = SubResource("SceneReplicationConfig_w53uu")
 
-[node name="SpawnerPlayerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
+[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
 replication_config = SubResource("SceneReplicationConfig_pu4sp")
 script = ExtResource("5_p4qid")
 

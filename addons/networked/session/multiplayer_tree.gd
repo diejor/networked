@@ -890,9 +890,9 @@ func _resolve_username_collision(join_payload: JoinPayload) -> void:
 		if entity and not entity.identity_id.is_empty():
 			existing_names.append(entity.identity_id)
 		else:
-			var client := SpawnerPlayerComponent.unwrap(player)
+			var client := SpawnerComponent.unwrap(player)
 			if client:
-				existing_names.append(client.username)
+				existing_names.append(client.identity_id)
 			else:
 				var parsed := player.name.get_slice("|", 0)
 				if not parsed.is_empty():
