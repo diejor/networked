@@ -25,9 +25,9 @@ func wait_for(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> bool:
 	return await Async.timeout(target_signal, timer)
 
 
-## Creates a fresh session and a server node. Does NOT host yet — register
+## Creates a fresh session and a server node. Does NOT host yet - register
 ## spawnable scenes on [method _get_scene_manager] before calling add_client().
-## Must be awaited — waits one frame for _ready() to fire before returning.
+## Must be awaited - waits one frame for _ready() to fire before returning.
 ##
 ## [param scene_manager_src] accepts:
 ## [br]- [PackedScene]: instantiated to produce a [MultiplayerSceneManager].
@@ -143,7 +143,7 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 ## Sends the real request_join_player RPC from a client to the server,
 ## triggering the full _on_player_joined production chain.
 ## level_scene_path must be a registered spawnable scene whose filename (no extension)
-## matches the level root node name (e.g. "TestLevel.tscn" → root "TestLevel").
+## matches the level root node name (e.g. "TestLevel.tscn" -> root "TestLevel").
 ## spawner_node_path is relative to the level root (e.g. "TestPlayerFull/SpawnerComponent").
 ## Returns the spawned player node from the server scene after one process frame.
 func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node_path: String) -> Node:
@@ -165,7 +165,7 @@ func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node
 	var scene_name: StringName = spawner_component_path.get_scene_name()
 	var scene := get_server_scene(scene_name)
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	var player_name := "%s|%d" % [username, peer_id]
+	var player_name := NetwEntity.format_name(username, peer_id)
 
 	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
 	while scene.level.get_node_or_null(player_name) == null:
@@ -184,10 +184,7 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, scene_name
 	var username: String = client.get_meta(&"_harness_username")
 
 	var player := player_scene.instantiate()
-	player.name = "%s|%d" % [username, peer_id]
-	var client_comp := SpawnerComponent.unwrap(player)
-	client_comp.identity_id = StringName(username)
-	client_comp.represented_peer_id = peer_id
+	NetwEntity.bundle(player, peer_id, StringName(username))
 
 	var scene := get_server_scene(scene_name)
 	scene.add_player(player)

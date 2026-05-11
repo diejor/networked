@@ -55,7 +55,7 @@ func test_player_spawns_in_level_after_join() -> void:
 		join_payload.serialize()
 	)
 
-	var player_name := "%s|%d" % [username, peer_id]
+	var player_name := NetwEntity.format_name(username, peer_id)
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)
@@ -86,7 +86,7 @@ func test_spawned_player_has_correct_username() -> void:
 		join_payload.serialize()
 	)
 
-	var player_name := "%s|%d" % [username, peer_id]
+	var player_name := NetwEntity.format_name(username, peer_id)
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)
@@ -98,7 +98,7 @@ func test_spawned_player_has_correct_username() -> void:
 	var player := level.get_node(player_name)
 	var client_comp := SpawnerComponent.unwrap(player)
 	assert_that(client_comp).is_not_null()
-	assert_that(str(client_comp.identity_id)).is_equal(username)
+	assert_that(str(client_comp.entity_id)).is_equal(username)
 
 
 func test_scene_context_accessible_from_level_node() -> void:

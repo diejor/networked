@@ -47,11 +47,7 @@ func _spawn_player(data: Variant) -> Node:
 	var spawn_index := int(spawn_data.get("spawn_index", 0))
 	
 	var player := PLAYER_SCENE.instantiate()
-	player.name = SpawnerComponent.format_name(username, peer_id)
-	
-	var player_spawner := SpawnerComponent.unwrap(player)
-	player_spawner.identity_id = StringName(username)
-	player_spawner.represented_peer_id = peer_id
+	NetwEntity.bundle(player, peer_id, StringName(username))
 	
 	var spawn_position := _get_spawn_position(spawn_index)
 	player.set("synced_position", spawn_position)
@@ -67,7 +63,7 @@ func _has_player(join_payload: JoinPayload) -> bool:
 	if not players_root:
 		return false
 	
-	var node_name := SpawnerComponent.format_name(
+	var node_name := NetwEntity.format_name(
 		str(join_payload.username),
 		join_payload.peer_id
 	)

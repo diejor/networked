@@ -106,6 +106,13 @@ func update_player(node: Node) -> void:
 
 ## Registers a peer as connected to this scene and updates visibility states.
 func connect_peer(peer_id: int) -> void:
+	if peer_id == 0:
+		Netw.dbg.error(
+			"SceneSynchronizer.connect_peer(0) is invalid.",
+			[],
+			func(m): push_error(m)
+		)
+		return
 	Netw.dbg.debug("peer `peer_id=%s` connected to scene." % peer_id)
 	set_visibility_for(peer_id, true)
 	connected_peers[peer_id] = true
@@ -114,7 +121,7 @@ func connect_peer(peer_id: int) -> void:
 
 ## Unregisters a peer from this scene and safely detaches their visibility.
 ##
-## The deferred call order is intentional — see
+## The deferred call order is intentional - see
 ## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
@@ -123,7 +130,7 @@ func disconnect_peer(peer_id: int) -> void:
 	# Skip visibility updates for peers the engine has already purged.
 	# `update_players()` would propagate filter results into
 	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
-	# `_update_spawn_visibility` — both assert when `peers_info` no longer
+	# `_update_spawn_visibility` - both assert when `peers_info` no longer
 	# contains the peer.
 	if not _peer_is_live(peer_id):
 		return

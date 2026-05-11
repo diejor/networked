@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ca6gwo0u2m4y2"]
 
-[ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
+[ext_resource type="Script" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="3_d22dq"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]

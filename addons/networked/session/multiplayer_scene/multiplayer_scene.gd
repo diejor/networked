@@ -73,18 +73,24 @@ func add_player(player: Node) -> void:
 
 
 func register_player(player: Node) -> void:
-	var peer_id := _get_scene_peer_id(player)
-	if peer_id != 0:
-		var previous_peer := _find_peer_for_player(player)
-		if previous_peer != 0 and previous_peer != peer_id:
-			_players_by_peer.erase(previous_peer)
-			synchronizer.disconnect_peer(previous_peer)
-		_players_by_peer[peer_id] = weakref(player)
-		if not synchronizer.connected_peers.has(peer_id):
-			synchronizer.connect_peer(peer_id)
-		var bound := _on_player_exiting.bind(player)
-		if not player.tree_exiting.is_connected(bound):
-			player.tree_exiting.connect(bound)
+	var peer_id := _get_peer_id(player)
+	if peer_id == 0:
+		Netw.dbg.error(
+			"Cannot register player '%s': peer_id is 0.",
+			[player.name],
+			func(m): push_error(m)
+		)
+		return
+	var previous_peer := _find_peer_for_player(player)
+	if previous_peer != 0 and previous_peer != peer_id:
+		_players_by_peer.erase(previous_peer)
+		synchronizer.disconnect_peer(previous_peer)
+	_players_by_peer[peer_id] = weakref(player)
+	if not synchronizer.connected_peers.has(peer_id):
+		synchronizer.connect_peer(peer_id)
+	var bound := _on_player_exiting.bind(player)
+	if not player.tree_exiting.is_connected(bound):
+		player.tree_exiting.connect(bound)
 
 
 func get_players() -> Array[Node]:
@@ -106,7 +112,7 @@ func _on_player_exiting(player: Node) -> void:
 
 
 func _remove_player(player: Node) -> void:
-	var peer_id := _get_scene_peer_id(player)
+	var peer_id := _get_peer_id(player)
 	if peer_id == 0:
 		peer_id = _find_peer_for_player(player)
 	if peer_id != 0:
@@ -170,15 +176,15 @@ func _cleanup_dead_gates() -> void:
 	)
 
 
-func _get_scene_peer_id(node: Node) -> int:
+func _get_peer_id(node: Node) -> int:
 	var entity := NetwEntity.of(node)
-	if entity:
-		return entity.scene_peer_id
-	return node.get_multiplayer_authority()
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	return NetwEntity.parse_peer(node.name)
 
 
 # ---------------------------------------------------------------------------
-# RPCs — suspend / resume  (soft, signal-only, game code decides what to do)
+# RPCs - suspend / resume (soft, signal-only, game code decides what to do)
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to notify all clients that the scene has been suspended.
@@ -206,7 +212,7 @@ func _rpc_request_suspend(reason: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — countdown
+# RPCs - countdown
 # ---------------------------------------------------------------------------
 
 ## Sent by the server when a new countdown starts.
@@ -234,7 +240,7 @@ func _rpc_receive_countdown_cancelled() -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — readiness
+# RPCs - readiness
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to report their ready state to the server.

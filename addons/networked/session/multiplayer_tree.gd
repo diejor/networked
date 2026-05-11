@@ -816,7 +816,7 @@ func _serialize_joined_players() -> Array[PackedByteArray]:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — pause / unpause (hard, SceneTree-level, moved from MultiplayerScene)
+# RPCs - pause / unpause (hard, SceneTree-level, moved from MultiplayerScene)
 # ---------------------------------------------------------------------------
 
 @rpc("any_peer", "call_local", "reliable")
@@ -840,7 +840,7 @@ func _rpc_receive_unpause() -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — kick (session-level, moved from MultiplayerScene)
+# RPCs - kick (session-level, moved from MultiplayerScene)
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to a specific peer to inform them they are being kicked.
@@ -860,7 +860,7 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — disconnect (session-level)
+# RPCs - disconnect (session-level)
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to ask the server for permission to disconnect.
@@ -887,12 +887,12 @@ func _resolve_username_collision(join_payload: JoinPayload) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
 		var entity := NetwEntity.of(player)
-		if entity and not entity.identity_id.is_empty():
-			existing_names.append(entity.identity_id)
+		if entity and not entity.entity_id.is_empty():
+			existing_names.append(entity.entity_id)
 		else:
 			var client := SpawnerComponent.unwrap(player)
 			if client:
-				existing_names.append(client.identity_id)
+				existing_names.append(client.entity_id)
 			else:
 				var parsed := player.name.get_slice("|", 0)
 				if not parsed.is_empty():

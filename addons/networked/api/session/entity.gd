@@ -6,13 +6,9 @@
 ## the entity with [code]Netw.ctx(self).entity[/code].
 ##
 ## [br][br]
-## [member identity_id] is the display / save / debug label for the
-## entity (e.g. a username). [member represented_peer_id] is the peer
-## this entity belongs to -- it drives [member MultiplayerTree.local_player],
-## auto-despawn on disconnect, and peer-specific identity lookups.
-## [member scene_peer_id] controls which peer gate the entity uses for
-## [SceneSynchronizer] visibility; it defaults to
-## [method Node.get_multiplayer_authority] when [code]0[/code].
+## [member entity_id] is the display / save / debug label for the
+## entity, for example a username. [member peer_id] is the joined peer
+## this entity represents, or [code]0[/code] for world entities.
 ##
 ## [br][br]
 ## The spawn phase (driven by [SpawnerComponent]) emits
@@ -48,28 +44,16 @@ signal spawned
 
 
 var owner: Node
-## Display / save / debug label for this entity (e.g. a username).
-## Empty means callers should fall back to their legacy identity source.
-## Set by [member SpawnerComponent.identity_id] via
-## [method SpawnerComponent._sync_entity_identity].
-var identity_id: StringName = &""
+## Display / save / debug label for this entity, for example a username.
+## Empty means callers should fall back to the node name.
+var entity_id: StringName = &""
 
-## Peer this entity belongs to. Drives [member MultiplayerTree.local_player],
+## Joined peer this entity represents. Drives
+## [member MultiplayerTree.local_player],
 ## auto-despawn on disconnect, and [method MultiplayerScene.register_player]
 ## registration. [code]0[/code] for non-player entities and server-owned
 ## world objects.
-var represented_peer_id := 0
-
-## Peer whose connection gate this entity uses for
-## [SceneSynchronizer] visibility. When [code]0[/code], reads
-## [method Node.get_multiplayer_authority] from [member owner].
-var scene_peer_id := 0:
-	get:
-		if scene_peer_id != 0:
-			return scene_peer_id
-		return owner.get_multiplayer_authority() if owner else 0
-	set(value):
-		scene_peer_id = value
+var peer_id := 0
 var _spawner_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
@@ -94,6 +78,56 @@ static func of(node: Node) -> NetwEntity:
 	var e := NetwEntity.new()
 	e._attach_to(root)
 	return e
+
+
+## Returns the entity id encoded in [param node_name].
+##
+## Names use the legacy [code]entity_id|peer_id[/code] spawn identity
+## convention. Invalid names return [code]&""[/code].
+static func parse_entity(node_name: String) -> StringName:
+	var parts := node_name.split("|")
+	if parts.size() != 2:
+		return &""
+	if parts[0].is_empty():
+		return &""
+	return StringName(parts[0])
+
+
+## Returns the peer id encoded in [param node_name].
+##
+## Names use the legacy [code]entity_id|peer_id[/code] spawn identity
+## convention. Invalid names return [code]0[/code].
+static func parse_peer(node_name: String) -> int:
+	var parts := node_name.split("|")
+	if parts.size() == 2:
+		return parts[1].to_int()
+	return 0
+
+
+## Formats [param entity_id] and [param peer_id] as a node name.
+static func format_name(entity_id: String, peer_id: int) -> String:
+	return "%s|%d" % [entity_id, peer_id]
+
+
+## Encodes [param peer_id] and [param entity_id] into [param node].
+##
+## The same values are mirrored into the node's [NetwEntity]. Returns
+## [param node] so spawn code can configure and return in one expression.
+static func bundle(
+		node: Node,
+		peer_id: int,
+		entity_id: StringName,
+) -> Node:
+	node.name = format_name(str(entity_id), peer_id)
+	var entity := of(node)
+	if entity:
+		entity.entity_id = entity_id
+		entity.peer_id = peer_id
+	var spawner := SpawnerComponent.unwrap(node)
+	if spawner:
+		spawner.entity_id = entity_id
+		spawner.peer_id = peer_id
+	return node
 
 
 ## Walks to the entity root for [param node]. Uses [member Node.owner]
@@ -188,7 +222,8 @@ func contribute_spawn_property(path: NodePath) -> void:
 func contribute_save_property(
 		virtual_name: StringName,
 		real_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode =
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:

@@ -660,23 +660,23 @@ func _set_active_scene_for_player(
 ) -> void:
 	if not is_instance_valid(player):
 		return
-	_set_active_scene_for_local_peer(_get_scene_peer_id(player), scene)
+	_set_active_scene_for_local_peer(_get_peer_id(player), scene)
 
 
 func _is_local_scene_peer(player: Node) -> bool:
 	if not is_instance_valid(player):
 		return false
-	if _get_scene_peer_id(player) != multiplayer.get_unique_id():
+	if _get_peer_id(player) != multiplayer.get_unique_id():
 		return false
 	var ctx := Netw.ctx(self)
 	return ctx and ctx.tree.is_listen_server()
 
 
-func _get_scene_peer_id(player: Node) -> int:
+func _get_peer_id(player: Node) -> int:
 	var entity := NetwEntity.of(player)
-	if entity and entity.scene_peer_id != 0:
-		return entity.scene_peer_id
-	return player.get_multiplayer_authority()
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	return NetwEntity.parse_peer(player.name)
 
 
 # Updates the active scene, retargets the ActiveSceneView service, and emits

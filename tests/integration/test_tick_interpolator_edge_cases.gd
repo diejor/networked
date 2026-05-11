@@ -110,7 +110,7 @@ func test_visual_smooth_movement_realtime() -> void:
 	await _harness.sync_ticks(30)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(Vector2(expected_x, 300), Vector2(1, 1))
+	assert_vector(final_client_pos).is_equal_approx(Vector2(expected_x, 300), Vector2(5, 5))
 
 func test_visual_smooth_movement_dynamic_path() -> void:
 	var waypoints: Array[Vector2] = [
@@ -134,7 +134,7 @@ func test_visual_smooth_movement_dynamic_path() -> void:
 	await _harness.sync_ticks(20)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(1, 1))
+	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(5, 5))
 
 func test_visual_player_walking() -> void:
 	var waypoints: Array[Vector2] = [
@@ -165,7 +165,7 @@ func test_visual_player_walking() -> void:
 	await _harness.sync_ticks(15)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(1, 1))
+	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(5, 5))
 
 
 

@@ -98,5 +98,5 @@ func exploded(_by_who: int) -> void:
 
 func _get_player_peer_id() -> int:
 	if player_spawner:
-		return player_spawner.represented_peer_id
-	return SpawnerComponent.parse_authority(name)
+		return player_spawner.peer_id
+	return NetwEntity.parse_peer(name)

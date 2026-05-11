@@ -197,13 +197,13 @@ static func _get_expected_authority(
 	spawner: SpawnerComponent
 ) -> int:
 	if not spawner:
-		return SpawnerComponent.parse_authority(node.name)
+		return NetwEntity.parse_peer(node.name)
 
 	match spawner.authority_mode:
 		SpawnerComponent.AuthorityMode.SERVER:
 			return MultiplayerPeer.TARGET_PEER_SERVER
 		SpawnerComponent.AuthorityMode.CLIENT:
-			return SpawnerComponent.parse_authority(node.name)
+			return NetwEntity.parse_peer(node.name)
 	return 0
 
 

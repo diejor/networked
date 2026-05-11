@@ -1,6 +1,6 @@
 ## Tests for [SpawnerComponent].
 ##
-## Covers [method SpawnerComponent.parse_authority], spawn-property
+## Covers [NetwEntity] identity helpers, spawn-property
 ## collection via [method SpawnerComponent.add_spawn_property], and
 ## [enum SpawnerComponent.AuthorityMode] behaviour in
 ## [method SpawnerComponent._on_owner_tree_entered].
@@ -9,41 +9,63 @@ extends NetworkedTestSuite
 
 
 # ---------------------------------------------------------------------------
-# parse_authority() - pure static, no scene tree needed
+# NetwEntity identity helpers - pure static, no scene tree needed
 # ---------------------------------------------------------------------------
 
-func test_parse_authority_with_valid_name() -> void:
-	assert_that(SpawnerComponent.parse_authority("alice|42")).is_equal(42)
+func test_parse_peer_with_valid_name() -> void:
+	assert_that(NetwEntity.parse_peer("alice|42")).is_equal(42)
+	assert_that(NetwEntity.parse_entity("alice|42")).is_equal(&"alice")
 
 
-func test_parse_authority_with_large_peer_id() -> void:
+func test_parse_peer_with_large_peer_id() -> void:
 	assert_that(
-		SpawnerComponent.parse_authority("player|2147483647")
+		NetwEntity.parse_peer("player|2147483647")
 	).is_equal(2147483647)
 
 
-func test_parse_authority_without_separator_returns_zero() -> void:
+func test_parse_peer_without_separator_returns_zero() -> void:
 	assert_that(
-		SpawnerComponent.parse_authority("no_separator")
+		NetwEntity.parse_peer("no_separator")
 	).is_equal(0)
 
 
-func test_parse_authority_with_empty_string_returns_zero() -> void:
-	assert_that(SpawnerComponent.parse_authority("")).is_equal(0)
+func test_parse_peer_with_empty_string_returns_zero() -> void:
+	assert_that(NetwEntity.parse_peer("")).is_equal(0)
 
 
-func test_parse_authority_with_only_separator_returns_zero() -> void:
-	assert_that(SpawnerComponent.parse_authority("|")).is_equal(0)
+func test_parse_peer_with_only_separator_returns_zero() -> void:
+	assert_that(NetwEntity.parse_peer("|")).is_equal(0)
+	assert_that(NetwEntity.parse_entity("|")).is_equal(&"")
 
 
-func test_parse_authority_with_multiple_separators_returns_zero() -> void:
-	assert_that(SpawnerComponent.parse_authority("a|b|c")).is_equal(0)
+func test_parse_peer_with_multiple_separators_returns_zero() -> void:
+	assert_that(NetwEntity.parse_peer("a|b|c")).is_equal(0)
+	assert_that(NetwEntity.parse_entity("a|b|c")).is_equal(&"")
 
 
-func test_parse_authority_with_non_numeric_peer_returns_zero() -> void:
+func test_parse_peer_with_non_numeric_peer_returns_zero() -> void:
 	assert_that(
-		SpawnerComponent.parse_authority("user|abc")
+		NetwEntity.parse_peer("user|abc")
 	).is_equal(0)
+
+
+func test_netw_entity_bundle_encodes_name_and_identity() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Player"
+
+	var spawner := SpawnerComponent.new()
+	spawner.name = "SpawnerComponent"
+	root.add_child(spawner)
+	spawner.owner = root
+
+	NetwEntity.bundle(root, 42, &"alice")
+
+	var entity := NetwEntity.of(root)
+	assert_that(root.name).is_equal("alice|42")
+	assert_that(entity.entity_id).is_equal(&"alice")
+	assert_that(entity.peer_id).is_equal(42)
+	assert_that(spawner.entity_id).is_equal(&"alice")
+	assert_that(spawner.peer_id).is_equal(42)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +110,7 @@ func test_sanitize_coerces_inspector_picked_properties() -> void:
 	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
 
 
-func test_spawner_collector_contributes_identity_id() -> void:
+func test_spawner_collector_does_not_contribute_identity() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "TestPlayer"
 
@@ -97,13 +119,9 @@ func test_spawner_collector_contributes_identity_id() -> void:
 	root.add_child(spawner)
 	spawner.owner = root
 
-	var expected := NodePath("SpawnerComponent:identity_id")
+	var expected := NodePath("SpawnerComponent:entity_id")
 	var cfg := spawner.replication_config
-	assert_that(cfg.has_property(expected)).is_true()
-	assert_that(cfg.property_get_spawn(expected)).is_true()
-	assert_that(
-		cfg.property_get_replication_mode(expected)
-	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
+	assert_that(cfg == null or not cfg.has_property(expected)).is_true()
 
 
 # ---------------------------------------------------------------------------

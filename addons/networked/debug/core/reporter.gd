@@ -66,11 +66,11 @@ static func _get_username(node: Node) -> String:
 	if not is_instance_valid(node):
 		return ""
 	var entity := NetwEntity.of(node)
-	if entity and not entity.identity_id.is_empty():
-		return entity.identity_id
+	if entity and not entity.entity_id.is_empty():
+		return entity.entity_id
 	var client := SpawnerComponent.unwrap(node)
 	if client:
-		return client.identity_id
+		return client.entity_id
 	return node.name.get_slice("|", 0)
 
 

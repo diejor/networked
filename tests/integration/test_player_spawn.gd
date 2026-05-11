@@ -53,7 +53,7 @@ func test_spawned_player_has_username() -> void:
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
 	var client_comp := SpawnerComponent.unwrap(player)
-	assert_that(client_comp.identity_id).is_equal("test_player_0")
+	assert_that(client_comp.entity_id).is_equal("test_player_0")
 
 
 func test_spawned_player_name_format() -> void:

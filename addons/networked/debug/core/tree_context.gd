@@ -54,7 +54,7 @@ func _init(mt: MultiplayerTree, reporter: NetworkedDebugReporter) -> void:
 	_reporter_ref = weakref(reporter)
 
 
-# ─── Public API ───────────────────────────────────────────────────────────────
+# Public API.
 
 ## Returns [code]true[/code] if the visualizer is enabled for a specific node.
 func is_enabled(viz: String, node: Node = null) -> bool:
@@ -159,7 +159,7 @@ func get_active_scene_path(context: Node = null) -> String:
 	return "?"
 
 
-# ─── Decoration Lifecycle ─────────────────────────────────────────────────────
+# Decoration lifecycle.
 
 func _refresh_all() -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
@@ -179,12 +179,12 @@ func _decorate_player(player: Node) -> void:
 	if should_have and not existing:
 		var username := ""
 		var entity := NetwEntity.of(player)
-		if entity and not entity.identity_id.is_empty():
-			username = entity.identity_id
+		if entity and not entity.entity_id.is_empty():
+			username = entity.entity_id
 		else:
 			var client := SpawnerComponent.unwrap(player)
 			if client:
-				username = client.identity_id
+				username = client.entity_id
 			else:
 				username = player.name.get_slice("|", 0)
 		if not username.is_empty():
@@ -199,15 +199,15 @@ func _decorate_player(player: Node) -> void:
 		existing.queue_free()
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# Helpers.
 
 func _get_stable_id(node: Node) -> Variant:
 	if not is_instance_valid(node):
 		return ""
 	var entity := NetwEntity.of(node)
-	if entity and entity.represented_peer_id != 0:
-		return entity.represented_peer_id
-	var parsed := SpawnerComponent.parse_authority(node.name)
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	var parsed := NetwEntity.parse_peer(node.name)
 	return parsed if parsed != 0 else str(node.get_path())
 
 
@@ -220,7 +220,7 @@ func _find_players(mt: MultiplayerTree) -> Array[Node]:
 	return mt.get_all_players()
 
 
-# ─── Signal Wiring ────────────────────────────────────────────────────────────
+# Signal wiring.
 
 func _ready() -> void:
 	var mt: MultiplayerTree = _mt_ref.get_ref()
@@ -329,7 +329,7 @@ func _on_configured() -> void:
 	tree_ready.emit.call_deferred()
 
 
-# ─── Scene Lifecycle ────────────────────────────────────────────────────
+# Scene lifecycle.
 
 func _on_scene_spawned(scene: MultiplayerScene) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
@@ -399,12 +399,12 @@ func _on_clock_pong(data: Dictionary) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if is_instance_valid(mt) and mt.local_player:
 		var entity := NetwEntity.of(mt.local_player)
-		if entity and not entity.identity_id.is_empty():
-			data["username"] = entity.identity_id
+		if entity and not entity.entity_id.is_empty():
+			data["username"] = entity.entity_id
 		else:
 			var player := SpawnerComponent.unwrap(mt.local_player)
 			if player:
-				data["username"] = player.identity_id
+				data["username"] = player.entity_id
 			else:
 				data["username"] = mt.local_player.name.get_slice("|", 0)
 	clock_pong_captured.emit(data)

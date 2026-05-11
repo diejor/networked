@@ -1,4 +1,4 @@
-## Unit tests for [SaveComponent] — entity binding, DB persistence, and synchronization.
+## Unit tests for [SaveComponent], DB persistence, and synchronization.
 ##
 ## All tests run without a SceneTree, network, or spawner.
 class_name TestSaveComponent
@@ -30,7 +30,7 @@ func test_get_entity_id_uses_username_when_client_present() -> void:
 	client.unique_name_in_owner = true
 	root.add_child(client)
 	client.owner = root
-	client.identity_id = &"alice"
+	client.entity_id = &"alice"
 
 	assert_that(save_comp._get_entity_id()).is_equal(&"alice")
 
