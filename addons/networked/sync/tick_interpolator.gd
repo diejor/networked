@@ -94,8 +94,8 @@ enum VisualOutputMode {
 
 
 ## The maximum number of extra ticks the interpolator can dilate beyond its
-## floor.
-@export_custom(0, "suffix:ticks") var max_extra_dilation: float = 4.0
+## floor. Increasing this value might help when network jitters.
+@export_custom(0, "suffix:ticks") var max_extra_dilation: float = 0.0
 
 
 ## If greater than [code]0[/code], the interpolator will log its internal state

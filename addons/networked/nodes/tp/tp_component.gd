@@ -310,10 +310,7 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 			# never re-init. Reset the ready flag for the whole subtree.
 			_request_ready_recursive(player)
 			to_scene.register_player(player)
-			var scene_manager := get_scene_manager()
-			if scene_manager:
-				scene_manager._set_active_scene_for_player(player, to_scene)
-			tp_component._teleported(to_scene.level, tp_path)
+		tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene.synchronizer._on_spawned
 	var to_spawn := to_scene.synchronizer._on_spawned

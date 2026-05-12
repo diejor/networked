@@ -27,14 +27,6 @@ signal scene_spawned(scene: MultiplayerScene)
 ## Emitted when a [Scene] is removed from the tree.
 signal scene_despawned(scene: MultiplayerScene)
 
-## Emitted on the listen-server host when the local player's active scene
-## changes (initial spawn, teleport, or scene destruction). Pass [code]null[/code]
-## when the player no longer has an active scene.
-##
-## [ActiveSceneView] subscribes to this to retarget itself; HUDs and audio
-## systems may also hook it.
-signal active_scene_changed(scene: MultiplayerScene)
-
 const SERVER_SCENE = preload("uid://dga0loylsa26i")
 const CLIENT_SCENE = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
@@ -96,12 +88,6 @@ var scene_paths: Array[String]:
 var _scene_configs: Dictionary = {}
 var _scene_cache: Dictionary[String, PackedScene] = {}
 var _scene_paths: Dictionary[StringName, String] = {}
-
-# The scene currently exposed via active_scene_changed; used to detect changes
-# and to suppress duplicate signal emissions.
-var _active_scene: MultiplayerScene = null
-# Set once we've warned about a missing ActiveSceneView so we don't spam logs.
-var _warned_missing_view: bool = false
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -214,8 +200,7 @@ func _exit_tree() -> void:
 	
 	if mt.configured.is_connected(configured.emit):
 		mt.configured.disconnect(configured.emit)
-	
-	_unbind_listen_server_swap()
+
 	active_scenes.clear()
 
 
@@ -369,134 +354,39 @@ func _spawn_scene_node(data: Variant) -> Node:
 	return scene
 
 
-## Activates the target scene for [param join_payload] and returns it.
-##
-## Checks for duplicate connections. Returns the active
-## [MultiplayerScene], or [code]null[/code] on failure.
-## [br][br]
-## Use for custom spawn flows that don't use [SpawnerComponent].
-func activate_scene_for(
-	join_payload: JoinPayload
-) -> MultiplayerScene:
-	var peer_id := join_payload.peer_id
-	for scene: MultiplayerScene in active_scenes.values():
-		var sync := scene.synchronizer
-		if is_instance_valid(sync) and peer_id in sync.connected_peers:
-			Netw.dbg.warn(
-				"Duplicate join from peer %d - ignored.", [peer_id],
-				func(m): push_warning(m)
-			)
-			return null
-	
-	Netw.dbg.info(
-		"Received join request from peer %d.", [peer_id]
-	)
-	var path := _resolve_scene_path(join_payload)
-	if not path or not path.is_valid():
-		Netw.dbg.debug(
-			"Join for '%s': missing or invalid spawner path.",
-			[join_payload.username],
-			func(m): push_error(m)
-		)
-		return null
-	
-	var scene_name := StringName(path.get_scene_name())
-	await activate_scene(scene_name)
-	
-	var scene := active_scenes.get(scene_name) as MultiplayerScene
-	if not scene:
-		Netw.dbg.error(
-			"Join failed: Scene '%s' not registered.", [scene_name],
-			func(m): push_error(m)
-		)
-		return null
-	
-	return scene
-
-
-# Resolves the scene path from [param join_payload]'s spawner field.
-func _resolve_scene_path(
-	join_payload: JoinPayload
-) -> SceneNodePath:
-	if (
-		join_payload.spawner_component_path
-		and join_payload.spawner_component_path.is_valid()
-	):
-		return join_payload.spawner_component_path
-	return null
-
-
 ## Called by [MultiplayerTree] to handle an accepted player join.
 ##
 ## Activates the target scene, dispatches to the configured spawner, and
 ## emits [signal MultiplayerTree.player_scene_ready].
+## [br][br]
+## When [member ResolvedJoin.scene_name] is empty (no
+## [member JoinPayload.spawner_component_path] was provided), this is a no-op.
 func handle_player_joined(join_payload: JoinPayload) -> void:
 	if not multiplayer.is_server():
 		return
-	
-	var scene := await activate_scene_for(join_payload)
-	if not scene:
+	var rj := join_payload.resolved
+	assert(rj, "request_join_player should have rejected malformed payload")
+
+	if rj.scene_name.is_empty():
 		return
-	
-	var dispatched := false
-	
-	var spawner_client := _resolve_join_spawner(join_payload, scene)
-	if spawner_client:
-		spawner_client.spawn_player(join_payload, scene)
-		dispatched = true
-		_set_active_scene_for_local_peer(join_payload.peer_id, scene)
+
+	await activate_scene(rj.scene_name)
+	var scene := active_scenes.get(rj.scene_name) as MultiplayerScene
+	assert(scene, "activate_scene must guarantee scene presence")
+
+	var spawner := _spawner_in(scene, rj.spawner_path)
+	spawner.spawn_player(join_payload, scene)
 
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
 		tree.player_scene_ready.emit(join_payload, scene)
-	
-	if not dispatched:
-		Netw.dbg.error(
-			"No valid spawner configured for player '%s'.",
-			[join_payload.username]
-		)
 
 
-func _resolve_join_spawner(
-	join_payload: JoinPayload,
-	scene: MultiplayerScene
-) -> SpawnerComponent:
-	var path := join_payload.spawner_component_path
-	if not path or not path.is_valid():
-		Netw.dbg.error(
-			"Join failed for '%s': invalid spawner path resource.",
-			[join_payload.username],
-			func(m): push_error(m)
-		)
-		return null
-
-	if not is_instance_valid(scene.level):
-		Netw.dbg.error(
-			"Join failed for '%s': scene '%s' has no level node.",
-			[join_payload.username, path.get_scene_name()],
-			func(m): push_error(m)
-		)
-		return null
-
-	var node := scene.level.get_node_or_null(path.node_path)
-	if not node:
-		Netw.dbg.error(
-			"Join failed for '%s': no node at '%s' in scene '%s'.",
-			[join_payload.username, path.node_path, path.get_scene_name()],
-			func(m): push_error(m)
-		)
-		return null
-
-	var spawner := node as SpawnerComponent
-	if not spawner:
-		Netw.dbg.error(
-			"Join failed for '%s': node '%s' is '%s', not SpawnerComponent.",
-			[join_payload.username, path.node_path, node.get_class()],
-			func(m): push_error(m)
-		)
-		return null
-
-	return spawner
+func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
+	var node := scene.level.get_node(path)
+	assert(node is SpawnerComponent,
+		"ResolvedJoin.spawner_path didn't point at a SpawnerComponent")
+	return node
 
 
 func _apply_empty_action_if_needed(name: StringName) -> void:
@@ -518,10 +408,6 @@ func _on_scene_spawned(node: Node) -> void:
 	Netw.dbg.info("Scene spawned: %s", [scene.level.name])
 	active_scenes[scene.level.name] = scene
 	if multiplayer.is_server():
-		if not scene.synchronizer.spawned.is_connected(
-			_on_scene_node_spawned
-		):
-			scene.synchronizer.spawned.connect(_on_scene_node_spawned)
 		scene.synchronizer.despawned.connect(
 			_on_player_left_scene.bind(StringName(scene.level.name)))
 		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
@@ -532,181 +418,29 @@ func _on_player_left_scene(player: Node, scene_name: StringName) -> void:
 		"Player left scene '%s'. Evaluating empty action.", [scene_name]
 	)
 	_apply_empty_action_if_needed(scene_name)
-	if _is_local_scene_peer(player):
-		_resolve_active_scene_from_local_player.call_deferred()
-
-
-func _on_scene_node_spawned(player: Node) -> void:
-	var scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
-	_set_active_scene_for_player.call_deferred(player, scene)
 
 
 func _on_scene_despawned(node: Node) -> void:
 	var scene := node as MultiplayerScene
 	Netw.dbg.info("Scene despawned: %s", [scene.level.name])
 	active_scenes.erase(scene.level.name)
-	if scene == _active_scene:
-		_resolve_active_scene_from_local_player.call_deferred()
-
-
-func _on_server_disconnected() -> void:
-	Netw.dbg.info("Server disconnected. Cleaning up scenes.")
-	_set_active_scene(null)
-	for scene: MultiplayerScene in active_scenes.values():
-		if scene.is_inside_tree():
-			scene.get_parent().remove_child(scene)
-		scene.queue_free()
 
 
 func _on_configured() -> void:
 	Netw.dbg.trace("_on_configured called.")
-	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
-		multiplayer.server_disconnected.connect(_on_server_disconnected)
-	
+
 	if multiplayer.is_server():
 		var debug_viewports: Node = VIEWPORTS_DEBUG.instantiate()
 		child_entered_tree.connect(debug_viewports.get("_on_node_entered"))
 		child_exiting_tree.connect(debug_viewports.get("_on_node_exited"))
 		add_child(debug_viewports)
-		
+
 		spawn_scenes.call_deferred()
 		_emit_startup_scenes_spawned.call_deferred()
-		_bind_listen_server_swap()
 
 
 func _emit_startup_scenes_spawned() -> void:
 	startup_scenes_spawned.emit()
-
-
-# Binds listen-server active-scene tracking. The actual scene resolution is
-# deferred until the tree role becomes LISTEN_SERVER and a local player
-# spawns, because connect_player changes the role after configured emits.
-func _bind_listen_server_swap() -> void:
-	var mt := MultiplayerTree.for_node(self)
-	if not mt:
-		return
-	if not mt.local_player_changed.is_connected(
-		_on_listen_server_player_changed
-	):
-		mt.local_player_changed.connect(_on_listen_server_player_changed)
-	
-	if mt.local_player:
-		_on_listen_server_player_changed(mt.local_player)
-
-
-# Unbinds listen-server active-scene tracking.
-func _unbind_listen_server_swap() -> void:
-	var mt := MultiplayerTree.for_node(self)
-	if mt and mt.local_player_changed.is_connected(
-		_on_listen_server_player_changed
-	):
-		mt.local_player_changed.disconnect(
-			_on_listen_server_player_changed
-		)
-
-
-# Called when the local player changes. Connects [code]tree_entered[/code] on
-# the new player and re-resolves the active scene immediately.
-func _on_listen_server_player_changed(player: Node) -> void:
-	if is_instance_valid(player):
-		var bound := _on_listen_server_player_entered.bind(player)
-		if not player.tree_entered.is_connected(bound):
-			player.tree_entered.connect(bound)
-	_resolve_active_scene_from_local_player()
-
-
-# Called when the tracked player enters the tree. Self-guards against stale
-# connections.
-func _on_listen_server_player_entered(player: Node) -> void:
-	var ctx := Netw.ctx(self)
-	if not ctx or not ctx.tree.is_listen_server():
-		return
-	if player != ctx.tree.get_local_player():
-		return
-	_resolve_active_scene_from_local_player()
-
-
-# Resolves the local player's containing scene and routes it through
-# _set_active_scene. No-ops on non-listen-server contexts.
-func _resolve_active_scene_from_local_player() -> void:
-	if not is_inside_tree():
-		return
-	var ctx := Netw.ctx(self)
-	if not ctx or not ctx.tree.is_listen_server():
-		return
-	var player := ctx.tree.get_local_player()
-	if not is_instance_valid(player):
-		_set_active_scene(null)
-		return
-	var scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
-	_set_active_scene(scene)
-
-
-func _set_active_scene_for_local_peer(
-	peer_id: int,
-	scene: MultiplayerScene
-) -> void:
-	if peer_id != multiplayer.get_unique_id():
-		return
-	var ctx := Netw.ctx(self)
-	if not ctx or not ctx.tree.is_listen_server():
-		return
-	_set_active_scene(scene)
-
-
-func _set_active_scene_for_player(
-	player: Node,
-	scene: MultiplayerScene
-) -> void:
-	if not is_instance_valid(player):
-		return
-	_set_active_scene_for_local_peer(_get_peer_id(player), scene)
-
-
-func _is_local_scene_peer(player: Node) -> bool:
-	if not is_instance_valid(player):
-		return false
-	if _get_peer_id(player) != multiplayer.get_unique_id():
-		return false
-	var ctx := Netw.ctx(self)
-	return ctx and ctx.tree.is_listen_server()
-
-
-func _get_peer_id(player: Node) -> int:
-	var entity := NetwEntity.of(player)
-	if entity and entity.peer_id != 0:
-		return entity.peer_id
-	return NetwEntity.parse_peer(player.name)
-
-
-# Updates the active scene, retargets the ActiveSceneView service, and emits
-# active_scene_changed. Idempotent.
-func _set_active_scene(scene: MultiplayerScene) -> void:
-	if scene == _active_scene:
-		return
-	_active_scene = scene
-
-	var view := _resolve_active_scene_view()
-	if view:
-		var viewport := scene as Node as SubViewport if scene else null
-		
-		view.set_target(viewport)
-	elif scene and not _warned_missing_view:
-		Netw.dbg.warn(
-			"Listen-server has no ActiveSceneView registered. The host will " +
-			"not see scene '%s'. Add an ActiveSceneView node under the " +
-			"MultiplayerTree.", [scene.name], func(m): push_warning(m)
-		)
-		_warned_missing_view = true
-
-	active_scene_changed.emit(scene)
-
-
-func _resolve_active_scene_view() -> ActiveSceneView:
-	var mt := MultiplayerTree.for_node(self)
-	if not mt:
-		return null
-	return mt.get_service(ActiveSceneView) as ActiveSceneView
 
 
 func _build_scene_paths() -> void:

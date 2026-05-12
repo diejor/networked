@@ -61,9 +61,6 @@ signal despawning(reason: StringName)
 ## Emitted after teardown when the node leaves the tree.
 signal despawned
 
-## Emitted on the server when a peer requests to join this player template.
-signal player_joined(join_payload: JoinPayload)
-
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
@@ -146,8 +143,6 @@ static func collect_from(template: Node, copy: Node) -> void:
 func _init() -> void:
 	name = "SpawnerComponent"
 	unique_name_in_owner = true
-	if not player_joined.is_connected(_on_player_joined):
-		player_joined.connect(_on_player_joined)
 
 
 func _notification(what: int) -> void:
@@ -429,71 +424,6 @@ func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 	var opts := DespawnOpts.new()
 	opts.reason = &"peer_disconnected"
 	despawn(opts)
-
-
-func _on_player_joined(join_payload: JoinPayload) -> void:
-	var ctx := Netw.ctx(self)
-	if not ctx:
-		return
-
-	var slot := ctx.tree.get_spawn_slot(
-		join_payload.spawner_component_path
-	)
-	if not slot.is_valid():
-		_dbg.error(
-			"Player join failed: no active scene for '%s'.",
-			[join_payload.spawner_component_path.get_scene_name()],
-			func(m): push_error(m)
-		)
-		return
-
-	var scene := _resolve_target_scene(join_payload, slot)
-	if not scene:
-		_dbg.error("Cannot place player: no scene available.", [])
-		return
-	spawn_player(join_payload, scene)
-
-
-func _resolve_target_scene(
-	jp: JoinPayload, slot: SpawnSlot
-) -> MultiplayerScene:
-	var ctx := Netw.ctx(self)
-	if not ctx:
-		return null
-
-	var level_save: SaveComponent = (
-		owner.get_node_or_null("%SaveComponent") as SaveComponent
-	)
-	if (
-		level_save
-		and level_save.database
-		and not level_save.table_name.is_empty()
-	):
-		var entity := level_save.database.table(
-			level_save.table_name
-		).fetch(StringName(jp.username))
-		if entity:
-			var path: String = entity.get_value(
-				&"current_scene_path", ""
-			)
-			if not path.is_empty():
-				var scene_mgr := (
-					ctx.services.get_scene_manager()
-				)
-				if scene_mgr:
-					var name := StringName(
-						path.get_file().get_basename()
-					)
-					var scene := (
-						scene_mgr.active_scenes.get(name)
-					)
-					if scene:
-						return scene
-
-	if slot.has_scene():
-		return slot.get_scene()
-
-	return null
 
 
 # Public spawn/despawn API.

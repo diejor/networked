@@ -74,12 +74,16 @@ var role: Role = Role.NONE
 ## Returns [code]true[/code] while this tree is acting as a server
 ## (dedicated or listen-server).
 var is_host: bool:
-	get: return role == Role.DEDICATED_SERVER or role == Role.LISTEN_SERVER
+	get:
+		_warn_if_role_unset()
+		return role == Role.DEDICATED_SERVER or role == Role.LISTEN_SERVER
 
 ## Returns [code]true[/code] while this tree is acting as a local client
 ## (including listen-server hosts, which are also their own client).
 var is_local_client: bool:
-	get: return role == Role.CLIENT or role == Role.LISTEN_SERVER
+	get:
+		_warn_if_role_unset()
+		return role == Role.CLIENT or role == Role.LISTEN_SERVER
 
 ## Backward compat. Maps to [member is_host].
 var is_server: bool:
@@ -87,6 +91,14 @@ var is_server: bool:
 	set(value):
 		if value:
 			role = Role.DEDICATED_SERVER
+
+
+func _warn_if_role_unset() -> void:
+	if role == Role.NONE:
+		Netw.dbg.warn(
+			"Accessed role-dependent property before role is set. "
+			+ "Connect to 'configured' before reading is_host/is_local_client."
+		)
 
 ## The transport implementation used for this session.
 ##
@@ -598,10 +610,8 @@ func connect_player(join_payload: JoinPayload) -> Error:
 		)
 		return ERR_INVALID_PARAMETER
 	var has_spawner := (
-		(join_payload.spawner_component_path
-			and join_payload.spawner_component_path.is_valid())
-		or (join_payload.multiplayer_spawner_path
-			and join_payload.multiplayer_spawner_path.is_valid())
+		join_payload.spawner_component_path
+		and join_payload.spawner_component_path.is_valid()
 	)
 	
 	await disconnect_player()
@@ -736,7 +746,15 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	var join_payload: JoinPayload = JoinPayload.new()
 	join_payload.deserialize(bytes)
 	join_payload.peer_id = peer_id
-	
+
+	var rj := join_payload.resolve()
+	if not rj:
+		Netw.dbg.warn(
+			"request_join_player: invalid payload from peer %d",
+			[peer_id]
+		)
+		return
+
 	_resolve_username_collision(join_payload)
 	
 	_remember_joined_player(join_payload)
@@ -804,6 +822,7 @@ func _clone_join_payload(join_payload: JoinPayload) -> JoinPayload:
 	
 	var clone := JoinPayload.new()
 	clone.deserialize(join_payload.serialize())
+	clone.resolved = join_payload.resolved
 	return clone
 
 

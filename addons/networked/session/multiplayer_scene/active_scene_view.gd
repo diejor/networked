@@ -1,9 +1,9 @@
 ## Renders an active [SubViewport] scene into the host's root viewport.
 ##
 ## Add this as a child of [MultiplayerTree] in your main scene. On
-## listen-server hosts, [MultiplayerSceneManager] resolves it via
-## [NetwServices] and points it at the local player's current scene each
-## time the player enters or teleports between scenes.
+## listen-server hosts, this view pulls the local player's current scene
+## directly from the tree and [MultiplayerSceneManager], rather than being
+## pushed to by the scene manager.
 ## [br][br]
 ## Pure clients and dedicated servers do not need this node — pure clients
 ## render their scene directly into root, and dedicated servers don't render
@@ -13,12 +13,13 @@
 ## Override anchors after adding it if you want a partial-screen view.
 class_name ActiveSceneView
 extends Control
- 
+
 ## If [code]true[/code], the target [SubViewport]'s size is kept in sync with
 ## this control's size. Disable to render at a fixed (e.g. lower) resolution.
 @export var auto_resize_target: bool = true
 
 var _target: SubViewport = null
+var _mt: MultiplayerTree
 var _previous_update_mode: int = SubViewport.UPDATE_DISABLED
 var _previous_clear_mode: int = SubViewport.CLEAR_MODE_NEVER
 var _dbg: NetwHandle = Netw.dbg.handle(self)
@@ -27,17 +28,90 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	NetwServices.register(self, ActiveSceneView)
+	_mt = NetwServices.register(self, ActiveSceneView)
+	if not _mt:
+		return
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(_on_resized)
+	_mt.configured.connect(_subscribe_scene_manager)
+	_mt.local_player_changed.connect(_on_local_player_changed)
+
+
+func _on_local_player_changed(player: Node) -> void:
+	if is_instance_valid(player):
+		if not player.tree_entered.is_connected(_on_local_player_entered):
+			player.tree_entered.connect(_on_local_player_entered)
+	_refresh.call_deferred()
+
+
+func _on_local_player_entered() -> void:
+	_refresh.call_deferred()
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	clear_target()
+	_mt = null
 	NetwServices.unregister(self, ActiveSceneView)
+
+
+func _subscribe_scene_manager() -> void:
+	if not _mt.is_host:
+		return
+	var sm := _mt.get_service(MultiplayerSceneManager)
+	if sm:
+		sm.scene_despawned.connect(func(_s): _refresh.call_deferred())
+		sm.scene_spawned.connect(_watch_scene_for_local_player_arrival)
+		sm.startup_scenes_spawned.connect(_on_startup_scenes_spawned)
+		for scene: MultiplayerScene in sm.active_scenes.values():
+			_watch_scene_for_local_player_arrival(scene)
+
+
+func _watch_scene_for_local_player_arrival(scene: MultiplayerScene) -> void:
+	if not scene.synchronizer.spawned.is_connected(_on_scene_player_spawned):
+		scene.synchronizer.spawned.connect(
+			_on_scene_player_spawned.bind(scene))
+	_refresh.call_deferred()
+
+
+func _on_scene_player_spawned(_player: Node, _scene: MultiplayerScene) -> void:
+	_refresh.call_deferred()
+
+
+func _on_startup_scenes_spawned() -> void:
+	_refresh.call_deferred()
+
+
+func _refresh() -> void:
+	if not _mt or not _mt.is_local_client:
+		set_target(null)
+		return
+	var player := _find_local_player()
+	if not is_instance_valid(player):
+		set_target(null)
+		return
+	var scene := MultiplayerTree.scene_for_node(player)
+	set_target(scene as Node as SubViewport if scene else null)
+
+
+func _find_local_player() -> Node:
+	var player := _mt.local_player
+	if is_instance_valid(player):
+		return player
+	var sm := _mt.get_service(MultiplayerSceneManager)
+	if not sm:
+		return null
+	var local_id := multiplayer.get_unique_id()
+	for scene: MultiplayerScene in sm.active_scenes.values():
+		for p in scene.get_players():
+			var entity := NetwEntity.of(p)
+			if entity and entity.peer_id == local_id:
+				return p
+			if NetwEntity.parse_peer(p.name) == local_id:
+				return p
+	return null
 
 
 ## Points this view at [param viewport] and forces it to render every frame.
