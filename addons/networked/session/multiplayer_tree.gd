@@ -35,10 +35,10 @@ signal connected_to_server()
 signal server_disconnected()
 
 ## Emitted on every peer after the server accepts a player join.
-signal player_joined(join_payload: JoinPayload)
+signal player_joined(rj: ResolvedJoin)
 
 ## Emitted when this peer's player join has been accepted by the server.
-signal local_player_joined(join_payload: JoinPayload)
+signal local_player_joined(rj: ResolvedJoin)
 
 ## Emitted when an external invitation is received (e.g. Steam Join Requested).
 ## [br][br]
@@ -181,7 +181,7 @@ signal local_player_changed(player: Node)
 ## has been dispatched. Useful for custom spawn flows that need to react
 ## after scene readiness is guaranteed.
 signal player_scene_ready(
-	join_payload: JoinPayload, scene: MultiplayerScene
+	rj: ResolvedJoin, scene: MultiplayerScene
 )
 
 ## Emitted on every peer when the game is paused via [method NetwTree.pause].
@@ -243,7 +243,7 @@ static func resolve(context: Object) -> MultiplayerTree:
 
 
 var _peer_contexts: Dictionary[int, NetwPeerContext] = {}
-var _joined_players: Dictionary[int, JoinPayload] = {}
+var _joined_players: Dictionary[int, ResolvedJoin] = {}
 var _services: Dictionary[Script, Node] = {}
 
 
@@ -313,19 +313,18 @@ func get_peer_context(peer_id: int) -> NetwPeerContext:
 	return _peer_contexts[peer_id]
 
 
-## Returns accepted player join payloads known by this peer.
-func get_joined_players() -> Array[JoinPayload]:
-	var players: Array[JoinPayload] = []
-	for join_payload: JoinPayload in _joined_players.values():
-		players.append(_clone_join_payload(join_payload))
+## Returns accepted player join data known by this peer.
+func get_joined_players() -> Array[ResolvedJoin]:
+	var players: Array[ResolvedJoin] = []
+	for rj: ResolvedJoin in _joined_players.values():
+		players.append(rj)
 	return players
 
 
-## Returns the accepted player payload for [param peer_id], or
+## Returns the accepted player data for [param peer_id], or
 ## [code]null[/code].
-func get_joined_player(peer_id: int) -> JoinPayload:
-	var join_payload := _joined_players.get(peer_id) as JoinPayload
-	return _clone_join_payload(join_payload) if join_payload else null
+func get_joined_player(peer_id: int) -> ResolvedJoin:
+	return _joined_players.get(peer_id) as ResolvedJoin
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -755,10 +754,10 @@ func request_join_player(bytes: PackedByteArray) -> void:
 		)
 		return
 
-	_resolve_username_collision(join_payload)
+	_resolve_username_collision(rj)
 	
-	_remember_joined_player(join_payload)
-	_rpc_notify_player_joined.rpc(join_payload.serialize())
+	_remember_joined_player(rj)
+	_rpc_notify_player_joined.rpc(rj.serialize())
 	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
 		_rpc_sync_joined_players.rpc_id(peer_id, _serialize_joined_players())
 
@@ -774,9 +773,8 @@ func _rpc_notify_player_joined(bytes: PackedByteArray) -> void:
 		)
 		return
 	
-	var join_payload: JoinPayload = JoinPayload.new()
-	join_payload.deserialize(bytes)
-	_remember_joined_player(join_payload)
+	var rj := ResolvedJoin.deserialize(bytes)
+	_remember_joined_player(rj)
 
 
 # Sends all accepted player payloads to a newly joined peer.
@@ -791,46 +789,33 @@ func _rpc_sync_joined_players(payloads: Array[PackedByteArray]) -> void:
 		return
 	
 	for bytes: PackedByteArray in payloads:
-		var join_payload: JoinPayload = JoinPayload.new()
-		join_payload.deserialize(bytes)
-		_remember_joined_player(join_payload)
+		var rj := ResolvedJoin.deserialize(bytes)
+		_remember_joined_player(rj)
 
 
-# Emits join signals derived from the accepted server-authority payload.
-func _emit_player_joined(join_payload: JoinPayload) -> void:
-	player_joined.emit(join_payload)
+# Emits join signals derived from the accepted server-authority data.
+func _emit_player_joined(rj: ResolvedJoin) -> void:
+	player_joined.emit(rj)
 	
-	if join_payload.peer_id == multiplayer.get_unique_id():
-		local_player_joined.emit(join_payload)
+	if rj.peer_id == multiplayer.get_unique_id():
+		local_player_joined.emit(rj)
 
 
-# Stores an accepted player payload and emits it once on this peer.
-func _remember_joined_player(join_payload: JoinPayload) -> bool:
-	if _joined_players.has(join_payload.peer_id):
+# Stores resolved join data and emits it once on this peer.
+func _remember_joined_player(rj: ResolvedJoin) -> bool:
+	if _joined_players.has(rj.peer_id):
 		return false
 	
-	var stored_payload := _clone_join_payload(join_payload)
-	_joined_players[join_payload.peer_id] = stored_payload
-	_emit_player_joined(_clone_join_payload(stored_payload))
+	_joined_players[rj.peer_id] = rj
+	_emit_player_joined(rj)
 	return true
-
-
-# Returns a defensive copy of an accepted join payload.
-func _clone_join_payload(join_payload: JoinPayload) -> JoinPayload:
-	if not join_payload:
-		return null
-	
-	var clone := JoinPayload.new()
-	clone.deserialize(join_payload.serialize())
-	clone.resolved = join_payload.resolved
-	return clone
 
 
 # Serializes the locally known accepted player roster.
 func _serialize_joined_players() -> Array[PackedByteArray]:
 	var payloads: Array[PackedByteArray] = []
-	for join_payload: JoinPayload in _joined_players.values():
-		payloads.append(join_payload.serialize())
+	for rj: ResolvedJoin in _joined_players.values():
+		payloads.append(rj.serialize())
 	return payloads
 
 
@@ -902,7 +887,7 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 	server_disconnecting.emit(reason)
 
 
-func _resolve_username_collision(join_payload: JoinPayload) -> void:
+func _resolve_username_collision(rj: ResolvedJoin) -> void:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
 		var entity := NetwEntity.of(player)
@@ -917,11 +902,11 @@ func _resolve_username_collision(join_payload: JoinPayload) -> void:
 				if not parsed.is_empty():
 					existing_names.append(StringName(parsed))
 	
-	var original_name := join_payload.username
+	var original_name := rj.username
 	if not original_name in existing_names:
 		return
 	
-	if join_payload.is_debug:
+	if rj.is_debug:
 		var suffix := 1
 		var new_name := StringName(str(original_name) + str(suffix))
 		while new_name in existing_names:
@@ -932,7 +917,7 @@ func _resolve_username_collision(join_payload: JoinPayload) -> void:
 			"Debug name collision: renaming %s to %s",
 			[original_name, new_name]
 		)
-		join_payload.username = new_name
+		rj.username = new_name
 	else:
 		Netw.dbg.warn(
 			"Username collision detected for '%s'. "

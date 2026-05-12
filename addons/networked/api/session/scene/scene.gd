@@ -27,7 +27,7 @@ signal player_left(player: Node)
 ## Emitted when a player toggles their ready state to [code]true[/code] via
 ## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
 ## automatic join event. See [signal player_entered] for spawn detection.
-signal player_ready(join_payload: JoinPayload)
+signal player_ready(rj: ResolvedJoin)
 
 # ---------------------------------------------------------------------------
 # Suspend / resume signals  (soft, signal-only, game code decides)
@@ -386,8 +386,8 @@ func _on_countdown_cancelled() -> void:
 	_active_countdown = null
 
 
-func _on_player_ready(join_payload: JoinPayload) -> void:
-	player_ready.emit(join_payload)
+func _on_player_ready(rj: ResolvedJoin) -> void:
+	player_ready.emit(rj)
 
 
 func _get_peer_id(node: Node) -> int:

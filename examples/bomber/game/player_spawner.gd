@@ -18,25 +18,25 @@ func _on_match_started() -> void:
 	spawn_joined_players(ctx.tree.get_joined_players())
 
 
-## Server-only. Spawns one player for each accepted join payload.
-func spawn_joined_players(joined_players: Array[JoinPayload]) -> void:
+## Server-only. Spawns one player for each accepted join data.
+func spawn_joined_players(joined_players: Array[ResolvedJoin]) -> void:
 	assert(multiplayer.is_server())
 	
 	joined_players.sort_custom(
-		func(a: JoinPayload, b: JoinPayload) -> bool:
+		func(a: ResolvedJoin, b: ResolvedJoin) -> bool:
 			return a.peer_id < b.peer_id
 	)
 	
 	for index in joined_players.size():
-		var join_payload := joined_players[index]
-		if _has_player(join_payload):
+		var rj := joined_players[index]
+		if _has_player(rj):
 			continue
 		
-		_register_score_player(join_payload)
+		_register_score_player(rj)
 		spawn({
-			"peer_id": join_payload.peer_id,
+			"peer_id": rj.peer_id,
 			"spawn_index": index,
-			"username": str(join_payload.username),
+			"username": str(rj.username),
 		})
 
 
@@ -58,23 +58,23 @@ func _spawn_player(data: Variant) -> Node:
 	return player
 
 
-func _has_player(join_payload: JoinPayload) -> bool:
+func _has_player(rj: ResolvedJoin) -> bool:
 	var players_root := get_node_or_null(spawn_path)
 	if not players_root:
 		return false
 	
 	var node_name := NetwEntity.format_name(
-		str(join_payload.username),
-		join_payload.peer_id
+		str(rj.username),
+		rj.peer_id
 	)
 	return players_root.get_node_or_null(node_name) != null
 
 
-func _register_score_player(join_payload: JoinPayload) -> void:
+func _register_score_player(rj: ResolvedJoin) -> void:
 	var world := ctx.scene.get_level()
 	
 	var score := world.get_node("Score")
-	score.add_player(join_payload.peer_id, str(join_payload.username))
+	score.add_player(rj.peer_id, str(rj.username))
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:

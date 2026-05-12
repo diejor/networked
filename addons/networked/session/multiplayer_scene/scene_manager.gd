@@ -361,11 +361,9 @@ func _spawn_scene_node(data: Variant) -> Node:
 ## [br][br]
 ## When [member ResolvedJoin.scene_name] is empty (no
 ## [member JoinPayload.spawner_component_path] was provided), this is a no-op.
-func handle_player_joined(join_payload: JoinPayload) -> void:
+func handle_player_joined(rj: ResolvedJoin) -> void:
 	if not multiplayer.is_server():
 		return
-	var rj := join_payload.resolved
-	assert(rj, "request_join_player should have rejected malformed payload")
 
 	if rj.scene_name.is_empty():
 		return
@@ -375,11 +373,11 @@ func handle_player_joined(join_payload: JoinPayload) -> void:
 	assert(scene, "activate_scene must guarantee scene presence")
 
 	var spawner := _spawner_in(scene, rj.spawner_path)
-	spawner.spawn_player(join_payload, scene)
+	spawner.spawn_player(rj, scene)
 
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
-		tree.player_scene_ready.emit(join_payload, scene)
+		tree.player_scene_ready.emit(rj, scene)
 
 
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:

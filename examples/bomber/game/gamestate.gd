@@ -29,8 +29,8 @@ func _ready() -> void:
 	setup_connections()
 
 
-func _on_player_joined(join_payload: JoinPayload) -> void:
-	register_player.rpc_id(join_payload.peer_id, player_name)
+func _on_player_joined(rj: ResolvedJoin) -> void:
+	register_player.rpc_id(rj.peer_id, rj.username)
 	player_list_changed.emit()
 
 func _on_peer_disconnected(id: int) -> void:

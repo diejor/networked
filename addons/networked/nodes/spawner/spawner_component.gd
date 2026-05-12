@@ -453,11 +453,11 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	return copy
 
 
-## Server-only. Spawns a player copy into [param scene] from [param jp].
-func spawn_player(jp: JoinPayload, scene: MultiplayerScene) -> Node:
+## Server-only. Spawns a player copy into [param scene] from [param rj].
+func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
 	assert(multiplayer.is_server())
 	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
-		NetwEntity.bundle(c.owner, jp.peer_id, jp.username)
+		NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
 	)
 	scene.add_player(copy)
 	return copy

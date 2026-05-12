@@ -29,22 +29,6 @@ var peer_id: int
 ## initialization data.
 var is_debug: bool = false
 
-## Set by [method resolve] after successful boundary validation.
-## Downstream code uses this directly; never null-checks it.
-var resolved: ResolvedJoin
-
-
-## Validated join data with all fields guaranteed non-null.
-##
-## Produced by [method JoinPayload.resolve]. Downstream code asserts on
-## these values rather than null-checking.
-class ResolvedJoin extends RefCounted:
-	var peer_id: int
-	var username: StringName
-	var scene_name: StringName
-	var spawner_path: NodePath
-	var is_debug: bool
-
 
 ## Validates structural fields and produces a [ResolvedJoin].
 ##
@@ -55,15 +39,14 @@ class ResolvedJoin extends RefCounted:
 func resolve() -> ResolvedJoin:
 	if username.is_empty():
 		return null
-	var r := ResolvedJoin.new()
-	r.peer_id = peer_id
-	r.username = username
-	r.is_debug = is_debug
+	var rj := ResolvedJoin.new()
+	rj.peer_id = peer_id
+	rj.username = username
+	rj.is_debug = is_debug
 	if spawner_component_path and spawner_component_path.is_valid():
-		r.scene_name = StringName(spawner_component_path.get_scene_name())
-		r.spawner_path = spawner_component_path.node_path
-	resolved = r
-	return r
+		rj.scene_name = StringName(spawner_component_path.get_scene_name())
+		rj.spawner_path = spawner_component_path.node_path
+	return rj
 
 
 ## Serializes the join payload into a [PackedByteArray] for network
