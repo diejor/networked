@@ -149,6 +149,14 @@ func _warn_if_role_unset() -> void:
 		use_listen_server = value
 		update_configuration_warnings()
 
+## Optional authentication provider. When set, [method connect_player]
+## runs the auth pipeline before opening transport. When [code]null[/code],
+## auth is skipped and the client-claimed username is trusted.
+@export var auth_provider: NetwAuthProvider:
+	set(value):
+		auth_provider = value
+		_prepare_auth_api(auth_provider != null)
+
 ## The active [SceneMultiplayer] instance provided by the current
 ## [member backend].
 var multiplayer_api: SceneMultiplayer:
@@ -245,6 +253,8 @@ static func resolve(context: Object) -> MultiplayerTree:
 var _peer_contexts: Dictionary[int, NetwPeerContext] = {}
 var _joined_players: Dictionary[int, ResolvedJoin] = {}
 var _services: Dictionary[Script, Node] = {}
+var _auth_rejection_reasons: Dictionary[int, String] = {}
+var _client_join_payload: JoinPayload
 
 
 ## Registers a [Node] as a service for this session.
@@ -304,6 +314,8 @@ func dispose() -> void:
 	_services.clear()
 	_peer_contexts.clear()
 	_joined_players.clear()
+	_auth_rejection_reasons.clear()
+	_client_join_payload = null
 
 
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
@@ -483,12 +495,14 @@ func host(quiet: bool = false) -> Error:
 				)
 			return setup_err
 	
+	_prepare_auth_api(auth_provider != null)
 	var connection_code: Error = await backend.host()
 	
 	if connection_code == OK:
 		role = Role.DEDICATED_SERVER
 		state = State.ONLINE
 		_config_api()
+		_synthesize_host_identity()
 	else:
 		state = State.OFFLINE
 		if not quiet:
@@ -529,6 +543,7 @@ func join(
 				)
 			return setup_err
 	
+	_prepare_auth_api(auth_provider != null and _client_join_payload != null)
 	var connection_code: Error = await backend.join(server_address, username)
 	if connection_code != OK:
 		state = State.OFFLINE
@@ -613,6 +628,23 @@ func connect_player(join_payload: JoinPayload) -> Error:
 		and join_payload.spawner_component_path.is_valid()
 	)
 	
+	if auth_provider:
+		Netw.dbg.info("Auth: running prepare for '%s'", [
+			join_payload.username
+		])
+		var prepare_err := await auth_provider._prepare(join_payload)
+		if prepare_err != OK:
+			Netw.dbg.error(
+				"Auth prepare failed: %s",
+				[error_string(prepare_err)],
+				func(m): push_error(m)
+			)
+			return prepare_err
+		Netw.dbg.info("Auth: prepare succeeded for '%s'", [
+			join_payload.username
+		])
+	
+	_client_join_payload = join_payload
 	await disconnect_player()
 	
 	var url := join_payload.url
@@ -746,6 +778,25 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	join_payload.deserialize(bytes)
 	join_payload.peer_id = peer_id
 
+	if auth_provider:
+		var bucket := get_peer_context(peer_id).get_bucket(
+			NetwIdentityBucket
+		)
+		if bucket.identity:
+			Netw.dbg.info(
+				"Auth: overriding username '%s' with bucket identity '%s' "
+				+ "(service=%s)",
+				[join_payload.username, bucket.identity.username,
+				bucket.identity.service]
+			)
+			join_payload.username = bucket.identity.username
+		else:
+			Netw.dbg.warn(
+				"Auth: provider configured but no identity for peer %d; "
+				+ "falling back to client-claimed username '%s'",
+				[peer_id, join_payload.username]
+			)
+
 	var rj := join_payload.resolve()
 	if not rj:
 		Netw.dbg.warn(
@@ -754,7 +805,8 @@ func request_join_player(bytes: PackedByteArray) -> void:
 		)
 		return
 
-	_resolve_username_collision(rj)
+	if not _resolve_username_collision(rj):
+		return
 	
 	_remember_joined_player(rj)
 	_rpc_notify_player_joined.rpc(rj.serialize())
@@ -887,7 +939,9 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 	server_disconnecting.emit(reason)
 
 
-func _resolve_username_collision(rj: ResolvedJoin) -> void:
+## Returns [code]true[/code] if the join should proceed, [code]false[/code]
+## if the peer should be rejected.
+func _resolve_username_collision(rj: ResolvedJoin) -> bool:
 	var existing_names: Array[StringName] = []
 	for player in get_all_players():
 		var entity := NetwEntity.of(player)
@@ -904,7 +958,7 @@ func _resolve_username_collision(rj: ResolvedJoin) -> void:
 	
 	var original_name := rj.username
 	if not original_name in existing_names:
-		return
+		return true
 	
 	if rj.is_debug:
 		var suffix := 1
@@ -918,12 +972,27 @@ func _resolve_username_collision(rj: ResolvedJoin) -> void:
 			[original_name, new_name]
 		)
 		rj.username = new_name
-	else:
-		Netw.dbg.warn(
-			"Username collision detected for '%s'. "
-			+ "Topology nameplates may break.", [original_name],
-			func(m): push_warning(m)
+		return true
+	
+	var bucket := get_peer_context(rj.peer_id).get_bucket(
+		NetwIdentityBucket
+	)
+	if bucket.identity:
+		var reason := "Username '%s' is already in use" % original_name
+		_auth_rejection_reasons[rj.peer_id] = reason
+		Netw.dbg.error(
+			"Authenticated username collision for '%s'. Rejecting join.",
+			[original_name]
 		)
+		multiplayer_api.disconnect_peer(rj.peer_id)
+		return false
+	
+	Netw.dbg.warn(
+		"Username collision detected for '%s'. "
+		+ "Topology nameplates may break.", [original_name],
+		func(m): push_warning(m)
+	)
+	return true
 
 
 func _config_api() -> void:
@@ -940,11 +1009,25 @@ func _config_api() -> void:
 	
 	Netw.dbg.register_tree(self)
 	
+	if auth_provider and is_host:
+		multiplayer_api.auth_callback = _on_auth_received
+	
 	configured.emit()
 	
 	var sm := get_service(MultiplayerSceneManager)
 	if sm and not sm.startup_scenes_spawned.is_connected(host_ready.emit):
 		sm.startup_scenes_spawned.connect(host_ready.emit)
+
+
+# Installs Godot auth hooks before the transport peer starts connecting.
+func _prepare_auth_api(use_auth: bool) -> void:
+	if not multiplayer_api:
+		return
+	
+	if use_auth:
+		multiplayer_api.auth_callback = _on_auth_received
+	else:
+		multiplayer_api.auth_callback = Callable()
 
 
 func _connect_backend_signals() -> void:
@@ -954,22 +1037,51 @@ func _connect_backend_signals() -> void:
 		multiplayer_api.peer_connected.connect(_on_peer_connected)
 	if not multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
 		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
-	if not multiplayer_api.connected_to_server.is_connected(_on_connected_to_server):
+	if not multiplayer_api.connected_to_server.is_connected(
+		_on_connected_to_server
+	):
 		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
-	if not multiplayer_api.server_disconnected.is_connected(_on_server_disconnected):
+	if not multiplayer_api.server_disconnected.is_connected(
+		_on_server_disconnected
+	):
 		multiplayer_api.server_disconnected.connect(_on_server_disconnected)
+	if not multiplayer_api.peer_authenticating.is_connected(
+		_on_peer_authenticating
+	):
+		multiplayer_api.peer_authenticating.connect(_on_peer_authenticating)
+	if not multiplayer_api.peer_authentication_failed.is_connected(
+		_on_peer_authentication_failed
+	):
+		multiplayer_api.peer_authentication_failed.connect(
+			_on_peer_authentication_failed
+		)
+
 
 func _disconnect_backend_signals() -> void:
-	if not multiplayer_api: 
+	if not multiplayer_api:
 		return
 	if multiplayer_api.peer_connected.is_connected(_on_peer_connected):
 		multiplayer_api.peer_connected.disconnect(_on_peer_connected)
 	if multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
 		multiplayer_api.peer_disconnected.disconnect(_on_peer_disconnected)
-	if multiplayer_api.connected_to_server.is_connected(_on_connected_to_server):
+	if multiplayer_api.connected_to_server.is_connected(
+		_on_connected_to_server
+	):
 		multiplayer_api.connected_to_server.disconnect(_on_connected_to_server)
-	if multiplayer_api.server_disconnected.is_connected(_on_server_disconnected):
+	if multiplayer_api.server_disconnected.is_connected(
+		_on_server_disconnected
+	):
 		multiplayer_api.server_disconnected.disconnect(_on_server_disconnected)
+	if multiplayer_api.peer_authenticating.is_connected(_on_peer_authenticating):
+		multiplayer_api.peer_authenticating.disconnect(
+			_on_peer_authenticating
+		)
+	if multiplayer_api.peer_authentication_failed.is_connected(
+		_on_peer_authentication_failed
+	):
+		multiplayer_api.peer_authentication_failed.disconnect(
+			_on_peer_authentication_failed
+		)
 
 
 func _on_exiting() -> void:
@@ -1004,6 +1116,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	Netw.dbg.info("Peer disconnected: %d", [peer_id])
 	_peer_contexts.erase(peer_id)
 	_joined_players.erase(peer_id)
+	_auth_rejection_reasons.erase(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
@@ -1011,10 +1124,102 @@ func _on_connected_to_server() -> void:
 	var peer_id := multiplayer_peer.get_unique_id()
 	Netw.dbg.info("Connected to server as peer %d.", [peer_id])
 	
+	if auth_provider:
+		multiplayer_api.auth_callback = Callable()
+	
 	set_multiplayer_authority(peer_id, false) 
 	connected_to_server.emit()
+
+
+func _on_peer_authenticating(peer_id: int) -> void:
+	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
+		return
+	if not auth_provider or not _client_join_payload:
+		return
+	
+	Netw.dbg.debug("Auth: sending credentials for peer %d", [peer_id])
+	var creds := auth_provider._get_credentials(_client_join_payload)
+	if creds.is_empty():
+		Netw.dbg.error(
+			"Auth: provider returned empty credentials for peer %d",
+			[peer_id]
+		)
+		multiplayer_api.disconnect_peer(peer_id)
+		return
+	
+	var send_err := multiplayer_api.send_auth(peer_id, creds)
+	if send_err != OK:
+		Netw.dbg.error(
+			"Auth: failed to send credentials to peer %d: %s",
+			[peer_id, error_string(send_err)]
+		)
+		multiplayer_api.disconnect_peer(peer_id)
+		return
+	
+	var complete_err := multiplayer_api.complete_auth(peer_id)
+	if complete_err != OK:
+		Netw.dbg.error(
+			"Auth: failed to complete local auth for peer %d: %s",
+			[peer_id, error_string(complete_err)]
+		)
+		multiplayer_api.disconnect_peer(peer_id)
+
+
+func _on_peer_authentication_failed(peer_id: int) -> void:
+	Netw.dbg.warn("Auth failed for peer %d", [peer_id])
 
 
 func _on_server_disconnected() -> void:
 	Netw.dbg.info("Disconnected from server.")
 	server_disconnected.emit()
+
+
+func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
+	if not auth_provider:
+		Netw.dbg.debug("Auth: no provider, completing auth for peer %d", [
+			peer_id
+		])
+		multiplayer_api.complete_auth(peer_id)
+		return
+	Netw.dbg.info("Auth: validating credentials for peer %d", [peer_id])
+	var identity := auth_provider._authenticate(peer_id, data)
+	if identity:
+		Netw.dbg.info(
+			"Auth: peer %d accepted as '%s' (service=%s)",
+			[peer_id, identity.username, identity.service]
+		)
+		get_peer_context(peer_id).get_bucket(
+			NetwIdentityBucket
+		).identity = identity
+		multiplayer_api.complete_auth(peer_id)
+	else:
+		var reason := (
+			auth_provider.rejection_reason
+			if auth_provider.rejection_reason
+			else "Authentication failed"
+		)
+		_auth_rejection_reasons[peer_id] = reason
+		Netw.dbg.warn(
+			"Auth rejected for peer %d: %s", [peer_id, reason]
+		)
+		multiplayer_api.disconnect_peer(peer_id)
+
+
+func _synthesize_host_identity() -> void:
+	if not auth_provider:
+		return
+	Netw.dbg.info("Auth: synthesizing host identity for peer 1")
+	var host_identity := auth_provider._get_host_identity()
+	if host_identity:
+		Netw.dbg.info(
+			"Auth: host identity '%s' (service=%s) stored for peer 1",
+			[host_identity.username, host_identity.service]
+		)
+		get_peer_context(
+			MultiplayerPeer.TARGET_PEER_SERVER
+		).get_bucket(NetwIdentityBucket).identity = host_identity
+		# Note: do NOT call complete_auth(1). The host was never in
+		# Godot's pending auth queue, so complete_auth would fail with
+		# ERR_INVALID_PARAMETER and corrupt the auth state.
+	else:
+		Netw.dbg.debug("Auth: provider returned no host identity")

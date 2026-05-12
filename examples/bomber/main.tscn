@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="3_d22dq"]
+[ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="4_d22dq"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="6_ej8d4"]
@@ -11,6 +12,10 @@
 [sub_resource type="Resource" id="Resource_mrsco"]
 script = ExtResource("3_d22dq")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
+
+[sub_resource type="Resource" id="Resource_d22dq"]
+script = ExtResource("4_d22dq")
+metadata/_custom_type_script = "uid://dp77sylvhe357"
 
 [node name="Lobby" type="Control" unique_id=125506540]
 layout_mode = 3
@@ -27,6 +32,7 @@ script = ExtResource("1_mrsco")
 script = ExtResource("2_wto4k")
 backend = SubResource("Resource_mrsco")
 use_listen_server = true
+auth_provider = SubResource("Resource_d22dq")
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="MultiplayerTree" unique_id=123456790]
 _spawnable_scenes = PackedStringArray("uid://l523ox2awhi6")

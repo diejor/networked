@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_7ue45"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
+[ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="5_lpgch"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/nodes/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
@@ -23,6 +24,9 @@ script = ExtResource("2_03owx")
 username = &"diego"
 spawner_component_path = SubResource("Resource_20pc6")
 
+[sub_resource type="Resource" id="Resource_k3bnk"]
+script = ExtResource("5_lpgch")
+
 [sub_resource type="Resource" id="Resource_wkp8b"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
@@ -35,6 +39,7 @@ script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
 init_join_payload = SubResource("Resource_5vvyt")
 use_listen_server = true
+auth_provider = SubResource("Resource_k3bnk")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
@@ -45,6 +50,10 @@ metadata/_custom_type_script = "uid://domi8t23qrsdh"
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
 spawn_path = NodePath(".")
 script = ExtResource("7_trn2v")
+scene_config/Level1/load_mode = 1
+scene_config/Level1/empty_action = 1
+scene_config/Level2/load_mode = 1
+scene_config/Level2/empty_action = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="ActiveSceneView" type="Control" parent="Client" unique_id=388107522]
