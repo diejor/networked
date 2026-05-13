@@ -250,10 +250,8 @@ static func resolve(context: Object) -> MultiplayerTree:
 	return null
 
 
-var _peer_contexts: Dictionary[int, NetwPeerContext] = {}
-var _joined_players: Dictionary[int, ResolvedJoin] = {}
+var _roster: SessionRoster = SessionRoster.new()
 var _services: Dictionary[Script, Node] = {}
-var _auth_rejection_reasons: Dictionary[int, String] = {}
 var _client_join_payload: JoinPayload
 
 
@@ -312,31 +310,29 @@ func find_service_node(type: Script) -> Node:
 ## references during teardown.
 func dispose() -> void:
 	_services.clear()
-	_peer_contexts.clear()
-	_joined_players.clear()
-	_auth_rejection_reasons.clear()
+	_roster.clear()
 	_client_join_payload = null
 
 
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
 func get_peer_context(peer_id: int) -> NetwPeerContext:
-	if peer_id not in _peer_contexts:
-		_peer_contexts[peer_id] = NetwPeerContext.new()
-	return _peer_contexts[peer_id]
+	return _roster.get_peer_context(peer_id)
+
+
+## Returns [code]true[/code] if a [NetwPeerContext] exists for [param peer_id].
+func has_peer_context(peer_id: int) -> bool:
+	return _roster.has_peer_context(peer_id)
 
 
 ## Returns accepted player join data known by this peer.
 func get_joined_players() -> Array[ResolvedJoin]:
-	var players: Array[ResolvedJoin] = []
-	for rj: ResolvedJoin in _joined_players.values():
-		players.append(rj)
-	return players
+	return _roster.get_joined_players()
 
 
 ## Returns the accepted player data for [param peer_id], or
 ## [code]null[/code].
 func get_joined_player(peer_id: int) -> ResolvedJoin:
-	return _joined_players.get(peer_id) as ResolvedJoin
+	return _roster.get_joined_player(peer_id)
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -855,20 +851,15 @@ func _emit_player_joined(rj: ResolvedJoin) -> void:
 
 # Stores resolved join data and emits it once on this peer.
 func _remember_joined_player(rj: ResolvedJoin) -> bool:
-	if _joined_players.has(rj.peer_id):
-		return false
-	
-	_joined_players[rj.peer_id] = rj
-	_emit_player_joined(rj)
-	return true
+	if _roster.remember_joined_player(rj):
+		_emit_player_joined(rj)
+		return true
+	return false
 
 
 # Serializes the locally known accepted player roster.
 func _serialize_joined_players() -> Array[PackedByteArray]:
-	var payloads: Array[PackedByteArray] = []
-	for rj: ResolvedJoin in _joined_players.values():
-		payloads.append(rj.serialize())
-	return payloads
+	return _roster.serialize_joined_players()
 
 
 # ---------------------------------------------------------------------------
@@ -942,57 +933,11 @@ func _rpc_receive_notify_disconnect(reason: String) -> void:
 ## Returns [code]true[/code] if the join should proceed, [code]false[/code]
 ## if the peer should be rejected.
 func _resolve_username_collision(rj: ResolvedJoin) -> bool:
-	var existing_names: Array[StringName] = []
-	for player in get_all_players():
-		var entity := NetwEntity.of(player)
-		if entity and not entity.entity_id.is_empty():
-			existing_names.append(entity.entity_id)
-		else:
-			var client := SpawnerComponent.unwrap(player)
-			if client:
-				existing_names.append(client.entity_id)
-			else:
-				var parsed := player.name.get_slice("|", 0)
-				if not parsed.is_empty():
-					existing_names.append(StringName(parsed))
-	
-	var original_name := rj.username
-	if not original_name in existing_names:
-		return true
-	
-	if rj.is_debug:
-		var suffix := 1
-		var new_name := StringName(str(original_name) + str(suffix))
-		while new_name in existing_names:
-			suffix += 1
-			new_name = StringName(str(original_name) + str(suffix))
-		
-		Netw.dbg.info(
-			"Debug name collision: renaming %s to %s",
-			[original_name, new_name]
-		)
-		rj.username = new_name
-		return true
-	
-	var bucket := get_peer_context(rj.peer_id).get_bucket(
-		NetwIdentityBucket
+	return _roster.resolve_username_collision(
+		rj, 
+		get_all_players(), 
+		multiplayer_api.disconnect_peer if multiplayer_api else Callable()
 	)
-	if bucket.identity:
-		var reason := "Username '%s' is already in use" % original_name
-		_auth_rejection_reasons[rj.peer_id] = reason
-		Netw.dbg.error(
-			"Authenticated username collision for '%s'. Rejecting join.",
-			[original_name]
-		)
-		multiplayer_api.disconnect_peer(rj.peer_id)
-		return false
-	
-	Netw.dbg.warn(
-		"Username collision detected for '%s'. "
-		+ "Topology nameplates may break.", [original_name],
-		func(m): push_warning(m)
-	)
-	return true
 
 
 func _config_api() -> void:
@@ -1114,9 +1059,7 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	Netw.dbg.info("Peer disconnected: %d", [peer_id])
-	_peer_contexts.erase(peer_id)
-	_joined_players.erase(peer_id)
-	_auth_rejection_reasons.erase(peer_id)
+	_roster.forget_peer(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
@@ -1198,7 +1141,7 @@ func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
 			if auth_provider.rejection_reason
 			else "Authentication failed"
 		)
-		_auth_rejection_reasons[peer_id] = reason
+		_roster.set_auth_rejection_reason(peer_id, reason)
 		Netw.dbg.warn(
 			"Auth rejected for peer %d: %s", [peer_id, reason]
 		)

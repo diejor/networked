@@ -47,12 +47,12 @@ func test_context_erased_on_peer_disconnect() -> void:
 	# Force creation of a context on the server keyed by the client's peer_id.
 	# This simulates any future server-side code that stores per-client state.
 	server.get_peer_context(client_peer_id)
-	assert_that(server._peer_contexts.has(client_peer_id)).is_true()
+	assert_that(server.has_peer_context(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
-	await wait_until(func(): return not server._peer_contexts.has(client_peer_id))
+	await wait_until(func(): return not server.has_peer_context(client_peer_id))
 
-	assert_that(server._peer_contexts.has(client_peer_id)).is_false()
+	assert_that(server.has_peer_context(client_peer_id)).is_false()
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ func test_server_context_does_not_contain_client_peer_id() -> void:
 
 	# Client-side components register in the client's own MultiplayerTree.
 	# The server should have no context keyed by the client's peer_id.
-	assert_that(server._peer_contexts.has(client_peer_id)).is_false()
+	assert_that(server.has_peer_context(client_peer_id)).is_false()
 
 
 func test_client_context_does_not_contain_server_peer_id() -> void:
@@ -88,7 +88,7 @@ func test_client_context_does_not_contain_server_peer_id() -> void:
 
 	# Server-side components register in the server's own MultiplayerTree.
 	# The client should have no context keyed by the server's peer_id (1).
-	assert_that(client0._peer_contexts.has(1)).is_false()
+	assert_that(client0.has_peer_context(1)).is_false()
 
 
 func test_save_buckets_contain_no_shared_component_instances() -> void:
