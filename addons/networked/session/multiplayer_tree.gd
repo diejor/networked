@@ -254,7 +254,7 @@ static func resolve(context: Object) -> MultiplayerTree:
 
 var _roster: SessionRoster = SessionRoster.new()
 var _auth: AuthCoordinator
-var _services: Dictionary[Script, Node] = {}
+var _services: ServiceRegistry = ServiceRegistry.new()
 var _client_join_payload: JoinPayload
 
 
@@ -264,33 +264,17 @@ func register_service(service: Node, type: Script = null) -> void:
 		is_ancestor_of(service) or service == self, 
 		"Service %s must be a descendant of the MultiplayerTree." % service.name
 	)
-	
-	if not type:
-		type = service.get_script()
-	
-	if type in _services:
-		Netw.dbg.warn(
-			"Service %s already registered - overwriting.",
-			[type.get_global_name()], func(m): push_warning(m)
-		)
-	
-	_services[type] = service
-	Netw.dbg.debug("Service %s registered.", [type.get_global_name()])
+	_services.register_service(service, type)
 
 
 ## Unregisters a [Node] from this session's services.
 func unregister_service(service: Node, type: Script = null) -> void:
-	if not type:
-		type = service.get_script()
-	
-	if _services.get(type) == service:
-		_services.erase(type)
-		Netw.dbg.debug("Service %s unregistered.", [type.get_global_name()])
+	_services.unregister_service(service, type)
 
 
 ## Returns the service registered for [param type], or [code]null[/code].
 func get_service(type: Script) -> Node:
-	return _services.get(type)
+	return _services.get_service(type)
 
 
 ## Scans descendant nodes for one whose type matches [param type].
