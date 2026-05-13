@@ -773,24 +773,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	join_payload.deserialize(bytes)
 	join_payload.peer_id = peer_id
 
-	if auth_provider:
-		var bucket := get_peer_context(peer_id).get_bucket(
-			NetwIdentityBucket
-		)
-		if bucket.identity:
-			Netw.dbg.info(
-				"Auth: overriding username '%s' with bucket identity '%s' "
-				+ "(service=%s)",
-				[join_payload.username, bucket.identity.username,
-				bucket.identity.service]
-			)
-			join_payload.username = bucket.identity.username
-		else:
-			Netw.dbg.warn(
-				"Auth: provider configured but no identity for peer %d; "
-				+ "falling back to client-claimed username '%s'",
-				[peer_id, join_payload.username]
-			)
+	_auth.resolve_identity(peer_id, join_payload)
 
 	var rj := join_payload.resolve()
 	if not rj:

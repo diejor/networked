@@ -80,6 +80,7 @@ func _on_game_error(errtxt: String) -> void:
 func refresh_lobby() -> void:
 	var players := gamestate.get_player_list()
 	players.sort()
+	print(players)
 	$Players/List.clear()
 	for p: String in players:
 		$Players/List.add_item(p)

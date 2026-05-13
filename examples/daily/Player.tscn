@@ -78,7 +78,6 @@ metadata/_custom_type_script = "uid://c72wanrudisxw"
 [node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1181938780]
 replication_config = SubResource("SceneReplicationConfig_5h0xu")
 script = ExtResource("5_dgaqa")
-authority_mode = 1
 metadata/_custom_type_script = "uid://cgyly1efa3m53"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]

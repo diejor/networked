@@ -373,11 +373,13 @@ func handle_player_joined(rj: ResolvedJoin) -> void:
 	assert(scene, "activate_scene must guarantee scene presence")
 
 	var spawner := _spawner_in(scene, rj.spawner_path)
-	spawner.spawn_player(rj, scene)
+	var player := spawner.instantiate_player(rj)
+	var target_scene := await _resolve_hydrated_spawn_scene(player, scene)
+	target_scene.add_player(player)
 
 	var tree := MultiplayerTree.for_node(self)
 	if tree:
-		tree.player_scene_ready.emit(rj, scene)
+		tree.player_scene_ready.emit(rj, target_scene)
 
 
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
@@ -385,6 +387,22 @@ func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
 	assert(node is SpawnerComponent,
 		"ResolvedJoin.spawner_path didn't point at a SpawnerComponent")
 	return node
+
+
+func _resolve_hydrated_spawn_scene(
+	player: Node, fallback_scene: MultiplayerScene
+) -> MultiplayerScene:
+	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
+	if save:
+		save.hydrate_from_db()
+	var tp: TPComponent = player.get_node_or_null("%TPComponent")
+	if not tp or tp.current_scene_name.is_empty():
+		return fallback_scene
+	var scene_name := StringName(tp.current_scene_name)
+	if not active_scenes.has(scene_name):
+		await activate_scene(scene_name)
+	var scene := active_scenes.get(scene_name) as MultiplayerScene
+	return scene if scene else fallback_scene
 
 
 func _apply_empty_action_if_needed(name: StringName) -> void:

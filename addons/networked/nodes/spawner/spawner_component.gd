@@ -64,6 +64,10 @@ signal despawned
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
+## When [code]true[/code], applies a small random offset to the owner's
+## position on spawn to prevent physics overlap.
+@export var spawn_jitter: bool = true
+
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -239,6 +243,9 @@ func _on_owner_tree_entered() -> void:
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
 
+	if spawn_jitter and owner.multiplayer.is_server():
+		_apply_spawn_jitter()
+
 	var entity := Netw.ctx(self).entity
 	if entity:
 		entity.spawning.emit()
@@ -290,6 +297,27 @@ func _hydrate_identity_from_name() -> void:
 	_sync_entity_identity()
 
 
+func _apply_spawn_jitter() -> void:
+	var jitter := 5.
+	var offset: Variant
+	
+	if owner is Node3D:
+		offset = Vector3(
+			randf_range(-jitter, jitter),
+			0,
+			randf_range(-jitter, jitter)
+		)
+	elif owner is Node2D:
+		offset = Vector2(
+			randf_range(-jitter, jitter),
+			randf_range(-jitter, jitter)
+		)
+	else:
+		return
+
+	owner.global_position += offset
+
+
 func _sync_entity_identity() -> void:
 	if not owner:
 		return
@@ -322,8 +350,6 @@ func _has_authority_binding() -> bool:
 # The server keeps the template visible only to itself;
 # clients remove it.
 func _apply_template_state() -> void:
-	if authority_mode != AuthorityMode.CLIENT:
-		return
 	owner.process_mode = Node.PROCESS_MODE_DISABLED
 	owner.visible = false
 	#if multiplayer and not multiplayer.is_server():
@@ -453,12 +479,18 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	return copy
 
 
-## Server-only. Spawns a player copy into [param scene] from [param rj].
-func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
+## Server-only. Instantiates a player copy from [param rj].
+func instantiate_player(rj: ResolvedJoin) -> Node:
 	assert(multiplayer.is_server())
 	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
 		NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
 	)
+	return copy
+
+
+## Server-only. Spawns a player copy into [param scene] from [param rj].
+func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
+	var copy := instantiate_player(rj)
 	scene.add_player(copy)
 	return copy
 

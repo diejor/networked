@@ -99,6 +99,31 @@ func synthesize_host_identity() -> void:
 		Netw.dbg.debug("Auth: provider returned no host identity")
 
 
+## Overrides [param join_payload]'s username with a server-authoritative
+## identity if one exists for [param peer_id].
+func resolve_identity(peer_id: int, join_payload: JoinPayload) -> void:
+	if not _auth_provider or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return
+	
+	var bucket := _roster.get_peer_context(peer_id).get_bucket(
+		NetwIdentityBucket
+	)
+	if bucket.identity:
+		Netw.dbg.info(
+			"Auth: overriding username '%s' with bucket identity '%s' "
+			+ "(service=%s)",
+			[join_payload.username, bucket.identity.username,
+			bucket.identity.service]
+		)
+		join_payload.username = bucket.identity.username
+	else:
+		Netw.dbg.warn(
+			"Auth: provider configured but no identity for peer %d; "
+			+ "falling back to client-claimed username '%s'",
+			[peer_id, join_payload.username]
+		)
+
+
 ## Clears runtime auth state and disconnects API hooks.
 func clear() -> void:
 	bind_api(null)

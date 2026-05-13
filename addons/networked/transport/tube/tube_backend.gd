@@ -5,6 +5,16 @@
 ## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal -
 ## the TubeClient owns its own [MultiplayerAPI], so this backend asks the tree
 ## to adopt it via [method MultiplayerTree._adopt_api].
+## [br][br]
+## [b]Service Registration:[/b]
+## During [method setup], this backend registers the [code]TubeClient[/code]
+## node as a session-wide service.
+## [codeblock]
+## # Retrieve the TubeClient from a component
+## var tube = ctx.services.get_service(TubeClient)
+## if tube:
+##     print("Session ID: ", tube.session_id)
+## [/codeblock]
 @tool
 class_name TubeBackend
 extends BackendPeer
@@ -32,6 +42,7 @@ func setup(tree: MultiplayerTree) -> Error:
 		tube = null
 		return ERR_INVALID_DATA
 
+	NetwServices.register(node)
 	tube.multiplayer_root_node = tree
 	tree._adopt_api(tube.multiplayer_api, "tube_swap")
 	Netw.dbg.warn(
@@ -40,6 +51,7 @@ func setup(tree: MultiplayerTree) -> Error:
 	)
 
 	return OK
+
 
 ## Creates a new Tube session and copies the session ID to the clipboard.
 ## Returns [code]null[/code] because the Tube transport owns its own peer; the
@@ -76,10 +88,13 @@ func create_join_peer(
 	return null
 
 func peer_reset_state() -> void:
-	if tube != null and tube.state != TubeWrapper.State.IDLE:
-		tube.leave_session()
+	if tube != null:
+		if tube.state != TubeWrapper.State.IDLE:
+			tube.leave_session()
+		NetwServices.unregister(tube._node)
 
 func get_join_address() -> String:
+
 	if tube != null and not tube.session_id.is_empty():
 		return tube.session_id
 

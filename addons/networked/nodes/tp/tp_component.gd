@@ -50,7 +50,7 @@ func _get_bucket() -> Bucket:
 class TeleportPromise extends RefCounted:
 	## Returned by [method TPComponent.teleport] to observe the completion of a teleport.
 	##
-	## Survives the client node's lifetime — safe to await even when the client player
+	## Survives the client node's lifetime - safe to await even when the client player
 	## is destroyed and respawned during the teleport handshake.
 	signal completed
 	var span: NetSpan # Reference to the initiating span
@@ -157,7 +157,6 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## Returns a [TPComponent.TeleportPromise] that resolves when the teleport
 ## completes. Safe to [operator await] across the delete+respawn cycle.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
-	_flush_player_position(owner)
 	var promise := TeleportPromise.new()
 	_begin_tp_span(target_tp.scene_path, promise)
 	_do_teleport(target_tp, promise)
@@ -189,6 +188,8 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 			_step("save_ack_timeout")
 	else:
 		_step("save_push_skipped")
+
+	_flush_player_position(owner)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -347,8 +348,12 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 			snap_pos = tp_node.get("global_position")
 	_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
 	owner.set("global_position", snap_pos)
+	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
+	if save:
+		save.pull_from_scene()
+		save.flush()
 
-	# Defer only the client notification — the original assert wanted to
+	# Defer only the client notification - the original assert wanted to
 	# guarantee the player is fully in tree, which is now true synchronously.
 	var notify_client := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")

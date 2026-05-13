@@ -30,7 +30,7 @@ func _ready() -> void:
 
 
 func _on_player_joined(rj: ResolvedJoin) -> void:
-	register_player.rpc_id(rj.peer_id, rj.username)
+	players[rj.peer_id] = rj.username
 	player_list_changed.emit()
 
 func _on_peer_disconnected(id: int) -> void:
