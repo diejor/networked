@@ -11,39 +11,36 @@ extends BackendPeer
 ## Hostname used for WSS connections when no explicit address is supplied.
 @export var public_host: String = "ws.diejor.tech"
 
-var ws_peer: WebSocketMultiplayerPeer:
-	get:
-		return api.multiplayer_peer as WebSocketMultiplayerPeer
-	set(peer):
-		api.multiplayer_peer = peer
 
-func host() -> Error:
-	Netw.dbg.trace("WebSocketBackend: host called.")
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	Netw.dbg.trace("WebSocketBackend: create_host_peer called.")
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var err := peer.create_server(port)
-	
-	if err == OK:
-		ws_peer = peer
-		Netw.dbg.info("WebSocket server ready on *:%d", [port])
-		return OK
-	
-	return err
+	if err != OK:
+		Netw.dbg.warn("WebSocket create_server failed: %s", [error_string(err)],
+		func(m): push_warning(m))
+		return null
+	Netw.dbg.info("WebSocket server ready on *:%d", [port])
+	return peer
 
-func join(server_address: String, _username: String = "") -> Error:
-	Netw.dbg.trace("WebSocketBackend: join called at %s", [server_address])
+
+func create_join_peer(
+	_tree: MultiplayerTree, server_address: String, _username: String = ""
+) -> MultiplayerPeer:
+	Netw.dbg.trace("WebSocketBackend: create_join_peer called at %s", [server_address])
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var url := build_url(server_address)
 	Netw.dbg.debug("WebSocket connecting to URL: %s", [url])
-	
+
 	var err := peer.create_client(url)
-	if err == OK:
-		ws_peer = peer
-		Netw.dbg.info("Client connecting to %s", [url])
-		return OK
-	
-	return err
+	if err != OK:
+		Netw.dbg.error("WebSocket create_client failed: %s", [error_string(err)])
+		return null
+	Netw.dbg.info("Client connecting to %s", [url])
+	return peer
+
 
 ## Builds the WebSocket URL from [param server_address].
 ##
@@ -53,10 +50,10 @@ func join(server_address: String, _username: String = "") -> Error:
 func build_url(server_address: String) -> String:
 	if server_address.is_empty():
 		return "wss://" + public_host
-	
+
 	if server_address == "localhost" or server_address == "127.0.0.1":
 		return "ws://localhost:" + str(port)
-	
+
 	return "wss://" + server_address
 
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:

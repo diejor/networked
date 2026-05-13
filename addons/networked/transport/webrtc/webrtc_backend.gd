@@ -27,9 +27,7 @@ signal room_created(room_id: String)
 	{ "urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject" }
 ]
 
-var webrtc_peer: WebRTCMultiplayerPeer:
-	get: return api.multiplayer_peer as WebRTCMultiplayerPeer
-	set(peer): api.multiplayer_peer = peer
+var webrtc_peer: WebRTCMultiplayerPeer = null
 
 var _sockets: Array[WebSocketPeer] = []
 var _is_server := false
@@ -44,73 +42,84 @@ var _local_godot_id := 0
 var _announce_timer := 0.0
 
 ## Creates a WebRTC server peer, connects to trackers, and emits [signal room_created] with the room hash.
-func host() -> Error:
-	Netw.dbg.trace("WebRTCBackend: host called.")
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	Netw.dbg.trace("WebRTCBackend: create_host_peer called.")
 	_is_server = true
 	_local_godot_id = 1
 	_local_peer_id = _generate_peer_id(_local_godot_id)
-	_info_hash = _generate_hash() 
+	_info_hash = _generate_hash()
 	_reset_state_vars()
-	
+
 	Netw.dbg.debug(
 		"Starting Host. Local WebTorrent ID: %s... Hash: %s",
 		[_local_peer_id.substr(0, 6), _info_hash]
 	)
-	
+
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_server()
 	if err != OK:
-		return err
-	
+		Netw.dbg.error("WebRTC create_server failed: %s", [error_string(err)])
+		return null
+
 	_bind_webrtc_signals(peer)
 	webrtc_peer = peer
 	room_created.emit(_info_hash)
-	
+
 	Netw.dbg.info(
 		"Room session ready at `%s` (saved to clipboard).",
 		[_info_hash]
 	)
 	DisplayServer.clipboard_set(_info_hash)
-	
-	return _connect_trackers()
+
+	var tracker_err := _connect_trackers()
+	if tracker_err != OK:
+		Netw.dbg.error("WebRTC tracker connect failed: %s", [error_string(tracker_err)])
+		return null
+	return peer
 
 ## Connects to the room identified by [param server_address] (the 20-char hash
 ## or any string that hashes to one).
-func join(server_address: String, _username: String = "") -> Error:
-	Netw.dbg.trace("WebRTCBackend: join called at %s", [server_address])
+func create_join_peer(
+	_tree: MultiplayerTree, server_address: String, _username: String = ""
+) -> MultiplayerPeer:
+	Netw.dbg.trace("WebRTCBackend: create_join_peer called at %s", [server_address])
 	_is_server = false
 	_local_godot_id = randi() % 1000000 + 2
 	_local_peer_id = _generate_peer_id(_local_godot_id)
-	
+
 	if server_address.length() != 20:
 		_info_hash = server_address.sha1_text().substr(0, 20)
 	else:
 		_info_hash = server_address
-	
+
 	_reset_state_vars()
-	
+
 	Netw.dbg.debug(
 		"Starting Client. Local Godot ID: %d, Room Hash: %s",
 		[_local_godot_id, _info_hash]
 	)
-	
+
 	var peer := WebRTCMultiplayerPeer.new()
 	var err := peer.create_client(_local_godot_id)
 	if err != OK:
-		return err
-	
+		Netw.dbg.error("WebRTC create_client failed: %s", [error_string(err)])
+		return null
+
 	_bind_webrtc_signals(peer)
 	webrtc_peer = peer
 	Netw.dbg.trace("Client Peer Created. Generating initial WebRTC Connection to Server...")
-	_create_peer_connection(1, "") 
-	
-	return _connect_trackers()
+	_create_peer_connection(1, "")
+
+	var tracker_err := _connect_trackers()
+	if tracker_err != OK:
+		Netw.dbg.error("WebRTC tracker connect failed: %s", [error_string(tracker_err)])
+		return null
+	return peer
 
 func poll(dt: float) -> void:
-	super.poll(dt)
 	if webrtc_peer:
 		webrtc_peer.poll()
-	
+
 	if not _sockets.is_empty():
 		_poll_trackers(dt)
 
@@ -139,8 +148,10 @@ func get_join_address() -> String:
 	return super.get_join_address()
 
 func peer_reset_state() -> void:
-	super.peer_reset_state()
 	Netw.dbg.trace("WebRTCBackend: Resetting Peer State.")
+	if webrtc_peer:
+		webrtc_peer.close()
+	webrtc_peer = null
 	for ws in _sockets:
 		ws.close()
 	_sockets.clear()

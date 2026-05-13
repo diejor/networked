@@ -55,6 +55,11 @@ signal host_ready()
 ## Emitted when the connection state changes.
 signal state_changed(old_state: State, new_state: State)
 
+## Emitted when the owned [SceneMultiplayer] is replaced (e.g. by a Tube
+## transport that brings its own api). Both [param old_api] and [param new_api]
+## may be valid; consumers that cached the previous reference should rebind.
+signal api_swapped(old_api: SceneMultiplayer, new_api: SceneMultiplayer, reason: String)
+
 
 enum State { OFFLINE, CONNECTING, ONLINE, DISCONNECTING }
 enum Role { NONE, CLIENT, DEDICATED_SERVER, LISTEN_SERVER }
@@ -107,13 +112,9 @@ func _warn_if_role_unset() -> void:
 @export var backend: BackendPeer:
 	set(value):
 		if not Engine.is_editor_hint():
-			if backend:
-				_disconnect_backend_signals()
-			
 			if value:
 				backend = value.duplicate()
 				backend._copy_from(value)
-				_connect_backend_signals()
 			else:
 				backend = null
 		else:
@@ -121,14 +122,14 @@ func _warn_if_role_unset() -> void:
 				update_configuration_warnings
 			):
 				backend.changed.disconnect(update_configuration_warnings)
-			
+
 			backend = value
-			
+
 			if backend and not backend.changed.is_connected(
 				update_configuration_warnings
 			):
 				backend.changed.connect(update_configuration_warnings)
-		
+
 		update_configuration_warnings()
 
 ## When set, [method connect_player] is called automatically on
@@ -159,18 +160,19 @@ func _warn_if_role_unset() -> void:
 			_auth.set_auth_provider(value)
 			_auth.prepare(value != null)
 
-## The active [SceneMultiplayer] instance provided by the current
-## [member backend].
-var multiplayer_api: SceneMultiplayer:
-	get:
-		return backend.api if backend else null
+## The owned [SceneMultiplayer] for this tree. Constructed in [code]_init[/code]
+## and mounted on [code]_enter_tree[/code] so child nodes can use the api in
+## their own [code]_ready[/code] / [code]_enter_tree[/code]. May be replaced
+## by backends that bring their own api (see [signal api_swapped]).
+var api: SceneMultiplayer
 
-## The active [MultiplayerPeer] connection managed by the [member backend].
+## [b]Deprecated.[/b] Use [member api]. Kept as a compatibility alias.
+var multiplayer_api: SceneMultiplayer:
+	get: return api
+
+## The active [MultiplayerPeer] connection.
 var multiplayer_peer: MultiplayerPeer:
-	get:
-		if backend and backend.api:
-			return backend.api.multiplayer_peer
-		return null
+	get: return api.multiplayer_peer if api else null
 
 var _tree_name: String = ""
 
@@ -407,12 +409,9 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
-	_connect_backend_signals()
-	
-	if is_online():
-		_config_api()
-	
+
+	_mount_api()
+
 	for child in get_children():
 		if child is MultiplayerSceneManager:
 			return
@@ -451,55 +450,67 @@ func _init() -> void:
 	_auth.set_roster(_roster)
 	_auth.set_auth_provider(auth_provider)
 	if not Engine.is_editor_hint():
+		api = SceneMultiplayer.new()
 		tree_exiting.connect(_on_exiting)
 
 
 func _process(dt: float) -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	if backend:
 		backend.poll(dt)
+	if api and api.has_multiplayer_peer():
+		api.poll()
 
 
 ## Starts this instance as a network host.
 ##
-## Calls [code]setup()[/code] on the backend if available, then [code]host()[/code].
-## Returns [code]OK[/code] on success or a non-zero [enum Error] code on failure.
+## Calls [code]setup()[/code] on the backend, asks it for a host peer via
+## [method BackendPeer.create_host_peer], and assigns the peer onto the
+## tree-owned api. Returns [code]OK[/code] on success or a non-zero
+## [enum Error] code on failure.
 func host(quiet: bool = false) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	Netw.dbg.trace("MultiplayerTree: Hosting session.")
 	state = State.CONNECTING
 	backend.peer_reset_state()
-	
-	if backend.has_method("setup"):
-		var setup_err: Error = backend.setup(self)
-		if setup_err != OK:
-			state = State.OFFLINE
-			if not quiet:
-				Netw.dbg.error(
-					"Setup failed: %s", [error_string(setup_err)], 
-					func(m): push_error(m)
-				)
-			return setup_err
-	
-	_auth.prepare(auth_provider != null)
-	var connection_code: Error = await backend.host()
-	
-	if connection_code == OK:
-		role = Role.DEDICATED_SERVER
-		state = State.ONLINE
-		_config_api()
-		_auth.synthesize_host_identity()
-	else:
+	var prior_api := api
+
+	var setup_err: Error = await backend.setup(self)
+	if setup_err != OK:
 		state = State.OFFLINE
 		if not quiet:
 			Netw.dbg.error(
-				"Failed to host: %s", [error_string(connection_code)], 
+				"Setup failed: %s", [error_string(setup_err)],
 				func(m): push_error(m)
 			)
-	
-	return connection_code
+		return setup_err
+
+	_auth.prepare(auth_provider != null)
+	var peer: MultiplayerPeer = await backend.create_host_peer(self)
+	var api_was_adopted := api != prior_api
+
+	# Adopted-api backends (e.g. TubeBackend) drive their peer onto the swapped
+	# api themselves and return null; non-adopting backends returning null are
+	# real failures.
+	if peer == null and not api_was_adopted:
+		state = State.OFFLINE
+		if not quiet:
+			Netw.dbg.error(
+				"Failed to host: backend produced no peer.",
+				func(m): push_error(m)
+			)
+		return ERR_CANT_CREATE
+
+	if peer != null:
+		api.multiplayer_peer = peer
+
+	role = Role.DEDICATED_SERVER
+	state = State.ONLINE
+	_finalize_session()
+	_auth.synthesize_host_identity()
+	return OK
 
 
 ## Connects to an active server at [param server_address].
@@ -519,29 +530,36 @@ func join(
 	)
 	state = State.CONNECTING
 	backend.peer_reset_state()
-	
-	if backend.has_method("setup"):
-		var setup_err: Error = backend.setup(self)
-		if setup_err != OK:
-			state = State.OFFLINE
-			if not quiet:
-				Netw.dbg.error(
-					"Setup failed: %s", [error_string(setup_err)], 
-					func(m): push_error(m)
-				)
-			return setup_err
-	
-	_auth.prepare(auth_provider != null and _client_join_payload != null)
-	var connection_code: Error = await backend.join(server_address, username)
-	if connection_code != OK:
+	var prior_api := api
+
+	var setup_err: Error = await backend.setup(self)
+	if setup_err != OK:
 		state = State.OFFLINE
 		if not quiet:
 			Netw.dbg.error(
-				"Failed to join: %s", [error_string(connection_code)], 
+				"Setup failed: %s", [error_string(setup_err)],
 				func(m): push_error(m)
 			)
-		return connection_code
-	
+		return setup_err
+
+	_auth.prepare(auth_provider != null and _client_join_payload != null)
+	var peer: MultiplayerPeer = await backend.create_join_peer(
+		self, server_address, username
+	)
+	var api_was_adopted := api != prior_api
+
+	if peer == null and not api_was_adopted:
+		state = State.OFFLINE
+		if not quiet:
+			Netw.dbg.error(
+				"Failed to join: backend produced no peer.",
+				func(m): push_error(m)
+			)
+		return ERR_CANT_CONNECT
+
+	if peer != null:
+		api.multiplayer_peer = peer
+
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		state = State.OFFLINE
@@ -549,18 +567,17 @@ func join(
 			Netw.dbg.error("Connection timed out. Server probably is not up, \
 consider using `connect_player` instead of `join`.", func(m): push_error(m))
 		return ERR_CANT_CONNECT
-	
+
 	role = Role.CLIENT
 	state = State.ONLINE
-	_config_api()
+	_finalize_session()
 	return OK
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
 func is_online() -> bool:
-	return (multiplayer_peer != null 
-		and not multiplayer_peer is OfflineMultiplayerPeer 
-		and multiplayer_api != null 
-		and multiplayer_api.has_multiplayer_peer())
+	return (api != null
+		and api.has_multiplayer_peer()
+		and not api.multiplayer_peer is OfflineMultiplayerPeer)
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server
@@ -574,15 +591,15 @@ func disconnect_player() -> void:
 	
 	state = State.DISCONNECTING
 	
-	var peer_id := multiplayer_api.get_unique_id() if multiplayer_api else 0
+	var peer_id := api.get_unique_id() if api else 0
 	if peer_id != 0:
 		SaveComponent._save_all_in(get_peer_context(peer_id))
-	if multiplayer_api and multiplayer_api.has_multiplayer_peer():
-		multiplayer_api.multiplayer_peer.close()
-	
+	if api and api.has_multiplayer_peer():
+		api.multiplayer_peer.close()
+
 	var timer := get_tree().create_timer(3.0)
-	if multiplayer_api:
-		await Async.timeout(multiplayer_api.server_disconnected, timer)
+	if api:
+		await Async.timeout(api.server_disconnected, timer)
 	
 	state = State.OFFLINE
 	role = Role.NONE
@@ -631,13 +648,14 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	
 	if _is_local_url(url):
 		if backend.supports_embedded_server():
-			var probe_url := url if not url.is_empty() else "localhost"
-			var probe_err: Error = await join(
-				probe_url, join_payload.username, 1.0, true
-			)
-			if probe_err == OK:
-				submit_join(join_payload)
-				return OK
+			if backend.supports_local_probe():
+				var probe_url := url if not url.is_empty() else "localhost"
+				var probe_err: Error = await join(
+					probe_url, join_payload.username, 1.0, true
+				)
+				if probe_err == OK:
+					submit_join(join_payload)
+					return OK
 			
 			if use_listen_server:
 				var host_err := await host(true)
@@ -917,87 +935,121 @@ func _resolve_username_collision(rj: ResolvedJoin) -> bool:
 	return _roster.resolve_username_collision(
 		rj, 
 		get_all_players(), 
-		multiplayer_api.disconnect_peer if multiplayer_api else Callable()
+		api.disconnect_peer if api else Callable()
 	)
 
 
-func _config_api() -> void:
-	Netw.dbg.trace("MultiplayerTree: Configuring multiplayer API.")
-	
+# Mounts the owned api onto the SceneTree at this node's path and binds
+# api signals. Called from _enter_tree, so the api is live before children
+# run their own _ready / _enter_tree.
+func _mount_api() -> void:
+	if not api:
+		return
+
 	_tree_name = name
-	
-	var multiplayer_root := get_path()
-	Netw.dbg.debug(
-		"Configuring multiplayer API with root: %s", [multiplayer_root]
-	)
-	backend.configure_tree(get_tree(), multiplayer_root)
-	multiplayer_api.set_meta(&"_multiplayer_tree", self)
-	
+	var root_path := get_path()
+	api.root_path = root_path
+	get_tree().set_multiplayer(api, root_path)
+	api.set_meta(&"_multiplayer_tree", self)
+	_bind_api_signals(api)
+
+
+# Replaces a fresh empty SceneMultiplayer at the api's old path. Godot 4 does
+# not accept null for non-root paths, so we install a placeholder instead.
+func _unmount_api(release_meta: bool) -> void:
+	if not api:
+		return
+
+	_unbind_api_signals(api)
+	if release_meta and api.has_meta(&"_multiplayer_tree"):
+		api.remove_meta(&"_multiplayer_tree")
+
+	if not api.root_path.is_empty():
+		get_tree().set_multiplayer(SceneMultiplayer.new(), api.root_path)
+
+
+## Replaces the owned [member api] with an externally-provided one. Used by
+## backends like [TubeBackend] that bring their own [SceneMultiplayer].
+func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
+	if new_api == api:
+		return
+
+	var old_api := api
+	if old_api:
+		_unbind_api_signals(old_api)
+		if old_api.has_meta(&"_multiplayer_tree"):
+			old_api.remove_meta(&"_multiplayer_tree")
+		if not old_api.root_path.is_empty():
+			get_tree().set_multiplayer(SceneMultiplayer.new(), old_api.root_path)
+
+	api = new_api
+	if api:
+		var root_path := get_path()
+		api.root_path = root_path
+		get_tree().set_multiplayer(api, root_path)
+		api.set_meta(&"_multiplayer_tree", self)
+		_bind_api_signals(api)
+
+	api_swapped.emit(old_api, api, reason)
+
+
+# Per-session finalization once the peer is live and the role is set.
+func _finalize_session() -> void:
+	Netw.dbg.trace("MultiplayerTree: Finalizing session.")
 	Netw.dbg.register_tree(self)
-	
 	configured.emit()
-	
+
 	var sm := get_service(MultiplayerSceneManager)
 	if sm and not sm.startup_scenes_spawned.is_connected(host_ready.emit):
 		sm.startup_scenes_spawned.connect(host_ready.emit)
 
 
-func _connect_backend_signals() -> void:
-	if not multiplayer_api:
+func _bind_api_signals(target: SceneMultiplayer) -> void:
+	if not target:
 		return
-	_auth.bind_api(multiplayer_api)
-	if not multiplayer_api.peer_connected.is_connected(_on_peer_connected):
-		multiplayer_api.peer_connected.connect(_on_peer_connected)
-	if not multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
-		multiplayer_api.peer_disconnected.connect(_on_peer_disconnected)
-	if not multiplayer_api.connected_to_server.is_connected(
-		_on_connected_to_server
-	):
-		multiplayer_api.connected_to_server.connect(_on_connected_to_server)
-	if not multiplayer_api.server_disconnected.is_connected(
-		_on_server_disconnected
-	):
-		multiplayer_api.server_disconnected.connect(_on_server_disconnected)
+	_auth.bind_api(target)
+	if not target.peer_connected.is_connected(_on_peer_connected):
+		target.peer_connected.connect(_on_peer_connected)
+	if not target.peer_disconnected.is_connected(_on_peer_disconnected):
+		target.peer_disconnected.connect(_on_peer_disconnected)
+	if not target.connected_to_server.is_connected(_on_connected_to_server):
+		target.connected_to_server.connect(_on_connected_to_server)
+	if not target.server_disconnected.is_connected(_on_server_disconnected):
+		target.server_disconnected.connect(_on_server_disconnected)
 
 
-func _disconnect_backend_signals() -> void:
-	if not multiplayer_api:
+func _unbind_api_signals(target: SceneMultiplayer) -> void:
+	if not target:
 		return
 	_auth.bind_api(null)
-	if multiplayer_api.peer_connected.is_connected(_on_peer_connected):
-		multiplayer_api.peer_connected.disconnect(_on_peer_connected)
-	if multiplayer_api.peer_disconnected.is_connected(_on_peer_disconnected):
-		multiplayer_api.peer_disconnected.disconnect(_on_peer_disconnected)
-	if multiplayer_api.connected_to_server.is_connected(
-		_on_connected_to_server
-	):
-		multiplayer_api.connected_to_server.disconnect(_on_connected_to_server)
-	if multiplayer_api.server_disconnected.is_connected(
-		_on_server_disconnected
-	):
-		multiplayer_api.server_disconnected.disconnect(_on_server_disconnected)
+	if target.peer_connected.is_connected(_on_peer_connected):
+		target.peer_connected.disconnect(_on_peer_connected)
+	if target.peer_disconnected.is_connected(_on_peer_disconnected):
+		target.peer_disconnected.disconnect(_on_peer_disconnected)
+	if target.connected_to_server.is_connected(_on_connected_to_server):
+		target.connected_to_server.disconnect(_on_connected_to_server)
+	if target.server_disconnected.is_connected(_on_server_disconnected):
+		target.server_disconnected.disconnect(_on_server_disconnected)
 
 
 func _on_exiting() -> void:
 	Netw.dbg.trace("MultiplayerTree: Exiting.")
-	
-	_disconnect_backend_signals()
-	
-	# When re-parenting, we only unregister the API from the previous path 
-	# to keep the connection alive. [method _enter_tree] handles re-registration.
+
+	# When re-parenting, we only unmount the api from the previous path to
+	# keep the connection alive. _enter_tree handles re-registration.
 	if not is_queued_for_deletion():
-		if backend:
-			backend.unregister_tree(get_tree())
+		_unmount_api(false)
 		return
-	
+
 	Netw.dbg.unregister_tree(self)
-	
-	if multiplayer_api and multiplayer_api.has_meta(&"_multiplayer_tree"):
-		multiplayer_api.remove_meta(&"_multiplayer_tree")
-	
+	if api and api.has_multiplayer_peer():
+		api.multiplayer_peer.close()
+		api.multiplayer_peer = null
+	_unmount_api(true)
+
 	if backend:
-		backend.unconfigure_tree(get_tree())
-	
+		backend.peer_reset_state()
+
 	dispose()
 
 

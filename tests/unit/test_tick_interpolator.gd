@@ -70,7 +70,7 @@ func before_test() -> void:
 	_sync.owner = _player
 	_interpolator.owner = _player
 
-	add_child(_player)
+	_tree.add_child(_player)
 
 	await get_tree().process_frame
 

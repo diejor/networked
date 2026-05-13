@@ -1,28 +1,37 @@
 ## Abstract base resource for network transports used by [MultiplayerTree].
 ##
 ## Subclass this to implement a new transport (ENet, WebSocket, WebRTC, etc.).
-## Override [method host], [method join], and [method _get_backend_warnings].
+## Override [method create_host_peer] and [method create_join_peer] to produce
+## a [MultiplayerPeer]; the [MultiplayerTree] owns the [SceneMultiplayer] and
+## assigns the returned peer onto it.
 @tool
 @abstract
 class_name BackendPeer
 extends Resource
 
-## The [SceneMultiplayer] instance owned by this backend.
-var api: SceneMultiplayer
+
+## Optional one-time setup hook called by [MultiplayerTree] before
+## [method create_host_peer] or [method create_join_peer]. Use it to resolve
+## scene-relative nodes or external services. Return [code]OK[/code] on success.
+func setup(_tree: MultiplayerTree) -> Error:
+	return OK
 
 
-func _init() -> void:
-	api = SceneMultiplayer.new()
-
-
-## Starts listening as a server. Returns [code]OK[/code] on success.
+## Produces a [MultiplayerPeer] in server mode. May [code]await[/code].
+##
+## Return [code]null[/code] to signal failure; the tree will treat this as
+## [code]ERR_CANT_CREATE[/code]. The tree assigns the returned peer onto its
+## owned [SceneMultiplayer].
 @abstract
-func host() -> Error
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer
 
 
-## Connects to [param _server_address] as a client. Returns [code]OK[/code] on success.
+## Produces a [MultiplayerPeer] in client mode connecting to [param address].
+## May [code]await[/code]. Return [code]null[/code] to signal failure.
 @abstract
-func join(_server_address: String, _username: String = "") -> Error
+func create_join_peer(
+	_tree: MultiplayerTree, _address: String, _username: String = ""
+) -> MultiplayerPeer
 
 
 ## Returns editor configuration warnings specific to this backend for the given [param tree].
@@ -30,40 +39,20 @@ func join(_server_address: String, _username: String = "") -> Error
 func _get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray
 
 
-## Registers [member api] with the [SceneTree] under [param root_path].
-func configure_tree(tree: SceneTree, root_path: NodePath) -> void:
-	api.root_path = root_path
-	tree.set_multiplayer(api, root_path)
-
-
-## Removes [member api] from the [SceneTree] without closing the peer.
-func unregister_tree(tree: SceneTree) -> void:
-	if not api or api.root_path.is_empty():
-		return
-	# Replaces the registry entry with a fresh empty [SceneMultiplayer] because 
-	# Godot 4 does not accept null for a non-root path.
-	tree.set_multiplayer(SceneMultiplayer.new(), api.root_path)
-
-
-## Removes [member api] from the [SceneTree] and closes the active peer.
-func unconfigure_tree(tree: SceneTree) -> void:
-	peer_reset_state()
-	unregister_tree(tree)
-
-
-## Polls the underlying [MultiplayerPeer] each frame.
+## Per-frame poll hook for backends that drive their own internal state
+## (e.g. WebRTC signaling sockets, in-process loopback queues).
+##
+## The tree polls the owned [SceneMultiplayer] separately - do not poll the
+## api here.
 func poll(_dt: float) -> void:
-	if api and api.has_multiplayer_peer():
-		api.poll()
+	pass
 
 
-## Closes and clears the active [MultiplayerPeer], returning this backend to a disconnected state.
+## Closes and clears any backend-side state. Called by [MultiplayerTree] before
+## opening a new session and on teardown. Override to release transport-specific
+## handles (e.g. tracker sockets, lobby memberships).
 func peer_reset_state() -> void:
-	if not api:
-		return
-	if api.has_multiplayer_peer():
-		api.multiplayer_peer.close()
-	api.multiplayer_peer = null
+	pass
 
 
 ## Returns the address clients should use to join a hosted session.
@@ -73,13 +62,23 @@ func get_join_address() -> String:
 	return "localhost"
 
 
-## Returns [code]true[/code] if this backend supports spinning up an embedded 
-## server on a local machine (e.g. ENet, WebSocket). 
+## Returns [code]true[/code] if this backend supports spinning up an embedded
+## server on a local machine (e.g. ENet, WebSocket).
 ##
-## Return [code]false[/code] for backends that rely on external lobby systems 
-## (e.g. Steam) where "localhost" is not a valid address.
+## Return [code]false[/code] for backends that rely on external lobby systems
+## (e.g. Steam).
 func supports_embedded_server() -> bool:
 	return true
+
+
+## Returns [code]true[/code] if [method MultiplayerTree.connect_player] can
+## probe an existing local session through [code]"localhost"[/code].
+##
+## Backends with session-id or lobby based joins should return
+## [code]false[/code] even when [method supports_embedded_server] is
+## [code]true[/code].
+func supports_local_probe() -> bool:
+	return supports_embedded_server()
 
 
 ## Called after this backend is duplicated by [MultiplayerTree]'s backend setter.

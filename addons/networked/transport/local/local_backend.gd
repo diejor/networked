@@ -9,35 +9,37 @@ extends BackendPeer
 ## The shared in-process loopback session.
 var session: LocalLoopbackSession = null
 
-## Initializes the loopback server peer. Returns [code]OK[/code].
-func host() -> Error:
-	Netw.dbg.trace("LocalLoopbackBackend: host called.")
+
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	Netw.dbg.trace("LocalLoopbackBackend: create_host_peer called.")
 	if not session:
 		session = LocalLoopbackSession.get_shared_session()
-		
+
 	if not session.has_live_server():
 		session.reset()
-	api.multiplayer_peer = session.get_server_peer()
 	Netw.dbg.info("Local loopback server ready.")
-	return OK
+	return session.get_server_peer()
 
-## Creates a new loopback client peer and links it to the server. Returns [code]OK[/code].
-func join(_server_address: String, _username: String = "") -> Error:
-	Netw.dbg.trace("LocalLoopbackBackend: join called.")
+
+func create_join_peer(
+	_tree: MultiplayerTree, _server_address: String, _username: String = ""
+) -> MultiplayerPeer:
+	Netw.dbg.trace("LocalLoopbackBackend: create_join_peer called.")
 	if not session:
 		session = LocalLoopbackSession.get_shared_session()
-		
-	if not session.has_live_server():
-		return ERR_CANT_CONNECT
-	
-	api.multiplayer_peer = session.create_client_peer()
-	Netw.dbg.info("Local loopback client ready.")
-	return OK
 
-func poll(dt: float) -> void:
+	if not session.has_live_server():
+		Netw.dbg.warn("Local loopback: no live server to join.",
+		func(m): push_warning(m))
+		return null
+
+	Netw.dbg.info("Local loopback client ready.")
+	return session.create_client_peer()
+
+
+func poll(_dt: float) -> void:
 	if session:
 		session.poll()
-	super.poll(dt)
 
 
 func _copy_from(source: BackendPeer) -> void:

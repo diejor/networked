@@ -13,7 +13,7 @@ func test_scoped_global_level_applies_until_close() -> void:
 	)
 	
 	scope.close()
-	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(before)
+	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(_before)
 
 
 func test_scoped_module_override_applies_until_close() -> void:
@@ -28,7 +28,7 @@ func test_scoped_module_override_applies_until_close() -> void:
 	)
 	
 	scope.close()
-	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(before)
+	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(_before)
 
 
 func test_double_close_is_harmless() -> void:
@@ -38,7 +38,7 @@ func test_double_close_is_harmless() -> void:
 	scope.close()
 	scope.close()
 	
-	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(before)
+	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(_before)
 
 
 func test_nested_scopes_restore_previous_layer() -> void:
@@ -56,7 +56,7 @@ func test_nested_scopes_restore_previous_layer() -> void:
 	)
 	
 	outer.close()
-	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(before)
+	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(_before)
 
 
 func test_out_of_order_close_fails_safely() -> void:
@@ -70,7 +70,7 @@ func test_out_of_order_close_fails_safely() -> void:
 	)
 	
 	inner.close()
-	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(before)
+	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(_before)
 
 
 func test_enable_logs_uses_session_hook_for_current_test() -> void:

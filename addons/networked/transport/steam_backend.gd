@@ -47,10 +47,6 @@ var _service: SteamService
 var _lobby_id: int = 0
 
 
-func _init() -> void:
-	super._init()
-
-
 ## Finds or creates a [SteamService] and caches the [SteamWrapper].
 func setup(tree: MultiplayerTree) -> Error:
 	_service = tree.get_service(SteamService)
@@ -71,10 +67,11 @@ func setup(tree: MultiplayerTree) -> Error:
 
 
 ## Creates a Steam lobby and starts hosting.
-func host() -> Error:
-	Netw.dbg.trace("SteamBackend: host called.")
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	Netw.dbg.trace("SteamBackend: create_host_peer called.")
 	if not _wrapper or not _service:
-		return ERR_UNCONFIGURED
+		Netw.dbg.error("SteamBackend: not configured.")
+		return null
 
 	_wrapper.create_lobby(lobby_type, max_clients)
 
@@ -86,7 +83,7 @@ func host() -> Error:
 		Netw.dbg.error(
 			"SteamBackend: Failed to create lobby: %d", [connect_lobby]
 		)
-		return ERR_CANT_CREATE
+		return null
 
 	_lobby_id = lobby_id
 
@@ -98,38 +95,39 @@ func host() -> Error:
 		Netw.dbg.error(
 			"SteamBackend: Failed to instantiate SteamMultiplayerPeer."
 		)
-		return ERR_CANT_CREATE
+		return null
 
 	_wrapper.configure_peer(peer, use_nagle, allow_p2p_relay)
 	var err: Error = peer.call(&"host_with_lobby", lobby_id)
-
-	if err == OK:
-		api.multiplayer_peer = peer
-		Netw.dbg.info("Steam server ready. Lobby ID: %d", [_lobby_id])
-		if copy_lobby_id_to_clipboard:
-			DisplayServer.clipboard_set(str(_lobby_id))
-			Netw.dbg.info("Lobby ID copied to clipboard.")
-	else:
+	if err != OK:
 		Netw.dbg.error(
 			"SteamBackend: Failed to host with lobby: %s",
 			[error_string(err)]
 		)
+		return null
 
-	return err
+	Netw.dbg.info("Steam server ready. Lobby ID: %d", [_lobby_id])
+	if copy_lobby_id_to_clipboard:
+		DisplayServer.clipboard_set(str(_lobby_id))
+		Netw.dbg.info("Lobby ID copied to clipboard.")
+	return peer
 
 
 ## Joins a Steam lobby by ID.
-func join(server_address: String, _username: String = "") -> Error:
-	Netw.dbg.trace("SteamBackend: join called at %s", [server_address])
+func create_join_peer(
+	_tree: MultiplayerTree, server_address: String, _username: String = ""
+) -> MultiplayerPeer:
+	Netw.dbg.trace("SteamBackend: create_join_peer called at %s", [server_address])
 	if not _wrapper or not _service:
-		return ERR_UNCONFIGURED
+		Netw.dbg.error("SteamBackend: not configured.")
+		return null
 
 	var lobby_id := server_address.to_int()
 	if lobby_id == 0:
 		Netw.dbg.error(
 			"SteamBackend: Invalid lobby ID: %s", [server_address]
 		)
-		return ERR_INVALID_PARAMETER
+		return null
 
 	_wrapper.join_lobby(lobby_id)
 
@@ -139,7 +137,7 @@ func join(server_address: String, _username: String = "") -> Error:
 
 	if response != 1: # 1 is SUCCESS in Steam API
 		Netw.dbg.error("SteamBackend: Failed to join lobby: %d", [response])
-		return ERR_CANT_CONNECT
+		return null
 
 	_lobby_id = lobby_id
 	var peer: MultiplayerPeer = _wrapper.create_peer()
@@ -147,21 +145,19 @@ func join(server_address: String, _username: String = "") -> Error:
 		Netw.dbg.error(
 			"SteamBackend: Failed to instantiate SteamMultiplayerPeer."
 		)
-		return ERR_CANT_CREATE
+		return null
 
 	_wrapper.configure_peer(peer, use_nagle, allow_p2p_relay)
 	var err: Error = peer.call(&"connect_to_lobby", lobby_id)
-
-	if err == OK:
-		api.multiplayer_peer = peer
-		Netw.dbg.info("Steam client connected to lobby %d", [_lobby_id])
-	else:
+	if err != OK:
 		Netw.dbg.error(
 			"SteamBackend: Failed to connect to lobby: %s",
 			[error_string(err)]
 		)
+		return null
 
-	return err
+	Netw.dbg.info("Steam client connected to lobby %d", [_lobby_id])
+	return peer
 
 
 ## Returns [code]false[/code] as Steam relies on an external lobby system.
@@ -182,7 +178,6 @@ func peer_reset_state() -> void:
 
 	_wrapper = null
 	_service = null
-	super.peer_reset_state()
 
 
 func _get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
