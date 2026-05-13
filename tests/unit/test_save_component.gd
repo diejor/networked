@@ -1,6 +1,6 @@
 ## Unit tests for [SaveComponent], DB persistence, and synchronization.
 ##
-## All tests run without a SceneTree, network, or spawner.
+## All tests run without a [SceneTree], network, or spawner.
 class_name TestSaveComponent
 extends NetworkedTestSuite
 

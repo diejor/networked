@@ -1,5 +1,7 @@
-## Tests TPComponent teleportation logic with real multiplayer peers and the
-## full request_join_player RPC join chain.
+## Tests [TPComponent] teleportation with real multiplayer peers.
+##
+## Covers the full [method MultiplayerTree.request_join_player] RPC join chain
+## and cross-scene teleportation.
 class_name TestTPFlow
 extends NetworkedTestSuite
 
@@ -41,7 +43,7 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-## Helper: joins a player via the real RPC chain and overrides its database.
+## Joins a player via the real RPC chain and overrides its database.
 func _spawn_tp_player(scene_path: String) -> Node2D:
 	var player := await harness.join_player(
 		client0, scene_path, SPAWNER_PATH) as Node2D
@@ -69,7 +71,8 @@ func test_tp_spawn_places_in_correct_scene() -> void:
 
 func test_reparent_moves_player_between_scenes() -> void:
 	var server_player := await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
-	var client_player := await harness.wait_for_client_player_spawn(client0, &"TestLevel") as Node2D
+	var client_player := await harness.wait_for_client_player_spawn(
+		client0, &"TestLevel") as Node2D
 
 	# Override client database as well
 	var client_save: SaveComponent = client_player.get_node("%SaveComponent")
@@ -92,7 +95,8 @@ func test_reparent_moves_player_between_scenes() -> void:
 
 func test_teleported_snaps_to_marker() -> void:
 	await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
-	var client_player := await harness.wait_for_client_player_spawn(client0, &"TestLevel") as Node2D
+	var client_player := await harness.wait_for_client_player_spawn(
+		client0, &"TestLevel") as Node2D
 
 	# Override client database as well
 	var client_save: SaveComponent = client_player.get_node("%SaveComponent")
@@ -107,5 +111,6 @@ func test_teleported_snaps_to_marker() -> void:
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
 	await timeout_await(client_tp.teleport(tp_target).completed)
 
-	var client_player2 := await harness.wait_for_client_player_spawn(client0, &"TestLevel2") as Node2D
+	var client_player2 := await harness.wait_for_client_player_spawn(
+		client0, &"TestLevel2") as Node2D
 	assert_that(client_player2.global_position).is_equal(Vector2(100, 100))

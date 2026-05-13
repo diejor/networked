@@ -1,3 +1,7 @@
+## Harness for movement tests requiring a synchronized [NetworkClock].
+##
+## Wraps [NetworkTestHarness] and adds [NetworkClock] services to all peers.
+## Provides [method sync_ticks_real] to reliably advance simulation in CI.
 class_name TickNetworkTestHarness
 extends Node
 
@@ -11,6 +15,7 @@ var _client: MultiplayerTree
 var _held_packets: Array[Dictionary] = []
 var _holding: bool = false
 
+
 func setup(runner: GdUnitSceneRunner) -> void:
 	_runner = runner
 	_inner = NetworkTestHarness.new()
@@ -21,6 +26,7 @@ func setup(runner: GdUnitSceneRunner) -> void:
 	var client_clock := _add_clock(_client)
 	client_clock._on_tree_configured()
 
+
 func teardown() -> void:
 	if is_instance_valid(_inner):
 		await _inner.teardown()
@@ -28,11 +34,14 @@ func teardown() -> void:
 		get_parent().remove_child(self)
 	queue_free()
 
+
 func get_server() -> MultiplayerTree:
 	return _inner.get_server()
 
+
 func get_client() -> MultiplayerTree:
 	return _client
+
 
 func _add_clock(tree: MultiplayerTree) -> NetworkClock:
 	var clock := NetworkClock.new()
@@ -42,15 +51,22 @@ func _add_clock(tree: MultiplayerTree) -> NetworkClock:
 	tree.add_child(clock)
 	return clock
 
+
 func _make_replication_config(prop_path: NodePath) -> SceneReplicationConfig:
 	var cfg := SceneReplicationConfig.new()
 	cfg.add_property(prop_path)
-	cfg.property_set_replication_mode(prop_path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
+	cfg.property_set_replication_mode(
+		prop_path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
 	cfg.property_set_spawn(prop_path, false)
 	cfg.property_set_watch(prop_path, true)
 	return cfg
 
-func _build_server_node(node_name: StringName, prop_path: NodePath, extra_child: Node = null) -> Node2D:
+
+func _build_server_node(
+	node_name: StringName,
+	prop_path: NodePath,
+	extra_child: Node = null
+) -> Node2D:
 	var player := Node2D.new()
 	player.name = node_name
 	player.set_multiplayer_authority(1)
@@ -73,7 +89,13 @@ func _build_server_node(node_name: StringName, prop_path: NodePath, extra_child:
 
 	return player
 
-func _build_client_node(node_name: StringName, prop_path: NodePath, interp_props: Dictionary, extra_child: Node = null) -> Node2D:
+
+func _build_client_node(
+	node_name: StringName,
+	prop_path: NodePath,
+	interp_props: Dictionary,
+	extra_child: Node = null
+) -> Node2D:
 	var player := Node2D.new()
 	player.name = node_name
 	player.set_multiplayer_authority(1)
@@ -107,6 +129,7 @@ func _build_client_node(node_name: StringName, prop_path: NodePath, interp_props
 
 	return player
 
+
 func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	var env := TickSimulationEnvironment.new()
 	
@@ -114,7 +137,8 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	get_server().add_child(env.server_node)
 
 	var interp_props = {&"position": TickInterpolator.Mode.LERP}
-	env.client_node = _build_client_node(node_name, NodePath(".:position"), interp_props)
+	env.client_node = _build_client_node(
+		node_name, NodePath(".:position"), interp_props)
 	get_client().add_child(env.client_node)
 
 	env.interpolator = env.client_node.get_node("TickInterpolator")
@@ -122,24 +146,30 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	await get_tree().process_frame
 	return env
 
-func create_environment_with_sprite(node_name: StringName) -> TickSimulationEnvironment:
+
+func create_environment_with_sprite(
+	node_name: StringName
+) -> TickSimulationEnvironment:
 	var env := TickSimulationEnvironment.new()
 	
 	var s_sprite := Sprite2D.new()
 	s_sprite.name = "Sprite2D"
-	env.server_node = _build_server_node(node_name, NodePath("Sprite2D:modulate"), s_sprite)
+	env.server_node = _build_server_node(
+		node_name, NodePath("Sprite2D:modulate"), s_sprite)
 	get_server().add_child(env.server_node)
 
 	var c_sprite := Sprite2D.new()
 	c_sprite.name = "Sprite2D"
 	var interp_props = {&"Sprite2D:modulate": TickInterpolator.Mode.LERP}
-	env.client_node = _build_client_node(node_name, NodePath("Sprite2D:modulate"), interp_props, c_sprite)
+	env.client_node = _build_client_node(
+		node_name, NodePath("Sprite2D:modulate"), interp_props, c_sprite)
 	get_client().add_child(env.client_node)
 
 	env.interpolator = env.client_node.get_node("TickInterpolator")
 
 	await get_tree().process_frame
 	return env
+
 
 func sync_ticks(n: int) -> void:
 	await sync_ticks_real(n)
@@ -162,7 +192,8 @@ func sync_ticks_real(n: int) -> void:
 	# We add a small buffer to ensure we reach the target.
 	var physics_fps: int = ProjectSettings.get_setting(
 		"physics/common/physics_ticks_per_second", 60)
-	var estimated_frames := ceili(float(n) * float(physics_fps) / float(TICKRATE))
+	var estimated_frames := ceili(
+		float(n) * float(physics_fps) / float(TICKRATE))
 	
 	# Simulate the bulk of frames in one go (very fast)
 	if estimated_frames > 2:
@@ -198,11 +229,14 @@ func yield_to_sync(extra_frames: int = 0) -> void:
 		4 + extra_frames
 	await sync_ticks_real(needed_ticks)
 
+
 func set_time_factor(factor: float) -> void:
 	_runner.set_time_factor(factor)
 
+
 func show_window() -> void:
 	_runner.move_window_to_foreground()
+
 
 func _process(_delta: float) -> void:
 	if not _holding: return
@@ -211,8 +245,10 @@ func _process(_delta: float) -> void:
 	_held_packets.append_array(peer._packet_queue)
 	peer._packet_queue.clear()
 
+
 func hold_client_packets() -> void:
 	_holding = true
+
 
 func release_client_packets() -> void:
 	if not _holding: return
@@ -224,6 +260,7 @@ func release_client_packets() -> void:
 	peer._packet_queue.append_array(_held_packets)
 	peer._packet_queue.append_array(existing)
 	_held_packets.clear()
+
 
 func _get_client_peer() -> LocalMultiplayerPeer:
 	var session := _inner.get_session()

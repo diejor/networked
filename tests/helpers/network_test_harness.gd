@@ -14,10 +14,6 @@ var _world_scene: PackedScene
 const DEFAULT_TIMEOUT := 1.0
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 ## Helper to await a signal with the harness's default timeout.
 ## Returns true if it timed out, false otherwise.
 func wait_for(target_signal: Signal, timeout: float = DEFAULT_TIMEOUT) -> bool:
@@ -190,10 +186,6 @@ func spawn_player(client: MultiplayerTree, player_scene: PackedScene, scene_name
 	scene.add_player(player)
 	return player
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 func _get_scene_manager(mt: MultiplayerTree) -> MultiplayerSceneManager:
 	return mt.get_service(MultiplayerSceneManager)

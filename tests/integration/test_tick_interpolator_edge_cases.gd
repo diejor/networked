@@ -1,3 +1,6 @@
+## Integration tests for [TickInterpolator] edge cases.
+##
+## Covers authority handover, snapping, teleportation, and feedback loops.
 class_name TestTickInterpolatorEdgeCases
 extends NetworkedTestSuite
 
@@ -17,15 +20,18 @@ func before_test() -> void:
 	# Ensure the clock is synchronized before we start any movement tests
 	await _harness.wait_for_clock_sync()
 	
-	var interpolator: TickInterpolator = _env.client_node.get_node("TickInterpolator")
+	var interpolator: TickInterpolator = _env.client_node.get_node(
+		"TickInterpolator")
 	interpolator.trace_interval = 0
 
 	_harness.set_time_factor(10.0)
+
 
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		await _harness.teardown()
 	await drain_frames(get_tree(), 3)
+
 
 func test_authority_handover() -> void:
 	const START := Vector2(0.0, 0.0)
@@ -34,7 +40,8 @@ func test_authority_handover() -> void:
 	_env.set_server_property(&"position", START)
 	await _harness.yield_to_sync()
 	
-	assert_vector(_env.get_client_property(&"position")).is_equal_approx(START, Vector2(1, 1))
+	assert_vector(_env.get_client_property(&"position")).is_equal_approx(
+		START, Vector2(1, 1))
 
 	var client_peer_id := _harness.get_client().multiplayer.get_unique_id()
 	_env.server_node.set_multiplayer_authority(client_peer_id)
@@ -44,13 +51,16 @@ func test_authority_handover() -> void:
 
 	await _harness.sync_ticks(10)
 
-	assert_vector(_env.client_node.position).is_equal_approx(CLIENT_MOVE, Vector2(1, 1))
+	assert_vector(_env.client_node.position).is_equal_approx(
+		CLIENT_MOVE, Vector2(1, 1))
+
 
 func test_first_frame_snapping() -> void:
 	_env.client_node.position = Vector2.ZERO
 	const FIRST_POS := Vector2(200.0, 100.0)
 
-	var interpolator: TickInterpolator = _env.client_node.get_node("TickInterpolator")
+	var interpolator: TickInterpolator = _env.client_node.get_node(
+		"TickInterpolator")
 
 	interpolator.snap_property(&"position", FIRST_POS)
 
@@ -60,11 +70,13 @@ func test_first_frame_snapping() -> void:
 	var actual_pos: Vector2 = _env.client_node.position
 	assert_vector(actual_pos).is_equal_approx(FIRST_POS, Vector2(0.01, 0.01))
 
+
 func test_teleport_prevents_first_frame_lerp() -> void:
 	_env.client_node.position = Vector2.ZERO
 	const FIRST_POS := Vector2(200.0, 100.0)
 	
-	var interpolator: TickInterpolator = _env.client_node.get_node("TickInterpolator")
+	var interpolator: TickInterpolator = _env.client_node.get_node(
+		"TickInterpolator")
 
 	_env.client_node.position = FIRST_POS
 	interpolator.reset()
@@ -74,6 +86,7 @@ func test_teleport_prevents_first_frame_lerp() -> void:
 
 	var actual_pos: Vector2 = _env.client_node.position
 	assert_vector(actual_pos).is_equal_approx(FIRST_POS, Vector2(0.01, 0.01))
+
 
 func test_feedback_loop_guard() -> void:
 	const P0 := Vector2(100.0, 0.0)
@@ -93,6 +106,7 @@ func test_feedback_loop_guard() -> void:
 	var snap: Variant = _env.get_buffer_at(&"position", newest_tick)
 	assert_vector(snap).is_equal_approx(P1, Vector2(0.01, 0.01))
 
+
 func test_visual_smooth_movement_realtime() -> void:
 	var start_pos := Vector2(100, 300)
 	var step_size := 40.0
@@ -110,7 +124,9 @@ func test_visual_smooth_movement_realtime() -> void:
 	await _harness.sync_ticks(30)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(Vector2(expected_x, 300), Vector2(5, 5))
+	assert_vector(final_client_pos).is_equal_approx(
+		Vector2(expected_x, 300), Vector2(5, 5))
+
 
 func test_visual_smooth_movement_dynamic_path() -> void:
 	var waypoints: Array[Vector2] = [
@@ -134,7 +150,9 @@ func test_visual_smooth_movement_dynamic_path() -> void:
 	await _harness.sync_ticks(20)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(5, 5))
+	assert_vector(final_client_pos).is_equal_approx(
+		waypoints.back(), Vector2(5, 5))
+
 
 func test_visual_player_walking() -> void:
 	var waypoints: Array[Vector2] = [
@@ -165,53 +183,5 @@ func test_visual_player_walking() -> void:
 	await _harness.sync_ticks(15)
 	
 	var final_client_pos = _env.get_client_property(&"position")
-	assert_vector(final_client_pos).is_equal_approx(waypoints.back(), Vector2(5, 5))
-
-
-
-
-#func test_dilation_recovery() -> void:
-	#_env.interpolator.enable_smart_dilation = true
-#
-	#for i in range(15):
-		#_env.set_server_property(&"position", Vector2(float(i * 10), 0.0))
-		#await _harness.sync_ticks(2) 
-	#
-	#var lag_before := _env.get_display_lag()
-#
-	#for _j in range(60):
-		#await _harness.sync_ticks(1)
-		#if _env.get_display_lag() > lag_before:
-			#break
-	#
-	#var lag_during := _env.get_display_lag()
-	#assert_float(lag_during).is_greater(lag_before)
-#
-	#for i in range(15, 30):
-		#_env.set_server_property(&"position", Vector2(float(i * 10), 0.0))
-		#await _harness.sync_ticks(2)
-#
-	## Wait until it settles back down from the spike
-	#for _j in range(60):
-		#await _harness.sync_ticks(1)
-		#if _env.get_display_lag() < lag_during:
-			#break
-	#
-	#var lag_after := _env.get_display_lag()
-	#assert_float(lag_after).is_less(lag_during)
-
-#func test_nested_paths() -> void:
-	#var env2 = await _harness.create_environment_with_sprite(&"SpritePlayer")
-	#
-	#env2.set_server_property(&"Sprite2D:modulate", Color.RED)
-	#await _harness.yield_to_sync()
-#
-	#env2.set_server_property(&"Sprite2D:modulate", Color.BLUE)
-	#await _harness.yield_to_sync()
-#
-	#var result: Variant = env2.get_client_property(&"Sprite2D:modulate")
-	#assert_bool(result != null).is_true()
-	#var color: Color = result
-	#
-	#assert_float(color.r).is_less(0.5)
-	#assert_float(color.b).is_greater(0.5)
+	assert_vector(final_client_pos).is_equal_approx(
+		waypoints.back(), Vector2(5, 5))

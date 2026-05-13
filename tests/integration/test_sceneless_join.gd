@@ -1,5 +1,6 @@
 ## Integration test for the default-scene join flow.
-## Verifies that dropping a Level as a direct child of MultiplayerTree
+##
+## Verifies that dropping a Level as a direct child of [MultiplayerTree]
 ## automatically routes joins and spawns players via a managed scene.
 class_name TestLobbylessJoin
 extends NetworkedTestSuite

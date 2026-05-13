@@ -1,8 +1,4 @@
-## Integration tests for MultiplayerSceneManager's level_spawn_function API.
-##
-## Verifies that custom spawn callables are invoked with the correct data, that
-## levels are accessible before tree entry, that activate_scene routes through
-## scene_spawn_data, and that EmptyAction still fires on the custom path.
+## Integration tests for [method MultiplayerSceneManager.spawn].
 class_name TestLobbyCustomSpawn
 extends NetworkedTestSuite
 
@@ -19,7 +15,6 @@ func before_test() -> void:
 	add_child(harness)
 	await harness.setup(NetworkedTestSuite.create_scene_manager)
 	server_mgr = harness._get_scene_manager(harness.get_server())
-	# Add a client so the server is online; capture its manager for parity setup.
 	var client := await harness.add_client()
 	client_mgr = harness._get_scene_manager(client)
 
@@ -30,16 +25,10 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-# --- Helper ------------------------------------------------------------------
-
-## Sets the same callable on both sides so MultiplayerSpawner replication works
-## when spawn data is not a plain String.
 func _set_spawn_fn(fn: Callable) -> void:
 	server_mgr.level_spawn_function = fn
 	client_mgr.level_spawn_function = fn
 
-
-# --- level_spawn_function invocation -----------------------------------------
 
 func test_level_spawn_function_called_on_spawn() -> void:
 	var called := [false]
@@ -78,8 +67,6 @@ func test_level_not_in_tree_when_spawn_function_called() -> void:
 	assert_that(in_tree_during_call[0]).is_false()
 
 
-# --- active_scenes keying ---------------------------------------------------
-
 func test_custom_spawn_scene_enters_active_scenes() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		return TEST_LEVEL_SCENE.instantiate()
@@ -103,8 +90,6 @@ func test_two_custom_spawns_register_independently() -> void:
 	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
 
 
-# --- activate_scene with level_spawn_function --------------------------------
-
 func test_activate_scene_uses_scene_spawn_data() -> void:
 	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
@@ -125,7 +110,6 @@ func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 		received[0] = data
 		return TEST_LEVEL_SCENE.instantiate()
 	)
-	# No scene_spawn_data entry — name itself should be forwarded.
 
 	server_mgr.activate_scene(&"TestLevel")
 
@@ -158,8 +142,6 @@ func test_activate_scene_does_not_respawn_when_already_active() -> void:
 
 	assert_that(call_count[0]).is_equal(1)
 
-
-# --- EmptyAction on custom spawn path ----------------------------------------
 
 func test_freeze_empty_action_applied_after_custom_spawn() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:

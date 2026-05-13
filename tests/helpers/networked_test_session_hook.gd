@@ -5,9 +5,6 @@
 class_name NetworkedTestSessionHook
 extends GdUnitTestSessionHook
 
-func _init() -> void:
-	super("NetworkedTestHook", "Auto-resets the NetworkedDebugger between tests.")
-
 static var _active_hook: NetworkedTestSessionHook
 
 var _baseline_child_count: int = 0
@@ -15,6 +12,10 @@ var _session_log_scope: NetwLogScope
 var _test_log_scope: NetwLogScope
 var _test_debug_scope: NetwDbgScope
 var _test_log_overrides: Dictionary = {}
+
+
+func _init() -> void:
+	super("NetworkedTestHook", "Auto-resets the NetworkedDebugger between tests.")
 
 
 ## Enables logging for the currently running test.
@@ -54,6 +55,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	session.test_event.connect(_on_test_event)
 
 	return GdUnitResult.success()
+
 
 func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
 	_close_test_debug_scope()

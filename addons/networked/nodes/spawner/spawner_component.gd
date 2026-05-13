@@ -64,10 +64,6 @@ signal despawned
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
-## When [code]true[/code], applies a small random offset to the owner's
-## position on spawn to prevent physics overlap.
-@export var spawn_jitter: bool = true
-
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -243,9 +239,6 @@ func _on_owner_tree_entered() -> void:
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
 
-	if spawn_jitter and owner.multiplayer.is_server():
-		_apply_spawn_jitter()
-
 	var entity := Netw.ctx(self).entity
 	if entity:
 		entity.spawning.emit()
@@ -295,27 +288,6 @@ func _hydrate_identity_from_name() -> void:
 	if peer_id == 0:
 		peer_id = NetwEntity.parse_peer(owner.name)
 	_sync_entity_identity()
-
-
-func _apply_spawn_jitter() -> void:
-	var jitter := 5.
-	var offset: Variant
-	
-	if owner is Node3D:
-		offset = Vector3(
-			randf_range(-jitter, jitter),
-			0,
-			randf_range(-jitter, jitter)
-		)
-	elif owner is Node2D:
-		offset = Vector2(
-			randf_range(-jitter, jitter),
-			randf_range(-jitter, jitter)
-		)
-	else:
-		return
-
-	owner.global_position += offset
 
 
 func _sync_entity_identity() -> void:

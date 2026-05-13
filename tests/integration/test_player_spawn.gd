@@ -1,8 +1,9 @@
 ## Tests player spawning and lifecycle with real multiplayer peers.
 ##
-## Uses NetworkTestHarness with a scene manager and test level scene.
-## Players are spawned via harness.spawn_player() which bypasses the RPC chain
-## and directly calls scene.add_player(), testing the server-side spawn path.
+## Uses [NetworkTestHarness] with a scene manager and test level scene.
+## Players are spawned via [method NetworkTestHarness.spawn_player] which
+## bypasses the RPC chain and directly calls [method MultiplayerScene.add_player],
+## testing the server-side spawn path.
 class_name TestPlayerSpawn
 extends NetworkedTestSuite
 

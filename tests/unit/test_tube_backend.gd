@@ -1,3 +1,4 @@
+## Unit tests for [TubeBackend] local capabilities.
 extends GdUnitTestSuite
 
 func test_local_capabilities() -> void:

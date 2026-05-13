@@ -1,3 +1,4 @@
+## Integration tests for [MultiplayerPeer] connection and topology.
 class_name TestMultiClientConnection
 extends NetworkedTestSuite
 
@@ -74,4 +75,5 @@ func test_three_clients_all_online() -> void:
 	for client in harness.get_all_clients():
 		ids.append(client.multiplayer_peer.get_unique_id())
 	# All IDs must be unique
-	assert_that(ids.size()).is_equal(ids.filter(func(id): return ids.count(id) == 1).size())
+	assert_that(ids.size()).is_equal(
+		ids.filter(func(id): return ids.count(id) == 1).size())

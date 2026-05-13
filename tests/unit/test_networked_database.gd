@@ -1,11 +1,10 @@
-## Unit tests for [NetwDatabase] — schema registry, transaction API, readers.
+## Unit tests for [NetwDatabase].
 ##
-## Uses an in-memory backend stub so no disk I/O or scene tree is required.
+## Covers schema registration, transaction API, and readers.
 class_name TestNetwDatabase
 extends NetworkedTestSuite
 
 
-## Spy backend that records every call made to it.
 class SpyBackend extends NetwBackend:
 	var init_calls: Array[Dictionary] = []
 	var upsert_calls: Array[Dictionary] = []
@@ -21,7 +20,8 @@ class SpyBackend extends NetwBackend:
 		upsert_calls.append({table = table, id = id, data = data.duplicate()})
 		if not _store.has(table):
 			_store[table] = {}
-		var existing: Dictionary = (_store[table].get(id, {}) as Dictionary).duplicate()
+		var existing: Dictionary = (_store[table].get(id, {}) as Dictionary) \
+			.duplicate()
 		for key in data:
 			existing[key] = data[key]
 		_store[table][id] = existing
@@ -55,9 +55,12 @@ class SpyBackend extends NetwBackend:
 		return OK
 
 
-## Spy backend that always fails upsert.
 class FailingBackend extends SpyBackend:
-	func upsert(_table: StringName, _id: StringName, _data: Dictionary) -> Error:
+	func upsert(
+		_table: StringName,
+		_id: StringName,
+		_data: Dictionary
+	) -> Error:
 		return ERR_CANT_CREATE
 
 
@@ -67,17 +70,12 @@ func _make_db() -> NetwDatabase:
 	return db
 
 
-# ---------------------------------------------------------------------------
-# _register_schema
-# ---------------------------------------------------------------------------
-
 func test_register_schema_stores_columns() -> void:
 	var db := _make_db()
 	db._register_schema(&"rocks", [&"health", &"position"])
-	await get_tree().process_frame  # let deferred _initialize_backend run
+	await get_tree().process_frame
 
 	var record := db._find_by_id(&"rocks", &"r1")
-	# No record yet — just verifies schema was accepted without error.
 	assert_that(record.is_empty()).is_true()
 
 
@@ -93,15 +91,12 @@ func test_register_schema_merges_columns_on_second_call() -> void:
 	var db := _make_db()
 	db._register_schema(&"rocks", [&"health"])
 	var captured_columns: Array[StringName] = []
-	db.schema_registered.connect(func(_t, cols: Array[StringName]): captured_columns.assign(cols))
+	db.schema_registered.connect(
+		func(_t, cols: Array[StringName]): captured_columns.assign(cols))
 	db._register_schema(&"rocks", [&"position"])
 	assert_that(captured_columns.has(&"health")).is_true()
 	assert_that(captured_columns.has(&"position")).is_true()
 
-
-# ---------------------------------------------------------------------------
-# transaction
-# ---------------------------------------------------------------------------
 
 func test_transaction_calls_backend_upsert() -> void:
 	var db := _make_db()
@@ -182,10 +177,6 @@ func test_transaction_does_not_emit_committed_on_failure() -> void:
 	assert_that(committed[0]).is_false()
 
 
-# ---------------------------------------------------------------------------
-# _find_by_id
-# ---------------------------------------------------------------------------
-
 func test_find_by_id_delegates_to_backend() -> void:
 	var db := _make_db()
 	db._register_schema(&"rocks", [&"health"])
@@ -225,10 +216,6 @@ func test_find_by_id_emits_loaded_signal_with_hit_false_on_miss() -> void:
 	assert_that(hit_value[0]).is_false()
 
 
-# ---------------------------------------------------------------------------
-# _find_all
-# ---------------------------------------------------------------------------
-
 func test_find_all_delegates_to_backend() -> void:
 	var db := _make_db()
 	db._register_schema(&"rocks", [&"health"])
@@ -242,10 +229,6 @@ func test_find_all_delegates_to_backend() -> void:
 	var all := db._find_all(&"rocks")
 	assert_that(all.size()).is_equal(2)
 
-
-# ---------------------------------------------------------------------------
-# delete
-# ---------------------------------------------------------------------------
 
 func test_delete_delegates_to_backend() -> void:
 	var db := _make_db()
@@ -262,10 +245,6 @@ func test_delete_delegates_to_backend() -> void:
 	assert_that(db._find_by_id(&"rocks", &"r1").is_empty()).is_true()
 
 
-# ---------------------------------------------------------------------------
-# Debugger signals
-# ---------------------------------------------------------------------------
-
 func test_upsert_emits_record_upserted_signal() -> void:
 	var db := _make_db()
 	db._register_schema(&"rocks", [&"health"])
@@ -274,8 +253,6 @@ func test_upsert_emits_record_upserted_signal() -> void:
 	var upserted_id: Array[StringName] = [&""]
 	db.record_upserted.connect(func(_t, id: StringName): upserted_id[0] = id)
 
-	# record_upserted is emitted by callers (SaveComponent) not by the DB itself;
-	# emit it manually here to verify the signal wire-up works.
 	db.record_upserted.emit(&"rocks", &"r1")
 	assert_that(upserted_id[0]).is_equal(&"r1")
 
@@ -287,12 +264,12 @@ func test_schema_mismatch_emits_signal_with_column_lists() -> void:
 
 	var captured_unknown: Array = []
 	var captured_missing: Array = []
-	db.schema_mismatch.connect(func(_t, _id, missing: Array[StringName], unknown: Array[StringName]):
-		captured_unknown.assign(unknown)
-		captured_missing.assign(missing)
+	db.schema_mismatch.connect(
+		func(_t, _id, missing: Array[StringName], unknown: Array[StringName]):
+			captured_unknown.assign(unknown)
+			captured_missing.assign(missing)
 	)
 
-	# 'gold' is unknown; 'health' is present so nothing is missing.
 	db._diff_record(&"rocks", &"r1", {&"health": 10, &"gold": 5})
 	assert_that(captured_unknown.has(&"gold")).is_true()
 	assert_that(captured_missing.is_empty()).is_true()

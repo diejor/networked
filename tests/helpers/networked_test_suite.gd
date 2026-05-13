@@ -29,7 +29,8 @@ func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
 	while not condition.call():
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
-			fail("Timed out waiting for condition after %.1f seconds." % timeout)
+			fail(
+				"Timed out waiting for condition after %.1f seconds." % timeout)
 			return
 
 

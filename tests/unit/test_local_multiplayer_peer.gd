@@ -1,3 +1,4 @@
+## Unit tests for [LocalMultiplayerPeer] routing and signals.
 class_name TestLocalMultiplayerPeer
 extends NetworkedTestSuite
 
@@ -35,12 +36,14 @@ func test_server_queues_peer_connected_on_force_connect() -> void:
 
 
 func test_client_starts_as_connecting() -> void:
-	assert_that(client._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTING)
+	assert_that(client._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTING)
 
 
 func test_client_becomes_connected_after_poll() -> void:
 	client.poll()
-	assert_that(client._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTED)
+	assert_that(client._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTED)
 
 
 func test_packet_routed_from_client_to_server() -> void:
@@ -73,7 +76,8 @@ func test_close_emits_peer_disconnected_on_server() -> void:
 	client.poll()  # finalize connection first
 
 	var disconnected_ids: Array[int] = []
-	server.peer_disconnected.connect(func(id: int) -> void: disconnected_ids.append(id))
+	server.peer_disconnected.connect(
+		func(id: int) -> void: disconnected_ids.append(id))
 
 	client.close()  # notifies server synchronously via _remote_closed
 	client.poll()   # finalizes client close state

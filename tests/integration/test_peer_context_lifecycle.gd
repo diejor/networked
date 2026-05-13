@@ -1,4 +1,4 @@
-## Integration tests for NetwPeerContext lifecycle within a real multiplayer session.
+## Integration tests for [NetwPeerContext] lifecycle.
 class_name TestPeerContextLifecycle
 extends NetworkedTestSuite
 
@@ -36,28 +36,19 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-# ---------------------------------------------------------------------------
-# Disconnect cleanup
-# ---------------------------------------------------------------------------
-
 func test_context_erased_on_peer_disconnect() -> void:
 	var server := harness.get_server()
 	var client_peer_id := client0.multiplayer_peer.get_unique_id()
 
-	# Force creation of a context on the server keyed by the client's peer_id.
-	# This simulates any future server-side code that stores per-client state.
 	server.get_peer_context(client_peer_id)
 	assert_that(server.has_peer_context(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
-	await wait_until(func(): return not server.has_peer_context(client_peer_id))
+	await wait_until(
+		func(): return not server.has_peer_context(client_peer_id))
 
 	assert_that(server.has_peer_context(client_peer_id)).is_false()
 
-
-# ---------------------------------------------------------------------------
-# Loopback isolation — SaveComponent.Bucket
-# ---------------------------------------------------------------------------
 
 func _spawn_save_player() -> void:
 	var player: Node2D = await harness.join_player(
@@ -67,8 +58,6 @@ func _spawn_save_player() -> void:
 	save_comp.database = db
 	save_comp.table_name = &"players"
 
-	# Wait for the replicated player to appear on the client side so both
-	# buckets are populated before any assertions run.
 	await harness.wait_for_client_player_spawn(client0, SCENE_NAME)
 
 
@@ -78,7 +67,6 @@ func test_server_context_does_not_contain_client_peer_id() -> void:
 	var server := harness.get_server()
 	var client_peer_id := client0.multiplayer_peer.get_unique_id()
 
-	# Client-side components register in the client's own MultiplayerTree.
 	# The server should have no context keyed by the client's peer_id.
 	assert_that(server.has_peer_context(client_peer_id)).is_false()
 
@@ -86,7 +74,6 @@ func test_server_context_does_not_contain_client_peer_id() -> void:
 func test_client_context_does_not_contain_server_peer_id() -> void:
 	await _spawn_save_player()
 
-	# Server-side components register in the server's own MultiplayerTree.
 	# The client should have no context keyed by the server's peer_id (1).
 	assert_that(client0.has_peer_context(1)).is_false()
 

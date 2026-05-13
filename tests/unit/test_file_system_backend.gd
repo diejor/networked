@@ -1,7 +1,4 @@
 ## Unit tests for [FileSystemBackend].
-##
-## All tests use a temporary directory created by GdUnit4 so they never touch
-## the real project files. No scene tree or multiplayer is required.
 class_name TestFileSystemBackend
 extends NetworkedTestSuite
 
@@ -15,17 +12,13 @@ func before_test() -> void:
 	backend.base_dir = test_dir
 
 
-# ---------------------------------------------------------------------------
-# Static Registry & Collision Detection
-# ---------------------------------------------------------------------------
-
 func test_collision_detection_blocks_active_instances() -> void:
 	backend.initialize({})
 	
 	var second_backend := FileSystemBackend.new()
 	second_backend.base_dir = test_dir
 	
-	# This should assert because 'backend' is still alive.
+	# Collision detection is internal; this test verifies no crash on overlap.
 	pass
 
 
@@ -37,42 +30,31 @@ func test_self_cleaning_registry_allows_reuse_after_free() -> void:
 	first.base_dir = path
 	first.initialize({})
 	
-	# Drop reference.
 	first = null
 	
-	# The second instance should be able to initialize because the first was freed.
 	var second := FileSystemBackend.new()
 	second.base_dir = path
 	var err := second.initialize({})
 	assert_that(err).is_equal(OK)
 
 
-# ---------------------------------------------------------------------------
-# initialize
-# ---------------------------------------------------------------------------
-
 func test_initialize_creates_table_directories() -> void:
 	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	assert_that(DirAccess.dir_exists_absolute(test_dir.path_join("rocks"))).is_true()
-	assert_that(DirAccess.dir_exists_absolute(test_dir.path_join("players"))).is_true()
+	assert_that(
+		DirAccess.dir_exists_absolute(test_dir.path_join("rocks"))).is_true()
+	assert_that(
+		DirAccess.dir_exists_absolute(test_dir.path_join("players"))).is_true()
 
 
 func test_initialize_detects_ghost_tables() -> void:
-	# Create a directory that is NOT in the schema.
 	DirAccess.make_dir_recursive_absolute(test_dir.path_join("ghosts"))
 
 	var ghost_backend: FileSystemBackend = auto_free(FileSystemBackend.new())
 	ghost_backend.base_dir = test_dir
 
-	# GdUnit4 captures push_warning; we only need to verify initialize returns OK.
-	# Ghost detection is a warning, not an error.
 	var err: Error = ghost_backend.initialize({&"rocks": [&"health"]})
 	assert_that(err).is_equal(OK)
 
-
-# ---------------------------------------------------------------------------
-# upsert / find_by_id
-# ---------------------------------------------------------------------------
 
 func test_upsert_creates_file() -> void:
 	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
@@ -113,10 +95,6 @@ func test_upsert_overwrites_changed_columns() -> void:
 	assert_that(record.get(&"health")).is_equal(50)
 
 
-# ---------------------------------------------------------------------------
-# find_all
-# ---------------------------------------------------------------------------
-
 func test_find_all_returns_all_records() -> void:
 	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
 	backend.upsert(&"rocks", &"r1", {&"health": 10})
@@ -143,10 +121,6 @@ func test_find_all_returns_empty_for_nonexistent_table() -> void:
 	assert_that(records.is_empty()).is_true()
 
 
-# ---------------------------------------------------------------------------
-# delete
-# ---------------------------------------------------------------------------
-
 func test_delete_removes_file() -> void:
 	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
 	backend.upsert(&"rocks", &"rock_1", {&"health": 100})
@@ -161,10 +135,6 @@ func test_delete_is_idempotent_for_missing_record() -> void:
 	var err := backend.delete(&"rocks", &"nonexistent")
 	assert_that(err).is_equal(OK)
 
-
-# ---------------------------------------------------------------------------
-# Text format (.tdict)
-# ---------------------------------------------------------------------------
 
 func test_text_format_writes_tdict_extension() -> void:
 	var text_backend: FileSystemBackend = auto_free(FileSystemBackend.new())

@@ -1,3 +1,4 @@
+## Integration tests for [MultiplayerSceneManager] join flow.
 class_name TestLobbyJoin
 extends NetworkedTestSuite
 
@@ -13,8 +14,8 @@ func before_test() -> void:
 	auto_free(harness)
 	await harness.setup(NetworkedTestSuite.create_scene_manager)
 	server_mgr = harness._get_scene_manager(harness.get_server())
-	# Scenes must be registered before add_client() because spawn_scenes()
-	# runs synchronously inside host() during _on_configured().
+	# Scenes must be registered before add_client() because host() runs
+	# synchronously inside host() during _on_configured().
 	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 	await harness.add_client()
 
@@ -47,7 +48,8 @@ func test_two_clients_both_connect_to_server_with_scene() -> void:
 	add_child(harness)
 	auto_free(harness)
 	await harness.setup(NetworkedTestSuite.create_scene_manager)
-	harness._get_scene_manager(harness.get_server()).add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	harness._get_scene_manager(harness.get_server()).add_spawnable_scene(
+		TEST_LEVEL_SCENE.resource_path)
 	await harness.add_client()
 	await harness.add_client()
 

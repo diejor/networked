@@ -1,3 +1,4 @@
+## Unit tests for [LocalLoopbackSession] and peer lifecycle.
 class_name TestLocalLoopbackSession
 extends NetworkedTestSuite
 
@@ -40,11 +41,15 @@ func test_both_clients_linked_to_server() -> void:
 func test_poll_advances_all_clients_to_connected() -> void:
 	var c1 := session.create_client_peer()
 	var c2 := session.create_client_peer()
-	assert_that(c1._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTING)
-	assert_that(c2._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTING)
+	assert_that(c1._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTING)
+	assert_that(c2._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTING)
 	session.poll()
-	assert_that(c1._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTED)
-	assert_that(c2._get_connection_status()).is_equal(MultiplayerPeer.CONNECTION_CONNECTED)
+	assert_that(c1._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTED)
+	assert_that(c2._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTED)
 
 
 func test_reset_clears_server_and_all_clients() -> void:
@@ -56,7 +61,7 @@ func test_reset_clears_server_and_all_clients() -> void:
 
 
 func test_session_is_independent_of_shared_singleton() -> void:
-	# GDUnit4 compares Resources by content, not identity — use instance ID instead
+	# GDUnit4 compares Resources by content, not identity — use instance ID
 	assert_that(session.get_instance_id()).is_not_equal(
 		LocalLoopbackSession.get_shared_session().get_instance_id()
 	)
@@ -65,7 +70,7 @@ func test_session_is_independent_of_shared_singleton() -> void:
 
 
 func test_get_client_peer_delegates_to_create() -> void:
-	# get_client_peer() is the backward-compat alias — each call creates a new peer
+	# get_client_peer() is backward-compat — each call creates a new peer
 	var c1 := session.get_client_peer()
 	var c2 := session.get_client_peer()
 	assert_that(c1).is_not_equal(c2)

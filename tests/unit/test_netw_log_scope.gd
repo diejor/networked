@@ -1,3 +1,4 @@
+## Unit tests for [NetwLogScope] and [method NetwLog.scoped].
 class_name TestNetwLogScope
 extends NetworkedTestSuite
 

@@ -1,12 +1,4 @@
-## Integration tests for the auth pipeline.
-##
-## Verifies that [NetwAuthProvider] hooks are called, [NetwIdentityBucket]
-## is populated on the server, and [method MultiplayerTree.request_join_player]
-## uses the bucket identity over the client-claimed username.
-##
-## [b]Note:[/b] The local loopback backend does not support Godot's built-in
-## auth handshake ([method SceneMultiplayer.send_auth]), so these tests
-## validate the prepare/reject and host identity paths directly.
+## Integration tests for the [NetwAuthProvider] and [NetwIdentityBucket] flow.
 class_name TestAuthPipeline
 extends NetworkedTestSuite
 
@@ -29,10 +21,6 @@ func before_test() -> void:
 func after_test() -> void:
 	session = null
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 func test_prepare_failure_aborts_connect() -> void:
 	var auth := _FailingPrepareAuth.new()
@@ -84,10 +72,6 @@ func test_no_auth_provider_trusts_client_username() -> void:
 	assert_that(joined_rjs).has_size(1)
 	assert_that(joined_rjs[0].username).is_equal(StringName("bob"))
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 func _setup_server() -> void:
 	server = MultiplayerTree.new()

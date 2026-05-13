@@ -1,11 +1,4 @@
-## Integration tests for MultiplayerTree.connect_player().
-##
-## These cover the production entry-point addon users call directly.
-## Setup is intentionally explicit (no NetworkTestHarness) so the test doubles
-## as documentation for what MultiplayerTree requires to function.
-##
-## The server is a plain MultiplayerTree — matching the production dedicated-server
-## model — while the client side goes through MultiplayerTree.connect_player().
+## Integration tests for [method MultiplayerTree.connect_player].
 class_name TestMultiplayerTreeConnect
 extends NetworkedTestSuite
 
@@ -33,10 +26,6 @@ func before_test() -> void:
 func after_test() -> void:
 	session = null
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 func test_client_is_online_after_connect_player() -> void:
 	client_tree.connect_player(_create_join_payload("alice"))
@@ -80,10 +69,6 @@ func test_listen_server_connect_player_spawns_player() -> void:
 	assert_that(scene.level.get_node_or_null("alice|1")).is_not_null()
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 func _setup_server() -> void:
 	server = MultiplayerTree.new()
 	server.name = "Server"
@@ -98,8 +83,7 @@ func _setup_server() -> void:
 
 	var mgr: MultiplayerSceneManager = NetworkedTestSuite.create_scene_manager()
 	server.add_child(mgr)
-	# Scenes must be registered before host() because spawn_lobbies() runs
-	# synchronously inside _on_configured(), which fires during host().
+	# Register scenes before host() to ensure lobbies spawn during _on_configured().
 	mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 
 

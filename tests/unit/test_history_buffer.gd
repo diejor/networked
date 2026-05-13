@@ -1,23 +1,9 @@
 ## Unit tests for [HistoryBuffer].
 ##
-## [HistoryBuffer] is a pure [RefCounted] with no scene-tree dependencies,
-## so every test is self-contained and runs without [code]add_child()[/code].
-##
-## Coverage areas:
-## [ul]
-## [li]Basic record and retrieval ([method HistoryBuffer.get_at])[/li]
-## [li]Bracketing search ([method HistoryBuffer.find_bracketing_ticks])[/li]
-## [li]Ring-buffer eviction when the buffer is full[/li]
-## [li]Oldest/newest tick queries[/li]
-## [li]Capacity power-of-two normalization[/li]
-## [/ul]
+## Exercises record retrieval, bracketing search, and ring-buffer eviction.
 class_name TestHistoryBuffer
 extends NetworkedTestSuite
 
-
-# ---------------------------------------------------------------------------
-# is_empty / size
-# ---------------------------------------------------------------------------
 
 func test_is_empty_true_on_new_buffer() -> void:
 	var buf := HistoryBuffer.new(4)
@@ -31,10 +17,6 @@ func test_is_empty_false_after_record() -> void:
 	assert_that(buf.is_empty()).is_false()
 	assert_that(buf.size()).is_equal(1)
 
-
-# ---------------------------------------------------------------------------
-# get_at — exact-tick lookup
-# ---------------------------------------------------------------------------
 
 func test_get_at_returns_null_on_empty_buffer() -> void:
 	var buf := HistoryBuffer.new(4)
@@ -68,10 +50,6 @@ func test_get_at_distinguishes_multiple_ticks() -> void:
 	assert_that(buf.get_at(2)).is_equal("b")
 	assert_that(buf.get_at(3)).is_equal("c")
 
-
-# ---------------------------------------------------------------------------
-# find_bracketing_ticks
-# ---------------------------------------------------------------------------
 
 func test_find_bracketing_ticks_exact_match() -> void:
 	var buf := HistoryBuffer.new(4)
@@ -123,10 +101,6 @@ func test_find_bracketing_ticks_empty() -> void:
 	assert_that(out[1]).is_equal(-1)
 
 
-# ---------------------------------------------------------------------------
-# has_tick_after
-# ---------------------------------------------------------------------------
-
 func test_has_tick_after() -> void:
 	var buf := HistoryBuffer.new(4)
 	buf.record(10, "a")
@@ -134,10 +108,6 @@ func test_has_tick_after() -> void:
 	assert_that(buf.has_tick_after(10)).is_false()
 	assert_that(buf.has_tick_after(15)).is_false()
 
-
-# ---------------------------------------------------------------------------
-# oldest_tick / newest_tick
-# ---------------------------------------------------------------------------
 
 func test_oldest_tick_returns_minus_one_on_empty() -> void:
 	var buf := HistoryBuffer.new(4)
@@ -162,10 +132,6 @@ func test_newest_tick_returns_last_recorded() -> void:
 	buf.record(5, "b")
 	assert_that(buf.newest_tick()).is_equal(5)
 
-
-# ---------------------------------------------------------------------------
-# Ring-buffer eviction & Power-of-two Capacity
-# ---------------------------------------------------------------------------
 
 func test_capacity_is_normalized_to_power_of_two() -> void:
 	var buf := HistoryBuffer.new(3)
