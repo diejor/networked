@@ -5,7 +5,7 @@ const MODULE := "core.test_scope"
 
 
 func test_scoped_global_level_applies_until_close() -> void:
-	var before := NetwLog.get_effective_level(MODULE)
+	var _before := NetwLog.get_effective_level(MODULE)
 	var scope := NetwLog.scoped("trace")
 	
 	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(
@@ -17,7 +17,7 @@ func test_scoped_global_level_applies_until_close() -> void:
 
 
 func test_scoped_module_override_applies_until_close() -> void:
-	var before := NetwLog.get_effective_level(MODULE)
+	var _before := NetwLog.get_effective_level(MODULE)
 	var scope := NetwLog.scoped("none,%s=debug" % MODULE)
 	
 	assert_that(NetwLog.get_effective_level(MODULE)).is_equal(
@@ -32,7 +32,7 @@ func test_scoped_module_override_applies_until_close() -> void:
 
 
 func test_double_close_is_harmless() -> void:
-	var before := NetwLog.get_effective_level(MODULE)
+	var _before := NetwLog.get_effective_level(MODULE)
 	var scope := NetwLog.scoped("trace")
 	
 	scope.close()
@@ -42,7 +42,7 @@ func test_double_close_is_harmless() -> void:
 
 
 func test_nested_scopes_restore_previous_layer() -> void:
-	var before := NetwLog.get_effective_level(MODULE)
+	var _before := NetwLog.get_effective_level(MODULE)
 	var outer := NetwLog.scoped("debug")
 	var inner := NetwLog.scoped("trace")
 	
@@ -60,7 +60,7 @@ func test_nested_scopes_restore_previous_layer() -> void:
 
 
 func test_out_of_order_close_fails_safely() -> void:
-	var before := NetwLog.get_effective_level(MODULE)
+	var _before := NetwLog.get_effective_level(MODULE)
 	var outer := NetwLog.scoped("debug")
 	var inner := NetwLog.scoped("trace")
 	

@@ -136,5 +136,5 @@ func _create_join_payload(username: String) -> JoinPayload:
 class _FailingPrepareAuth:
 	extends NetwAuthProvider
 
-	func _prepare(payload: JoinPayload) -> Error:
+	func _prepare(_payload: JoinPayload) -> Error:
 		return ERR_UNAUTHORIZED
