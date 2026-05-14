@@ -50,11 +50,15 @@ signal state_changed(old_state: State, new_state: State)
 ## Emitted when the owned [SceneMultiplayer] is replaced (e.g. by a Tube
 ## transport that brings its own api). Both [param old_api] and [param new_api]
 ## may be valid; consumers that cached the previous reference should rebind.
-signal api_swapped(old_api: SceneMultiplayer, new_api: SceneMultiplayer, reason: String)
+signal api_swapped(
+	old_api: SceneMultiplayer, new_api: SceneMultiplayer, reason: String
+)
 
 
 enum State { OFFLINE, CONNECTING, ONLINE, DISCONNECTING }
 enum Role { NONE, CLIENT, DEDICATED_SERVER, LISTEN_SERVER }
+
+const ADOPT_CONNECT_TIMEOUT := 15.0
 
 ## The current connection state of this tree.
 var state: State = State.OFFLINE:
@@ -190,7 +194,8 @@ signal player_scene_ready(
 
 ## Emitted on every peer when the game is paused via [method NetwTree.pause].
 signal tree_paused(reason: String)
-## Emitted on every peer when the game is unpaused via [method NetwTree.unpause].
+## Emitted on every peer when the game is unpaused via
+## [method NetwTree.unpause].
 signal tree_unpaused()
 ## Emitted on the server when a client requests to kick a peer.
 signal kick_requested(requester_id: int, target_id: int, reason: String)
@@ -217,7 +222,8 @@ static func for_node(node: Node) -> MultiplayerTree:
 	return api.get_meta(&"_multiplayer_tree") as MultiplayerTree
 
 
-## Returns the [member role] of the [MultiplayerTree] associated with [param node].
+## Returns the [member role] of the [MultiplayerTree] associated with
+## [param node].
 static func get_role_for(node: Node) -> Role:
 	var mt := for_node(node)
 	return mt.role if mt else Role.NONE
@@ -297,7 +303,8 @@ func dispose() -> void:
 	_client_join_payload = null
 
 
-## Returns the [NetwPeerContext] for [param peer_id], creating one on first access.
+## Returns the [NetwPeerContext] for [param peer_id], creating one on first
+## access.
 func get_peer_context(peer_id: int) -> NetwPeerContext:
 	return _roster.get_peer_context(peer_id)
 
@@ -569,8 +576,8 @@ consider using `connect_player` instead of `join`.", func(m): push_error(m))
 ##
 ## For transports (e.g. Steam lobbies) where the peer is produced by an
 ## external lobby flow rather than by [method host] / [method join]. The peer
-## must already be connected; this method assigns it onto the owned
-## [member api] and finalizes the session.
+## must be connecting or connected; client adoption waits for Godot to emit
+## [signal connected_to_server] before finalizing the session.
 ## [br][br]
 ## If [param join_payload] is provided, it is automatically submitted to the
 ## server via [method submit_join] once adoption is complete.
@@ -578,8 +585,9 @@ consider using `connect_player` instead of `join`.", func(m): push_error(m))
 ## Derives [member role] from [code]peer.get_unique_id()[/code]:
 ## [code]1[/code] -> [code]LISTEN_SERVER[/code], otherwise [code]CLIENT[/code].
 ## [br][br]
-## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is [code]null[/code]
-## or already disconnected. Asserts the tree is [code]OFFLINE[/code].
+## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is
+## [code]null[/code] or already disconnected. Asserts the tree is
+## [code]OFFLINE[/code].
 func adopt_peer(
 	peer: MultiplayerPeer, join_payload: JoinPayload = null
 ) -> Error:
@@ -607,7 +615,7 @@ func adopt_peer(
 		_client_join_payload = join_payload
 		_auth.set_client_join_payload(join_payload)
 
-	_auth.prepare(auth_provider != null)
+	_auth.prepare(auth_provider != null and join_payload != null)
 	api.multiplayer_peer = peer
 
 	var unique_id := peer.get_unique_id()
@@ -616,14 +624,17 @@ func adopt_peer(
 	else:
 		role = Role.CLIENT
 
+	if role == Role.CLIENT:
+		var connect_err := await _await_adopted_client_connected()
+		if connect_err != OK:
+			state = State.OFFLINE
+			role = Role.NONE
+			return connect_err
+
 	state = State.ONLINE
 	_finalize_session()
 
 	if join_payload:
-		if role == Role.CLIENT:
-			# Wait for Godot to finalize its internal handshake before RPCing.
-			if not is_online():
-				await connected_to_server
 		submit_join(join_payload)
 
 	if role == Role.LISTEN_SERVER:
@@ -635,7 +646,9 @@ func adopt_peer(
 func is_online() -> bool:
 	return (api != null
 		and api.has_multiplayer_peer()
-		and not api.multiplayer_peer is OfflineMultiplayerPeer)
+		and not api.multiplayer_peer is OfflineMultiplayerPeer
+		and api.multiplayer_peer.get_connection_status()
+			== MultiplayerPeer.CONNECTION_CONNECTED)
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server
@@ -813,6 +826,24 @@ func submit_join(join_payload: JoinPayload) -> void:
 	)
 
 
+# Waits for an adopted client peer to finish Godot's connection handshake.
+func _await_adopted_client_connected() -> Error:
+	if not api or not api.has_multiplayer_peer():
+		return ERR_UNCONFIGURED
+	if api.multiplayer_peer.get_connection_status() \
+			== MultiplayerPeer.CONNECTION_CONNECTED:
+		return OK
+	
+	var timer := get_tree().create_timer(ADOPT_CONNECT_TIMEOUT)
+	if await Async.timeout(connected_to_server, timer):
+		Netw.dbg.error(
+			"adopt_peer: timed out waiting for the adopted peer to connect.",
+			func(m): push_error(m)
+		)
+		return ERR_TIMEOUT
+	return OK
+
+
 func _is_local_url(url: String) -> bool:
 	return url.is_empty() or "localhost" in url or "127.0.0.1" in url
 
@@ -930,7 +961,10 @@ func _serialize_joined_players() -> Array[PackedByteArray]:
 func _rpc_receive_pause(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != 1 and sender != 0:
-		Netw.dbg.warn("_rpc_receive_pause received from non-server peer %d", [sender])
+		Netw.dbg.warn(
+			"_rpc_receive_pause received from non-server peer %d",
+			[sender]
+		)
 		return
 	get_tree().paused = true
 	tree_paused.emit(reason)
@@ -940,7 +974,10 @@ func _rpc_receive_pause(reason: String) -> void:
 func _rpc_receive_unpause() -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != 1 and sender != 0:
-		Netw.dbg.warn("_rpc_receive_unpause received from non-server peer %d", [sender])
+		Netw.dbg.warn(
+			"_rpc_receive_unpause received from non-server peer %d",
+			[sender]
+		)
 		return
 	get_tree().paused = false
 	tree_unpaused.emit()
@@ -960,7 +997,10 @@ func _rpc_receive_kicked(reason: String) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 	if not multiplayer.is_server():
-		Netw.dbg.warn("_rpc_request_kick received on non-server peer %d", [multiplayer.get_unique_id()])
+		Netw.dbg.warn(
+			"_rpc_request_kick received on non-server peer %d",
+			[multiplayer.get_unique_id()]
+		)
 		return
 	var requester_id := multiplayer.get_remote_sender_id()
 	kick_requested.emit(requester_id, target_peer_id, reason)
@@ -974,7 +1014,10 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_request_disconnect(reason: String) -> void:
 	if not multiplayer.is_server():
-		Netw.dbg.warn("_rpc_request_disconnect received on non-server peer %d", [multiplayer.get_unique_id()])
+		Netw.dbg.warn(
+			"_rpc_request_disconnect received on non-server peer %d",
+			[multiplayer.get_unique_id()]
+		)
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	disconnect_requested.emit(peer_id, reason)
@@ -985,7 +1028,10 @@ func _rpc_request_disconnect(reason: String) -> void:
 func _rpc_receive_notify_disconnect(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != 1:
-		Netw.dbg.warn("_rpc_receive_notify_disconnect received from non-server peer %d", [sender])
+		Netw.dbg.warn(
+			"_rpc_receive_notify_disconnect received from non-server peer %d",
+			[sender]
+		)
 		return
 	server_disconnecting.emit(reason)
 

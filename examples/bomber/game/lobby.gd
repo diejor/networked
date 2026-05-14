@@ -18,6 +18,7 @@ extends Control
 
 enum State { PRE, IN_LOBBY }
 
+@warning_ignore("unused_private_class_variable")
 @onready var _title: Label = %TitleLabel
 @onready var _status: Label = %StatusLabel
 @onready var _pre: Control = %PreLobby
