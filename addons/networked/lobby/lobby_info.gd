@@ -22,16 +22,16 @@ extends Resource
 
 
 static func make(
-	id_: int,
-	name_: String,
-	players_: int,
-	max_: int,
-	metadata_: Dictionary = {}
+	id: int,
+	lobby_name: String,
+	players: int,
+	max_players: int,
+	metadata: Dictionary = {}
 ) -> LobbyInfo:
 	var info := LobbyInfo.new()
-	info.id = id_
-	info.lobby_name = name_
-	info.players = players_
-	info.max_players = max_
-	info.metadata = metadata_
+	info.id = id
+	info.lobby_name = lobby_name
+	info.players = players
+	info.max_players = max_players
+	info.metadata = metadata
 	return info

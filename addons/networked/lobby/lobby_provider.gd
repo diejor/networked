@@ -1,6 +1,6 @@
 ## Abstract base for lobby providers (Steam, Discord, custom matchmaking, ...).
 ##
-## A [LobbyProvider] runs as a [b]descendant of [MultiplayerTree][/b] and owns
+## A [LobbyProvider] runs as a descendant of [MultiplayerTree] and owns
 ## the lifecycle of an external lobby system: creating, browsing, joining,
 ## leaving lobbies, and producing a connected [MultiplayerPeer]. After a peer
 ## is ready, callers (typically a lobby UI) hand it to

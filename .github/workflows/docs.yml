@@ -1,0 +1,64 @@
+name: Build and deploy docs
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "addons/networked/**/*.gd"
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download Godot
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.7-beta1/Godot_v4.7-beta1_linux.x86_64.tar.xz
+          tar -xf Godot_v4.7-beta1_linux.x86_64.tar.xz
+          mv godot.linux.* ../godot_linux.x86_64
+          chmod +x ../godot_linux.x86_64
+
+      - name: Generate XML via godot --doctool
+        run: |
+          ../godot_linux.x86_64 --doctool api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
+
+      - name: Filter private members
+        run: python tools/filter_private.py api api_filtered
+
+      - name: Generate RST
+        run: python tools/make_rst.py api_filtered --output classes
+
+      - name: Build HTML with Sphinx
+        run: sphinx-build -b html . _build/html
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
