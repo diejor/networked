@@ -1,0 +1,61 @@
+[gd_scene format=3 uid="uid://ca6gwo0u2m4y2"]
+
+[ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
+[ext_resource type="PackedScene" path="res://examples/bomber/game/pre_lobby.tscn" id="10_pre"]
+[ext_resource type="PackedScene" path="res://examples/bomber/game/in_lobby.tscn" id="11_in"]
+
+[node name="Lobby" type="Control" unique_id=125506540]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 2
+size_flags_vertical = 2
+script = ExtResource("1_mrsco")
+
+[node name="TitleLabel" type="Label" parent="." unique_id=1724387341]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 24.0
+offset_right = 200.0
+offset_bottom = 64.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 32
+text = "Bomber"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="." unique_id=1887354777]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -56.0
+offset_right = 300.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.82, 0.29, 0.29, 1)
+horizontal_alignment = 1
+
+[node name="PreLobby" parent="." unique_id=341697971 instance=ExtResource("10_pre")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="InLobby" parent="." unique_id=788442195 instance=ExtResource("11_in")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="ErrorDialog" type="AcceptDialog" parent="." unique_id=142008537]

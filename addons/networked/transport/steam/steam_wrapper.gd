@@ -140,7 +140,7 @@ func configure_peer(
 func get_steam_id_from_peer_id(peer: MultiplayerPeer, peer_id: int) -> int:
 	if peer == null:
 		return 0
-	return peer.call(&"get_steam_id_from_peer_id", peer_id)
+	return peer.call(&"get_steam_id_for_peer_id", peer_id)
 
 func connect_signal(sig: String, callable: Callable) -> void:
 	_steam.connect(sig, callable)

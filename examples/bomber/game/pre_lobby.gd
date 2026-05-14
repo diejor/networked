@@ -41,6 +41,14 @@ func reset_buttons() -> void:
 	_host_btn.disabled = false
 
 
+## Re-requests the lobby list. Call when re-entering pre-lobby after a
+## disconnect or game-end.
+func refresh() -> void:
+	if _provider:
+		_list.clear()
+		_provider.list_lobbies()
+
+
 func _on_host_pressed() -> void:
 	var lobby_name := _name_edit.text.strip_edges()
 	if lobby_name.is_empty():
