@@ -48,9 +48,6 @@ func _ready() -> void:
 
 	_ctx.tree.server_disconnecting.connect(_on_server_disconnecting)
 	_ctx.tree.server_disconnected.connect(_on_server_disconnected)
-	var sm := _ctx.services.get_scene_manager()
-	if sm:
-		sm.scene_spawned.connect(_on_scene_spawned)
 
 	gamestate.game_ended.connect(_on_game_ended)
 	gamestate.game_error.connect(_on_game_error)
@@ -106,11 +103,6 @@ func _on_server_disconnected() -> void:
 
 func _on_match_started() -> void:
 	hide()
-
-
-func _on_scene_spawned(scene: MultiplayerScene) -> void:
-	if scene.level.name == &"World":
-		hide()
 
 
 func _on_game_ended() -> void:

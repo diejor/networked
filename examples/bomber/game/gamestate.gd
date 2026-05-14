@@ -87,6 +87,11 @@ func get_player_list() -> Array:
 func begin_game() -> void:
 	assert(multiplayer.is_server())
 	_activate_world_scene()
+	_rpc_match_started.rpc()
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_match_started() -> void:
 	match_started.emit()
 
 
