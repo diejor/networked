@@ -27,7 +27,8 @@ static var _instance: WeakRef = weakref(null)
 var max_clients: int = 8
 
 ## Default visibility used by [method create_lobby].
-@export var default_lobby_type: SteamWrapper.LobbyType = SteamWrapper.LobbyType.PUBLIC
+@export var default_lobby_type: SteamWrapper.LobbyType = \
+	SteamWrapper.LobbyType.PUBLIC
 
 ## Tag stored under the [code]uid[/code] lobby key. Browser filters on this so
 ## different games don't pollute each other's lobby lists.
@@ -49,6 +50,7 @@ var _lobby_id: int = 0
 var _peer: MultiplayerPeer
 var _pending_list: bool = false
 var _pending_create_name: String = ""
+var _pending_join_lobby_id: int = 0
 var _init_ok: bool = false
 
 
@@ -78,7 +80,10 @@ func _enter_tree() -> void:
 		return
 
 	var init_res: Dictionary = _wrapper.steam_init_ex()
-	var status: int = init_res.get("status", SteamWrapper.InitResult.FAILED_GENERIC)
+	var status: int = init_res.get(
+		"status",
+		SteamWrapper.InitResult.FAILED_GENERIC
+	)
 	_init_ok = status == SteamWrapper.InitResult.OK
 	if not _init_ok:
 		var reason := "Steam init failed (status %d)" % status
@@ -137,6 +142,11 @@ func get_lobby_id() -> int:
 	return _lobby_id
 
 
+## Returns [code]true[/code] while Steam is resolving a lobby join request.
+func is_join_pending() -> bool:
+	return _pending_join_lobby_id != 0
+
+
 ## Returns the local user's display name.
 func get_persona_name() -> String:
 	return _wrapper.get_persona_name() if _init_ok else ""
@@ -178,9 +188,18 @@ func join_lobby(lobby_id: int) -> void:
 	if lobby_id <= 0:
 		lobby_join_failed.emit("Invalid lobby id")
 		return
+	if _pending_join_lobby_id != 0:
+		Netw.dbg.debug(
+			"SteamLobbyProvider: ignoring join_lobby(%d); " +
+			"join_lobby(%d) is still pending.",
+			[lobby_id, _pending_join_lobby_id]
+		)
+		return
 	if _lobby_id != 0:
 		_wrapper.leave_lobby(_lobby_id)
 		_lobby_id = 0
+	_pending_join_lobby_id = lobby_id
+	lobby_join_started.emit(lobby_id)
 	_wrapper.join_lobby(lobby_id)
 
 
@@ -200,6 +219,7 @@ func list_lobbies() -> void:
 
 
 func leave_lobby() -> void:
+	_pending_join_lobby_id = 0
 	if _lobby_id == 0 or not _wrapper:
 		return
 	_wrapper.leave_lobby(_lobby_id)
@@ -282,16 +302,21 @@ func _on_lobby_joined(
 	if response != 1:
 		var reason := SteamWrapper.chat_room_enter_response_to_string(response)
 		Netw.dbg.error("SteamLobbyProvider: join failed: %s", [reason])
+		_pending_join_lobby_id = 0
 		lobby_join_failed.emit(reason)
 		return
 
 	# Host's own joinLobby callback fires too - skip if already hosting.
 	if _peer != null and _lobby_id == lobby_id:
+		_pending_join_lobby_id = 0
 		return
 
 	_lobby_id = lobby_id
 	var peer := _build_peer()
 	if peer == null:
+		_pending_join_lobby_id = 0
+		_lobby_id = 0
+		_wrapper.leave_lobby(lobby_id)
 		lobby_join_failed.emit("Failed to instantiate SteamMultiplayerPeer")
 		return
 	var err: Error = peer.call(&"connect_to_lobby", lobby_id)
@@ -300,12 +325,16 @@ func _on_lobby_joined(
 			"SteamLobbyProvider: connect_to_lobby failed: %s",
 			[error_string(err)]
 		)
+		_pending_join_lobby_id = 0
+		_lobby_id = 0
+		_wrapper.leave_lobby(lobby_id)
 		lobby_join_failed.emit(
 			"connect_to_lobby failed: %s" % error_string(err)
 		)
 		return
 
 	_peer = peer
+	_pending_join_lobby_id = 0
 	Netw.dbg.info("SteamLobbyProvider: joined lobby %d.", [lobby_id])
 	peer_ready.emit(peer)
 	lobby_joined.emit(lobby_id)

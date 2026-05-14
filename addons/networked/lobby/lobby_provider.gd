@@ -24,6 +24,9 @@ signal lobby_created(lobby_id: int)
 ## Emitted once after the local client successfully joins a lobby.
 signal lobby_joined(lobby_id: int)
 
+## Emitted after a local join request is submitted to the provider.
+signal lobby_join_started(lobby_id: int)
+
 ## Emitted when a create or join attempt fails. [param reason] is a
 ## human-readable string suitable for UI display.
 signal lobby_join_failed(reason: String)
@@ -89,6 +92,12 @@ func get_local_member_name() -> String:
 	if peer == null:
 		return "Player"
 	return get_member_name(peer.get_unique_id())
+
+
+## Returns [code]true[/code] while a lobby join request is waiting for its
+## transport callback.
+func is_join_pending() -> bool:
+	return false
 
 
 ## Adopts the produced peer onto [param tree] and wires standard lifecycle
