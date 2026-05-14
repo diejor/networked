@@ -43,13 +43,15 @@ signal provider_unavailable(reason: String)
 
 
 ## Creates a new lobby with display name [param lobby_name]. Fire-and-forget.
-## Completion is reported via [signal lobby_created] / [signal lobby_join_failed].
+## Completion is reported via [signal lobby_created] /
+## [signal lobby_join_failed].
 @abstract
 func create_lobby(lobby_name: String) -> void
 
 
 ## Joins an existing lobby by transport-specific [param lobby_id].
-## Completion is reported via [signal lobby_joined] / [signal lobby_join_failed].
+## Completion is reported via [signal lobby_joined] /
+## [signal lobby_join_failed].
 @abstract
 func join_lobby(lobby_id: int) -> void
 
@@ -76,6 +78,17 @@ func get_peer() -> MultiplayerPeer
 ## providers (Steam, Discord, ...) should override to resolve personas.
 func get_member_name(peer_id: int) -> String:
 	return "Player %d" % peer_id
+
+
+## Returns the local lobby member's display name.
+##
+## Providers may override this when the local identity is known before a
+## Godot peer ID can be resolved.
+func get_local_member_name() -> String:
+	var peer := get_peer()
+	if peer == null:
+		return "Player"
+	return get_member_name(peer.get_unique_id())
 
 
 ## Adopts the produced peer onto [param tree] and wires standard lifecycle

@@ -337,16 +337,23 @@ func _on_tree_configured() -> void:
 	var api := multiplayer as SceneMultiplayer
 	if api:
 		api.set_meta(&"_network_clock", self)
-		api.server_disconnected.connect(_on_server_disconnect)
-		api.connection_failed.connect(_on_server_disconnect)
+		if not api.server_disconnected.is_connected(_on_server_disconnect):
+			api.server_disconnected.connect(_on_server_disconnect)
+		if not api.connection_failed.is_connected(_on_server_disconnect):
+			api.connection_failed.connect(_on_server_disconnect)
 	
 	if not multiplayer.is_server():
 		if multiplayer.multiplayer_peer.get_connection_status() == \
 				MultiplayerPeer.CONNECTION_CONNECTED:
 			_request_handshake.rpc_id(1)
 		else:
+			var request_handshake := _request_handshake.rpc_id.bind(1)
+			if multiplayer.connected_to_server.is_connected(
+				request_handshake
+			):
+				return
 			multiplayer.connected_to_server.connect(
-				_request_handshake.rpc_id.bind(1),
+				request_handshake,
 				CONNECT_ONE_SHOT
 			)
 

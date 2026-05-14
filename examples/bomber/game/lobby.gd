@@ -48,6 +48,7 @@ func _ready() -> void:
 
 	_ctx.tree.server_disconnecting.connect(_on_server_disconnecting)
 	_ctx.tree.server_disconnected.connect(_on_server_disconnected)
+	_ctx.tree.player_scene_ready.connect(_on_player_scene_ready)
 
 	gamestate.game_ended.connect(_on_game_ended)
 	gamestate.game_error.connect(_on_game_error)
@@ -70,8 +71,7 @@ func _enter_lobby(_lobby_id: int) -> void:
 	if _provider == null:
 		return
 
-	var local_id := multiplayer.get_unique_id()
-	var pname := _provider.get_member_name(local_id)
+	var pname := _provider.get_local_member_name()
 	gamestate.player_name = pname
 	
 	var jp := JoinPayload.new()
@@ -104,6 +104,11 @@ func _on_server_disconnected() -> void:
 
 func _on_match_started() -> void:
 	hide()
+
+
+func _on_player_scene_ready(rj: ResolvedJoin, _scene: NetwScene) -> void:
+	if rj.peer_id == multiplayer.get_unique_id():
+		hide()
 
 
 func _on_game_ended() -> void:

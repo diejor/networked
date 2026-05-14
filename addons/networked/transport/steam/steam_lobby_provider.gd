@@ -152,6 +152,12 @@ func get_member_name(peer_id: int) -> String:
 	return persona if not persona.is_empty() else super.get_member_name(peer_id)
 
 
+## Returns the local Steam persona name.
+func get_local_member_name() -> String:
+	var persona := get_persona_name()
+	return persona if not persona.is_empty() else super.get_local_member_name()
+
+
 func create_lobby(lobby_name: String) -> void:
 	if not _guard_ready("create_lobby"):
 		return
