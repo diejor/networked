@@ -128,6 +128,15 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	return await mt.connect_player(join_payload) if mt else ERR_UNCONFIGURED
 
 
+## Adopts a pre-connected [param peer] without going through a backend.
+##
+## For lobby flows (e.g. Steam) where the peer is produced externally.
+## See [method MultiplayerTree.adopt_peer].
+func adopt_peer(peer: MultiplayerPeer) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.adopt_peer(peer) if mt else ERR_UNCONFIGURED
+
+
 ## Returns the current connection state.
 func get_state() -> MultiplayerTree.State:
 	var mt := _tree_ref.get_ref() as MultiplayerTree

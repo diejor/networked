@@ -40,14 +40,6 @@ signal player_joined(rj: ResolvedJoin)
 ## Emitted when this peer's player join has been accepted by the server.
 signal local_player_joined(rj: ResolvedJoin)
 
-## Emitted when an external invitation is received (e.g. Steam Join Requested).
-## [br][br]
-## [b]Steam Context:[/b]
-## [br]- [param address]: The 64-bit Steam Lobby ID as a [String].
-## [br]- [param sender]: The 64-bit Steam ID of the inviting friend.
-signal invite_received(address: String, sender: int)
-
-
 ## Emitted after the host's startup scenes have been spawned and the server
 ## is ready to accept the local player. Only relevant for listen-server hosts.
 signal host_ready()
@@ -572,6 +564,49 @@ consider using `connect_player` instead of `join`.", func(m): push_error(m))
 	state = State.ONLINE
 	_finalize_session()
 	return OK
+
+## Adopts a pre-connected [param peer] without going through a [BackendPeer].
+##
+## For transports (e.g. Steam lobbies) where the peer is produced by an
+## external lobby flow rather than by [method host] / [method join]. The peer
+## must already be connected; this method assigns it onto the owned
+## [member api] and finalizes the session.
+## [br][br]
+## Derives [member role] from [code]peer.get_unique_id()[/code]:
+## [code]1[/code] -> [code]LISTEN_SERVER[/code], otherwise [code]CLIENT[/code].
+## [br][br]
+## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is [code]null[/code]
+## or already disconnected. Asserts the tree is [code]OFFLINE[/code].
+func adopt_peer(peer: MultiplayerPeer) -> Error:
+	assert(state == State.OFFLINE, "Must be offline to adopt a peer.")
+	if peer == null:
+		Netw.dbg.error(
+			"adopt_peer: peer is null.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
+		Netw.dbg.error(
+			"adopt_peer: peer is not connected.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+
+	Netw.dbg.trace("MultiplayerTree: Adopting external peer.")
+	state = State.CONNECTING
+	_auth.prepare(auth_provider != null)
+	api.multiplayer_peer = peer
+
+	var unique_id := peer.get_unique_id()
+	if unique_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		role = Role.LISTEN_SERVER
+	else:
+		role = Role.CLIENT
+
+	state = State.ONLINE
+	_finalize_session()
+	if role == Role.LISTEN_SERVER:
+		_auth.synthesize_host_identity()
+	return OK
+
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
 func is_online() -> bool:
