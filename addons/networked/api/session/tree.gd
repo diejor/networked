@@ -109,6 +109,15 @@ func is_online() -> bool:
 	return mt.is_online() if mt else false
 
 
+## Starts the instance as a network host using [param join_payload].
+##
+## Bypasses the localhost probing found in [method connect_player],
+## making it faster when the caller knows they are hosting.
+func host_player(join_payload: JoinPayload) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return await mt.host_player(join_payload) if mt else ERR_UNCONFIGURED
+
+
 ## Connects the local player to a session using [param join_payload].
 ##
 ## Probes localhost when [param join_payload.url] is empty or localhost,

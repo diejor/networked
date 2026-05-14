@@ -254,9 +254,7 @@ func _apply_authority() -> void:
 		return
 	match authority_mode:
 		AuthorityMode.SERVER:
-			owner.set_multiplayer_authority(
-				MultiplayerPeer.TARGET_PEER_SERVER
-			)
+			pass
 		AuthorityMode.CLIENT:
 			if peer_id == 0:
 				if entity_id.is_empty():

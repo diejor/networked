@@ -122,14 +122,14 @@ func _warn_if_role_unset() -> void:
 				update_configuration_warnings
 			):
 				backend.changed.disconnect(update_configuration_warnings)
-
+			
 			backend = value
-
+			
 			if backend and not backend.changed.is_connected(
 				update_configuration_warnings
 			):
 				backend.changed.connect(update_configuration_warnings)
-
+		
 		update_configuration_warnings()
 
 ## When set, [method connect_player] is called automatically on
@@ -409,9 +409,9 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-
+	
 	_mount_api()
-
+	
 	for child in get_children():
 		if child is MultiplayerSceneManager:
 			return
@@ -457,7 +457,7 @@ func _init() -> void:
 func _process(dt: float) -> void:
 	if Engine.is_editor_hint():
 		return
-
+	
 	if backend:
 		backend.poll(dt)
 	if api and api.has_multiplayer_peer():
@@ -476,7 +476,7 @@ func host(quiet: bool = false) -> Error:
 	state = State.CONNECTING
 	backend.peer_reset_state()
 	var prior_api := api
-
+	
 	var setup_err: Error = await backend.setup(self)
 	if setup_err != OK:
 		state = State.OFFLINE
@@ -486,11 +486,11 @@ func host(quiet: bool = false) -> Error:
 				func(m): push_error(m)
 			)
 		return setup_err
-
+	
 	_auth.prepare(auth_provider != null)
 	var peer: MultiplayerPeer = await backend.create_host_peer(self)
 	var api_was_adopted := api != prior_api
-
+	
 	# Adopted-api backends (e.g. TubeBackend) drive their peer onto the swapped
 	# api themselves and return null; non-adopting backends returning null are
 	# real failures.
@@ -502,10 +502,10 @@ func host(quiet: bool = false) -> Error:
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CREATE
-
+	
 	if peer != null:
 		api.multiplayer_peer = peer
-
+	
 	role = Role.DEDICATED_SERVER
 	state = State.ONLINE
 	_finalize_session()
@@ -531,7 +531,7 @@ func join(
 	state = State.CONNECTING
 	backend.peer_reset_state()
 	var prior_api := api
-
+	
 	var setup_err: Error = await backend.setup(self)
 	if setup_err != OK:
 		state = State.OFFLINE
@@ -541,13 +541,13 @@ func join(
 				func(m): push_error(m)
 			)
 		return setup_err
-
+	
 	_auth.prepare(auth_provider != null and _client_join_payload != null)
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
 	var api_was_adopted := api != prior_api
-
+	
 	if peer == null and not api_was_adopted:
 		state = State.OFFLINE
 		if not quiet:
@@ -556,10 +556,10 @@ func join(
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
-
+	
 	if peer != null:
 		api.multiplayer_peer = peer
-
+	
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		state = State.OFFLINE
@@ -567,7 +567,7 @@ func join(
 			Netw.dbg.error("Connection timed out. Server probably is not up, \
 consider using `connect_player` instead of `join`.", func(m): push_error(m))
 		return ERR_CANT_CONNECT
-
+	
 	role = Role.CLIENT
 	state = State.ONLINE
 	_finalize_session()
@@ -596,7 +596,7 @@ func disconnect_player() -> void:
 		SaveComponent._save_all_in(get_peer_context(peer_id))
 	if api and api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
-
+	
 	var timer := get_tree().create_timer(3.0)
 	if api:
 		await Async.timeout(api.server_disconnected, timer)
@@ -611,6 +611,20 @@ func disconnect_player() -> void:
 			server.queue_free.call_deferred()
 
 
+## Validates [param join_payload] and starts this instance as a network host
+## (either directly as a listen-server or by spinning up an embedded server).
+##
+## Bypasses the localhost probing found in [method connect_player].
+## Returns [code]OK[/code] on success.
+func host_player(join_payload: JoinPayload) -> Error:
+	assert(state == State.OFFLINE, "Must be offline to host.")
+	var err := await _prepare_session(join_payload)
+	if err != OK:
+		return err
+	
+	return await _host_player_logic(join_payload)
+
+
 ## Validates [param join_payload], probes for an existing localhost server,
 ## then either joins it or spins up an embedded server by duplicating this
 ## tree into a sibling node.
@@ -618,28 +632,9 @@ func disconnect_player() -> void:
 ## Returns [code]OK[/code] on success.
 func connect_player(join_payload: JoinPayload) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to connect.")
-	if not join_payload:
-		Netw.dbg.error(
-			"connect_player: join_payload is null.", func(m): push_error(m)
-		)
-		return ERR_INVALID_PARAMETER
-	if join_payload.username.is_empty():
-		Netw.dbg.error(
-			"connect_player: username is empty.", func(m): push_error(m)
-		)
-		return ERR_INVALID_PARAMETER
-	var has_spawner := (
-		join_payload.spawner_component_path
-		and join_payload.spawner_component_path.is_valid()
-	)
-	
-	var prepare_err := await _auth.prepare_join_payload(join_payload)
-	if prepare_err != OK:
-		return prepare_err
-	
-	_client_join_payload = join_payload
-	_auth.set_client_join_payload(join_payload)
-	await disconnect_player()
+	var err := await _prepare_session(join_payload)
+	if err != OK:
+		return err
 	
 	var url := join_payload.url
 	Netw.dbg.info(
@@ -657,56 +652,7 @@ func connect_player(join_payload: JoinPayload) -> Error:
 					submit_join(join_payload)
 					return OK
 			
-			if use_listen_server:
-				var host_err := await host(true)
-				if host_err == OK:
-					role = Role.LISTEN_SERVER
-					await host_ready
-					submit_join(join_payload)
-					return OK
-				elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
-					var join_err := await join(
-						backend.get_join_address(), join_payload.username
-					)
-					if join_err == OK:
-						submit_join(join_payload)
-					return join_err
-				else:
-					return host_err
-			
-			var server := duplicate() as MultiplayerTree
-			server.is_server = true
-			server.name = "Server"
-			server.init_join_payload = null
-			server.auto_host_headless = false
-			get_parent().add_child.call_deferred(server)
-			await get_tree().process_frame
-			
-			var client_sm := get_service(MultiplayerSceneManager)
-			if client_sm:
-				var server_sm := server.get_service(MultiplayerSceneManager)
-				for path in client_sm._get_configured_paths():
-					server_sm._configure_default(path)
-			
-			var host_err := await server.host(true)
-			if host_err == OK:
-				var join_err := await join(
-					server.backend.get_join_address(), join_payload.username
-				)
-				if join_err == OK:
-					submit_join(join_payload)
-				return join_err
-			elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
-				server.queue_free.call_deferred()
-				var join_err := await join(
-					backend.get_join_address(), join_payload.username
-				)
-				if join_err == OK:
-					submit_join(join_payload)
-				return join_err
-			else:
-				server.queue_free.call_deferred()
-				return host_err
+			return await _host_player_logic(join_payload)
 		else:
 			# For backends that don't support embedded servers (like Steam),
 			# local URL means we should just host a lobby.
@@ -721,10 +667,84 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	if OS.has_feature("web") and url.begins_with("ws"):
 		backend = WebSocketBackend.new()
 	
-	var err := await join(url, join_payload.username)
-	if err == OK:
+	var join_err := await join(url, join_payload.username)
+	if join_err == OK:
 		submit_join(join_payload)
-	return err
+	return join_err
+
+
+func _prepare_session(join_payload: JoinPayload) -> Error:
+	if not join_payload:
+		Netw.dbg.error("join_payload is null.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+	if join_payload.username.is_empty():
+		Netw.dbg.error("username is empty.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+	
+	var prepare_err := await _auth.prepare_join_payload(join_payload)
+	if prepare_err != OK:
+		return prepare_err
+	
+	_client_join_payload = join_payload
+	_auth.set_client_join_payload(join_payload)
+	await disconnect_player()
+	return OK
+
+
+func _host_player_logic(join_payload: JoinPayload) -> Error:
+	if use_listen_server:
+		var host_err := await host(true)
+		if host_err == OK:
+			role = Role.LISTEN_SERVER
+			await host_ready
+			submit_join(join_payload)
+			return OK
+		elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
+			var join_err := await join(
+				backend.get_join_address(), join_payload.username
+			)
+			if join_err == OK:
+				submit_join(join_payload)
+			return join_err
+		else:
+			return host_err
+	
+	var server := duplicate() as MultiplayerTree
+	server.is_server = true
+	server.name = "Server"
+	server.init_join_payload = null
+	server.auto_host_headless = false
+	get_parent().add_child.call_deferred(server)
+	await get_tree().process_frame
+	
+	var client_sm := get_service(MultiplayerSceneManager)
+	if client_sm:
+		var server_sm := server.get_service(MultiplayerSceneManager)
+		for path in client_sm._get_configured_paths():
+			server_sm._configure_default(path)
+	
+	var host_err := await server.host(true)
+	if host_err == OK:
+		var join_err := await join(
+			server.backend.get_join_address(), join_payload.username
+		)
+		if join_err == OK:
+			submit_join(join_payload)
+		return join_err
+	elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
+		server.queue_free.call_deferred()
+		var join_err := await join(
+			backend.get_join_address(), join_payload.username
+		)
+		if join_err == OK:
+			submit_join(join_payload)
+		return join_err
+	else:
+		server.queue_free.call_deferred()
+		return host_err
+
 
 
 ## Submits a join request to the server.
@@ -772,9 +792,9 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	var join_payload: JoinPayload = JoinPayload.new()
 	join_payload.deserialize(bytes)
 	join_payload.peer_id = peer_id
-
+	
 	_auth.resolve_identity(peer_id, join_payload)
-
+	
 	var rj := join_payload.resolve()
 	if not rj:
 		Netw.dbg.warn(
@@ -782,7 +802,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 			[peer_id]
 		)
 		return
-
+	
 	if not _resolve_username_collision(rj):
 		return
 	
@@ -928,7 +948,7 @@ func _resolve_username_collision(rj: ResolvedJoin) -> bool:
 func _mount_api() -> void:
 	if not api:
 		return
-
+	
 	_tree_name = name
 	var root_path := get_path()
 	api.root_path = root_path
@@ -942,11 +962,11 @@ func _mount_api() -> void:
 func _unmount_api(release_meta: bool) -> void:
 	if not api:
 		return
-
+	
 	_unbind_api_signals(api)
 	if release_meta and api.has_meta(&"_multiplayer_tree"):
 		api.remove_meta(&"_multiplayer_tree")
-
+	
 	if not api.root_path.is_empty():
 		get_tree().set_multiplayer(SceneMultiplayer.new(), api.root_path)
 
@@ -956,7 +976,7 @@ func _unmount_api(release_meta: bool) -> void:
 func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 	if new_api == api:
 		return
-
+	
 	var old_api := api
 	if old_api:
 		_unbind_api_signals(old_api)
@@ -964,7 +984,7 @@ func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 			old_api.remove_meta(&"_multiplayer_tree")
 		if not old_api.root_path.is_empty():
 			get_tree().set_multiplayer(SceneMultiplayer.new(), old_api.root_path)
-
+	
 	api = new_api
 	if api:
 		var root_path := get_path()
@@ -972,7 +992,7 @@ func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 		get_tree().set_multiplayer(api, root_path)
 		api.set_meta(&"_multiplayer_tree", self)
 		_bind_api_signals(api)
-
+	
 	api_swapped.emit(old_api, api, reason)
 
 
@@ -981,7 +1001,7 @@ func _finalize_session() -> void:
 	Netw.dbg.trace("MultiplayerTree: Finalizing session.")
 	Netw.dbg.register_tree(self)
 	configured.emit()
-
+	
 	var sm := get_service(MultiplayerSceneManager)
 	if sm and not sm.startup_scenes_spawned.is_connected(host_ready.emit):
 		sm.startup_scenes_spawned.connect(host_ready.emit)
@@ -1017,22 +1037,22 @@ func _unbind_api_signals(target: SceneMultiplayer) -> void:
 
 func _on_exiting() -> void:
 	Netw.dbg.trace("MultiplayerTree: Exiting.")
-
+	
 	# When re-parenting, we only unmount the api from the previous path to
 	# keep the connection alive. _enter_tree handles re-registration.
 	if not is_queued_for_deletion():
 		_unmount_api(false)
 		return
-
+	
 	Netw.dbg.unregister_tree(self)
 	if api and api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
 		api.multiplayer_peer = null
 	_unmount_api(true)
-
+	
 	if backend:
 		backend.peer_reset_state()
-
+	
 	dispose()
 
 

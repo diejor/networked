@@ -66,8 +66,7 @@ func host_game(_player_name: String) -> void:
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 	
-	ctx.tree.connect_player(jp)
-
+	ctx.tree.host_player(jp)
 @rpc("any_peer", "call_local")
 func register_player(new_player_name: String) -> void:
 	var id := multiplayer.get_remote_sender_id()
@@ -103,7 +102,7 @@ func _activate_world_scene() -> void:
 func end_game() -> void:
 	if has_node(^"/root/World"):
 		get_node(^"/root/World").queue_free()
-
+	
 	game_ended.emit()
 	players.clear()
 
