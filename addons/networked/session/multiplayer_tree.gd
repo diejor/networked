@@ -597,6 +597,16 @@ func adopt_peer(
 
 	Netw.dbg.trace("MultiplayerTree: Adopting external peer.")
 	state = State.CONNECTING
+	
+	if join_payload:
+		var prepare_err := await _auth.prepare_join_payload(join_payload)
+		if prepare_err != OK:
+			state = State.OFFLINE
+			return prepare_err
+		
+		_client_join_payload = join_payload
+		_auth.set_client_join_payload(join_payload)
+
 	_auth.prepare(auth_provider != null)
 	api.multiplayer_peer = peer
 
@@ -610,6 +620,10 @@ func adopt_peer(
 	_finalize_session()
 
 	if join_payload:
+		if role == Role.CLIENT:
+			# Wait for Godot to finalize its internal handshake before RPCing.
+			if not is_online():
+				await connected_to_server
 		submit_join(join_payload)
 
 	if role == Role.LISTEN_SERVER:

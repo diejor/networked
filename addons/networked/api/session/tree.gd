@@ -136,7 +136,7 @@ func adopt_peer(
 	peer: MultiplayerPeer, join_payload: JoinPayload = null
 ) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.adopt_peer(peer, join_payload) if mt else ERR_UNCONFIGURED
+	return await mt.adopt_peer(peer, join_payload) if mt else ERR_UNCONFIGURED
 
 
 ## Returns the current connection state.

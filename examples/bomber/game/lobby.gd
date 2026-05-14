@@ -76,7 +76,7 @@ func _enter_lobby(_lobby_id: int) -> void:
 	var jp := JoinPayload.new()
 	jp.username = pname
 	
-	var err := _provider.bind(_ctx.tree, jp)
+	var err := await _provider.bind(_ctx.tree, jp)
 	if err != OK:
 		_set_status("Bind failed: %s" % error_string(err))
 		_pre.reset_buttons()

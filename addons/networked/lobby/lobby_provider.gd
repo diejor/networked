@@ -90,7 +90,7 @@ func bind(tree: NetwTree, join_payload: JoinPayload = null) -> Error:
 	var peer := get_peer()
 	if peer == null:
 		return ERR_UNCONFIGURED
-	var err := tree.adopt_peer(peer, join_payload)
+	var err := await tree.adopt_peer(peer, join_payload)
 	if err != OK:
 		return err
 	_bind_tree_signals(tree)
