@@ -32,7 +32,6 @@ func spawn_joined_players(joined_players: Array[ResolvedJoin]) -> void:
 		if _has_player(rj):
 			continue
 		
-		_register_score_player(rj)
 		spawn({
 			"peer_id": rj.peer_id,
 			"spawn_index": index,
@@ -45,6 +44,11 @@ func _spawn_player(data: Variant) -> Node:
 	var peer_id := int(spawn_data.get("peer_id", 0))
 	var username := str(spawn_data.get("username", ""))
 	var spawn_index := int(spawn_data.get("spawn_index", 0))
+	
+	# Ensure the score UI knows about this player on all peers (host and clients).
+	var world := ctx.scene.get_level()
+	var score := world.get_node("Score")
+	score.add_player(peer_id, username)
 	
 	var player := PLAYER_SCENE.instantiate()
 	NetwEntity.bundle(player, peer_id, StringName(username))
@@ -68,13 +72,6 @@ func _has_player(rj: ResolvedJoin) -> bool:
 		rj.peer_id
 	)
 	return players_root.get_node_or_null(node_name) != null
-
-
-func _register_score_player(rj: ResolvedJoin) -> void:
-	var world := ctx.scene.get_level()
-	
-	var score := world.get_node("Score")
-	score.add_player(rj.peer_id, str(rj.username))
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:

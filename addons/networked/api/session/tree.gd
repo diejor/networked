@@ -132,9 +132,11 @@ func connect_player(join_payload: JoinPayload) -> Error:
 ##
 ## For lobby flows (e.g. Steam) where the peer is produced externally.
 ## See [method MultiplayerTree.adopt_peer].
-func adopt_peer(peer: MultiplayerPeer) -> Error:
+func adopt_peer(
+	peer: MultiplayerPeer, join_payload: JoinPayload = null
+) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.adopt_peer(peer) if mt else ERR_UNCONFIGURED
+	return mt.adopt_peer(peer, join_payload) if mt else ERR_UNCONFIGURED
 
 
 ## Returns the current connection state.

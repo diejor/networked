@@ -572,12 +572,17 @@ consider using `connect_player` instead of `join`.", func(m): push_error(m))
 ## must already be connected; this method assigns it onto the owned
 ## [member api] and finalizes the session.
 ## [br][br]
+## If [param join_payload] is provided, it is automatically submitted to the
+## server via [method submit_join] once adoption is complete.
+## [br][br]
 ## Derives [member role] from [code]peer.get_unique_id()[/code]:
 ## [code]1[/code] -> [code]LISTEN_SERVER[/code], otherwise [code]CLIENT[/code].
 ## [br][br]
 ## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is [code]null[/code]
 ## or already disconnected. Asserts the tree is [code]OFFLINE[/code].
-func adopt_peer(peer: MultiplayerPeer) -> Error:
+func adopt_peer(
+	peer: MultiplayerPeer, join_payload: JoinPayload = null
+) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to adopt a peer.")
 	if peer == null:
 		Netw.dbg.error(
@@ -603,6 +608,10 @@ func adopt_peer(peer: MultiplayerPeer) -> Error:
 
 	state = State.ONLINE
 	_finalize_session()
+
+	if join_payload:
+		submit_join(join_payload)
+
 	if role == Role.LISTEN_SERVER:
 		_auth.synthesize_host_identity()
 	return OK

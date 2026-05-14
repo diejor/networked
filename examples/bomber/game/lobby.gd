@@ -68,7 +68,15 @@ func _on_lobby_joined(lobby_id: int) -> void:
 func _enter_lobby(_lobby_id: int) -> void:
 	if _provider == null:
 		return
-	var err := _provider.bind(_ctx.tree)
+
+	var local_id := multiplayer.get_unique_id()
+	var pname := _provider.get_member_name(local_id)
+	gamestate.player_name = pname
+	
+	var jp := JoinPayload.new()
+	jp.username = pname
+	
+	var err := _provider.bind(_ctx.tree, jp)
 	if err != OK:
 		_set_status("Bind failed: %s" % error_string(err))
 		_pre.reset_buttons()
@@ -78,15 +86,6 @@ func _enter_lobby(_lobby_id: int) -> void:
 	_in.refresh()
 	_set_state(State.IN_LOBBY)
 	_set_status("")
-
-	# Make the gamestate aware of this peer's display name so the existing
-	# bomber world-spawn logic still has names to render once the match
-	# begins. This is the only place lobby-layer identity bleeds into the
-	# session-layer game state.
-	var local_id := multiplayer.get_unique_id()
-	var pname := _provider.get_member_name(local_id)
-	gamestate.player_name = pname
-	gamestate.register_player.rpc(pname)
 
 
 func _on_start_requested() -> void:

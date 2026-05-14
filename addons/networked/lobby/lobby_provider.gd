@@ -81,13 +81,16 @@ func get_member_name(peer_id: int) -> String:
 ## Adopts the produced peer onto [param tree] and wires standard lifecycle
 ## sync (advertised member count, leave-on-disconnect).
 ##
+## If [param join_payload] is provided, it is passed to
+## [method NetwTree.adopt_peer] to trigger the session join.
+##
 ## Call once per lobby session after [signal peer_ready] (or after
 ## [signal lobby_created] / [signal lobby_joined], which imply it).
-func bind(tree: NetwTree) -> Error:
+func bind(tree: NetwTree, join_payload: JoinPayload = null) -> Error:
 	var peer := get_peer()
 	if peer == null:
 		return ERR_UNCONFIGURED
-	var err := tree.adopt_peer(peer)
+	var err := tree.adopt_peer(peer, join_payload)
 	if err != OK:
 		return err
 	_bind_tree_signals(tree)
