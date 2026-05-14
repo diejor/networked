@@ -142,6 +142,16 @@ func get_persona_name() -> String:
 	return _wrapper.get_persona_name() if _init_ok else ""
 
 
+func get_member_name(peer_id: int) -> String:
+	if not _init_ok or _peer == null:
+		return super.get_member_name(peer_id)
+	var steam_id := _wrapper.get_steam_id_from_peer_id(_peer, peer_id)
+	if steam_id == 0:
+		return super.get_member_name(peer_id)
+	var persona := _wrapper.get_friend_persona_name(steam_id)
+	return persona if not persona.is_empty() else super.get_member_name(peer_id)
+
+
 func create_lobby(lobby_name: String) -> void:
 	if not _guard_ready("create_lobby"):
 		return

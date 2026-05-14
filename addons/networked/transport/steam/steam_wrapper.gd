@@ -135,6 +135,13 @@ func configure_peer(
 	peer.call(&"set_no_nagle", not nagle)
 	peer.call(&"set_server_relay", relay)
 
+## Resolves a Godot multiplayer [param peer_id] to a Steam ID via the active
+## [code]SteamMultiplayerPeer[/code]. Returns [code]0[/code] if unavailable.
+func get_steam_id_from_peer_id(peer: MultiplayerPeer, peer_id: int) -> int:
+	if peer == null:
+		return 0
+	return peer.call(&"get_steam_id_from_peer_id", peer_id)
+
 func connect_signal(sig: String, callable: Callable) -> void:
 	_steam.connect(sig, callable)
 

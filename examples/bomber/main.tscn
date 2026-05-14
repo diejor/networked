@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="6_ej8d4"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_wto4k"]
+[ext_resource type="Script" uid="uid://xxtg8cpj7yun" path="res://addons/networked/transport/steam/steam_lobby_provider.gd" id="9_p4o8j"]
 
 [sub_resource type="Resource" id="Resource_mrsco"]
 script = ExtResource("3_d22dq")
@@ -56,6 +57,10 @@ metadata/_custom_type_script = "uid://dfoggo64snch3"
 [node name="NetworkClock" type="Node" parent="MultiplayerTree" unique_id=1298520482]
 script = ExtResource("7_wto4k")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
+
+[node name="SteamLobbyProvider" type="Node" parent="MultiplayerTree" unique_id=2146781032]
+script = ExtResource("9_p4o8j")
+metadata/_custom_type_script = "uid://xxtg8cpj7yun"
 
 [node name="Players" type="Panel" parent="." unique_id=1013754916]
 visible = false

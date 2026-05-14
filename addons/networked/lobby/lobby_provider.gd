@@ -71,6 +71,13 @@ func leave_lobby() -> void
 func get_peer() -> MultiplayerPeer
 
 
+## Resolves a Godot multiplayer [param peer_id] to a human-readable display
+## name. Default returns [code]"Player %d"[/code]; transport-specific
+## providers (Steam, Discord, ...) should override to resolve personas.
+func get_member_name(peer_id: int) -> String:
+	return "Player %d" % peer_id
+
+
 ## Adopts the produced peer onto [param tree] and wires standard lifecycle
 ## sync (advertised member count, leave-on-disconnect).
 ##
