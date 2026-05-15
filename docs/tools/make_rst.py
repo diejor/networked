@@ -899,8 +899,13 @@ def main() -> None:
     elif state.num_errors == 1:
         print(f"{Ansi.RED}1 error was found in the class reference XML. Please check the messages above.{Ansi.RESET}")
 
-    if state.num_warnings == 0 and state.num_errors == 0:
-        print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
+    if state.num_errors == 0:
+        if state.num_warnings == 0:
+            print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
+        else:
+            print(
+                f"{Ansi.YELLOW}Done with {state.num_warnings} warnings (zero errors).{Ansi.RESET}"
+            )
         if not args.dry_run:
             print(f"Wrote reStructuredText files for each class to: {args.output}")
     else:
