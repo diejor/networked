@@ -36,7 +36,7 @@ func test_adopt_server_peer_sets_listen_server_role() -> void:
 	var tree := _make_tree()
 	var peer := _make_connected_server_peer()
 
-	var err := tree.adopt_peer(peer)
+	var err := await tree.adopt_peer(peer)
 
 	assert_that(err).is_equal(OK)
 	assert_that(tree.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
@@ -48,7 +48,7 @@ func test_adopt_client_peer_sets_client_role() -> void:
 	var tree := _make_tree()
 	var peer := _make_connected_client_peer()
 
-	var err := tree.adopt_peer(peer)
+	var err := await tree.adopt_peer(peer)
 
 	assert_that(err).is_equal(OK)
 	assert_that(tree.role).is_equal(MultiplayerTree.Role.CLIENT)
@@ -58,7 +58,7 @@ func test_adopt_client_peer_sets_client_role() -> void:
 func test_adopt_null_peer_returns_invalid_parameter() -> void:
 	var tree := _make_tree()
 
-	var err := tree.adopt_peer(null)
+	var err := await tree.adopt_peer(null)
 
 	assert_that(err).is_equal(ERR_INVALID_PARAMETER)
 	assert_that(tree.state).is_equal(MultiplayerTree.State.OFFLINE)
@@ -70,7 +70,7 @@ func test_adopt_disconnected_peer_returns_invalid_parameter() -> void:
 	var peer: LocalMultiplayerPeer = auto_free(LocalMultiplayerPeer.new())
 	# Fresh peer with no create_server/create_client is DISCONNECTED.
 
-	var err := tree.adopt_peer(peer)
+	var err := await tree.adopt_peer(peer)
 
 	assert_that(err).is_equal(ERR_INVALID_PARAMETER)
 	assert_that(tree.state).is_equal(MultiplayerTree.State.OFFLINE)
