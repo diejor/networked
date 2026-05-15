@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from collections import OrderedDict
 from typing import Any, TextIO
 
-sys.path.insert(0, root_directory := os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")))
+sys.path.insert(0, root_directory := os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../"))
 
 import version
 from misc.utility.color import Ansi, force_stderr_color, force_stdout_color
@@ -102,60 +102,19 @@ CLASS_GROUPS: dict[str, str] = {
     "editor": "Editor-only",
     "variant": "Variant types",
 }
-
 CLASS_GROUPS_BASE: dict[str, str] = {
     "node": "Node",
     "resource": "Resource",
     "object": "Object",
     "variant": "Variant",
 }
-
-# Engine-class shim: when a referenced symbol is not in our local XML set (e.g.
-# Node, Resource, Variant, Error), emit a `:godot:` role. URL construction lives
-# in docs/_extensions/godot_xref.py — keep this helper minimal so the diff against
-# upstream stays small.
-def godot_external_link(display_text: str, class_name: str, fragment: str = "") -> str:
-    target = class_name if not fragment else f"{class_name}#{fragment}"
-    if display_text == target:
-        return f":godot:`{display_text}`"
-    return f":godot:`{display_text} <{target}>`"
-
-# Fallback mapping of Godot engine class names to their ultimate class group.
-# Used when the parent class is not in `state.classes` (i.e. our addon XML set
-# doesn't include engine base classes like Node, Resource, Object, Control, etc.).
-GODOT_ENGINE_CLASS_GROUPS: dict[str, str] = {
-    "Node": "node",
-    "Node2D": "node",
-    "Node3D": "node",
-    "CanvasItem": "node",
-    "CanvasLayer": "node",
-    "Control": "node",
-    "Area2D": "node",
-    "Area3D": "node",
-    "CollisionObject2D": "node",
-    "CollisionObject3D": "node",
-    "Container": "node",
-    "BoxContainer": "node",
-    "HBoxContainer": "node",
-    "VBoxContainer": "node",
-    "MarginContainer": "node",
-    "PanelContainer": "node",
-    "Panel": "node",
-    "Label": "node",
-    "Popup": "node",
-    "Window": "node",
-    "MultiplayerSpawner": "node",
-    "MultiplayerSynchronizer": "node",
-    "EditorPlugin": "node",
-    "EditorDebuggerPlugin": "node",
-    "Resource": "resource",
-    "ResourceFormatLoader": "resource",
-    "ResourceFormatSaver": "resource",
-    "Object": "object",
-    "RefCounted": "object",
-    "MultiplayerPeerExtension": "object",
-}
-
+# Sync with editor\register_editor_types.cpp
+EDITOR_CLASSES: list[str] = [
+    "FileSystemDock",
+    "ScriptCreateDialog",
+    "ScriptEditor",
+    "ScriptEditorBase",
+]
 # Sync with the types mentioned in https://docs.godotengine.org/en/stable/tutorials/scripting/c_sharp/c_sharp_differences.html
 CLASSES_WITH_CSHARP_DIFFERENCES: list[str] = [
     "@GlobalScope",
@@ -202,8 +161,6 @@ PACKED_ARRAY_TYPES: list[str] = [
     "PackedVector4Array",
 ]
 
-PRIMITIVE_TYPES: list[str] = ["int", "float", "bool", "void"]
-
 
 class State:
     def __init__(self) -> None:
@@ -226,8 +183,6 @@ class State:
         inherits = class_root.get("inherits")
         if inherits is not None:
             class_def.inherits = inherits
-
-        class_def.api_type = class_root.get("api_type")
 
         class_def.deprecated = class_root.get("deprecated")
         class_def.experimental = class_root.get("experimental")
@@ -640,8 +595,8 @@ class ClassDef(DefinitionBase):
     def __init__(self, name: str) -> None:
         super().__init__("class", name)
 
-        self.class_group: str = "variant"
-        self.api_type: str | None = None
+        self.class_group = "variant"
+        self.editor_class = self._is_editor_class()
 
         self.constants: OrderedDict[str, ConstantDef] = OrderedDict()
         self.enums: OrderedDict[str, EnumDef] = OrderedDict()
@@ -660,6 +615,14 @@ class ClassDef(DefinitionBase):
 
         # Used to match the class with XML source for output filtering purposes.
         self.filepath: str = ""
+
+    def _is_editor_class(self) -> bool:
+        if self.name.startswith("Editor"):
+            return True
+        if self.name in EDITOR_CLASSES:
+            return True
+
+        return False
 
     def update_class_group(self, state: State) -> None:
         group_name = "variant"
@@ -685,12 +648,6 @@ class ClassDef(DefinitionBase):
                     inherits = inode.strip()
                 else:
                     break
-
-            # Fallback: if the walk exited without finding a group
-            # (because the parent is a Godot engine class not in our XML set),
-            # check against the known Godot engine class hierarchy.
-            if group_name == "variant" and inherits in GODOT_ENGINE_CLASS_GROUPS:
-                group_name = GODOT_ENGINE_CLASS_GROUPS[inherits]
 
         self.class_group = group_name
 
@@ -842,7 +799,7 @@ def main() -> None:
             grouped_classes[class_def.class_group] = []
         grouped_classes[class_def.class_group].append(class_name)
 
-        if class_def.api_type == "editor":
+        if class_def.editor_class:
             if "editor" not in grouped_classes:
                 grouped_classes["editor"] = []
             grouped_classes["editor"].append(class_name)
@@ -892,13 +849,8 @@ def main() -> None:
     elif state.num_errors == 1:
         print(f"{Ansi.RED}1 error was found in the class reference XML. Please check the messages above.{Ansi.RESET}")
 
-    if state.num_errors == 0:
-        if state.num_warnings == 0:
-            print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
-        else:
-            print(
-                f"{Ansi.YELLOW}Done with {state.num_warnings} warnings (zero errors).{Ansi.RESET}"
-            )
+    if state.num_warnings == 0 and state.num_errors == 0:
+        print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
         if not args.dry_run:
             print(f"Wrote reStructuredText files for each class to: {args.output}")
     else:
@@ -1549,16 +1501,17 @@ def make_type(klass: str, state: State) -> str:
         if link_type in state.classes:
             return f":ref:`{link_type}<class_{sanitize_class_name(link_type)}>`"
         else:
-            return godot_external_link(link_type, link_type)
+            print_error(f'{state.current_class}.xml: Unresolved type "{link_type}".', state)
+            return f"``{link_type}``"
 
     if klass.endswith("[]"):  # Typed array, strip [] to link to contained type.
-        return f"{resolve_type('Array')}\\[{resolve_type(klass[: -len('[]')])}\\]"
+        return f":ref:`Array<class_Array>`\\[{resolve_type(klass[: -len('[]')])}\\]"
 
     if klass.startswith("Dictionary["):  # Typed dictionary, split elements to link contained types.
         parts = klass[len("Dictionary[") : -len("]")].partition(", ")
         key = parts[0]
         value = parts[2]
-        return f"{resolve_type('Dictionary')}\\[{resolve_type(key)}, {resolve_type(value)}\\]"
+        return f":ref:`Dictionary<class_Dictionary>`\\[{resolve_type(key)}, {resolve_type(value)}\\]"
 
     return resolve_type(klass)
 
@@ -1586,11 +1539,9 @@ def make_enum(t: str, is_bitfield: bool, state: State) -> str:
         else:
             return f":ref:`{e}<enum_{sanitize_class_name(c)}_{e}>`"
 
-    # Fallback for Godot engine enums: link to external docs.
-    # Downgrade error to warning for standalone addon builds.
-    print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
-    slug = sanitize_class_name(c).lower()
-    return godot_external_link(t, c, fragment=f"enum_{slug}_{e}")
+    print_error(f'{state.current_class}.xml: Unresolved enum "{t}".', state)
+
+    return t
 
 
 def make_method_signature(
@@ -1730,7 +1681,6 @@ def make_footer() -> str:
     operator_msg = translate("This method describes a valid operator to use with this type as left-hand operand.")
     bitfield_msg = translate("This value is an integer composed as a bitmask of the following flags.")
     void_msg = translate("No return value.")
-    abstract_msg = translate("This method is abstract and has no implementation. It must be overridden by subclasses.")
 
     return (
         f".. |virtual| replace:: :abbr:`virtual ({virtual_msg})`\n"
@@ -1742,7 +1692,6 @@ def make_footer() -> str:
         f".. |operator| replace:: :abbr:`operator ({operator_msg})`\n"
         f".. |bitfield| replace:: :abbr:`BitField ({bitfield_msg})`\n"
         f".. |void| replace:: :abbr:`void ({void_msg})`\n"
-        f".. |abstract| replace:: :abbr:`abstract ({abstract_msg})`\n"
     )
 
 
@@ -1810,7 +1759,7 @@ def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_
                 f.write(f"    :name: toc-class-ref-{group_name}s\n")
                 f.write("\n")
 
-                if group_name in CLASS_GROUPS_BASE and CLASS_GROUPS_BASE[group_name] in grouped_classes[group_name]:
+                if group_name in CLASS_GROUPS_BASE:
                     f.write(f"    class_{sanitize_class_name(CLASS_GROUPS_BASE[group_name], True)}\n")
 
                 for class_name in grouped_classes[group_name]:
@@ -1887,15 +1836,7 @@ def get_tag_and_args(tag_text: str) -> TagState:
 
 
 def parse_link_target(link_target: str, state: State, context_name: str) -> list[str]:
-    if "." in link_target:
-        # Longest prefix match for nested class names (e.g., NetwDatabase.TableRepository.fetch)
-        parts = link_target.split(".")
-        for i in range(len(parts) - 1, 0, -1):
-            class_name = ".".join(parts[:i])
-            if class_name in state.classes:
-                return [class_name, ".".join(parts[i:])]
-
-        # Fallback for engine classes not in our local set (e.g. Node)
+    if link_target.find(".") != -1:
         return link_target.split(".")
     else:
         return [state.current_class, link_target]
@@ -1928,20 +1869,7 @@ def format_text_block(
 
     pos = 0
     tag_depth = 0
-    debug_tag_stack: list[str] = []
     while True:
-        if tag_depth > 2 or (
-            tag_depth == 2
-            and not (
-                debug_tag_stack[0] == "codeblocks"
-                and (debug_tag_stack[1] == "gdscript" or debug_tag_stack[1] == "csharp")
-            )
-        ):
-            print_warning(
-                f"{state.current_class}.xml: Found nested tags [{']['.join(debug_tag_stack)}] in {context_name} (online doc will contain invalid RST markup).",
-                state,
-            )
-
         pos = text.find("[", pos)
         if pos == -1:
             break
@@ -1958,10 +1886,7 @@ def format_text_block(
         escape_post = False
 
         # Tag is a reference to a class.
-        if (
-            tag_text in state.classes
-            or (tag_text and (tag_text[0].isupper() or tag_text in PRIMITIVE_TYPES) and "=" not in tag_text and tag_text not in RESERVED_FORMATTING_TAGS)
-        ) and not inside_code:
+        if tag_text in state.classes and not inside_code:
             if tag_text == state.current_class:
                 # Don't create a link to the same class, format it as strong emphasis.
                 tag_text = f"**{tag_text}**"
@@ -1983,7 +1908,6 @@ def format_text_block(
                     if is_in_tagset(tag_state.name, RESERVED_CODEBLOCK_TAGS):
                         tag_text = ""
                         tag_depth -= 1
-                        debug_tag_stack.pop()
                         inside_code = False
                         ignore_code_warnings = False
                         # Strip newline if the tag was alone on one
@@ -1993,7 +1917,6 @@ def format_text_block(
                     elif is_in_tagset(tag_state.name, ["code"]):
                         tag_text = "``"
                         tag_depth -= 1
-                        debug_tag_stack.pop()
                         inside_code = False
                         ignore_code_warnings = False
                         escape_post = True
@@ -2023,18 +1946,15 @@ def format_text_block(
                     has_codeblocks_csharp = False
 
                     tag_depth -= 1
-                    debug_tag_stack.pop()
                     tag_text = ""
                     inside_code_tabs = False
                 else:
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                     tag_text = "\n.. tabs::"
                     inside_code_tabs = True
 
             elif is_in_tagset(tag_state.name, RESERVED_CODEBLOCK_TAGS):
                 tag_depth += 1
-                debug_tag_stack.append(tag_state.name)
 
                 if tag_state.name == "gdscript":
                     if not inside_code_tabs:
@@ -2074,7 +1994,6 @@ def format_text_block(
             elif is_in_tagset(tag_state.name, ["code"]):
                 tag_text = "``"
                 tag_depth += 1
-                debug_tag_stack.append(tag_state.name)
 
                 inside_code = True
                 inside_code_tag = "code"
@@ -2205,8 +2124,6 @@ def format_text_block(
                         # but method, member, and theme_item have special cases.
                         ref_type = "_{}".format(tag_state.name)
 
-                        resolved = True
-
                         if target_class_name in state.classes:
                             class_def = state.classes[target_class_name]
 
@@ -2215,35 +2132,31 @@ def format_text_block(
                                     ref_type = "_private_method"
 
                                 if target_name not in class_def.methods:
-                                    print_warning(
+                                    print_error(
                                         f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
                                         state,
                                     )
-                                    resolved = False
 
                             elif tag_state.name == "constructor" and target_name not in class_def.constructors:
-                                print_warning(
+                                print_error(
                                     f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
                                     state,
                                 )
-                                resolved = False
 
                             elif tag_state.name == "operator" and target_name not in class_def.operators:
-                                print_warning(
+                                print_error(
                                     f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
                                     state,
                                 )
-                                resolved = False
 
                             elif tag_state.name == "member":
                                 ref_type = "_property"
 
                                 if target_name not in class_def.properties:
-                                    print_warning(
+                                    print_error(
                                         f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
                                         state,
                                     )
-                                    resolved = False
 
                                 elif class_def.properties[target_name].overrides is not None:
                                     print_error(
@@ -2252,26 +2165,23 @@ def format_text_block(
                                     )
 
                             elif tag_state.name == "signal" and target_name not in class_def.signals:
-                                print_warning(
+                                print_error(
                                     f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
                                     state,
                                 )
-                                resolved = False
 
                             elif tag_state.name == "annotation" and target_name not in class_def.annotations:
-                                print_warning(
+                                print_error(
                                     f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
                                     state,
                                 )
-                                resolved = False
 
                             elif tag_state.name == "theme_item":
                                 if target_name not in class_def.theme_items:
-                                    print_warning(
+                                    print_error(
                                         f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
                                         state,
                                     )
-                                    resolved = False
                                 else:
                                     # Needs theme data type to be properly linked, which we cannot get without a class.
                                     name = class_def.theme_items[target_name].data_name
@@ -2285,8 +2195,7 @@ def format_text_block(
 
                                 if link_target.find(".") == -1:
                                     # Also search in @GlobalScope as a last resort if no class was specified
-                                    if "@GlobalScope" in state.classes:
-                                        search_class_defs.append(state.classes["@GlobalScope"])
+                                    search_class_defs.append(state.classes["@GlobalScope"])
 
                                 for search_class_def in search_class_defs:
                                     if target_name in search_class_def.constants:
@@ -2301,62 +2210,23 @@ def format_text_block(
                                                 break
 
                                 if not found:
-                                    print_warning(
+                                    print_error(
                                         f'{state.current_class}.xml: Unresolved constant reference "{link_target}" in {context_name}.',
                                         state,
                                     )
-                                    resolved = False
-
-                            else:
-                                print_warning(
-                                    f'{state.current_class}.xml: Unresolved type reference "{target_class_name}" in method reference "{link_target}" in {context_name}.',
-                                    state,
-                                )
-                                resolved = False
 
                         else:
-                            print_warning(
+                            print_error(
                                 f'{state.current_class}.xml: Unresolved type reference "{target_class_name}" in method reference "{link_target}" in {context_name}.',
                                 state,
                             )
-                            resolved = False
 
-                        if resolved:
-                            repl_text = target_name
-                            if target_class_name != state.current_class:
-                                repl_text = f"{target_class_name}.{target_name}"
-                            if tag_state.name == "method":
-                                repl_text = f"{repl_text}()"
-                            tag_text = f":ref:`{repl_text}<class_{sanitize_class_name(target_class_name)}{ref_type}_{target_name}>`"
-                        else:
-                            fragment_parts = [f"class_{sanitize_class_name(target_class_name)}"]
-                            if tag_state.name == "method":
-                                if target_name.startswith("_"):
-                                    fragment_parts.append("private_method")
-                                else:
-                                    fragment_parts.append("method")
-                            elif tag_state.name == "constructor":
-                                fragment_parts.append("constructor")
-                            elif tag_state.name == "operator":
-                                fragment_parts.append("operator")
-                            elif tag_state.name == "member":
-                                fragment_parts.append("property")
-                            elif tag_state.name == "signal":
-                                fragment_parts.append("signal")
-                            elif tag_state.name == "annotation":
-                                fragment_parts.append("annotation")
-                            elif tag_state.name == "theme_item":
-                                fragment_parts.append("theme_item")
-                            elif tag_state.name == "constant":
-                                fragment_parts.append("constant")
-                            fragment_parts.append(target_name)
-                            fragment = "_".join(fragment_parts)
-                            display_text = target_name
-                            if target_class_name != state.current_class:
-                                display_text = f"{target_class_name}.{target_name}"
-                            if tag_state.name == "method":
-                                display_text = f"{display_text}()"
-                            tag_text = godot_external_link(display_text, target_class_name, fragment=fragment)
+                        repl_text = target_name
+                        if target_class_name != state.current_class:
+                            repl_text = f"{target_class_name}.{target_name}"
+                        if tag_state.name == "method":
+                            repl_text = f"{repl_text}()"
+                        tag_text = f":ref:`{repl_text}<class_{sanitize_class_name(target_class_name)}{ref_type}_{target_name}>`"
                         escape_pre = True
                         escape_post = True
 
@@ -2380,7 +2250,7 @@ def format_text_block(
                                     found = True
                                     break
                             if not found:
-                                print_warning(
+                                print_error(
                                     f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.',
                                     state,
                                 )
@@ -2410,12 +2280,6 @@ def format_text_block(
                         )
                         break
                     link_title = text[endq_pos + 1 : endurl_pos]
-                    for rft in RESERVED_FORMATTING_TAGS:
-                        if link_title.find(f"[{rft}]") != -1:
-                            print_warning(
-                                f"{state.current_class}.xml: Found nested tags [url][{rft}] in {context_name} (online doc will contain invalid RST markup).",
-                                state,
-                            )
                     tag_text = make_link(url_target, link_title)
 
                     pre_text = text[:pos]
@@ -2434,75 +2298,40 @@ def format_text_block(
                 # Make a new paragraph instead of a linebreak, rst is not so linebreak friendly
                 tag_text = "\n\n"
                 # Strip potential leading spaces
-                while len(post_text) > 0 and post_text[0] == " ":
+                while post_text[0] == " ":
                     post_text = post_text[1:]
+
             elif tag_state.name == "center":
                 if tag_state.closing:
                     tag_depth -= 1
-                    debug_tag_stack.pop()
                 else:
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
-                tag_text = ""
-
-            elif is_in_tagset(tag_state.name, ["color", "font"]):
-                if tag_state.closing:
-                    tag_depth -= 1
-                    debug_tag_stack.pop()
-                else:
-                    tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                 tag_text = ""
 
             elif tag_state.name == "i":
                 if tag_state.closing:
                     tag_depth -= 1
-                    debug_tag_stack.pop()
-                else:
-                    tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
-                tag_text = ""
-
-            elif is_in_tagset(tag_state.name, ["color", "font"]):
-                if tag_state.closing:
-                    tag_depth -= 1
-                    debug_tag_stack.pop()
-                else:
-                    tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
-                tag_text = ""
-
-            elif tag_state.name == "i":
-
-                if tag_state.closing:
-                    tag_depth -= 1
-                    debug_tag_stack.pop()
                     escape_post = True
                 else:
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                     escape_pre = True
                 tag_text = "*"
 
             elif tag_state.name == "b":
                 if tag_state.closing:
                     tag_depth -= 1
-                    debug_tag_stack.pop()
                     escape_post = True
                 else:
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                     escape_pre = True
                 tag_text = "**"
 
             elif tag_state.name == "u":
                 if tag_state.closing:
                     tag_depth -= 1
-                    debug_tag_stack.pop()
                     escape_post = True
                 else:
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                     escape_pre = True
                 tag_text = ""
 
@@ -2516,12 +2345,10 @@ def format_text_block(
                 tag_text = "`"
                 if tag_state.closing:
                     tag_depth -= 1
-                    debug_tag_stack.pop()
                     escape_post = True
                 else:
                     tag_text = ":kbd:" + tag_text
                     tag_depth += 1
-                    debug_tag_stack.append(tag_state.name)
                     escape_pre = True
 
             # Invalid syntax.
@@ -2534,15 +2361,12 @@ def format_text_block(
 
                     tag_text = f"[{tag_text}]"
                 else:
-                    if tag_state.name and tag_state.name[0].isupper() and "=" not in tag_state.raw:
-                        tag_text = make_type(tag_state.name, state)
-                    else:
-                        print_error(
-                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
-                            state,
-                        )
+                    print_error(
+                        f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
+                        state,
+                    )
 
-                        tag_text = f"``{tag_text}``"
+                    tag_text = f"``{tag_text}``"
                     escape_pre = True
                     escape_post = True
 
@@ -2588,7 +2412,6 @@ def preformat_text_block(text: str, state: State) -> str | None:
     result = ""
     codeblock_tag = ""
     indent_level = 0
-    just_exited_codeblock = False
 
     for line in text.splitlines():
         stripped_line = line.lstrip("\t")
@@ -2606,7 +2429,6 @@ def preformat_text_block(text: str, state: State) -> str | None:
             if stripped_line.startswith("[/" + codeblock_tag):
                 result += stripped_line
                 codeblock_tag = ""
-                just_exited_codeblock = True
             else:
                 # Remove extraneous tabs and replace remaining tabs with spaces.
                 result += "\n" + "    " * (tab_count - indent_level + 1) + stripped_line
@@ -2631,11 +2453,7 @@ def preformat_text_block(text: str, state: State) -> str | None:
                 # A line break in XML should become two line breaks (unless in a code block).
                 if result:
                     result += "\n\n"
-                if just_exited_codeblock and stripped_line:
-                    result += "\\ " + stripped_line.lstrip()
-                    just_exited_codeblock = False
-                else:
-                    result += stripped_line
+                result += stripped_line
 
     return result
 

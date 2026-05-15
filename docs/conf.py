@@ -26,6 +26,7 @@ needs_sphinx = "8.1"
 
 extensions = [
     "gdscript",
+    "godot_xref",
     "sphinx_copybutton",
     "notfound.extension",
     "sphinxext.opengraph",

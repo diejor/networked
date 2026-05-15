@@ -1,0 +1,144 @@
+# Handle [color]/[font] tags, guard empty [br] tails, fall back uppercase invalid tags to make_type(), fix codeblock paragraph-eating escape.
+--- a/make_rst.py
++++ b/make_rst.py
+@@ -2298,40 +2434,75 @@
+                 # Make a new paragraph instead of a linebreak, rst is not so linebreak friendly
+                 tag_text = "\n\n"
+                 # Strip potential leading spaces
+-                while post_text[0] == " ":
++                while len(post_text) > 0 and post_text[0] == " ":
+                     post_text = post_text[1:]
+-
+             elif tag_state.name == "center":
+                 if tag_state.closing:
+                     tag_depth -= 1
++                    debug_tag_stack.pop()
++                else:
++                    tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
++                tag_text = ""
++
++            elif is_in_tagset(tag_state.name, ["color", "font"]):
++                if tag_state.closing:
++                    tag_depth -= 1
++                    debug_tag_stack.pop()
+                 else:
+                     tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
+                 tag_text = ""
+ 
+             elif tag_state.name == "i":
+                 if tag_state.closing:
+                     tag_depth -= 1
++                    debug_tag_stack.pop()
++                else:
++                    tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
++                tag_text = ""
++
++            elif is_in_tagset(tag_state.name, ["color", "font"]):
++                if tag_state.closing:
++                    tag_depth -= 1
++                    debug_tag_stack.pop()
++                else:
++                    tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
++                tag_text = ""
++
++            elif tag_state.name == "i":
++
++                if tag_state.closing:
++                    tag_depth -= 1
++                    debug_tag_stack.pop()
+                     escape_post = True
+                 else:
+                     tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
+                     escape_pre = True
+                 tag_text = "*"
+ 
+             elif tag_state.name == "b":
+                 if tag_state.closing:
+                     tag_depth -= 1
++                    debug_tag_stack.pop()
+                     escape_post = True
+                 else:
+                     tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
+                     escape_pre = True
+                 tag_text = "**"
+ 
+             elif tag_state.name == "u":
+                 if tag_state.closing:
+                     tag_depth -= 1
++                    debug_tag_stack.pop()
+                     escape_post = True
+                 else:
+                     tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
+                     escape_pre = True
+                 tag_text = ""
+ 
+@@ -2345,10 +2516,12 @@
+                 tag_text = "`"
+                 if tag_state.closing:
+                     tag_depth -= 1
++                    debug_tag_stack.pop()
+                     escape_post = True
+                 else:
+                     tag_text = ":kbd:" + tag_text
+                     tag_depth += 1
++                    debug_tag_stack.append(tag_state.name)
+                     escape_pre = True
+ 
+             # Invalid syntax.
+@@ -2361,12 +2534,15 @@
+ 
+                     tag_text = f"[{tag_text}]"
+                 else:
+-                    print_error(
+-                        f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
+-                        state,
+-                    )
++                    if tag_state.name and tag_state.name[0].isupper() and "=" not in tag_state.raw:
++                        tag_text = make_type(tag_state.name, state)
++                    else:
++                        print_error(
++                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
++                            state,
++                        )
+ 
+-                    tag_text = f"``{tag_text}``"
++                        tag_text = f"``{tag_text}``"
+                     escape_pre = True
+                     escape_post = True
+ 
+@@ -2412,6 +2588,7 @@
+     result = ""
+     codeblock_tag = ""
+     indent_level = 0
++    just_exited_codeblock = False
+ 
+     for line in text.splitlines():
+         stripped_line = line.lstrip("\t")
+@@ -2429,6 +2606,7 @@
+             if stripped_line.startswith("[/" + codeblock_tag):
+                 result += stripped_line
+                 codeblock_tag = ""
++                just_exited_codeblock = True
+             else:
+                 # Remove extraneous tabs and replace remaining tabs with spaces.
+                 result += "\n" + "    " * (tab_count - indent_level + 1) + stripped_line
+@@ -2453,7 +2631,11 @@
+                 # A line break in XML should become two line breaks (unless in a code block).
+                 if result:
+                     result += "\n\n"
+-                result += stripped_line
++                if just_exited_codeblock and stripped_line:
++                    result += "\\ " + stripped_line.lstrip()
++                    just_exited_codeblock = False
++                else:
++                    result += stripped_line
+ 
+     return result
+ 

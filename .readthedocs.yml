@@ -18,6 +18,7 @@ build:
     - unzip
   commands:
     - pip install -r docs/requirements.txt
+    - cd docs && python tools/build_make_rst.py
     - wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip -O /tmp/godot.zip
     - unzip /tmp/godot.zip -d /tmp
     - mv /tmp/Godot_v4.6.2-stable_linux.x86_64 ./godot_linux.x86_64
