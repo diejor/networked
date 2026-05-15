@@ -162,6 +162,12 @@ func _warn_if_role_unset() -> void:
 ## by backends that bring their own api (see [signal api_swapped]).
 var api: SceneMultiplayer
 
+## Visibility and interest registry for this tree. Constructed in
+## [code]_init[/code] so descendants can rely on it being present
+## from their own [code]_enter_tree[/code]. See [NetwInterest] for
+## the public API.
+var interest: NetwInterest
+
 ## [b]Deprecated.[/b] Use [member api]. Kept as a compatibility alias.
 var multiplayer_api: SceneMultiplayer:
 	get: return api
@@ -450,6 +456,7 @@ func _init() -> void:
 	_auth.set_auth_provider(auth_provider)
 	if not Engine.is_editor_hint():
 		api = SceneMultiplayer.new()
+		interest = NetwInterest.new(self)
 		tree_exiting.connect(_on_exiting)
 
 
@@ -1162,12 +1169,16 @@ func _on_exiting() -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	Netw.dbg.info("Peer connected: %d", [peer_id])
+	if interest:
+		interest._on_peer_connected(peer_id)
 	peer_connected.emit(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	Netw.dbg.info("Peer disconnected: %d", [peer_id])
 	_roster.forget_peer(peer_id)
+	if interest:
+		interest._on_peer_disconnected(peer_id)
 	peer_disconnected.emit(peer_id)
 
 
