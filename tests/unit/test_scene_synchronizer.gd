@@ -1,9 +1,12 @@
-## Unit tests for [SceneSynchronizer] visibility filtering.
+## Unit tests for [SceneSynchronizer] as a thin adapter over a
+## [NetwInterestLayer]. The synchronizer's own [code]scene_visibility_filter[/code]
+## helper is kept as a back-compat query that reads
+## [member SceneSynchronizer.connected_peers]; this suite covers that
+## query plus the layer-side mirroring done by [code]connect_peer[/code]
+## / [code]disconnect_peer[/code].
 ##
-## [method SceneSynchronizer.scene_visibility_filter] is pure GDScript logic
-## that reads [member SceneSynchronizer.connected_peers]. These tests set
-## peers directly to avoid C++ [MultiplayerSynchronizer] requirements that
-## belong in integration tests.
+## Integration coverage of the wire transport lives in
+## [code]tests/integration/test_interest_service.gd[/code].
 class_name TestSceneSynchronizer
 extends NetworkedTestSuite
 
@@ -15,6 +18,10 @@ func before_test() -> void:
 	add_child(sync)
 	auto_free(sync)
 
+
+# ---------------------------------------------------------------------------
+# scene_visibility_filter back-compat query.
+# ---------------------------------------------------------------------------
 
 func test_unknown_peer_not_visible_by_default() -> void:
 	assert_that(sync.scene_visibility_filter(99)).is_false()

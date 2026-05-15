@@ -168,6 +168,10 @@ var api: SceneMultiplayer
 ## the public API.
 var interest: NetwInterest
 
+## Transport node for [member interest]. Owns layer-lifecycle RPCs.
+## Auto-added as a child in [code]_enter_tree[/code]; not user-configurable.
+var interest_service: InterestService
+
 ## [b]Deprecated.[/b] Use [member api]. Kept as a compatibility alias.
 var multiplayer_api: SceneMultiplayer:
 	get: return api
@@ -414,9 +418,10 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	_mount_api()
-	
+	_ensure_interest_service()
+
 	for child in get_children():
 		if child is MultiplayerSceneManager:
 			return
@@ -439,6 +444,14 @@ func _enter_tree() -> void:
 			add_child(manager)
 			manager._configure_default(scene_path)
 			return
+
+
+func _ensure_interest_service() -> void:
+	if is_instance_valid(interest_service) and interest_service.get_parent() == self:
+		return
+	interest_service = InterestService.new()
+	interest_service.name = &"InterestService"
+	add_child(interest_service)
 
 
 static func _has_spawner_component(node: Node) -> bool:

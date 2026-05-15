@@ -46,6 +46,7 @@ var root: NetwInterestLayer
 
 
 var _tree_ref: WeakRef
+var _service_ref: WeakRef
 var _layers: Dictionary[StringName, NetwInterestLayer] = {}
 
 # Inverted indexes used to bound the work performed during a flush.
@@ -127,6 +128,66 @@ func viewers_of(entity: NetwEntity) -> Array[int]:
 ## code should let the deferred flush run on its own.
 func flush_now() -> void:
 	_flush()
+
+
+## Returns the [InterestService] node that owns the wire, or
+## [code]null[/code] if the service hasn't entered the tree yet. The
+## service is auto-attached by [MultiplayerTree] in its
+## [code]_enter_tree[/code].
+func service() -> InterestService:
+	return _service_ref.get_ref() as InterestService if _service_ref else null
+
+
+# ---------------------------------------------------------------------------
+# Service binding (called by InterestService).
+# ---------------------------------------------------------------------------
+
+func _bind_service(svc: InterestService) -> void:
+	_service_ref = weakref(svc)
+	# Server-side: catch the service up on layers that already exist
+	# (typically just ROOT, created in _init).
+	if not _is_server():
+		return
+	for layer_ in _layers.values():
+		svc.notify_layer_created(layer_)
+
+
+func _unbind_service(_svc: InterestService) -> void:
+	_service_ref = null
+
+
+# Convenience for layers; returns the live service or null.
+func _service() -> InterestService:
+	return service()
+
+
+func _is_server() -> bool:
+	var tree := _tree_ref.get_ref() as MultiplayerTree if _tree_ref else null
+	if not tree or not tree.api:
+		return false
+	return tree.api.has_multiplayer_peer() and tree.api.is_server()
+
+
+# ---------------------------------------------------------------------------
+# Client-side mirror hooks. Invoked by InterestService when authority
+# RPCs land. Mirror layers carry a flag so server-side mutators stay no-op.
+# ---------------------------------------------------------------------------
+
+func _client_create_mirror(layer_id: StringName, policy: int) -> void:
+	if _layers.has(layer_id):
+		return
+	var layer_ := NetwInterestLayer.new(
+			layer_id, policy as NetwInterestLayer.Policy, self)
+	layer_._is_mirror = true
+	_layers[layer_id] = layer_
+
+
+func _client_dispose_mirror(layer_id: StringName) -> void:
+	var layer_ := _layers.get(layer_id)
+	if not layer_:
+		return
+	layer_._client_finish_dispose()
+	_layers.erase(layer_id)
 
 
 # ---------------------------------------------------------------------------

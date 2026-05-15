@@ -424,7 +424,7 @@ func _on_scene_spawned(node: Node) -> void:
 	Netw.dbg.info("Scene spawned: %s", [scene.level.name])
 	active_scenes[scene.level.name] = scene
 	if multiplayer.is_server():
-		scene.synchronizer.despawned.connect(
+		scene.player_despawned.connect(
 			_on_player_left_scene.bind(StringName(scene.level.name)))
 		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
 

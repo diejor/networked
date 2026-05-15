@@ -9,6 +9,25 @@ extends Node
 ## The [SceneSynchronizer] that manages peer visibility for this scene.
 @export var synchronizer: SceneSynchronizer
 
+## The [NetwInterestLayer] that owns membership for this scene. On the
+## server, lazily created (ISOLATE policy) when the scene enters the
+## tree. On clients, populated by [InterestService] once the local peer
+## joins. Returns [code]null[/code] if interest is unavailable or the
+## client hasn't yet been added as a member.
+var layer: NetwInterestLayer:
+	get:
+		var mt := MultiplayerTree.resolve(self)
+		if not mt or not mt.interest:
+			return null
+		return mt.interest.layer(_layer_id())
+
+
+## Stable layer id for this scene. Derived from this node's name (the
+## scene wrapper, which matches across server/client). Same value used
+## by [InterestService] over the wire.
+func _layer_id() -> StringName:
+	return StringName("scene:%s" % name)
+
 ## The instantiated level scene for this scene.
 ##
 ## Setting this property adds the level as a child, names the scene, and hooks spawn signals.
@@ -22,6 +41,15 @@ var level: Node:
 		level.owner = self
 
 var _context: NetwContext
+
+## Emitted when a tracked player node enters this scene's tree. Fires on
+## both server and client. Prefer this over reaching through
+## [member synchronizer].
+signal player_spawned(node: Node)
+
+## Emitted when a tracked player node exits this scene's tree.
+signal player_despawned(node: Node)
+
 ## Emitted when a player toggles their ready state to [code]true[/code] via
 ## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
 ## automatic join event. See [signal player_entered] for spawn detection.
@@ -55,6 +83,20 @@ func hook_spawn_signals(level: Node) -> void:
 	for spawner in spawners:
 		spawner.spawned.connect(synchronizer._on_spawned)
 		spawner.despawned.connect(synchronizer._on_despawned)
+	if is_instance_valid(synchronizer):
+		if not synchronizer.spawned.is_connected(player_spawned.emit):
+			synchronizer.spawned.connect(player_spawned.emit)
+		if not synchronizer.despawned.is_connected(player_despawned.emit):
+			synchronizer.despawned.connect(player_despawned.emit)
+
+
+## Returns the currently tracked player nodes for this scene.
+func player_nodes() -> Array[Node]:
+	if not is_instance_valid(synchronizer):
+		return []
+	var out: Array[Node] = []
+	out.assign(synchronizer.tracked_nodes.keys())
+	return out
 
 
 ## Returns all [MultiplayerSpawner]s within the [param node]'s hierarchy.

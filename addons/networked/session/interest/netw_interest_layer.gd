@@ -77,6 +77,11 @@ var _subjects: Dictionary[NetwEntity, bool] = {}
 var _interest: WeakRef
 var _disposed: bool = false
 
+## When [code]true[/code], this layer is a read-only client mirror
+## maintained by [InterestService]. Server-side mutators
+## ([method add_member], [method add_subject], etc.) become no-ops.
+var _is_mirror: bool = false
+
 
 func _init(
 		id_: StringName,
@@ -90,8 +95,11 @@ func _init(
 
 ## Adds [param peer_id] to [member members]. Idempotent. Schedules a
 ## flush.
+##
+## On a mirror layer this is a no-op; mirror state is updated by
+## [InterestService].
 func add_member(peer_id: int) -> void:
-	if _disposed or peer_id == 0:
+	if _disposed or peer_id == 0 or _is_mirror:
 		return
 	if _members.has(peer_id):
 		return
@@ -99,23 +107,32 @@ func add_member(peer_id: int) -> void:
 	var ix := _get_interest()
 	if ix:
 		ix._on_member_added(self, peer_id)
+		var svc := ix._service()
+		if svc:
+			svc.notify_member_added(self, peer_id)
 	member_added.emit(peer_id)
 
 
 ## Removes [param peer_id] from [member members]. Idempotent.
 func remove_member(peer_id: int) -> void:
+	if _is_mirror:
+		return
 	if not _members.has(peer_id):
 		return
 	_members.erase(peer_id)
 	var ix := _get_interest()
 	if ix:
 		ix._on_member_removed(self, peer_id)
+		var svc := ix._service()
+		if svc:
+			svc.notify_member_removed(id, peer_id)
 	member_removed.emit(peer_id)
 
 
-## Adds [param entity] to [member subjects]. Idempotent.
+## Adds [param entity] to [member subjects]. Idempotent. Server-only
+## (subjects do not replicate to clients).
 func add_subject(entity: NetwEntity) -> void:
-	if _disposed or not is_instance_valid(entity):
+	if _disposed or not is_instance_valid(entity) or _is_mirror:
 		return
 	if _subjects.has(entity):
 		return
@@ -129,6 +146,8 @@ func add_subject(entity: NetwEntity) -> void:
 
 ## Removes [param entity] from [member subjects]. Idempotent.
 func remove_subject(entity: NetwEntity) -> void:
+	if _is_mirror:
+		return
 	if not _subjects.has(entity):
 		return
 	_subjects.erase(entity)
@@ -217,6 +236,9 @@ func dispose_immediate() -> void:
 
 
 func _finish_disposal() -> void:
+	if _is_mirror:
+		_client_finish_dispose()
+		return
 	_disposed = true
 	for entity in _subjects.keys():
 		if is_instance_valid(entity):
@@ -224,6 +246,38 @@ func _finish_disposal() -> void:
 	var ix := _get_interest()
 	if ix:
 		ix._on_layer_disposed(self)
+		var svc := ix._service()
+		if svc:
+			svc.notify_layer_disposed(id)
+	_members.clear()
+	_subjects.clear()
+	closed.emit()
+
+
+# ---------------------------------------------------------------------------
+# Client-mirror update hooks. Called by InterestService when authority
+# RPCs land. Only emit signals; do not forward to NetwInterest (the server
+# is the only authority that drives visibility computation).
+# ---------------------------------------------------------------------------
+
+func _client_apply_member_added(peer_id: int) -> void:
+	if _members.has(peer_id):
+		return
+	_members[peer_id] = true
+	member_added.emit(peer_id)
+
+
+func _client_apply_member_removed(peer_id: int) -> void:
+	if not _members.has(peer_id):
+		return
+	_members.erase(peer_id)
+	member_removed.emit(peer_id)
+
+
+func _client_finish_dispose() -> void:
+	if _disposed:
+		return
+	_disposed = true
 	_members.clear()
 	_subjects.clear()
 	closed.emit()

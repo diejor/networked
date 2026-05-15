@@ -234,10 +234,11 @@ func wait_for_client_scene_spawn(client: MultiplayerTree, scene_name: StringName
 
 func wait_for_client_player_spawn(client: MultiplayerTree, scene_name: StringName) -> Node:
 	var scene := await wait_for_client_scene_spawn(client, scene_name)
-	if scene.synchronizer.tracked_nodes.size() > 0:
-		return scene.synchronizer.tracked_nodes.keys()[0]
+	var existing := scene.player_nodes()
+	if existing.size() > 0:
+		return existing[0]
 
-	if await wait_for(scene.synchronizer.spawned):
+	if await wait_for(scene.player_spawned):
 		assert(false, "Timed out waiting for player to spawn in scene '%s'." % scene_name)
 
-	return scene.synchronizer.tracked_nodes.keys()[0]
+	return scene.player_nodes()[0]

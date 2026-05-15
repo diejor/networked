@@ -202,11 +202,10 @@ func _on_owner_tree_exiting() -> void:
 	_parent_entity_resolved = false
 	_parent_entity_ref = null
 	_synchronizers_dirty = true
-	var interest := _interest_ref.get_ref() as NetwInterest \
-			if _interest_ref else null
+	var interest := _get_interest()
 	for layer in _subscribed_layers.keys():
 		if is_instance_valid(layer):
-			(layer as NetwInterestLayer).remove_subject(self)
+			layer.remove_subject(self)
 	if interest and interest.root.has_subject(self):
 		interest.root.remove_subject(self)
 
@@ -352,8 +351,7 @@ func subscribed_layers() -> Array[NetwInterestLayer]:
 func is_visible_to(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
-	var interest := _interest_ref.get_ref() as NetwInterest \
-			if _interest_ref else null
+	var interest := _get_interest()
 	if not interest:
 		return true
 	var view: Dictionary = interest._visible.get(peer_id, {})
@@ -387,12 +385,17 @@ func _interest_visibility_filter(peer_id: int) -> bool:
 		return true
 	if peer_id == 0:
 		return false
-	var interest := _interest_ref.get_ref() as NetwInterest \
-			if _interest_ref else null
+	var interest := _get_interest()
 	if not interest:
 		return true
 	var view: Dictionary = interest._visible.get(peer_id, {})
 	return view.has(self)
+
+
+func _get_interest() -> NetwInterest:
+	if not _interest_ref:
+		return null
+	return _interest_ref.get_ref() as NetwInterest
 
 
 func _walk_for_parent_entity() -> NetwEntity:

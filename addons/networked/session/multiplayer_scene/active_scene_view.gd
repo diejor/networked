@@ -70,8 +70,8 @@ func _subscribe_scene_manager() -> void:
 
 
 func _watch_scene_for_local_player_arrival(scene: MultiplayerScene) -> void:
-	if not scene.synchronizer.spawned.is_connected(_on_scene_player_spawned):
-		scene.synchronizer.spawned.connect(
+	if not scene.player_spawned.is_connected(_on_scene_player_spawned):
+		scene.player_spawned.connect(
 			_on_scene_player_spawned.bind(scene))
 	_refresh.call_deferred()
 
