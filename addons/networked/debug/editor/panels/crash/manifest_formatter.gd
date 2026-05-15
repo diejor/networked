@@ -23,8 +23,9 @@ extends RefCounted
 ##   network_state: Dictionary,
 ##   error_text: String,
 ##   preflight: Array,        # formatted preflight rows  [{label, color, tooltip}]
-##   telemetry: Array,        # formatted telemetry rows [{label, tooltip}]
+##   telemetry: Array,        # formatted telemetry rows [{label, color, tooltip}]
 ## }
+## [/codeblock]
 static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 	var trigger: String = d.get("trigger", "UNKNOWN")
 	var cid: String = d.get("cid", "?")
