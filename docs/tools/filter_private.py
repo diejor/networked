@@ -60,17 +60,21 @@ def main() -> None:
         input_path = os.path.join(args.input_dir, filename)
         output_path = os.path.join(args.output_dir, filename)
 
-        tree = ET.parse(input_path)
-        root = tree.getroot()
+        try:
+            tree = ET.parse(input_path)
+            root = tree.getroot()
 
-        if should_skip_class(root):
-            print(f"Skipped: {filename}")
-            continue
+            if should_skip_class(root):
+                print(f"Skipped: {filename}")
+                continue
 
-        filter_private_elements(root)
-        tree.write(output_path, encoding="utf-8", xml_declaration=True)
-
-        print(f"Filtered: {filename}")
+            filter_private_elements(root)
+            tree.write(output_path, encoding="utf-8", xml_declaration=True)
+            print(f"Filtered: {filename}")
+        except ET.ParseError as e:
+            print(f"Error parsing {filename}: {e}. Skipping file.")
+        except Exception as e:
+            print(f"Unexpected error processing {filename}: {e}. Skipping file.")
 
     print("Done.")
 
