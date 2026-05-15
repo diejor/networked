@@ -61,7 +61,7 @@ jobs:
           chmod +x ../godot_linux.x86_64
 
       - name: Generate XML via godot --doctool
-        run: ../godot_linux.x86_64 --doctool api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
+        run: ../godot_linux.x86_64 --doctool docs/api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
 
       - name: Filter private members
         run: python tools/filter_private.py api api_filtered
