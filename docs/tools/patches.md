@@ -196,3 +196,46 @@ class list.
 + if group_name in CLASS_GROUPS_BASE and CLASS_GROUPS_BASE[group_name] in grouped_classes[group_name]:
       f.write(f"    class_{sanitize_class_name(CLASS_GROUPS_BASE[group_name], True)}\n")
 ```
+
+## Patch 13: External links for unresolved enums
+**Rationale**: Like Patch 3, `make_enum()` would error on engine enums like `Error`. Added a fallback to link to Godot's online documentation.
+
+```diff
+-     print_error(f'{state.current_class}.xml: Unresolved enum "{t}".', state)
+-     return t
++     # Fallback for Godot engine enums: link to external docs.
++     print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
++     slug = sanitize_class_name(c).lower()
++     url = f"https://docs.godotengine.org/en/stable/classes/class_{slug}.html#enum_{slug}_{e}"
++     return f"`{t} <{url}>`__"
+```
+
+## Patch 14: Recognize unknown class tags as external links
+**Rationale**: Godot descriptions often use `[Node]` or `[Dictionary]` tags. If the class isn't in our local XML set, `make_rst.py` would fail with an "Unrecognized opening tag" error. Added logic to treat uppercase tags as engine class references.
+
+```diff
+-         if tag_text in state.classes and not inside_code:
++         if (tag_text in state.classes or (tag_text and tag_text[0].isupper() and "=" not in tag_text and tag_text not in RESERVED_FORMATTING_TAGS)) and not inside_code:
+```
+
+## Patch 15: Ignore [color] and [font] tags
+**Rationale**: Godot's XML sometimes includes BBCode-style `[color]` or `[font]` tags which are not supported by RST. Added empty handlers to prevent "Unrecognized opening tag" errors.
+
+```diff
++             elif is_in_tagset(tag_state.name, ["color", "font"]):
++                 if tag_state.closing:
++                     tag_depth -= 1
++                     debug_tag_stack.pop()
++                 else:
++                     tag_depth += 1
++                     debug_tag_stack.append(tag_state.name)
++                 tag_text = ""
+```
+
+## Patch 16: Downgrade argument reference errors to warnings
+**Rationale**: Standalone builds can sometimes lose context for argument references (e.g. `[param address]`). Downgraded from `print_error` to `print_warning` to prevent build failures.
+
+```diff
+-                                 print_error(f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.', state)
++                                 print_warning(f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.', state)
+```

@@ -1571,9 +1571,12 @@ def make_enum(t: str, is_bitfield: bool, state: State) -> str:
         else:
             return f":ref:`{e}<enum_{sanitize_class_name(c)}_{e}>`"
 
-    print_error(f'{state.current_class}.xml: Unresolved enum "{t}".', state)
-
-    return t
+    # Fallback for Godot engine enums: link to external docs.
+    # Downgrade error to warning for standalone addon builds.
+    print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
+    slug = sanitize_class_name(c).lower()
+    url = f"https://docs.godotengine.org/en/stable/classes/class_{slug}.html#enum_{slug}_{e}"
+    return f"`{t} <{url}>`__"
 
 
 def make_method_signature(
@@ -1933,7 +1936,10 @@ def format_text_block(
         escape_post = False
 
         # Tag is a reference to a class.
-        if tag_text in state.classes and not inside_code:
+        if (
+            tag_text in state.classes
+            or (tag_text and tag_text[0].isupper() and "=" not in tag_text and tag_text not in RESERVED_FORMATTING_TAGS)
+        ) and not inside_code:
             if tag_text == state.current_class:
                 # Don't create a link to the same class, format it as strong emphasis.
                 tag_text = f"**{tag_text}**"
@@ -2353,7 +2359,7 @@ def format_text_block(
                                     found = True
                                     break
                             if not found:
-                                print_error(
+                                print_warning(
                                     f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.',
                                     state,
                                 )
@@ -2409,7 +2415,6 @@ def format_text_block(
                 # Strip potential leading spaces
                 while len(post_text) > 0 and post_text[0] == " ":
                     post_text = post_text[1:]
-
             elif tag_state.name == "center":
                 if tag_state.closing:
                     tag_depth -= 1
@@ -2419,7 +2424,35 @@ def format_text_block(
                     debug_tag_stack.append(tag_state.name)
                 tag_text = ""
 
+            elif is_in_tagset(tag_state.name, ["color", "font"]):
+                if tag_state.closing:
+                    tag_depth -= 1
+                    debug_tag_stack.pop()
+                else:
+                    tag_depth += 1
+                    debug_tag_stack.append(tag_state.name)
+                tag_text = ""
+
             elif tag_state.name == "i":
+                if tag_state.closing:
+                    tag_depth -= 1
+                    debug_tag_stack.pop()
+                else:
+                    tag_depth += 1
+                    debug_tag_stack.append(tag_state.name)
+                tag_text = ""
+
+            elif is_in_tagset(tag_state.name, ["color", "font"]):
+                if tag_state.closing:
+                    tag_depth -= 1
+                    debug_tag_stack.pop()
+                else:
+                    tag_depth += 1
+                    debug_tag_stack.append(tag_state.name)
+                tag_text = ""
+
+            elif tag_state.name == "i":
+
                 if tag_state.closing:
                     tag_depth -= 1
                     debug_tag_stack.pop()
@@ -2480,12 +2513,15 @@ def format_text_block(
 
                     tag_text = f"[{tag_text}]"
                 else:
-                    print_error(
-                        f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
-                        state,
-                    )
+                    if tag_state.name and tag_state.name[0].isupper() and "=" not in tag_state.raw:
+                        tag_text = make_type(tag_state.name, state)
+                    else:
+                        print_error(
+                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
+                            state,
+                        )
 
-                    tag_text = f"``{tag_text}``"
+                        tag_text = f"``{tag_text}``"
                     escape_pre = True
                     escape_post = True
 

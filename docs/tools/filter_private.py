@@ -14,10 +14,19 @@ import xml.etree.ElementTree as ET
 def should_skip_class(root: ET.Element) -> bool:
     """Return True if this XML should be excluded from docs entirely."""
     name = root.get("name", "")
+    
+    # Skip GdUnit, GodotSteam, and other third-party addons.
+    # We identify them by their specific class prefixes or if they were 
+    # auto-named by Godot (which uses the "addons--" filename convention).
+    name_lower = name.lower()
+    if any(x in name_lower for x in ["gdunit", "godotsteam"]):
+        return True
+
     # Files without a class_name declaration get a quoted file path as name.
-    # These are editor plugins, UI scripts, vendored addons -- not public API.
+    # These are editor plugins, UI scripts, etc. -- not public API.
     if name.startswith('"'):
         return True
+        
     return False
 
 
