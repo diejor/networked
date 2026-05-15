@@ -110,6 +110,23 @@ CLASS_GROUPS_BASE: dict[str, str] = {
     "variant": "Variant",
 }
 
+# Engine-class shim: when a referenced symbol is not in our local XML set (e.g.
+# Node, Resource, Variant, Error), build an external link to docs.godotengine.org.
+# Centralises the URL pattern used by patches 3, 6, and 13 in patches.md.
+GODOT_DOCS_BASE = "https://docs.godotengine.org/en/stable/classes"
+
+
+def godot_external_url(class_name: str, fragment: str = "") -> str:
+    slug = sanitize_class_name(class_name).lower()
+    url = f"{GODOT_DOCS_BASE}/class_{slug}.html"
+    if fragment:
+        url = f"{url}#{fragment}"
+    return url
+
+
+def godot_external_link(display_text: str, class_name: str, fragment: str = "") -> str:
+    return f"`{display_text} <{godot_external_url(class_name, fragment)}>`__"
+
 # Fallback mapping of Godot engine class names to their ultimate class group.
 # Used when the parent class is not in `state.classes` (i.e. our addon XML set
 # doesn't include engine base classes like Node, Resource, Object, Control, etc.).
@@ -1532,9 +1549,7 @@ def make_type(klass: str, state: State) -> str:
         if link_type in state.classes:
             return f":ref:`{link_type}<class_{sanitize_class_name(link_type)}>`"
         else:
-            slug = sanitize_class_name(link_type).lower()
-            url = f"https://docs.godotengine.org/en/stable/classes/class_{slug}.html"
-            return f"`{link_type} <{url}>`__"
+            return godot_external_link(link_type, link_type)
 
     if klass.endswith("[]"):  # Typed array, strip [] to link to contained type.
         return f"{resolve_type('Array')}\\[{resolve_type(klass[: -len('[]')])}\\]"
@@ -1575,8 +1590,7 @@ def make_enum(t: str, is_bitfield: bool, state: State) -> str:
     # Downgrade error to warning for standalone addon builds.
     print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
     slug = sanitize_class_name(c).lower()
-    url = f"https://docs.godotengine.org/en/stable/classes/class_{slug}.html#enum_{slug}_{e}"
-    return f"`{t} <{url}>`__"
+    return godot_external_link(t, c, fragment=f"enum_{slug}_{e}")
 
 
 def make_method_signature(
@@ -2307,7 +2321,6 @@ def format_text_block(
                                 repl_text = f"{repl_text}()"
                             tag_text = f":ref:`{repl_text}<class_{sanitize_class_name(target_class_name)}{ref_type}_{target_name}>`"
                         else:
-                            slug = sanitize_class_name(target_class_name).lower()
                             fragment_parts = [f"class_{sanitize_class_name(target_class_name)}"]
                             if tag_state.name == "method":
                                 if target_name.startswith("_"):
@@ -2335,7 +2348,7 @@ def format_text_block(
                                 display_text = f"{target_class_name}.{target_name}"
                             if tag_state.name == "method":
                                 display_text = f"{display_text}()"
-                            tag_text = f"`{display_text} <https://docs.godotengine.org/en/stable/classes/class_{slug}.html#{fragment}>`__"
+                            tag_text = godot_external_link(display_text, target_class_name, fragment=fragment)
                         escape_pre = True
                         escape_post = True
 

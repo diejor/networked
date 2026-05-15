@@ -3,6 +3,20 @@
 This file tracks all modifications made to the Godot engine's `doc/tools/make_rst.py` for the
 Networked addon documentation build.
 
+## Engine-class shim helpers
+
+Patches 3, 6, and 13 all generate the same `https://docs.godotengine.org/en/stable/classes/class_{slug}.html[#fragment]` URL.
+The three sites now call shared helpers added near `CLASS_GROUPS_BASE`:
+
+```python
+GODOT_DOCS_BASE = "https://docs.godotengine.org/en/stable/classes"
+
+def godot_external_url(class_name: str, fragment: str = "") -> str: ...
+def godot_external_link(display_text: str, class_name: str, fragment: str = "") -> str: ...
+```
+
+If Godot ever changes its docs URL scheme, only `GODOT_DOCS_BASE` needs editing.
+
 ## Patch 1: Import path fix
 **Lines**: ~14
 **Rationale**: In Godot engine, `make_rst.py` lives in `doc/tools/` and imports from the engine

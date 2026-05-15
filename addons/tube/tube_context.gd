@@ -34,6 +34,7 @@ const _APP_ID_CHARACTER_SET := "!#$%&()*+,-./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi
 ##		"username: "my-username",
 ##		"credential": "my-credential",
 ## }
+## [/codeblock]
 @export var turn_servers: Array[Dictionary] = []
 
 
@@ -79,7 +80,6 @@ func is_valid() -> bool:
 ## 		}
 ## 	]
 ## }
-
 ## [/codeblock]
 func get_ice_servers() -> Dictionary:
 	var ice_servers := []
