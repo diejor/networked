@@ -42,9 +42,9 @@ jobs:
       - name: Download Godot
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/4.7-beta1/Godot_v4.7-beta1_linux.x86_64.tar.xz
-          tar -xf Godot_v4.7-beta1_linux.x86_64.tar.xz
-          mv Godot_v4.7-beta1_linux.x86_64 ../godot_linux.x86_64
+          wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip
+          unzip Godot_v4.6.2-stable_linux.x86_64.zip
+          mv Godot_v4.6.2-stable_linux.x86_64 ../godot_linux.x86_64
           chmod +x ../godot_linux.x86_64
 
       - name: Regenerate class RST
