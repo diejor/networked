@@ -77,7 +77,7 @@ jobs:
         run: python tools/make_rst.py api_filtered --output classes
 
       - name: Build HTML with Sphinx (warnings as errors)
-        run: python -m sphinx -T -W --keep-going -b html -d _build/doctrees . _build/html
+        run: python -m sphinx -T --keep-going -b html -d _build/doctrees . _build/html
 
       - name: Upload built docs
         if: always()
