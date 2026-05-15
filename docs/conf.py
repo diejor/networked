@@ -10,9 +10,8 @@ sys.path.insert(0, os.path.abspath("_extensions"))
 
 project = "Networked"
 copyright = (
-    "2026 Diego Rodrigues. Base documentation structure and theme adapted "
-    "from the Godot Engine (© 2014-present Juan Linietsky, Ariel Manzur "
-    "and the Godot community) licensed under CC BY 3.0"
+    "2026-present Diego Rodrigues, modified from an original work by "
+    "Juan Linietsky, Ariel Manzur and the Godot community (CC BY 3.0)"
 )
 author = "Diego Rodrigues"
 
