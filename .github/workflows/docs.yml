@@ -1,7 +1,9 @@
 name: Docs build verification
 
 # Pure CI check: confirms the doctool → make_rst → sphinx-build pipeline still
-# works. Publication is handled by Read the Docs (.readthedocs.yml).
+# works. Publication is handled by Read the Docs (.readthedocs.yml). The
+# Godot-fetch / doctool / make_rst prelude lives in the local composite action
+# .github/actions/build-docs-classes and is shared with linkcheck.yml.
 
 on:
   push:
@@ -10,6 +12,7 @@ on:
       - "addons/networked/**/*.gd"
       - "docs/**"
       - ".github/workflows/docs.yml"
+      - ".github/actions/build-docs-classes/**"
       - ".readthedocs.yml"
   pull_request:
     branches: [main, master]
@@ -17,6 +20,7 @@ on:
       - "addons/networked/**/*.gd"
       - "docs/**"
       - ".github/workflows/docs.yml"
+      - ".github/actions/build-docs-classes/**"
       - ".readthedocs.yml"
   workflow_dispatch:
 
@@ -30,56 +34,21 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: docs/requirements.txt
+      - uses: ./.github/actions/build-docs-classes
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Verify make_rst.py is in sync with vendor + patches
-        run: python tools/build_make_rst.py --check
-
-      - name: Cache Godot binary
-        id: cache-godot
+      - name: Cache Sphinx doctrees
         uses: actions/cache@v4
         with:
-          path: godot_linux.x86_64
-          key: godot-4.6.2-stable-linux
-
-      - name: Download Godot
-        if: steps.cache-godot.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip
-          unzip Godot_v4.6.2-stable_linux.x86_64.zip
-          mv Godot_v4.6.2-stable_linux.x86_64 ../godot_linux.x86_64
-          chmod +x ../godot_linux.x86_64
-
-      - name: Generate XML via godot --doctool
-        run: |
-          mkdir -p api
-          # 1. Import pass: Resolves UIDs in project.godot to prevent "Main scene path could not be resolved" abort.
-          ../godot_linux.x86_64 --headless --path .. --editor --quit || true
-          # 2. Doctool pass: Use '.' for gdscript-docs as discovered to avoid path resolution crashes.
-          ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs . --headless --path .. --quit
-          ls -R api
-
-      - name: Filter private members
-
-        run: python tools/filter_private.py api api_filtered
-
-      - name: Generate RST
-        run: python tools/make_rst.py api_filtered --output classes
+          path: docs/_build/doctrees
+          key: sphinx-doctrees-html-${{ hashFiles('docs/**/*.rst', 'docs/**/*.py', 'docs/conf.py') }}
+          restore-keys: |
+            sphinx-doctrees-html-
 
       - name: Build HTML with Sphinx (warnings as errors)
+        working-directory: docs
         run: python -m sphinx -T --keep-going -b html -d _build/doctrees . _build/html
 
       - name: Upload built docs
