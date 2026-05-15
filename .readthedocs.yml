@@ -15,10 +15,11 @@ build:
   # Sync with the version used in .github/workflows/docs.yml
   apt_packages:
     - wget
+    - unzip
   commands:
     - pip install -r docs/requirements.txt
-    - wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.tar.xz -O /tmp/godot.tar.xz
-    - tar -xf /tmp/godot.tar.xz -C /tmp
+    - wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip -O /tmp/godot.zip
+    - unzip /tmp/godot.zip -d /tmp
     - mv /tmp/Godot_v4.6.2-stable_linux.x86_64 ./godot_linux.x86_64
     - chmod +x ./godot_linux.x86_64
     - cd docs && mkdir -p api
