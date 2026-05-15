@@ -50,20 +50,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: godot_linux.x86_64
-          key: godot-4.7-beta1-linux
+          key: godot-4.6.2-stable-linux
 
       - name: Download Godot
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip
-          unzip Godot_v4.6.2-stable_linux.x86_64.zip
+          wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.tar.xz
+          tar -xf Godot_v4.6.2-stable_linux.x86_64.tar.xz
           mv Godot_v4.6.2-stable_linux.x86_64 ../godot_linux.x86_64
           chmod +x ../godot_linux.x86_64
 
       - name: Generate XML via godot --doctool
-        run: ../godot_linux.x86_64 --doctool docs/api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
+        run: |
+          mkdir -p api
+          ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs res://addons/networked --headless --path .. --quit
+          ls -R api
 
       - name: Filter private members
+
         run: python tools/filter_private.py api api_filtered
 
       - name: Generate RST

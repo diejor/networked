@@ -17,11 +17,13 @@ build:
     - wget
   commands:
     - pip install -r docs/requirements.txt
-    - wget -q https://github.com/godotengine/godot/releases/download/4.7-beta1/Godot_v4.7-beta1_linux.x86_64.tar.xz -O /tmp/godot.tar.xz
+    - wget -q https://github.com/godotengine/godot/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.tar.xz -O /tmp/godot.tar.xz
     - tar -xf /tmp/godot.tar.xz -C /tmp
-    - mv /tmp/Godot_v4.7-beta1_linux.x86_64 ./godot_linux.x86_64
+    - mv /tmp/Godot_v4.6.2-stable_linux.x86_64 ./godot_linux.x86_64
     - chmod +x ./godot_linux.x86_64
-    - cd docs && ../godot_linux.x86_64 --doctool docs/api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
+    - cd docs && mkdir -p api
+    - cd docs && ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs res://addons/networked --headless --path .. --quit
+    - cd docs && ls -R api
     - cd docs && python tools/filter_private.py api api_filtered
     - cd docs && python tools/make_rst.py api_filtered --output classes
     - cd docs && python -m sphinx -T -W --keep-going -b html -d _build/doctrees . $READTHEDOCS_OUTPUT/html

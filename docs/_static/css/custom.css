@@ -196,6 +196,17 @@
     --monospace-font-family: "JetBrains Mono", SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, Courier, monospace;
 }
 
+/* Giscus Comments */
+.giscus-wrapper {
+    margin-top: 40px;
+}
+
+.giscus-wrapper h2 {
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--hr-color);
+    padding-bottom: 10px;
+}
+
 /* Dark theme colors */
 @media (prefers-color-scheme: dark) {
     :root {
