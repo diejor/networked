@@ -33,6 +33,7 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 	players[rj.peer_id] = rj.username
 	player_list_changed.emit()
 
+
 func _on_peer_disconnected(id: int) -> void:
 	if has_node(^"/root/World"):
 		if multiplayer.is_server():
@@ -53,6 +54,7 @@ func _on_server_disconnected() -> void:
 func _on_connected_fail() -> void:
 	connection_failed.emit()
 
+
 func join_game(ip: String, _player_name: String) -> void:
 	player_name = _player_name
 	var jp := JoinPayload.new()
@@ -61,12 +63,15 @@ func join_game(ip: String, _player_name: String) -> void:
 	
 	ctx.tree.connect_player(jp)
 
+
 func host_game(_player_name: String) -> void:
 	player_name = _player_name
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 	
 	ctx.tree.host_player(jp)
+
+
 @rpc("any_peer", "call_local")
 func register_player(new_player_name: String) -> void:
 	var id := multiplayer.get_remote_sender_id()

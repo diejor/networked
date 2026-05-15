@@ -16,6 +16,7 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 [node name="Main" type="Node" unique_id=68306203]
 
 [node name="MultiplayerTree" type="Node" parent="." unique_id=842142872]
+unique_name_in_owner = true
 script = ExtResource("2_wto4k")
 backend = SubResource("Resource_mrsco")
 use_listen_server = true
