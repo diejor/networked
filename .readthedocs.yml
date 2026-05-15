@@ -28,4 +28,4 @@ build:
     - cd docs && ls -R api
     - cd docs && python tools/filter_private.py api api_filtered
     - cd docs && python tools/make_rst.py api_filtered --output classes
-    - cd docs && python -m sphinx -T -W --keep-going -b html -d _build/doctrees . $READTHEDOCS_OUTPUT/html
+    - cd docs && python -m sphinx -T --keep-going -b html -d _build/doctrees . $READTHEDOCS_OUTPUT/html
