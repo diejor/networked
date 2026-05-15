@@ -209,6 +209,8 @@ PACKED_ARRAY_TYPES: list[str] = [
     "PackedVector4Array",
 ]
 
+PRIMITIVE_TYPES: list[str] = ["int", "float", "bool", "void"]
+
 
 class State:
     def __init__(self) -> None:
@@ -1887,7 +1889,15 @@ def get_tag_and_args(tag_text: str) -> TagState:
 
 
 def parse_link_target(link_target: str, state: State, context_name: str) -> list[str]:
-    if link_target.find(".") != -1:
+    if "." in link_target:
+        # Longest prefix match for nested class names (e.g., NetwDatabase.TableRepository.fetch)
+        parts = link_target.split(".")
+        for i in range(len(parts) - 1, 0, -1):
+            class_name = ".".join(parts[:i])
+            if class_name in state.classes:
+                return [class_name, ".".join(parts[i:])]
+
+        # Fallback for engine classes not in our local set (e.g. Node)
         return link_target.split(".")
     else:
         return [state.current_class, link_target]
@@ -1952,7 +1962,7 @@ def format_text_block(
         # Tag is a reference to a class.
         if (
             tag_text in state.classes
-            or (tag_text and tag_text[0].isupper() and "=" not in tag_text and tag_text not in RESERVED_FORMATTING_TAGS)
+            or (tag_text and (tag_text[0].isupper() or tag_text in PRIMITIVE_TYPES) and "=" not in tag_text and tag_text not in RESERVED_FORMATTING_TAGS)
         ) and not inside_code:
             if tag_text == state.current_class:
                 # Don't create a link to the same class, format it as strong emphasis.
