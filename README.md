@@ -1,5 +1,8 @@
 # networked
 
+[![Documentation Status](https://readthedocs.org/projects/networked/badge/?version=latest)](https://networked.readthedocs.io/en/latest/?badge=latest)
+[![CI](https://github.com/diejor/networked/actions/workflows/ci.yml/badge.svg)](https://github.com/diejor/networked/actions/workflows/ci.yml)
+
 **A proof-of-concept multiplayer framework for Godot 4.**
 
 I built this because Godot's built-in multiplayer APIs, while powerful, felt 
