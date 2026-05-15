@@ -1,5 +1,10 @@
 # Read the Docs configuration file
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+# https://docs.readthedocs.com/platform/stable/config-file/v2.html
+#
+# This build downloads a headless Godot, regenerates the class XML via
+# `godot --doctool`, runs make_rst.py, and then sphinx-build. The committed
+# docs/classes/ directory is therefore *not* a build input — it is gitignored
+# and produced on every RTD build.
 
 version: 2
 
@@ -7,10 +12,16 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.13"
-
-sphinx:
-  configuration: docs/conf.py
-
-python:
-  install:
-    - requirements: docs/requirements.txt
+  # Sync with the version used in .github/workflows/docs.yml
+  apt_packages:
+    - wget
+  commands:
+    - pip install -r docs/requirements.txt
+    - wget -q https://github.com/godotengine/godot/releases/download/4.7-beta1/Godot_v4.7-beta1_linux.x86_64.tar.xz -O /tmp/godot.tar.xz
+    - tar -xf /tmp/godot.tar.xz -C /tmp
+    - mv /tmp/Godot_v4.7-beta1_linux.x86_64 ./godot_linux.x86_64
+    - chmod +x ./godot_linux.x86_64
+    - cd docs && ../godot_linux.x86_64 --doctool api --gdscript-docs res://addons/networked --headless --path .. --quit 2>/dev/null || true
+    - cd docs && python tools/filter_private.py api api_filtered
+    - cd docs && python tools/make_rst.py api_filtered --output classes
+    - cd docs && python -m sphinx -T -W --keep-going -b html -d _build/doctrees . $READTHEDOCS_OUTPUT/html
