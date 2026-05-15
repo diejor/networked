@@ -63,7 +63,10 @@ jobs:
       - name: Generate XML via godot --doctool
         run: |
           mkdir -p api
-          ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs res://addons/networked --headless --path .. --quit
+          # 1. Import pass: Resolves UIDs in project.godot to prevent "Main scene path could not be resolved" abort.
+          ../godot_linux.x86_64 --headless --path .. --editor --quit || true
+          # 2. Doctool pass: Use '.' for gdscript-docs as discovered to avoid path resolution crashes.
+          ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs . --headless --path .. --quit
           ls -R api
 
       - name: Filter private members

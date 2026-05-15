@@ -23,7 +23,8 @@ build:
     - mv /tmp/Godot_v4.6.2-stable_linux.x86_64 ./godot_linux.x86_64
     - chmod +x ./godot_linux.x86_64
     - cd docs && mkdir -p api
-    - cd docs && ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs res://addons/networked --headless --path .. --quit
+    - cd docs && ../godot_linux.x86_64 --headless --path .. --editor --quit || true
+    - cd docs && ../godot_linux.x86_64 --doctool $(pwd)/api --gdscript-docs . --headless --path .. --quit
     - cd docs && ls -R api
     - cd docs && python tools/filter_private.py api api_filtered
     - cd docs && python tools/make_rst.py api_filtered --output classes
