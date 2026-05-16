@@ -2,12 +2,9 @@
 ## data for their scene.
 ##
 ## Attach this synchronizer to a [Scene] node. Call [method track_node] for
-## each entity node to register it; the synchronizer registers the entity
-## as a subject of its [code]ISOLATE[/code] [NetwInterestLayer] so only
-## peers added via [method connect_peer] receive updates.
-##
-## The layer's id is [code]scene:&lt;owner.name&gt;[/code]; downstream code can
-## look it up via [code]ctx.interest.layer(&"scene:&lt;owner.name&gt;")[/code].
+## each entity node to register it; the synchronizer will then restrict
+## replication so only peers inside this scene receive updates. Peer
+## membership is tracked in [member connected_peers].
 class_name SceneSynchronizer
 extends MultiplayerSynchronizer
 
@@ -16,24 +13,27 @@ signal spawned(node: Node)
 ## Emitted when a tracked node exits the scene tree.
 signal despawned(node: Node)
 
-## Dictionary of peer IDs currently connected to this scene, mapped to [code]true[/code].
+## Dictionary of peer IDs currently connected to this scene, mapped to
+## [code]true[/code].
 ##
-## Mirrors layer membership for replication to clients; layer.add_member /
-## remove_member remain authoritative on the server.
-@export var connected_peers: Dictionary[int, bool]
+## Writing to this property defers a [method update_players] call.
+@export var connected_peers: Dictionary[int, bool]:
+	get:
+		return connected_peers
+	set(peers):
+		connected_peers = peers
+		update_players.call_deferred()
 
 ## Map of all nodes currently tracked by this synchronizer.
 var tracked_nodes: Dictionary[Node, bool]
-
-## The [NetwInterestLayer] owned by this synchronizer. Created lazily on
-## first call to [method _ensure_layer] (server-side; clients leave it null).
-var layer: NetwInterestLayer
 
 
 func _ready() -> void:
 	name = "SceneSynchronizer"
 	unique_name_in_owner = true
 	public_visibility = false
+
+	delta_synchronized.connect(update_players)
 
 	if not owner:
 		return
@@ -50,21 +50,13 @@ func _ready() -> void:
 
 	replication_config = config
 
-	if multiplayer.is_server():
-		_ensure_layer()
 
-
-func _exit_tree() -> void:
-	if layer and not layer.is_disposed():
-		layer.dispose_immediate()
-	layer = null
-
-
-## Binds a node's lifecycle to the scene's interest layer.
+## Binds a node's lifecycle to the scene's visibility filters.
 ##
 ## When [param node] is already in the tree (e.g., a preplaced entity
 ## registering during its own [signal Node.tree_entered] handler), the
-## spawn-side bookkeeping fires immediately.
+## spawn-side bookkeeping fires immediately so visibility filters are
+## applied without waiting for the next tree-entry.
 func track_node(node: Node) -> void:
 	var on_spawned_bound := _on_spawned.bind(node)
 	if not node.tree_entered.is_connected(on_spawned_bound):
@@ -78,7 +70,7 @@ func track_node(node: Node) -> void:
 		_on_spawned(node)
 
 
-## Removes a node from the scene's lifecycle tracking and interest layer.
+## Removes a node from the scene's lifecycle tracking and visibility filters.
 func untrack_node(node: Node) -> void:
 	var on_spawned_bound := _on_spawned.bind(node)
 	if node.tree_entered.is_connected(on_spawned_bound):
@@ -102,7 +94,21 @@ func untrack_player(player: Node) -> void:
 	untrack_node(player)
 
 
-## Registers a peer as connected to this scene and adds them to the layer.
+## Forces a visibility update for all synchronizers belonging to tracked
+## nodes in this scene.
+func update_players() -> void:
+	for node: Node in tracked_nodes.keys():
+		update_player(node)
+
+
+## Forces a visibility update for a specific node's cached synchronizers.
+func update_player(node: Node) -> void:
+	var syncs := SynchronizersCache.get_synchronizers(node)
+	for sync in syncs:
+		sync.update_visibility()
+
+
+## Registers a peer as connected to this scene and updates visibility states.
 func connect_peer(peer_id: int) -> void:
 	if peer_id == 0:
 		Netw.dbg.error(
@@ -114,26 +120,28 @@ func connect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` connected to scene." % peer_id)
 	set_visibility_for(peer_id, true)
 	connected_peers[peer_id] = true
-	notify_property_list_changed()
-	_ensure_layer()
-	if layer:
-		layer.add_member(peer_id)
+	update_players()
 
 
 ## Unregisters a peer from this scene and safely detaches their visibility.
 ##
-## See [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code]
-## for the deferred order.
+## The deferred call order is intentional - see
+## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
 	connected_peers.erase(peer_id)
-	notify_property_list_changed()
-	if layer:
-		layer.remove_member(peer_id)
 
+	# Skip visibility updates for peers the engine has already purged.
+	# `update_players()` would propagate filter results into
+	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
+	# `_update_spawn_visibility` - both assert when `peers_info` no longer
+	# contains the peer.
 	if not _peer_is_live(peer_id):
 		return
 
+	update_players()
+	# Very important the order in which the peer visibility is handled:
+	# `https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958`
 	set_visibility_for.call_deferred(peer_id, false)
 
 
@@ -154,11 +162,10 @@ func _on_spawned(node: Node) -> void:
 
 	tracked_nodes[node] = true
 
-	_ensure_layer()
-	if layer:
-		var entity := NetwEntity.of(node)
-		if entity:
-			layer.add_subject(entity)
+	var syncs := SynchronizersCache.get_synchronizers(node)
+
+	for sync in syncs:
+		sync.add_visibility_filter(scene_visibility_filter)
 
 	spawned.emit(node)
 
@@ -169,47 +176,22 @@ func _on_despawned(node: Node) -> void:
 	Netw.dbg.debug("%s despawned." % node.name)
 	tracked_nodes.erase(node)
 
-	if layer:
-		var entity := NetwEntity.of(node)
-		if entity:
-			layer.remove_subject(entity)
+	for sync in SynchronizersCache.get_synchronizers(node):
+		sync.remove_visibility_filter(scene_visibility_filter)
 
 	despawned.emit(node)
 
 
-# Resolves the scene's layer. On the server this lazily creates an
-# ISOLATE layer; on clients it picks up the mirror layer pushed by
-# InterestService once the peer joins the scene.
-func _ensure_layer() -> void:
-	if is_instance_valid(layer) or not is_inside_tree():
-		return
-	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.interest:
-		return
-	var id := _layer_id()
-	var existing := mt.interest.layer(id)
-	if existing:
-		layer = existing
-		return
-	if multiplayer != null and multiplayer.is_server():
-		layer = mt.interest.create_layer(id, NetwInterestLayer.Policy.ISOLATE)
-
-
-## Back-compat query: returns whether [param peer_id] would receive
-## tracked-node updates under the current scene membership. Equivalent to
-## [code]layer.has_member(peer_id)[/code] but resolves from
-## [member connected_peers] so the answer is consistent on clients (which
-## don't own the layer) and on freshly-constructed synchronizers (where
-## the layer has not been created yet).
+## Visibility filter callback passed to each tracked node's synchronizers.
+##
+## Returns [code]true[/code] for the server and any peer present in
+## [member connected_peers].
 func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
+
 	if peer_id == 0:
 		return false
-	return peer_id in connected_peers
 
-
-func _layer_id() -> StringName:
-	if not is_instance_valid(owner):
-		return &"scene:<orphan:%d>" % get_instance_id()
-	return StringName("scene:%s" % owner.name)
+	var res: bool = peer_id in connected_peers
+	return res

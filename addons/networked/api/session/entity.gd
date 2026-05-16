@@ -181,7 +181,6 @@ func _handle_tree_entered() -> void:
 	if _tree_entered_fired:
 		return
 	_tree_entered_fired = true
-	_register_with_interest()
 	owner_tree_entered.emit()
 
 

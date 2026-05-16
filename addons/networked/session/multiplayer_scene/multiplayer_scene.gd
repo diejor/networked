@@ -9,25 +9,6 @@ extends Node
 ## The [SceneSynchronizer] that manages peer visibility for this scene.
 @export var synchronizer: SceneSynchronizer
 
-## The [NetwInterestLayer] that owns membership for this scene. On the
-## server, lazily created (ISOLATE policy) when the scene enters the
-## tree. On clients, populated by [InterestService] once the local peer
-## joins. Returns [code]null[/code] if interest is unavailable or the
-## client hasn't yet been added as a member.
-var layer: NetwInterestLayer:
-	get:
-		var mt := MultiplayerTree.resolve(self)
-		if not mt or not mt.interest:
-			return null
-		return mt.interest.layer(_layer_id())
-
-
-## Stable layer id for this scene. Derived from this node's name (the
-## scene wrapper, which matches across server/client). Same value used
-## by [InterestService] over the wire.
-func _layer_id() -> StringName:
-	return StringName("scene:%s" % name)
-
 ## The instantiated level scene for this scene.
 ##
 ## Setting this property adds the level as a child, names the scene, and hooks spawn signals.
@@ -42,9 +23,7 @@ var level: Node:
 
 var _context: NetwContext
 
-## Emitted when a tracked player node enters this scene's tree. Fires on
-## both server and client. Prefer this over reaching through
-## [member synchronizer].
+## Emitted when a tracked player node enters this scene's tree.
 signal player_spawned(node: Node)
 
 ## Emitted when a tracked player node exits this scene's tree.

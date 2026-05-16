@@ -60,7 +60,9 @@ func notify_layer_disposed(layer_id: StringName) -> void:
 	if not _is_server():
 		return
 	var obs := _observers.get(layer_id, {}) as Dictionary
-	for peer_id in obs:
+	for peer_id in obs.keys():
+		if not _can_rpc_peer(peer_id):
+			continue
 		_rpc_layer_disposed.rpc_id(peer_id, layer_id)
 	_observers.erase(layer_id)
 
@@ -69,7 +71,8 @@ func notify_member_added(layer: NetwInterestLayer, peer_id: int) -> void:
 	if not _is_server():
 		return
 	var obs: Dictionary = _observers.get_or_add(layer.id, {})
-	var is_first_time := not obs.has(peer_id)
+	var peer_can_observe := _can_rpc_peer(peer_id)
+	var is_first_time := peer_can_observe and not obs.has(peer_id)
 	if is_first_time:
 		obs[peer_id] = true
 		# Bootstrap the new observer with the layer and existing members.
@@ -78,7 +81,10 @@ func notify_member_added(layer: NetwInterestLayer, peer_id: int) -> void:
 			if existing_peer != peer_id:
 				_rpc_member_added.rpc_id(peer_id, layer.id, existing_peer)
 	# Broadcast the new member to every observer (including themselves).
-	for observer_peer in obs:
+	for observer_peer in obs.keys():
+		if not _can_rpc_peer(observer_peer):
+			obs.erase(observer_peer)
+			continue
 		_rpc_member_added.rpc_id(observer_peer, layer.id, peer_id)
 
 
@@ -90,12 +96,16 @@ func notify_member_removed(layer_id: StringName, peer_id: int) -> void:
 		return
 	# Broadcast removal to all current observers (including the leaver, so
 	# their local mirror sees themselves leave one last time).
-	for observer_peer in obs:
+	for observer_peer in obs.keys():
+		if not _can_rpc_peer(observer_peer):
+			obs.erase(observer_peer)
+			continue
 		_rpc_member_removed.rpc_id(observer_peer, layer_id, peer_id)
 	# Leaver loses observer status: tear down their mirror entirely.
 	if obs.has(peer_id):
 		obs.erase(peer_id)
-		_rpc_layer_disposed.rpc_id(peer_id, layer_id)
+		if _can_rpc_peer(peer_id):
+			_rpc_layer_disposed.rpc_id(peer_id, layer_id)
 
 
 # ---------------------------------------------------------------------------
@@ -139,3 +149,13 @@ func _is_server() -> bool:
 	if not _mt or not _mt.api:
 		return false
 	return _mt.api.has_multiplayer_peer() and _mt.api.is_server()
+
+
+func _can_rpc_peer(peer_id: int) -> bool:
+	if peer_id == 0 or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return false
+	if not _mt or not _mt.api or not _mt.api.has_multiplayer_peer():
+		return false
+	if peer_id == _mt.api.get_unique_id():
+		return false
+	return peer_id in _mt.api.get_peers()

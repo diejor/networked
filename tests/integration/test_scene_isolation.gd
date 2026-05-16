@@ -1,5 +1,4 @@
-## Integration tests for [MultiplayerScene] peer isolation, exercised via
-## the new [NetwInterestLayer] API on [member MultiplayerScene.layer].
+## Integration tests for [MultiplayerScene] peer isolation.
 class_name TestLobbyIsolation
 extends NetworkedTestSuite
 
@@ -34,88 +33,57 @@ func after_test() -> void:
 	await drain_frames(get_tree(), 3)
 
 
-# ---------------------------------------------------------------------------
-# Server-side layer membership is the source of truth.
-# ---------------------------------------------------------------------------
-
-func test_scene_layer_exists_after_spawn() -> void:
-	assert_that(scene.layer).is_not_null()
-	assert_that(scene.layer.policy).is_equal(NetwInterestLayer.Policy.ISOLATE)
+func test_connected_peers_empty_initially() -> void:
+	assert_that(scene.synchronizer.connected_peers).is_empty()
 
 
-func test_layer_empty_initially() -> void:
-	assert_that(scene.layer.members()).is_empty()
-
-
-func test_unregistered_peer_not_in_layer() -> void:
+func test_unregistered_peer_not_visible() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
-	assert_that(scene.layer.has_member(client_id)).is_false()
+	assert_that(scene.synchronizer.scene_visibility_filter(client_id)) \
+			.is_false()
 
 
-func test_connect_peer_adds_layer_member() -> void:
+func test_registered_peer_becomes_visible() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	scene.synchronizer.connect_peer(client_id)
-	assert_that(scene.layer.has_member(client_id)).is_true()
+	assert_that(scene.synchronizer.scene_visibility_filter(client_id)) \
+			.is_true()
 
 
-func test_second_peer_not_in_layer_when_only_first_connected() -> void:
+func test_second_peer_not_visible_when_first_registered() -> void:
 	var id0 := client0.multiplayer_peer.get_unique_id()
 	var id1 := client1.multiplayer_peer.get_unique_id()
 	scene.synchronizer.connect_peer(id0)
-	assert_that(scene.layer.has_member(id0)).is_true()
-	assert_that(scene.layer.has_member(id1)).is_false()
+	assert_that(scene.synchronizer.scene_visibility_filter(id1)) \
+			.is_false()
 
 
-func test_disconnect_peer_removes_layer_member() -> void:
-	var client_id := client0.multiplayer_peer.get_unique_id()
-	scene.synchronizer.connect_peer(client_id)
-	scene.synchronizer.disconnect_peer(client_id)
-	assert_that(scene.layer.has_member(client_id)).is_false()
+func test_server_always_visible_regardless_of_registered_peers() -> void:
+	assert_that(scene.synchronizer.scene_visibility_filter(
+			MultiplayerPeer.TARGET_PEER_SERVER)).is_true()
 
 
-# ---------------------------------------------------------------------------
-# Back-compat: connected_peers mirror stays in sync with layer.
-# ---------------------------------------------------------------------------
-
-func test_connected_peers_mirror_layer_state() -> void:
+func test_connect_peer_adds_to_connected_peers() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	scene.synchronizer.connect_peer(client_id)
 	assert_that(scene.synchronizer.connected_peers.has(client_id)).is_true()
+
+
+func test_disconnect_peer_removes_from_connected_peers() -> void:
+	var client_id := client0.multiplayer_peer.get_unique_id()
+	scene.synchronizer.connect_peer(client_id)
 	scene.synchronizer.disconnect_peer(client_id)
 	await wait_until(
 		func(): return not scene.synchronizer.connected_peers.has(client_id))
 	assert_that(scene.synchronizer.connected_peers.has(client_id)).is_false()
 
 
-# ---------------------------------------------------------------------------
-# Client-side mirror: the layer shows up on the joined client.
-# ---------------------------------------------------------------------------
-
-func test_client_sees_scene_layer_mirror_after_join() -> void:
+func test_disconnect_peer_removes_visibility() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	scene.synchronizer.connect_peer(client_id)
-
+	scene.synchronizer.disconnect_peer(client_id)
 	await wait_until(
-		func(): return client0.interest.layer(scene._layer_id()) != null)
-	var mirror := client0.interest.layer(scene._layer_id())
-	assert_that(mirror).is_not_null()
-	assert_that(mirror._is_mirror).is_true()
-	assert_that(mirror.has_member(client_id)).is_true()
-
-
-func test_client_layer_signals_fire_on_membership_change() -> void:
-	var id0 := client0.multiplayer_peer.get_unique_id()
-	var id1 := client1.multiplayer_peer.get_unique_id()
-
-	# Connect client0 first so it observes the layer.
-	scene.synchronizer.connect_peer(id0)
-	await wait_until(
-		func(): return client0.interest.layer(scene._layer_id()) != null)
-	var mirror := client0.interest.layer(scene._layer_id())
-
-	var added: Array[int] = []
-	mirror.member_added.connect(func(p: int): added.append(p))
-
-	scene.synchronizer.connect_peer(id1)
-	await wait_until(func(): return mirror.has_member(id1))
-	assert_that(added).contains([id1])
+		func(): return not scene.synchronizer.scene_visibility_filter(
+			client_id))
+	assert_that(scene.synchronizer.scene_visibility_filter(client_id)) \
+			.is_false()

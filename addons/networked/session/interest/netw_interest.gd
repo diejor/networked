@@ -64,6 +64,7 @@ var _known_entities: Dictionary[NetwEntity, bool] = {}
 
 var _dirty_peers: Dictionary[int, bool] = {}
 var _dirty_entities: Dictionary[NetwEntity, bool] = {}
+var _exit_layers_by_pair: Dictionary[String, Array] = {}
 var _flush_scheduled: bool = false
 var _flushing: bool = false
 
@@ -203,6 +204,8 @@ func _on_member_added(layer_: NetwInterestLayer, peer_id: int) -> void:
 
 
 func _on_member_removed(layer_: NetwInterestLayer, peer_id: int) -> void:
+	for entity in layer_._subjects:
+		_mark_exit_layer(peer_id, entity, layer_)
 	var arr: Array = _layers_by_member.get(peer_id, [])
 	arr.erase(layer_)
 	if arr.is_empty():
@@ -223,6 +226,9 @@ func _on_subject_added(
 
 func _on_subject_removed(
 		layer_: NetwInterestLayer, entity: NetwEntity) -> void:
+	for peer_id in layer_._members:
+		_mark_exit_layer(peer_id, entity, layer_)
+		_dirty_peers[peer_id] = true
 	var arr: Array = _layers_by_subject.get(entity, [])
 	arr.erase(layer_)
 	if arr.is_empty():
@@ -238,6 +244,8 @@ func _on_layer_disposed(layer_: NetwInterestLayer) -> void:
 				func(m): push_error(m))
 		return
 	for peer_id in layer_.members():
+		for entity in layer_.subjects():
+			_mark_exit_layer(peer_id, entity, layer_)
 		var arr: Array = _layers_by_member.get(peer_id, [])
 		arr.erase(layer_)
 		if arr.is_empty():
@@ -440,8 +448,20 @@ func _pair_key(peer_id: int, entity: NetwEntity) -> String:
 	return "%d|%d" % [peer_id, entity.get_instance_id()]
 
 
+func _mark_exit_layer(
+		peer_id: int,
+		entity: NetwEntity,
+		layer_: NetwInterestLayer,
+) -> void:
+	var key := _pair_key(peer_id, entity)
+	var layers: Array = _exit_layers_by_pair.get_or_add(key, [])
+	if layer_ not in layers:
+		layers.append(layer_)
+
+
 func _apply_ordered(deltas: Array[Delta]) -> void:
 	if deltas.is_empty():
+		_exit_layers_by_pair.clear()
 		return
 	var shows: Array[Delta] = []
 	var hides: Array[Delta] = []
@@ -456,6 +476,7 @@ func _apply_ordered(deltas: Array[Delta]) -> void:
 		_apply_one(d)
 	for d in hides:
 		_apply_one(d)
+	_exit_layers_by_pair.clear()
 
 
 func _by_depth_shallow_first(a: Delta, b: Delta) -> bool:
@@ -482,13 +503,19 @@ func _apply_one(d: Delta) -> void:
 		if not is_instance_valid(sync):
 			continue
 		sync.set_visibility_for(d.peer_id, d.visible)
-	for layer_ in _layers_by_subject.get(d.entity, []):
-		var l := layer_ as NetwInterestLayer
-		if not l.has_member(d.peer_id):
-			continue
-		if d.visible:
+	var exit_layers: Array = _exit_layers_by_pair.get(
+			_pair_key(d.peer_id, d.entity), [])
+	if d.visible:
+		for layer_ in _layers_by_subject.get(d.entity, []):
+			var l := layer_ as NetwInterestLayer
+			if not l.has_member(d.peer_id):
+				continue
 			l.interest_enter.emit(d.entity, d.peer_id)
-		else:
+	else:
+		for layer_ in exit_layers:
+			var l := layer_ as NetwInterestLayer
+			if not is_instance_valid(l):
+				continue
 			l.interest_exit.emit(d.entity, d.peer_id)
 
 
