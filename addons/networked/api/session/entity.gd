@@ -47,6 +47,18 @@ signal spawning
 ## Emitted by [SpawnerComponent] after scene registration completes.
 signal spawned
 
+## Emitted on the server when this entity becomes visible to
+## [param peer_id] through any [InterestSynchronizer] gating it. On a
+## client, [param peer_id] is always the local peer; the signal then
+## means "I gained sight of this entity's gated synchronizers." Fires
+## only after the initial spawn-sync handshake completes.
+signal interest_enter(peer_id: int)
+
+## Reverse of [signal interest_enter]. Fires before the gating
+## visibility filter is detached so handlers can read the entity's
+## last-known state.
+signal interest_exit(peer_id: int)
+
 
 var owner: Node
 ## Display / save / debug label for this entity, for example a username.
