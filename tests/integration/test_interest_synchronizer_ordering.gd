@@ -41,7 +41,13 @@ func before_test() -> void:
 	container.add_child(sync)
 
 	parent_entity = _build_entity_at(container, "Parent")
-	child_entity = _build_entity_at(parent_entity.owner, "Child")
+	# A non-entity wrapper gives the child a deeper path without
+	# nesting it under the parent's NetwEntity meta (which would make
+	# NetwEntity.of walk up and return the parent entity).
+	var wrapper := Node.new()
+	wrapper.name = "Wrapper"
+	container.add_child(wrapper)
+	child_entity = _build_entity_at(wrapper, "Child")
 
 
 func after_test() -> void:
@@ -57,11 +63,17 @@ func _id0() -> int:
 func _build_entity_at(parent: Node, entity_name: String) -> NetwEntity:
 	var root := Node.new()
 	root.name = entity_name
+	# Pre-attach the entity so NetwEntity.of short-circuits on
+	# has_meta(META_KEY) instead of walking up past the test fixture's
+	# unowned ancestors and resolving every "entity" to the same root.
+	var entity := NetwEntity.new()
+	root.set_meta(NetwEntity.META_KEY, entity)
+	entity.owner = root
 	parent.add_child(root)
 	var sync_node := MultiplayerSynchronizer.new()
 	sync_node.name = "Sync"
 	root.add_child(sync_node)
-	return NetwEntity.of(root)
+	return entity
 
 
 # ---------------------------------------------------------------------------
@@ -141,13 +153,17 @@ func test_entity_level_exit_fires_for_both() -> void:
 	sync.add_viewer(_id0())
 	sync.drive_now()
 
-	var parent_exits := 0
-	var child_exits := 0
-	parent_entity.interest_exit.connect(func(_p): parent_exits += 1)
-	child_entity.interest_exit.connect(func(_p): child_exits += 1)
+	# Use arrays as counters; GDScript lambdas can mutate captured
+	# reference types but not reassign captured value-typed locals.
+	var parent_exits: Array[int] = []
+	var child_exits: Array[int] = []
+	parent_entity.interest_exit.connect(
+			func(_p): parent_exits.append(1))
+	child_entity.interest_exit.connect(
+			func(_p): child_exits.append(1))
 
 	sync.remove_viewer(_id0())
 	sync.drive_now()
 
-	assert_that(parent_exits).is_equal(1)
-	assert_that(child_exits).is_equal(1)
+	assert_that(parent_exits.size()).is_equal(1)
+	assert_that(child_exits.size()).is_equal(1)
