@@ -300,3 +300,58 @@ func test_dismiss_emits_exit() -> void:
 	# so we observe the eager exit.
 	assert_that(exits.size() >= 1).is_true()
 	assert_that(exits[0][0]).is_equal(e)
+
+
+# ---------------------------------------------------------------------------
+# Initial spawn-sync semantics: setter must be store-only until the
+# end of [code]_enter_tree[/code]. Locks the invariant that lets
+# clients absorb the anchor's initial state without emitting transition
+# signals for already-resolved visibility.
+# ---------------------------------------------------------------------------
+
+func test_setter_during_initial_sync_does_not_drive() -> void:
+	# Simulate a client receiving spawn-sync before _enter_tree: the
+	# setter fires while _initial_sync_done is still false.
+	var fresh := InterestSynchronizer.new()
+	fresh.layer_id = &"fresh"
+	# Don't add to tree yet; _initial_sync_done stays false.
+	var collected: Array = []
+	fresh.viewer_added.connect(func(p): collected.append(p))
+	# Assigning the dict whole-cloth triggers the setter.
+	fresh.viewers = {7: true, 9: true}
+	assert_that(collected).is_empty()
+	fresh.free()
+
+
+func test_setter_after_initial_sync_drives_and_emits() -> void:
+	# sync is already in tree -> _initial_sync_done is true.
+	var collected: Array = []
+	sync.viewer_added.connect(func(p): collected.append(p))
+	sync.viewers = {7: true, 9: true}
+	# Setter computes diff against prior empty viewers -> emits both.
+	collected.sort()
+	assert_that(collected).contains_exactly([7, 9])
+
+
+func test_initial_sync_done_flips_at_enter_tree() -> void:
+	var fresh := InterestSynchronizer.new()
+	assert_that(fresh._initial_sync_done).is_false()
+	add_child(fresh)
+	auto_free(fresh)
+	assert_that(fresh._initial_sync_done).is_true()
+
+
+func test_no_double_emit_when_entity_arrives_after_viewer() -> void:
+	# Simulates client-side timing: viewers setter fires first (no
+	# entities locally yet -> no emit), then entity registration
+	# arrives and drives once.
+	sync.add_viewer(7)
+	sync.drive_now()
+	# enters should be empty at this point - no entities enrolled.
+	assert_that(enters).is_empty()
+	# Now entity arrives.
+	var e := _make_entity()
+	sync.add_entity(e)
+	sync.drive_now()
+	# Exactly one enter for the new entity.
+	assert_that(enters).contains_exactly([[e, 7]])

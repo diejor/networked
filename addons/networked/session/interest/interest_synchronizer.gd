@@ -332,8 +332,13 @@ func _drive_visibility_update() -> void:
 		return
 
 	var peers := _live_peers()
-	var to_show: Array = []
-	var to_hide: Array = []
+	# Per-(entity, peer) transitions for signal emission. Independent
+	# of synchronizer count so entities without a sync still emit.
+	var hide_transitions: Array = []
+	var show_transitions: Array = []
+	# Per-sync tuples for [method MultiplayerSynchronizer.update_visibility].
+	var sync_hides: Array = []
+	var sync_shows: Array = []
 	var new_state: Dictionary = {}
 
 	for entity: NetwEntity in entities:
@@ -349,46 +354,40 @@ func _drive_visibility_update() -> void:
 			var was: bool = prev.get(peer, false)
 			if was == now:
 				continue
+			var transition := [entity, peer]
+			if now:
+				show_transitions.append(transition)
+			else:
+				hide_transitions.append(transition)
 			for sync in entity.synchronizers():
 				if not is_instance_valid(sync):
 					continue
-				var tup := [sync, peer, entity, now]
+				var tup := [sync, peer]
 				if now:
-					to_show.append(tup)
+					sync_shows.append(tup)
 				else:
-					to_hide.append(tup)
+					sync_hides.append(tup)
 
-	to_hide.sort_custom(_deeper_first)
-	to_show.sort_custom(_shallower_first)
+	sync_hides.sort_custom(_sync_deeper_first)
+	sync_shows.sort_custom(_sync_shallower_first)
+	hide_transitions.sort_custom(_entity_deeper_first)
+	show_transitions.sort_custom(_entity_shallower_first)
 
 	if _is_server() and multiplayer \
 			and multiplayer.multiplayer_peer != null:
-		for t in to_hide:
+		for t in sync_hides:
 			(t[0] as MultiplayerSynchronizer).update_visibility(t[1])
-		for t in to_show:
+		for t in sync_shows:
 			(t[0] as MultiplayerSynchronizer).update_visibility(t[1])
 
-	# Emit one anchor+entity signal per (entity, peer) transition.
-	# Tuples for the same entity repeat across syncs; track emitted
-	# pairs so a multi-sync entity fires the signal once.
-	var emitted_pairs: Dictionary = {}
-	for t in to_hide:
-		var entity: NetwEntity = t[2]
+	for t in hide_transitions:
+		var entity: NetwEntity = t[0]
 		var peer: int = t[1]
-		var key := _pair_key(entity, peer)
-		if emitted_pairs.has(key):
-			continue
-		emitted_pairs[key] = true
 		interest_exit.emit(entity, peer)
 		entity.interest_exit.emit(peer)
-	emitted_pairs.clear()
-	for t in to_show:
-		var entity: NetwEntity = t[2]
+	for t in show_transitions:
+		var entity: NetwEntity = t[0]
 		var peer: int = t[1]
-		var key := _pair_key(entity, peer)
-		if emitted_pairs.has(key):
-			continue
-		emitted_pairs[key] = true
 		interest_enter.emit(entity, peer)
 		entity.interest_enter.emit(peer)
 
@@ -424,18 +423,24 @@ func _live_peers() -> Array[int]:
 	return out
 
 
-func _deeper_first(a: Array, b: Array) -> bool:
+func _sync_deeper_first(a: Array, b: Array) -> bool:
 	return (a[0] as Node).get_path().get_name_count() \
 		> (b[0] as Node).get_path().get_name_count()
 
 
-func _shallower_first(a: Array, b: Array) -> bool:
+func _sync_shallower_first(a: Array, b: Array) -> bool:
 	return (a[0] as Node).get_path().get_name_count() \
 		< (b[0] as Node).get_path().get_name_count()
 
 
-func _pair_key(entity: NetwEntity, peer_id: int) -> String:
-	return "%d|%d" % [entity.get_instance_id(), peer_id]
+func _entity_deeper_first(a: Array, b: Array) -> bool:
+	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
+		> (b[0] as NetwEntity).owner.get_path().get_name_count()
+
+
+func _entity_shallower_first(a: Array, b: Array) -> bool:
+	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
+		< (b[0] as NetwEntity).owner.get_path().get_name_count()
 
 
 # ---------------------------------------------------------------------------
