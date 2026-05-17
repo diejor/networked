@@ -70,20 +70,8 @@ func _make_entity(
 		peer_id: int = 0,
 		parent: Node = null,
 ) -> NetwEntity:
-	var root := Node.new()
-	root.name = entity_name
-	if parent:
-		parent.add_child(root)
-	else:
-		add_child(root)
-	auto_free(root)
-	var sync_node := MultiplayerSynchronizer.new()
-	sync_node.name = "Sync"
-	root.add_child(sync_node)
-	auto_free(sync_node)
-	var entity := NetwEntity.of(root)
-	entity.peer_id = peer_id
-	return entity
+	var host: Node = parent if parent else self
+	return NetwEntity.of(make_test_entity(host, entity_name, peer_id))
 
 
 # ---------------------------------------------------------------------------

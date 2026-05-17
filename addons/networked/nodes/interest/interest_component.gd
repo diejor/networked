@@ -95,9 +95,10 @@ func _apply_layer_diff(
 
 
 func _resolve_entity() -> NetwEntity:
-	if not is_instance_valid(owner):
-		return null
-	return NetwEntity.of(owner)
+	# Walks from self via [method NetwEntity.of] so the resolution
+	# works whether or not [member Node.owner] has been assigned
+	# (packed-scene placement sets it; programmatic add_child does not).
+	return NetwEntity.of(self)
 
 
 func _resolve_interest() -> NetwInterest:

@@ -61,19 +61,7 @@ func _id0() -> int:
 
 
 func _build_entity_at(parent: Node, entity_name: String) -> NetwEntity:
-	var root := Node.new()
-	root.name = entity_name
-	# Pre-attach the entity so NetwEntity.of short-circuits on
-	# has_meta(META_KEY) instead of walking up past the test fixture's
-	# unowned ancestors and resolving every "entity" to the same root.
-	var entity := NetwEntity.new()
-	root.set_meta(NetwEntity.META_KEY, entity)
-	entity.owner = root
-	parent.add_child(root)
-	var sync_node := MultiplayerSynchronizer.new()
-	sync_node.name = "Sync"
-	root.add_child(sync_node)
-	return entity
+	return NetwEntity.of(make_test_entity(parent, entity_name))
 
 
 # ---------------------------------------------------------------------------

@@ -160,6 +160,12 @@ static func bundle(
 ## Walks to the entity root for [param node]. Uses [member Node.owner]
 ## when [param node] is in-tree, otherwise the parent chain (which works
 ## on orphans, where [member Node.owner] is [code]null[/code]).
+##
+## Emits a warning when the walk reaches the topmost ancestor without
+## finding [constant META_KEY] or a non-null [member Node.owner]; the
+## caller almost always meant to set one of those, and silently
+## attaching a fresh [NetwEntity] to a scene root or test-fixture
+## ancestor masks the bug.
 static func _find_root(node: Node) -> Node:
 	if node.has_meta(META_KEY):
 		return node
@@ -170,8 +176,13 @@ static func _find_root(node: Node) -> Node:
 		n = n.get_parent()
 		if n.has_meta(META_KEY):
 			return n
-	if n is Window:
-		pass
+	if n != node:
+		push_warning(
+				("NetwEntity.of: walked from '%s' up to topmost "
+				+ "ancestor '%s' with no META and no Node.owner; "
+				+ "attaching entity to '%s'. Set Node.owner or "
+				+ "pre-attach META on the intended root to "
+				+ "disambiguate.") % [node.name, n.name, n.name])
 	return n
 
 
