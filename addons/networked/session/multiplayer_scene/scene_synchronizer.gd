@@ -36,6 +36,15 @@ func _ready() -> void:
 	delta_synchronized.connect(update_players)
 
 	if not owner:
+		Netw.dbg.warn(
+			"SceneSynchronizer at %s has no owner; "
+			+ "replication_config will not be built. "
+			+ "Set 'owner' before _ready (editor placement does this "
+			+ "automatically; script-driven instantiation requires "
+			+ "explicit assignment).",
+			[get_path()],
+			func(m): push_warning(m)
+		)
 		return
 
 	root_path = get_path_to(owner)

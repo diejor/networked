@@ -136,6 +136,24 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 	return server_sm.active_scenes.get(scene_name)
 
 
+## Admits [param client] to [param scene_name] on the server by calling
+## [method SceneSynchronizer.connect_peer] directly, bypassing the
+## player-join flow. Useful for tests that need to assert client-side
+## visibility into a scene without spawning a player into it.
+##
+## Awaits until the client's [MultiplayerSceneManager] reports the
+## scene as active so callers can assert on the replicated state.
+func admit_client_to_scene(
+	client: MultiplayerTree,
+	scene_name: StringName,
+) -> MultiplayerScene:
+	var server_scene := get_server_scene(scene_name)
+	assert(server_scene, "admit_client_to_scene: scene '%s' not active on server." % scene_name)
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	server_scene.synchronizer.connect_peer(peer_id)
+	return await wait_for_client_scene_spawn(client, scene_name)
+
+
 ## Sends the real request_join_player RPC from a client to the server,
 ## triggering the full _on_player_joined production chain.
 ## level_scene_path must be a registered spawnable scene whose filename (no extension)

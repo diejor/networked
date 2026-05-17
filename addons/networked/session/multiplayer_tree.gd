@@ -880,7 +880,7 @@ func _ready() -> void:
 		if use_listen_server:
 			await host()
 			role = Role.LISTEN_SERVER
-		elif is_server:
+		elif role == Role.DEDICATED_SERVER:
 			await host()
 
 

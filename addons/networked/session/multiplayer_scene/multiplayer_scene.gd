@@ -5,6 +5,14 @@ extends Node
 ##
 ## Created by [MultiplayerSceneManager] via its spawn function. Holds the instantiated
 ## level scene and wires up spawn/despawn signals to the [SceneSynchronizer].
+##
+## [b]Visibility invariant:[/b] The wrapper's [SceneSynchronizer] gates the
+## scene's spawn-replication to peers. A peer only receives the scene
+## (and its level subtree) after the server calls
+## [method SceneSynchronizer.connect_peer] for that peer - typically
+## via [method register_player] from the join flow. A scene that
+## auto-spawned on the server but has no connected peers is invisible
+## to every client; this is by design.
 
 ## The [SceneSynchronizer] that manages peer visibility for this scene.
 @export var synchronizer: SceneSynchronizer

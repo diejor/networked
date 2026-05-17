@@ -6,6 +6,20 @@ extends MultiplayerSpawner
 ##
 ## Extends [MultiplayerSpawner] to replicate scene levels to clients.
 ## Add level scenes to the spawn list via the [member add_to_spawn_list] property.
+##
+## [b]Spawnable-scene registration must match on both sides.[/b]
+## [MultiplayerSpawner] uses the spawnable-scenes list as an index-based
+## protocol; if the server and client lists differ, spawns are dropped
+## silently on the client. Each [MultiplayerSceneManager] logs its
+## registered set at [code]info[/code] level on configure for
+## diff-friendly debugging.
+##
+## [b]Spawned scenes are not visible to peers until admitted.[/b]
+## Even after the server activates a scene, the wrapper's
+## [SceneSynchronizer] gates spawn-replication per peer. A peer only
+## receives the scene after [method SceneSynchronizer.connect_peer] is
+## called for it (typically transitively via [method MultiplayerScene.register_player]).
+## See [MultiplayerScene] for the full invariant.
 ## [codeblock]
 ## # Listen for scenes becoming available:
 ## scene_manager.scene_spawned.connect(
@@ -444,6 +458,19 @@ func _on_scene_despawned(node: Node) -> void:
 
 func _on_configured() -> void:
 	Netw.dbg.trace("_on_configured called.")
+
+	# MultiplayerSpawner uses the spawnable_scenes list as an index-based
+	# protocol; if the client and server lists do not match, spawns are
+	# dropped silently. Log the registered set on both sides so a diff is
+	# visible at trace-level when debugging missing replication.
+	var role := "server" if multiplayer.is_server() else "client"
+	var registered: Array[String] = []
+	for i in get_spawnable_scene_count():
+		registered.append(get_spawnable_scene(i))
+	Netw.dbg.info(
+		"SceneManager (%s): %d spawnable scene(s) registered: %s",
+		[role, registered.size(), registered]
+	)
 
 	if multiplayer.is_server():
 		var debug_viewports: Node = VIEWPORTS_DEBUG.instantiate()

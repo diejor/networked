@@ -86,6 +86,10 @@ func _ready() -> void:
 	unique_name_in_owner = true
 	public_visibility = true
 	add_visibility_filter(_self_filter)
+	# Fallback for cases where [constant Node.NOTIFICATION_PARENTED]
+	# fired before [member Node.owner] was assigned (script-driven
+	# instantiation). Idempotent via [member _config_built].
+	_build_replication_config()
 
 
 # ---------------------------------------------------------------------------
