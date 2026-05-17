@@ -33,9 +33,7 @@ const META_KEY := &"netw_entity"
 
 ## Server-owned vs. peer-owned semantic marker. Derived from
 ## [member peer_id]: [code]PEER[/code] when non-zero,
-## [code]SERVER[/code] otherwise. Used by [NetwInterestLayer] to
-## decide whether an entity may act as a viewer (member) in addition
-## to a subject.
+## [code]SERVER[/code] otherwise.
 enum Ownership { PEER, SERVER }
 
 ## Emitted once when the entity root enters the live scene tree.
@@ -72,13 +70,10 @@ var _tree_entered_fired: bool = false
 var _pending_spawn_props: Array[NodePath] = []
 var _pending_save_props: Array = []
 
-var _subscribed_layers: Dictionary[NetwInterestLayer, bool] = {}
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
 var _synchronizers_dirty: bool = true
 var _parent_entity_resolved: bool = false
 var _parent_entity_ref: WeakRef
-var _interest_ref: WeakRef
-var _interest_filter_installed: bool = false
 
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root,
@@ -184,31 +179,6 @@ func _handle_tree_entered() -> void:
 	owner_tree_entered.emit()
 
 
-func _register_with_interest() -> void:
-	if not is_instance_valid(owner):
-		return
-	var mt := MultiplayerTree.resolve(owner)
-	if not mt or not mt.interest:
-		return
-	_interest_ref = weakref(mt.interest)
-	mt.interest._on_entity_ready(self)
-	if is_instance_valid(owner) and \
-			not owner.tree_exiting.is_connected(_on_owner_tree_exiting):
-		owner.tree_exiting.connect(_on_owner_tree_exiting)
-
-
-func _on_owner_tree_exiting() -> void:
-	_parent_entity_resolved = false
-	_parent_entity_ref = null
-	_synchronizers_dirty = true
-	var interest := _get_interest()
-	for layer in _subscribed_layers.keys():
-		if is_instance_valid(layer):
-			layer.remove_subject(self)
-	if interest and interest.root.has_subject(self):
-		interest.root.remove_subject(self)
-
-
 ## Returns [code]true[/code] once [signal owner_tree_entered] has fired
 ## for this entity.
 func has_entered_tree() -> bool:
@@ -280,7 +250,7 @@ func contribute_save_property(
 
 
 # ---------------------------------------------------------------------------
-# Interest / synchronizer wiring
+# Synchronizer wiring
 # ---------------------------------------------------------------------------
 
 ## Returns the [MultiplayerSynchronizer] nodes owned by this entity's
@@ -319,82 +289,6 @@ func parent_entity() -> NetwEntity:
 		_parent_entity_ref = null
 		return null
 	return parent
-
-
-## Adds this entity as a subject of [param layer]. Reciprocal of
-## [method NetwInterestLayer.add_subject]; kept on [NetwEntity] for
-## ergonomic call sites near spawn code.
-func subscribe(layer: NetwInterestLayer) -> void:
-	if not is_instance_valid(layer):
-		return
-	layer.add_subject(self)
-
-
-## Removes this entity as a subject of [param layer].
-func unsubscribe(layer: NetwInterestLayer) -> void:
-	if not is_instance_valid(layer):
-		return
-	layer.remove_subject(self)
-
-
-## Returns every layer this entity is currently a subject of.
-func subscribed_layers() -> Array[NetwInterestLayer]:
-	var out: Array[NetwInterestLayer] = []
-	out.assign(_subscribed_layers.keys())
-	return out
-
-
-## Returns [code]true[/code] if [param peer_id] would currently
-## receive this entity's synchronizers under the flushed visibility
-## state.
-func is_visible_to(peer_id: int) -> bool:
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-	var interest := _get_interest()
-	if not interest:
-		return true
-	var view: Dictionary = interest._visible.get(peer_id, {})
-	return view.has(self)
-
-
-# ---------------------------------------------------------------------------
-# Internal -- called by NetwInterest / NetwInterestLayer
-# ---------------------------------------------------------------------------
-
-func _on_layer_subscribed(layer: NetwInterestLayer) -> void:
-	_subscribed_layers[layer] = true
-
-
-func _on_layer_unsubscribed(layer: NetwInterestLayer) -> void:
-	_subscribed_layers.erase(layer)
-
-
-func _install_interest_filter(interest: NetwInterest) -> void:
-	if _interest_filter_installed:
-		return
-	_interest_filter_installed = true
-	_interest_ref = weakref(interest)
-	for sync in synchronizers():
-		if is_instance_valid(sync):
-			sync.add_visibility_filter(_interest_visibility_filter)
-
-
-func _interest_visibility_filter(peer_id: int) -> bool:
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-	if peer_id == 0:
-		return false
-	var interest := _get_interest()
-	if not interest:
-		return true
-	var view: Dictionary = interest._visible.get(peer_id, {})
-	return view.has(self)
-
-
-func _get_interest() -> NetwInterest:
-	if not _interest_ref:
-		return null
-	return _interest_ref.get_ref() as NetwInterest
 
 
 func _walk_for_parent_entity() -> NetwEntity:

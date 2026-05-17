@@ -1,12 +1,7 @@
-## Unit tests for [SceneSynchronizer] as a thin adapter over a
-## [NetwInterestLayer]. The synchronizer's own [code]scene_visibility_filter[/code]
-## helper is kept as a back-compat query that reads
-## [member SceneSynchronizer.connected_peers]; this suite covers that
-## query plus the layer-side mirroring done by [code]connect_peer[/code]
-## / [code]disconnect_peer[/code].
-##
-## Integration coverage of the wire transport lives in
-## [code]tests/integration/test_interest_service.gd[/code].
+## Unit tests for [SceneSynchronizer]. Covers
+## [code]scene_visibility_filter[/code], the membership reflected in
+## [member SceneSynchronizer.connected_peers], and the
+## [code]connect_peer[/code] / [code]disconnect_peer[/code] mutators.
 class_name TestSceneSynchronizer
 extends NetworkedTestSuite
 

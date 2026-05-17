@@ -1,532 +1,104 @@
-## Push-based visibility registry for a [MultiplayerTree].
+## Tree-scoped registry that connects [InterestSynchronizer] anchors
+## to [NetwEntity] members by [code]layer_id[/code].
 ##
-## Owns the set of active [NetwInterestLayer]s and computes, for every
-## [code](peer, entity)[/code] pair, whether the peer should receive
-## that entity's synchronizers. Access via [member NetwContext.interest].
+## One instance lives on [member MultiplayerTree.interest] and is
+## available from any node via [code]Netw.ctx(self).interest[/code].
+## Anchors register themselves on tree entry; entities register through
+## the [code]layer_ids[/code] property contributed by
+## [InterestComponent]. The pending queue absorbs either registration
+## order so a late-arriving anchor still picks up earlier entities and
+## vice versa.
+##
 ## [codeblock]
-##     var arena := Netw.ctx(self).interest.create_layer(
-##             &"combat:%d" % battle_id,
-##             NetwInterestLayer.Policy.ISOLATE)
-##     arena.add_participant(player_a)
-##     arena.add_participant(player_b)
+##     var arena := Netw.ctx(self).interest.anchor_for(&"arena:1")
+##     if arena:
+##         arena.add_viewer(player.peer_id)
 ## [/codeblock]
 ##
-## A [code]ROOT[/code] GRANT layer ([member root]) is created
-## automatically; new peers and new entities are added to it so the
-## default behaviour is "everyone sees everyone." Scenes, bubbles, and
-## combat overlays restrict this default by adding [code]ISOLATE[/code]
-## layers that override the ROOT visibility for their members.
-##
-## Mutations on layers are coalesced into a single deferred flush per
-## frame. The flush recomputes only dirty (peer, entity) pairs, orders
-## visibility deltas so parents apply before children on show and
-## after children on hide ([url]https://github.com/godotengine/godot/issues/68508[/url]),
-## then pushes the result to each entity's
-## [MultiplayerSynchronizer]s.
+## This registry holds no replication state itself. Visibility filters
+## live on the [InterestSynchronizer] anchors; this class only
+## indexes them.
 class_name NetwInterest
 extends RefCounted
 
 
-## Identifier for the always-present default-visible layer.
-const ROOT_ID := &"root"
-
-
-## Emitted after each flush completes. [param delta_count] is the
-## number of visibility transitions applied. Useful for tests and
-## debug UIs.
-signal flushed(delta_count: int)
-
-
-## The implicit default-visible layer ([code]GRANT[/code] policy).
-## Every spawned entity is added as a subject; every connected peer
-## is added as a member. Removing a peer from [member root] makes
-## them invisible-to-default; useful when paired with a more
-## restrictive layer.
-var root: NetwInterestLayer
-
-
 var _tree_ref: WeakRef
-var _service_ref: WeakRef
-var _layers: Dictionary[StringName, NetwInterestLayer] = {}
-
-# Inverted indexes used to bound the work performed during a flush.
-var _layers_by_member: Dictionary[int, Array] = {}
-var _layers_by_subject: Dictionary[NetwEntity, Array] = {}
-
-# Cached visibility: peer_id -> Dictionary[NetwEntity, bool]. Filter
-# callbacks read directly from these dictionaries; mutating them
-# outside [method _flush] would desync the engine.
-var _visible: Dictionary[int, Dictionary] = {}
-
-# Entities the interest system is tracking. Used to know which
-# synchronizer filters to install/refresh on flush.
-var _known_entities: Dictionary[NetwEntity, bool] = {}
-
-var _dirty_peers: Dictionary[int, bool] = {}
-var _dirty_entities: Dictionary[NetwEntity, bool] = {}
-var _exit_layers_by_pair: Dictionary[String, Array] = {}
-var _flush_scheduled: bool = false
-var _flushing: bool = false
+var _anchors: Dictionary[StringName, InterestSynchronizer] = {}
+var _pending_entities: Dictionary[StringName, Array] = {}
 
 
 func _init(mt: MultiplayerTree) -> void:
 	_tree_ref = weakref(mt)
-	root = NetwInterestLayer.new(
-			ROOT_ID, NetwInterestLayer.Policy.GRANT, self)
-	_layers[ROOT_ID] = root
 
 
-## Creates and registers a new layer under [param id]. Returns the
-## layer, or [code]null[/code] if [param id] is already taken.
-func create_layer(
-		id: StringName,
-		policy: NetwInterestLayer.Policy = NetwInterestLayer.Policy.GRANT,
-) -> NetwInterestLayer:
-	if _layers.has(id):
-		Netw.dbg.warn(
-				"NetwInterest.create_layer: id `%s` already exists.",
-				[id], func(m): push_warning(m))
-		return null
-	var layer := NetwInterestLayer.new(id, policy, self)
-	_layers[id] = layer
-	return layer
+## Registers [param anchor] under its [member
+## InterestSynchronizer.layer_id]. Drains any entities that registered
+## for the same id while no anchor was present. Idempotent.
+func register_anchor(anchor: InterestSynchronizer) -> void:
+	if not is_instance_valid(anchor):
+		return
+	var id := anchor.layer_id
+	if id.is_empty():
+		return
+	if _anchors.get(id) == anchor:
+		return
+	_anchors[id] = anchor
+	var pending: Array = _pending_entities.get(id, [])
+	for entity: NetwEntity in pending:
+		if is_instance_valid(entity) and is_instance_valid(entity.owner):
+			anchor.add_entity(entity)
+	_pending_entities.erase(id)
 
 
-## Returns the layer registered under [param id], or [code]null[/code].
-func layer(id: StringName) -> NetwInterestLayer:
-	return _layers.get(id)
+## Removes [param anchor] if it is the currently registered entry
+## under its [code]layer_id[/code]. Idempotent.
+func unregister_anchor(anchor: InterestSynchronizer) -> void:
+	if not is_instance_valid(anchor):
+		return
+	var id := anchor.layer_id
+	if id.is_empty():
+		return
+	if _anchors.get(id) == anchor:
+		_anchors.erase(id)
 
 
-## Returns every registered layer, including [member root].
-func all_layers() -> Array[NetwInterestLayer]:
-	var out: Array[NetwInterestLayer] = []
-	out.assign(_layers.values())
+## Returns the [InterestSynchronizer] registered under [param layer_id],
+## or [code]null[/code] when no anchor has registered with that id.
+func anchor_for(layer_id: StringName) -> InterestSynchronizer:
+	return _anchors.get(layer_id)
+
+
+## Returns every registered anchor as an array.
+func all_anchors() -> Array[InterestSynchronizer]:
+	var out: Array[InterestSynchronizer] = []
+	out.assign(_anchors.values())
 	return out
 
 
-## Snapshot of the entities currently visible to [param peer_id]
-## under the last flushed state.
-func visible_subjects_for(peer_id: int) -> Array[NetwEntity]:
-	var view: Dictionary = _visible.get(peer_id, {})
-	var out: Array[NetwEntity] = []
-	out.assign(view.keys())
-	return out
-
-
-## Snapshot of the peers that currently see [param entity] under the
-## last flushed state.
-func viewers_of(entity: NetwEntity) -> Array[int]:
-	var out: Array[int] = []
-	for peer_id in _visible:
-		var view: Dictionary = _visible[peer_id]
-		if view.has(entity):
-			out.append(peer_id)
-	return out
-
-
-## Synchronously flushes pending mutations. Tests and interactive
-## tooling can call this to observe the result without yielding; game
-## code should let the deferred flush run on its own.
-func flush_now() -> void:
-	_flush()
-
-
-## Returns the [InterestService] node that owns the wire, or
-## [code]null[/code] if the service hasn't entered the tree yet. The
-## service is auto-attached by [MultiplayerTree] in its
-## [code]_enter_tree[/code].
-func service() -> InterestService:
-	return _service_ref.get_ref() as InterestService if _service_ref else null
-
-
-# ---------------------------------------------------------------------------
-# Service binding (called by InterestService).
-# ---------------------------------------------------------------------------
-
-func _bind_service(svc: InterestService) -> void:
-	_service_ref = weakref(svc)
-	# Server-side: catch the service up on layers that already exist
-	# (typically just ROOT, created in _init).
-	if not _is_server():
+## Registers [param entity] as a member of [param layer_id]. Enrolls
+## immediately when the anchor is already known; queues otherwise.
+func register_entity_for_layer(
+		layer_id: StringName, entity: NetwEntity) -> void:
+	if layer_id.is_empty() or entity == null:
 		return
-	for layer_ in _layers.values():
-		svc.notify_layer_created(layer_)
-
-
-func _unbind_service(_svc: InterestService) -> void:
-	_service_ref = null
-
-
-# Convenience for layers; returns the live service or null.
-func _service() -> InterestService:
-	return service()
-
-
-func _is_server() -> bool:
-	var tree := _tree_ref.get_ref() as MultiplayerTree if _tree_ref else null
-	if not tree or not tree.api:
-		return false
-	return tree.api.has_multiplayer_peer() and tree.api.is_server()
-
-
-# ---------------------------------------------------------------------------
-# Client-side mirror hooks. Invoked by InterestService when authority
-# RPCs land. Mirror layers carry a flag so server-side mutators stay no-op.
-# ---------------------------------------------------------------------------
-
-func _client_create_mirror(layer_id: StringName, policy: int) -> void:
-	if _layers.has(layer_id):
+	var anchor: InterestSynchronizer = _anchors.get(layer_id)
+	if anchor:
+		anchor.add_entity(entity)
 		return
-	var layer_ := NetwInterestLayer.new(
-			layer_id, policy as NetwInterestLayer.Policy, self)
-	layer_._is_mirror = true
-	_layers[layer_id] = layer_
+	var queue: Array = _pending_entities.get_or_add(layer_id, [])
+	if entity not in queue:
+		queue.append(entity)
 
 
-func _client_dispose_mirror(layer_id: StringName) -> void:
-	var layer_ := _layers.get(layer_id)
-	if not layer_:
+## Reverses [method register_entity_for_layer]. Idempotent.
+func unregister_entity_from_layer(
+		layer_id: StringName, entity: NetwEntity) -> void:
+	if layer_id.is_empty() or entity == null:
 		return
-	layer_._client_finish_dispose()
-	_layers.erase(layer_id)
-
-
-# ---------------------------------------------------------------------------
-# Internal hooks invoked by NetwInterestLayer and NetwEntity.
-# ---------------------------------------------------------------------------
-
-func _on_member_added(layer_: NetwInterestLayer, peer_id: int) -> void:
-	var arr: Array = _layers_by_member.get_or_add(peer_id, [])
-	if layer_ not in arr:
-		arr.append(layer_)
-	_dirty_peers[peer_id] = true
-	_schedule_flush()
-
-
-func _on_member_removed(layer_: NetwInterestLayer, peer_id: int) -> void:
-	for entity in layer_._subjects:
-		_mark_exit_layer(peer_id, entity, layer_)
-	var arr: Array = _layers_by_member.get(peer_id, [])
-	arr.erase(layer_)
-	if arr.is_empty():
-		_layers_by_member.erase(peer_id)
-	_dirty_peers[peer_id] = true
-	_schedule_flush()
-
-
-func _on_subject_added(
-		layer_: NetwInterestLayer, entity: NetwEntity) -> void:
-	var arr: Array = _layers_by_subject.get_or_add(entity, [])
-	if layer_ not in arr:
-		arr.append(layer_)
-	_track_entity(entity)
-	_dirty_entities[entity] = true
-	_schedule_flush()
-
-
-func _on_subject_removed(
-		layer_: NetwInterestLayer, entity: NetwEntity) -> void:
-	for peer_id in layer_._members:
-		_mark_exit_layer(peer_id, entity, layer_)
-		_dirty_peers[peer_id] = true
-	var arr: Array = _layers_by_subject.get(entity, [])
-	arr.erase(layer_)
-	if arr.is_empty():
-		_layers_by_subject.erase(entity)
-	_dirty_entities[entity] = true
-	_schedule_flush()
-
-
-func _on_layer_disposed(layer_: NetwInterestLayer) -> void:
-	if layer_ == root:
-		Netw.dbg.error(
-				"NetwInterest: root layer cannot be disposed.", [],
-				func(m): push_error(m))
-		return
-	for peer_id in layer_.members():
-		for entity in layer_.subjects():
-			_mark_exit_layer(peer_id, entity, layer_)
-		var arr: Array = _layers_by_member.get(peer_id, [])
-		arr.erase(layer_)
-		if arr.is_empty():
-			_layers_by_member.erase(peer_id)
-		_dirty_peers[peer_id] = true
-	for entity in layer_.subjects():
-		var arr: Array = _layers_by_subject.get(entity, [])
-		arr.erase(layer_)
-		if arr.is_empty():
-			_layers_by_subject.erase(entity)
-		_dirty_entities[entity] = true
-	_layers.erase(layer_.id)
-	_schedule_flush()
-
-
-# Auto-attach default participation for a freshly connected peer.
-func _on_peer_connected(peer_id: int) -> void:
-	root.add_member(peer_id)
-
-
-# Remove a disconnected peer from every layer and clear its cached
-# view so stale entries don't leak.
-func _on_peer_disconnected(peer_id: int) -> void:
-	var layers_for_peer: Array = _layers_by_member.get(
-			peer_id, []).duplicate()
-	for layer_ in layers_for_peer:
-		(layer_ as NetwInterestLayer).remove_member(peer_id)
-	_visible.erase(peer_id)
-
-
-# Auto-add an entity to ROOT once it enters the tree. Called by
-# NetwEntity from owner_tree_entered.
-func _on_entity_ready(entity: NetwEntity) -> void:
-	root.add_subject(entity)
-
-
-func _track_entity(entity: NetwEntity) -> void:
-	if _known_entities.has(entity):
-		return
-	_known_entities[entity] = true
-	entity._install_interest_filter(self)
-
-
-# ---------------------------------------------------------------------------
-# Flush.
-# ---------------------------------------------------------------------------
-
-func _schedule_flush() -> void:
-	if _flush_scheduled or _flushing:
-		return
-	_flush_scheduled = true
-	var tree := _tree_ref.get_ref() as MultiplayerTree
-	if not tree or not tree.is_inside_tree():
-		return
-	tree.get_tree().process_frame.connect(
-			_flush, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
-
-
-func _flush() -> void:
-	if _flushing:
-		return
-	_flushing = true
-	_flush_scheduled = false
-
-	var deltas: Array[Delta] = []
-	var seen_pairs: Dictionary = {}
-
-	for peer_id in _dirty_peers:
-		var new_view := _resolve_visible_set(peer_id)
-		var old_view: Dictionary = _visible.get(peer_id, {})
-		for entity in new_view:
-			seen_pairs[_pair_key(peer_id, entity)] = true
-			if not old_view.has(entity):
-				deltas.append(Delta.new(peer_id, entity, true))
-		for entity in old_view:
-			seen_pairs[_pair_key(peer_id, entity)] = true
-			if not new_view.has(entity):
-				deltas.append(Delta.new(peer_id, entity, false))
-		_visible[peer_id] = new_view
-
-	for entity in _dirty_entities:
-		var affected_peers := _affected_peers_for(entity)
-		for peer_id in affected_peers:
-			var key := _pair_key(peer_id, entity)
-			if seen_pairs.has(key):
-				continue
-			seen_pairs[key] = true
-			var view: Dictionary = _visible.get_or_add(peer_id, {})
-			var was_visible := view.has(entity)
-			var is_visible := _resolve_pair(peer_id, entity)
-			if is_visible == was_visible:
-				continue
-			if is_visible:
-				view[entity] = true
-			else:
-				view.erase(entity)
-			deltas.append(Delta.new(peer_id, entity, is_visible))
-
-	_dirty_peers.clear()
-	_dirty_entities.clear()
-
-	_apply_ordered(deltas)
-	_flushing = false
-	flushed.emit(deltas.size())
-
-
-func _affected_peers_for(entity: NetwEntity) -> Array[int]:
-	var peers: Dictionary[int, bool] = {}
-	for layer_ in _layers_by_subject.get(entity, []):
-		for peer_id in (layer_ as NetwInterestLayer)._members:
-			peers[peer_id] = true
-	# ISOLATE layers without this entity as subject still affect
-	# their members' visibility on this entity (outward block).
-	for peer_id in _layers_by_member:
-		for layer_ in _layers_by_member[peer_id]:
-			if (layer_ as NetwInterestLayer).policy \
-					== NetwInterestLayer.Policy.ISOLATE:
-				peers[peer_id] = true
-				break
-	var out: Array[int] = []
-	out.assign(peers.keys())
-	return out
-
-
-func _resolve_visible_set(peer_id: int) -> Dictionary:
-	var view: Dictionary = {}
-	var member_layers: Array = _layers_by_member.get(peer_id, [])
-
-	var isolates: Array[NetwInterestLayer] = []
-	var grants: Array[NetwInterestLayer] = []
-	var member_denies: Array[NetwInterestLayer] = []
-	for layer_ in member_layers:
-		var l := layer_ as NetwInterestLayer
-		match l.policy:
-			NetwInterestLayer.Policy.ISOLATE: isolates.append(l)
-			NetwInterestLayer.Policy.GRANT: grants.append(l)
-			NetwInterestLayer.Policy.DENY: member_denies.append(l)
-
-	if isolates.is_empty():
-		for l in grants:
-			for entity in l._subjects:
-				view[entity] = true
-	else:
-		# Intersection of isolate subject sets.
-		var smallest := isolates[0]
-		for l in isolates:
-			if l._subjects.size() < smallest._subjects.size():
-				smallest = l
-		for entity in smallest._subjects:
-			var in_all := true
-			for l in isolates:
-				if not l._subjects.has(entity):
-					in_all = false
-					break
-			if in_all:
-				view[entity] = true
-
-	# DENY where the peer is a member: hide subjects co-located with
-	# the peer in that layer. (DENY only fires when both sides are in
-	# the layer; see resolution table.)
-	for l in member_denies:
-		for entity in l._subjects:
-			view.erase(entity)
-
-	return view
-
-
-func _resolve_pair(peer_id: int, entity: NetwEntity) -> bool:
-	# Slow path used when an entity's subject membership changed but
-	# the peer wasn't otherwise dirty. Recomputes one cell.
-	var member_layers: Array = _layers_by_member.get(peer_id, [])
-	var has_isolate := false
-	var visible := false
-
-	for layer_ in member_layers:
-		var l := layer_ as NetwInterestLayer
-		match l.policy:
-			NetwInterestLayer.Policy.ISOLATE:
-				has_isolate = true
-				if l._subjects.has(entity):
-					visible = true
-				else:
-					return false  # outward block wins immediately.
-			NetwInterestLayer.Policy.GRANT:
-				if not has_isolate and l._subjects.has(entity):
-					visible = true
-			NetwInterestLayer.Policy.DENY:
-				if l._subjects.has(entity):
-					return false
-
-	# When isolates exist, visibility is gated entirely by them.
-	if has_isolate:
-		return visible
-
-	# No isolates, no grant hit yet -> not visible.
-	return visible
-
-
-func _pair_key(peer_id: int, entity: NetwEntity) -> String:
-	return "%d|%d" % [peer_id, entity.get_instance_id()]
-
-
-func _mark_exit_layer(
-		peer_id: int,
-		entity: NetwEntity,
-		layer_: NetwInterestLayer,
-) -> void:
-	var key := _pair_key(peer_id, entity)
-	var layers: Array = _exit_layers_by_pair.get_or_add(key, [])
-	if layer_ not in layers:
-		layers.append(layer_)
-
-
-func _apply_ordered(deltas: Array[Delta]) -> void:
-	if deltas.is_empty():
-		_exit_layers_by_pair.clear()
-		return
-	var shows: Array[Delta] = []
-	var hides: Array[Delta] = []
-	for d in deltas:
-		if d.visible:
-			shows.append(d)
-		else:
-			hides.append(d)
-	shows.sort_custom(_by_depth_shallow_first)
-	hides.sort_custom(_by_depth_deep_first)
-	for d in shows:
-		_apply_one(d)
-	for d in hides:
-		_apply_one(d)
-	_exit_layers_by_pair.clear()
-
-
-func _by_depth_shallow_first(a: Delta, b: Delta) -> bool:
-	return _entity_depth(a.entity) < _entity_depth(b.entity)
-
-
-func _by_depth_deep_first(a: Delta, b: Delta) -> bool:
-	return _entity_depth(a.entity) > _entity_depth(b.entity)
-
-
-func _entity_depth(entity: NetwEntity) -> int:
-	var d := 0
-	var current := entity.parent_entity()
-	while current:
-		d += 1
-		current = current.parent_entity()
-	return d
-
-
-func _apply_one(d: Delta) -> void:
-	if not is_instance_valid(d.entity):
-		return
-	for sync in d.entity.synchronizers():
-		if not is_instance_valid(sync):
-			continue
-		sync.set_visibility_for(d.peer_id, d.visible)
-	var exit_layers: Array = _exit_layers_by_pair.get(
-			_pair_key(d.peer_id, d.entity), [])
-	if d.visible:
-		for layer_ in _layers_by_subject.get(d.entity, []):
-			var l := layer_ as NetwInterestLayer
-			if not l.has_member(d.peer_id):
-				continue
-			l.interest_enter.emit(d.entity, d.peer_id)
-	else:
-		for layer_ in exit_layers:
-			var l := layer_ as NetwInterestLayer
-			if not is_instance_valid(l):
-				continue
-			l.interest_exit.emit(d.entity, d.peer_id)
-
-
-## Single visibility transition recorded during a flush. Public so
-## tests and debug tooling can inspect [signal flushed] history.
-class Delta extends RefCounted:
-	var peer_id: int
-	var entity: NetwEntity
-	var visible: bool
-
-	func _init(p: int, e: NetwEntity, v: bool) -> void:
-		peer_id = p
-		entity = e
-		visible = v
+	var anchor: InterestSynchronizer = _anchors.get(layer_id)
+	if anchor:
+		anchor.remove_entity(entity)
+	var queue: Array = _pending_entities.get(layer_id, [])
+	queue.erase(entity)
+	if queue.is_empty():
+		_pending_entities.erase(layer_id)
