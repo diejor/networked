@@ -361,7 +361,8 @@ func _drive_visibility_update() -> void:
 	to_hide.sort_custom(_deeper_first)
 	to_show.sort_custom(_shallower_first)
 
-	if _is_server():
+	if _is_server() and multiplayer \
+			and multiplayer.multiplayer_peer != null:
 		for t in to_hide:
 			(t[0] as MultiplayerSynchronizer).update_visibility(t[1])
 		for t in to_show:
@@ -394,16 +395,32 @@ func _drive_visibility_update() -> void:
 	_visibility = new_state
 
 
+## Peers the driver iterates over each pass. Unions:
+## [br]- the multiplayer peer list (real session participants),
+## [br]- current [member viewers] (peers that should become visible),
+## [br]- peers cached in [member _visibility] (peers that may need to
+##   transition to hidden after a [method remove_viewer]).
+## [br][br]
+## On a client this collapses to the local peer id when a multiplayer
+## peer is attached; outside multiplayer (unit tests) it falls back to
+## the union of viewers and cached peers.
 func _live_peers() -> Array[int]:
+	var seen: Dictionary[int, bool] = {}
+	var live_peer := multiplayer and multiplayer.multiplayer_peer != null
+	if live_peer:
+		if _is_server():
+			for p in multiplayer.get_peers():
+				seen[p] = true
+		else:
+			seen[multiplayer.get_unique_id()] = true
+	for p in viewers:
+		seen[p] = true
+	for entity in _visibility:
+		var per_entity: Dictionary = _visibility[entity]
+		for p in per_entity:
+			seen[p] = true
 	var out: Array[int] = []
-	if not is_inside_tree() or not multiplayer \
-			or multiplayer.multiplayer_peer == null:
-		return out
-	if _is_server():
-		for p in multiplayer.get_peers():
-			out.append(p)
-	else:
-		out.append(multiplayer.get_unique_id())
+	out.assign(seen.keys())
 	return out
 
 
