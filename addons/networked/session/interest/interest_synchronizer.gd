@@ -231,8 +231,11 @@ func add_entity(entity: NetwEntity) -> void:
 		return
 	entities[entity] = true
 
-	if _layer:
+	if _uses_interest_service() and _layer:
 		_layer.add_entity(entity)
+
+	if binding and not _uses_interest_service():
+		binding.install_entity(entity, _make_entity_filter(entity))
 
 	var handler := _on_entity_tree_exiting.bind(entity)
 	_entity_exit_handlers[entity] = handler
@@ -265,8 +268,11 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	entities.erase(entity)
 
-	if _layer:
+	if _uses_interest_service() and _layer:
 		_layer.remove_entity(entity)
+
+	if binding and not _uses_interest_service():
+		binding.uninstall_entity(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
 	if handler.is_valid() and is_instance_valid(entity) \
@@ -515,11 +521,12 @@ func _register_with_interest() -> void:
 	if not service:
 		return
 	service.register_anchor(self)
-	_layer = service.layer_for(layer_id)
+	if _uses_interest_service():
+		_layer = service.layer_for(layer_id)
 	_sync_layer_policy()
 	_sync_layer_viewers()
 	for entity: NetwEntity in entities:
-		if _layer:
+		if _uses_interest_service() and _layer:
 			_layer.add_entity(entity)
 	_registered_with_interest = true
 
@@ -538,7 +545,15 @@ func _service() -> InterestService:
 	return mt.get_service(InterestService) as InterestService if mt else null
 
 
+func _uses_interest_service() -> bool:
+	return anchor_strategy == InterestBinding.AnchorStrategy.OPEN \
+			and _service() != null \
+			and not layer_id.is_empty()
+
+
 func _sync_layer_policy() -> void:
+	if not _uses_interest_service():
+		return
 	if not _layer and not layer_id.is_empty():
 		var service := _service()
 		_layer = service.layer_for(layer_id) if service else null
@@ -547,6 +562,8 @@ func _sync_layer_policy() -> void:
 
 
 func _sync_layer_viewers() -> void:
+	if not _uses_interest_service():
+		return
 	if not _layer and not layer_id.is_empty():
 		var service := _service()
 		_layer = service.layer_for(layer_id) if service else null
@@ -562,12 +579,12 @@ func _sync_layer_viewers() -> void:
 
 
 func _add_layer_viewer(peer_id: int) -> void:
-	if _layer:
+	if _uses_interest_service() and _layer:
 		_layer.add_viewer(peer_id)
 
 
 func _remove_layer_viewer(peer_id: int) -> void:
-	if _layer:
+	if _uses_interest_service() and _layer:
 		_layer.remove_viewer(peer_id)
 
 
