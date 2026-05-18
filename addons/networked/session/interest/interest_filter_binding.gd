@@ -76,8 +76,16 @@ func uninstall_entity(entity: NetwEntity) -> void:
 ## Applies the transitions returned by [method InterestDriver.compute].
 ## Hides run first (deep-first) so descendants hide before ancestors;
 ## shows run after (shallow-first) so ancestors appear before
-## descendants.
-func apply(sync_hides: Array, sync_shows: Array) -> void:
+## descendants. The [param peers], [param kind], [param viewers]
+## arguments are accepted for parity with
+## [InterestPublicVisibilityBinding] but unused here: the anchor's
+## filter already gates visibility per peer.
+func apply(
+		sync_hides: Array,
+		sync_shows: Array,
+		_peers: Array[int],
+		_kind: int,
+		_viewers: Dictionary) -> void:
 	for t in sync_hides:
 		var sync: MultiplayerSynchronizer = t[0]
 		if is_instance_valid(sync):

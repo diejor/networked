@@ -51,9 +51,29 @@ enum Policy {
 }
 
 
+## Selects the engine-side gating strategy. See [member binding_mode].
+enum BindingMode {
+	## Default-allow: anchor uses [code]public_visibility=true[/code]
+	## plus an anchor-side visibility filter; entities receive per-sync
+	## visibility filters. Use for AoI and per-entity gating where the
+	## spawner is shared across peers.
+	FILTER,
+	## Default-deny: anchor uses [code]public_visibility=false[/code]
+	## and is admitted per peer via [method
+	## MultiplayerSynchronizer.set_visibility_for]. Use when the anchor
+	## sits on a subtree that contains its own [MultiplayerSpawner]
+	## (the [SceneSynchronizer] case).
+	PUBLIC_VISIBILITY,
+}
+
+
 ## Stable identifier for the layer this synchronizer anchors. Used by
 ## [NetwInterest] to look up the anchor from [NetwEntity] members.
 @export var layer_id: StringName
+
+## Engine-side gating strategy. See [enum BindingMode]. Must be set
+## before [method _ready] runs; switching at runtime is not supported.
+@export var binding_mode: BindingMode = BindingMode.FILTER
 
 ## Composition policy. See [enum Policy]. Mutating triggers a driver
 ## pass; on the client this lands via spawn-sync replication.
@@ -130,10 +150,12 @@ var entities: Dictionary[NetwEntity, bool] = {}
 ## and debug code can inspect [method InterestDriver.dump].
 var driver: InterestDriver = InterestDriver.new()
 
-## Engine-touching binding. Public so debug code can call
-## [method InterestFilterBinding.dump_state]. Created in
-## [method _ready].
-var binding: InterestFilterBinding
+## Engine-touching binding. Concrete type depends on [member
+## binding_mode]: [InterestFilterBinding] for [code]FILTER[/code],
+## [InterestPublicVisibilityBinding] for [code]PUBLIC_VISIBILITY[/code].
+## Public so debug code can call [code]binding.dump_state(...)[/code].
+## Created in [method _ready].
+var binding: RefCounted
 
 var _entity_exit_handlers: Dictionary = {}
 var _config_built: bool = false
@@ -158,12 +180,20 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	unique_name_in_owner = true
-	binding = InterestFilterBinding.new(self)
+	binding = _make_binding()
 	binding.install_anchor(_self_filter)
 	# Fallback for cases where [constant Node.NOTIFICATION_PARENTED]
 	# fired before [member Node.owner] was assigned (script-driven
 	# instantiation). Idempotent via [member _config_built].
 	_build_replication_config()
+
+
+func _make_binding() -> RefCounted:
+	match binding_mode:
+		BindingMode.PUBLIC_VISIBILITY:
+			return InterestPublicVisibilityBinding.new(self)
+		_:
+			return InterestFilterBinding.new(self)
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +415,12 @@ func _drive_visibility_update() -> void:
 
 	if _is_server() and binding and multiplayer \
 			and multiplayer.multiplayer_peer != null:
-		binding.apply(result.sync_hides, result.sync_shows)
+		binding.apply(
+				result.sync_hides,
+				result.sync_shows,
+				peers,
+				policy,
+				viewers)
 
 	for t in result.hide_transitions:
 		var entity: NetwEntity = t[0]
@@ -505,6 +540,6 @@ func _build_replication_config() -> void:
 		return
 	# binding may not exist yet if NOTIFICATION_PARENTED fires before
 	# _ready; build a transient binding just for config in that case.
-	var b := binding if binding else InterestFilterBinding.new(self)
+	var b: RefCounted = binding if binding else _make_binding()
 	if b.build_replication_config():
 		_config_built = true
