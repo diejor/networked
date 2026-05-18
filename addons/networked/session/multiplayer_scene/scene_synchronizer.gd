@@ -1,17 +1,17 @@
 ## Per-scene visibility gate for one [MultiplayerScene] wrapper.
 ##
 ## Specialization of [InterestSynchronizer] that fixes
-## [member InterestSynchronizer.binding_mode] to
-## [code]PUBLIC_VISIBILITY[/code] and exposes the legacy SS API used
-## across the codebase: [method connect_peer] / [method disconnect_peer]
-## for membership, [method track_node] / [method untrack_node] for
+## [member InterestSynchronizer.anchor_strategy] to
+## [code]ADMIT[/code] and exposes the legacy SS API used across the
+## codebase: [method connect_peer] / [method disconnect_peer] for
+## membership, [method track_node] / [method untrack_node] for
 ## per-entity gating, and [member connected_peers] / [member
 ## tracked_nodes] as observation surfaces.
 ##
-## [b]Default-deny[/b] is what makes this binding safe for the scene
-## case: the anchor is invisible to every peer until
-## [method connect_peer] admits one, so [MultiplayerSpawner]s under
-## the wrapper never replicate a partial subtree to outsider peers.
+## [b]Default-deny[/b] is what makes this safe for the scene case:
+## the anchor is invisible to every peer until [method connect_peer]
+## admits one, so [MultiplayerSpawner]s under the wrapper never
+## replicate a partial subtree to outsider peers.
 ##
 ## [codeblock]
 ##     var scene := %SceneSynchronizer
@@ -54,7 +54,7 @@ var tracked_nodes: Dictionary[Node, bool]:
 
 
 func _init() -> void:
-	binding_mode = BindingMode.PUBLIC_VISIBILITY
+	anchor_strategy = InterestBinding.AnchorStrategy.ADMIT
 	policy = Policy.HIDE_FROM_OUTSIDERS
 
 
@@ -74,14 +74,6 @@ func _ready() -> void:
 ## Admits [param peer_id] to this scene. Equivalent to
 ## [method InterestSynchronizer.add_viewer] with a guard that rejects
 ## peer id [code]0[/code] (an invalid peer context).
-##
-## Flushes the visibility pass synchronously via [method drive_now] so
-## the anchor's spawn packet for [param peer_id] is sent before any
-## subsequent engine-side spawn fires (e.g. before a freshly added
-## player's [signal Node.ready] reaches the engine's spawn pipeline).
-## Without the synchronous flush, deferred drive lets the engine send
-## entity spawn packets that reference the wrapper subtree before the
-## client has been admitted.
 func connect_peer(peer_id: int) -> void:
 	if peer_id == 0:
 		Netw.dbg.error(
@@ -90,23 +82,12 @@ func connect_peer(peer_id: int) -> void:
 				func(m): push_error(m))
 		return
 	add_viewer(peer_id)
-	drive_now()
 
 
-## Removes [param peer_id] from this scene.
-##
-## Intentionally defers the visibility drive (no [method drive_now]
-## here) so [method MultiplayerSynchronizer.set_visibility_for] on
-## the anchor fires [b]after[/b] any spawner-driven despawns produced
-## by an in-flight [method Node.reparent] of an entity out of this
-## scene (the [code]tp_component[/code] teleport flow). Running the
-## anchor hide first would despawn the wrapper before the inner
-## spawner's despawn packet for the entity reaches the peer; the
-## peer's engine then cascade-frees the entity's net id during the
-## wrapper teardown, and the later entity despawn fails with
-## [code]on_despawn_receive[/code] [code]ERR_UNAUTHORIZED[/code].
-## Godot issue #68508 describes the same hide-deep-before-shallow
-## constraint.
+## Removes [param peer_id] from this scene. Equivalent to
+## [method InterestSynchronizer.remove_viewer]; the deferred anchor
+## hide and the entity-this-frame / anchor-next-frame ordering are
+## handled by the binding.
 func disconnect_peer(peer_id: int) -> void:
 	remove_viewer(peer_id)
 
