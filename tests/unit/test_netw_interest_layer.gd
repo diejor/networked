@@ -1,4 +1,6 @@
-## Unit tests for [NetwInterestLayer].
+## Unit tests for [NetwInterestLayer]. Covers the canonical mutation
+## API exercised standalone (no [InterestService]) so the data model
+## is testable in isolation.
 class_name TestNetwInterestLayer
 extends NetworkedTestSuite
 
@@ -31,7 +33,7 @@ func test_remove_viewer_changes_verdict() -> void:
 
 
 func test_hide_from_insiders_inverts_verdict() -> void:
-	layer.set_policy(InterestSynchronizer.Policy.HIDE_FROM_INSIDERS)
+	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	assert_that(layer.verdict_for(7)).is_true()
 	layer.add_viewer(7)
 	assert_that(layer.verdict_for(7)).is_false()
@@ -76,3 +78,22 @@ func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 
 	assert_that(viewer_adds).contains_exactly([7])
 	assert_that(entity_adds).contains_exactly([entity])
+
+
+func test_layer_with_service_broadcasts_through_hooks() -> void:
+	# When a layer is owned by an [InterestService] (i.e., obtained
+	# from [NetwInterest]), its mutators flow through the service
+	# hooks. Without a peer the broadcast is a no-op; this just
+	# verifies the layer remains usable in that mode.
+	var mt := MultiplayerTree.new()
+	mt.name = "TestTreeWithService"
+	add_child(mt)
+	auto_free(mt)
+
+	var owned := mt.interest.layer(&"owned")
+	var entity := _make_entity("owned_ent")
+	owned.add_entity(entity)
+	owned.add_viewer(11)
+
+	assert_that(owned.has_entity(entity)).is_true()
+	assert_that(owned.has_viewer(11)).is_true()

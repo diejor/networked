@@ -1,17 +1,16 @@
-## Stateless verdict resolver for [InterestSynchronizer].
+## Stateless verdict resolver for [NetwInterestLayer].
 ##
-## Given a policy kind and a viewer set, returns the per-peer
-## visibility verdict. The same function powers the anchor's self
-## filter, every per-entity filter, and the driver's transition
-## computation, so anything that disagrees here is a bug in this one
-## place.
+## Given a [enum NetwInterestLayer.Policy] and a viewer set, returns
+## the per-peer visibility verdict. Every gate in the system - layer
+## verdicts, per-entity filters, anchor admission - routes through
+## this function so disagreement is a single-source bug.
 ##
 ## [method explain] returns a human-readable reason and is the first
 ## tool to reach for when a peer is visible or hidden when it should
 ## not be.
 ##
 ## [codeblock]
-##     var k := InterestSynchronizer.Policy.HIDE_FROM_OUTSIDERS
+##     var k := NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS
 ##     InterestPolicy.verdict(k, viewers, peer_id)
 ##     print(InterestPolicy.explain(k, viewers, peer_id))
 ## [/codeblock]
@@ -21,7 +20,7 @@ extends RefCounted
 
 ## Returns the per-peer visibility verdict.
 ##
-## [param kind] is one of [enum InterestSynchronizer.Policy].
+## [param kind] is one of [enum NetwInterestLayer.Policy].
 ## [param viewers] is the layer's viewer set. Server peer
 ## ([constant MultiplayerPeer.TARGET_PEER_SERVER]) is always admitted;
 ## peer id [code]0[/code] is always rejected.
@@ -34,9 +33,9 @@ static func verdict(
 	if peer_id == 0:
 		return false
 	match kind:
-		InterestSynchronizer.Policy.HIDE_FROM_OUTSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
 			return viewers.has(peer_id)
-		InterestSynchronizer.Policy.HIDE_FROM_INSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
 			return not viewers.has(peer_id)
 	return true
 
@@ -54,13 +53,13 @@ static func explain(
 	var in_viewers := viewers.has(peer_id)
 	var label := _kind_label(kind)
 	match kind:
-		InterestSynchronizer.Policy.HIDE_FROM_OUTSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
 			if in_viewers:
 				return "ADMIT peer=%d in viewers under %s" \
 						% [peer_id, label]
 			return "REJECT peer=%d not in viewers under %s" \
 					% [peer_id, label]
-		InterestSynchronizer.Policy.HIDE_FROM_INSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
 			if in_viewers:
 				return "REJECT peer=%d in viewers under %s" \
 						% [peer_id, label]
@@ -72,8 +71,8 @@ static func explain(
 
 static func _kind_label(kind: int) -> String:
 	match kind:
-		InterestSynchronizer.Policy.HIDE_FROM_OUTSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
 			return "HIDE_FROM_OUTSIDERS"
-		InterestSynchronizer.Policy.HIDE_FROM_INSIDERS:
+		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
 			return "HIDE_FROM_INSIDERS"
 	return "kind=%d" % kind

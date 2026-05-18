@@ -1,7 +1,7 @@
 ## Unit tests for [InterestComponent]. Covers the membership contract:
-## spawn-property contribution, [method NetwInterest.register_entity_for_layer]
-## on tree-enter, unregister on tree-exit, and the [member layer_ids]
-## setter diff.
+## spawn-property contribution, layer enrollment via
+## [method NetwInterestLayer.add_entity] on tree-enter, removal on
+## tree-exit, and the [member layer_ids] setter diff.
 ##
 ## A bare [MultiplayerTree] hosts each test so
 ## [code]Netw.ctx(self).interest[/code] resolves to a real

@@ -231,13 +231,8 @@ func add_entity(entity: NetwEntity) -> void:
 		return
 	entities[entity] = true
 
-	if _uses_interest_service():
-		_interest().register_entity_for_layer(layer_id, entity)
-	elif _layer:
+	if _layer:
 		_layer.add_entity(entity)
-
-	if binding and not _uses_interest_service():
-		binding.install_entity(entity, _make_entity_filter(entity))
 
 	var handler := _on_entity_tree_exiting.bind(entity)
 	_entity_exit_handlers[entity] = handler
@@ -270,13 +265,8 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	entities.erase(entity)
 
-	if _uses_interest_service():
-		_interest().unregister_entity_from_layer(layer_id, entity)
-	elif _layer:
+	if _layer:
 		_layer.remove_entity(entity)
-
-	if binding and not _uses_interest_service():
-		binding.uninstall_entity(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
 	if handler.is_valid() and is_instance_valid(entity) \
@@ -521,17 +511,15 @@ func _register_with_interest() -> void:
 		return
 	if layer_id.is_empty():
 		return
-	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.interest:
+	var service := _service()
+	if not service:
 		return
-	mt.interest.register_anchor(self)
-	_layer = mt.interest.layer_for(layer_id)
+	service.register_anchor(self)
+	_layer = service.layer_for(layer_id)
 	_sync_layer_policy()
 	_sync_layer_viewers()
 	for entity: NetwEntity in entities:
-		if _uses_interest_service():
-			mt.interest.register_entity_for_layer(layer_id, entity)
-		elif _layer:
+		if _layer:
 			_layer.add_entity(entity)
 	_registered_with_interest = true
 
@@ -540,39 +528,28 @@ func _unregister_with_interest() -> void:
 	if not _registered_with_interest:
 		return
 	_registered_with_interest = false
+	var service := _service()
+	if service:
+		service.unregister_anchor(self)
+
+
+func _service() -> InterestService:
 	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.interest:
-		return
-	mt.interest.unregister_anchor(self)
-
-
-func _interest() -> NetwInterest:
-	var mt := MultiplayerTree.resolve(self)
-	return mt.interest if mt else null
-
-
-func _uses_interest_service() -> bool:
-	return anchor_strategy == InterestBinding.AnchorStrategy.OPEN \
-			and _interest() != null \
-			and not layer_id.is_empty()
+	return mt.get_service(InterestService) as InterestService if mt else null
 
 
 func _sync_layer_policy() -> void:
-	var interest := _interest()
-	if interest and not layer_id.is_empty():
-		_layer = interest.layer_for(layer_id)
-		if _uses_interest_service():
-			interest.set_policy(layer_id, policy)
-		elif _layer:
-			_layer.set_policy(policy)
-	elif _layer:
+	if not _layer and not layer_id.is_empty():
+		var service := _service()
+		_layer = service.layer_for(layer_id) if service else null
+	if _layer:
 		_layer.set_policy(policy)
 
 
 func _sync_layer_viewers() -> void:
 	if not _layer and not layer_id.is_empty():
-		var interest := _interest()
-		_layer = interest.layer_for(layer_id) if interest else null
+		var service := _service()
+		_layer = service.layer_for(layer_id) if service else null
 	if not _layer:
 		return
 	var prev: Array[int] = []
@@ -585,16 +562,12 @@ func _sync_layer_viewers() -> void:
 
 
 func _add_layer_viewer(peer_id: int) -> void:
-	if _uses_interest_service():
-		_interest().add_viewer(layer_id, peer_id)
-	elif _layer:
+	if _layer:
 		_layer.add_viewer(peer_id)
 
 
 func _remove_layer_viewer(peer_id: int) -> void:
-	if _uses_interest_service():
-		_interest().remove_viewer(layer_id, peer_id)
-	elif _layer:
+	if _layer:
 		_layer.remove_viewer(peer_id)
 
 

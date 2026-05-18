@@ -69,7 +69,7 @@ func _register_for(layer_id: StringName) -> void:
 	var interest := _resolve_interest()
 	if not interest:
 		return
-	interest.register_entity_for_layer(layer_id, entity)
+	interest.layer(layer_id).add_entity(entity)
 
 
 func _unregister_for(layer_id: StringName) -> void:
@@ -81,7 +81,9 @@ func _unregister_for(layer_id: StringName) -> void:
 	var interest := _resolve_interest()
 	if not interest:
 		return
-	interest.unregister_entity_from_layer(layer_id, entity)
+	var layer := interest.get_layer(layer_id)
+	if layer:
+		layer.remove_entity(entity)
 
 
 func _apply_layer_diff(

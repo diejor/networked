@@ -1,4 +1,5 @@
-## Unit tests for [NetwInterest].
+## Unit tests for [NetwInterest]. The facade is 3 methods deep; the
+## real API lives on [NetwInterestLayer].
 class_name TestNetwInterest
 extends NetworkedTestSuite
 
@@ -15,64 +16,32 @@ func before_test() -> void:
 	interest = mt.interest
 
 
-func _make_entity(entity_name: String = "ent") -> NetwEntity:
-	return NetwEntity.of(make_test_entity(mt, entity_name, 0, false))
+func test_layer_creates_on_first_use() -> void:
+	var a := interest.layer(&"a")
+	assert_that(a).is_not_null()
+	assert_that(a.layer_id).is_equal(&"a")
 
 
-func test_layer_for_returns_stable_instance() -> void:
-	var a := interest.layer_for(&"a")
-	var b := interest.layer_for(&"a")
+func test_layer_returns_same_instance() -> void:
+	var a := interest.layer(&"a")
+	var b := interest.layer(&"a")
 	assert_that(a).is_equal(b)
-
-
-func test_facade_uses_interest_service() -> void:
-	assert_that(interest.get_service()).is_instanceof(InterestService)
-	assert_that(mt.get_service(InterestService)).is_equal(
-			interest.get_service())
-	assert_that(NetwServices.new(mt).get_interest_service()).is_equal(
-			interest.get_service())
 
 
 func test_get_layer_returns_null_for_missing_layer() -> void:
 	assert_that(interest.get_layer(&"missing")).is_null()
 
 
-func test_register_entity_creates_layer_membership() -> void:
-	var entity := _make_entity()
-	interest.register_entity_for_layer(&"a", entity)
-	assert_that(interest.layer_for(&"a").has_entity(entity)).is_true()
+func test_get_layer_returns_existing() -> void:
+	var created := interest.layer(&"x")
+	assert_that(interest.get_layer(&"x")).is_equal(created)
 
 
-func test_unregister_entity_removes_layer_membership() -> void:
-	var entity := _make_entity()
-	interest.register_entity_for_layer(&"a", entity)
-	interest.unregister_entity_from_layer(&"a", entity)
-	assert_that(interest.layer_for(&"a").has_entity(entity)).is_false()
-
-
-func test_can_peer_see_entity_uses_union_semantics() -> void:
-	var entity := _make_entity()
-	interest.register_entity_for_layer(&"hidden", entity)
-	interest.register_entity_for_layer(&"visible", entity)
-	interest.add_viewer(&"visible", 7)
-
-	assert_that(interest.can_peer_see_entity(7, entity)).is_true()
-
-
-func test_can_peer_see_entity_rejects_without_visible_layer() -> void:
-	var entity := _make_entity()
-	interest.register_entity_for_layer(&"hidden", entity)
-
-	assert_that(interest.can_peer_see_entity(7, entity)).is_false()
-
-
-func test_receive_viewer_delta_updates_mirrored_layer() -> void:
-	interest.receive_viewer_delta(&"mirror", 7, true)
-	assert_that(interest.layer_for(&"mirror").has_viewer(7)).is_true()
-
-
-func test_receive_layer_config_updates_mirrored_policy() -> void:
-	interest.receive_layer_config(
-			&"mirror", InterestSynchronizer.Policy.HIDE_FROM_INSIDERS)
-	assert_that(interest.layer_for(&"mirror").policy).is_equal(
-			InterestSynchronizer.Policy.HIDE_FROM_INSIDERS)
+func test_all_layers_lists_created_layers() -> void:
+	interest.layer(&"a")
+	interest.layer(&"b")
+	var ids: Array[StringName] = []
+	for layer: NetwInterestLayer in interest.all_layers():
+		ids.append(layer.layer_id)
+	ids.sort()
+	assert_that(ids).contains_exactly([&"a", &"b"])

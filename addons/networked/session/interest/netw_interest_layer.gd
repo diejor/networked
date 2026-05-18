@@ -1,12 +1,33 @@
-## Pure data model for one interest layer.
+## A named slice of the interest graph: a viewer set, an entity set,
+## and a composition [enum Policy].
 ##
-## Stores layer membership and viewer state, computes local visibility
-## transitions, and emits the same entity-level signals used by
-## [InterestSynchronizer]. It does not touch Godot replication APIs;
-## [NetwInterest] and adapter nodes decide how engine visibility is
-## applied.
+## Layers are the canonical state and the canonical mutation API.
+## Get one from [method NetwInterest.layer] or
+## [method NetwInterest.get_layer], then call [method add_viewer],
+## [method add_entity], [method remove_viewer], [method remove_entity],
+## or [method set_policy]. The owning [InterestService] handles
+## broadcast, mirroring, and engine-side visibility flushes; tests
+## without a service mutate the layer in isolation.
+##
+## [codeblock]
+##     var arena := Netw.interest.layer(&"arena")
+##     arena.add_entity(player_entity)
+##     arena.add_viewer(player.peer_id)
+##     player_entity.interest_enter.connect(_on_seen_by)
+## [/codeblock]
 class_name NetwInterestLayer
 extends RefCounted
+
+
+## Composition rule for the per-peer verdict.
+enum Policy {
+	## Peers in [member viewers] see [member entities]; outsiders do
+	## not.
+	HIDE_FROM_OUTSIDERS,
+	## Peers in [member viewers] do [b]not[/b] see [member entities];
+	## outsiders do. Use for stealth-style bubbles.
+	HIDE_FROM_INSIDERS,
+}
 
 
 ## Emitted when [param entity] becomes visible to [param peer_id].
@@ -31,9 +52,8 @@ signal entity_removed(entity: NetwEntity)
 ## Stable id used by [NetwInterest] to index this layer.
 var layer_id: StringName
 
-## Composition policy. Uses the same values as
-## [enum InterestSynchronizer.Policy].
-var policy: int = InterestSynchronizer.Policy.HIDE_FROM_OUTSIDERS
+## Composition policy. See [enum Policy].
+var policy: int = Policy.HIDE_FROM_OUTSIDERS
 
 ## Peer ids participating in this layer.
 var viewers: Dictionary[int, bool] = {}
@@ -41,12 +61,17 @@ var viewers: Dictionary[int, bool] = {}
 ## Entities participating in this layer.
 var entities: Dictionary[NetwEntity, bool] = {}
 
-## Per-(entity, peer) transition cache.
+## Per-(entity, peer) transition cache used by [method drive_now].
 var driver: InterestDriver = InterestDriver.new()
 
 
-func _init(id: StringName = &"") -> void:
+var _service_ref: WeakRef
+
+
+func _init(id: StringName = &"", service: Object = null) -> void:
 	layer_id = id
+	if service != null:
+		_service_ref = weakref(service)
 
 
 ## Replaces [member policy]. Returns [code]true[/code] when changed.
@@ -54,15 +79,22 @@ func set_policy(value: int) -> bool:
 	if policy == value:
 		return false
 	policy = value
+	var s := _service()
+	if s:
+		s._on_layer_policy_changed(self)
 	return true
 
 
-## Adds [param peer_id] to [member viewers]. Idempotent.
+## Adds [param peer_id] to [member viewers]. Idempotent. Returns
+## [code]true[/code] when the set changed.
 func add_viewer(peer_id: int) -> bool:
 	if peer_id == 0 or viewers.has(peer_id):
 		return false
 	viewers[peer_id] = true
 	viewer_added.emit(peer_id)
+	var s := _service()
+	if s:
+		s._on_layer_viewer_changed(self, peer_id, true)
 	return true
 
 
@@ -72,6 +104,9 @@ func remove_viewer(peer_id: int) -> bool:
 		return false
 	viewers.erase(peer_id)
 	viewer_removed.emit(peer_id)
+	var s := _service()
+	if s:
+		s._on_layer_viewer_changed(self, peer_id, false)
 	return true
 
 
@@ -80,7 +115,7 @@ func has_viewer(peer_id: int) -> bool:
 	return viewers.has(peer_id)
 
 
-## Adds [param entity] to [member entities]. Idempotent.
+## Enrolls [param entity] in this layer. Idempotent.
 func add_entity(entity: NetwEntity) -> bool:
 	if entity == null or not is_instance_valid(entity.owner):
 		return false
@@ -88,10 +123,14 @@ func add_entity(entity: NetwEntity) -> bool:
 		return false
 	entities[entity] = true
 	entity_added.emit(entity)
+	var s := _service()
+	if s:
+		s._on_layer_entity_changed(self, entity, true)
 	return true
 
 
-## Removes [param entity] from [member entities]. Idempotent.
+## Removes [param entity] from this layer. Emits [signal interest_exit]
+## for every peer that previously saw it.
 func remove_entity(entity: NetwEntity) -> bool:
 	if entity == null or not entities.has(entity):
 		return false
@@ -103,6 +142,9 @@ func remove_entity(entity: NetwEntity) -> bool:
 	driver.forget(entity)
 	entities.erase(entity)
 	entity_removed.emit(entity)
+	var s := _service()
+	if s:
+		s._on_layer_entity_changed(self, entity, false)
 	return true
 
 
@@ -116,7 +158,9 @@ func is_visible_to(entity: NetwEntity, peer_id: int) -> bool:
 	return driver.cached_verdict(entity, peer_id)
 
 
-## Computes and emits local transitions for [param peers].
+## Computes and emits transitions for [param peers]. Tests use this
+## to observe enter/exit without an [InterestService]; in production,
+## the service drives this on dirty layers.
 func drive_now(peers: Array[int]) -> InterestDriver.Result:
 	var result := driver.compute(entities, peers, policy, viewers)
 	_emit_transitions(result)
@@ -161,3 +205,7 @@ func _emit_transitions(result: InterestDriver.Result) -> void:
 		var peer: int = t[1]
 		interest_enter.emit(entity, peer)
 		entity.interest_enter.emit(peer)
+
+
+func _service() -> InterestService:
+	return _service_ref.get_ref() as InterestService if _service_ref else null
