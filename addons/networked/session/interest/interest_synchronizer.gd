@@ -133,6 +133,8 @@ var _initial_sync_done: bool = false
 var _refresh_scheduled: bool = false
 var _registered_with_interest: bool = false
 
+func _init() -> void:
+	unique_name_in_owner = true
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PARENTED:
@@ -149,19 +151,8 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
-	unique_name_in_owner = true
 	binding = InterestBinding.new(self, anchor_strategy)
 	binding.install_anchor()
-	# Fallback for cases where [constant Node.NOTIFICATION_PARENTED]
-	# fired before [member Node.owner] was assigned (script-driven
-	# instantiation). Idempotent via [member _config_built].
-	_build_replication_config()
-	# Continuous re-evaluation: every replication tick, ask the engine
-	# to re-run installed filters on every tracked entity sync. The
-	# legacy [SceneSynchronizer] used the same hook; it is what keeps
-	# the path self-healing under viewer churn.
-	if not delta_synchronized.is_connected(_on_delta_synchronized):
-		delta_synchronized.connect(_on_delta_synchronized)
 
 
 # ---------------------------------------------------------------------------

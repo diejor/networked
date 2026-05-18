@@ -162,10 +162,9 @@ func _warn_if_role_unset() -> void:
 ## by backends that bring their own api (see [signal api_swapped]).
 var api: SceneMultiplayer
 
-## Visibility and interest registry for this tree. Constructed in
-## [code]_init[/code] so descendants can rely on it being present
-## from their own [code]_enter_tree[/code]. See [NetwInterest] for
-## the public API.
+## Visibility and interest facade for this tree. Constructed in
+## [code]_init[/code]; backed by an [InterestService] child ensured
+## before descendant services enter the tree.
 var interest: NetwInterest
 
 ## [b]Deprecated.[/b] Use [member api]. Kept as a compatibility alias.
@@ -262,6 +261,7 @@ var _roster: SessionRoster = SessionRoster.new()
 var _auth: AuthCoordinator
 var _services: ServiceRegistry = ServiceRegistry.new()
 var _client_join_payload: JoinPayload
+var _interest_service: InterestService
 
 
 ## Registers a [Node] as a service for this session.
@@ -416,6 +416,7 @@ func _enter_tree() -> void:
 		return
 
 	_mount_api()
+	_ensure_interest_service()
 
 	for child in get_children():
 		if child is MultiplayerSceneManager:
@@ -456,6 +457,8 @@ func _init() -> void:
 	_auth.set_auth_provider(auth_provider)
 	if not Engine.is_editor_hint():
 		api = SceneMultiplayer.new()
+		_interest_service = InterestService.new()
+		_interest_service.name = &"InterestService"
 		interest = NetwInterest.new(self)
 		tree_exiting.connect(_on_exiting)
 
@@ -1014,50 +1017,6 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs - interest layer mirrors
-# ---------------------------------------------------------------------------
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_layer_config(layer_id: String, policy: int) -> void:
-	if not _is_rpc_from_server("_rpc_interest_layer_config"):
-		return
-	interest.receive_layer_config(StringName(layer_id), policy)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_viewer_delta(
-		layer_id: String,
-		peer_id: int,
-		added: bool) -> void:
-	if not _is_rpc_from_server("_rpc_interest_viewer_delta"):
-		return
-	interest.receive_viewer_delta(StringName(layer_id), peer_id, added)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_entity_delta(
-		layer_id: String,
-		entity_path: String,
-		added: bool) -> void:
-	if not _is_rpc_from_server("_rpc_interest_entity_delta"):
-		return
-	interest.receive_entity_delta(StringName(layer_id), entity_path, added)
-
-
-func _flush_interest_visibility() -> void:
-	if interest:
-		interest.flush_visibility()
-
-
-func _is_rpc_from_server(rpc_name: String) -> bool:
-	var sender := multiplayer.get_remote_sender_id()
-	if sender == 1:
-		return true
-	Netw.dbg.warn("%s received from non-server peer %d", [rpc_name, sender])
-	return false
-
-
-# ---------------------------------------------------------------------------
 # RPCs - disconnect (session-level)
 # ---------------------------------------------------------------------------
 
@@ -1110,6 +1069,26 @@ func _mount_api() -> void:
 	get_tree().set_multiplayer(api, root_path)
 	api.set_meta(&"_multiplayer_tree", self)
 	_bind_api_signals(api)
+
+
+func _ensure_interest_service() -> void:
+	if is_instance_valid(_interest_service) \
+			and is_ancestor_of(_interest_service):
+		return
+	if is_instance_valid(_interest_service) \
+			and _interest_service.get_parent() == null:
+		add_child(_interest_service)
+		return
+	_interest_service = null
+	_interest_service = get_node_or_null("InterestService") \
+			as InterestService
+	if not _interest_service:
+		_interest_service = find_service_node(InterestService) \
+				as InterestService
+	if not _interest_service:
+		_interest_service = InterestService.new()
+		_interest_service.name = &"InterestService"
+		add_child(_interest_service)
 
 
 # Replaces a fresh empty SceneMultiplayer at the api's old path. Godot 4 does

@@ -25,6 +25,14 @@ func test_layer_for_returns_stable_instance() -> void:
 	assert_that(a).is_equal(b)
 
 
+func test_facade_uses_interest_service() -> void:
+	assert_that(interest.get_service()).is_instanceof(InterestService)
+	assert_that(mt.get_service(InterestService)).is_equal(
+			interest.get_service())
+	assert_that(NetwServices.new(mt).get_interest_service()).is_equal(
+			interest.get_service())
+
+
 func test_get_layer_returns_null_for_missing_layer() -> void:
 	assert_that(interest.get_layer(&"missing")).is_null()
 

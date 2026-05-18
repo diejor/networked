@@ -53,6 +53,14 @@ func get_scene_manager() -> MultiplayerSceneManager:
 	return mt.get_service(MultiplayerSceneManager)
 
 
+## Returns the [InterestService] service, or [code]null[/code].
+func get_interest_service() -> InterestService:
+	var mt: MultiplayerTree = _tree_ref.get_ref()
+	if not mt:
+		return null
+	return mt.get_service(InterestService) as InterestService
+
+
 ## Returns the [NetworkClock] service, or [code]null[/code].
 func get_clock() -> NetworkClock:
 	var mt: MultiplayerTree = _tree_ref.get_ref()
