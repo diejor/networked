@@ -1,4 +1,4 @@
-## Unit tests for [DictionaryEntity].
+## Unit tests for [DictionaryEntity] persistence and serialization.
 class_name TestDictionarySave
 extends NetworkedTestSuite
 

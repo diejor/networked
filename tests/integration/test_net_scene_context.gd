@@ -1,17 +1,10 @@
-## Integration tests for NetwContext.
-##
-## Exercises the full game-facing API across real in-process multiplayer peers:
-## player queries, wait_for_players, suspend/resume, pause/unpause, kick,
-## countdown, and the readiness gate — all wired through the LocalLoopback
-## transport so RPCs actually travel between server and client nodes.
-##
-## Each test gets a fresh harness (before_test / after_test).
-## Two clients are connected and two player nodes spawned before every test.
+## Integration tests for [NetwContext] and [NetwSceneContext].
 class_name TestNetwContext
 extends NetworkedTestSuite
 
 const TEST_LEVEL_SCENE    := preload("res://tests/helpers/TestLevel.tscn")
-const TEST_PLAYER_SCENE   := preload("res://tests/helpers/TestPlayerMinimal.tscn")
+const TEST_PLAYER_SCENE   := preload(
+	"res://tests/helpers/TestPlayerMinimal.tscn")
 
 var harness: NetworkTestHarness
 var client0: MultiplayerTree
@@ -47,24 +40,22 @@ func before_test() -> void:
 
 	server_ctx = harness.get_server_scene().get_context()
 
-	var c0_scene := await harness.wait_for_client_scene_spawn(client0, &"TestLevel")
-	var c1_scene := await harness.wait_for_client_scene_spawn(client1, &"TestLevel")
+	var c0_scene := await harness.wait_for_client_scene_spawn(
+		client0, &"TestLevel")
+	var c1_scene := await harness.wait_for_client_scene_spawn(
+		client1, &"TestLevel")
 	client0_ctx = c0_scene.get_context()
 	client1_ctx = c1_scene.get_context()
 
 
 func after_test() -> void:
-	# Safety: ensure the tree is never left paused, which would deadlock teardown.
+	# Safety: ensure the tree is not left paused.
 	get_tree().paused = false
 
 	if is_instance_valid(harness):
 		await harness.teardown()
 	await drain_frames(get_tree(), 3)
 
-
-# ---------------------------------------------------------------------------
-# Player queries
-# ---------------------------------------------------------------------------
 
 func test_get_players_returns_all_spawned() -> void:
 	var players := server_ctx.scene.get_players()
@@ -77,33 +68,28 @@ func test_get_player_by_peer_id_returns_correct_player() -> void:
 	var peer0_id := client0.multiplayer_peer.get_unique_id()
 	var peer1_id := client1.multiplayer_peer.get_unique_id()
 
-	assert_that(server_ctx.scene.get_player_by_peer_id(peer0_id)).is_equal(player0)
-	assert_that(server_ctx.scene.get_player_by_peer_id(peer1_id)).is_equal(player1)
+	assert_that(server_ctx.scene.get_player_by_peer_id(peer0_id)).is_equal(
+		player0)
+	assert_that(server_ctx.scene.get_player_by_peer_id(peer1_id)).is_equal(
+		player1)
 
-
-# ---------------------------------------------------------------------------
-# wait_for_players
-# ---------------------------------------------------------------------------
 
 func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
-	# Both players are already present; wait_for_players(2) should never
-	# suspend — the while-loop exits immediately and the coroutine runs to
-	# completion before yielding.
+	# wait_for_players(2) should never suspend if count is already met.
 	var results := { "completed": false }
 	(func():
 		await server_ctx.scene.wait_for_players(2)
 		results.completed = true).call()
 
-	# No frame advance needed: the coroutine was never suspended.
 	assert_that(results.completed).is_true()
 
 
 func test_wait_for_players_suspends_until_player_enters() -> void:
-	# Separate fresh scene with zero players so the loop must actually await.
 	var h: NetworkTestHarness = auto_free(NetworkTestHarness.new())
 	add_child(h)
 	await h.setup(NetworkedTestSuite.create_scene_manager)
-	h._get_scene_manager(h.get_server()).add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	h._get_scene_manager(h.get_server()).add_spawnable_scene(
+		TEST_LEVEL_SCENE.resource_path)
 	var c: MultiplayerTree = await h.add_client()
 	var ctx: NetwContext = h.get_server_scene().get_context()
 
@@ -119,10 +105,6 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	await wait_until(func(): return results.resolved)
 	assert_that(results.resolved).is_true()
 
-
-# ---------------------------------------------------------------------------
-# Suspend / resume  (signal-only broadcast, does not touch get_tree().paused)
-# ---------------------------------------------------------------------------
 
 func test_suspend_signal_reaches_client_context() -> void:
 	var results := { "received_reason": "" }
@@ -143,12 +125,12 @@ func test_request_suspend_notifies_server() -> void:
 	client0_ctx.scene.request_suspend("brb")
 
 	await wait_until(func(): return results.requester_id != -1)
-	assert_that(results.requester_id).is_equal(client0.multiplayer_peer.get_unique_id())
+	assert_that(results.requester_id).is_equal(
+		client0.multiplayer_peer.get_unique_id())
 	assert_that(results.received_reason).is_equal("brb")
 
 
 func test_resume_signal_reaches_client_context() -> void:
-	# Suspend first, then resume, and verify the resume reaches client1.
 	server_ctx.scene.suspend("")
 	var results := { "resume_received": false }
 	client1_ctx.scene.resumed.connect(func(): results.resume_received = true)
@@ -158,15 +140,6 @@ func test_resume_signal_reaches_client_context() -> void:
 	await wait_until(func(): return results.resume_received)
 	assert_that(results.resume_received).is_true()
 
-
-# ---------------------------------------------------------------------------
-# Pause / unpause  (hard, get_tree().paused, broadcast via call_local RPC)
-#
-# Client-side delivery cannot be awaited while the tree is paused because the
-# loopback backend polls in _process, which is gated by the pause.  We verify
-# the server-side half (synchronous via call_local) and the round-trip via
-# unpause below.
-# ---------------------------------------------------------------------------
 
 func test_pause_sets_tree_paused_on_server_synchronously() -> void:
 	var results := { "paused_reason": "" }
@@ -193,16 +166,13 @@ func test_unpause_clears_tree_paused_and_emits_signal() -> void:
 	assert_that(results.unpaused_fired).is_true()
 
 
-# ---------------------------------------------------------------------------
-# Kick
-# ---------------------------------------------------------------------------
-
 func test_kick_disconnects_the_peer() -> void:
 	var server := harness.get_server()
 	var peer0_id := client0.multiplayer_peer.get_unique_id()
 
 	var results := { "disconnected_id": -1 }
-	server.peer_disconnected.connect(func(id): results.disconnected_id = id, CONNECT_ONE_SHOT)
+	server.peer_disconnected.connect(
+		func(id): results.disconnected_id = id, CONNECT_ONE_SHOT)
 
 	server_ctx.tree.kick(peer0_id)
 
@@ -222,31 +192,29 @@ func test_request_kick_notifies_server() -> void:
 	client0_ctx.tree.request_kick(peer1_id, "griefing")
 
 	await wait_until(func(): return results.received_requester != -1)
-	assert_that(results.received_requester).is_equal(client0.multiplayer_peer.get_unique_id())
+	assert_that(results.received_requester).is_equal(
+		client0.multiplayer_peer.get_unique_id())
 	assert_that(results.received_target).is_equal(peer1_id)
 
 
-# ---------------------------------------------------------------------------
-# Countdown
-# ---------------------------------------------------------------------------
-
 func test_cancel_countdown_fires_immediately_without_waiting() -> void:
 	var results := { "cancelled": false }
-	server_ctx.scene.countdown_cancelled.connect(func(): results.cancelled = true)
+	server_ctx.scene.countdown_cancelled.connect(
+		func(): results.cancelled = true)
 
 	var cd := server_ctx.scene.start_countdown(30)
 	assert_that(cd.is_running()).is_true()
 
 	server_ctx.scene.cancel_countdown()
 
-	# All signal emissions are synchronous — no frame advance needed.
 	assert_that(results.cancelled).is_true()
 	assert_that(cd.is_running()).is_false()
 
 
 func test_countdown_started_signal_reaches_client() -> void:
 	var results := { "client_seconds": -1 }
-	client0_ctx.scene.countdown_started.connect(func(s): results.client_seconds = s)
+	client0_ctx.scene.countdown_started.connect(
+		func(s): results.client_seconds = s)
 
 	server_ctx.scene.start_countdown(10)
 	await wait_until(func(): return results.client_seconds != -1)
@@ -255,7 +223,6 @@ func test_countdown_started_signal_reaches_client() -> void:
 	server_ctx.scene.cancel_countdown()
 
 
-## NOTE: this test takes ~1 second (one real-time timer tick).
 func test_countdown_tick_and_finished_fire_in_order() -> void:
 	var events: Array[String] = []
 	server_ctx.scene.countdown_tick.connect(func(s): events.append("tick:%d" % s))
@@ -271,12 +238,7 @@ func test_countdown_tick_and_finished_fire_in_order() -> void:
 	assert_that(events[1]).is_equal("finished")
 
 
-# ---------------------------------------------------------------------------
-# Readiness gate
-# ---------------------------------------------------------------------------
-
 func test_readiness_gate_pre_populated_with_current_players() -> void:
-	# Server scene has tracked_nodes for both players; gate should reflect this.
 	var gate := server_ctx.scene.create_readiness_gate()
 	var peer0_id := client0.multiplayer_peer.get_unique_id()
 	var peer1_id := client1.multiplayer_peer.get_unique_id()
@@ -299,7 +261,8 @@ func test_set_ready_propagates_to_server_gate_via_rpc() -> void:
 	c0_gate.set_ready(true)
 
 	await wait_until(func(): return results.changed_peer != -1)
-	assert_that(results.changed_peer).is_equal(client0.multiplayer_peer.get_unique_id())
+	assert_that(results.changed_peer).is_equal(
+		client0.multiplayer_peer.get_unique_id())
 	assert_that(results.changed_state).is_true()
 
 
@@ -324,8 +287,6 @@ func test_player_leave_removes_entry_from_gate() -> void:
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_true()
 
-	# Untracks the player from the synchronizer, firing context._on_despawned,
-	# which calls _notify_gates_player_removed for registered gates.
 	harness.get_server_scene().synchronizer.untrack_node(player0)
 	await get_tree().process_frame
 

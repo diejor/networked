@@ -1,14 +1,9 @@
 ## Verifies the [NetwBackend] abstract contract via a minimal stub.
-##
-## The abstract class itself cannot be instantiated (Godot prevents it),
-## so we test through a concrete stub that delegates to an in-memory dictionary.
 class_name TestNetwBackend
 extends NetworkedTestSuite
 
 
-## In-memory stub implementing the full [NetwBackend] contract.
 class MemoryBackend extends NetwBackend:
-	## { table → { id → data } }
 	var _store: Dictionary = {}
 
 	func initialize(_schema: Dictionary) -> Error:
@@ -48,10 +43,6 @@ class MemoryBackend extends NetwBackend:
 			_store[table].erase(id)
 		return OK
 
-
-# ---------------------------------------------------------------------------
-# Stub contract tests
-# ---------------------------------------------------------------------------
 
 func test_initialize_returns_ok() -> void:
 	var backend: MemoryBackend = auto_free(MemoryBackend.new())
@@ -100,7 +91,8 @@ func test_find_all_with_filter() -> void:
 	backend.upsert(&"rocks", &"r2", {&"type": &"marble"})
 	backend.upsert(&"rocks", &"r3", {&"type": &"granite"})
 
-	var granite: Array[Dictionary] = backend.find_all(&"rocks", {&"type": &"granite"})
+	var granite: Array[Dictionary] = backend.find_all(
+		&"rocks", {&"type": &"granite"})
 	assert_that(granite.size()).is_equal(2)
 
 

@@ -48,7 +48,7 @@ func get_at(tick: int) -> Variant:
 	return null
 
 
-## Optimized search that populates [param out_pair] with [prev_tick, next_tick].
+## Optimized search that populates [param out_pair] with [code][prev_tick, next_tick][/code].
 ## This avoids array allocation in the interpolation loop.
 func find_bracketing_ticks(tick: int, hint_tick: int, out_pair: PackedInt32Array) -> void:
 	var prev_tick := -1

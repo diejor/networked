@@ -16,14 +16,6 @@ extends Serde
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
 var spawner_component_path: SceneNodePath
 
-## Optional path to a [MultiplayerSpawner] that will receive the spawn
-## payload instead of a [SpawnerComponent].
-##
-## When set, the framework calls [method MultiplayerSpawner.spawn] with
-## the gathered payload after activating the target scene.
-@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
-var multiplayer_spawner_path: SceneNodePath
-
 ## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a
 ## local session.
 @export var url: String
@@ -38,6 +30,25 @@ var peer_id: int
 var is_debug: bool = false
 
 
+## Validates structural fields and produces a [ResolvedJoin].
+##
+## Returns [code]null[/code] if [member username] is empty.
+## [member spawner_component_path] is optional -- when set, its fields
+## are unpacked into [ResolvedJoin]; when absent, [member ResolvedJoin.scene_name]
+## and [member ResolvedJoin.spawner_path] remain empty.
+func resolve() -> ResolvedJoin:
+	if username.is_empty():
+		return null
+	var rj := ResolvedJoin.new()
+	rj.peer_id = peer_id
+	rj.username = username
+	rj.is_debug = is_debug
+	if spawner_component_path and spawner_component_path.is_valid():
+		rj.scene_name = StringName(spawner_component_path.get_scene_name())
+		rj.spawner_path = spawner_component_path.node_path
+	return rj
+
+
 ## Serializes the join payload into a [PackedByteArray] for network
 ## transmission.
 func serialize() -> PackedByteArray:
@@ -50,8 +61,6 @@ func serialize() -> PackedByteArray:
 		peer_id = peer_id,
 		is_debug = is_debug,
 	}
-	if multiplayer_spawner_path and multiplayer_spawner_path.is_valid():
-		dict.multiplayer_spawner_path = multiplayer_spawner_path.as_uid()
 	return var_to_bytes(dict)
 
 
@@ -63,11 +72,6 @@ func deserialize(bytes: PackedByteArray) -> void:
 
 	username = data.username
 	spawner_component_path = SceneNodePath.new(data.spawner_component_path)
-	if data.get("multiplayer_spawner_path"):
-		multiplayer_spawner_path = SceneNodePath.new(
-			data.multiplayer_spawner_path
-		)
 	url = data.url
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)
-

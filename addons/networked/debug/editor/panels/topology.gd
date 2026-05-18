@@ -5,10 +5,12 @@
 ## the most recent entry and [method on_new_entry] replaces rather than appends.
 ##
 ## Layout (top to bottom):
+## [codeblock]
 ##   [cache banner]      - hidden unless snapshot is stale
 ##   identity rows       - username / peer_id, scene / mode
 ##   node button         - opens the node in the editor scene inspector
 ##   synchronizer tree   - Name / Mode / Flags / Source columns
+## [/codeblock]
 @tool
 class_name PanelTopology
 extends DebugPanel

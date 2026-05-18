@@ -1,0 +1,47 @@
+name: Docs linkcheck
+
+# Catches dead external links — particularly important because make_rst.py
+# generates docs.godotengine.org links heuristically (via the :godot: role
+# defined in docs/_extensions/godot_xref.py) and Godot occasionally renames or
+# moves class pages.
+#
+# Shares its Godot/doctool/make_rst prelude with docs.yml via the local
+# composite action .github/actions/build-docs-classes.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  linkcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-docs-classes
+
+      - name: Cache Sphinx doctrees
+        uses: actions/cache@v4
+        with:
+          path: docs/_build/doctrees
+          key: sphinx-doctrees-linkcheck-${{ hashFiles('docs/**/*.rst', 'docs/**/*.py', 'docs/conf.py') }}
+          restore-keys: |
+            sphinx-doctrees-linkcheck-
+
+      - name: Run sphinx linkcheck
+        working-directory: docs
+        run: python -m sphinx -b linkcheck -d _build/doctrees . _build/linkcheck
+
+      - name: Upload linkcheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkcheck-report
+          path: docs/_build/linkcheck
+          retention-days: 30

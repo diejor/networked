@@ -1,3 +1,4 @@
+## Unit tests for [NetwDbgScope] and [NetwDbgNoop] facade.
 class_name TestNetwDebugScope
 extends NetworkedTestSuite
 

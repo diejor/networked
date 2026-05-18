@@ -1,10 +1,7 @@
-## Unit tests for SceneSynchronizer.scene_visibility_filter().
-##
-## scene_visibility_filter() is pure GDScript logic that reads connected_peers.
-## These tests set connected_peers directly rather than going through
-## connect_peer() / disconnect_peer(), which call set_visibility_for() — a
-## C++ MultiplayerSynchronizer method that requires a real peer registered in the
-## engine's replication interface. That requirement belongs in integration tests.
+## Unit tests for [SceneSynchronizer]. Covers
+## [code]scene_visibility_filter[/code], the membership reflected in
+## [member SceneSynchronizer.connected_peers], and the
+## [code]connect_peer[/code] / [code]disconnect_peer[/code] mutators.
 class_name TestSceneSynchronizer
 extends NetworkedTestSuite
 
@@ -17,12 +14,17 @@ func before_test() -> void:
 	auto_free(sync)
 
 
+# ---------------------------------------------------------------------------
+# scene_visibility_filter back-compat query.
+# ---------------------------------------------------------------------------
+
 func test_unknown_peer_not_visible_by_default() -> void:
 	assert_that(sync.scene_visibility_filter(99)).is_false()
 
 
 func test_server_peer_always_visible() -> void:
-	assert_that(sync.scene_visibility_filter(MultiplayerPeer.TARGET_PEER_SERVER)).is_true()
+	assert_that(sync.scene_visibility_filter(
+		MultiplayerPeer.TARGET_PEER_SERVER)).is_true()
 
 
 func test_zero_peer_not_visible() -> void:

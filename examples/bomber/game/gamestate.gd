@@ -29,9 +29,10 @@ func _ready() -> void:
 	setup_connections()
 
 
-func _on_player_joined(join_payload: JoinPayload) -> void:
-	register_player.rpc_id(join_payload.peer_id, player_name)
+func _on_player_joined(rj: ResolvedJoin) -> void:
+	players[rj.peer_id] = rj.username
 	player_list_changed.emit()
+
 
 func _on_peer_disconnected(id: int) -> void:
 	if has_node(^"/root/World"):
@@ -53,6 +54,7 @@ func _on_server_disconnected() -> void:
 func _on_connected_fail() -> void:
 	connection_failed.emit()
 
+
 func join_game(ip: String, _player_name: String) -> void:
 	player_name = _player_name
 	var jp := JoinPayload.new()
@@ -61,12 +63,14 @@ func join_game(ip: String, _player_name: String) -> void:
 	
 	ctx.tree.connect_player(jp)
 
+
 func host_game(_player_name: String) -> void:
 	player_name = _player_name
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 	
-	ctx.tree.connect_player(jp)
+	ctx.tree.host_player(jp)
+
 
 @rpc("any_peer", "call_local")
 func register_player(new_player_name: String) -> void:
@@ -88,6 +92,11 @@ func get_player_list() -> Array:
 func begin_game() -> void:
 	assert(multiplayer.is_server())
 	_activate_world_scene()
+	_rpc_match_started.rpc()
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_match_started() -> void:
 	match_started.emit()
 
 
@@ -103,7 +112,7 @@ func _activate_world_scene() -> void:
 func end_game() -> void:
 	if has_node(^"/root/World"):
 		get_node(^"/root/World").queue_free()
-
+	
 	game_ended.emit()
 	players.clear()
 

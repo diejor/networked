@@ -1,8 +1,10 @@
-## Manages per-scene synchronization visibility so each peer only receives data for their scene.
+## Manages per-scene synchronization visibility so each peer only receives
+## data for their scene.
 ##
-## Attach this synchronizer to a [Scene] node. Call [method track_node] for each entity node
-## to register it; the synchronizer will then restrict replication so only peers inside this
-## scene receive updates. Peer membership is tracked in [member connected_peers].
+## Attach this synchronizer to a [Scene] node. Call [method track_node] for
+## each entity node to register it; the synchronizer will then restrict
+## replication so only peers inside this scene receive updates. Peer
+## membership is tracked in [member connected_peers].
 class_name SceneSynchronizer
 extends MultiplayerSynchronizer
 
@@ -11,7 +13,8 @@ signal spawned(node: Node)
 ## Emitted when a tracked node exits the scene tree.
 signal despawned(node: Node)
 
-## Dictionary of peer IDs currently connected to this scene, mapped to [code]true[/code].
+## Dictionary of peer IDs currently connected to this scene, mapped to
+## [code]true[/code].
 ##
 ## Writing to this property defers a [method update_players] call.
 @export var connected_peers: Dictionary[int, bool]:
@@ -29,22 +32,31 @@ func _ready() -> void:
 	name = "SceneSynchronizer"
 	unique_name_in_owner = true
 	public_visibility = false
-	
+
 	delta_synchronized.connect(update_players)
-	
+
 	if not owner:
+		Netw.dbg.warn(
+			"SceneSynchronizer at %s has no owner; "
+			+ "replication_config will not be built. "
+			+ "Set 'owner' before _ready (editor placement does this "
+			+ "automatically; script-driven instantiation requires "
+			+ "explicit assignment).",
+			[get_path()],
+			func(m): push_warning(m)
+		)
 		return
-	
+
 	root_path = get_path_to(owner)
 	var config := SceneReplicationConfig.new()
-	
+
 	var path : =NodePath(str(owner.get_path_to(self)) + ":connected_peers")
 	config.add_property(path)
 	config.property_set_spawn(path, true)
 	config.property_set_replication_mode(
 		path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE
 	)
-	
+
 	replication_config = config
 
 
@@ -91,7 +103,8 @@ func untrack_player(player: Node) -> void:
 	untrack_node(player)
 
 
-## Forces a visibility update for all synchronizers belonging to tracked nodes in this scene.
+## Forces a visibility update for all synchronizers belonging to tracked
+## nodes in this scene.
 func update_players() -> void:
 	for node: Node in tracked_nodes.keys():
 		update_player(node)
@@ -106,6 +119,13 @@ func update_player(node: Node) -> void:
 
 ## Registers a peer as connected to this scene and updates visibility states.
 func connect_peer(peer_id: int) -> void:
+	if peer_id == 0:
+		Netw.dbg.error(
+			"SceneSynchronizer.connect_peer(0) is invalid.",
+			[],
+			func(m): push_error(m)
+		)
+		return
 	Netw.dbg.debug("peer `peer_id=%s` connected to scene." % peer_id)
 	set_visibility_for(peer_id, true)
 	connected_peers[peer_id] = true
@@ -114,7 +134,7 @@ func connect_peer(peer_id: int) -> void:
 
 ## Unregisters a peer from this scene and safely detaches their visibility.
 ##
-## The deferred call order is intentional — see
+## The deferred call order is intentional - see
 ## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
 func disconnect_peer(peer_id: int) -> void:
 	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
@@ -123,7 +143,7 @@ func disconnect_peer(peer_id: int) -> void:
 	# Skip visibility updates for peers the engine has already purged.
 	# `update_players()` would propagate filter results into
 	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
-	# `_update_spawn_visibility` — both assert when `peers_info` no longer
+	# `_update_spawn_visibility` - both assert when `peers_info` no longer
 	# contains the peer.
 	if not _peer_is_live(peer_id):
 		return
@@ -173,13 +193,14 @@ func _on_despawned(node: Node) -> void:
 
 ## Visibility filter callback passed to each tracked node's synchronizers.
 ##
-## Returns [code]true[/code] for the server and any peer present in [member connected_peers].
+## Returns [code]true[/code] for the server and any peer present in
+## [member connected_peers].
 func scene_visibility_filter(peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
-	
+
 	if peer_id == 0:
 		return false
-	
+
 	var res: bool = peer_id in connected_peers
 	return res

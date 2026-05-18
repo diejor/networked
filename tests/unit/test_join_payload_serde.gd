@@ -1,3 +1,4 @@
+## Unit tests for [JoinPayload] serialization and deserialization.
 class_name TestJoinPayloadSerde
 extends NetworkedTestSuite
 

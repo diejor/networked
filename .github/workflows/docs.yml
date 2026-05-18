@@ -1,0 +1,60 @@
+name: Docs build verification
+
+# Pure CI check: confirms the doctool → make_rst → sphinx-build pipeline still
+# works. Publication is handled by Read the Docs (.readthedocs.yml). The
+# Godot-fetch / doctool / make_rst prelude lives in the local composite action
+# .github/actions/build-docs-classes and is shared with linkcheck.yml.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "addons/networked/**/*.gd"
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - ".github/actions/build-docs-classes/**"
+      - ".readthedocs.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "addons/networked/**/*.gd"
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - ".github/actions/build-docs-classes/**"
+      - ".readthedocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/build-docs-classes
+
+      - name: Cache Sphinx doctrees
+        uses: actions/cache@v4
+        with:
+          path: docs/_build/doctrees
+          key: sphinx-doctrees-html-${{ hashFiles('docs/**/*.rst', 'docs/**/*.py', 'docs/conf.py') }}
+          restore-keys: |
+            sphinx-doctrees-html-
+
+      - name: Build HTML with Sphinx (warnings as errors)
+        working-directory: docs
+        run: python -m sphinx -T --keep-going -b html -d _build/doctrees . _build/html
+
+      - name: Upload built docs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+          retention-days: 7

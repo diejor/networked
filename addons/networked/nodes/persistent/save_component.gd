@@ -103,7 +103,7 @@ func _exit_tree() -> void:
 		_unregister()
 
 
-# ── ProxySynchronizer overrides ────────────────────────────────────────────────
+# ProxySynchronizer overrides.
 
 # Receives a replicated value from the network and stores it in bound_entity.
 func _write_property(name: StringName, _path: NodePath, value: Variant) -> void:
@@ -121,7 +121,7 @@ func _get_property_list() -> Array[Dictionary]:
 	return properties
 
 
-# ── Internal sync setup ────────────────────────────────────────────────────────
+# Internal sync setup.
 
 # Builds the SceneReplicationConfig by virtualizing properties picked in the Editor.
 func _setup_sync() -> void:
@@ -169,7 +169,7 @@ func _seed_entity_from_scene() -> void:
 			bound_entity.set_value(entity_key, value)
 
 
-# ── Public API ─────────────────────────────────────────────────────────────────
+# Public API.
 
 ## Returns [code]true[/code] if the component has unsaved changes.
 func is_dirty() -> bool:
@@ -215,7 +215,7 @@ func add_save_property(
 	register_property(virtual_name, NodePath(translated), mode, spawn, watch)
 
 
-# ── Scene ↔ entity transfer ────────────────────────────────────────────────────
+# Scene to entity transfer.
 
 ## Writes entity values for all tracked properties into the live scene nodes.
 func push_to_scene() -> Error:
@@ -250,7 +250,7 @@ func _write_scene(entity_key: StringName, value: Variant) -> void:
 	SynchronizersCache.assign_value(root, path, value)
 
 
-# ── Deferred dirty coalescing ──────────────────────────────────────────────────
+# Deferred dirty coalescing.
 
 # Emits state_changed once per frame when any property was written.
 func _save_once() -> void:
@@ -259,7 +259,7 @@ func _save_once() -> void:
 		_state_changed = false
 
 
-# ── Network transfer ───────────────────────────────────────────────────────────
+# Network transfer.
 
 ## Sends the current entity state to [param peer_id].
 ##
@@ -286,7 +286,7 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 				tp._rpc_push_ack.rpc_id(sender_id)
 
 
-# ── Database persistence ───────────────────────────────────────────────────────
+# Database persistence.
 
 # Returns the stable entity identifier used as the database record ID.
 func _get_entity_id() -> StringName:
@@ -300,8 +300,8 @@ func _get_entity_id() -> StringName:
 		return &""
 
 	var entity := NetwEntity.of(root)
-	if entity and not entity.identity_id.is_empty():
-		return entity.identity_id
+	if entity and not entity.entity_id.is_empty():
+		return entity.entity_id
 
 	var spawner := SpawnerComponent.unwrap(root)
 	if spawner and not spawner.entity_id.is_empty():
@@ -374,7 +374,7 @@ func _serialize_scene() -> PackedByteArray:
 	return bound_entity.serialize()
 
 
-# ── Lifecycle ──────────────────────────────────────────────────────────────────
+# Lifecycle.
 
 # Handles a state change event: saves to database and emits network sync signals.
 func _on_state_changed() -> void:
@@ -452,7 +452,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 	return warnings
 
 
-# ── Static helpers ─────────────────────────────────────────────────────────────
+# Static helpers.
 
 # Internal entry point: saves all components registered in [param ctx].
 static func _save_all_in(ctx: NetwPeerContext) -> void:
@@ -471,7 +471,7 @@ static func _save_all_in(ctx: NetwPeerContext) -> void:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
 
-# ── Session / bucket access ────────────────────────────────────────────────────
+# Session / bucket access.
 
 ## Returns the [NetwPeerContext] for the local peer.
 func get_peer_context() -> NetwPeerContext:

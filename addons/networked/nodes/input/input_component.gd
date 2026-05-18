@@ -95,7 +95,7 @@ func is_down(action: StringName) -> bool:
 	return state.get(action, false)
 
 
-## Returns a [-1, 1] float from two opposing actions: [param negative_action] and [param positive_action].
+## Returns a float in the range [code][-1, 1][/code] from two opposing actions: [param negative_action] and [param positive_action].
 func get_axis(negative_action: StringName, positive_action: StringName) -> float:
 	var p_action := 1.0 if is_down(positive_action) else 0.0
 	var n_action := 1.0 if is_down(negative_action) else 0.0

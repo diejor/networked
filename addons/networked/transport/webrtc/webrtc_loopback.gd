@@ -12,28 +12,26 @@ var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []
 
-## Initializes the loopback server peer. Returns [code]OK[/code].
-func host() -> Error:
+func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	if not session.has_live_server():
 		session.reset()
 	elif session.pc_server \
 			and session.pc_server.get_connection_state() \
 			!= WebRTCPeerConnection.STATE_NEW:
 		session.reset()
-	api.multiplayer_peer = session.get_server_peer()
 	Netw.dbg.info("WebRTC loopback server ready.")
-	return OK
+	return session.get_server_peer()
 
-## Creates a loopback client peer and links it to the server. Returns [code]OK[/code].
-func join(_server_address: String, _username: String = "") -> Error:
+func create_join_peer(
+	_tree: MultiplayerTree, _server_address: String, _username: String = ""
+) -> MultiplayerPeer:
 	if not session.has_live_server():
-		return ERR_CANT_CONNECT
-	api.multiplayer_peer = session.get_client_peer()
+		Netw.dbg.warn("WebRTC loopback: no live server to join.",
+		func(m): push_warning())
+		return null
 	Netw.dbg.info("WebRTC loopback client ready.")
-	return OK
+	return session.get_client_peer()
 
-func poll(dt: float) -> void:
+func poll(_dt: float) -> void:
 	if session:
 		session.poll()
-	
-	super.poll(dt)

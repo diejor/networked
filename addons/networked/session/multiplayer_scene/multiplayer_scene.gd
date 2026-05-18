@@ -5,6 +5,14 @@ extends Node
 ##
 ## Created by [MultiplayerSceneManager] via its spawn function. Holds the instantiated
 ## level scene and wires up spawn/despawn signals to the [SceneSynchronizer].
+##
+## [b]Visibility invariant:[/b] The wrapper's [SceneSynchronizer] gates the
+## scene's spawn-replication to peers. A peer only receives the scene
+## (and its level subtree) after the server calls
+## [method SceneSynchronizer.connect_peer] for that peer - typically
+## via [method register_player] from the join flow. A scene that
+## auto-spawned on the server but has no connected peers is invisible
+## to every client; this is by design.
 
 ## The [SceneSynchronizer] that manages peer visibility for this scene.
 @export var synchronizer: SceneSynchronizer
@@ -22,10 +30,17 @@ var level: Node:
 		level.owner = self
 
 var _context: NetwContext
+
+## Emitted when a tracked player node enters this scene's tree.
+signal player_spawned(node: Node)
+
+## Emitted when a tracked player node exits this scene's tree.
+signal player_despawned(node: Node)
+
 ## Emitted when a player toggles their ready state to [code]true[/code] via
 ## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
 ## automatic join event. See [signal player_entered] for spawn detection.
-signal player_ready(join_payload: JoinPayload)
+signal player_ready(rj: ResolvedJoin)
 
 ## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].
 var _readiness_gates: Array[WeakRef] = []
@@ -55,6 +70,20 @@ func hook_spawn_signals(level: Node) -> void:
 	for spawner in spawners:
 		spawner.spawned.connect(synchronizer._on_spawned)
 		spawner.despawned.connect(synchronizer._on_despawned)
+	if is_instance_valid(synchronizer):
+		if not synchronizer.spawned.is_connected(player_spawned.emit):
+			synchronizer.spawned.connect(player_spawned.emit)
+		if not synchronizer.despawned.is_connected(player_despawned.emit):
+			synchronizer.despawned.connect(player_despawned.emit)
+
+
+## Returns the currently tracked player nodes for this scene.
+func player_nodes() -> Array[Node]:
+	if not is_instance_valid(synchronizer):
+		return []
+	var out: Array[Node] = []
+	out.assign(synchronizer.tracked_nodes.keys())
+	return out
 
 
 ## Returns all [MultiplayerSpawner]s within the [param node]'s hierarchy.
@@ -73,18 +102,24 @@ func add_player(player: Node) -> void:
 
 
 func register_player(player: Node) -> void:
-	var peer_id := _get_scene_peer_id(player)
-	if peer_id != 0:
-		var previous_peer := _find_peer_for_player(player)
-		if previous_peer != 0 and previous_peer != peer_id:
-			_players_by_peer.erase(previous_peer)
-			synchronizer.disconnect_peer(previous_peer)
-		_players_by_peer[peer_id] = weakref(player)
-		if not synchronizer.connected_peers.has(peer_id):
-			synchronizer.connect_peer(peer_id)
-		var bound := _on_player_exiting.bind(player)
-		if not player.tree_exiting.is_connected(bound):
-			player.tree_exiting.connect(bound)
+	var peer_id := _get_peer_id(player)
+	if peer_id == 0:
+		Netw.dbg.error(
+			"Cannot register player '%s': peer_id is 0.",
+			[player.name],
+			func(m): push_error(m)
+		)
+		return
+	var previous_peer := _find_peer_for_player(player)
+	if previous_peer != 0 and previous_peer != peer_id:
+		_players_by_peer.erase(previous_peer)
+		synchronizer.disconnect_peer(previous_peer)
+	_players_by_peer[peer_id] = weakref(player)
+	if not synchronizer.connected_peers.has(peer_id):
+		synchronizer.connect_peer(peer_id)
+	var bound := _on_player_exiting.bind(player)
+	if not player.tree_exiting.is_connected(bound):
+		player.tree_exiting.connect(bound)
 
 
 func get_players() -> Array[Node]:
@@ -106,7 +141,7 @@ func _on_player_exiting(player: Node) -> void:
 
 
 func _remove_player(player: Node) -> void:
-	var peer_id := _get_scene_peer_id(player)
+	var peer_id := _get_peer_id(player)
 	if peer_id == 0:
 		peer_id = _find_peer_for_player(player)
 	if peer_id != 0:
@@ -170,15 +205,15 @@ func _cleanup_dead_gates() -> void:
 	)
 
 
-func _get_scene_peer_id(node: Node) -> int:
+func _get_peer_id(node: Node) -> int:
 	var entity := NetwEntity.of(node)
-	if entity:
-		return entity.scene_peer_id
-	return node.get_multiplayer_authority()
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	return NetwEntity.parse_peer(node.name)
 
 
 # ---------------------------------------------------------------------------
-# RPCs — suspend / resume  (soft, signal-only, game code decides what to do)
+# RPCs - suspend / resume (soft, signal-only, game code decides what to do)
 # ---------------------------------------------------------------------------
 
 ## Sent by the server to notify all clients that the scene has been suspended.
@@ -206,7 +241,7 @@ func _rpc_request_suspend(reason: String) -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — countdown
+# RPCs - countdown
 # ---------------------------------------------------------------------------
 
 ## Sent by the server when a new countdown starts.
@@ -234,7 +269,7 @@ func _rpc_receive_countdown_cancelled() -> void:
 
 
 # ---------------------------------------------------------------------------
-# RPCs — readiness
+# RPCs - readiness
 # ---------------------------------------------------------------------------
 
 ## Sent by a client to report their ready state to the server.

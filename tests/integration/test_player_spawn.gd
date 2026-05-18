@@ -1,8 +1,9 @@
 ## Tests player spawning and lifecycle with real multiplayer peers.
 ##
-## Uses NetworkTestHarness with a scene manager and test level scene.
-## Players are spawned via harness.spawn_player() which bypasses the RPC chain
-## and directly calls scene.add_player(), testing the server-side spawn path.
+## Uses [NetworkTestHarness] with a scene manager and test level scene.
+## Players are spawned via [method NetworkTestHarness.spawn_player] which
+## bypasses the RPC chain and directly calls [method MultiplayerScene.add_player],
+## testing the server-side spawn path.
 class_name TestPlayerSpawn
 extends NetworkedTestSuite
 
@@ -52,8 +53,8 @@ func test_spawned_player_has_username() -> void:
 	var player := harness.spawn_player(client0, TEST_PLAYER_SCENE)
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
-	var client_comp := SpawnerPlayerComponent.unwrap(player)
-	assert_that(client_comp.username).is_equal("test_player_0")
+	var client_comp := SpawnerComponent.unwrap(player)
+	assert_that(client_comp.entity_id).is_equal("test_player_0")
 
 
 func test_spawned_player_name_format() -> void:

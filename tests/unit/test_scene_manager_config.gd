@@ -1,7 +1,8 @@
-## Unit tests for MultiplayerSceneManager's per-level configuration system.
+## Unit tests for [MultiplayerSceneManager] level configuration.
 ##
-## Verifies _set(), _get(), and _get_config() behavior without any multiplayer
-## peers or scene tree — no networking is exercised here.
+## Verifies [method MultiplayerSceneManager._set],
+## [method MultiplayerSceneManager._get], and
+## [method MultiplayerSceneManager._get_config] behavior without networking.
 class_name TestLobbyManagerConfig
 extends NetworkedTestSuite
 
@@ -18,19 +19,17 @@ func after_test() -> void:
 		mgr.free()
 
 
-# --- _get_config defaults ---
-
 func test_get_config_load_mode_defaults_to_on_startup() -> void:
 	var config := mgr._get_config(&"UnknownLevel")
-	assert_that(config["load_mode"]).is_equal(MultiplayerSceneManager.LoadMode.ON_STARTUP)
+	assert_that(config["load_mode"]).is_equal(
+		MultiplayerSceneManager.LoadMode.ON_STARTUP)
 
 
 func test_get_config_empty_action_defaults_to_freeze() -> void:
 	var config := mgr._get_config(&"UnknownLevel")
-	assert_that(config["empty_action"]).is_equal(MultiplayerSceneManager.EmptyAction.FREEZE)
+	assert_that(config["empty_action"]).is_equal(
+		MultiplayerSceneManager.EmptyAction.FREEZE)
 
-
-# --- _set ---
 
 func test_set_returns_true_for_valid_config_property() -> void:
 	assert_that(mgr._set(&"scene_config/Level1/load_mode", 0)).is_true()
@@ -41,24 +40,25 @@ func test_set_returns_false_for_unrelated_property() -> void:
 
 
 func test_set_stores_load_mode_on_demand() -> void:
-	mgr._set(&"scene_config/Level1/load_mode", MultiplayerSceneManager.LoadMode.ON_DEMAND)
+	mgr._set(&"scene_config/Level1/load_mode",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND)
 	assert_that(mgr._get_config(&"Level1")["load_mode"]).is_equal(
 		MultiplayerSceneManager.LoadMode.ON_DEMAND)
 
 
 func test_set_stores_empty_action_destroy() -> void:
-	mgr._set(&"scene_config/Level1/empty_action", MultiplayerSceneManager.EmptyAction.DESTROY)
+	mgr._set(&"scene_config/Level1/empty_action",
+		MultiplayerSceneManager.EmptyAction.DESTROY)
 	assert_that(mgr._get_config(&"Level1")["empty_action"]).is_equal(
 		MultiplayerSceneManager.EmptyAction.DESTROY)
 
 
 func test_set_stores_empty_action_keep_active() -> void:
-	mgr._set(&"scene_config/Level1/empty_action", MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+	mgr._set(&"scene_config/Level1/empty_action",
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
 	assert_that(mgr._get_config(&"Level1")["empty_action"]).is_equal(
 		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
 
-
-# --- _get ---
 
 func test_get_returns_null_for_unrelated_property() -> void:
 	assert_that(mgr._get(&"some_other_property")).is_null()
@@ -75,22 +75,24 @@ func test_get_returns_default_empty_action_when_not_set() -> void:
 
 
 func test_get_reads_stored_load_mode() -> void:
-	mgr._set(&"scene_config/Level1/load_mode", MultiplayerSceneManager.LoadMode.ON_DEMAND)
+	mgr._set(&"scene_config/Level1/load_mode",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND)
 	assert_that(mgr._get(&"scene_config/Level1/load_mode")).is_equal(
 		MultiplayerSceneManager.LoadMode.ON_DEMAND)
 
 
 func test_get_reads_stored_empty_action() -> void:
-	mgr._set(&"scene_config/Level1/empty_action", MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+	mgr._set(&"scene_config/Level1/empty_action",
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
 	assert_that(mgr._get(&"scene_config/Level1/empty_action")).is_equal(
 		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
 
 
-# --- Independence between levels ---
-
 func test_two_levels_have_independent_load_modes() -> void:
-	mgr._set(&"scene_config/Level1/load_mode", MultiplayerSceneManager.LoadMode.ON_DEMAND)
-	mgr._set(&"scene_config/Level2/load_mode", MultiplayerSceneManager.LoadMode.ON_STARTUP)
+	mgr._set(&"scene_config/Level1/load_mode",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND)
+	mgr._set(&"scene_config/Level2/load_mode",
+		MultiplayerSceneManager.LoadMode.ON_STARTUP)
 	assert_that(mgr._get_config(&"Level1")["load_mode"]).is_equal(
 		MultiplayerSceneManager.LoadMode.ON_DEMAND)
 	assert_that(mgr._get_config(&"Level2")["load_mode"]).is_equal(
@@ -98,6 +100,8 @@ func test_two_levels_have_independent_load_modes() -> void:
 
 
 func test_setting_one_level_does_not_affect_another() -> void:
-	mgr._set(&"scene_config/Level1/empty_action", MultiplayerSceneManager.EmptyAction.DESTROY)
+	mgr._set(&"scene_config/Level1/empty_action",
+		MultiplayerSceneManager.EmptyAction.DESTROY)
 	var config2 := mgr._get_config(&"Level2")
-	assert_that(config2["empty_action"]).is_equal(MultiplayerSceneManager.EmptyAction.FREEZE)
+	assert_that(config2["empty_action"]).is_equal(
+		MultiplayerSceneManager.EmptyAction.FREEZE)

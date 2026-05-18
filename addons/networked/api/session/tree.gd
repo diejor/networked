@@ -20,11 +20,11 @@ signal connected_to_server()
 signal server_disconnected()
 
 ## Emitted on every peer after the server accepts a player join.
-signal player_joined(join_payload: JoinPayload)
+signal player_joined(rj: ResolvedJoin)
 ## Emitted when this peer's player join has been accepted by the server.
-signal local_player_joined(join_payload: JoinPayload)
+signal local_player_joined(rj: ResolvedJoin)
 ## Emitted after a player's target scene has been activated.
-signal player_scene_ready(join_payload: JoinPayload, netw_scene: NetwScene)
+signal player_scene_ready(rj: ResolvedJoin, netw_scene: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
 signal server_disconnecting(reason: String)
 ## Emitted on the server when a client requests to kick a peer.
@@ -69,15 +69,15 @@ func get_all_players() -> Array[Node]:
 	return mt.get_all_players() if mt else []
 
 
-## Returns accepted player join payloads known by this peer.
-func get_joined_players() -> Array[JoinPayload]:
+## Returns accepted player join data known by this peer.
+func get_joined_players() -> Array[ResolvedJoin]:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.get_joined_players() if mt else []
 
 
-## Returns the accepted player payload for [param peer_id], or
+## Returns the accepted player data for [param peer_id], or
 ## [code]null[/code].
-func get_joined_player(peer_id: int) -> JoinPayload:
+func get_joined_player(peer_id: int) -> ResolvedJoin:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.get_joined_player(peer_id) if mt else null
 
@@ -109,6 +109,15 @@ func is_online() -> bool:
 	return mt.is_online() if mt else false
 
 
+## Starts the instance as a network host using [param join_payload].
+##
+## Bypasses the localhost probing found in [method connect_player],
+## making it faster when the caller knows they are hosting.
+func host_player(join_payload: JoinPayload) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return await mt.host_player(join_payload) if mt else ERR_UNCONFIGURED
+
+
 ## Connects the local player to a session using [param join_payload].
 ##
 ## Probes localhost when [param join_payload.url] is empty or localhost,
@@ -117,6 +126,17 @@ func is_online() -> bool:
 func connect_player(join_payload: JoinPayload) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return await mt.connect_player(join_payload) if mt else ERR_UNCONFIGURED
+
+
+## Adopts a pre-connected [param peer] without going through a backend.
+##
+## For lobby flows (e.g. Steam) where the peer is produced externally.
+## See [method MultiplayerTree.adopt_peer].
+func adopt_peer(
+	peer: MultiplayerPeer, join_payload: JoinPayload = null
+) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return await mt.adopt_peer(peer, join_payload) if mt else ERR_UNCONFIGURED
 
 
 ## Returns the current connection state.
@@ -229,9 +249,9 @@ func notify_disconnect(reason: String = "") -> void:
 
 
 func _on_player_scene_ready(
-	join_payload: JoinPayload, scene: MultiplayerScene
+	rj: ResolvedJoin, scene: MultiplayerScene
 ) -> void:
 	var netw_scene := NetwScene.new(scene) if is_instance_valid(scene) else null
-	player_scene_ready.emit(join_payload, netw_scene)
+	player_scene_ready.emit(rj, netw_scene)
 	if is_instance_valid(scene):
-		scene.player_ready.emit(join_payload)
+		scene.player_ready.emit(rj)

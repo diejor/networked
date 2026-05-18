@@ -1,0 +1,162 @@
+# Run against an addon-only XML set: addon-relative sys.path, api_type-driven editor detection, engine-class group fallback, godot-xref helper, PRIMITIVE_TYPES, friendlier warning summary.
+--- a/make_rst.py
++++ b/make_rst.py
+@@ -11,7 +11,7 @@
+ from collections import OrderedDict
+ from typing import Any, TextIO
+ 
+-sys.path.insert(0, root_directory := os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../"))
++sys.path.insert(0, root_directory := os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")))
+ 
+ import version
+ from misc.utility.color import Ansi, force_stderr_color, force_stdout_color
+@@ -102,19 +102,60 @@
+     "editor": "Editor-only",
+     "variant": "Variant types",
+ }
++
+ CLASS_GROUPS_BASE: dict[str, str] = {
+     "node": "Node",
+     "resource": "Resource",
+     "object": "Object",
+     "variant": "Variant",
+ }
+-# Sync with editor\register_editor_types.cpp
+-EDITOR_CLASSES: list[str] = [
+-    "FileSystemDock",
+-    "ScriptCreateDialog",
+-    "ScriptEditor",
+-    "ScriptEditorBase",
+-]
++
++# Engine-class shim: when a referenced symbol is not in our local XML set (e.g.
++# Node, Resource, Variant, Error), emit a `:godot:` role. URL construction lives
++# in docs/_extensions/godot_xref.py — keep this helper minimal so the diff against
++# upstream stays small.
++def godot_external_link(display_text: str, class_name: str, fragment: str = "") -> str:
++    target = class_name if not fragment else f"{class_name}#{fragment}"
++    if display_text == target:
++        return f":godot:`{display_text}`"
++    return f":godot:`{display_text} <{target}>`"
++
++# Fallback mapping of Godot engine class names to their ultimate class group.
++# Used when the parent class is not in `state.classes` (i.e. our addon XML set
++# doesn't include engine base classes like Node, Resource, Object, Control, etc.).
++GODOT_ENGINE_CLASS_GROUPS: dict[str, str] = {
++    "Node": "node",
++    "Node2D": "node",
++    "Node3D": "node",
++    "CanvasItem": "node",
++    "CanvasLayer": "node",
++    "Control": "node",
++    "Area2D": "node",
++    "Area3D": "node",
++    "CollisionObject2D": "node",
++    "CollisionObject3D": "node",
++    "Container": "node",
++    "BoxContainer": "node",
++    "HBoxContainer": "node",
++    "VBoxContainer": "node",
++    "MarginContainer": "node",
++    "PanelContainer": "node",
++    "Panel": "node",
++    "Label": "node",
++    "Popup": "node",
++    "Window": "node",
++    "MultiplayerSpawner": "node",
++    "MultiplayerSynchronizer": "node",
++    "EditorPlugin": "node",
++    "EditorDebuggerPlugin": "node",
++    "Resource": "resource",
++    "ResourceFormatLoader": "resource",
++    "ResourceFormatSaver": "resource",
++    "Object": "object",
++    "RefCounted": "object",
++    "MultiplayerPeerExtension": "object",
++}
++
+ # Sync with the types mentioned in https://docs.godotengine.org/en/stable/tutorials/scripting/c_sharp/c_sharp_differences.html
+ CLASSES_WITH_CSHARP_DIFFERENCES: list[str] = [
+     "@GlobalScope",
+@@ -161,6 +202,8 @@
+     "PackedVector4Array",
+ ]
+ 
++PRIMITIVE_TYPES: list[str] = ["int", "float", "bool", "void"]
++
+ 
+ class State:
+     def __init__(self) -> None:
+@@ -184,6 +227,8 @@
+         if inherits is not None:
+             class_def.inherits = inherits
+ 
++        class_def.api_type = class_root.get("api_type")
++
+         class_def.deprecated = class_root.get("deprecated")
+         class_def.experimental = class_root.get("experimental")
+ 
+@@ -595,8 +640,8 @@
+     def __init__(self, name: str) -> None:
+         super().__init__("class", name)
+ 
+-        self.class_group = "variant"
+-        self.editor_class = self._is_editor_class()
++        self.class_group: str = "variant"
++        self.api_type: str | None = None
+ 
+         self.constants: OrderedDict[str, ConstantDef] = OrderedDict()
+         self.enums: OrderedDict[str, EnumDef] = OrderedDict()
+@@ -616,14 +661,6 @@
+         # Used to match the class with XML source for output filtering purposes.
+         self.filepath: str = ""
+ 
+-    def _is_editor_class(self) -> bool:
+-        if self.name.startswith("Editor"):
+-            return True
+-        if self.name in EDITOR_CLASSES:
+-            return True
+-
+-        return False
+-
+     def update_class_group(self, state: State) -> None:
+         group_name = "variant"
+ 
+@@ -649,6 +686,12 @@
+                 else:
+                     break
+ 
++            # Fallback: if the walk exited without finding a group
++            # (because the parent is a Godot engine class not in our XML set),
++            # check against the known Godot engine class hierarchy.
++            if group_name == "variant" and inherits in GODOT_ENGINE_CLASS_GROUPS:
++                group_name = GODOT_ENGINE_CLASS_GROUPS[inherits]
++
+         self.class_group = group_name
+ 
+ 
+@@ -799,7 +842,7 @@
+             grouped_classes[class_def.class_group] = []
+         grouped_classes[class_def.class_group].append(class_name)
+ 
+-        if class_def.editor_class:
++        if class_def.api_type == "editor":
+             if "editor" not in grouped_classes:
+                 grouped_classes["editor"] = []
+             grouped_classes["editor"].append(class_name)
+@@ -849,8 +892,13 @@
+     elif state.num_errors == 1:
+         print(f"{Ansi.RED}1 error was found in the class reference XML. Please check the messages above.{Ansi.RESET}")
+ 
+-    if state.num_warnings == 0 and state.num_errors == 0:
+-        print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
++    if state.num_errors == 0:
++        if state.num_warnings == 0:
++            print(f"{Ansi.GREEN}No warnings or errors found in the class reference XML.{Ansi.RESET}")
++        else:
++            print(
++                f"{Ansi.YELLOW}Done with {state.num_warnings} warnings (zero errors).{Ansi.RESET}"
++            )
+         if not args.dry_run:
+             print(f"Wrote reStructuredText files for each class to: {args.output}")
+     else:

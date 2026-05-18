@@ -62,8 +62,8 @@ func _ready() -> void:
 	if not ctx or not ctx.tree:
 		return
 	
-	for join_payload: JoinPayload in ctx.tree.get_joined_players():
-		add_player(join_payload.peer_id, str(join_payload.username))
+	for rj: ResolvedJoin in ctx.tree.get_joined_players():
+		add_player(rj.peer_id, str(rj.username))
 
 
 func _on_exit_game_pressed() -> void:

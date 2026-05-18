@@ -1,0 +1,81 @@
+# Emit :godot: roles for symbols outside the local XML set; add |abstract|, missing-base grouped-index guard, nested-class link targets.
+--- a/make_rst.py
++++ b/make_rst.py
+@@ -1501,17 +1549,16 @@
+         if link_type in state.classes:
+             return f":ref:`{link_type}<class_{sanitize_class_name(link_type)}>`"
+         else:
+-            print_error(f'{state.current_class}.xml: Unresolved type "{link_type}".', state)
+-            return f"``{link_type}``"
++            return godot_external_link(link_type, link_type)
+ 
+     if klass.endswith("[]"):  # Typed array, strip [] to link to contained type.
+-        return f":ref:`Array<class_Array>`\\[{resolve_type(klass[: -len('[]')])}\\]"
++        return f"{resolve_type('Array')}\\[{resolve_type(klass[: -len('[]')])}\\]"
+ 
+     if klass.startswith("Dictionary["):  # Typed dictionary, split elements to link contained types.
+         parts = klass[len("Dictionary[") : -len("]")].partition(", ")
+         key = parts[0]
+         value = parts[2]
+-        return f":ref:`Dictionary<class_Dictionary>`\\[{resolve_type(key)}, {resolve_type(value)}\\]"
++        return f"{resolve_type('Dictionary')}\\[{resolve_type(key)}, {resolve_type(value)}\\]"
+ 
+     return resolve_type(klass)
+ 
+@@ -1539,9 +1586,11 @@
+         else:
+             return f":ref:`{e}<enum_{sanitize_class_name(c)}_{e}>`"
+ 
+-    print_error(f'{state.current_class}.xml: Unresolved enum "{t}".', state)
+-
+-    return t
++    # Fallback for Godot engine enums: link to external docs.
++    # Downgrade error to warning for standalone addon builds.
++    print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
++    slug = sanitize_class_name(c).lower()
++    return godot_external_link(t, c, fragment=f"enum_{slug}_{e}")
+ 
+ 
+ def make_method_signature(
+@@ -1681,6 +1730,7 @@
+     operator_msg = translate("This method describes a valid operator to use with this type as left-hand operand.")
+     bitfield_msg = translate("This value is an integer composed as a bitmask of the following flags.")
+     void_msg = translate("No return value.")
++    abstract_msg = translate("This method is abstract and has no implementation. It must be overridden by subclasses.")
+ 
+     return (
+         f".. |virtual| replace:: :abbr:`virtual ({virtual_msg})`\n"
+@@ -1692,6 +1742,7 @@
+         f".. |operator| replace:: :abbr:`operator ({operator_msg})`\n"
+         f".. |bitfield| replace:: :abbr:`BitField ({bitfield_msg})`\n"
+         f".. |void| replace:: :abbr:`void ({void_msg})`\n"
++        f".. |abstract| replace:: :abbr:`abstract ({abstract_msg})`\n"
+     )
+ 
+ 
+@@ -1759,7 +1810,7 @@
+                 f.write(f"    :name: toc-class-ref-{group_name}s\n")
+                 f.write("\n")
+ 
+-                if group_name in CLASS_GROUPS_BASE:
++                if group_name in CLASS_GROUPS_BASE and CLASS_GROUPS_BASE[group_name] in grouped_classes[group_name]:
+                     f.write(f"    class_{sanitize_class_name(CLASS_GROUPS_BASE[group_name], True)}\n")
+ 
+                 for class_name in grouped_classes[group_name]:
+@@ -1836,7 +1887,15 @@
+ 
+ 
+ def parse_link_target(link_target: str, state: State, context_name: str) -> list[str]:
+-    if link_target.find(".") != -1:
++    if "." in link_target:
++        # Longest prefix match for nested class names (e.g., NetwDatabase.TableRepository.fetch)
++        parts = link_target.split(".")
++        for i in range(len(parts) - 1, 0, -1):
++            class_name = ".".join(parts[:i])
++            if class_name in state.classes:
++                return [class_name, ".".join(parts[i:])]
++
++        # Fallback for engine classes not in our local set (e.g. Node)
+         return link_target.split(".")
+     else:
+         return [state.current_class, link_target]

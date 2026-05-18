@@ -87,7 +87,7 @@ func parse(formatted_path: String) -> void:
 ## and the scene file exists on disk.
 ## [br][br]
 ## [b]Note:[/b] This is a surface-level check. It does [b]not[/b] verify if the [member node_path]
-## actually exists inside the scene file. Use [method SceneNodePath.StateInspector.is_valid] for a more robust validation.
+## actually exists inside the scene file. Use [method StateInspector.is_valid] for a more robust validation.
 func is_valid() -> bool:
 	if scene_path.is_empty() or node_path.is_empty():
 		return false
@@ -433,8 +433,8 @@ class StateInspector:
 	## [br]- [code]"method"[/code]: The [StringName] of the connected method.
 	## [br]- [code]"target"[/code]: The [NodePath] to the receiving node.
 	## [br]- [code]"binds"[/code]: An [Array] of bound parameters.
-	## [br]- [code]"unbinds"[/code]: An [int] representing the number of unbound parameters.
-	## [br]- [code]"flags"[/code]: An [int] representing the connection flags (see [enum Object.ConnectFlags]).
+	## [br]- [code]"unbinds"[/code]: An [code]int[/code] representing the number of unbound parameters.
+	## [br]- [code]"flags"[/code]: An [code]int[/code] representing the connection flags (see [enum Object.ConnectFlags]).
 	## [codeblock]
 	## for connection in path.peek().get_connections():
 	##     print("Signal: %s -> Method: %s" % [connection.signal, connection.method])

@@ -1,5 +1,6 @@
 ## Integration test for the default-scene join flow.
-## Verifies that dropping a Level as a direct child of MultiplayerTree
+##
+## Verifies that dropping a Level as a direct child of [MultiplayerTree]
 ## automatically routes joins and spawns players via a managed scene.
 class_name TestLobbylessJoin
 extends NetworkedTestSuite
@@ -44,7 +45,7 @@ func test_player_spawns_in_level_after_join() -> void:
 
 	var spawner_component_path := SceneNodePath.new()
 	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerPlayerComponent"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
@@ -55,7 +56,7 @@ func test_player_spawns_in_level_after_join() -> void:
 		join_payload.serialize()
 	)
 
-	var player_name := "%s|%d" % [username, peer_id]
+	var player_name := NetwEntity.format_name(username, peer_id)
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)
@@ -75,7 +76,7 @@ func test_spawned_player_has_correct_username() -> void:
 
 	var spawner_component_path := SceneNodePath.new()
 	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerPlayerComponent"
+	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
@@ -86,7 +87,7 @@ func test_spawned_player_has_correct_username() -> void:
 		join_payload.serialize()
 	)
 
-	var player_name := "%s|%d" % [username, peer_id]
+	var player_name := NetwEntity.format_name(username, peer_id)
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)
@@ -96,9 +97,9 @@ func test_spawned_player_has_correct_username() -> void:
 	)
 
 	var player := level.get_node(player_name)
-	var client_comp := SpawnerPlayerComponent.unwrap(player)
+	var client_comp := SpawnerComponent.unwrap(player)
 	assert_that(client_comp).is_not_null()
-	assert_that(str(client_comp.username)).is_equal(username)
+	assert_that(str(client_comp.entity_id)).is_equal(username)
 
 
 func test_scene_context_accessible_from_level_node() -> void:

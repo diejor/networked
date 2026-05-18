@@ -27,7 +27,7 @@ signal player_left(player: Node)
 ## Emitted when a player toggles their ready state to [code]true[/code] via
 ## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
 ## automatic join event. See [signal player_entered] for spawn detection.
-signal player_ready(join_payload: JoinPayload)
+signal player_ready(rj: ResolvedJoin)
 
 # ---------------------------------------------------------------------------
 # Suspend / resume signals  (soft, signal-only, game code decides)
@@ -161,7 +161,7 @@ func get_local_player() -> Node:
 		return null
 	var local_id := scene.multiplayer.get_unique_id()
 	for player: Node in scene.get_players():
-		if _get_scene_peer_id(player) == local_id:
+		if _get_peer_id(player) == local_id:
 			return player
 	return null
 
@@ -172,7 +172,7 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 	if not is_instance_valid(scene):
 		return null
 	for player: Node in scene.get_players():
-		if _get_scene_peer_id(player) == peer_id:
+		if _get_peer_id(player) == peer_id:
 			return player
 	return null
 
@@ -330,7 +330,7 @@ func create_readiness_gate() -> NetwSceneReadiness:
 	var gate := NetwSceneReadiness.new(scene)
 	scene._register_readiness_gate(gate)
 	for player: Node in scene.get_players():
-		gate._add_peer(_get_scene_peer_id(player))
+		gate._add_peer(_get_peer_id(player))
 	return gate
 
 
@@ -343,7 +343,7 @@ func _on_spawned(player: Node) -> void:
 	if not is_instance_valid(scene) or not (player in scene.get_players()):
 		return
 	player_entered.emit(player)
-	scene._notify_gates_player_added(_get_scene_peer_id(player))
+	scene._notify_gates_player_added(_get_peer_id(player))
 
 
 func _on_despawned(player: Node) -> void:
@@ -351,7 +351,7 @@ func _on_despawned(player: Node) -> void:
 	if not is_instance_valid(scene) or not (player in scene.get_players()):
 		return
 	player_left.emit(player)
-	scene._notify_gates_player_removed(_get_scene_peer_id(player))
+	scene._notify_gates_player_removed(_get_peer_id(player))
 
 
 func _on_countdown_tick(seconds_left: int) -> void:
@@ -386,12 +386,12 @@ func _on_countdown_cancelled() -> void:
 	_active_countdown = null
 
 
-func _on_player_ready(join_payload: JoinPayload) -> void:
-	player_ready.emit(join_payload)
+func _on_player_ready(rj: ResolvedJoin) -> void:
+	player_ready.emit(rj)
 
 
-func _get_scene_peer_id(node: Node) -> int:
+func _get_peer_id(node: Node) -> int:
 	var entity := NetwEntity.of(node)
-	if entity:
-		return entity.scene_peer_id
-	return node.get_multiplayer_authority()
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	return NetwEntity.parse_peer(node.name)

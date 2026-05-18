@@ -1,0 +1,72 @@
+name: Build docs classes
+description: >
+  Set up Python, verify make_rst.py is in sync with vendor + patches, fetch the
+  pinned Godot headless binary, run doctool against the addon, filter private
+  members, and emit RST under docs/classes/. The single shared prelude used by
+  docs.yml and linkcheck.yml.
+
+inputs:
+  godot-version:
+    description: Godot release tag (matches a GitHub release asset).
+    required: false
+    default: 4.6.2-stable
+  python-version:
+    description: Python version for Sphinx.
+    required: false
+    default: "3.13"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: docs/requirements.txt
+
+    - name: Install Python dependencies
+      shell: bash
+      working-directory: docs
+      run: pip install -r requirements.txt
+
+    - name: Verify make_rst.py is in sync with vendor + patches
+      shell: bash
+      working-directory: docs
+      run: python tools/build_make_rst.py --check
+
+    - name: Cache Godot binary
+      id: cache-godot
+      uses: actions/cache@v4
+      with:
+        path: godot_linux.x86_64
+        key: godot-${{ inputs.godot-version }}-linux
+
+    - name: Download Godot
+      if: steps.cache-godot.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        wget -q "https://github.com/godotengine/godot/releases/download/${{ inputs.godot-version }}/Godot_v${{ inputs.godot-version }}_linux.x86_64.zip"
+        unzip "Godot_v${{ inputs.godot-version }}_linux.x86_64.zip"
+        mv "Godot_v${{ inputs.godot-version }}_linux.x86_64" godot_linux.x86_64
+        chmod +x godot_linux.x86_64
+
+    - name: Generate XML via godot --doctool
+      shell: bash
+      working-directory: docs
+      run: |
+        mkdir -p api
+        # 1. Import pass: resolves UIDs in project.godot so doctool doesn't
+        #    abort on "Main scene path could not be resolved".
+        ../godot_linux.x86_64 --headless --path .. --editor --quit || true
+        # 2. Doctool pass: '.' for --gdscript-docs avoids path-resolution crashes.
+        ../godot_linux.x86_64 --doctool "$(pwd)/api" --gdscript-docs . --headless --path .. --quit
+
+    - name: Filter private members
+      shell: bash
+      working-directory: docs
+      run: python tools/filter_private.py api api_filtered
+
+    - name: Generate RST
+      shell: bash
+      working-directory: docs
+      run: python tools/make_rst.py api_filtered --output classes
