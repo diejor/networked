@@ -14,11 +14,6 @@ func _ready() -> void:
 		world.world_2d = get_tree().root.world_2d
 "
 
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_adjto"]
-properties/0/path = NodePath("SceneSynchronizer:connected_peers")
-properties/0/spawn = true
-properties/0/replication_mode = 2
-
 [node name="Scene" type="SubViewport" unique_id=1753885499 node_paths=PackedStringArray("synchronizer")]
 disable_3d = true
 anisotropic_filtering_level = 0
@@ -38,6 +33,5 @@ world = NodePath("..")
 
 [node name="SceneSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=719015563]
 unique_name_in_owner = true
-replication_config = SubResource("SceneReplicationConfig_adjto")
 public_visibility = false
 script = ExtResource("2_cauto")

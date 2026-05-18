@@ -1,96 +1,156 @@
-## Manages per-scene synchronization visibility so each peer only receives
-## data for their scene.
+## Per-scene visibility gate for one [MultiplayerScene] wrapper.
 ##
-## Attach this synchronizer to a [Scene] node. Call [method track_node] for
-## each entity node to register it; the synchronizer will then restrict
-## replication so only peers inside this scene receive updates. Peer
-## membership is tracked in [member connected_peers].
+## Specialization of [InterestSynchronizer] that fixes
+## [member InterestSynchronizer.binding_mode] to
+## [code]PUBLIC_VISIBILITY[/code] and exposes the legacy SS API used
+## across the codebase: [method connect_peer] / [method disconnect_peer]
+## for membership, [method track_node] / [method untrack_node] for
+## per-entity gating, and [member connected_peers] / [member
+## tracked_nodes] as observation surfaces.
+##
+## [b]Default-deny[/b] is what makes this binding safe for the scene
+## case: the anchor is invisible to every peer until
+## [method connect_peer] admits one, so [MultiplayerSpawner]s under
+## the wrapper never replicate a partial subtree to outsider peers.
+##
+## [codeblock]
+##     var scene := %SceneSynchronizer
+##     scene.connect_peer(player.peer_id)
+##     scene.track_node(player)
+## [/codeblock]
 class_name SceneSynchronizer
-extends MultiplayerSynchronizer
+extends InterestSynchronizer
 
-## Emitted when a tracked node enters the scene tree.
+
+## Emitted when a tracked node enters the scene tree. Re-emits
+## [signal InterestSynchronizer.entity_added] with the entity's owner.
 signal spawned(node: Node)
+
 ## Emitted when a tracked node exits the scene tree.
 signal despawned(node: Node)
 
-## Dictionary of peer IDs currently connected to this scene, mapped to
-## [code]true[/code].
-##
-## Writing to this property defers a [method update_players] call.
-@export var connected_peers: Dictionary[int, bool]:
-	get:
-		return connected_peers
-	set(peers):
-		connected_peers = peers
-		update_players.call_deferred()
 
-## Map of all nodes currently tracked by this synchronizer.
-var tracked_nodes: Dictionary[Node, bool]
+## Alias for [member InterestSynchronizer.viewers]. Reads and writes
+## the same dictionary. Kept for source compatibility with the legacy
+## SS API.
+var connected_peers: Dictionary[int, bool]:
+	get:
+		return viewers
+	set(value):
+		viewers = value
+
+
+## Alias surfacing tracked nodes as [code]{Node: true}[/code] mirroring
+## the legacy SS API. Derived from
+## [member InterestSynchronizer.entities].
+var tracked_nodes: Dictionary[Node, bool]:
+	get:
+		var out: Dictionary[Node, bool] = {}
+		for entity: NetwEntity in entities:
+			if is_instance_valid(entity) \
+					and is_instance_valid(entity.owner):
+				out[entity.owner] = true
+		return out
+
+
+func _init() -> void:
+	binding_mode = BindingMode.PUBLIC_VISIBILITY
+	policy = Policy.HIDE_FROM_OUTSIDERS
 
 
 func _ready() -> void:
+	if layer_id.is_empty():
+		layer_id = StringName("scene:%d" % get_instance_id())
+	super._ready()
 	name = "SceneSynchronizer"
-	unique_name_in_owner = true
-	public_visibility = false
-
-	delta_synchronized.connect(update_players)
-
-	if not owner:
-		Netw.dbg.warn(
-			"SceneSynchronizer at %s has no owner; "
-			+ "replication_config will not be built. "
-			+ "Set 'owner' before _ready (editor placement does this "
-			+ "automatically; script-driven instantiation requires "
-			+ "explicit assignment).",
-			[get_path()],
-			func(m): push_warning(m)
-		)
-		return
-
-	root_path = get_path_to(owner)
-	var config := SceneReplicationConfig.new()
-
-	var path : =NodePath(str(owner.get_path_to(self)) + ":connected_peers")
-	config.add_property(path)
-	config.property_set_spawn(path, true)
-	config.property_set_replication_mode(
-		path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE
-	)
-
-	replication_config = config
+	entity_added.connect(_emit_spawned_from_entity)
+	entity_removed.connect(_emit_despawned_from_entity)
 
 
-## Binds a node's lifecycle to the scene's visibility filters.
+# ---------------------------------------------------------------------------
+# Legacy SS API.
+# ---------------------------------------------------------------------------
+
+## Admits [param peer_id] to this scene. Equivalent to
+## [method InterestSynchronizer.add_viewer] with a guard that rejects
+## peer id [code]0[/code] (an invalid peer context).
 ##
-## When [param node] is already in the tree (e.g., a preplaced entity
-## registering during its own [signal Node.tree_entered] handler), the
-## spawn-side bookkeeping fires immediately so visibility filters are
-## applied without waiting for the next tree-entry.
+## Flushes the visibility pass synchronously via [method drive_now] so
+## the anchor's spawn packet for [param peer_id] is sent before any
+## subsequent engine-side spawn fires (e.g. before a freshly added
+## player's [signal Node.ready] reaches the engine's spawn pipeline).
+## Without the synchronous flush, deferred drive lets the engine send
+## entity spawn packets that reference the wrapper subtree before the
+## client has been admitted.
+func connect_peer(peer_id: int) -> void:
+	if peer_id == 0:
+		Netw.dbg.error(
+				"SceneSynchronizer.connect_peer(0) is invalid.",
+				[],
+				func(m): push_error(m))
+		return
+	add_viewer(peer_id)
+	drive_now()
+
+
+## Removes [param peer_id] from this scene.
+##
+## Intentionally defers the visibility drive (no [method drive_now]
+## here) so [method MultiplayerSynchronizer.set_visibility_for] on
+## the anchor fires [b]after[/b] any spawner-driven despawns produced
+## by an in-flight [method Node.reparent] of an entity out of this
+## scene (the [code]tp_component[/code] teleport flow). Running the
+## anchor hide first would despawn the wrapper before the inner
+## spawner's despawn packet for the entity reaches the peer; the
+## peer's engine then cascade-frees the entity's net id during the
+## wrapper teardown, and the later entity despawn fails with
+## [code]on_despawn_receive[/code] [code]ERR_UNAUTHORIZED[/code].
+## Godot issue #68508 describes the same hide-deep-before-shallow
+## constraint.
+func disconnect_peer(peer_id: int) -> void:
+	remove_viewer(peer_id)
+
+
+## Registers [param node]'s [NetwEntity] under this anchor. Resolves
+## via [method NetwEntity.of]; nodes without a resolvable entity are
+## logged and ignored.
+##
+## Also installs [method _on_spawned] / [method _on_despawned] on
+## [param node]'s tree signals so [code]tp_component[/code]'s
+## reparent flow can swap callbacks between the old and new scene's
+## anchor when teleporting a player.
 func track_node(node: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(node)
-	if not node.tree_entered.is_connected(on_spawned_bound):
-		node.tree_entered.connect(on_spawned_bound)
+	if not is_instance_valid(node):
+		return
+	var entity := NetwEntity.of(node)
+	if entity == null:
+		Netw.dbg.warn(
+				"SceneSynchronizer.track_node: %s has no NetwEntity",
+				[node.name])
+		return
+	add_entity(entity)
+	var on_spawned := _on_spawned.bind(node)
+	if not node.tree_entered.is_connected(on_spawned):
+		node.tree_entered.connect(on_spawned)
+	var on_despawned := _on_despawned.bind(node)
+	if not node.tree_exiting.is_connected(on_despawned):
+		node.tree_exiting.connect(on_despawned)
 
-	var on_despawned_bound := _on_despawned.bind(node)
-	if not node.tree_exiting.is_connected(on_despawned_bound):
-		node.tree_exiting.connect(on_despawned_bound)
 
-	if node.is_inside_tree() and not tracked_nodes.has(node):
-		_on_spawned(node)
-
-
-## Removes a node from the scene's lifecycle tracking and visibility filters.
+## Reverses [method track_node].
 func untrack_node(node: Node) -> void:
-	var on_spawned_bound := _on_spawned.bind(node)
-	if node.tree_entered.is_connected(on_spawned_bound):
-		node.tree_entered.disconnect(on_spawned_bound)
-
-	var on_despawned_bound := _on_despawned.bind(node)
-	if node.tree_exiting.is_connected(on_despawned_bound):
-		node.tree_exiting.disconnect(on_despawned_bound)
-
-	if node in tracked_nodes:
-		_on_despawned(node)
+	if not is_instance_valid(node):
+		return
+	var entity := NetwEntity.of(node)
+	if entity == null:
+		return
+	var on_spawned := _on_spawned.bind(node)
+	if node.tree_entered.is_connected(on_spawned):
+		node.tree_entered.disconnect(on_spawned)
+	var on_despawned := _on_despawned.bind(node)
+	if node.tree_exiting.is_connected(on_despawned):
+		node.tree_exiting.disconnect(on_despawned)
+	remove_entity(entity)
 
 
 ## Deprecated: alias for [method track_node].
@@ -103,104 +163,80 @@ func untrack_player(player: Node) -> void:
 	untrack_node(player)
 
 
-## Forces a visibility update for all synchronizers belonging to tracked
-## nodes in this scene.
+## Forces a synchronous visibility pass. Wraps
+## [method InterestSynchronizer.drive_now].
 func update_players() -> void:
-	for node: Node in tracked_nodes.keys():
-		update_player(node)
+	drive_now()
 
 
-## Forces a visibility update for a specific node's cached synchronizers.
+## Calls [method MultiplayerSynchronizer.update_visibility] on every
+## sync owned by [param node]. Kept for source compatibility; routine
+## drive passes handle the same updates.
 func update_player(node: Node) -> void:
-	var syncs := SynchronizersCache.get_synchronizers(node)
-	for sync in syncs:
-		sync.update_visibility()
-
-
-## Registers a peer as connected to this scene and updates visibility states.
-func connect_peer(peer_id: int) -> void:
-	if peer_id == 0:
-		Netw.dbg.error(
-			"SceneSynchronizer.connect_peer(0) is invalid.",
-			[],
-			func(m): push_error(m)
-		)
+	var entity := NetwEntity.of(node)
+	if entity == null:
 		return
-	Netw.dbg.debug("peer `peer_id=%s` connected to scene." % peer_id)
-	set_visibility_for(peer_id, true)
-	connected_peers[peer_id] = true
-	update_players()
+	for sync in entity.synchronizers():
+		if is_instance_valid(sync):
+			sync.update_visibility()
 
 
-## Unregisters a peer from this scene and safely detaches their visibility.
-##
-## The deferred call order is intentional - see
-## [code]https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958[/code].
-func disconnect_peer(peer_id: int) -> void:
-	Netw.dbg.debug("peer `peer_id=%s` disconnected from scene." % peer_id)
-	connected_peers.erase(peer_id)
-
-	# Skip visibility updates for peers the engine has already purged.
-	# `update_players()` would propagate filter results into
-	# `_update_sync_visibility`, and `set_visibility_for` would propagate into
-	# `_update_spawn_visibility` - both assert when `peers_info` no longer
-	# contains the peer.
-	if not _peer_is_live(peer_id):
-		return
-
-	update_players()
-	# Very important the order in which the peer visibility is handled:
-	# `https://github.com/godotengine/godot/issues/68508#issuecomment-2597110958`
-	set_visibility_for.call_deferred(peer_id, false)
-
-
-func _peer_is_live(peer_id: int) -> bool:
-	if not multiplayer or multiplayer.multiplayer_peer == null:
-		return false
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-	if peer_id == multiplayer.get_unique_id():
-		return true
-	return peer_id in multiplayer.get_peers()
-
-
-func _on_spawned(node: Node) -> void:
-	if tracked_nodes.has(node):
-		return
-	Netw.dbg.debug("%s spawned." % node.name)
-
-	tracked_nodes[node] = true
-
-	var syncs := SynchronizersCache.get_synchronizers(node)
-
-	for sync in syncs:
-		sync.add_visibility_filter(scene_visibility_filter)
-
-	spawned.emit(node)
-
-
-func _on_despawned(node: Node) -> void:
-	if not tracked_nodes.has(node):
-		return
-	Netw.dbg.debug("%s despawned." % node.name)
-	tracked_nodes.erase(node)
-
-	for sync in SynchronizersCache.get_synchronizers(node):
-		sync.remove_visibility_filter(scene_visibility_filter)
-
-	despawned.emit(node)
-
-
-## Visibility filter callback passed to each tracked node's synchronizers.
-##
-## Returns [code]true[/code] for the server and any peer present in
-## [member connected_peers].
+## Legacy visibility filter callback. Returns the same verdict the
+## anchor uses for [param peer_id].
 func scene_visibility_filter(peer_id: int) -> bool:
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
+	return _verdict_for(peer_id)
 
-	if peer_id == 0:
-		return false
 
-	var res: bool = peer_id in connected_peers
-	return res
+# ---------------------------------------------------------------------------
+# Spawn/despawn signal bridge.
+# ---------------------------------------------------------------------------
+
+func _emit_spawned_from_entity(entity: NetwEntity) -> void:
+	if not is_instance_valid(entity) \
+			or not is_instance_valid(entity.owner):
+		return
+	if entity.owner.is_inside_tree():
+		spawned.emit(entity.owner)
+	else:
+		entity.owner.tree_entered.connect(
+				_emit_spawned_on_tree_entered.bind(entity.owner),
+				CONNECT_ONE_SHOT)
+
+
+func _emit_spawned_on_tree_entered(node: Node) -> void:
+	if is_instance_valid(node):
+		spawned.emit(node)
+
+
+func _emit_despawned_from_entity(entity: NetwEntity) -> void:
+	if is_instance_valid(entity) and is_instance_valid(entity.owner):
+		despawned.emit(entity.owner)
+
+
+# ---------------------------------------------------------------------------
+# Spawn-signal wiring used by [method MultiplayerScene.hook_spawn_signals].
+# ---------------------------------------------------------------------------
+
+## Compatibility shim: [MultiplayerScene] connects each level
+## [MultiplayerSpawner]'s [signal MultiplayerSpawner.spawned] to this
+## method, and [method track_node] wires it to
+## [signal Node.tree_entered] so reparented nodes re-enroll
+## automatically. Idempotent via [method add_entity].
+func _on_spawned(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	var entity := NetwEntity.of(node)
+	if entity != null:
+		add_entity(entity)
+
+
+## Reverse of [method _on_spawned]. Removes the entity from the
+## anchor but leaves [method track_node]'s tree signal connections in
+## place so [code]tp_component[/code]'s teleport flow can still
+## disconnect them after the reparent.
+func _on_despawned(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	var entity := NetwEntity.of(node)
+	if entity != null:
+		remove_entity(entity)

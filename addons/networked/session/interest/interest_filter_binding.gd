@@ -100,14 +100,26 @@ func apply(
 ## spawn-syncs [member InterestSynchronizer.viewers] and
 ## [member InterestSynchronizer.policy]. Idempotent against the
 ## anchor: callers guard re-entry.
+##
+## Uses [member Node.owner] when available, falling back to [method
+## Node.get_parent]. The fallback lets the config build during
+## [constant Node.NOTIFICATION_PARENTED] (when [member Node.owner] is
+## not yet assigned by the packed-scene loader) so the config is in
+## place before the engine's
+## [code]on_replication_start[/code] fires at [constant
+## Node.NOTIFICATION_ENTER_TREE]. Assumes the IS placement convention
+## where the anchor is a direct child of the node it gates.
 func build_replication_config() -> bool:
 	var anchor := _anchor()
-	if not anchor or not anchor.owner:
+	if not anchor:
 		return false
-	anchor.root_path = anchor.get_path_to(anchor.owner)
+	var target: Node = anchor.owner if anchor.owner else anchor.get_parent()
+	if not target:
+		return false
+	anchor.root_path = anchor.get_path_to(target)
 	var config := SceneReplicationConfig.new()
-	_add_spawn_property(config, anchor, "viewers")
-	_add_spawn_property(config, anchor, "policy")
+	_add_spawn_property(config, anchor, target, "viewers")
+	_add_spawn_property(config, anchor, target, "policy")
 	anchor.replication_config = config
 	return true
 
@@ -115,9 +127,10 @@ func build_replication_config() -> bool:
 static func _add_spawn_property(
 		config: SceneReplicationConfig,
 		anchor: MultiplayerSynchronizer,
+		target: Node,
 		property: String) -> void:
 	var path := NodePath(
-			str(anchor.owner.get_path_to(anchor)) + ":" + property)
+			str(target.get_path_to(anchor)) + ":" + property)
 	config.add_property(path)
 	config.property_set_spawn(path, true)
 	config.property_set_replication_mode(

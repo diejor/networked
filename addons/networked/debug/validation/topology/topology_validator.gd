@@ -55,8 +55,8 @@ static func validate_node(node: Node) -> Dictionary:
 	var diff := cache_diff(node)
 	if not diff["match"]:
 		errors.append(
-			"cache/live mismatch: cached=%d live=%d | " + \
-			"only_cached=%s only_live=%s" % [
+			("cache/live mismatch: cached=%d live=%d | " + \
+			"only_cached=%s only_live=%s") % [
 				diff["cached_count"], diff["live_count"],
 				str(diff["only_in_cache"]), str(diff["only_in_live"]),
 			]

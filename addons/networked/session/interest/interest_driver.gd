@@ -110,6 +110,13 @@ func _compute_entity(
 		kind: int,
 		viewers: Dictionary,
 		result: Result) -> void:
+	# Off-tree owners and syncs cannot be ordered by [method
+	# Node.get_path] (which the comparators call), and an off-tree
+	# sync cannot be the target of [method
+	# MultiplayerSynchronizer.update_visibility] anyway. Skip both so
+	# the binding-apply phase only sees nodes the engine can act on.
+	if not entity.owner.is_inside_tree():
+		return
 	var prev: Dictionary = _state.get(entity, {})
 	var per_entity: Dictionary = {}
 	result.new_state[entity] = per_entity
@@ -125,7 +132,7 @@ func _compute_entity(
 		else:
 			result.hide_transitions.append(transition)
 		for sync in entity.synchronizers():
-			if not is_instance_valid(sync):
+			if not is_instance_valid(sync) or not sync.is_inside_tree():
 				continue
 			var tup := [sync, peer]
 			if now:

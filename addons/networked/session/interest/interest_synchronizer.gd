@@ -158,6 +158,7 @@ var driver: InterestDriver = InterestDriver.new()
 var binding: RefCounted
 
 var _entity_exit_handlers: Dictionary = {}
+var _entity_install_handlers: Dictionary = {}
 var _config_built: bool = false
 var _initial_sync_done: bool = false
 var _drive_scheduled: bool = false
@@ -249,6 +250,12 @@ func viewer_ids() -> Array[int]:
 ## the anchor's visibility filter on every [MultiplayerSynchronizer]
 ## owned by the entity. On both sides, records the entity locally and
 ## hooks [signal Node.tree_exiting] for automatic cleanup. Idempotent.
+##
+## [b]Off-tree owners:[/b] when the entity's owner has not yet entered
+## the scene tree (e.g., [code]add_player[/code] calls [method
+## track_node] before [method Node.add_child]), filter install is
+## deferred to [signal Node.tree_entered] so [method
+## NetwEntity.synchronizers] returns the populated list.
 func add_entity(entity: NetwEntity) -> void:
 	if entity == null or not is_instance_valid(entity.owner):
 		return
@@ -257,7 +264,13 @@ func add_entity(entity: NetwEntity) -> void:
 	entities[entity] = true
 
 	if _is_server() and binding:
-		binding.install_entity(entity, _make_entity_filter(entity))
+		if entity.owner.is_inside_tree():
+			binding.install_entity(entity, _make_entity_filter(entity))
+		else:
+			var install_handler := _install_entity_filter.bind(entity)
+			_entity_install_handlers[entity] = install_handler
+			entity.owner.tree_entered.connect(
+					install_handler, CONNECT_ONE_SHOT)
 
 	var handler := _on_entity_tree_exiting.bind(entity)
 	_entity_exit_handlers[entity] = handler
@@ -265,8 +278,28 @@ func add_entity(entity: NetwEntity) -> void:
 		entity.owner.tree_exiting.connect(handler)
 
 	Netw.dbg.trace(
-			"IS[%s] add_entity %s", [layer_id, entity.owner.name])
+			"IS[%s] add_entity %s (in_tree=%s)",
+			[layer_id, entity.owner.name,
+			entity.owner.is_inside_tree()])
 	entity_added.emit(entity)
+	_schedule_drive()
+
+
+# Fires from [signal Node.tree_entered] when [method add_entity] was
+# called before the entity's owner was in the tree. Installs the
+# visibility filter now that [method NetwEntity.synchronizers] has
+# real syncs to attach to, then drives so the new filter state is
+# reflected in the engine's per-peer visibility.
+func _install_entity_filter(entity: NetwEntity) -> void:
+	_entity_install_handlers.erase(entity)
+	if not _is_server() or not binding:
+		return
+	if not is_instance_valid(entity) \
+			or not is_instance_valid(entity.owner):
+		return
+	if not entities.has(entity):
+		return
+	binding.install_entity(entity, _make_entity_filter(entity))
 	_schedule_drive()
 
 
@@ -292,6 +325,14 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	if _is_server() and binding:
 		binding.uninstall_entity(entity)
+
+	var install_handler: Callable = _entity_install_handlers.get(
+			entity, Callable())
+	if install_handler.is_valid() and is_instance_valid(entity) \
+			and is_instance_valid(entity.owner) \
+			and entity.owner.tree_entered.is_connected(install_handler):
+		entity.owner.tree_entered.disconnect(install_handler)
+	_entity_install_handlers.erase(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
 	if handler.is_valid() and is_instance_valid(entity) \
@@ -536,10 +577,13 @@ func _unregister_with_interest() -> void:
 func _build_replication_config() -> void:
 	if _config_built:
 		return
-	if not owner:
-		return
 	# binding may not exist yet if NOTIFICATION_PARENTED fires before
 	# _ready; build a transient binding just for config in that case.
+	# The binding's build_replication_config falls back to
+	# [method Node.get_parent] when [member Node.owner] is not yet
+	# assigned, so this can succeed at NOTIFICATION_PARENTED time -
+	# which is critical so the config is in place before the engine's
+	# on_replication_start fires at NOTIFICATION_ENTER_TREE.
 	var b: RefCounted = binding if binding else _make_binding()
 	if b.build_replication_config():
 		_config_built = true
