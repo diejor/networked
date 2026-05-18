@@ -51,7 +51,6 @@ enum AnchorStrategy {
 var _anchor_ref: WeakRef
 var _strategy: AnchorStrategy
 var _entity_filters: Dictionary[NetwEntity, Callable] = {}
-var _entity_filter_syncs: Dictionary[NetwEntity, Array] = {}
 
 
 func _init(
@@ -81,9 +80,7 @@ func install_entity(entity: NetwEntity, filter: Callable) -> void:
 	if _entity_filters.has(entity):
 		return
 	_entity_filters[entity] = filter
-	var syncs := _entity_synchronizers(entity)
-	_entity_filter_syncs[entity] = syncs
-	for sync in syncs:
+	for sync in entity.synchronizers():
 		if is_instance_valid(sync):
 			sync.add_visibility_filter(filter)
 
@@ -94,12 +91,11 @@ func uninstall_entity(entity: NetwEntity) -> void:
 	var filter: Callable = _entity_filters.get(entity, Callable())
 	if not filter.is_valid():
 		return
-	var syncs: Array = _entity_filter_syncs.get(entity, [])
-	for sync in syncs:
-		if is_instance_valid(sync):
-			sync.remove_visibility_filter(filter)
+	if is_instance_valid(entity) and is_instance_valid(entity.owner):
+		for sync in entity.synchronizers():
+			if is_instance_valid(sync):
+				sync.remove_visibility_filter(filter)
 	_entity_filters.erase(entity)
-	_entity_filter_syncs.erase(entity)
 
 
 ## Calls [method MultiplayerSynchronizer.update_visibility] with no
@@ -113,8 +109,7 @@ func refresh_entities() -> void:
 		if not is_instance_valid(entity) \
 				or not is_instance_valid(entity.owner):
 			continue
-		var syncs: Array = _entity_filter_syncs.get(entity, [])
-		for sync in syncs:
+		for sync in entity.synchronizers():
 			if is_instance_valid(sync) and sync.is_inside_tree():
 				sync.update_visibility()
 
@@ -192,19 +187,6 @@ func installed_entities() -> Array[NetwEntity]:
 	var out: Array[NetwEntity] = []
 	out.assign(_entity_filters.keys())
 	return out
-
-
-func _entity_synchronizers(entity: NetwEntity) -> Array:
-	var syncs: Array = []
-	if entity == null or not is_instance_valid(entity.owner):
-		return syncs
-	if entity.owner.is_inside_tree():
-		syncs.assign(entity.synchronizers())
-	if not syncs.is_empty():
-		return syncs
-	syncs.assign(entity.owner.find_children(
-			"*", "MultiplayerSynchronizer", true, false))
-	return syncs
 
 
 ## Returns a snapshot of binding state for [param peer_id]. Pass the

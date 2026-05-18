@@ -9,9 +9,10 @@ extends RefCounted
 const META_KEY := &"cached_synchronizers"
 
 
-## Returns all [MultiplayerSynchronizer] nodes whose [code]root_path[/code]
-## points to [param target_node].
-static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
+## Returns all [MultiplayerSynchronizer] nodes whose
+## [code]root_path[/code] points to [param target_node].
+static func get_synchronizers(
+		target_node: Node) -> Array[MultiplayerSynchronizer]:
 	var synchronizers: Array[MultiplayerSynchronizer] = []
 	if not target_node:
 		return synchronizers
@@ -23,10 +24,7 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 			
 			var is_cache_valid := true
 			for sync in cached:
-				if not is_instance_valid(sync) or sync.is_queued_for_deletion() \
-					or not sync.is_inside_tree() \
-					or not sync.has_node(sync.root_path) \
-					or sync.get_node(sync.root_path) != target_node:
+				if not _is_cached_sync_valid(sync, target_node):
 					is_cache_valid = false
 					break
 			
@@ -36,9 +34,9 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 	synchronizers.assign(target_node.find_children("*", "MultiplayerSynchronizer"))
 	
 	var filtered_syncs: Array[MultiplayerSynchronizer] = []
-	filtered_syncs.assign(synchronizers.filter(func(sync: MultiplayerSynchronizer):
-		return sync.root_path and sync.has_node(sync.root_path) \
-			and sync.get_node(sync.root_path) == target_node
+	filtered_syncs.assign(synchronizers.filter(func(
+			sync: MultiplayerSynchronizer) -> bool:
+		return _sync_targets(sync, target_node)
 	))
 	
 	var result: Array[MultiplayerSynchronizer] = []
@@ -58,18 +56,43 @@ static func get_synchronizers(target_node: Node) -> Array[MultiplayerSynchronize
 	return result
 
 
-## Returns only the [MultiplayerSynchronizer] nodes that are owned by [param target_node] in the scene tree.
-static func get_client_synchronizers(target_node: Node) -> Array[MultiplayerSynchronizer]:
-	return get_synchronizers(target_node).filter(func(sync: MultiplayerSynchronizer):
-		# In editor, owner is the scene root. In game, it might be different but 
-		# for client-owned nodes it should match.
-		return sync.owner == target_node or (Engine.is_editor_hint() and sync.owner == target_node.owner)
+static func _is_cached_sync_valid(
+		sync: MultiplayerSynchronizer,
+		target_node: Node) -> bool:
+	if not is_instance_valid(sync) or sync.is_queued_for_deletion():
+		return false
+	if target_node.is_inside_tree() and not sync.is_inside_tree():
+		return false
+	return _sync_targets(sync, target_node)
+
+
+static func _sync_targets(
+		sync: MultiplayerSynchronizer,
+		target_node: Node) -> bool:
+	if not sync.root_path:
+		return false
+	if sync.has_node(sync.root_path):
+		return sync.get_node(sync.root_path) == target_node
+	return not target_node.is_inside_tree() and sync.get_parent() == target_node
+
+
+## Returns only synchronizers owned by [param target_node] in the tree.
+static func get_client_synchronizers(
+		target_node: Node) -> Array[MultiplayerSynchronizer]:
+	return get_synchronizers(target_node).filter(func(
+			sync: MultiplayerSynchronizer) -> bool:
+		# In editor, owner is the scene root.
+		return sync.owner == target_node \
+				or (Engine.is_editor_hint() \
+				and sync.owner == target_node.owner)
 	)
 
 
-## Returns a dictionary of all property paths tracked by client-owned synchronizers on [param target_node].
-## [br]Key is the cleaned [StringName] of the path, value is the raw [NodePath].
-static func get_all_synchronized_properties(target_node: Node) -> Dictionary[StringName, NodePath]:
+## Returns all property paths tracked by client-owned synchronizers on
+## [param target_node].
+## [br]Key is the cleaned [StringName], value is the raw [NodePath].
+static func get_all_synchronized_properties(
+		target_node: Node) -> Dictionary[StringName, NodePath]:
 	var result: Dictionary[StringName, NodePath] = {}
 	if not target_node:
 		return result
@@ -87,7 +110,8 @@ static func get_all_synchronized_properties(target_node: Node) -> Dictionary[Str
 
 
 ## Safely resolves a value from a [param target] node using a [param path].
-## Handles edge cases where [method Object.get_indexed] might fail in the editor.
+## Handles edge cases where [method Object.get_indexed] may fail in the
+## editor.
 static func resolve_value(target: Node, path: NodePath) -> Variant:
 	if not target or path.is_empty():
 		return null
@@ -127,7 +151,8 @@ static func _extract_clean_name(path: NodePath) -> StringName:
 	return StringName(s)
 
 
-## Restricts all synchronizers on [param target_node] to only send data to the server peer.
+## Restricts all synchronizers on [param target_node] to only send data
+## to the server peer.
 static func sync_only_server(target_node: Node) -> void:
 	for sync in get_synchronizers(target_node):
 		sync.set_visibility_for(0, false)
@@ -141,9 +166,9 @@ static func clear_cache(target_node: Node) -> void:
 		target_node.remove_meta(META_KEY)
 
 
-## Connects [signal Node.child_entered_tree] to [method clear_cache] on [param node]
-## exactly once, so that adding a new [MultiplayerSynchronizer] child auto-invalidates
-## the cache.
+## Connects [signal Node.child_entered_tree] to [method clear_cache] on
+## [param node] exactly once, so adding a new
+## [MultiplayerSynchronizer] child auto-invalidates the cache.
 static func _connect_invalidation(node: Node) -> void:
 	const CONNECTED_META := &"_sc_invalidation_connected"
 	if node.has_meta(CONNECTED_META):

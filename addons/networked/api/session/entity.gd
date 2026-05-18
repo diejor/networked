@@ -79,6 +79,7 @@ var ownership: Ownership:
 var _spawner_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
+var _owner_exiting_tree: bool = false
 var _pending_spawn_props: Array[NodePath] = []
 var _pending_save_props: Array = []
 
@@ -189,17 +190,24 @@ static func _find_root(node: Node) -> Node:
 func _attach_to(root: Node) -> void:
 	owner = root
 	root.set_meta(META_KEY, self)
+	if not root.tree_entered.is_connected(_handle_tree_entered):
+		root.tree_entered.connect(_handle_tree_entered)
+	if not root.tree_exiting.is_connected(_handle_tree_exiting):
+		root.tree_exiting.connect(_handle_tree_exiting)
 	if root.is_inside_tree():
 		_handle_tree_entered.call_deferred()
-	else:
-		root.tree_entered.connect(_handle_tree_entered, CONNECT_ONE_SHOT)
 
 
 func _handle_tree_entered() -> void:
+	_owner_exiting_tree = false
 	if _tree_entered_fired:
 		return
 	_tree_entered_fired = true
 	owner_tree_entered.emit()
+
+
+func _handle_tree_exiting() -> void:
+	_owner_exiting_tree = true
 
 
 ## Returns [code]true[/code] once [signal owner_tree_entered] has fired
@@ -279,12 +287,16 @@ func contribute_save_property(
 ## Returns the [MultiplayerSynchronizer] nodes owned by this entity's
 ## root. Wraps [SynchronizersCache.get_synchronizers] and adds a
 ## one-shot dirty bust so repeated calls during a frame are cheap.
+## During teardown, falls back to the last valid scan so cleanup can
+## detach filters from the same synchronizers that received them.
 func synchronizers() -> Array[MultiplayerSynchronizer]:
 	if _synchronizers_dirty or _synchronizers_cache.is_empty():
 		if is_instance_valid(owner):
-			_synchronizers_cache = \
-					SynchronizersCache.get_synchronizers(owner)
-		_synchronizers_dirty = false
+			var found := SynchronizersCache.get_synchronizers(owner)
+			if not found.is_empty() or not _owner_exiting_tree:
+				_synchronizers_cache = found
+			_synchronizers_dirty = _owner_exiting_tree \
+					and _synchronizers_cache.is_empty()
 	return _synchronizers_cache
 
 
