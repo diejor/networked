@@ -18,10 +18,12 @@ var client1: MultiplayerTree
 func before_test() -> void:
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_scene_manager(harness.get_server())
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	var sm_factory := func() -> MultiplayerSceneManager:
+		var sm := NetworkedTestSuite.create_scene_manager()
+		sm.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+		return sm
+	await harness.setup(sm_factory)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()

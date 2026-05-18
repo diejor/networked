@@ -42,7 +42,7 @@ enum Policy {
 
 ## Anchor-gating strategy. See [enum InterestBinding.AnchorStrategy].
 @export var anchor_strategy: InterestBinding.AnchorStrategy = \
-		InterestBinding.AnchorStrategy.ADMIT
+		InterestBinding.AnchorStrategy.OPEN
 
 ## Stable identifier for the layer this synchronizer anchors. Used by
 ## [NetwInterest] to look up the anchor from [NetwEntity] members.
@@ -125,7 +125,6 @@ var driver: InterestDriver = InterestDriver.new()
 var binding: InterestBinding
 
 var _entity_exit_handlers: Dictionary = {}
-var _entity_install_handlers: Dictionary = {}
 var _config_built: bool = false
 var _initial_sync_done: bool = false
 var _refresh_scheduled: bool = false
@@ -221,15 +220,14 @@ func viewer_ids() -> Array[int]:
 
 
 # ---------------------------------------------------------------------------
-# Entity API. Server installs filters; both sides update the local
-# [member entities] dict and run the driver to fire signals.
+# Entity API. Every peer installs local filters, updates the local
+# [member entities] dict, and runs the driver to fire signals.
 # ---------------------------------------------------------------------------
 
-## Enrolls [param entity] under this anchor. On the server, installs
-## the entity-side visibility filter on every [MultiplayerSynchronizer]
-## owned by [param entity]. On both sides, records the entity locally
-## and hooks [signal Node.tree_exiting] for automatic cleanup.
-## Idempotent.
+## Enrolls [param entity] under this anchor. Installs the entity-side
+## visibility filter on every [MultiplayerSynchronizer] owned by
+## [param entity], records it locally, and hooks
+## [signal Node.tree_exiting] for automatic cleanup. Idempotent.
 func add_entity(entity: NetwEntity) -> void:
 	if entity == null or not is_instance_valid(entity.owner):
 		return
@@ -237,14 +235,8 @@ func add_entity(entity: NetwEntity) -> void:
 		return
 	entities[entity] = true
 
-	if _is_server() and binding:
-		if entity.owner.is_inside_tree():
-			binding.install_entity(entity, _make_entity_filter(entity))
-		else:
-			var install_handler := _install_entity_filter.bind(entity)
-			_entity_install_handlers[entity] = install_handler
-			entity.owner.tree_entered.connect(
-					install_handler, CONNECT_ONE_SHOT)
+	if binding:
+		binding.install_entity(entity, _make_entity_filter(entity))
 
 	var handler := _on_entity_tree_exiting.bind(entity)
 	_entity_exit_handlers[entity] = handler
@@ -270,21 +262,6 @@ func add_entity(entity: NetwEntity) -> void:
 	_emit_transitions()
 
 
-# Fires from [signal Node.tree_entered] when [method add_entity] was
-# called before the entity's owner was in the tree.
-func _install_entity_filter(entity: NetwEntity) -> void:
-	_entity_install_handlers.erase(entity)
-	if not _is_server() or not binding:
-		return
-	if not is_instance_valid(entity) \
-			or not is_instance_valid(entity.owner):
-		return
-	if not entities.has(entity):
-		return
-	binding.install_entity(entity, _make_entity_filter(entity))
-	_emit_transitions()
-
-
 ## Removes [param entity] from this anchor. Emits [signal interest_exit]
 ## for every peer that previously saw it, detaches the filter, and
 ## clears the cleanup hook. Idempotent.
@@ -303,16 +280,8 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	entities.erase(entity)
 
-	if _is_server() and binding:
+	if binding:
 		binding.uninstall_entity(entity)
-
-	var install_handler: Callable = _entity_install_handlers.get(
-			entity, Callable())
-	if install_handler.is_valid() and is_instance_valid(entity) \
-			and is_instance_valid(entity.owner) \
-			and entity.owner.tree_entered.is_connected(install_handler):
-		entity.owner.tree_entered.disconnect(install_handler)
-	_entity_install_handlers.erase(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
 	if handler.is_valid() and is_instance_valid(entity) \

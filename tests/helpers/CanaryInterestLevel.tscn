@@ -1,11 +1,11 @@
-[gd_scene format=3 uid="uid://dtdocp4a6pcom"]
+[gd_scene format=3 uid="uid://dyayyq8e2urfn"]
 
-[ext_resource type="PackedScene" uid="uid://c5tj2gqmrl0mg" path="res://tests/helpers/TestPlayerFull.tscn" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://bpnpmprpg6p6b" path="res://tests/helpers/TestPlayerMinimal.tscn" id="1_player"]
 [ext_resource type="Script" uid="uid://dxpp514t8ye05" path="res://addons/networked/session/interest/interest_synchronizer.gd" id="2_interest"]
 
 [node name="CanaryInterestLevel" type="Node2D" unique_id=1635541641]
 
-[node name="TestPlayerFull" parent="." unique_id=754678471 instance=ExtResource("1_player")]
+[node name="TestPlayerMinimal" parent="." unique_id=754678471 instance=ExtResource("1_player")]
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=686370674]
 _spawnable_scenes = PackedStringArray("uid://c5tj2gqmrl0mg", "uid://bpnpmprpg6p6b")
