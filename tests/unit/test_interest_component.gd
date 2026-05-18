@@ -3,9 +3,10 @@
 ## on tree-enter, unregister on tree-exit, and the [member layer_ids]
 ## setter diff.
 ##
-## A bare [MultiplayerTree] hosts each test so [code]Netw.ctx(self).interest[/code]
-## resolves to a real [NetwInterest]. No multiplayer peer is attached;
-## anchors created here run with [code]_is_server == true[/code].
+## A bare [MultiplayerTree] hosts each test so
+## [code]Netw.ctx(self).interest[/code] resolves to a real
+## [NetwInterest]. No multiplayer peer is attached; anchors created
+## here run with [code]_is_server == true[/code].
 class_name TestInterestComponent
 extends NetworkedTestSuite
 

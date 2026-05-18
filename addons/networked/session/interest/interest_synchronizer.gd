@@ -56,6 +56,7 @@ enum Policy {
 		if changed and _initial_sync_done:
 			Netw.dbg.trace(
 					"IS[%s] policy changed -> %d", [layer_id, value])
+			_sync_layer_policy()
 			_schedule_refresh()
 
 ## Peer IDs participating in this layer. Spawn-synced
@@ -85,6 +86,7 @@ enum Policy {
 					"IS[%s] viewer removed (spawn-sync) %d",
 					[layer_id, p])
 			viewer_removed.emit(p)
+		_sync_layer_viewers()
 		if added.size() > 0 or removed.size() > 0:
 			_schedule_refresh()
 
@@ -125,6 +127,7 @@ var driver: InterestDriver = InterestDriver.new()
 var binding: InterestBinding
 
 var _entity_exit_handlers: Dictionary = {}
+var _layer: NetwInterestLayer
 var _config_built: bool = false
 var _initial_sync_done: bool = false
 var _refresh_scheduled: bool = false
@@ -182,6 +185,7 @@ func add_viewer(peer_id: int) -> void:
 	if binding:
 		binding.admit(peer_id)
 	viewers[peer_id] = true
+	_add_layer_viewer(peer_id)
 	Netw.dbg.trace("IS[%s] add_viewer %d", [layer_id, peer_id])
 	viewer_added.emit(peer_id)
 	_refresh_now()
@@ -200,6 +204,7 @@ func remove_viewer(peer_id: int) -> void:
 	if not viewers.has(peer_id):
 		return
 	viewers.erase(peer_id)
+	_remove_layer_viewer(peer_id)
 	Netw.dbg.trace("IS[%s] remove_viewer %d", [layer_id, peer_id])
 	viewer_removed.emit(peer_id)
 	_refresh_now()
@@ -235,7 +240,12 @@ func add_entity(entity: NetwEntity) -> void:
 		return
 	entities[entity] = true
 
-	if binding:
+	if _uses_interest_service():
+		_interest().register_entity_for_layer(layer_id, entity)
+	elif _layer:
+		_layer.add_entity(entity)
+
+	if binding and not _uses_interest_service():
 		binding.install_entity(entity, _make_entity_filter(entity))
 
 	var handler := _on_entity_tree_exiting.bind(entity)
@@ -269,7 +279,12 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	entities.erase(entity)
 
-	if binding:
+	if _uses_interest_service():
+		_interest().unregister_entity_from_layer(layer_id, entity)
+	elif _layer:
+		_layer.remove_entity(entity)
+
+	if binding and not _uses_interest_service():
 		binding.uninstall_entity(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
@@ -456,6 +471,48 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 	remove_entity(entity)
 
 
+func _mirror_viewer_from_interest(peer_id: int, added: bool) -> void:
+	if added:
+		if viewers.has(peer_id):
+			return
+		viewers[peer_id] = true
+		viewer_added.emit(peer_id)
+	else:
+		if not viewers.has(peer_id):
+			return
+		viewers.erase(peer_id)
+		viewer_removed.emit(peer_id)
+	_refresh_now()
+
+
+func _mirror_entity_from_interest(entity: NetwEntity, added: bool) -> void:
+	if added:
+		if entity == null or not is_instance_valid(entity.owner):
+			return
+		if entities.has(entity):
+			return
+		entities[entity] = true
+		var handler := _on_entity_tree_exiting.bind(entity)
+		_entity_exit_handlers[entity] = handler
+		if not entity.owner.tree_exiting.is_connected(handler):
+			entity.owner.tree_exiting.connect(handler)
+		entity_added.emit(entity)
+		_refresh_now()
+	else:
+		if entity == null or not entities.has(entity):
+			return
+		driver.forget(entity)
+		entities.erase(entity)
+		var handler: Callable = _entity_exit_handlers.get(
+				entity, Callable())
+		if handler.is_valid() and is_instance_valid(entity) \
+				and is_instance_valid(entity.owner) \
+				and entity.owner.tree_exiting.is_connected(handler):
+			entity.owner.tree_exiting.disconnect(handler)
+		_entity_exit_handlers.erase(entity)
+		entity_removed.emit(entity)
+
+
 func _is_server() -> bool:
 	if not is_inside_tree():
 		return true
@@ -477,6 +534,14 @@ func _register_with_interest() -> void:
 	if not mt or not mt.interest:
 		return
 	mt.interest.register_anchor(self)
+	_layer = mt.interest.layer_for(layer_id)
+	_sync_layer_policy()
+	_sync_layer_viewers()
+	for entity: NetwEntity in entities:
+		if _uses_interest_service():
+			mt.interest.register_entity_for_layer(layer_id, entity)
+		elif _layer:
+			_layer.add_entity(entity)
 	_registered_with_interest = true
 
 
@@ -488,6 +553,58 @@ func _unregister_with_interest() -> void:
 	if not mt or not mt.interest:
 		return
 	mt.interest.unregister_anchor(self)
+
+
+func _interest() -> NetwInterest:
+	var mt := MultiplayerTree.resolve(self)
+	return mt.interest if mt else null
+
+
+func _uses_interest_service() -> bool:
+	return anchor_strategy == InterestBinding.AnchorStrategy.OPEN \
+			and _interest() != null \
+			and not layer_id.is_empty()
+
+
+func _sync_layer_policy() -> void:
+	var interest := _interest()
+	if interest and not layer_id.is_empty():
+		_layer = interest.layer_for(layer_id)
+		if _uses_interest_service():
+			interest.set_policy(layer_id, policy)
+		elif _layer:
+			_layer.set_policy(policy)
+	elif _layer:
+		_layer.set_policy(policy)
+
+
+func _sync_layer_viewers() -> void:
+	if not _layer and not layer_id.is_empty():
+		var interest := _interest()
+		_layer = interest.layer_for(layer_id) if interest else null
+	if not _layer:
+		return
+	var prev: Array[int] = []
+	prev.assign(_layer.viewers.keys())
+	for peer_id in prev:
+		if not viewers.has(peer_id):
+			_layer.remove_viewer(peer_id)
+	for peer_id in viewers:
+		_layer.add_viewer(peer_id)
+
+
+func _add_layer_viewer(peer_id: int) -> void:
+	if _uses_interest_service():
+		_interest().add_viewer(layer_id, peer_id)
+	elif _layer:
+		_layer.add_viewer(peer_id)
+
+
+func _remove_layer_viewer(peer_id: int) -> void:
+	if _uses_interest_service():
+		_interest().remove_viewer(layer_id, peer_id)
+	elif _layer:
+		_layer.remove_viewer(peer_id)
 
 
 # ---------------------------------------------------------------------------

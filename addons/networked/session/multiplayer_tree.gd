@@ -1014,6 +1014,50 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 
 
 # ---------------------------------------------------------------------------
+# RPCs - interest layer mirrors
+# ---------------------------------------------------------------------------
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_interest_layer_config(layer_id: String, policy: int) -> void:
+	if not _is_rpc_from_server("_rpc_interest_layer_config"):
+		return
+	interest.receive_layer_config(StringName(layer_id), policy)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_interest_viewer_delta(
+		layer_id: String,
+		peer_id: int,
+		added: bool) -> void:
+	if not _is_rpc_from_server("_rpc_interest_viewer_delta"):
+		return
+	interest.receive_viewer_delta(StringName(layer_id), peer_id, added)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_interest_entity_delta(
+		layer_id: String,
+		entity_path: String,
+		added: bool) -> void:
+	if not _is_rpc_from_server("_rpc_interest_entity_delta"):
+		return
+	interest.receive_entity_delta(StringName(layer_id), entity_path, added)
+
+
+func _flush_interest_visibility() -> void:
+	if interest:
+		interest.flush_visibility()
+
+
+func _is_rpc_from_server(rpc_name: String) -> bool:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 1:
+		return true
+	Netw.dbg.warn("%s received from non-server peer %d", [rpc_name, sender])
+	return false
+
+
+# ---------------------------------------------------------------------------
 # RPCs - disconnect (session-level)
 # ---------------------------------------------------------------------------
 

@@ -4,22 +4,22 @@
 ## [SaveComponent] / [SpawnerComponent] pattern: contributes its
 ## [member layer_ids] property to the spawner's spawn packet so the
 ## value lands on the client before the entity enters its tree, then
-## registers the entity with the matching [InterestSynchronizer]
-## anchors through [NetwInterest].
+## registers the entity with matching [NetwInterestLayer] state
+## through [NetwInterest].
 ##
 ## [codeblock]
 ##     # In the entity scene:
 ##     %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
 ## [/codeblock]
 ##
-## Membership transports as part of the entity's own spawn-sync; no
-## NodePaths or RPC mirroring on the wire.
+## Membership transports as part of the entity's own spawn-sync, while
+## server-side layer mutations are mirrored by [NetwInterest].
 class_name InterestComponent
 extends Node
 
 
 ## Stable layer ids this entity belongs to. Resolved against
-## [member NetwInterest._anchors] at tree-enter. Mutating after
+## [NetwInterestLayer] entries at tree-enter. Mutating after
 ## tree-enter is supported on the server; the new set replaces the
 ## previous registration on the next driver pass.
 @export var layer_ids: Array[StringName] = []:
