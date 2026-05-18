@@ -17,22 +17,25 @@
 ##     arena.add_viewer(player.peer_id)
 ## [/codeblock]
 ##
-## [b]Binding model:[/b] FilterBinding. [member public_visibility] is
-## kept [code]true[/code] so [member peer_visibility] short-circuits to
-## true, leaving the per-peer verdict to the installed visibility
-## filters (anchor self + each enrolled entity sync).
+## [b]Composition:[/b] this node is a thin orchestrator over three
+## helpers, each independently testable and inspectable:
+## [br]- [InterestPolicy]: stateless [code](kind, viewers, peer)[/code]
+##   verdict and [method InterestPolicy.explain] reason string.
+## [br]- [member driver]: per-(entity, peer) cache and transition
+##   computation. Engine-free.
+## [br]- [member binding]: the only engine-touching piece; installs
+##   visibility filters and calls [method
+##   MultiplayerSynchronizer.update_visibility].
 ##
-## [b]Replication config:[/b] [member replication_config] is built on
-## [constant Node.NOTIFICATION_PARENTED] to spawn-sync [member viewers]
-## and [member policy]. User-defined replicated properties must live on
-## a sibling [MultiplayerSynchronizer].
+## [b]Debugging:[/b] every mutation traces through [code]Netw.dbg[/code]
+## (level [code]trace[/code]); [method debug_dump] returns a full
+## snapshot of policy / driver / binding state for a peer.
 ##
 ## [b]Signals:[/b] [signal interest_enter] / [signal interest_exit]
 ## fire for each per-peer visibility transition. Lifecycle signals
 ## [signal viewer_added] / [signal viewer_removed] /
 ## [signal entity_added] / [signal entity_removed] fire eagerly on
-## each mutation. See the class header in [code]docs/[/code] for the
-## full driver contract.
+## each mutation.
 class_name InterestSynchronizer
 extends MultiplayerSynchronizer
 
@@ -59,6 +62,8 @@ enum Policy {
 		var changed := value != policy
 		policy = value
 		if changed and _initial_sync_done:
+			Netw.dbg.trace(
+					"IS[%s] policy changed -> %d", [layer_id, value])
 			_schedule_drive()
 
 ## Peer IDs participating in this layer. Spawn-synced
@@ -79,8 +84,14 @@ enum Policy {
 			if not viewers.has(p):
 				removed.append(p)
 		for p in added:
+			Netw.dbg.trace(
+					"IS[%s] viewer added (spawn-sync) %d",
+					[layer_id, p])
 			viewer_added.emit(p)
 		for p in removed:
+			Netw.dbg.trace(
+					"IS[%s] viewer removed (spawn-sync) %d",
+					[layer_id, p])
 			viewer_removed.emit(p)
 		if added.size() > 0 or removed.size() > 0:
 			_schedule_drive()
@@ -115,11 +126,15 @@ signal entity_removed(entity: NetwEntity)
 ## per-peer signals.
 var entities: Dictionary[NetwEntity, bool] = {}
 
-# Per-(entity, peer) visibility cache. Server: cached verdict for
-# every live peer. Client: cached verdict for the local peer.
-var _visibility: Dictionary = {}
+## Per-(entity, peer) cache + transition computation. Public so tests
+## and debug code can inspect [method InterestDriver.dump].
+var driver: InterestDriver = InterestDriver.new()
 
-var _entity_filters: Dictionary = {}
+## Engine-touching binding. Public so debug code can call
+## [method InterestFilterBinding.dump_state]. Created in
+## [method _ready].
+var binding: InterestFilterBinding
+
 var _entity_exit_handlers: Dictionary = {}
 var _config_built: bool = false
 var _initial_sync_done: bool = false
@@ -143,8 +158,8 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	unique_name_in_owner = true
-	public_visibility = true
-	add_visibility_filter(_self_filter)
+	binding = InterestFilterBinding.new(self)
+	binding.install_anchor(_self_filter)
 	# Fallback for cases where [constant Node.NOTIFICATION_PARENTED]
 	# fired before [member Node.owner] was assigned (script-driven
 	# instantiation). Idempotent via [member _config_built].
@@ -165,6 +180,7 @@ func add_viewer(peer_id: int) -> void:
 	if viewers.has(peer_id):
 		return
 	viewers[peer_id] = true
+	Netw.dbg.trace("IS[%s] add_viewer %d", [layer_id, peer_id])
 	viewer_added.emit(peer_id)
 	_schedule_drive()
 
@@ -177,6 +193,7 @@ func remove_viewer(peer_id: int) -> void:
 	if not viewers.has(peer_id):
 		return
 	viewers.erase(peer_id)
+	Netw.dbg.trace("IS[%s] remove_viewer %d", [layer_id, peer_id])
 	viewer_removed.emit(peer_id)
 	_schedule_drive()
 
@@ -209,18 +226,16 @@ func add_entity(entity: NetwEntity) -> void:
 		return
 	entities[entity] = true
 
-	if _is_server():
-		var filter := _make_entity_filter(entity)
-		_entity_filters[entity] = filter
-		for sync in entity.synchronizers():
-			if is_instance_valid(sync):
-				sync.add_visibility_filter(filter)
+	if _is_server() and binding:
+		binding.install_entity(entity, _make_entity_filter(entity))
 
 	var handler := _on_entity_tree_exiting.bind(entity)
 	_entity_exit_handlers[entity] = handler
 	if not entity.owner.tree_exiting.is_connected(handler):
 		entity.owner.tree_exiting.connect(handler)
 
+	Netw.dbg.trace(
+			"IS[%s] add_entity %s", [layer_id, entity.owner.name])
 	entity_added.emit(entity)
 	_schedule_drive()
 
@@ -236,29 +251,26 @@ func remove_entity(entity: NetwEntity) -> void:
 
 	# Emit interest_exit for peers that were seeing this entity, while
 	# the [NetwEntity] reference is still valid.
-	var prev_view: Dictionary = _visibility.get(entity, {})
+	var prev_view := driver.cached_view_for(entity)
 	for peer_id: int in prev_view:
 		if prev_view[peer_id]:
 			interest_exit.emit(entity, peer_id)
 			entity.interest_exit.emit(peer_id)
-	_visibility.erase(entity)
+	driver.forget(entity)
 
 	entities.erase(entity)
 
-	if _is_server():
-		var filter: Callable = _entity_filters.get(entity, Callable())
-		if filter.is_valid() and is_instance_valid(entity.owner):
-			for sync in entity.synchronizers():
-				if is_instance_valid(sync):
-					sync.remove_visibility_filter(filter)
-		_entity_filters.erase(entity)
+	if _is_server() and binding:
+		binding.uninstall_entity(entity)
 
 	var handler: Callable = _entity_exit_handlers.get(entity, Callable())
-	if handler.is_valid() and is_instance_valid(entity.owner) \
+	if handler.is_valid() and is_instance_valid(entity) \
+			and is_instance_valid(entity.owner) \
 			and entity.owner.tree_exiting.is_connected(handler):
 		entity.owner.tree_exiting.disconnect(handler)
 	_entity_exit_handlers.erase(entity)
 
+	Netw.dbg.trace("IS[%s] remove_entity", [layer_id])
 	entity_removed.emit(entity)
 
 
@@ -275,8 +287,7 @@ func has_entity(entity: NetwEntity) -> bool:
 ## [param peer_id]. On the server, valid for every live peer; on the
 ## client, valid only for the local peer.
 func is_visible_to(entity: NetwEntity, peer_id: int) -> bool:
-	var per_entity: Dictionary = _visibility.get(entity, {})
-	return per_entity.get(peer_id, false)
+	return driver.cached_verdict(entity, peer_id)
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +312,49 @@ func dismiss(entity: NetwEntity) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Debugging.
+# ---------------------------------------------------------------------------
+
+## Returns a structured snapshot of every layer subsystem for
+## [param peer_id]. Use when chasing a visibility error: print the
+## dump, correlate [code]binding.entities[].filter_installed[/code]
+## with what the engine actually replicated.
+##
+## Structure:
+## [codeblock]
+##     {
+##         "layer_id": "arena:1",
+##         "policy": 0,
+##         "viewers": [1, 5],
+##         "peer_id": 5,
+##         "verdict": true,
+##         "explanation": "ADMIT peer=5 in viewers under ...",
+##         "driver_cache": {<entity>: {<peer>: bool}},
+##         "binding": { ...InterestFilterBinding.dump_state... },
+##     }
+## [/codeblock]
+func debug_dump(peer_id: int = 0) -> Dictionary:
+	var verdict := InterestPolicy.verdict(policy, viewers, peer_id)
+	var explanation := InterestPolicy.explain(
+			policy, viewers, peer_id)
+	var binding_state: Dictionary
+	if binding:
+		binding_state = binding.dump_state(policy, viewers, peer_id)
+	else:
+		binding_state = {}
+	return {
+		"layer_id": String(layer_id),
+		"policy": policy,
+		"viewers": viewer_ids(),
+		"peer_id": peer_id,
+		"verdict": verdict,
+		"explanation": explanation,
+		"driver_cache": driver.dump(),
+		"binding": binding_state,
+	}
+
+
+# ---------------------------------------------------------------------------
 # Driver.
 # ---------------------------------------------------------------------------
 
@@ -321,83 +375,44 @@ func _schedule_drive() -> void:
 	_drive_visibility_update.call_deferred()
 
 
-# Recomputes visibility and emits transition signals.
-#
-# Server iterates every live peer; client iterates only itself.
-# Hide transitions are sorted deep-first to avoid Godot issue #68508
-# (hiding a shallow ancestor before its visible descendants).
 func _drive_visibility_update() -> void:
 	_drive_scheduled = false
 	if not is_inside_tree():
 		return
 
 	var peers := _live_peers()
-	# Per-(entity, peer) transitions for signal emission. Independent
-	# of synchronizer count so entities without a sync still emit.
-	var hide_transitions: Array = []
-	var show_transitions: Array = []
-	# Per-sync tuples for [method MultiplayerSynchronizer.update_visibility].
-	var sync_hides: Array = []
-	var sync_shows: Array = []
-	var new_state: Dictionary = {}
+	var result := driver.compute(entities, peers, policy, viewers)
 
-	for entity: NetwEntity in entities:
-		if not is_instance_valid(entity) \
-				or not is_instance_valid(entity.owner):
-			continue
-		var prev: Dictionary = _visibility.get(entity, {})
-		var per_entity: Dictionary = {}
-		new_state[entity] = per_entity
-		for peer: int in peers:
-			var now := _verdict_for(peer)
-			per_entity[peer] = now
-			var was: bool = prev.get(peer, false)
-			if was == now:
-				continue
-			var transition := [entity, peer]
-			if now:
-				show_transitions.append(transition)
-			else:
-				hide_transitions.append(transition)
-			for sync in entity.synchronizers():
-				if not is_instance_valid(sync):
-					continue
-				var tup := [sync, peer]
-				if now:
-					sync_shows.append(tup)
-				else:
-					sync_hides.append(tup)
-
-	sync_hides.sort_custom(_sync_deeper_first)
-	sync_shows.sort_custom(_sync_shallower_first)
-	hide_transitions.sort_custom(_entity_deeper_first)
-	show_transitions.sort_custom(_entity_shallower_first)
-
-	if _is_server() and multiplayer \
+	if _is_server() and binding and multiplayer \
 			and multiplayer.multiplayer_peer != null:
-		for t in sync_hides:
-			(t[0] as MultiplayerSynchronizer).update_visibility(t[1])
-		for t in sync_shows:
-			(t[0] as MultiplayerSynchronizer).update_visibility(t[1])
+		binding.apply(result.sync_hides, result.sync_shows)
 
-	for t in hide_transitions:
+	for t in result.hide_transitions:
 		var entity: NetwEntity = t[0]
 		var peer: int = t[1]
 		interest_exit.emit(entity, peer)
 		entity.interest_exit.emit(peer)
-	for t in show_transitions:
+	for t in result.show_transitions:
 		var entity: NetwEntity = t[0]
 		var peer: int = t[1]
 		interest_enter.emit(entity, peer)
 		entity.interest_enter.emit(peer)
 
-	_visibility = new_state
+	if (result.hide_transitions.size() > 0
+			or result.show_transitions.size() > 0):
+		Netw.dbg.trace(
+				"IS[%s] drive peers=%d hides=%d shows=%d",
+				[layer_id, peers.size(),
+				result.hide_transitions.size(),
+				result.show_transitions.size()])
+
+	driver.commit(result)
 
 
 ## Peers the driver iterates over each pass. Unions:
 ## [br]- the multiplayer peer list (real session participants),
 ## [br]- current [member viewers] (peers that should become visible),
-## [br]- peers cached in [member _visibility] (peers that may need to
+## [br]- peers cached in the driver (peers that may need to
 ##   transition to hidden after a [method remove_viewer]).
 ## [br][br]
 ## On a client this collapses to the local peer id when a multiplayer
@@ -414,53 +429,22 @@ func _live_peers() -> Array[int]:
 			seen[multiplayer.get_unique_id()] = true
 	for p in viewers:
 		seen[p] = true
-	for entity in _visibility:
-		var per_entity: Dictionary = _visibility[entity]
-		for p in per_entity:
-			seen[p] = true
+	for p in driver.cached_peers():
+		seen[p] = true
 	var out: Array[int] = []
 	out.assign(seen.keys())
 	return out
-
-
-func _sync_deeper_first(a: Array, b: Array) -> bool:
-	return (a[0] as Node).get_path().get_name_count() \
-		> (b[0] as Node).get_path().get_name_count()
-
-
-func _sync_shallower_first(a: Array, b: Array) -> bool:
-	return (a[0] as Node).get_path().get_name_count() \
-		< (b[0] as Node).get_path().get_name_count()
-
-
-func _entity_deeper_first(a: Array, b: Array) -> bool:
-	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
-		> (b[0] as NetwEntity).owner.get_path().get_name_count()
-
-
-func _entity_shallower_first(a: Array, b: Array) -> bool:
-	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
-		< (b[0] as NetwEntity).owner.get_path().get_name_count()
 
 
 # ---------------------------------------------------------------------------
 # Verdict and filters.
 # ---------------------------------------------------------------------------
 
-## Per-peer verdict resolved from [member policy] and [member viewers].
-## The server peer is always admitted; peer id [code]0[/code] (no peer
-## context) is always rejected.
+# Thin delegate to [InterestPolicy.verdict]. Kept on the node so tests
+# and live debugging can call [code]sync._verdict_for(peer)[/code]
+# without touching [member binding] or [member driver].
 func _verdict_for(peer_id: int) -> bool:
-	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-	if peer_id == 0:
-		return false
-	match policy:
-		Policy.HIDE_FROM_OUTSIDERS:
-			return viewers.has(peer_id)
-		Policy.HIDE_FROM_INSIDERS:
-			return not viewers.has(peer_id)
-	return true
+	return InterestPolicy.verdict(policy, viewers, peer_id)
 
 
 func _self_filter(peer_id: int) -> bool:
@@ -519,21 +503,8 @@ func _build_replication_config() -> void:
 		return
 	if not owner:
 		return
-	_config_built = true
-	root_path = get_path_to(owner)
-	var config := SceneReplicationConfig.new()
-	var viewers_path := NodePath(
-			str(owner.get_path_to(self)) + ":viewers")
-	config.add_property(viewers_path)
-	config.property_set_spawn(viewers_path, true)
-	config.property_set_replication_mode(
-			viewers_path,
-			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
-	var policy_path := NodePath(
-			str(owner.get_path_to(self)) + ":policy")
-	config.add_property(policy_path)
-	config.property_set_spawn(policy_path, true)
-	config.property_set_replication_mode(
-			policy_path,
-			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
-	replication_config = config
+	# binding may not exist yet if NOTIFICATION_PARENTED fires before
+	# _ready; build a transient binding just for config in that case.
+	var b := binding if binding else InterestFilterBinding.new(self)
+	if b.build_replication_config():
+		_config_built = true

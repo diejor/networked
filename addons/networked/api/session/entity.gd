@@ -177,12 +177,12 @@ static func _find_root(node: Node) -> Node:
 		if n.has_meta(META_KEY):
 			return n
 	if n != node:
-		push_warning(
+		Netw.dbg.trace(
 				("NetwEntity.of: walked from '%s' up to topmost "
 				+ "ancestor '%s' with no META and no Node.owner; "
 				+ "attaching entity to '%s'. Set Node.owner or "
 				+ "pre-attach META on the intended root to "
-				+ "disambiguate.") % [node.name, n.name, n.name])
+				+ "disambiguate."), [node.name, n.name, n.name])
 	return n
 
 
