@@ -248,18 +248,7 @@ func add_entity(entity: NetwEntity) -> void:
 			[layer_id, entity.owner.name,
 			entity.owner.is_inside_tree()])
 	entity_added.emit(entity)
-	# Driver-side signal emission only. Intentionally no
-	# [method InterestBinding.refresh_entities] call here: viewers have
-	# not changed, and triggering [method
-	# MultiplayerSynchronizer.update_visibility] before the next
-	# [method add_viewer] would evaluate the freshly installed filter
-	# against the engine's stale [code]peers_info[/code] (peers that
-	# saw this entity at its previous anchor before a reparent),
-	# producing hide messages that encode the entity's new path - which
-	# outsider peers cannot resolve. Engine re-evaluation is the
-	# [method add_viewer] / [method remove_viewer] /
-	# [signal MultiplayerSynchronizer.delta_synchronized] job.
-	_emit_transitions()
+	_refresh_now()
 
 
 ## Removes [param entity] from this anchor. Emits [signal interest_exit]
