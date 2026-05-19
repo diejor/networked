@@ -218,7 +218,7 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 
 
 func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
-	for entity: NetwEntity in layer.entities:
+	for entity: NetwEntity in layer._entities:
 		_mark_entity_dirty(entity)
 
 

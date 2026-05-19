@@ -7,7 +7,7 @@ class_name TestSceneInterestGate
 extends NetworkedTestSuite
 
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
-const TEST_PLAYER_SCENE := preload("res://tests/helpers/test_player.tscn")
+const TEST_PLAYER_MINIMAL = preload("uid://bpnpmprpg6p6b")
 
 var harness: NetworkTestHarness
 var server_mgr: MultiplayerSceneManager
@@ -59,7 +59,7 @@ func test_client_layer_entities_empty_even_after_admission() -> void:
 	# Spawn a player so the server's layer has entities, then verify
 	# the client's mirror of that layer carries no entity membership
 	# (entities are server-only state).
-	harness.spawn_player(client0, TEST_PLAYER_SCENE)
+	harness.spawn_player(client0, TEST_PLAYER_MINIMAL)
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
 	# Server-side: layer has the player as an entity.

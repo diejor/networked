@@ -94,8 +94,15 @@ var policy: int = Policy.HIDE_FROM_OUTSIDERS
 ## Peer ids participating in this layer.
 var viewers: Dictionary[int, bool] = {}
 
+var _entities: Dictionary[NetwEntity, bool] = {}
+
 ## Server-owned entity set participating in this layer.
-var entities: Dictionary[NetwEntity, bool] = {}
+var entities: Dictionary[NetwEntity, bool]:
+	get:
+		var s := _service()
+		if s and not s._is_server():
+			return {}
+		return _entities
 
 ## Per-(entity, peer) transition cache used by [method drive_now].
 var driver: InterestDriver = InterestDriver.new()
@@ -156,9 +163,9 @@ func has_viewer(peer_id: int) -> bool:
 func add_entity(entity: NetwEntity) -> bool:
 	if entity == null or not is_instance_valid(entity.owner):
 		return false
-	if entities.has(entity):
+	if _entities.has(entity):
 		return false
-	entities[entity] = true
+	_entities[entity] = true
 	entity_added.emit(entity)
 	var s := _service()
 	if s:
@@ -168,7 +175,7 @@ func add_entity(entity: NetwEntity) -> bool:
 
 ## Removes [param entity] from this layer. Emits exits first.
 func remove_entity(entity: NetwEntity) -> bool:
-	if entity == null or not entities.has(entity):
+	if entity == null or not _entities.has(entity):
 		return false
 	var prev_view := driver.cached_view_for(entity)
 	for peer_id: int in prev_view:
@@ -176,7 +183,7 @@ func remove_entity(entity: NetwEntity) -> bool:
 			interest_exit.emit(entity, peer_id)
 			entity.interest_exit.emit(peer_id)
 	driver.forget(entity)
-	entities.erase(entity)
+	_entities.erase(entity)
 	entity_removed.emit(entity)
 	var s := _service()
 	if s:
@@ -186,7 +193,7 @@ func remove_entity(entity: NetwEntity) -> bool:
 
 ## Returns [code]true[/code] when [param entity] is in this layer.
 func has_entity(entity: NetwEntity) -> bool:
-	return entities.has(entity)
+	return _entities.has(entity)
 
 
 ## Returns the cached verdict for [param entity] and [param peer_id].
@@ -196,7 +203,7 @@ func is_visible_to(entity: NetwEntity, peer_id: int) -> bool:
 
 ## Computes transitions for [param peers] without engine side effects.
 func drive_now(peers: Array[int]) -> InterestDriver.Result:
-	var result := driver.compute(entities, peers, policy, viewers)
+	var result := driver.compute(_entities, peers, policy, viewers)
 	_emit_transitions(result)
 	driver.commit(result)
 	return result
