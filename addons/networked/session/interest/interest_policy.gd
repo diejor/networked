@@ -25,7 +25,7 @@ extends RefCounted
 ## ([constant MultiplayerPeer.TARGET_PEER_SERVER]) is always admitted;
 ## peer id [code]0[/code] is always rejected.
 static func verdict(
-		kind: int,
+		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary,
 		peer_id: int) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
@@ -43,7 +43,7 @@ static func verdict(
 ## Returns a one-line description of why [param peer_id] resolved the
 ## way it did. Intended for log lines and debugger inspection.
 static func explain(
-		kind: int,
+		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary,
 		peer_id: int) -> String:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
@@ -69,7 +69,7 @@ static func explain(
 			% [peer_id, kind]
 
 
-static func _kind_label(kind: int) -> String:
+static func _kind_label(kind: NetwInterestLayer.Policy) -> String:
 	match kind:
 		NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
 			return "HIDE_FROM_OUTSIDERS"

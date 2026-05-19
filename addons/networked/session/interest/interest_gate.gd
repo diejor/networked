@@ -48,7 +48,8 @@ extends MultiplayerSynchronizer
 		_on_viewers_replicated(prev, value)
 
 ## Spawn-synced policy value for the bound layer.
-@export var policy: int = NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
+@export var policy: NetwInterestLayer.Policy = \
+		NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
 	set(value):
 		var changed := value != policy
 		policy = value
@@ -95,7 +96,8 @@ func verdict_for(peer_id: int) -> bool:
 ## This updates replicated properties and the gate synchronizer's own
 ## per-peer visibility. Callers should mutate the layer, not this method.
 func apply_snapshot(
-		new_viewers: PackedInt32Array, new_policy: int) -> void:
+		new_viewers: PackedInt32Array,
+		new_policy: NetwInterestLayer.Policy) -> void:
 	_applying_local = true
 	policy = new_policy
 	viewers = new_viewers

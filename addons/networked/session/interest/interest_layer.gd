@@ -89,7 +89,7 @@ signal gate_unbound(gate: Object)
 var layer_id: StringName
 
 ## Composition policy. See [enum Policy].
-var policy: int = Policy.HIDE_FROM_OUTSIDERS
+var policy: Policy = Policy.HIDE_FROM_OUTSIDERS
 
 ## Peer ids participating in this layer.
 var viewers: Dictionary[int, bool] = {}
@@ -119,7 +119,7 @@ func _init(id: StringName = &"", service: Object = null) -> void:
 
 
 ## Replaces [member policy]. Returns [code]true[/code] when changed.
-func set_policy(value: int) -> bool:
+func set_policy(value: Policy) -> bool:
 	if policy == value:
 		return false
 	policy = value

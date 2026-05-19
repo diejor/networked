@@ -84,7 +84,7 @@ func cached_peers() -> Array[int]:
 func compute(
 		entities: Dictionary,
 		peers: Array[int],
-		kind: int,
+		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary) -> Result:
 	var result := Result.new()
 	for entity: NetwEntity in entities:
@@ -102,7 +102,7 @@ func compute(
 func _compute_entity(
 		entity: NetwEntity,
 		peers: Array[int],
-		kind: int,
+		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary,
 		result: Result) -> void:
 	# Off-tree owners and syncs cannot be ordered by [method
