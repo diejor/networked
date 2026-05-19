@@ -3,65 +3,36 @@
 Development setup
 =================
 
-This page walks through getting a Networked checkout running locally, both
-the addon proper and the test suite. The addon ships as a Godot project that
-contains its own examples and tests, so cloning the repository gives you
-everything you need to make changes and verify them without a second
-project.
-
-Cloning the project
--------------------
-
-The repository uses Git LFS for binary art assets in the example projects.
-After cloning, run ``git lfs pull`` once. Otherwise, your editor will open
-broken textures in the bomber and daily examples.
+Clone the repository and open its root folder as a Godot project:
 
 .. code-block:: console
 
     git clone https://github.com/diejor/networked.git
     cd networked
-    git lfs pull
 
-The directory layout is intentionally flat: ``addons/networked`` is the
-addon itself, ``examples/`` contains complete sample projects, ``tests/``
-contains the GdUnit4 test suite, and ``docs/`` is the Sphinx documentation
-you are reading right now.
+The project already contains the addon, examples, tests, and documentation.
+Godot will import resources the first time you open it. After import finishes,
+make sure the *Networked* and *GdUnit4* plugins are enabled in
+:menu:`Project > Project Settings > Plugins`.
 
-Editor and engine versions
---------------------------
+The project is currently developed and tested with the Godot version used by
+CI. See ``.github/workflows/ci.yml`` and
+``.github/actions/build-docs-classes/action.yml`` for the exact versions used
+by tests and documentation builds.
 
-Networked targets Godot 4.2 and newer. CI builds with the current stable
-release. If a patch starts depending on a feature from a newer minor, the
-PR should bump the ``Requirements`` section in ``README.md`` and the
-matching note at the top of :ref:`doc_quick_start`.
+Running tests
+-------------
 
-Open the repository root as a Godot project. The editor will import the
-addon's resources on first launch. Give it a minute, particularly on a
-fresh clone where the ``.godot`` import cache is empty. Once import
-finishes, enable the *Networked* plugin in
-:menu:`Project → Project Settings → Plugins` if it is not enabled already.
+Networked uses `GdUnit4 <https://mikeschulze.github.io/gdUnit4/>`__. Run the
+tests from the editor with :menu:`Tools > GdUnit4 > Run Tests`, or from the
+command line:
 
-Running the test suite
-----------------------
+.. warning::
 
-The repository uses `GdUnit4 <https://mikeschulze.github.io/gdUnit4/>`__,
-vendored as an addon under ``addons/gdUnit4``. There are two layers of
-tests you should know about:
-
-- **Unit tests** in ``tests/unit/`` exercise individual scripts in
-  isolation. They are fast (milliseconds per test) and have no multiplayer
-  setup. They are the right place for new logic that does not touch
-  RPCs.
-- **Integration tests** in ``tests/integration/`` spin up real
-  :ref:`MultiplayerTree <class_MultiplayerTree>` instances, host a session,
-  connect one or more clients, and assert end-to-end behaviour. They use
-  the :ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>` and the
-  ``NetworkTestHarness`` helper to
-  avoid touching the network.
-
-From the editor, run the full suite from the *GdUnit4* dock:
-:menu:`Tools → GdUnit4 → Run Tests`. From the command line, the addon
-ships a runner script:
+    Run tests with one Godot instance. Disable
+    :menu:`Debug > Run Multiple Instances` and close any extra debug sessions
+    before starting GdUnit4. The integration tests manage their own peers and
+    will fail if another project instance is already running.
 
 .. tabs::
  .. code-tab:: bash Linux/macOS
@@ -72,38 +43,49 @@ ships a runner script:
 
     .\addons\gdUnit4\runtest.cmd -a tests
 
-If you are adding a feature that touches the session, please write at
-least one integration test alongside the unit tests. The existing
-``tests/integration/test_multiplayer_tree_connect.gd`` is a good template
-to copy: it builds a server tree, a client tree, hosts, joins, and
-asserts.
+Use a focused path while working on one area:
 
-.. note::
+.. tabs::
+ .. code-tab:: bash Linux/macOS
 
-    The integration tests assume the GdUnit4 runner is in charge of the
-    main loop. If your test creates additional ``SceneTree`` plumbing of
-    its own, free it in ``after_test``. The ``auto_free`` helper is the
-    most reliable way to do this.
+    ./addons/gdUnit4/runtest.sh -a tests/integration/test_multiplayer_tree_connect.gd
 
-Running the examples
---------------------
+ .. code-tab:: powershell Windows
 
-The fastest way to validate a change to the core is to run the bundled
-examples. Both rely on the addon directly without any duplication, so a
-regression usually shows up immediately:
+    .\addons\gdUnit4\runtest.cmd -a tests/integration/test_multiplayer_tree_connect.gd
 
-- ``examples/daily/Main.tscn``: A single-player walk-and-teleport scene
-  that covers the core spawn, save, and teleport flow. Good for verifying
-  changes to :ref:`SpawnerComponent <class_SpawnerComponent>`,
-  :ref:`SaveComponent <class_SaveComponent>`, and
-  :ref:`TPComponent <class_TPComponent>`.
-- ``examples/bomber/main.tscn``: A multi-player lobby and match scene
-  using :ref:`WebSocketBackend <class_WebSocketBackend>`. Good for
-  verifying changes to the session roster, scene manager, and per-peer
-  context plumbing.
+The test session hook can enable Networked logs for the whole run:
 
-Run each scene with :kbd:`F5` after temporarily setting it as the project's
-main scene. To test two clients at once, use :menu:`Debug → Run Multiple
-Instances`.
-.
-.
+.. tabs::
+ .. code-tab:: bash Linux/macOS
+
+    NETW_TEST_LOG=trace ./addons/gdUnit4/runtest.sh -a tests
+
+ .. code-tab:: powershell Windows
+
+    $env:NETW_TEST_LOG = "trace"
+    .\addons\gdUnit4\runtest.cmd -a tests
+
+You can also pass ``--netw-log=trace`` to Godot, or enable logs for a single
+test from a GdUnit test class:
+
+.. code-block:: gdscript
+
+    func before_test() -> void:
+        enable_logs("trace")
+
+Use logs when debugging session setup, backend connection failures, spawn
+order, or authority issues. Leave them disabled for normal test runs unless
+the failure needs the extra detail.
+
+Running examples
+----------------
+
+The repository includes example scenes that exercise the addon directly:
+
+- ``examples/daily/Main.tscn`` shows spawning, saving, and teleporting.
+- ``examples/bomber/main.tscn`` shows a lobby, multiple players, and gameplay
+  over a backend.
+
+Open a scene in the editor and press :kbd:`F5`. To test more than one local
+peer, use :menu:`Debug > Run Multiple Instances`.

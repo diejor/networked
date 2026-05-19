@@ -3,9 +3,9 @@
 Transport backends
 ==================
 
-The :ref:`BackendPeer <class_BackendPeer>` resource is the seam between
-Networked's session lifecycle and the underlying transport. A backend's
-single job is to produce a configured
+The :ref:`BackendPeer <class_BackendPeer>` resource connects Networked's
+session lifecycle to the underlying transport. A backend's main job is to
+produce a configured
 :godot:`MultiplayerPeer <MultiplayerPeer>` when the tree asks for one --
 everything else (session state, roster, scene replication) is the same
 regardless of whether your bytes are travelling over UDP, WebSocket, or a
@@ -21,8 +21,8 @@ If you do not have a strong reason to pick otherwise, start with
 :ref:`ENetBackend <class_ENetBackend>` for desktop projects and
 :ref:`WebSocketBackend <class_WebSocketBackend>` for projects that need a
 web export. Both implement the full backend contract, both support local
-loopback, and both will get you through the entire :ref:`quick start
-<doc_quick_start>` without changes.
+loopback, and both will get you through the entire
+:ref:`quick start <doc_quick_start>` without changes.
 
 .. list-table::
    :header-rows: 1

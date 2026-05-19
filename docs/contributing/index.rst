@@ -5,17 +5,13 @@
 Contributing
 ============
 
-Networked is a small project run by a single maintainer, and contributions of
-every size are welcome. Bug reports, repro projects, docs fixes, new
-example scenes, transport backends, and patches against the core. This page
-describes how the repository is laid out, what the test suite expects, how
-the documentation is built, and the conventions a pull request should match
-before review.
+All kind of contributions are welcome, new features, bug
+reports with a minimal reproduction, focused fixes, tests, examples, and
+documentation updates.
 
-If you have stumbled on this page because something does not work, please
-open an issue first with a minimal reproduction project. A scene that
-demonstrates the bug is worth ten paragraphs of description and lets the
-fix land in hours instead of days.
+Before changing behavior, try to make the problem reproducible in a test or in
+one of the example scenes. Multiplayer bugs are much easier to review when the
+expected peer, scene, and authority state are visible.
 
 .. toctree::
    :maxdepth: 1

@@ -11,15 +11,15 @@ the same time.
 
 Networked is built directly on top of Godot's high-level multiplayer API. If
 you have never read the engine's :godot:`SceneMultiplayer <SceneMultiplayer>`
-chapter before, you do not need to — this page introduces every concept that
-you need — but the engine's :godot:`MultiplayerSpawner <MultiplayerSpawner>`
+chapter before, you do not need to, this page introduces every concept that
+you need, but the engine's :godot:`MultiplayerSpawner <MultiplayerSpawner>`
 and :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` documentation
 makes a good companion read once you are done.
 
 .. note::
 
-    The code on this page targets Godot 4.2 or newer with GDScript. C# is not
-    currently supported by the addon.
+    The code on this page uses GDScript. C# is not currently supported by the
+    addon.
 
 Before you start
 ----------------
@@ -27,7 +27,7 @@ Before you start
 You should already have:
 
 - A Godot project with the ``addons/networked/`` folder installed and the
-  *Networked* plugin enabled in :menu:`Project → Project Settings → Plugins`.
+  *Networked* plugin enabled in :menu:`Project > Project Settings > Plugins`.
 - Familiarity with the editor's scene dock and inspector. If you have built a
   single-player Godot scene before, you have enough.
 
@@ -40,7 +40,7 @@ The mental model
 
 Networked turns a Godot scene tree into a *session*. A session is anything
 that can be hosted or joined: a listen-server with two players, a dedicated
-server with thirty, a hot-seat lobby on a single machine. The three nodes you
+server, a hot-seat lobby on a single machine. The three nodes you
 will meet in this quick start are the moving parts of every session.
 
 - :ref:`MultiplayerTree <class_MultiplayerTree>` is the entry point. You add
@@ -67,9 +67,8 @@ Setting up the session
 
 Create a new empty scene with a :godot:`Node2D <Node2D>` root and save it as
 ``main.tscn``. Add a child :godot:`Node <Node>` named ``Client`` (this name
-is arbitrary, but it is convenient when you later run a listen-server, because
-the addon spawns a sibling ``Server`` node next to it. Attach the
-:ref:`MultiplayerTree <class_MultiplayerTree>` script to the new node.
+is arbitrary. Attach the :ref:`MultiplayerTree <class_MultiplayerTree>` 
+script to the new node.
 
 In the inspector for ``Client``, click :button:`<empty>` next to the
 :button:`Backend` property and choose :menu:`New WebSocketBackend`. The
@@ -78,14 +77,6 @@ exports without any extra configuration. If you target desktop only, pick
 :menu:`New ENetBackend` instead. Both implement the same
 :ref:`BackendPeer <class_BackendPeer>` interface, so the rest of this page
 applies unchanged.
-
-.. warning::
-
-    Do not assign the abstract ``BackendPeer`` itself. The editor will show a
-    configuration warning on the node and the session will refuse to start.
-    Always pick one of the concrete implementations such as
-    :ref:`ENetBackend <class_ENetBackend>` or
-    :ref:`WebSocketBackend <class_WebSocketBackend>`.
 
 You now have a tree that can host or join, but no world for players to spawn
 into. Let's build one.
@@ -108,7 +99,7 @@ right place on every client's first frame.
 
 .. note::
 
-    All flags other than *Spawn* are coerced to off at runtime --
+    All flags other than *Spawn* are coerced to off at runtime,
     :ref:`SpawnerComponent <class_SpawnerComponent>` only uses the
     replication config for the spawn snapshot. For continuous state
     replication, add a sibling
@@ -124,9 +115,8 @@ but the client peer owns the body itself and can read input from
 Finally, create the level scene ``level.tscn`` with a :godot:`Node2D <Node2D>`
 root and instance ``player.tscn`` as a child. The player you place here is a
 *template*: it sits in the scene at edit time, but the runtime spawn flow
-copies it for each connecting peer. You do not need to add a
-:godot:`MultiplayerSpawner <MultiplayerSpawner>` yourself. Networked manages
-that.
+copies it for each connecting peer. Add a :godot:`MultiplayerSpawner <MultiplayerSpawner>` 
+that tracks ``player.tscn`` in the auto-spawn list.
 
 Back in ``main.tscn``, drag ``level.tscn`` as a child of the ``Client`` node.
 Because the level contains a :ref:`SpawnerComponent <class_SpawnerComponent>`
@@ -149,11 +139,12 @@ they want to spawn, and (optionally) where the server lives:
     extends Node2D
 
     @onready var client: MultiplayerTree = $Client
+    const LEVEL = preload("res://level.tscn")
 
     func _ready() -> void:
         var spawner_path := SceneNodePath.new()
-        spawner_path.scene_path = preload("res://level.tscn").resource_path
-        spawner_path.node_path = "Player/SpawnerComponent"
+        spawner_path.scene_path = LEVEL.resource_path
+        spawner_path.node_path = "Player/%SpawnerComponent"
 
         var join := JoinPayload.new()
         join.username = "alice"
@@ -178,7 +169,7 @@ and the tree will create a client peer that connects to it.
     call :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
-:menu:`Debug → Run Multiple Instances` and set it to ``2``. Run the project
+:menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project
 again: two windows appear, each spawns a player with the username they were
 given, and you should see both characters on each screen.
 
@@ -224,8 +215,8 @@ Where to go next
 ----------------
 
 You now have the building blocks every Networked session uses: a tree, a
-backend, a level, and a spawnable player. From here, the :ref:`manual
-<doc_manual_overview>` walks through each subsystem in depth, including
+backend, a level, and a spawnable player. From here, the
+:ref:`manual <doc_manual_overview>` walks through each subsystem in depth, including
 scene transitions with :ref:`TPComponent <class_TPComponent>`, saved data
 with :ref:`SaveComponent <class_SaveComponent>`, and the
 :ref:`NetwContext <class_NetwContext>` facade used by most user scripts.
@@ -233,6 +224,4 @@ with :ref:`SaveComponent <class_SaveComponent>`, and the
 If you want to see a complete, larger project, the ``examples/bomber`` scene
 in the repository runs the same APIs across a lobby, multiple connected
 players, and a per-peer authoritative bomb spawner.
-
-
 

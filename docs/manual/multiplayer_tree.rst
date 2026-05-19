@@ -14,8 +14,8 @@ Most user code never instantiates the tree manually. You add it as a node in
 the editor, fill in its inspector fields, and then either let it connect on
 :godot:`_ready() <Node#class_node_private_method__ready>` (via :button:`Init Join Payload`) or drive it from a script with
 :ref:`connect_player() <class_MultiplayerTree_method_connect_player>`. This
-page describes the lifecycle, the role/state machine, and the seams that
-make custom transports and embedded servers possible.
+page describes the lifecycle, the role and state machine, custom transports,
+and embedded servers.
 
 A tree in the scene
 -------------------

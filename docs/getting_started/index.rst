@@ -6,16 +6,15 @@ Getting started
 ===============
 
 This section is the entry point for new Networked users. It assumes you can
-already build a small single-player Godot project but have not yet built a
-multiplayer one. By the end of the quick start you will have a window that
-hosts a session, accepts another instance as a client, and replicates a
-moving character between them.
+already build a small single-player Godot project, but have not yet built a
+multiplayer one. The quick start walks through a session that hosts locally,
+accepts another editor instance as a client, and replicates a moving
+character between both windows.
 
 If you have used Godot's :godot:`SceneMultiplayer <SceneMultiplayer>`
-directly before, you will recognize the pieces underneath. Networked never
-hides Godot's high-level API, it just wraps it so the most common project
-shape (host, scene, players, transport) takes a handful of inspector clicks
-instead of a few hundred lines of glue code.
+directly before, the pieces should look familiar. Networked keeps the same
+peer and RPC model, but gives common project structure--host, scene, players,
+and transport--a smaller API.
 
 .. toctree::
    :maxdepth: 1

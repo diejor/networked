@@ -5,8 +5,8 @@
 Manual
 ======
 
-The manual is the reference companion to the :ref:`quick start
-<doc_quick_start>`. Where the quick start walks you through one scene in one
+The manual is the reference companion to the :ref:`quick start <doc_quick_start>`.
+Where the quick start walks you through one scene in one
 sitting, the manual zooms in on each subsystem so you can pick the parts you
 need and ignore the parts you don't. Pages can be read in any order, but if
 this is your first deep dive into the addon, start with

@@ -3,121 +3,137 @@
 Code style
 ==========
 
-Networked follows the conventions you see in the standard library and in
-godot-docs' own examples, with a few addon-specific rules to keep the
-network-facing parts predictable. This page is not a long list of
-formatting rules. The existing files in ``addons/networked/`` are the
-canonical reference, but this guide captures the choices that come up in code
-review often enough to be worth writing down.
+Networked follows Godot's GDScript style where possible. Existing files in
+``addons/networked/`` are the best reference for formatting, naming, and
+structure.
 
-GDScript conventions
---------------------
+Keep changes small and direct. Multiplayer code is easier to review when a
+patch changes one behavior, includes the tests for that behavior, and avoids
+rewriting nearby code for style alone.
 
-- **Tabs for indentation**, four-column width. This matches the engine's
-  defaults and the editor's auto-formatter.
-- **Static typing everywhere a value is assigned at declaration**. The
-  inferred form ``var foo := 3`` is preferred over the explicit
-  ``var foo: int = 3`` when the right-hand side carries the type. For
-  fields, prefer the explicit form so the inspector and the docs see the
-  type even when no initializer is present.
-- **Use ``class_name``** for any script that is going to be referenced from
-  another file. Networked's class reference picks the class up
-  automatically once it has a ``class_name``.
-- **Doc comments use ``##``**. The first ``##`` block above the class
-  declaration becomes the class description in the reference. The block
-  above a method or member becomes its description. The first sentence
-  should be a complete one-line summary that reads sensibly in a class
-  index.
-- **Signals are documented**, even when their name seems obvious. The
-  reader of the class reference does not always have the script open;
-  spell out *who* emits the signal and *when*.
+GDScript
+--------
 
-A typical script header looks like this:
+- Use tabs for indentation.
+- Prefer wrapping code at 80 columns. This is not a hard formatter rule, but
+  long expressions should usually be split before review.
+- Prefer typed variables, parameters, return values, and exported fields.
+- Use ``class_name`` for scripts that form part of the public API or are used
+  from other files.
+- Use ``##`` documentation comments on public classes, methods, properties,
+  and signals.
+- Keep public names in ``snake_case``. Private helpers should start with
+  ``_``.
+- Name signals after the event they report, such as ``player_joined`` or
+  ``configured``.
+
+Doc comments should explain what the API does from the caller's point of
+view. Avoid restating the method name. A useful first sentence can stand alone
+in the generated class reference.
 
 .. code-block:: gdscript
 
-    ## Stores per-peer scratch state used by a single component.
-    ##
-    ## Each consumer declares its own [code]Bucket[/code] inner class and
-    ## retrieves a typed instance via [method get_bucket].
+    ## Stores per-peer state for one component.
     class_name MyComponent
     extends Node
 
-    ## Emitted on the server when [method begin] finishes resolving.
-    signal began(result: Dictionary)
+    ## Emitted on the server after setup finishes.
+    signal configured(peer_id: int)
 
-RPC discipline
---------------
+Logging
+-------
 
-RPCs are the single largest source of multiplayer bugs, so Networked applies
-two extra rules on top of the defaults Godot enforces.
+Use ``Netw.dbg`` for addon logs. Pass formatting values as an array instead
+of formatting the string first:
 
-- **Validate the sender, always.** Every ``any_peer`` RPC handler must call
-  :godot:`get_remote_sender_id() <MultiplayerAPI#class_multiplayerapi_method_get_remote_sender_id>` and reject calls from peers it does
-  not expect. Use the helper logging pattern from the existing
-  :ref:`MultiplayerTree <class_MultiplayerTree>` RPCs for consistency:
+.. code-block:: gdscript
 
-  .. code-block:: gdscript
+    Netw.dbg.info("Player %s connected.", [username])
 
-      @rpc("any_peer", "call_local", "reliable")
-      func _rpc_request_thing() -> void:
-          if not multiplayer.is_server():
-              Netw.dbg.warn(
-                  "_rpc_request_thing received on non-server peer %d",
-                  [multiplayer.get_unique_id()]
-              )
-              return
-          # ...
+The array form avoids formatting work when the log level is disabled. If the
+arguments are expensive to compute, check the level first:
 
-- **Prefer :godot:`rpc_id(1, ...) <Node#class_node_method_rpc_id>` over broadcast for any client-to-server
-  message.** The default :godot:`rpc() <Node#class_node_method_rpc>` broadcasts to every peer. For a request
-  meant for the server only, that is wasted bandwidth and a security risk.
-  The class docs on :ref:`Netw <class_Netw>` call this out for the same
-  reason.
+.. code-block:: gdscript
 
-Naming
-------
+    if Netw.dbg.is_level_active(NetwLog.Level.TRACE):
+        Netw.dbg.trace("Roster: %s", [build_roster_dump()])
 
-- Public methods are ``snake_case``. Helpers and constants follow the engine
-  style.
-- RPC handlers are prefixed with ``_rpc_`` when they are not part of the
-  public API. The prefix makes it obvious in logs which call is an RPC
-  versus a normal method.
-- Signals are past-tense verbs (``configured``, ``player_joined``) when
-  they describe completed events, and present participles
-  (``connecting``, ``spawning``) when they describe events in progress.
+For warnings and errors that should appear in Godot's editor output with a
+clickable file and line, pass a callable that emits the engine warning or
+error from the call site:
+
+.. code-block:: gdscript
+
+    Netw.dbg.warn(
+        "Backend failed to bind port %d.", [port],
+        func(m): push_warning(m)
+    )
+    Netw.dbg.error(
+        "Scene '%s' could not be loaded.", [path],
+        func(m): push_error(m)
+    )
+
+Component code can also cache a handle:
+
+.. code-block:: gdscript
+
+    var _dbg: NetwHandle = Netw.dbg.handle(self)
+
+    func _ready() -> void:
+        _dbg.info("Ready for peer %d.", [multiplayer.get_unique_id()])
+
+RPCs
+----
+
+Treat every RPC as a public network boundary. Validate who sent it, validate
+the state it expects, and log failures with enough context to diagnose the
+peer that made the call.
+
+For client-to-server messages, prefer
+:godot:`rpc_id(1, ...) <Node#class_node_method_rpc_id>` over broadcast RPCs.
+Use :godot:`get_remote_sender_id() <MultiplayerAPI#class_multiplayerapi_method_get_remote_sender_id>`
+in ``any_peer`` handlers and reject calls from unexpected peers.
+
+Most Networked RPC handlers that represent client requests use
+``@rpc("any_peer", "call_local", "reliable")``. ``call_local`` matters for
+listen servers: the server can also be the local player, so a locally
+triggered request must run on the same peer. Server-only operations should
+still guard with ``multiplayer.is_server()`` inside the handler, because
+remote clients can call the same RPC too.
+
+.. code-block:: gdscript
+
+    @rpc("any_peer", "call_local", "reliable")
+    func _rpc_request_spawn() -> void:
+        if not multiplayer.is_server():
+            Netw.dbg.warn(
+                "_rpc_request_spawn received on non-server peer %d",
+                [multiplayer.get_unique_id()]
+            )
+            return
+
+        var sender_id := multiplayer.get_remote_sender_id()
+        # Validate sender_id before mutating session state.
+
+Assertions
+----------
+
+Use ``assert()`` for invariants that should fail loudly in debug builds and
+for time-sensitive code where continuing would hide the real fault. Examples
+include server-only entry points, required setup order, and impossible spawn
+states.
+
+Do not use ``assert()`` for recoverable user or network errors. Log those with
+``Netw.dbg.warn()`` or ``Netw.dbg.error()`` and return an error value when the
+caller can handle the failure.
 
 Tests
 -----
 
-The :ref:`development setup <doc_contributing_setup>` page describes the
-test framework. A few stylistic notes:
+Add or update tests with code changes whenever the behavior can be checked
+without excessive setup. Prefer tests that describe user-visible behavior over
+implementation details.
 
-- **One concept per test.** Each ``test_*`` method should assert one
-  observable property of the system. Tests that chain three behaviours
-  together produce vague failure messages.
-- **Name tests for behaviour, not implementation.**
-  ``test_client_is_online_after_connect_player`` reads better than
-  ``test_connect_player_sets_state_to_online``. The reader of a failing
-  test wants to know what is broken, not what line broke.
-- **Use the harness for multi-tree cases.** ``NetworkTestHarness`` (in
-  ``tests/helpers/``) abstracts the most common server-plus-N-clients
-  pattern. Reach for it before hand-rolling a new fixture. If it is
-  missing something, extend it instead of duplicating it.
-
-Commits and pull requests
--------------------------
-
-- Keep commits focused. A single PR should usually contain one
-  conceptually-coherent change. If it touches docs, code, and tests, that
-  is fine as long as they all describe the same change.
-- The commit message subject line should fit in 72 characters and read as
-  an instruction: ``Make SpawnerComponent log instead of crash on missing
-  owner``, not ``Fixed crash``.
-- Pull requests should describe the *user-visible* change in the
-  description. The body of the PR ends up in the changelog. Reviewers (and
-  future you) read it before they read the diff.
-
-Thanks for taking the time to read this far. If anything in this page is
-out of date or unclear, opening a PR that fixes the page itself is the
-single most valuable contribution you can make right now.
+For multiplayer flows, use the helpers in ``tests/helpers/`` before creating a
+new fixture. If a helper is missing one small feature, extend the helper rather
+than copying setup code into a new test.
