@@ -348,10 +348,13 @@ func _on_spawned(player: Node) -> void:
 
 func _on_despawned(player: Node) -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene) or not (player in scene.get_players()):
+	if not is_instance_valid(scene):
+		return
+	var peer_id := _get_peer_id(player)
+	if peer_id == 0:
 		return
 	player_left.emit(player)
-	scene._notify_gates_player_removed(_get_peer_id(player))
+	scene._notify_gates_player_removed(peer_id)
 
 
 func _on_countdown_tick(seconds_left: int) -> void:

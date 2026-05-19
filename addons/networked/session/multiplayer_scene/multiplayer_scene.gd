@@ -199,10 +199,9 @@ func track_node(node: Node) -> void:
 				[node.name])
 		return
 	_tracked_nodes[node] = true
-	if _is_server():
-		var l := layer
-		if l:
-			l.add_entity(entity)
+	var l := layer
+	if l:
+		l.add_entity(entity)
 	var on_spawned := _on_spawned.bind(node)
 	if not node.tree_entered.is_connected(on_spawned):
 		node.tree_entered.connect(on_spawned)
@@ -215,10 +214,11 @@ func track_node(node: Node) -> void:
 func untrack_node(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
-	var entity := NetwEntity.of(node)
-	if entity and _is_server():
+	var peer_id := _get_peer_id(node)
+	if not node.is_inside_tree():
+		var entity := NetwEntity.of(node)
 		var l := layer
-		if l:
+		if entity and l:
 			l.remove_entity(entity)
 	_tracked_nodes.erase(node)
 	var on_spawned := _on_spawned.bind(node)
@@ -227,6 +227,8 @@ func untrack_node(node: Node) -> void:
 	var on_despawned := _on_despawned.bind(node)
 	if node.tree_exiting.is_connected(on_despawned):
 		node.tree_exiting.disconnect(on_despawned)
+	if peer_id != 0:
+		_notify_gates_player_removed(peer_id)
 
 
 # ---------------------------------------------------------------------------
@@ -241,10 +243,9 @@ func _on_spawned(node: Node) -> void:
 	var entity := NetwEntity.of(node)
 	if entity != null:
 		_tracked_nodes[node] = true
-		if _is_server():
-			var l := layer
-			if l:
-				l.add_entity(entity)
+		var l := layer
+		if l:
+			l.add_entity(entity)
 	if node.is_inside_tree():
 		spawned.emit(node)
 		player_spawned.emit(node)
@@ -264,7 +265,7 @@ func _on_despawned(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
 	var entity := NetwEntity.of(node)
-	if entity and _is_server():
+	if entity:
 		var l := layer
 		if l:
 			l.remove_entity(entity)
@@ -289,8 +290,35 @@ func _is_server() -> bool:
 func add_player(player: Node) -> void:
 	track_node(player)
 	register_player(player)
+	_flush_gate_now()
 	level.add_child(player)
 	player.owner = level
+	_flush_interest_now()
+
+
+## Admits [param player]'s peer before a server-side reparent into this
+## scene. Call before [method Node.reparent] so the gate's spawn
+## visibility is flushed before child spawn packets target this scene.
+func prepare_player_transfer(player: Node) -> void:
+	var peer_id := _get_peer_id(player)
+	if peer_id == 0:
+		Netw.dbg.error(
+			"Cannot prepare player '%s': peer_id is 0.",
+			[player.name],
+			func(m): push_error(m)
+		)
+		return
+	_players_by_peer[peer_id] = weakref(player)
+	connect_peer(peer_id)
+	_flush_gate_now()
+
+
+## Completes a server-side transfer after [param player] has entered
+## this scene. Registers the entity and flushes synchronizer visibility
+## before follow-up RPCs target nodes under the transferred player.
+func complete_player_transfer(player: Node) -> void:
+	register_player(player)
+	_flush_interest_now()
 
 
 ## Admits [param player]'s peer, enrolls the player as a tracked
@@ -353,6 +381,28 @@ func _find_peer_for_player(player: Node) -> int:
 		if _players_by_peer[peer_id].get_ref() == player:
 			return peer_id
 	return 0
+
+
+func _flush_interest_now() -> void:
+	if not _is_server():
+		return
+	var mt := MultiplayerTree.resolve(self)
+	if not mt:
+		return
+	var service := mt.get_service(InterestService) as InterestService
+	if service:
+		service.flush()
+
+
+func _flush_gate_now() -> void:
+	if not _is_server():
+		return
+	var mt := MultiplayerTree.resolve(self)
+	if not mt:
+		return
+	var service := mt.get_service(InterestService) as InterestService
+	if service:
+		service.flush_gates()
 
 
 # ---------------------------------------------------------------------------

@@ -84,7 +84,8 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 	_mark_layer_dirty(layer)
-	_drive_layer(layer)
+	if _is_server():
+		_drive_layer(layer)
 	if _gates.has(layer.layer_id):
 		_mark_gate_dirty(layer.layer_id)
 
@@ -94,7 +95,8 @@ func _on_layer_viewer_changed(
 	if _gates.has(layer.layer_id):
 		_mark_gate_dirty(layer.layer_id)
 	_mark_layer_dirty(layer)
-	_drive_layer(layer)
+	if _is_server():
+		_drive_layer(layer)
 
 
 func _on_layer_entity_changed(
@@ -105,7 +107,7 @@ func _on_layer_entity_changed(
 	else:
 		_untrack_entity_layer(entity, layer.layer_id)
 	_mark_entity_dirty(entity)
-	if added:
+	if added and _is_server():
 		_drive_layer(layer)
 
 
@@ -129,7 +131,7 @@ func register_gate(gate: InterestGate) -> void:
 		return
 	_gates[gate.layer_id] = gate
 	var layer := get_layer(gate.layer_id)
-	if layer:
+	if layer and _is_server():
 		gate.apply_snapshot(layer.viewers_packed(), layer.policy)
 
 
@@ -243,6 +245,14 @@ func flush() -> void:
 	_flush_entity_visibility()
 
 
+## Synchronously flushes only gate snapshots/admission. Use before
+## spawning under a gate so the gated subtree is admitted before the
+## child spawn packet is emitted, while entity visibility remains
+## dirty until the child is in-tree.
+func flush_gates() -> void:
+	_flush_gate_snapshots()
+
+
 func _flush_visibility() -> void:
 	flush()
 
@@ -294,3 +304,12 @@ func _live_peers(layer: NetwInterestLayer) -> Array[int]:
 
 func _tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
+
+
+func _is_server() -> bool:
+	var mt := _tree()
+	if not is_instance_valid(mt):
+		return true
+	if not mt.multiplayer_api or mt.multiplayer_peer == null:
+		return true
+	return mt.multiplayer_api.is_server()

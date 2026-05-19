@@ -68,6 +68,10 @@ set_bomb={
 ]
 }
 
+[network]
+
+limits/debugger/max_chars_per_second=65536
+
 [networked]
 
 logging/active_profile="uid://dd2xtj1kbwpm7"

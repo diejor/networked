@@ -32,7 +32,15 @@ extends MultiplayerSynchronizer
 
 
 ## Stable identifier of the [NetwInterestLayer] this gate binds to.
-@export var layer_id: StringName
+@export var layer_id: StringName:
+	set(value):
+		if value == layer_id:
+			return
+		if _registered:
+			_unbind()
+		layer_id = value
+		if is_inside_tree():
+			_bind()
 
 ## Spawn-synced viewer ids. Authoritative on the server, written
 ## through [method apply_snapshot]; on the client this property is
@@ -167,6 +175,8 @@ func _bind() -> void:
 	_layer.bind_gate(self)
 	_registered = true
 	service.register_gate(self)
+	if not _is_server():
+		_mirror_snapshot_to_layer()
 
 
 func _unbind() -> void:
@@ -225,6 +235,21 @@ func _packed_to_dict(arr: PackedInt32Array) -> Dictionary:
 
 func _viewers_as_dict() -> Dictionary:
 	return _packed_to_dict(viewers)
+
+
+func _mirror_snapshot_to_layer() -> void:
+	if not _layer:
+		return
+	var next := _viewers_as_dict()
+	var prev: Array[int] = []
+	prev.assign(_layer.viewers.keys())
+	for p: int in prev:
+		if not next.has(p):
+			_layer.remove_viewer(p)
+	for p: int in next:
+		if not _layer.viewers.has(p):
+			_layer.add_viewer(p)
+	_layer.set_policy(policy)
 
 
 func _is_server() -> bool:

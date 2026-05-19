@@ -310,14 +310,15 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
 			# never re-init. Reset the ready flag for the whole subtree.
 			_request_ready_recursive(player)
-			to_scene.register_player(player)
-		tp_component._teleported(to_scene.level, tp_path)
+			to_scene.complete_player_transfer(player)
+			tp_component._teleported(to_scene.level, tp_path)
 
 	var from_spawn := from_scene._on_spawned
 	var to_spawn := to_scene._on_spawned
 	var from_despawn := from_scene._on_despawned
 	var to_despawn := to_scene._on_despawned
 
+	to_scene.prepare_player_transfer(player)
 	flip.call(player.tree_entered, from_spawn, to_spawn)
 	player.tree_entered.connect(flip.bind(player.tree_exiting, from_despawn, to_despawn))
 
@@ -421,6 +422,4 @@ func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 	var scene: MultiplayerScene = scene_mgr.active_scenes.get(current_scene_name)
 	if scene:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
-		scene.track_node(owner)
-		scene.level.add_child(owner)
-		owner.owner = scene.level
+		scene.add_player(owner)
