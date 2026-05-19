@@ -3,18 +3,7 @@
 Networked
 =========
 
-Welcome to the Networked documentation. Networked is a small framework that
-wraps Godot's :godot:`SceneMultiplayer <SceneMultiplayer>` into an opinionated
-shape: a single :ref:`MultiplayerTree <class_MultiplayerTree>` node hosts or
-joins a session, a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`
-replicates levels, and :ref:`SpawnerComponent <class_SpawnerComponent>` decides
-how players and entities enter the world.
-
-The :ref:`quick start <doc_quick_start>` is the right entry point if this is
-your first time using the addon. From there, the :ref:`manual
-<doc_manual_overview>` covers each subsystem in depth, and the
-:ref:`class reference <toc-class-ref>` documents every exported method,
-member, and signal.
+Networked is a lightweight, opinionated multiplayer framework for Godot 4. It simplifies the underlying :godot:`SceneMultiplayer <SceneMultiplayer>` API into a streamlined workflow. A single :ref:`MultiplayerTree <class_MultiplayerTree>` manages session connections, :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` handles level replication, and :ref:`SpawnerComponent <class_SpawnerComponent>` coordinates how players and entities populate your world. Dive into the :ref:`quick start <doc_quick_start>` to begin, explore the :ref:`manual <doc_manual_overview>` for in-depth concepts, or consult the :ref:`class reference <toc-class-ref>` for detailed API documentation.
 
 .. toctree::
    :maxdepth: 1

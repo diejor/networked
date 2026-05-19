@@ -20,18 +20,18 @@ instance of a level inside a session, wrapped in a
 :ref:`MultiplayerScene <class_MultiplayerScene>` so its lifetime, visibility
 filters, and spawn signals are controlled centrally. The
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` keeps the
-running scenes in its ``active_scenes`` dictionary, keyed by node name, and
+running scenes in its :ref:`active_scenes <class_MultiplayerSceneManager_property_active_scenes>` dictionary, keyed by node name, and
 owns the :godot:`MultiplayerSpawner <MultiplayerSpawner>` that replicates
 new scenes to clients.
 
 The manager supports two complementary controls per level:
 
-- **Load mode** -- ``ON_STARTUP`` spawns the level the moment the server
-  finishes hosting; ``ON_DEMAND`` waits until a player explicitly asks for
+- **Load mode**: :ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` spawns the level the moment the server
+  finishes hosting. :ref:`ON_DEMAND <class_MultiplayerSceneManager_constant_ON_DEMAND>` waits until a player explicitly asks for
   the level via :ref:`activate_scene() <class_MultiplayerSceneManager_method_activate_scene>`.
-- **Empty action** -- when the last player leaves a scene, the manager can
-  ``KEEP_ACTIVE`` (the default for lobbies), ``FREEZE`` (pause the level so
-  it stops processing but stays cheap to wake up), or ``DESTROY`` (free the
+- **Empty action**: when the last player leaves a scene, the manager can
+  :ref:`KEEP_ACTIVE <class_MultiplayerSceneManager_constant_KEEP_ACTIVE>` (the default for lobbies), :ref:`FREEZE <class_MultiplayerSceneManager_constant_FREEZE>` (pause the level so
+  it stops processing but stays cheap to wake up), or :ref:`DESTROY <class_MultiplayerSceneManager_constant_DESTROY>` (free the
   scene so memory is reclaimed). The right choice depends on whether you
   want late joiners to find the level instantly or whether the level is
   expensive to keep alive.
@@ -39,8 +39,8 @@ The manager supports two complementary controls per level:
 For a single-scene project, you do not need to think about any of this.
 Dropping a scene with a :ref:`SpawnerComponent <class_SpawnerComponent>`
 descendant directly under the tree makes Networked auto-configure a
-``MultiplayerSceneManager`` with that scene as its only spawnable, in
-``ON_STARTUP`` mode. The first time you need a second level (a lobby plus a
+:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` with that scene as its only spawnable, in
+:ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` mode. The first time you need a second level (a lobby plus a
 match, say) you'll add the manager explicitly and configure both there.
 
 The MultiplayerScene container
@@ -54,11 +54,10 @@ level node underneath. The container does three useful things:
    level into the scene's :ref:`SceneSynchronizer <class_SceneSynchronizer>`
    so per-peer visibility filters apply automatically. You get visibility
    filtering for free without touching the engine API.
-2. It tracks the players currently inside the scene (``_players_by_peer``),
-   so server-side systems can iterate them without scanning the whole tree.
-3. It exposes a :ref:`NetwScene <class_NetwScene>` facade through
-   :ref:`get_context() <class_MultiplayerScene_method_get_context>`, used
-   for readiness gates, countdowns, and "wait for N players" flows.
+2. It tracks the players currently inside the scene, emitting signals
+   as they arrive or leave.
+3. It provides readiness gates (via :ref:`NetwScene <class_NetwScene>`) so
+   the game only starts once every player has finished loading.
 
 You do not instantiate :ref:`MultiplayerScene <class_MultiplayerScene>`
 yourself. The scene manager creates them, and the wrapper does its work
@@ -81,7 +80,7 @@ that you configure for that purpose.
 
 This separation is deliberate. The spawn snapshot needs to be small,
 strictly server-driven, and decoded before the node's
-:godot:`_ready <Node#class_node_method__ready>` runs; ongoing replication
+:godot:`_ready() <Node#class_node_private_method__ready>` runs. Ongoing replication
 has different traffic patterns and different authority rules. Sharing one
 node for both jobs leads to spawn packets that secretly drift over time --
 exactly the kind of bug "I added it in the inspector and it worked" has
@@ -91,12 +90,12 @@ Authority modes
 ~~~~~~~~~~~~~~~
 
 The component's :ref:`AuthorityMode <class_SpawnerComponent_property_authority_mode>`
-controls who is in charge of the entity's ``owner`` node:
+controls who is in charge of the entity's :godot:`owner <Node#class_node_property_owner>` node:
 
-- ``SERVER`` -- the server peer (id 1) is the multiplayer authority. Use
+- :ref:`SERVER <class_SpawnerComponent_constant_SERVER>`: the server peer (id 1) is the multiplayer authority. Use
   this for NPCs, level props, and anything that should remain
   server-authoritative.
-- ``CLIENT`` -- the represented peer (parsed from the entity's name in the
+- :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>`: the represented peer (parsed from the entity's name in the
   form ``entity_id|peer_id``) is the multiplayer authority. This is the
   setting for player avatars where the owning client reads input and the
   server only validates.
@@ -104,7 +103,7 @@ controls who is in charge of the entity's ``owner`` node:
 Regardless of the owner's authority, the *synchronizer itself* always sits
 on the server. That asymmetry is what lets the server issue spawn and
 despawn commands for client-authoritative entities without playing
-permission games -- it owns the synchronizer, the synchronizer owns the
+permission games. It owns the synchronizer, the synchronizer owns the
 spawn list, and the entity rides along.
 
 Contributing spawn properties
@@ -131,15 +130,15 @@ points to a property the synchronizer should bundle:
             hydrate_from_db()
 
 The ordering is important: contributions must happen in
-``NOTIFICATION_PARENTED``, because Godot reads the synchronizer's
+:godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`, because Godot reads the synchronizer's
 replication config between scene instantiation and tree entry. Connecting
 to :ref:`spawning <class_SpawnerComponent_signal_spawning>` and adding
-properties from inside it is too late -- the spawn packet has already been
+properties from inside it is too late. The spawn packet has already been
 serialized.
 
 .. warning::
 
-    Do not write to spawn properties from clients during ``_ready``. The
+    Do not write to spawn properties from clients during :godot:`_ready() <Node#class_node_private_method__ready>`. The
     spawn snapshot has just landed and your write will race the next
     on-change synchronizer tick. Wait for the
     :ref:`spawned <class_NetwEntity>` signal if you need to touch the
@@ -152,13 +151,12 @@ Most spawns happen inside the addon: a client connects, the server
 resolves their :ref:`ResolvedJoin <class_ResolvedJoin>`, and
 :ref:`spawn_player() <class_SpawnerComponent_method_spawn_player>` drops a
 copy of the template into the target
-:ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else --
-NPCs, projectiles, loot -- there are two helpers:
+:ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else (NPCs, projectiles, loot) there are two helpers:
 
-- :ref:`spawn_under() <class_SpawnerComponent_method_spawn_under>` -- the
+- :ref:`spawn_under() <class_SpawnerComponent_method_spawn_under>`: the
   simple case: clone the template under a parent and give it an entity id.
-- :ref:`instantiate_from() <class_SpawnerComponent_method_instantiate_from>`
-  -- the configurable case: clone the template, run a callback on the copy
+- :ref:`instantiate_from() <class_SpawnerComponent_method_instantiate_from>`:
+  the configurable case: clone the template, run a callback on the copy
   before it enters the tree, and let the caller add it to the scene.
 
 Both are server-only. The copy goes through the same spawn lifecycle as a
@@ -185,8 +183,8 @@ contains:
 
 - A :godot:`CharacterBody2D <CharacterBody2D>` (or 3D equivalent) with the
   movement script.
-- A :ref:`SpawnerComponent <class_SpawnerComponent>` with ``AuthorityMode``
-  set to ``CLIENT`` and the body's ``position`` listed as a spawn property.
+- A :ref:`SpawnerComponent <class_SpawnerComponent>` with :ref:`AuthorityMode <class_SpawnerComponent_property_authority_mode>`
+  set to :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` and the body's position listed as a spawn property.
 - A sibling :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` for
   continuous state (position, animation frame, weapon held).
 - Optionally, a :ref:`SaveComponent <class_SaveComponent>` so the player's

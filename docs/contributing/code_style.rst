@@ -6,8 +6,8 @@ Code style
 Networked follows the conventions you see in the standard library and in
 godot-docs' own examples, with a few addon-specific rules to keep the
 network-facing parts predictable. This page is not a long list of
-formatting rules -- the existing files in ``addons/networked/`` are the
-canonical reference -- but it captures the choices that come up in code
+formatting rules. The existing files in ``addons/networked/`` are the
+canonical reference, but this guide captures the choices that come up in code
 review often enough to be worth writing down.
 
 GDScript conventions
@@ -24,7 +24,7 @@ GDScript conventions
   another file. Networked's class reference picks the class up
   automatically once it has a ``class_name``.
 - **Doc comments use ``##``**. The first ``##`` block above the class
-  declaration becomes the class description in the reference; the block
+  declaration becomes the class description in the reference. The block
   above a method or member becomes its description. The first sentence
   should be a complete one-line summary that reads sensibly in a class
   index.
@@ -53,7 +53,7 @@ RPCs are the single largest source of multiplayer bugs, so Networked applies
 two extra rules on top of the defaults Godot enforces.
 
 - **Validate the sender, always.** Every ``any_peer`` RPC handler must call
-  ``multiplayer.get_remote_sender_id()`` and reject calls from peers it does
+  :godot:`get_remote_sender_id() <MultiplayerAPI#class_multiplayerapi_method_get_remote_sender_id>` and reject calls from peers it does
   not expect. Use the helper logging pattern from the existing
   :ref:`MultiplayerTree <class_MultiplayerTree>` RPCs for consistency:
 
@@ -69,8 +69,8 @@ two extra rules on top of the defaults Godot enforces.
               return
           # ...
 
-- **Prefer ``rpc_id(1, ...)`` over broadcast for any client-to-server
-  message.** The default ``rpc()`` broadcasts to every peer; for a request
+- **Prefer :godot:`rpc_id(1, ...) <Node#class_node_method_rpc_id>` over broadcast for any client-to-server
+  message.** The default :godot:`rpc() <Node#class_node_method_rpc>` broadcasts to every peer. For a request
   meant for the server only, that is wasted bandwidth and a security risk.
   The class docs on :ref:`Netw <class_Netw>` call this out for the same
   reason.
@@ -102,20 +102,20 @@ test framework. A few stylistic notes:
   test wants to know what is broken, not what line broke.
 - **Use the harness for multi-tree cases.** ``NetworkTestHarness`` (in
   ``tests/helpers/``) abstracts the most common server-plus-N-clients
-  pattern. Reach for it before hand-rolling a new fixture; if it is
+  pattern. Reach for it before hand-rolling a new fixture. If it is
   missing something, extend it instead of duplicating it.
 
 Commits and pull requests
 -------------------------
 
 - Keep commits focused. A single PR should usually contain one
-  conceptually-coherent change; if it touches docs, code, and tests, that
+  conceptually-coherent change. If it touches docs, code, and tests, that
   is fine as long as they all describe the same change.
 - The commit message subject line should fit in 72 characters and read as
   an instruction: ``Make SpawnerComponent log instead of crash on missing
   owner``, not ``Fixed crash``.
 - Pull requests should describe the *user-visible* change in the
-  description. The body of the PR ends up in the changelog; reviewers (and
+  description. The body of the PR ends up in the changelog. Reviewers (and
   future you) read it before they read the diff.
 
 Thanks for taking the time to read this far. If anything in this page is

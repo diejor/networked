@@ -6,7 +6,7 @@ Contributing
 ============
 
 Networked is a small project run by a single maintainer, and contributions of
-every size are welcome -- bug reports, repro projects, docs fixes, new
+every size are welcome. Bug reports, repro projects, docs fixes, new
 example scenes, transport backends, and patches against the core. This page
 describes how the repository is laid out, what the test suite expects, how
 the documentation is built, and the conventions a pull request should match

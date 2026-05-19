@@ -13,7 +13,7 @@ Cloning the project
 -------------------
 
 The repository uses Git LFS for binary art assets in the example projects.
-After cloning, run ``git lfs pull`` once -- otherwise your editor will open
+After cloning, run ``git lfs pull`` once. Otherwise, your editor will open
 broken textures in the bomber and daily examples.
 
 .. code-block:: console
@@ -31,12 +31,12 @@ Editor and engine versions
 --------------------------
 
 Networked targets Godot 4.2 and newer. CI builds with the current stable
-release; if a patch starts depending on a feature from a newer minor, the
+release. If a patch starts depending on a feature from a newer minor, the
 PR should bump the ``Requirements`` section in ``README.md`` and the
 matching note at the top of :ref:`doc_quick_start`.
 
 Open the repository root as a Godot project. The editor will import the
-addon's resources on first launch -- give it a minute, particularly on a
+addon's resources on first launch. Give it a minute, particularly on a
 fresh clone where the ``.godot`` import cache is empty. Once import
 finishes, enable the *Networked* plugin in
 :menu:`Project → Project Settings → Plugins` if it is not enabled already.
@@ -50,7 +50,7 @@ tests you should know about:
 
 - **Unit tests** in ``tests/unit/`` exercise individual scripts in
   isolation. They are fast (milliseconds per test) and have no multiplayer
-  setup -- they are the right place for new logic that does not touch
+  setup. They are the right place for new logic that does not touch
   RPCs.
 - **Integration tests** in ``tests/integration/`` spin up real
   :ref:`MultiplayerTree <class_MultiplayerTree>` instances, host a session,
@@ -82,7 +82,7 @@ asserts.
 
     The integration tests assume the GdUnit4 runner is in charge of the
     main loop. If your test creates additional ``SceneTree`` plumbing of
-    its own, free it in ``after_test`` -- the ``auto_free`` helper is the
+    its own, free it in ``after_test``. The ``auto_free`` helper is the
     most reliable way to do this.
 
 Running the examples
@@ -92,12 +92,12 @@ The fastest way to validate a change to the core is to run the bundled
 examples. Both rely on the addon directly without any duplication, so a
 regression usually shows up immediately:
 
-- ``examples/daily/Main.tscn`` -- a single-player walk-and-teleport scene
+- ``examples/daily/Main.tscn``: A single-player walk-and-teleport scene
   that covers the core spawn, save, and teleport flow. Good for verifying
   changes to :ref:`SpawnerComponent <class_SpawnerComponent>`,
   :ref:`SaveComponent <class_SaveComponent>`, and
   :ref:`TPComponent <class_TPComponent>`.
-- ``examples/bomber/main.tscn`` -- a multi-player lobby and match scene
+- ``examples/bomber/main.tscn``: A multi-player lobby and match scene
   using :ref:`WebSocketBackend <class_WebSocketBackend>`. Good for
   verifying changes to the session roster, scene manager, and per-peer
   context plumbing.
@@ -105,3 +105,5 @@ regression usually shows up immediately:
 Run each scene with :kbd:`F5` after temporarily setting it as the project's
 main scene. To test two clients at once, use :menu:`Debug → Run Multiple
 Instances`.
+.
+.

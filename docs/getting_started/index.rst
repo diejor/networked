@@ -12,7 +12,7 @@ hosts a session, accepts another instance as a client, and replicates a
 moving character between them.
 
 If you have used Godot's :godot:`SceneMultiplayer <SceneMultiplayer>`
-directly before, you will recognize the pieces underneath -- Networked never
+directly before, you will recognize the pieces underneath. Networked never
 hides Godot's high-level API, it just wraps it so the most common project
 shape (host, scene, players, transport) takes a handful of inspector clicks
 instead of a few hundred lines of glue code.

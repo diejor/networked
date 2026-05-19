@@ -11,8 +11,8 @@ the same time.
 
 Networked is built directly on top of Godot's high-level multiplayer API. If
 you have never read the engine's :godot:`SceneMultiplayer <SceneMultiplayer>`
-chapter before, you do not need to -- this page introduces every concept that
-you need -- but the engine's :godot:`MultiplayerSpawner <MultiplayerSpawner>`
+chapter before, you do not need to — this page introduces every concept that
+you need — but the engine's :godot:`MultiplayerSpawner <MultiplayerSpawner>`
 and :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` documentation
 makes a good companion read once you are done.
 
@@ -45,9 +45,9 @@ will meet in this quick start are the moving parts of every session.
 
 - :ref:`MultiplayerTree <class_MultiplayerTree>` is the entry point. You add
   it to your scene, give it a transport (a :ref:`BackendPeer <class_BackendPeer>`),
-  and call ``host()`` or ``join()`` on it. It owns its own
+  and call :ref:`host() <class_MultiplayerTree_method_host>` or :ref:`join() <class_MultiplayerTree_method_join>` on it. It owns its own
   :godot:`SceneMultiplayer <SceneMultiplayer>` and installs it onto the scene
-  tree, so every descendant gets the correct ``multiplayer`` property
+  tree, so every descendant gets the correct :godot:`multiplayer <Node#class_node_property_multiplayer>` property
   automatically.
 - :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` (optional for
   this first project) replicates whole levels to clients. For a single-scene
@@ -66,7 +66,7 @@ Setting up the session
 ----------------------
 
 Create a new empty scene with a :godot:`Node2D <Node2D>` root and save it as
-``main.tscn``. Add a child :godot:`Node <Node>` named ``Client`` -- this name
+``main.tscn``. Add a child :godot:`Node <Node>` named ``Client`` (this name
 is arbitrary, but it is convenient when you later run a listen-server, because
 the addon spawns a sibling ``Server`` node next to it. Attach the
 :ref:`MultiplayerTree <class_MultiplayerTree>` script to the new node.
@@ -75,7 +75,7 @@ In the inspector for ``Client``, click :button:`<empty>` next to the
 :button:`Backend` property and choose :menu:`New WebSocketBackend`. The
 WebSocket backend is convenient for early testing because it works in HTML5
 exports without any extra configuration. If you target desktop only, pick
-:menu:`New ENetBackend` instead -- both implement the same
+:menu:`New ENetBackend` instead. Both implement the same
 :ref:`BackendPeer <class_BackendPeer>` interface, so the rest of this page
 applies unchanged.
 
@@ -93,15 +93,15 @@ into. Let's build one.
 Building a world scene
 ----------------------
 
-Create a second scene -- ``player.tscn`` -- with a
+Create a second scene, ``player.tscn``, with a
 :godot:`CharacterBody2D <CharacterBody2D>` root, a child
 :godot:`Sprite2D <Sprite2D>` for visuals, and a
 :godot:`CollisionShape2D <CollisionShape2D>`. Save it.
 
 Now add a :ref:`SpawnerComponent <class_SpawnerComponent>` child to the
-``CharacterBody2D``. The component automatically renames itself to
-``SpawnerComponent`` and registers a unique name. In the *Replication* panel
-at the bottom of the editor, add a single property: the body's ``position``,
+:godot:`CharacterBody2D <CharacterBody2D>`. The component automatically renames itself to
+:ref:`SpawnerComponent <class_SpawnerComponent>` and registers a unique name. In the *Replication* panel
+at the bottom of the editor, add a single property: the body's :godot:`position <Node2D#class_node2d_property_position>`,
 with the *Spawn* checkbox enabled. This tells the server to bundle the
 player's starting position into the spawn packet so the entity appears in the
 right place on every client's first frame.
@@ -115,7 +115,7 @@ right place on every client's first frame.
     :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` and configure
     it independently.
 
-Set the body's *Authority Mode* on the component to ``CLIENT`` if you want
+Set the body's *Authority Mode* on the component to :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` if you want
 the connecting player to drive their own movement. This is the common case
 for player avatars: server stays the source of truth for spawn and despawn,
 but the client peer owns the body itself and can read input from
@@ -125,12 +125,12 @@ Finally, create the level scene ``level.tscn`` with a :godot:`Node2D <Node2D>`
 root and instance ``player.tscn`` as a child. The player you place here is a
 *template*: it sits in the scene at edit time, but the runtime spawn flow
 copies it for each connecting peer. You do not need to add a
-:godot:`MultiplayerSpawner <MultiplayerSpawner>` yourself; Networked manages
+:godot:`MultiplayerSpawner <MultiplayerSpawner>` yourself. Networked manages
 that.
 
 Back in ``main.tscn``, drag ``level.tscn`` as a child of the ``Client`` node.
 Because the level contains a :ref:`SpawnerComponent <class_SpawnerComponent>`
-descendant, the tree's ``_enter_tree`` will detect it on play and silently
+descendant, the tree's :godot:`_enter_tree() <Node#class_node_private_method__enter_tree>` will detect it on play and silently
 substitute it for a one-scene
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` configured to
 spawn this level on startup.
@@ -162,12 +162,12 @@ they want to spawn, and (optionally) where the server lives:
 
         client.connect_player(join)
 
-The ``url`` field follows a simple rule: an empty string or anything
+The :ref:`url <class_JoinPayload_property_url>` field follows a simple rule: an empty string or anything
 containing ``"localhost"`` or ``"127.0.0.1"`` is treated as a request to host
 locally. The tree probes the configured backend for a running server first;
 if nothing is listening, it spins one up next to the client (or, when
-``use_listen_server`` is enabled on the tree, hosts directly on the same
-node). For LAN or internet servers, set ``url`` to an IP address or hostname
+:ref:`use_listen_server <class_MultiplayerTree_property_use_listen_server>` is enabled on the tree, hosts directly on the same
+node). For LAN or internet servers, set :ref:`url <class_JoinPayload_property_url>` to an IP address or hostname
 and the tree will create a client peer that connects to it.
 
 .. tip::
@@ -175,7 +175,7 @@ and the tree will create a client peer that connects to it.
     You can skip the script entirely while prototyping. Set the inspector
     field :button:`Init Join Payload` on the :ref:`MultiplayerTree <class_MultiplayerTree>`
     to a :ref:`JoinPayload <class_JoinPayload>` resource and the tree will
-    call ``connect_player()`` for you on ``_ready``.
+    call :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug → Run Multiple Instances` and set it to ``2``. Run the project
@@ -205,19 +205,19 @@ Right now the players spawn but do not move. Add the following script to
         move_and_slide()
 
 The :godot:`is_multiplayer_authority <Node#class_node_method_is_multiplayer_authority>`
-guard is essential: every peer runs ``_physics_process`` on every
+guard is essential: every peer runs :godot:`_physics_process() <Node#class_node_private_method__physics_process>` on every
 :godot:`CharacterBody2D <CharacterBody2D>` in the level, but only the peer
 that owns this particular body should be the one writing to ``velocity``.
 
-The ``CLIENT`` authority mode you picked earlier means
+The :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` authority mode you picked earlier means
 :ref:`SpawnerComponent <class_SpawnerComponent>` sets that peer's id as the
 body's multiplayer authority right after spawn, so the right player is in
 control with no extra wiring.
 
 To replicate that movement back to the other peer, add a sibling
 :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` to the player
-scene and register the body's ``position`` with replication mode *On Change*
-and the *Sync* flag enabled. Run the project again -- both players can now
+scene and register the body's :godot:`position <Node2D#class_node2d_property_position>` with replication mode *On Change*
+and the *Sync* flag enabled. Run the project again. Both players can now
 walk around, and each peer sees the other in real time.
 
 Where to go next
@@ -233,3 +233,6 @@ with :ref:`SaveComponent <class_SaveComponent>`, and the
 If you want to see a complete, larger project, the ``examples/bomber`` scene
 in the repository runs the same APIs across a lobby, multiple connected
 players, and a per-peer authoritative bomb spawner.
+
+
+

@@ -40,7 +40,7 @@ loopback, and both will get you through the entire :ref:`quick start
      - Yes
      - Yes
      - TCP-based, works in HTML5, slightly higher latency than ENet.
-   * - WebRTC (via ``tube``)
+   * - WebRTC (via `tube <https://github.com/koopmyers/tube>`__)
      - No (peer-to-peer)
      - Yes
      - Requires a signalling server. Useful for matchmade lobbies without
@@ -48,15 +48,15 @@ loopback, and both will get you through the entire :ref:`quick start
    * - Steam lobby
      - No (Steam-managed)
      - No
-     - Adopts a peer produced by Steam's lobby system; the tree uses
+     - Adopts a peer produced by Steam's lobby system. The tree uses
        :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>` rather
-       than going through ``host()``/``join()``.
+       than going through :ref:`host() <class_MultiplayerTree_method_host>`/:ref:`join() <class_MultiplayerTree_method_join>`.
 
 The "embedded server" column matters when you call
 :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` with
-a local URL. Backends that report ``supports_embedded_server()`` participate
+a local URL. Backends that report :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
 in the host-on-demand flow described in
-:ref:`doc_manual_multiplayer_tree`; the others fall back to "just host a
+:ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.
 
 Configuring a backend
@@ -73,7 +73,7 @@ shared across multiple trees without bleed-through.
 .. tip::
 
     When debugging mismatched configuration, set ``Netw.dbg.level`` to
-    ``DEBUG`` and look for the ``ENet create_server`` / ``WebSocket open``
+    :ref:`DEBUG <class_NetwLog_constant_DEBUG>` and look for the :godot:`ENetMultiplayerPeer.create_server() <ENetMultiplayerPeer#class_enetmultiplayerpeer_method_create_server>` / :godot:`WebSocketMultiplayerPeer.create_server() <WebSocketMultiplayerPeer#class_websocketmultiplayerpeer_method_create_server>`
     log lines. Every built-in backend logs the address it tried to bind so
     "port already in use" or "wrong protocol" mistakes surface immediately.
 
@@ -87,47 +87,47 @@ to fit on this page:
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    class_name MyBackend
-    extends BackendPeer
+     class_name MyBackend
+     extends BackendPeer
 
-    func setup(_tree: MultiplayerTree) -> Error:
-        # Bring up sockets, fetch ICE candidates, log in to your service.
-        return OK
+     func setup(_tree: MultiplayerTree) -> Error:
+         # Bring up sockets, fetch ICE candidates, log in to your service.
+         return OK
 
-    func create_host_peer(
-        _tree: MultiplayerTree
-    ) -> MultiplayerPeer:
-        var peer := SomeMultiplayerPeer.new()
-        var err := peer.create_server(...)
-        if err != OK:
-            return null
-        return peer
+     func create_host_peer(
+         _tree: MultiplayerTree
+     ) -> MultiplayerPeer:
+         var peer := SomeMultiplayerPeer.new()
+         var err := peer.create_server(...)
+         if err != OK:
+             return null
+         return peer
 
-    func create_join_peer(
-        _tree: MultiplayerTree, server_address: String, _username: String = ""
-    ) -> MultiplayerPeer:
-        var peer := SomeMultiplayerPeer.new()
-        var err := peer.create_client(server_address, ...)
-        if err != OK:
-            return null
-        return peer
+     func create_join_peer(
+         _tree: MultiplayerTree, server_address: String, _username: String = ""
+     ) -> MultiplayerPeer:
+         var peer := SomeMultiplayerPeer.new()
+         var err := peer.create_client(server_address, ...)
+         if err != OK:
+             return null
+         return peer
 
-    func poll(_dt: float) -> void:
-        # Optional: only needed if your transport requires explicit polling
-        # outside the SceneMultiplayer poll() that the tree already calls.
-        pass
+     func poll(_dt: float) -> void:
+         # Optional: only needed if your transport requires explicit polling
+         # outside the SceneMultiplayer poll() that the tree already calls.
+         pass
 
 You only need to override the methods that differ from the base class.
 Returning ``null`` from one of the ``create_*_peer`` methods is the
-canonical way to signal failure to the tree; pair it with an error log so
+canonical way to signal failure to the tree. Pair it with an error log so
 the failure is visible.
 
-Some transports do not fit the request/response shape -- Steam lobbies and
+Some transports do not fit the request/response shape. Steam lobbies and
 WebRTC matchmaking, for example, produce a peer asynchronously from an
-external pipeline. For those, return ``null`` from ``create_host_peer`` and
+external pipeline. For those, return ``null`` from :ref:`create_host_peer() <class_BackendPeer_method_create_host_peer>` and
 instead drive the new peer directly onto the tree's
 :ref:`api <class_MultiplayerTree_property_api>` (the "adopted API" pattern
-used by the ``tube`` backend). The tree detects that its API has been
+used by the `tube <https://github.com/koopmyers/tube>`__ backend). The tree detects that its API has been
 swapped and treats the missing return value as success, not failure.
 
 Lifecycle hooks
@@ -136,17 +136,17 @@ Lifecycle hooks
 The tree calls a handful of lifecycle methods on backends. Override the
 ones you need:
 
-- ``setup(tree)`` -- called once per session before any peer is created.
+- :ref:`setup() <class_BackendPeer_method_setup>`: called once per session before any peer is created.
   Use this for asynchronous bring-up (login, service discovery).
-- ``peer_reset_state()`` -- called whenever a session ends. Clear any
+- :ref:`peer_reset_state() <class_BackendPeer_method_peer_reset_state>`: called whenever a session ends. Clear any
   cached lobby/login state your backend holds.
-- ``supports_embedded_server()`` -- return ``true`` if this backend can be
+- :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>`: return ``true`` if this backend can be
   the target of the localhost host-on-demand probe. Most transports return
-  ``true``; managed-lobby backends (Steam) return ``false``.
-- ``supports_local_probe()`` -- return ``true`` if the backend can answer a
-  short ``join()`` probe without falsely succeeding when no server is
-  listening. ENet and WebSocket both qualify; transports that defer
+  ``true``. Managed-lobby backends (Steam) return ``false``.
+- :ref:`supports_local_probe() <class_BackendPeer_method_supports_local_probe>`: return ``true`` if the backend can answer a
+  short :ref:`join() <class_MultiplayerTree_method_join>` probe without falsely succeeding when no server is
+  listening. ENet and WebSocket both qualify. Transports that defer
   acceptance to an external lobby manager do not.
-- ``_get_backend_warnings(tree)`` -- editor-time validation. Strings
+- :godot:`_get_configuration_warnings() <Node#class_node_private_method__get_configuration_warnings>`: editor-time validation. Strings
   returned here are surfaced as configuration warnings on the tree node so
   misconfigured fields are caught before play.
