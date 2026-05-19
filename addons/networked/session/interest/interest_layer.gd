@@ -1,25 +1,39 @@
-## A named slice of the interest graph: a [member viewers] set, an
-## [member entities] set, and a composition [enum Policy].
+## Server-owned membership and per-peer visibility for one interest slice.
 ##
-## Layers are the canonical state and the canonical mutation API.
-## [member entities] is server-only and never crosses the wire;
-## [member viewers] and [member policy] do, but only when an
-## [InterestGate] is bound to the layer via [method bind_gate].
-## The owning [InterestService] batches mutations and flushes once
-## per frame, applying engine-side visibility through
-## [method MultiplayerSynchronizer.set_visibility_for] on entity
-## synchronizers and on the bound gate.
+## A layer combines [member entities], [member viewers], and
+## [member policy]. The server uses that state to decide which peers
+## can see each entity. Entity membership never crosses the wire.
 ##
 ## [br][br]
-## Server reacts via [signal interest_enter] / [signal interest_exit];
-## clients react via Godot's
-## [signal MultiplayerSynchronizer.visibility_changed] on the
-## entity synchronizers the server admitted them to.
+## Pick signals by gameplay question:
+## [br]- Server authority: [signal interest_enter] /
+## [signal interest_exit].
+## [br]- Local client view: [signal entity_visible] /
+## [signal entity_hidden].
+## [br]- Owner awareness: [signal NetwEntity.observer_entered] /
+## [signal NetwEntity.observer_left].
+##
+## [br][br]
+## Scene-level admission is separate and should happen before adding
+## generic viewers for entities inside a scene. A generic layer can
+## refine visibility under an already-visible scene; it should not be
+## used to materialize the scene root.
 ## [codeblock]
-## var arena := Netw.ctx(self).interest.layer(&"arena")
-## arena.add_entity(player_entity)
-## arena.add_viewer(player.peer_id)
-## arena.interest_enter.connect(_on_seen_by)
+## # Server: decide who can see the target.
+## var sight := server_tree.interest.layer(&"sight")
+## sight.add_entity(target_entity)
+## sight.add_viewer(observer_peer_id)
+##
+## # Observer client: react to what this peer can see.
+## var sight := Netw.ctx(self).interest.layer(&"sight")
+## sight.entity_visible.connect(func(entity):
+##     add_marker(entity.owner)
+## )
+##
+## # Owner client: react to who can see this entity.
+## Netw.ctx(self).entity.observer_entered.connect(func(layer_id, peer_id):
+##     show_seen_by(peer_id)
+## )
 ## [/codeblock]
 class_name NetwInterestLayer
 extends RefCounted
@@ -31,16 +45,26 @@ enum Policy {
 	## not.
 	HIDE_FROM_OUTSIDERS,
 	## Peers in [member viewers] do [b]not[/b] see [member entities];
-	## outsiders do. Use for stealth-style bubbles.
+	## outsiders do.
 	HIDE_FROM_INSIDERS,
 }
 
 
-## Emitted when [param entity] becomes visible to [param peer_id].
+## Emitted on the server when [param entity] becomes visible to
+## [param peer_id] through this layer.
 signal interest_enter(entity: NetwEntity, peer_id: int)
 
-## Emitted when [param entity] stops being visible to [param peer_id].
+## Emitted on the server when [param entity] stops being visible to
+## [param peer_id] through this layer.
 signal interest_exit(entity: NetwEntity, peer_id: int)
+
+## Emitted on a client when the local peer can see [param entity]
+## through this layer.
+signal entity_visible(entity: NetwEntity)
+
+## Emitted on a client when the local peer stops seeing [param entity]
+## through this layer.
+signal entity_hidden(entity: NetwEntity)
 
 ## Emitted when [param peer_id] is added to [member viewers].
 signal viewer_added(peer_id: int)
@@ -57,7 +81,7 @@ signal entity_removed(entity: NetwEntity)
 ## Emitted when an [InterestGate] binds to this layer.
 signal gate_bound(gate: Object)
 
-## Emitted when the bound gate is detached.
+## Emitted when the bound [InterestGate] detaches.
 signal gate_unbound(gate: Object)
 
 
@@ -70,7 +94,7 @@ var policy: int = Policy.HIDE_FROM_OUTSIDERS
 ## Peer ids participating in this layer.
 var viewers: Dictionary[int, bool] = {}
 
-## Entities participating in this layer.
+## Server-owned entity set participating in this layer.
 var entities: Dictionary[NetwEntity, bool] = {}
 
 ## Per-(entity, peer) transition cache used by [method drive_now].
@@ -142,8 +166,7 @@ func add_entity(entity: NetwEntity) -> bool:
 	return true
 
 
-## Removes [param entity] from this layer. Emits [signal interest_exit]
-## for every peer that previously saw it.
+## Removes [param entity] from this layer. Emits exits first.
 func remove_entity(entity: NetwEntity) -> bool:
 	if entity == null or not entities.has(entity):
 		return false
@@ -171,9 +194,7 @@ func is_visible_to(entity: NetwEntity, peer_id: int) -> bool:
 	return driver.cached_verdict(entity, peer_id)
 
 
-## Computes and emits transitions for [param peers]. Tests use this
-## to observe enter/exit without an [InterestService]; in production,
-## the service drives this on dirty layers.
+## Computes transitions for [param peers] without engine side effects.
 func drive_now(peers: Array[int]) -> InterestDriver.Result:
 	var result := driver.compute(entities, peers, policy, viewers)
 	_emit_transitions(result)
@@ -207,8 +228,8 @@ func viewer_ids() -> Array[int]:
 	return out
 
 
-## Returns current viewer peer ids as a [PackedInt32Array] suitable
-## for [method InterestGate.apply_snapshot].
+## Returns viewer ids in the format used by
+## [method InterestGate.apply_snapshot].
 func viewers_packed() -> PackedInt32Array:
 	var out: PackedInt32Array = []
 	for p: int in viewers.keys():
@@ -233,11 +254,10 @@ func _service() -> InterestService:
 	return _service_ref.get_ref() as InterestService if _service_ref else null
 
 
-## Associates an [InterestGate] with this layer. The gate's synced
-## [code]viewers[/code] and [code]policy[/code] properties will be
-## kept in step with this layer's state on the server, and Godot's
-## spawn-sync / property replication will deliver them to clients.
-## Errors if another gate is already bound.
+## Associates [param gate] with this layer for client-side admission.
+##
+## A bound gate mirrors [member viewers] and [member policy] to clients.
+## It does not replicate [member entities].
 func bind_gate(gate: Object) -> void:
 	if gate == null:
 		return
@@ -251,7 +271,7 @@ func bind_gate(gate: Object) -> void:
 	gate_bound.emit(gate)
 
 
-## Detaches the bound gate, if any.
+## Detaches the bound [InterestGate], if any.
 func unbind_gate() -> void:
 	var current := _bound_gate_ref.get_ref() if _bound_gate_ref else null
 	_bound_gate_ref = null

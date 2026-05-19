@@ -1,9 +1,13 @@
-## Layer-lookup facade for one [MultiplayerTree]'s interest graph.
+## Lookup facade for one [MultiplayerTree]'s interest graph.
 ##
-## Exposed at [member MultiplayerTree.interest]. Lookup only — all
-## mutation, signals, and policy live on [NetwInterestLayer]. Use
-## [method layer] to get-or-create, [method get_layer] for a null-
-## returning lookup, or [method all_layers] to enumerate.
+## Exposed at [member MultiplayerTree.interest]. This object only
+## resolves layers; [NetwInterestLayer] owns mutation, policy, and
+## transition signals.
+##
+## [br][br]
+## Server code usually creates layers through [method layer]. Client
+## code should only rely on layers mirrored by an [InterestGate], or on
+## observer signals relayed by [member InterestComponent.report_observers].
 ## [codeblock]
 ## var arena := Netw.ctx(self).interest.layer(&"arena")
 ## arena.add_entity(player_entity)
@@ -26,8 +30,7 @@ func layer(layer_id: StringName) -> NetwInterestLayer:
 	return service.layer_for(layer_id) if service else null
 
 
-## Returns the layer for [param layer_id], or [code]null[/code] if it
-## has not been created yet.
+## Returns the layer for [param layer_id], or [code]null[/code].
 func get_layer(layer_id: StringName) -> NetwInterestLayer:
 	var service := _service()
 	return service.get_layer(layer_id) if service else null

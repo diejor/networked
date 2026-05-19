@@ -1,4 +1,4 @@
-## Pure transition computer for [InterestSynchronizer].
+## Pure transition computer for [NetwInterestLayer].
 ##
 ## Holds the per-(entity, peer) verdict cache. [method compute] takes
 ## the current entity set, peer list, and policy state, returns the
@@ -15,7 +15,6 @@
 ## [codeblock]
 ##     var driver := InterestDriver.new()
 ##     var result := driver.compute(entities, peers, kind, viewers)
-##     binding.apply(result.sync_hides, result.sync_shows)
 ##     emit_transitions(result.hide_transitions, result.show_transitions)
 ##     driver.commit(result)
 ## [/codeblock]
@@ -33,10 +32,9 @@ class Result:
 	var hide_transitions: Array = []
 	## Per-(entity, peer) show transitions, shallow-first.
 	var show_transitions: Array = []
-	## Per-(sync, peer) hide tuples for [method
-	## MultiplayerSynchronizer.update_visibility], deep-first.
+	## Per-(sync, peer) hide tuples for visibility updates, deep-first.
 	var sync_hides: Array = []
-	## Per-(sync, peer) show tuples, shallow-first.
+	## Per-(sync, peer) show tuples for visibility updates, shallow-first.
 	var sync_shows: Array = []
 	## Full new visibility state: [code]{entity: {peer: bool}}[/code].
 	var new_state: Dictionary = {}
@@ -53,9 +51,7 @@ func cached_verdict(entity: NetwEntity, peer_id: int) -> bool:
 
 
 ## Returns every peer currently cached as visible for [param entity].
-## Used by [method InterestSynchronizer.remove_entity] to emit
-## [signal InterestSynchronizer.interest_exit] before the entity goes
-## away.
+## Used to emit exit transitions before the entity leaves its layer.
 func cached_view_for(entity: NetwEntity) -> Dictionary:
 	return _state.get(entity, {}).duplicate()
 
@@ -69,8 +65,7 @@ func forget(entity: NetwEntity) -> Dictionary:
 
 
 ## Returns the peer ids the driver has ever cached a verdict for.
-## Used by [method InterestSynchronizer._live_peers] to drive
-## hide-transitions for peers removed from the viewer set.
+## Used to drive hide transitions for peers removed from the viewer set.
 func cached_peers() -> Array[int]:
 	var seen: Dictionary[int, bool] = {}
 	for entity in _state:

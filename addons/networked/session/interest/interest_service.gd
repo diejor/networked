@@ -1,21 +1,26 @@
-## Per-tree scheduler that batches [NetwInterestLayer] mutations and
-## applies their engine-side effects.
+## Applies [NetwInterestLayer] state to Godot replication.
 ##
-## One [InterestService] lives under each [MultiplayerTree], registered
-## via [NetwServices]. External code never calls it directly; it
-## reacts to layer mutators through hooks and exposes
-## [method gate_for] / [method layer_for] for [InterestGate] binding.
+## One service lives under each [MultiplayerTree]. Layers are pure state;
+## this service installs entity visibility filters, drives transition
+## signals, updates bound [InterestGate] snapshots, and relays optional
+## observer events.
 ##
 ## [br][br]
-## Per frame: viewer / policy / entity changes mark the layer dirty;
-## a deferred [method flush] computes per-(entity, peer) transitions,
-## emits [signal NetwInterestLayer.interest_enter] /
-## [signal NetwInterestLayer.interest_exit], calls
-## [method MultiplayerSynchronizer.update_visibility] on each
-## entity synchronizer, and applies the bound gate's snapshot. The
-## service is not the network transport — bound-layer admission
-## crosses the wire via the gate's own
-## [MultiplayerSynchronizer], not service RPCs.
+## Unbound layers do not replicate layer state. They affect the wire only
+## by changing each entity [MultiplayerSynchronizer]'s visibility. Bound
+## layers also replicate [member NetwInterestLayer.viewers] and
+## [member NetwInterestLayer.policy] through their gate.
+##
+## [br][br]
+## Client-side [signal NetwInterestLayer.entity_visible] and
+## [signal NetwInterestLayer.entity_hidden] are transition events,
+## relayed from the server. They do not mean the client owns the layer's
+## [member NetwInterestLayer.entities] set.
+##
+## [br][br]
+## Scene gates are parent visibility. Generic layers should refine
+## visibility under an already-admitted scene, not reveal scene roots by
+## themselves.
 class_name InterestService
 extends Node
 
@@ -29,13 +34,32 @@ var _dirty_entities: Dictionary[NetwEntity, bool] = {}
 var _dirty_gate_layers: Dictionary[StringName, bool] = {}
 var _refresh_scheduled: bool = false
 
+# Queued observer events keyed by owning peer id.
+# Event shape: [entity_path, layer_id, observer_peer, ObserverEvent].
+enum ObserverEvent { EXIT, ENTER }
+var _observer_relay: Dictionary[int, Array] = {}
+var _visibility_relay: Dictionary[int, Array] = {}
+var _pending_visibility_events: Array = []
+
 
 func _enter_tree() -> void:
 	NetwServices.register(self, InterestService)
+	var mt := _tree()
+	if is_instance_valid(mt):
+		mt.peer_disconnected.connect(_on_peer_disconnected)
 
 
 func _exit_tree() -> void:
+	var mt := _tree()
+	if is_instance_valid(mt) \
+			and mt.peer_disconnected.is_connected(_on_peer_disconnected):
+		mt.peer_disconnected.disconnect(_on_peer_disconnected)
 	NetwServices.unregister(self, InterestService)
+
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	_visibility_relay.erase(peer_id)
+	_observer_relay.erase(peer_id)
 
 
 ## Returns the layer for [param layer_id], creating it when missing.
@@ -47,6 +71,8 @@ func layer_for(layer_id: StringName) -> NetwInterestLayer:
 		return layer
 	layer = NetwInterestLayer.new(layer_id, self)
 	_layers[layer_id] = layer
+	layer.interest_enter.connect(_on_layer_interest_enter.bind(layer))
+	layer.interest_exit.connect(_on_layer_interest_exit.bind(layer))
 	return layer
 
 
@@ -62,8 +88,8 @@ func all_layers() -> Array[NetwInterestLayer]:
 	return out
 
 
-## Returns [code]true[/code] if any entity layer admits [param peer_id].
-## Used by the spawn-visibility integration to gate spawn packets.
+## Returns [code]true[/code] if any layer admits [param peer_id] to
+## [param entity].
 func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
@@ -76,11 +102,6 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 			return true
 	return false
 
-
-# ---------------------------------------------------------------------------
-# Layer mutation hooks. Called by [NetwInterestLayer] mutators; do not
-# call directly.
-# ---------------------------------------------------------------------------
 
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 	_mark_layer_dirty(layer)
@@ -111,13 +132,7 @@ func _on_layer_entity_changed(
 		_drive_layer(layer)
 
 
-# ---------------------------------------------------------------------------
-# Gate registry.
-# ---------------------------------------------------------------------------
-
-## Registers [param gate] as the network carrier for its
-## [member InterestGate.layer_id]. Errors if another gate is already
-## registered for the same id. Called by [InterestGate._enter_tree].
+## Registers [param gate] as the network carrier for its layer.
 func register_gate(gate: InterestGate) -> void:
 	if not is_instance_valid(gate):
 		return
@@ -147,10 +162,6 @@ func unregister_gate(gate: InterestGate) -> void:
 func gate_for(layer_id: StringName) -> InterestGate:
 	return _gates.get(layer_id)
 
-
-# ---------------------------------------------------------------------------
-# Engine-effect: per-entity visibility filter management.
-# ---------------------------------------------------------------------------
 
 func _track_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
 	var layers: Dictionary = _entity_layers.get_or_add(entity, {})
@@ -206,10 +217,6 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 	_uninstall_entity_filter(entity)
 
 
-# ---------------------------------------------------------------------------
-# Visibility flush scheduling.
-# ---------------------------------------------------------------------------
-
 func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
 	for entity: NetwEntity in layer.entities:
 		_mark_entity_dirty(entity)
@@ -236,19 +243,19 @@ func _schedule_visibility_flush() -> void:
 	_flush_visibility.call_deferred()
 
 
-## Synchronously flushes pending gate snapshots and entity visibility
-## updates. Normally invoked via [code]call_deferred[/code] at end of
-## frame; tests call this directly to observe effects.
+## Flushes gate snapshots, entity visibility, and observer events.
 func flush() -> void:
 	_refresh_scheduled = false
 	_flush_gate_snapshots()
 	_flush_entity_visibility()
+	_flush_visibility_relay()
+	_flush_observer_relay()
 
 
-## Synchronously flushes only gate snapshots/admission. Use before
-## spawning under a gate so the gated subtree is admitted before the
-## child spawn packet is emitted, while entity visibility remains
-## dirty until the child is in-tree.
+## Flushes only bound gate snapshots.
+##
+## Use before spawning a subtree whose admission gate must be visible
+## before child spawn packets are sent.
 func flush_gates() -> void:
 	_flush_gate_snapshots()
 
@@ -313,3 +320,193 @@ func _is_server() -> bool:
 	if not mt.multiplayer_api or mt.multiplayer_peer == null:
 		return true
 	return mt.multiplayer_api.is_server()
+
+
+func _on_layer_interest_enter(
+		entity: NetwEntity, peer_id: int,
+		layer: NetwInterestLayer) -> void:
+	_queue_visibility_event(layer, entity, peer_id, ObserverEvent.ENTER)
+	_queue_observer_event(layer, entity, peer_id, ObserverEvent.ENTER)
+
+
+func _on_layer_interest_exit(
+		entity: NetwEntity, peer_id: int,
+		layer: NetwInterestLayer) -> void:
+	_queue_visibility_event(layer, entity, peer_id, ObserverEvent.EXIT)
+	_queue_observer_event(layer, entity, peer_id, ObserverEvent.EXIT)
+
+
+func _queue_visibility_event(
+		layer: NetwInterestLayer, entity: NetwEntity,
+		observer_peer: int, kind: int) -> void:
+	if not _is_server():
+		return
+	if entity == null or not is_instance_valid(entity.owner):
+		return
+	if observer_peer == 0 or observer_peer == MultiplayerPeer.TARGET_PEER_SERVER:
+		return
+	if not entity.owner.is_inside_tree():
+		return
+	var mt := _tree()
+	if not _can_send_rpc_to_peer(mt, observer_peer):
+		return
+	var bucket: Array = _visibility_relay.get_or_add(observer_peer, [])
+	bucket.append([
+		mt.get_path_to(entity.owner),
+		layer.layer_id,
+		kind,
+	])
+	_schedule_visibility_flush()
+
+
+func _flush_visibility_relay() -> void:
+	if _visibility_relay.is_empty():
+		return
+	if not _is_server():
+		_visibility_relay.clear()
+		return
+	for observer_peer: int in _visibility_relay.keys():
+		var events: Array = _visibility_relay[observer_peer]
+		if events.is_empty():
+			continue
+		var mt := _tree()
+		if not _can_send_rpc_to_peer(mt, observer_peer):
+			continue
+		_rpc_visibility_events.rpc_id(observer_peer, events)
+	_visibility_relay.clear()
+
+
+func _queue_observer_event(
+		layer: NetwInterestLayer, entity: NetwEntity,
+		observer_peer: int, kind: int) -> void:
+	if not _is_server():
+		return
+	if entity == null or not is_instance_valid(entity.owner):
+		return
+	if entity.peer_id == 0 or observer_peer == entity.peer_id:
+		return
+	if layer.bound_gate() != null:
+		return
+	var component := InterestComponent.of(entity)
+	if not component or not component.report_observers:
+		return
+	if not entity.owner.is_inside_tree():
+		return
+	var mt := _tree()
+	if not _can_send_rpc_to_peer(mt, entity.peer_id):
+		return
+	var owner_peer := entity.peer_id
+	var bucket: Array = _observer_relay.get_or_add(owner_peer, [])
+	bucket.append([
+		mt.get_path_to(entity.owner),
+		layer.layer_id,
+		observer_peer,
+		kind,
+	])
+	_schedule_visibility_flush()
+
+
+func _flush_observer_relay() -> void:
+	if _observer_relay.is_empty():
+		return
+	if not _is_server():
+		_observer_relay.clear()
+		return
+	for owner_peer: int in _observer_relay.keys():
+		var events: Array = _observer_relay[owner_peer]
+		if events.is_empty():
+			continue
+		var mt := _tree()
+		if not _can_send_rpc_to_peer(mt, owner_peer):
+			continue
+		_rpc_observer_events.rpc_id(owner_peer, events)
+	_observer_relay.clear()
+
+
+func _can_send_rpc_to_peer(mt: MultiplayerTree, peer_id: int) -> bool:
+	if not is_instance_valid(mt):
+		return false
+	if peer_id == 0 or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+		return false
+	if not mt.multiplayer_api or not mt.multiplayer_api.has_multiplayer_peer():
+		return false
+	var peer := mt.multiplayer_peer
+	if peer == null or peer is OfflineMultiplayerPeer:
+		return false
+	if peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return false
+	if mt.multiplayer_api.is_server():
+		return peer_id in mt.multiplayer_api.get_peers()
+	return peer_id == MultiplayerPeer.TARGET_PEER_SERVER
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_observer_events(events: Array) -> void:
+	var mt := _tree()
+	if not is_instance_valid(mt):
+		return
+	for raw in events:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 4:
+			continue
+		var path: NodePath = raw[0]
+		var layer_id: StringName = raw[1]
+		var observer_peer: int = raw[2]
+		var kind: int = raw[3]
+		var node := mt.get_node_or_null(path)
+		if not is_instance_valid(node):
+			continue
+		var entity := NetwEntity.of(node)
+		if not entity:
+			continue
+		if kind == ObserverEvent.ENTER:
+			entity.observer_entered.emit(layer_id, observer_peer)
+		else:
+			entity.observer_left.emit(layer_id, observer_peer)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_visibility_events(events: Array) -> void:
+	for raw in events:
+		if not _apply_visibility_event(raw):
+			_pending_visibility_events.append([raw, 0])
+	if not _pending_visibility_events.is_empty():
+		_flush_pending_visibility_events.call_deferred()
+
+
+func _apply_visibility_event(raw: Variant) -> bool:
+	if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 3:
+		return true
+	var path: NodePath = raw[0]
+	var layer_id: StringName = raw[1]
+	var kind: int = raw[2]
+	var mt := _tree()
+	if not is_instance_valid(mt):
+		return false
+	var node := mt.get_node_or_null(path)
+	if not is_instance_valid(node):
+		return kind != ObserverEvent.ENTER
+	var entity := NetwEntity.of(node)
+	if not entity:
+		return true
+	var layer := layer_for(layer_id)
+	if not layer:
+		return true
+	if kind == ObserverEvent.ENTER:
+		layer.entity_visible.emit(entity)
+	else:
+		layer.entity_hidden.emit(entity)
+	return true
+
+
+func _flush_pending_visibility_events() -> void:
+	var pending := _pending_visibility_events
+	_pending_visibility_events = []
+	for item in pending:
+		if typeof(item) != TYPE_ARRAY or (item as Array).size() != 2:
+			continue
+		var raw: Variant = item[0]
+		var attempts: int = item[1]
+		if not _apply_visibility_event(raw) and attempts < 30:
+			_pending_visibility_events.append([raw, attempts + 1])
+	if not _pending_visibility_events.is_empty():
+		_flush_pending_visibility_events.call_deferred()

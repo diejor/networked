@@ -1,31 +1,44 @@
-## Declares which [NetwInterestLayer]s an entity participates in.
+## Declares extra [NetwInterestLayer] memberships for an entity.
 ##
-## Sibling under a [NetwEntity] root. [member layer_ids] is
-## contributed to the spawn packet via
-## [method NetwEntity.contribute_spawn_property], so the value lands
-## on the client before the entity enters its tree. On the server,
-## tree-enter registers the entity with each named layer through
-## [NetwInterest]; tree-exit unregisters. Mutating [member layer_ids]
-## at runtime applies the diff incrementally.
+## Scene membership is owned by [MultiplayerScene]; this component adds
+## optional layers such as teams, sight cones, proximity buckets, or
+## stealth zones. [member layer_ids] is spawn-synced so client tools can
+## read the labels, but entity membership and visibility decisions stay
+## server-owned.
 ##
 ## [br][br]
-## Entity membership is server-only state — registration is gated on
-## [method MultiplayerAPI.is_server], and clients carry no entity set.
-## For scene-level enrollment use [method MultiplayerScene.register_player]
-## instead; this component is for [b]additional[/b] layers (AoI rings,
-## team buckets, stealth bubbles) the entity opts into.
+## Add this as a sibling under the entity root. Mutating
+## [member layer_ids] while the node is in the tree updates server-side
+## layer membership immediately. Set [member report_observers] only when
+## the owner client needs to know which other peers can see this entity.
 ## [codeblock]
-## # In the entity scene:
+## # Server: this entity participates in two extra layers.
 ## %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
+##
+## # Owner client: react when other peers observe this entity.
+## %InterestComponent.report_observers = true
+## %InterestComponent.observer_entered.connect(func(layer_id, peer_id):
+##     show_seen_by(peer_id)
+## )
 ## [/codeblock]
 class_name InterestComponent
 extends Node
 
 
-## Stable layer ids this entity belongs to. Resolved against
-## [NetwInterestLayer] entries at tree-enter. Mutating after
-## tree-enter is supported on the server; the new set replaces the
-## previous registration on the next driver pass.
+## Emitted on the owner client when [param peer_id] starts observing
+## this entity through [param layer_id].
+signal observer_entered(layer_id: StringName, peer_id: int)
+
+## Emitted on the owner client when [param peer_id] stops observing
+## this entity through [param layer_id].
+signal observer_left(layer_id: StringName, peer_id: int)
+
+
+## Stable extra layer ids this entity belongs to.
+##
+## The server registers the entity with these layers. Clients receive
+## the value for local UI/debugging only; client-side layer entity sets
+## remain empty.
 @export var layer_ids: Array[StringName] = []:
 	set(value):
 		var prev := layer_ids.duplicate()
@@ -33,10 +46,24 @@ extends Node
 		if is_inside_tree():
 			_apply_layer_diff(prev, layer_ids)
 
+## Enables owner-client observer transitions for this entity.
+##
+## This answers "who can see me?" Client code asking "what can I see?"
+## should connect to [signal NetwInterestLayer.entity_visible] instead.
+@export var report_observers: bool = false
+
 
 func _init() -> void:
 	name = "InterestComponent"
 	unique_name_in_owner = true
+
+
+## Returns the [InterestComponent] sibling under [param entity]'s root.
+static func of(entity: NetwEntity) -> InterestComponent:
+	if entity == null or not is_instance_valid(entity.owner):
+		return null
+	return entity.owner.get_node_or_null(^"%InterestComponent") \
+			as InterestComponent
 
 
 func _notification(what: int) -> void:
@@ -53,6 +80,7 @@ func _notification(what: int) -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	_bind_observer_signals()
 	if not _is_server():
 		return
 	for id in layer_ids:
@@ -62,10 +90,39 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	_unbind_observer_signals()
 	if not _is_server():
 		return
 	for id in layer_ids:
 		_unregister_for(id)
+
+
+func _bind_observer_signals() -> void:
+	var entity := _resolve_entity()
+	if not entity:
+		return
+	if not entity.observer_entered.is_connected(_on_entity_observer_entered):
+		entity.observer_entered.connect(_on_entity_observer_entered)
+	if not entity.observer_left.is_connected(_on_entity_observer_left):
+		entity.observer_left.connect(_on_entity_observer_left)
+
+
+func _unbind_observer_signals() -> void:
+	var entity := _resolve_entity()
+	if not entity:
+		return
+	if entity.observer_entered.is_connected(_on_entity_observer_entered):
+		entity.observer_entered.disconnect(_on_entity_observer_entered)
+	if entity.observer_left.is_connected(_on_entity_observer_left):
+		entity.observer_left.disconnect(_on_entity_observer_left)
+
+
+func _on_entity_observer_entered(layer_id: StringName, peer_id: int) -> void:
+	observer_entered.emit(layer_id, peer_id)
+
+
+func _on_entity_observer_left(layer_id: StringName, peer_id: int) -> void:
+	observer_left.emit(layer_id, peer_id)
 
 
 func _is_server() -> bool:
@@ -113,9 +170,7 @@ func _apply_layer_diff(
 
 
 func _resolve_entity() -> NetwEntity:
-	# Walks from self via [method NetwEntity.of] so the resolution
-	# works whether or not [member Node.owner] has been assigned
-	# (packed-scene placement sets it; programmatic add_child does not).
+	# Works for packed-scene placement and programmatic add_child.
 	return NetwEntity.of(self)
 
 
