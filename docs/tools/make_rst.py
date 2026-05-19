@@ -1586,9 +1586,9 @@ def make_enum(t: str, is_bitfield: bool, state: State) -> str:
         else:
             return f":ref:`{e}<enum_{sanitize_class_name(c)}_{e}>`"
 
-    # Fallback for Godot engine enums: link to external docs.
-    # Downgrade error to warning for standalone addon builds.
-    print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
+    # Fallback for Godot engine enums: link to external docs silently.
+    # External resolution is the expected outcome for any enum outside the
+    # local addon XML set, so no warning is emitted.
     slug = sanitize_class_name(c).lower()
     return godot_external_link(t, c, fragment=f"enum_{slug}_{e}")
 
@@ -2221,19 +2221,21 @@ def format_text_block(
                                     )
                                     resolved = False
 
-                            elif tag_state.name == "constructor" and target_name not in class_def.constructors:
-                                print_warning(
-                                    f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
-                                    state,
-                                )
-                                resolved = False
+                            elif tag_state.name == "constructor":
+                                if target_name not in class_def.constructors:
+                                    print_warning(
+                                        f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
+                                        state,
+                                    )
+                                    resolved = False
 
-                            elif tag_state.name == "operator" and target_name not in class_def.operators:
-                                print_warning(
-                                    f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
-                                    state,
-                                )
-                                resolved = False
+                            elif tag_state.name == "operator":
+                                if target_name not in class_def.operators:
+                                    print_warning(
+                                        f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
+                                        state,
+                                    )
+                                    resolved = False
 
                             elif tag_state.name == "member":
                                 ref_type = "_property"
@@ -2251,19 +2253,21 @@ def format_text_block(
                                         state,
                                     )
 
-                            elif tag_state.name == "signal" and target_name not in class_def.signals:
-                                print_warning(
-                                    f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
-                                    state,
-                                )
-                                resolved = False
+                            elif tag_state.name == "signal":
+                                if target_name not in class_def.signals:
+                                    print_warning(
+                                        f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
+                                        state,
+                                    )
+                                    resolved = False
 
-                            elif tag_state.name == "annotation" and target_name not in class_def.annotations:
-                                print_warning(
-                                    f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
-                                    state,
-                                )
-                                resolved = False
+                            elif tag_state.name == "annotation":
+                                if target_name not in class_def.annotations:
+                                    print_warning(
+                                        f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
+                                        state,
+                                    )
+                                    resolved = False
 
                             elif tag_state.name == "theme_item":
                                 if target_name not in class_def.theme_items:
@@ -2301,10 +2305,13 @@ def format_text_block(
                                                 break
 
                                 if not found:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved constant reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    # Unqualified constants that miss locally are
+                                    # almost always @GlobalScope entries (OK,
+                                    # ERR_UNCONFIGURED, ...). Retarget the
+                                    # external-link path at @GlobalScope so the
+                                    # fragment resolves on docs.godotengine.org.
+                                    if link_target.find(".") == -1:
+                                        target_class_name = "@GlobalScope"
                                     resolved = False
 
                             else:
@@ -2315,10 +2322,9 @@ def format_text_block(
                                 resolved = False
 
                         else:
-                            print_warning(
-                                f'{state.current_class}.xml: Unresolved type reference "{target_class_name}" in method reference "{link_target}" in {context_name}.',
-                                state,
-                            )
+                            # Target class is outside the local addon XML set
+                            # (engine class like Node, MultiplayerSynchronizer).
+                            # Fall through to the external-link path silently.
                             resolved = False
 
                         if resolved:
@@ -2329,6 +2335,16 @@ def format_text_block(
                                 repl_text = f"{repl_text}()"
                             tag_text = f":ref:`{repl_text}<class_{sanitize_class_name(target_class_name)}{ref_type}_{target_name}>`"
                         else:
+                            # Unqualified refs (e.g. [member replication_config]) default
+                            # target_class_name to current_class. If the symbol is inherited
+                            # from an engine class, retarget the external link to the first
+                            # ancestor outside our local XML set.
+                            if "." not in link_target and target_class_name in state.classes:
+                                walker = state.classes[target_class_name].inherits
+                                while walker is not None and walker in state.classes:
+                                    walker = state.classes[walker].inherits
+                                if walker is not None:
+                                    target_class_name = walker
                             fragment_parts = [f"class_{sanitize_class_name(target_class_name)}"]
                             if tag_state.name == "method":
                                 if target_name.startswith("_"):
@@ -2537,12 +2553,16 @@ def format_text_block(
                     if tag_state.name and tag_state.name[0].isupper() and "=" not in tag_state.raw:
                         tag_text = make_type(tag_state.name, state)
                     else:
-                        print_error(
-                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
+                        # Permissive fallback: unknown lowercase/numeric bracket content
+                        # (e.g. "[prev_tick, next_tick]", "[-1, 1]", "[cache banner]") is
+                        # almost always an authoring slip-up rather than a real tag. Render
+                        # the literal bracketed text as inline code and warn instead of
+                        # erroring, so the build does not fail on docstring prose.
+                        print_warning(
+                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}. Rendering literally.',
                             state,
                         )
-
-                        tag_text = f"``{tag_text}``"
+                        tag_text = f"``[{tag_state.raw}]``"
                     escape_pre = True
                     escape_post = True
 

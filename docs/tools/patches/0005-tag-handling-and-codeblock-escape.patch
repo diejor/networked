@@ -1,7 +1,7 @@
 # Handle [color]/[font] tags, guard empty [br] tails, fall back uppercase invalid tags to make_type(), fix codeblock paragraph-eating escape.
 --- a/make_rst.py
 +++ b/make_rst.py
-@@ -2298,40 +2434,75 @@
+@@ -2298,40 +2450,75 @@
                  # Make a new paragraph instead of a linebreak, rst is not so linebreak friendly
                  tag_text = "\n\n"
                  # Strip potential leading spaces
@@ -13,8 +13,8 @@
                  if tag_state.closing:
                      tag_depth -= 1
 +                    debug_tag_stack.pop()
-+                else:
-+                    tag_depth += 1
+                 else:
+                     tag_depth += 1
 +                    debug_tag_stack.append(tag_state.name)
 +                tag_text = ""
 +
@@ -22,8 +22,8 @@
 +                if tag_state.closing:
 +                    tag_depth -= 1
 +                    debug_tag_stack.pop()
-                 else:
-                     tag_depth += 1
++                else:
++                    tag_depth += 1
 +                    debug_tag_stack.append(tag_state.name)
                  tag_text = ""
  
@@ -79,7 +79,7 @@
                      escape_pre = True
                  tag_text = ""
  
-@@ -2345,10 +2516,12 @@
+@@ -2345,10 +2532,12 @@
                  tag_text = "`"
                  if tag_state.closing:
                      tag_depth -= 1
@@ -92,7 +92,7 @@
                      escape_pre = True
  
              # Invalid syntax.
-@@ -2361,12 +2534,15 @@
+@@ -2361,12 +2550,19 @@
  
                      tag_text = f"[{tag_text}]"
                  else:
@@ -100,20 +100,25 @@
 -                        f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
 -                        state,
 -                    )
+-
+-                    tag_text = f"``{tag_text}``"
 +                    if tag_state.name and tag_state.name[0].isupper() and "=" not in tag_state.raw:
 +                        tag_text = make_type(tag_state.name, state)
 +                    else:
-+                        print_error(
-+                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}.',
++                        # Permissive fallback: unknown lowercase/numeric bracket content
++                        # (e.g. "[prev_tick, next_tick]", "[-1, 1]", "[cache banner]") is
++                        # almost always an authoring slip-up rather than a real tag. Render
++                        # the literal bracketed text as inline code and warn instead of
++                        # erroring, so the build does not fail on docstring prose.
++                        print_warning(
++                            f'{state.current_class}.xml: Unrecognized opening tag "[{tag_state.raw}]" in {context_name}. Rendering literally.',
 +                            state,
 +                        )
- 
--                    tag_text = f"``{tag_text}``"
-+                        tag_text = f"``{tag_text}``"
++                        tag_text = f"``[{tag_state.raw}]``"
                      escape_pre = True
                      escape_post = True
  
-@@ -2412,6 +2588,7 @@
+@@ -2412,6 +2608,7 @@
      result = ""
      codeblock_tag = ""
      indent_level = 0
@@ -121,7 +126,7 @@
  
      for line in text.splitlines():
          stripped_line = line.lstrip("\t")
-@@ -2429,6 +2606,7 @@
+@@ -2429,6 +2626,7 @@
              if stripped_line.startswith("[/" + codeblock_tag):
                  result += stripped_line
                  codeblock_tag = ""
@@ -129,7 +134,7 @@
              else:
                  # Remove extraneous tabs and replace remaining tabs with spaces.
                  result += "\n" + "    " * (tab_count - indent_level + 1) + stripped_line
-@@ -2453,7 +2631,11 @@
+@@ -2453,7 +2651,11 @@
                  # A line break in XML should become two line breaks (unless in a code block).
                  if result:
                      result += "\n\n"
