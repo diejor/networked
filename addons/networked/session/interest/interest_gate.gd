@@ -1,28 +1,31 @@
-## Spawn-sync carrier for a [NetwInterestLayer].
+## Node-projection of a [NetwInterestLayer] for spawn-time replication.
 ##
-## Bind a gate to a layer by setting [member layer_id] and adding the
-## gate to the scene tree. On [signal Node.tree_entered] the gate
-## resolves the layer via [NetwInterest] (creating it when missing),
-## registers with [InterestService], and calls [method
-## NetwInterestLayer.bind_gate]. From that point the layer's [code]
-## viewers[/code] and [code]policy[/code] state is mirrored onto this
-## node's spawn-synced properties, so any peer that later observes the
-## gate via spawn-sync receives the layer's current state atomically
-## with the surrounding scene spawn.
+## A gate binds to the layer named by [member layer_id] when it enters
+## the tree. [member viewers] and [member policy] are spawn-synced and
+## carry the layer's admission state to peers; [member public_visibility]
+## is [code]false[/code] so per-peer admission is granted via
+## [method MultiplayerSynchronizer.set_visibility_for], called by
+## [InterestService] on each flush.
 ##
-## Gates are optional. A layer without a gate is server-only state used
-## for property visibility via [method
-## MultiplayerSynchronizer.set_visibility_for]. A gate is needed when
-## the layer must gate [MultiplayerSpawner] traffic for a subtree -
-## place the gate at the subtree's root so the spawner consults
-## [method make_spawner_filter].
+## [br][br]
+## Place a gate at a subtree root when you need admission state to
+## arrive atomically with the surrounding spawn packets (e.g.
+## [MultiplayerScene]'s scene-level gate). Layers without a bound gate
+## are server-only and gate visibility through per-entity synchronizer
+## filters; layers [b]with[/b] a gate also project state to clients so
+## queries like "am I admitted?" resolve client-side via
+## [method has_viewer].
 ##
+## [br][br]
+## Entity membership is server-only and never serialized.
+## [code]apply_snapshot[/code] is the only entry point the service
+## calls; do not write [member viewers] or [member policy] directly.
 ## [codeblock]
-##     var gate := InterestGate.new()
-##     gate.layer_id = &"arena:1"
-##     add_child(gate)
-##     var layer := Netw.ctx(self).interest.layer(&"arena:1")
-##     layer.add_viewer(player.peer_id)
+## var gate := InterestGate.new()
+## gate.layer_id = &"arena:1"
+## arena_root.add_child(gate)
+## var layer := Netw.ctx(self).interest.layer(&"arena:1")
+## layer.add_viewer(player.peer_id)
 ## [/codeblock]
 class_name InterestGate
 extends MultiplayerSynchronizer

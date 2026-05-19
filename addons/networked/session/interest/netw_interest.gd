@@ -1,15 +1,13 @@
-## Entry point to the interest graph for a [MultiplayerTree].
+## Layer-lookup facade for one [MultiplayerTree]'s interest graph.
 ##
-## One instance lives on [member MultiplayerTree.interest]. Use it to
-## reach a [NetwInterestLayer], which is where the real API lives -
-## viewers, entities, policy, and the [signal
-## NetwInterestLayer.interest_enter] / [signal
-## NetwInterestLayer.interest_exit] signals.
-##
+## Exposed at [member MultiplayerTree.interest]. Lookup only — all
+## mutation, signals, and policy live on [NetwInterestLayer]. Use
+## [method layer] to get-or-create, [method get_layer] for a null-
+## returning lookup, or [method all_layers] to enumerate.
 ## [codeblock]
-##     var arena := Netw.ctx(self).interest.layer(&"arena")
-##     arena.add_entity(player_entity)
-##     arena.add_viewer(player.peer_id)
+## var arena := Netw.ctx(self).interest.layer(&"arena")
+## arena.add_entity(player_entity)
+## arena.add_viewer(player.peer_id)
 ## [/codeblock]
 class_name NetwInterest
 extends RefCounted

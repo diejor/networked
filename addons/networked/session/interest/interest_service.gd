@@ -1,16 +1,26 @@
-## Owns layer storage, RPC mirroring, and engine-side visibility
-## flushes for a [MultiplayerTree].
+## Per-tree scheduler that batches [NetwInterestLayer] mutations and
+## applies their engine-side effects.
 ##
-## External callers do not use this service directly: they go through
-## [NetwInterest] to obtain a [NetwInterestLayer] and mutate the
-## layer, which calls back into the [code]_on_layer_*[/code] hooks
-## here.
+## One [InterestService] lives under each [MultiplayerTree], registered
+## via [NetwServices]. External code never calls it directly; it
+## reacts to layer mutators through hooks and exposes
+## [method gate_for] / [method layer_for] for [InterestGate] binding.
+##
+## [br][br]
+## Per frame: viewer / policy / entity changes mark the layer dirty;
+## a deferred [method flush] computes per-(entity, peer) transitions,
+## emits [signal NetwInterestLayer.interest_enter] /
+## [signal NetwInterestLayer.interest_exit], calls
+## [method MultiplayerSynchronizer.update_visibility] on each
+## entity synchronizer, and applies the bound gate's snapshot. The
+## service is not the network transport — bound-layer admission
+## crosses the wire via the gate's own
+## [MultiplayerSynchronizer], not service RPCs.
 class_name InterestService
 extends Node
 
 
 var _layers: Dictionary[StringName, NetwInterestLayer] = {}
-var _anchors: Dictionary[StringName, InterestSynchronizer] = {}
 var _gates: Dictionary[StringName, InterestGate] = {}
 var _entity_layers: Dictionary[NetwEntity, Dictionary] = {}
 var _entity_filters: Dictionary[NetwEntity, Callable] = {}
@@ -18,7 +28,6 @@ var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = {}
 var _dirty_entities: Dictionary[NetwEntity, bool] = {}
 var _dirty_gate_layers: Dictionary[StringName, bool] = {}
 var _refresh_scheduled: bool = false
-var _suppress_broadcast: bool = false
 
 
 func _enter_tree() -> void:
@@ -75,82 +84,33 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 	_mark_layer_dirty(layer)
-	_drive_layer_if_unanchored(layer)
-	if _gates.has(layer.layer_id) and not _suppress_broadcast:
+	_drive_layer(layer)
+	if _gates.has(layer.layer_id):
 		_mark_gate_dirty(layer.layer_id)
-	if not _suppress_broadcast:
-		_broadcast_layer_config(layer)
 
 
 func _on_layer_viewer_changed(
 		layer: NetwInterestLayer, peer_id: int, added: bool) -> void:
-	var anchor: InterestSynchronizer = _anchors.get(layer.layer_id)
-	if is_instance_valid(anchor):
-		anchor._mirror_viewer_from_interest(peer_id, added)
-	if _gates.has(layer.layer_id) and not _suppress_broadcast:
+	if _gates.has(layer.layer_id):
 		_mark_gate_dirty(layer.layer_id)
 	_mark_layer_dirty(layer)
-	_drive_layer_if_unanchored(layer)
-	if not _suppress_broadcast:
-		_broadcast_viewer_delta(layer.layer_id, peer_id, added)
+	_drive_layer(layer)
 
 
 func _on_layer_entity_changed(
 		layer: NetwInterestLayer, entity: NetwEntity, added: bool) -> void:
-	var anchor: InterestSynchronizer = _anchors.get(layer.layer_id)
 	if added:
 		_track_entity_layer(entity, layer.layer_id)
-		if is_instance_valid(anchor):
-			anchor._mirror_entity_from_interest(entity, true)
 		_install_entity_filter(entity)
 	else:
-		if is_instance_valid(anchor):
-			anchor._mirror_entity_from_interest(entity, false)
 		_untrack_entity_layer(entity, layer.layer_id)
 	_mark_entity_dirty(entity)
 	if added:
-		_drive_layer_if_unanchored(layer)
-	if not _suppress_broadcast:
-		_broadcast_entity_delta(layer.layer_id, entity, added)
+		_drive_layer(layer)
 
 
 # ---------------------------------------------------------------------------
-# Anchor compat. Deleted in Phase 2 when [InterestSynchronizer] goes
-# away.
-# ---------------------------------------------------------------------------
-
-func register_anchor(anchor: InterestSynchronizer) -> void:
-	if not is_instance_valid(anchor):
-		return
-	if anchor.layer_id.is_empty():
-		return
-	_anchors[anchor.layer_id] = anchor
-	var layer := layer_for(anchor.layer_id)
-	for entity: NetwEntity in layer.entities:
-		anchor._mirror_entity_from_interest(entity, true)
-	for peer_id: int in layer.viewers:
-		anchor._mirror_viewer_from_interest(peer_id, true)
-
-
-func unregister_anchor(anchor: InterestSynchronizer) -> void:
-	if not is_instance_valid(anchor):
-		return
-	if _anchors.get(anchor.layer_id) == anchor:
-		_anchors.erase(anchor.layer_id)
-
-
-func anchor_for(layer_id: StringName) -> InterestSynchronizer:
-	return _anchors.get(layer_id)
-
-
-func all_anchors() -> Array[InterestSynchronizer]:
-	var out: Array[InterestSynchronizer] = []
-	out.assign(_anchors.values())
-	return out
-
-
-# ---------------------------------------------------------------------------
-# Gate registry. New in Phase 2; replaces anchor registry in Phase 3.
+# Gate registry.
 # ---------------------------------------------------------------------------
 
 ## Registers [param gate] as the network carrier for its
@@ -184,76 +144,6 @@ func unregister_gate(gate: InterestGate) -> void:
 ## Returns the gate bound to [param layer_id], or [code]null[/code].
 func gate_for(layer_id: StringName) -> InterestGate:
 	return _gates.get(layer_id)
-
-
-# ---------------------------------------------------------------------------
-# RPC receive paths. Suppress re-broadcast while applying remote
-# mirrors.
-# ---------------------------------------------------------------------------
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_layer_config(layer_id: String, policy: int) -> void:
-	if not _is_rpc_from_server("_rpc_interest_layer_config"):
-		return
-	_apply_remote_policy(StringName(layer_id), policy)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_viewer_delta(
-		layer_id: String,
-		peer_id: int,
-		added: bool) -> void:
-	if not _is_rpc_from_server("_rpc_interest_viewer_delta"):
-		return
-	_apply_remote_viewer(StringName(layer_id), peer_id, added)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_interest_entity_delta(
-		layer_id: String,
-		entity_path: String,
-		added: bool) -> void:
-	if not _is_rpc_from_server("_rpc_interest_entity_delta"):
-		return
-	var entity := _entity_from_path(entity_path)
-	if not entity:
-		return
-	_apply_remote_entity(StringName(layer_id), entity, added)
-
-
-func _apply_remote_policy(layer_id: StringName, policy: int) -> void:
-	var layer := layer_for(layer_id)
-	if not layer:
-		return
-	_suppress_broadcast = true
-	layer.set_policy(policy)
-	_suppress_broadcast = false
-
-
-func _apply_remote_viewer(
-		layer_id: StringName, peer_id: int, added: bool) -> void:
-	var layer := layer_for(layer_id)
-	if not layer:
-		return
-	_suppress_broadcast = true
-	if added:
-		layer.add_viewer(peer_id)
-	else:
-		layer.remove_viewer(peer_id)
-	_suppress_broadcast = false
-
-
-func _apply_remote_entity(
-		layer_id: StringName, entity: NetwEntity, added: bool) -> void:
-	var layer := layer_for(layer_id)
-	if not layer:
-		return
-	_suppress_broadcast = true
-	if added:
-		layer.add_entity(entity)
-	else:
-		layer.remove_entity(entity)
-	_suppress_broadcast = false
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +268,8 @@ func _flush_entity_visibility() -> void:
 	_dirty_entities.clear()
 
 
-func _drive_layer_if_unanchored(layer: NetwInterestLayer) -> void:
-	if layer == null or _anchors.has(layer.layer_id):
+func _drive_layer(layer: NetwInterestLayer) -> void:
+	if layer == null:
 		return
 	layer.drive_now(_live_peers(layer))
 
@@ -400,66 +290,6 @@ func _live_peers(layer: NetwInterestLayer) -> Array[int]:
 	var out: Array[int] = []
 	out.assign(seen.keys())
 	return out
-
-
-# ---------------------------------------------------------------------------
-# RPC broadcast helpers.
-# ---------------------------------------------------------------------------
-
-func _broadcast_layer_config(layer: NetwInterestLayer) -> void:
-	var mt := _tree()
-	if not _can_broadcast(mt):
-		return
-	for peer_id: int in mt.multiplayer_api.get_peers():
-		_rpc_interest_layer_config.rpc_id(
-				peer_id, String(layer.layer_id), layer.policy)
-
-
-func _broadcast_viewer_delta(
-		layer_id: StringName, peer_id: int, added: bool) -> void:
-	var mt := _tree()
-	if not _can_broadcast(mt):
-		return
-	for target_id: int in mt.multiplayer_api.get_peers():
-		_rpc_interest_viewer_delta.rpc_id(
-				target_id, String(layer_id), peer_id, added)
-
-
-func _broadcast_entity_delta(
-		layer_id: StringName,
-		entity: NetwEntity,
-		added: bool) -> void:
-	var mt := _tree()
-	if not _can_broadcast(mt):
-		return
-	if entity == null or not is_instance_valid(entity.owner):
-		return
-	var entity_path := String(mt.get_path_to(entity.owner))
-	for peer_id: int in mt.multiplayer_api.get_peers():
-		_rpc_interest_entity_delta.rpc_id(
-				peer_id, String(layer_id), entity_path, added)
-
-
-func _entity_from_path(entity_path: String) -> NetwEntity:
-	var mt := _tree()
-	if not is_instance_valid(mt):
-		return null
-	var node := mt.get_node_or_null(NodePath(entity_path))
-	return NetwEntity.of(node) if is_instance_valid(node) else null
-
-
-func _is_rpc_from_server(rpc_name: String) -> bool:
-	var sender := multiplayer.get_remote_sender_id()
-	if sender == MultiplayerPeer.TARGET_PEER_SERVER:
-		return true
-	Netw.dbg.warn("%s received from non-server peer %d", [rpc_name, sender])
-	return false
-
-
-func _can_broadcast(mt: MultiplayerTree) -> bool:
-	return is_instance_valid(mt) and mt.is_server \
-			and mt.multiplayer_api != null \
-			and mt.multiplayer_peer != null
 
 
 func _tree() -> MultiplayerTree:

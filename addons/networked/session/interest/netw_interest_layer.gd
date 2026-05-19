@@ -1,19 +1,25 @@
-## A named slice of the interest graph: a viewer set, an entity set,
-## and a composition [enum Policy].
+## A named slice of the interest graph: a [member viewers] set, an
+## [member entities] set, and a composition [enum Policy].
 ##
 ## Layers are the canonical state and the canonical mutation API.
-## Get one from [method NetwInterest.layer] or
-## [method NetwInterest.get_layer], then call [method add_viewer],
-## [method add_entity], [method remove_viewer], [method remove_entity],
-## or [method set_policy]. The owning [InterestService] handles
-## broadcast, mirroring, and engine-side visibility flushes; tests
-## without a service mutate the layer in isolation.
+## [member entities] is server-only and never crosses the wire;
+## [member viewers] and [member policy] do, but only when an
+## [InterestGate] is bound to the layer via [method bind_gate].
+## The owning [InterestService] batches mutations and flushes once
+## per frame, applying engine-side visibility through
+## [method MultiplayerSynchronizer.set_visibility_for] on entity
+## synchronizers and on the bound gate.
 ##
+## [br][br]
+## Server reacts via [signal interest_enter] / [signal interest_exit];
+## clients react via Godot's
+## [signal MultiplayerSynchronizer.visibility_changed] on the
+## entity synchronizers the server admitted them to.
 ## [codeblock]
-##     var arena := Netw.interest.layer(&"arena")
-##     arena.add_entity(player_entity)
-##     arena.add_viewer(player.peer_id)
-##     player_entity.interest_enter.connect(_on_seen_by)
+## var arena := Netw.ctx(self).interest.layer(&"arena")
+## arena.add_entity(player_entity)
+## arena.add_viewer(player.peer_id)
+## arena.interest_enter.connect(_on_seen_by)
 ## [/codeblock]
 class_name NetwInterestLayer
 extends RefCounted

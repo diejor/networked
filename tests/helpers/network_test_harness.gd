@@ -137,7 +137,7 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 
 
 ## Admits [param client] to [param scene_name] on the server by calling
-## [method SceneSynchronizer.connect_peer] directly, bypassing the
+## [method MultiplayerScene.connect_peer] directly, bypassing the
 ## player-join flow. Useful for tests that need to assert client-side
 ## visibility into a scene without spawning a player into it.
 ##
@@ -150,7 +150,7 @@ func admit_client_to_scene(
 	var server_scene := get_server_scene(scene_name)
 	assert(server_scene, "admit_client_to_scene: scene '%s' not active on server." % scene_name)
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	server_scene.synchronizer.connect_peer(peer_id)
+	server_scene.connect_peer(peer_id)
 	return await wait_for_client_scene_spawn(client, scene_name)
 
 

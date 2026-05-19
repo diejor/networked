@@ -1,19 +1,23 @@
-## Declares which interest layers an entity participates in.
+## Declares which [NetwInterestLayer]s an entity participates in.
 ##
-## Sibling component placed under a [NetwEntity] root. Mirrors the
-## [SaveComponent] / [SpawnerComponent] pattern: contributes its
-## [member layer_ids] property to the spawner's spawn packet so the
-## value lands on the client before the entity enters its tree, then
-## registers the entity with matching [NetwInterestLayer] state
-## through [NetwInterest].
+## Sibling under a [NetwEntity] root. [member layer_ids] is
+## contributed to the spawn packet via
+## [method NetwEntity.contribute_spawn_property], so the value lands
+## on the client before the entity enters its tree. On the server,
+## tree-enter registers the entity with each named layer through
+## [NetwInterest]; tree-exit unregisters. Mutating [member layer_ids]
+## at runtime applies the diff incrementally.
 ##
+## [br][br]
+## Entity membership is server-only state — registration is gated on
+## [method MultiplayerAPI.is_server], and clients carry no entity set.
+## For scene-level enrollment use [method MultiplayerScene.register_player]
+## instead; this component is for [b]additional[/b] layers (AoI rings,
+## team buckets, stealth bubbles) the entity opts into.
 ## [codeblock]
-##     # In the entity scene:
-##     %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
+## # In the entity scene:
+## %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
 ## [/codeblock]
-##
-## Membership transports as part of the entity's own spawn-sync, while
-## server-side layer mutations are mirrored by [NetwInterest].
 class_name InterestComponent
 extends Node
 
@@ -49,6 +53,8 @@ func _notification(what: int) -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	if not _is_server():
+		return
 	for id in layer_ids:
 		_register_for(id)
 
@@ -56,8 +62,18 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	if not _is_server():
+		return
 	for id in layer_ids:
 		_unregister_for(id)
+
+
+func _is_server() -> bool:
+	if not is_inside_tree():
+		return true
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return true
+	return multiplayer.is_server()
 
 
 func _register_for(layer_id: StringName) -> void:

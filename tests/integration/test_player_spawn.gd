@@ -73,7 +73,7 @@ func test_connect_peer_called_on_spawn() -> void:
 
 	var scene := harness.get_server_scene()
 	var peer_id := client0.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id)).is_true()
+	assert_that(scene.connected_peers.has(peer_id)).is_true()
 
 
 func test_two_players_in_same_scene() -> void:
@@ -87,5 +87,5 @@ func test_two_players_in_same_scene() -> void:
 
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id_0)).is_true()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id_1)).is_true()
+	assert_that(scene.connected_peers.has(peer_id_0)).is_true()
+	assert_that(scene.connected_peers.has(peer_id_1)).is_true()

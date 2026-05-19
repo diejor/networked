@@ -42,7 +42,7 @@ var _visualizers: Dictionary = {}
 ## used for causal linking.
 var _scene_tokens: Dictionary = {}
 
-## Scene -> [Callable] connected to [member Scene.synchronizer.spawned], for
+## Scene -> [Callable] connected to [signal MultiplayerScene.spawned], for
 ## disconnect-on-cleanup.
 var _hooked_scenes: Dictionary = {}
 
@@ -354,23 +354,21 @@ func _on_scene_despawned(scene: MultiplayerScene) -> void:
 
 
 func _hook_synchronizer(scene: MultiplayerScene) -> void:
-	if not is_instance_valid(scene) or \
-			not is_instance_valid(scene.synchronizer):
+	if not is_instance_valid(scene):
 		return
 	if _hooked_scenes.has(scene):
 		return
 
 	var cb := func(node: Node): _on_player_spawned(node, scene)
-	scene.synchronizer.spawned.connect(cb)
+	scene.spawned.connect(cb)
 	_hooked_scenes[scene] = cb
 
 
 func _unhook_synchronizer(scene: MultiplayerScene) -> void:
 	var cb: Callable = _hooked_scenes.get(scene, Callable())
-	if cb.is_valid() and is_instance_valid(scene) and \
-			is_instance_valid(scene.synchronizer):
-		if scene.synchronizer.spawned.is_connected(cb):
-			scene.synchronizer.spawned.disconnect(cb)
+	if cb.is_valid() and is_instance_valid(scene):
+		if scene.spawned.is_connected(cb):
+			scene.spawned.disconnect(cb)
 	_hooked_scenes.erase(scene)
 
 

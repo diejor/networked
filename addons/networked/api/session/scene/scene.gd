@@ -68,8 +68,8 @@ var _tree: NetwTree
 
 func _init(scene: MultiplayerScene) -> void:
 	_scene_ref = weakref(scene)
-	scene.synchronizer.spawned.connect(_on_spawned)
-	scene.synchronizer.despawned.connect(_on_despawned)
+	scene.spawned.connect(_on_spawned)
+	scene.despawned.connect(_on_despawned)
 	scene.player_ready.connect(_on_player_ready)
 
 
@@ -127,10 +127,10 @@ func tree() -> NetwTree:
 ## [/codeblock]
 func get_peers() -> Array[int]:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene) or not is_instance_valid(scene.synchronizer):
+	if not is_instance_valid(scene):
 		return []
 	var result: Array[int] = []
-	result.assign(scene.synchronizer.connected_peers.keys())
+	result.assign(scene.connected_peers.keys())
 	return result
 
 
@@ -203,11 +203,11 @@ static func for_node(node: Node) -> NetwScene:
 ## Called automatically when the underlying [MultiplayerScene] exits the tree.
 func close() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if is_instance_valid(scene) and is_instance_valid(scene.synchronizer):
-		if scene.synchronizer.spawned.is_connected(_on_spawned):
-			scene.synchronizer.spawned.disconnect(_on_spawned)
-		if scene.synchronizer.despawned.is_connected(_on_despawned):
-			scene.synchronizer.despawned.disconnect(_on_despawned)
+	if is_instance_valid(scene):
+		if scene.spawned.is_connected(_on_spawned):
+			scene.spawned.disconnect(_on_spawned)
+		if scene.despawned.is_connected(_on_despawned):
+			scene.despawned.disconnect(_on_despawned)
 		if scene.player_ready.is_connected(_on_player_ready):
 			scene.player_ready.disconnect(_on_player_ready)
 	if _active_countdown:
@@ -231,7 +231,7 @@ func suspend(reason: String = "") -> void:
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.suspend() must be called on the server.")
-	for peer_id: int in scene.synchronizer.connected_peers:
+	for peer_id: int in scene.connected_peers:
 		if peer_id == scene.multiplayer.get_unique_id():
 			continue
 		scene._rpc_receive_suspend.rpc_id(peer_id, reason)
@@ -259,7 +259,7 @@ func resume() -> void:
 		return
 	assert(scene.multiplayer.is_server(),
 		"NetwScene.resume() must be called on the server.")
-	for peer_id: int in scene.synchronizer.connected_peers:
+	for peer_id: int in scene.connected_peers:
 		if peer_id == scene.multiplayer.get_unique_id():
 			continue
 		scene._rpc_receive_resume.rpc_id(peer_id)
@@ -295,7 +295,7 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 	cd.cancelled.connect(_on_countdown_cancelled)
 
 	# Notify clients before the first tick so they can prepare UI
-	for peer_id: int in scene.synchronizer.connected_peers:
+	for peer_id: int in scene.connected_peers:
 		if peer_id == scene.multiplayer.get_unique_id():
 			continue
 		scene._rpc_receive_countdown_started.rpc_id(peer_id, seconds)
@@ -358,7 +358,7 @@ func _on_countdown_tick(seconds_left: int) -> void:
 	countdown_tick.emit(seconds_left)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		for peer_id: int in scene.synchronizer.connected_peers:
+		for peer_id: int in scene.connected_peers:
 			if peer_id == scene.multiplayer.get_unique_id():
 				continue
 			scene._rpc_receive_countdown_tick.rpc_id(peer_id, seconds_left)
@@ -368,7 +368,7 @@ func _on_countdown_finished() -> void:
 	countdown_finished.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		for peer_id: int in scene.synchronizer.connected_peers:
+		for peer_id: int in scene.connected_peers:
 			if peer_id == scene.multiplayer.get_unique_id():
 				continue
 			scene._rpc_receive_countdown_finished.rpc_id(peer_id)
@@ -379,7 +379,7 @@ func _on_countdown_cancelled() -> void:
 	countdown_cancelled.emit()
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		for peer_id: int in scene.synchronizer.connected_peers:
+		for peer_id: int in scene.connected_peers:
 			if peer_id == scene.multiplayer.get_unique_id():
 				continue
 			scene._rpc_receive_countdown_cancelled.rpc_id(peer_id)

@@ -16,8 +16,8 @@ extends MultiplayerSpawner
 ##
 ## [b]Spawned scenes are not visible to peers until admitted.[/b]
 ## Even after the server activates a scene, the wrapper's
-## [SceneSynchronizer] gates spawn-replication per peer. A peer only
-## receives the scene after [method SceneSynchronizer.connect_peer] is
+## [InterestGate] gates spawn-replication per peer. A peer only
+## receives the scene after [method MultiplayerScene.connect_peer] is
 ## called for it (typically transitively via [method MultiplayerScene.register_player]).
 ## See [MultiplayerScene] for the full invariant.
 ## [codeblock]
@@ -421,7 +421,7 @@ func _resolve_hydrated_spawn_scene(
 
 func _apply_empty_action_if_needed(name: StringName) -> void:
 	var scene := active_scenes.get(name) as MultiplayerScene
-	if not scene or not scene.synchronizer.connected_peers.is_empty():
+	if not scene or not scene.connected_peers.is_empty():
 		return
 	var config := _get_config(name)
 	match config["empty_action"]:

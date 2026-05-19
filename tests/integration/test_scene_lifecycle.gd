@@ -159,7 +159,7 @@ func test_freeze_empty_action_disables_level_on_despawn() -> void:
 	var scene := server_mgr.active_scenes[&"TestLevel"]
 
 	var dummy := Node.new()
-	scene.synchronizer.despawned.emit(dummy)
+	scene.despawned.emit(dummy)
 	dummy.free()
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
@@ -173,7 +173,7 @@ func test_destroy_empty_action_removes_scene_on_despawn() -> void:
 	var scene := server_mgr.active_scenes[&"TestLevel"]
 
 	var dummy := Node.new()
-	scene.synchronizer.despawned.emit(dummy)
+	scene.despawned.emit(dummy)
 	dummy.free()
 	await get_tree().process_frame
 
@@ -189,7 +189,7 @@ func test_keep_active_empty_action_leaves_level_processing() -> void:
 	var scene := server_mgr.active_scenes[&"TestLevel"]
 
 	var dummy := Node.new()
-	scene.synchronizer.despawned.emit(dummy)
+	scene.despawned.emit(dummy)
 	dummy.free()
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
@@ -199,12 +199,12 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 	@warning_ignore("redundant_await")
 	await server_mgr.activate_scene(&"TestLevel")
 	var scene := server_mgr.active_scenes[&"TestLevel"]
-	scene.synchronizer.connected_peers[999] = true
+	scene.connect_peer(999)
 
 	var dummy := Node.new()
-	scene.synchronizer.despawned.emit(dummy)
+	scene.despawned.emit(dummy)
 	dummy.free()
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	scene.synchronizer.connected_peers.erase(999)
+	scene.disconnect_peer(999)

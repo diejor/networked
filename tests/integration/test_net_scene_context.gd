@@ -287,7 +287,7 @@ func test_player_leave_removes_entry_from_gate() -> void:
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_true()
 
-	harness.get_server_scene().synchronizer.untrack_node(player0)
+	harness.get_server_scene().untrack_node(player0)
 	await get_tree().process_frame
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_false()

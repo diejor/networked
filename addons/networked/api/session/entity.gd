@@ -48,7 +48,7 @@ signal spawning
 signal spawned
 
 ## Emitted on the server when this entity becomes visible to
-## [param peer_id] through any [InterestSynchronizer] gating it. On a
+## [param peer_id] through any [NetwInterestLayer] gating it. On a
 ## client, [param peer_id] is always the local peer; the signal then
 ## means "I gained sight of this entity's gated synchronizers." Fires
 ## only after the initial spawn-sync handshake completes.

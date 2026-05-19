@@ -376,20 +376,23 @@ func _sanitize_replication_config() -> void:
 		_coerce_to_spawn_only(replication_config, prop)
 
 
-# Registers the entity with the enclosing [SceneSynchronizer] so per-peer
-# scene visibility filters apply.
+# Registers the entity with the enclosing [MultiplayerScene] so per-peer
+# scene visibility filters apply. Scene-owned enrollment - the scene's
+# layer/gate is the authoritative admission state; [InterestComponent]
+# only handles additional generic layers.
 func _register_with_scene() -> void:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if not scene:
 		_dbg.debug(
 			"No enclosing MultiplayerScene for '%s'; skipping "
-			+ "SceneSynchronizer track.", [owner.name]
+			+ "scene track.", [owner.name]
 		)
 		return
 	if peer_id != 0:
 		scene.register_player(owner)
 		_assign_local_player_if_needed()
-	scene.synchronizer.track_node(owner)
+	else:
+		scene.track_node(owner)
 
 
 func _assign_local_player_if_needed() -> void:
