@@ -39,11 +39,16 @@ func test_gate_unbinds_on_exit_tree() -> void:
 	assert_that(layer.bound_gate()).is_null()
 
 
+func _service() -> InterestService:
+	return mt.get_service(InterestService) as InterestService
+
+
 func test_layer_add_viewer_writes_through_to_gate() -> void:
 	var gate := _make_gate(&"a")
 	var layer := mt.interest.layer(&"a")
 	layer.add_viewer(7)
 	layer.add_viewer(11)
+	_service().flush()
 	assert_that(gate.has_viewer(7)).is_true()
 	assert_that(gate.has_viewer(11)).is_true()
 
@@ -53,6 +58,7 @@ func test_layer_remove_viewer_writes_through_to_gate() -> void:
 	var layer := mt.interest.layer(&"a")
 	layer.add_viewer(7)
 	layer.remove_viewer(7)
+	_service().flush()
 	assert_that(gate.has_viewer(7)).is_false()
 
 
@@ -60,6 +66,7 @@ func test_layer_set_policy_writes_through_to_gate() -> void:
 	var gate := _make_gate(&"a")
 	var layer := mt.interest.layer(&"a")
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
+	_service().flush()
 	assert_that(gate.policy).is_equal(
 			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 
@@ -74,13 +81,30 @@ func test_gate_picks_up_initial_layer_state_on_bind() -> void:
 			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 
 
-func test_spawner_filter_reflects_policy() -> void:
+func test_verdict_reflects_policy() -> void:
 	var gate := _make_gate(&"a")
 	var layer := mt.interest.layer(&"a")
-	var filter := gate.make_spawner_filter()
-	assert_that(filter.call(7)).is_false()
+	_service().flush()
+	assert_that(gate.verdict_for(7)).is_false()
 	layer.add_viewer(7)
-	assert_that(filter.call(7)).is_true()
+	_service().flush()
+	assert_that(gate.verdict_for(7)).is_true()
+
+
+func test_batched_mutations_produce_one_snapshot() -> void:
+	var gate := _make_gate(&"a")
+	var layer := mt.interest.layer(&"a")
+	# Mutate many times in one frame; assert the gate observes only
+	# the final state once flush runs (i.e. nothing was written
+	# eagerly between mutations).
+	for i in 5:
+		layer.add_viewer(100 + i)
+	# Before flush, the gate has not yet seen any of these (apply_snapshot
+	# only runs on flush; the register_gate snapshot at bind happened
+	# before viewers were added).
+	assert_that(gate.viewers.size()).is_equal(0)
+	_service().flush()
+	assert_that(gate.viewers.size()).is_equal(5)
 
 
 func test_second_gate_for_same_layer_errors() -> void:

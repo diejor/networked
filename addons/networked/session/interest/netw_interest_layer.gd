@@ -201,6 +201,15 @@ func viewer_ids() -> Array[int]:
 	return out
 
 
+## Returns current viewer peer ids as a [PackedInt32Array] suitable
+## for [method InterestGate.apply_snapshot].
+func viewers_packed() -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	for p: int in viewers.keys():
+		out.append(p)
+	return out
+
+
 func _emit_transitions(result: InterestDriver.Result) -> void:
 	for t in result.hide_transitions:
 		var entity: NetwEntity = t[0]

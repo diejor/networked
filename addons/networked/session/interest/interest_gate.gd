@@ -31,9 +31,9 @@ extends MultiplayerSynchronizer
 ## Stable identifier of the [NetwInterestLayer] this gate binds to.
 @export var layer_id: StringName
 
-## Spawn-synced viewer ids. Authoritative on the server; on the
-## client this property is set by replication and mirrored back into
-## the local layer state.
+## Spawn-synced viewer ids. Authoritative on the server, written
+## through [method apply_snapshot]; on the client this property is
+## set by replication and mirrored back into the local layer state.
 @export var viewers: PackedInt32Array = []:
 	set(value):
 		var prev := viewers
@@ -57,6 +57,7 @@ var _registered: bool = false
 
 func _init() -> void:
 	unique_name_in_owner = true
+	public_visibility = false
 
 
 func _notification(what: int) -> void:
@@ -82,36 +83,37 @@ func verdict_for(peer_id: int) -> bool:
 	return InterestPolicy.verdict(policy, _viewers_as_dict(), peer_id)
 
 
-## Returns a Callable suitable for
-## [method MultiplayerSpawner.add_visibility_filter]. The filter reads
-## [member viewers] and [member policy] directly off the gate, so the
-## spawner consults current state every dispatch.
-func make_spawner_filter() -> Callable:
-	return func(peer_id: int) -> bool:
-		return verdict_for(peer_id)
-
-
 # ---------------------------------------------------------------------------
-# Service-side write paths. Called by [InterestService] hooks when the
-# bound layer mutates on the server.
+# Service-side write path. [InterestService] calls this once per flush
+# with the bound layer's current viewer/policy snapshot. The gate
+# writes its replicated properties and updates per-peer admission
+# visibility on its own [MultiplayerSynchronizer].
 # ---------------------------------------------------------------------------
 
-func _write_viewer(peer_id: int, added: bool) -> void:
+## Server-side: writes [param new_viewers] and [param new_policy] to
+## the gate's replicated properties and applies per-peer admission
+## via [method MultiplayerSynchronizer.set_visibility_for]. Called by
+## [InterestService] on flush; do not invoke directly.
+func apply_snapshot(
+		new_viewers: PackedInt32Array, new_policy: int) -> void:
 	_applying_local = true
-	if added:
-		if not viewers.has(peer_id):
-			viewers.append(peer_id)
-	else:
-		var idx := viewers.find(peer_id)
-		if idx >= 0:
-			viewers.remove_at(idx)
+	policy = new_policy
+	viewers = new_viewers
 	_applying_local = false
+	_apply_admission_visibility()
 
 
-func _write_policy(value: int) -> void:
-	_applying_local = true
-	policy = value
-	_applying_local = false
+func _apply_admission_visibility() -> void:
+	if not is_inside_tree():
+		return
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return
+	if not multiplayer.is_server():
+		return
+	var v_dict := _viewers_as_dict()
+	for peer_id: int in multiplayer.get_peers():
+		var verdict := InterestPolicy.verdict(policy, v_dict, peer_id)
+		set_visibility_for(peer_id, verdict)
 
 
 # ---------------------------------------------------------------------------
@@ -159,11 +161,9 @@ func _bind() -> void:
 	_layer = service.layer_for(layer_id)
 	if not _layer:
 		return
-	service.register_gate(self)
 	_layer.bind_gate(self)
 	_registered = true
-	if _is_server():
-		_sync_from_layer()
+	service.register_gate(self)
 
 
 func _unbind() -> void:
@@ -176,18 +176,6 @@ func _unbind() -> void:
 	if service:
 		service.unregister_gate(self)
 	_layer = null
-
-
-func _sync_from_layer() -> void:
-	if not _layer:
-		return
-	_applying_local = true
-	policy = _layer.policy
-	var arr: PackedInt32Array = []
-	for p in _layer.viewers:
-		arr.append(p)
-	viewers = arr
-	_applying_local = false
 
 
 # ---------------------------------------------------------------------------

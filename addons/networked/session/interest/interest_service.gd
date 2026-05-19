@@ -16,6 +16,7 @@ var _entity_layers: Dictionary[NetwEntity, Dictionary] = {}
 var _entity_filters: Dictionary[NetwEntity, Callable] = {}
 var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = {}
 var _dirty_entities: Dictionary[NetwEntity, bool] = {}
+var _dirty_gate_layers: Dictionary[StringName, bool] = {}
 var _refresh_scheduled: bool = false
 var _suppress_broadcast: bool = false
 
@@ -75,9 +76,8 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 	_mark_layer_dirty(layer)
 	_drive_layer_if_unanchored(layer)
-	var gate: InterestGate = _gates.get(layer.layer_id)
-	if is_instance_valid(gate) and not _suppress_broadcast:
-		gate._write_policy(layer.policy)
+	if _gates.has(layer.layer_id) and not _suppress_broadcast:
+		_mark_gate_dirty(layer.layer_id)
 	if not _suppress_broadcast:
 		_broadcast_layer_config(layer)
 
@@ -87,9 +87,8 @@ func _on_layer_viewer_changed(
 	var anchor: InterestSynchronizer = _anchors.get(layer.layer_id)
 	if is_instance_valid(anchor):
 		anchor._mirror_viewer_from_interest(peer_id, added)
-	var gate: InterestGate = _gates.get(layer.layer_id)
-	if is_instance_valid(gate) and not _suppress_broadcast:
-		gate._write_viewer(peer_id, added)
+	if _gates.has(layer.layer_id) and not _suppress_broadcast:
+		_mark_gate_dirty(layer.layer_id)
 	_mark_layer_dirty(layer)
 	_drive_layer_if_unanchored(layer)
 	if not _suppress_broadcast:
@@ -169,6 +168,9 @@ func register_gate(gate: InterestGate) -> void:
 				% [String(gate.layer_id)])
 		return
 	_gates[gate.layer_id] = gate
+	var layer := get_layer(gate.layer_id)
+	if layer:
+		gate.apply_snapshot(layer.viewers_packed(), layer.policy)
 
 
 ## Removes [param gate] from the registry. Idempotent.
@@ -328,6 +330,13 @@ func _mark_entity_dirty(entity: NetwEntity) -> void:
 	_schedule_visibility_flush()
 
 
+func _mark_gate_dirty(layer_id: StringName) -> void:
+	if layer_id.is_empty():
+		return
+	_dirty_gate_layers[layer_id] = true
+	_schedule_visibility_flush()
+
+
 func _schedule_visibility_flush() -> void:
 	if _refresh_scheduled:
 		return
@@ -335,8 +344,30 @@ func _schedule_visibility_flush() -> void:
 	_flush_visibility.call_deferred()
 
 
-func _flush_visibility() -> void:
+## Synchronously flushes pending gate snapshots and entity visibility
+## updates. Normally invoked via [code]call_deferred[/code] at end of
+## frame; tests call this directly to observe effects.
+func flush() -> void:
 	_refresh_scheduled = false
+	_flush_gate_snapshots()
+	_flush_entity_visibility()
+
+
+func _flush_visibility() -> void:
+	flush()
+
+
+func _flush_gate_snapshots() -> void:
+	for layer_id: StringName in _dirty_gate_layers.keys():
+		var gate: InterestGate = _gates.get(layer_id)
+		var layer := get_layer(layer_id)
+		if not is_instance_valid(gate) or layer == null:
+			continue
+		gate.apply_snapshot(layer.viewers_packed(), layer.policy)
+	_dirty_gate_layers.clear()
+
+
+func _flush_entity_visibility() -> void:
 	for entity: NetwEntity in _dirty_entities.keys():
 		if not is_instance_valid(entity) \
 				or not is_instance_valid(entity.owner):
