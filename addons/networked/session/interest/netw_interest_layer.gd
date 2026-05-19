@@ -48,6 +48,12 @@ signal entity_added(entity: NetwEntity)
 ## Emitted when [param entity] leaves this layer.
 signal entity_removed(entity: NetwEntity)
 
+## Emitted when an [InterestGate] binds to this layer.
+signal gate_bound(gate: Object)
+
+## Emitted when the bound gate is detached.
+signal gate_unbound(gate: Object)
+
 
 ## Stable id used by [NetwInterest] to index this layer.
 var layer_id: StringName
@@ -66,6 +72,7 @@ var driver: InterestDriver = InterestDriver.new()
 
 
 var _service_ref: WeakRef
+var _bound_gate_ref: WeakRef
 
 
 func _init(id: StringName = &"", service: Object = null) -> void:
@@ -209,3 +216,34 @@ func _emit_transitions(result: InterestDriver.Result) -> void:
 
 func _service() -> InterestService:
 	return _service_ref.get_ref() as InterestService if _service_ref else null
+
+
+## Associates an [InterestGate] with this layer. The gate's synced
+## [code]viewers[/code] and [code]policy[/code] properties will be
+## kept in step with this layer's state on the server, and Godot's
+## spawn-sync / property replication will deliver them to clients.
+## Errors if another gate is already bound.
+func bind_gate(gate: Object) -> void:
+	if gate == null:
+		return
+	var current := _bound_gate_ref.get_ref() if _bound_gate_ref else null
+	if current and current != gate:
+		push_error(
+				"NetwInterestLayer[%s]: another gate is already bound"
+				% [String(layer_id)])
+		return
+	_bound_gate_ref = weakref(gate)
+	gate_bound.emit(gate)
+
+
+## Detaches the bound gate, if any.
+func unbind_gate() -> void:
+	var current := _bound_gate_ref.get_ref() if _bound_gate_ref else null
+	_bound_gate_ref = null
+	if current:
+		gate_unbound.emit(current)
+
+
+## Returns the bound [InterestGate], or [code]null[/code].
+func bound_gate() -> Object:
+	return _bound_gate_ref.get_ref() if _bound_gate_ref else null

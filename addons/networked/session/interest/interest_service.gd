@@ -11,6 +11,7 @@ extends Node
 
 var _layers: Dictionary[StringName, NetwInterestLayer] = {}
 var _anchors: Dictionary[StringName, InterestSynchronizer] = {}
+var _gates: Dictionary[StringName, InterestGate] = {}
 var _entity_layers: Dictionary[NetwEntity, Dictionary] = {}
 var _entity_filters: Dictionary[NetwEntity, Callable] = {}
 var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = {}
@@ -74,6 +75,9 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 	_mark_layer_dirty(layer)
 	_drive_layer_if_unanchored(layer)
+	var gate: InterestGate = _gates.get(layer.layer_id)
+	if is_instance_valid(gate) and not _suppress_broadcast:
+		gate._write_policy(layer.policy)
 	if not _suppress_broadcast:
 		_broadcast_layer_config(layer)
 
@@ -83,6 +87,9 @@ func _on_layer_viewer_changed(
 	var anchor: InterestSynchronizer = _anchors.get(layer.layer_id)
 	if is_instance_valid(anchor):
 		anchor._mirror_viewer_from_interest(peer_id, added)
+	var gate: InterestGate = _gates.get(layer.layer_id)
+	if is_instance_valid(gate) and not _suppress_broadcast:
+		gate._write_viewer(peer_id, added)
 	_mark_layer_dirty(layer)
 	_drive_layer_if_unanchored(layer)
 	if not _suppress_broadcast:
@@ -141,6 +148,40 @@ func all_anchors() -> Array[InterestSynchronizer]:
 	var out: Array[InterestSynchronizer] = []
 	out.assign(_anchors.values())
 	return out
+
+
+# ---------------------------------------------------------------------------
+# Gate registry. New in Phase 2; replaces anchor registry in Phase 3.
+# ---------------------------------------------------------------------------
+
+## Registers [param gate] as the network carrier for its
+## [member InterestGate.layer_id]. Errors if another gate is already
+## registered for the same id. Called by [InterestGate._enter_tree].
+func register_gate(gate: InterestGate) -> void:
+	if not is_instance_valid(gate):
+		return
+	if gate.layer_id.is_empty():
+		return
+	var existing: InterestGate = _gates.get(gate.layer_id)
+	if is_instance_valid(existing) and existing != gate:
+		push_error(
+				"InterestService: gate already registered for layer '%s'"
+				% [String(gate.layer_id)])
+		return
+	_gates[gate.layer_id] = gate
+
+
+## Removes [param gate] from the registry. Idempotent.
+func unregister_gate(gate: InterestGate) -> void:
+	if not is_instance_valid(gate):
+		return
+	if _gates.get(gate.layer_id) == gate:
+		_gates.erase(gate.layer_id)
+
+
+## Returns the gate bound to [param layer_id], or [code]null[/code].
+func gate_for(layer_id: StringName) -> InterestGate:
+	return _gates.get(layer_id)
 
 
 # ---------------------------------------------------------------------------
