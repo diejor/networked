@@ -436,8 +436,9 @@ func send_to_game(p_session_id: int, message: String, data: Array) -> void:
 	var s := get_session(p_session_id)
 	if s and s.is_active():
 		s.send_message(message, data)
-	else:
-		_dbg.warn("DebuggerPlugin: send skipped session=%d msg=%s", [
-			p_session_id,
-			message,
-		])
+
+
+## Returns [code]true[/code] when [param p_session_id] can receive messages.
+func is_game_session_active(p_session_id: int) -> bool:
+	var s := get_session(p_session_id)
+	return s and s.is_active()

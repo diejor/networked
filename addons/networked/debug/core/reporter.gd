@@ -20,8 +20,11 @@ static func set_enabled(enabled: bool) -> void:
 	_reporting_enabled = enabled
 	_reporting_checked = true
 	var reporter := _get_instance()
-	if reporter and enabled:
-		reporter._try_register_capture()
+	if reporter:
+		if enabled:
+			reporter._try_register_capture()
+		else:
+			reporter._unregister_capture()
 
 
 ## Property-style access for the singleton instance.
@@ -80,9 +83,9 @@ static func _get_username(node: Node) -> String:
 ## This performs a deep reset, freeing all internal [NetDebugTreeContext]
 ## instances and clearing the [NetTrace] history.
 func reset_state() -> void:
+	_unregister_capture()
 	_reporting_checked = false
 	_reporting_enabled = false
-	_capture_registered = false
 
 	if _clock_monitor:
 		_clock_monitor.clear_all()
@@ -122,13 +125,21 @@ static func _get_instance() -> NetworkedDebugReporter:
 
 func _try_register_capture() -> void:
 	if _has_local_session() and not _capture_registered:
-		_capture_registered = true
 		EngineDebugger.register_message_capture(
 			"networked",
 			func(message: String, data: Array) -> bool:
 				_on_editor_message(message, data)
 				return true
 		)
+		_capture_registered = true
+
+
+func _unregister_capture() -> void:
+	if not _capture_registered:
+		return
+	_capture_registered = false
+	if EngineDebugger.has_method("unregister_message_capture"):
+		EngineDebugger.unregister_message_capture("networked")
 
 
 func _init() -> void:
@@ -172,6 +183,8 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	_unregister_capture()
+
 	if not _debug_build():
 		Netw.dbg.unregister_reporter(self)
 		return
