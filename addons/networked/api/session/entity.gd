@@ -75,6 +75,13 @@ var peer_id := 0
 var ownership: Ownership:
 	get: return Ownership.PEER if peer_id != 0 else Ownership.SERVER
 
+## Returns [member SpawnerComponent.is_template] for this entity's
+## registered spawner.
+var is_template: bool:
+	get:
+		var spawner := get_spawner()
+		return spawner.is_template if spawner else false
+
 var _spawner_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false

@@ -55,8 +55,29 @@ signal api_swapped(
 )
 
 
-enum State { OFFLINE, CONNECTING, ONLINE, DISCONNECTING }
-enum Role { NONE, CLIENT, DEDICATED_SERVER, LISTEN_SERVER }
+## Session lifecycle state for this tree.
+enum State {
+	## No active [MultiplayerPeer] is mounted.
+	OFFLINE,
+	## A host, join, or adopt operation is configuring transport.
+	CONNECTING,
+	## The tree has an active [MultiplayerPeer] and configured services.
+	ONLINE,
+	## The tree is closing the active peer and clearing session state.
+	DISCONNECTING,
+}
+
+## Runtime role this tree plays in the current session.
+enum Role {
+	## No session role has been assigned yet.
+	NONE,
+	## This tree is connected to a remote server as a client.
+	CLIENT,
+	## This tree hosts the session without acting as a local client.
+	DEDICATED_SERVER,
+	## This tree hosts the session and also represents the local player.
+	LISTEN_SERVER,
+}
 
 const ADOPT_CONNECT_TIMEOUT := 15.0
 
@@ -515,7 +536,7 @@ func host(quiet: bool = false) -> Error:
 	if peer != null:
 		api.multiplayer_peer = peer
 	
-	role = Role.DEDICATED_SERVER
+	role = Role.LISTEN_SERVER if use_listen_server else Role.DEDICATED_SERVER
 	state = State.ONLINE
 	_finalize_session()
 	_auth.synthesize_host_identity()

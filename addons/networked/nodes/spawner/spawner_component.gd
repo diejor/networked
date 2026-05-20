@@ -185,7 +185,7 @@ func _ready() -> void:
 	):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	if (
-		not multiplayer.is_server()
+		_is_local_client()
 		and _is_local_represented_peer()
 		and is_inside_tree()
 	):
@@ -409,6 +409,11 @@ func _is_local_represented_peer() -> bool:
 	if not multiplayer or multiplayer.multiplayer_peer == null:
 		return false
 	return peer_id == multiplayer.get_unique_id()
+
+
+func _is_local_client() -> bool:
+	var mt := MultiplayerTree.resolve(self)
+	return mt.is_local_client if mt else false
 
 
 func _on_peer_disconnected(disconnected_peer_id: int) -> void:

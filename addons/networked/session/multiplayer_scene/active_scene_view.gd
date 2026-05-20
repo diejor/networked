@@ -170,6 +170,17 @@ func _gui_input(event: InputEvent) -> void:
 	_target.push_input(to_push, true)
 
 
+# Forwards keyboard/action input that survived the host UI into the target
+# viewport. The target viewport still gets first chance to route it through
+# its own GUI before any gameplay _unhandled_input callbacks run.
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_instance_valid(_target):
+		return
+	if event is InputEventMouse:
+		return
+	_target.push_input(event, true)
+
+
 func _on_resized() -> void:
 	if auto_resize_target and is_instance_valid(_target):
 		_target.size = Vector2i(size)
