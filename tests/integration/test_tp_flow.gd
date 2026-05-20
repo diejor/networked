@@ -20,7 +20,6 @@ var db: NetwDatabase
 
 
 func before_test() -> void:
-	enable_logs()
 	test_dir = create_temp_dir("tp_flow_test")
 	backend = auto_free(FileSystemBackend.new())
 	backend.base_dir = test_dir
