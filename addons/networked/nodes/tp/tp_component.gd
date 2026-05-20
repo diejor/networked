@@ -296,6 +296,7 @@ func _request_teleport(username: String,
 	if owns_guard:
 		server_guard.release()
 		tp_component._tp_guard = null
+		tp_component._reset_visual_smoothing(player)
 	span.end()
 
 
@@ -374,10 +375,14 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 		save.pull_from_scene()
 		save.flush()
 
+	_reset_visual_smoothing(owner)
+
 	# Defer only the client notification - the original assert wanted to
 	# guarantee the player is fully in tree, which is now true synchronously.
 	var notify_client := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
+		owner.set("global_position", snap_pos)
+		_reset_visual_smoothing(owner)
 		var authority := owner.get_multiplayer_authority()
 		_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
@@ -403,11 +408,11 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	var peer_id := multiplayer.get_unique_id()
 
 	_recover_tp_span()
-
 	_dbg.info("Teleport committed. Snapping local player to %s" % [str(snap_pos)])
 	_step("committed", {"snap_pos": str(snap_pos)})
 	_teleport_committed.emit()
 	owner.set("global_position", snap_pos)
+	_reset_visual_smoothing(owner)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -440,6 +445,20 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	# reveal and race against the in-flight commit.
 	_tp_mutex.unlock()
 	_end_tp_span()
+
+
+# Clears presentation state that survives the listen-server reparent path.
+func _reset_visual_smoothing(root: Node) -> void:
+	if not root:
+		return
+	if root is TickInterpolator:
+		(root as TickInterpolator).reset()
+	elif root is Camera2D:
+		(root as Camera2D).reset_smoothing()
+	elif root is Camera3D:
+		(root as Camera3D).reset_smoothing()
+	for child in root.get_children():
+		_reset_visual_smoothing(child)
 
 
 ## [code]true[/code] for [member settle_seconds] after the last
