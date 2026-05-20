@@ -20,9 +20,6 @@ class_name NetwDbg
 extends RefCounted
 
 
-## Emitted when the editor requests all instances to re-calculate their tiling.
-signal tiling_requested
-
 var _reporter_ref: WeakRef
 var _debug_enabled := false
 

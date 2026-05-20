@@ -1,4 +1,4 @@
-## Orchestrates debug signals and visuals for a single [MultiplayerTree] instance.
+## Orchestrates debug signals and visuals for one [MultiplayerTree].
 ##
 ## Owns the full lifecycle of all per-tree debug connections: scene events,
 ## per-scene synchronizer hooks, peer events, and visual decorations
@@ -9,7 +9,7 @@
 class_name NetDebugTreeContext
 extends Node
 
-## Emitted when the tree has finished initial wiring and is ready for debug tiling.
+## Emitted when the tree has finished initial debug wiring.
 signal tree_ready
 
 ## Emitted when a local clock pong is captured.
