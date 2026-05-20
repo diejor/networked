@@ -1103,6 +1103,7 @@ func _ensure_interest_service() -> void:
 		existing = find_service_node(InterestService) \
 				as InterestService
 	if existing:
+		_free_unparented_interest_service(existing)
 		_interest_service = existing
 		return
 	
@@ -1114,6 +1115,17 @@ func _ensure_interest_service() -> void:
 	_interest_service = InterestService.new()
 	_interest_service.name = &"InterestService"
 	add_child(_interest_service)
+
+
+# Frees the transient service created by _init when duplicate() copied one.
+func _free_unparented_interest_service(keep: InterestService) -> void:
+	if not is_instance_valid(_interest_service):
+		return
+	if _interest_service == keep:
+		return
+	if _interest_service.get_parent() != null:
+		return
+	_interest_service.free()
 
 
 # Replaces a fresh empty SceneMultiplayer at the api's old path. Godot 4 does

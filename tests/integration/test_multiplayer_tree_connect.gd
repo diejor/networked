@@ -4,31 +4,46 @@ extends NetworkedTestSuite
 
 const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
-## Path from the level root to the [SpawnerComponent] that acts as the spawn template.
+## Path from the level root to the [SpawnerComponent] spawn template.
 const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
 var session: LocalLoopbackSession
 var server: MultiplayerTree
 var client_tree: MultiplayerTree
+var _sessions: Array[LocalLoopbackSession] = []
 
 
 func before_test() -> void:
-	var active_test := str(get("__active_test_case"))
-	if active_test == "test_host_player_starts_server_and_joins":
-		return
-
 	session = LocalLoopbackSession.new()
+	_sessions.append(session)
 	
 	_setup_server()
 	_setup_client()
 	
 	# One frame so _ready() fires on all added nodes before host() runs.
 	await get_tree().process_frame
-	server.host()
+	await server.host()
 
 
 func after_test() -> void:
+	for child in get_children():
+		if child is MultiplayerTree:
+			child.queue_free()
+	
+	await drain_frames(get_tree(), 1)
+	
+	for tracked_session in _sessions:
+		if tracked_session:
+			tracked_session.reset()
+	_sessions.clear()
+	
+	await drain_frames(get_tree(), 4)
+	
+	server = null
+	client_tree = null
 	session = null
+	
+	super.after_test()
 
 
 func test_client_is_online_after_connect_player() -> void:
@@ -45,7 +60,7 @@ func test_host_player_starts_server_and_joins() -> void:
 	auto_free(tree)
 	
 	var backend := LocalLoopbackBackend.new()
-	backend.session = LocalLoopbackSession.new()
+	backend.session = _track_session(LocalLoopbackSession.new())
 	tree.backend = backend
 	
 	var mgr: MultiplayerSceneManager = (
@@ -84,6 +99,7 @@ func test_listen_server_connect_player_spawns_player() -> void:
 	auto_free(tree)
 	
 	var ls_session := LocalLoopbackSession.new()
+	_track_session(ls_session)
 	var backend := LocalLoopbackBackend.new()
 	backend.session = ls_session
 	tree.backend = backend
@@ -113,7 +129,7 @@ func test_listen_server_connect_player_spawns_player() -> void:
 
 func _setup_server() -> void:
 	server = MultiplayerTree.new()
-	server.name = "Server"
+	server.name = "SetupServer"
 	server.is_server = true
 	server.auto_host_headless = false
 	add_child(server)
@@ -125,7 +141,7 @@ func _setup_server() -> void:
 	
 	var mgr: MultiplayerSceneManager = NetworkedTestSuite.create_scene_manager()
 	server.add_child(mgr)
-	# Register scenes before host() to ensure lobbies spawn during _on_configured().
+	# Register scenes before host() so lobbies spawn during _on_configured().
 	mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
 
 
@@ -153,3 +169,10 @@ func _create_join_payload(username: String) -> JoinPayload:
 	data.url = "localhost"
 	data.spawner_component_path = spawner_component_path
 	return data
+
+
+func _track_session(
+	tracked_session: LocalLoopbackSession
+) -> LocalLoopbackSession:
+	_sessions.append(tracked_session)
+	return tracked_session
