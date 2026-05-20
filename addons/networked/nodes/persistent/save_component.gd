@@ -55,6 +55,10 @@ var bound_entity: Entity = DictionaryEntity.new()
 		table_name = v
 		update_configuration_warnings()
 
+## Seconds the server waits after broadcasting the shutdown notice before
+## saving and quitting. Gives clients time to react before the connection drops.
+@export_range(0.0, 5.0, 0.1, "suffix:s") var shutdown_notify_delay: float = 0.5
+
 
 func _init() -> void:
 	name = "SaveComponent"
@@ -91,7 +95,8 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	
-	get_tree().set_auto_accept_quit(false)
+	if multiplayer.is_server():
+		get_tree().set_auto_accept_quit(false)
 	_register()
 	if not delta_synchronized.is_connected(client_synchronized.emit):
 		delta_synchronized.connect(client_synchronized.emit)
@@ -502,6 +507,10 @@ func _unregister() -> void:
 
 func _handle_shutdown() -> void:
 	_dbg.info("Beginning graceful shutdown...")
+	var mt := MultiplayerTree.resolve(self)
+	if mt and mt.is_host:
+		mt.notify_shutdown("Server is shutting down.")
+		await get_tree().create_timer(shutdown_notify_delay).timeout
 	SaveComponent._save_all_in(get_peer_context())
 	_dbg.info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()

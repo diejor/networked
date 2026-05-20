@@ -1054,6 +1054,11 @@ func _rpc_request_disconnect(reason: String) -> void:
 	disconnect_requested.emit(peer_id, reason)
 
 
+## Broadcasts a server-shutdown notice to all connected clients.
+func notify_shutdown(reason: String) -> void:
+	_rpc_receive_notify_disconnect.rpc(reason)
+
+
 ## Sent by the server to notify clients it is shutting down.
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_notify_disconnect(reason: String) -> void:

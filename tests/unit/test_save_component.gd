@@ -100,7 +100,7 @@ func test_hydrate_from_db_registers_schema_before_read() -> void:
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	await assert_error(func() -> void:
+	assert_error(func() -> void:
 		save_comp.hydrate_from_db()
 	).is_success()
 
