@@ -98,11 +98,36 @@ func verdict_for(peer_id: int) -> bool:
 func apply_snapshot(
 		new_viewers: PackedInt32Array,
 		new_policy: NetwInterestLayer.Policy) -> void:
+	apply_snapshot_data(new_viewers, new_policy)
+	_apply_admission_visibility()
+
+
+## Writes [param new_viewers] and [param new_policy] without touching
+## per-peer visibility. Used by [InterestService] to stage gate data
+## ahead of split admit/revoke visibility passes.
+func apply_snapshot_data(
+		new_viewers: PackedInt32Array,
+		new_policy: NetwInterestLayer.Policy) -> void:
 	_applying_local = true
 	policy = new_policy
 	viewers = new_viewers
 	_applying_local = false
-	_apply_admission_visibility()
+
+
+## Applies admission visibility for [param peer_ids] only, using the
+## gate's current [member policy] and [member viewers] to compute each
+## verdict. Peers not listed are left untouched.
+func apply_admission_visibility_to(peer_ids: Array) -> void:
+	if not is_inside_tree():
+		return
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return
+	if not multiplayer.is_server():
+		return
+	var v_dict := _viewers_as_dict()
+	for peer_id: int in peer_ids:
+		var verdict := InterestPolicy.verdict(policy, v_dict, peer_id)
+		set_visibility_for(peer_id, verdict)
 
 
 func _apply_admission_visibility() -> void:

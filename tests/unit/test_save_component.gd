@@ -88,6 +88,25 @@ func test_hydrate_empty_record_uses_scene_defaults() -> void:
 	assert_that(signal_fired[0]).is_true()
 
 
+func test_hydrate_from_db_registers_schema_before_read() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Ghost"
+	root.position = Vector2(3, 4)
+
+	var save_comp: SaveComponent = auto_free(SaveComponent.new())
+	save_comp.database = db
+	save_comp.table_name = &"players"
+	save_comp.track(&"position", NodePath("..:position"))
+	root.add_child(save_comp)
+	save_comp.owner = root
+
+	await assert_error(func() -> void:
+		save_comp.hydrate_from_db()
+	).is_success()
+
+	assert_that(db.get_registered_columns(&"players")).contains(&"position")
+
+
 func test_flush_uses_entity_to_dict() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Bob"

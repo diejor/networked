@@ -1096,20 +1096,24 @@ func _ensure_interest_service() -> void:
 	if is_instance_valid(_interest_service) \
 			and is_ancestor_of(_interest_service):
 		return
+	
+	var existing := get_node_or_null("InterestService") \
+			as InterestService
+	if not existing:
+		existing = find_service_node(InterestService) \
+				as InterestService
+	if existing:
+		_interest_service = existing
+		return
+	
 	if is_instance_valid(_interest_service) \
 			and _interest_service.get_parent() == null:
 		add_child(_interest_service)
 		return
-	_interest_service = null
-	_interest_service = get_node_or_null("InterestService") \
-			as InterestService
-	if not _interest_service:
-		_interest_service = find_service_node(InterestService) \
-				as InterestService
-	if not _interest_service:
-		_interest_service = InterestService.new()
-		_interest_service.name = &"InterestService"
-		add_child(_interest_service)
+	
+	_interest_service = InterestService.new()
+	_interest_service.name = &"InterestService"
+	add_child(_interest_service)
 
 
 # Replaces a fresh empty SceneMultiplayer at the api's old path. Godot 4 does

@@ -67,6 +67,7 @@ func add_client() -> MultiplayerTree:
 	if _scene_manager_src:
 		var sm := _instantiate_scene_manager()
 		if sm:
+			_configure_client_scene_manager(sm)
 			client.add_child(sm)
 
 	_clients.append(client)
@@ -91,9 +92,13 @@ func add_client() -> MultiplayerTree:
 
 ## Cleans up all server/client instances and removes nodes from the tree.
 ## Should be called in after_test().
+##
+## Frees nodes before closing peers so each synchronizer's
+## [code]_exit_tree[/code] (and the engine's [code]on_replication_stop[/code])
+## fires while [code]recv_sync_ids[/code] entries are still consistent,
+## avoiding stray "missing node" warnings from in-flight sync packets.
 func teardown() -> void:
-	if _session:
-		_session.reset()
+	var tree := Engine.get_main_loop() as SceneTree
 
 	if is_instance_valid(_server):
 		_server.queue_free()
@@ -105,12 +110,17 @@ func teardown() -> void:
 	_clients.clear()
 	_server = null
 
+	if tree:
+		await NetworkedTestSuite.drain_frames(tree, 1)
+
+	if _session:
+		_session.reset()
+
 	if is_inside_tree():
 		get_parent().remove_child(self)
 
-	var tree := Engine.get_main_loop() as SceneTree
 	if tree:
-		await NetworkedTestSuite.drain_frames(tree, 3)
+		await NetworkedTestSuite.drain_frames(tree, 2)
 
 	queue_free()
 
@@ -125,6 +135,13 @@ func get_all_clients() -> Array[MultiplayerTree]:
 
 func get_session() -> LocalLoopbackSession:
 	return _session
+
+
+## Returns the spawned player node name for [param client].
+func client_player_name(client: MultiplayerTree) -> StringName:
+	var username: String = client.get_meta(&"_harness_username")
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	return NetwEntity.format_name(username, peer_id)
 
 
 ## Returns a scene from the server's scene manager by name,
@@ -178,17 +195,17 @@ func join_player(client: MultiplayerTree, level_scene_path: String, spawner_node
 
 	var scene_name: StringName = spawner_component_path.get_scene_name()
 	var scene := get_server_scene(scene_name)
-	var peer_id := client.multiplayer_peer.get_unique_id()
-	var player_name := NetwEntity.format_name(username, peer_id)
+	var player_name := client_player_name(client)
+	var player_path := NodePath(String(player_name))
 
 	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
-	while scene.level.get_node_or_null(player_name) == null:
+	while scene.level.get_node_or_null(player_path) == null:
 		await get_tree().process_frame
 		if timeout_timer.time_left <= 0:
 			assert(false, "Timed out waiting for player '%s' to spawn in scene '%s'." % [player_name, scene_name])
 			return null
 
-	return scene.level.get_node_or_null(player_name)
+	return scene.level.get_node_or_null(player_path)
 
 
 ## Spawns a player into a server scene, bypassing the RPC chain.
@@ -217,6 +234,22 @@ func _instantiate_scene_manager() -> MultiplayerSceneManager:
 	elif _scene_manager_src is MultiplayerSceneManager:
 		return _scene_manager_src as MultiplayerSceneManager
 	return null
+
+
+# Mirrors server scene replication config onto a newly created client manager.
+func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
+	var server_sm := _get_scene_manager(_server)
+	if not server_sm:
+		return
+	var paths: Array[String] = []
+	for path: String in server_sm.scene_paths:
+		if not paths.has(path):
+			paths.append(path)
+	for path: String in server_sm._get_configured_paths():
+		if not paths.has(path):
+			paths.append(path)
+	for path: String in paths:
+		sm.add_spawnable_scene(path)
 
 
 func _setup_server() -> void:
@@ -250,13 +283,52 @@ func wait_for_client_scene_spawn(client: MultiplayerTree, scene_name: StringName
 	return sm.active_scenes.get(scene_name)
 
 
-func wait_for_client_player_spawn(client: MultiplayerTree, scene_name: StringName) -> Node:
+## Waits for a player in [param scene_name] on [param client].
+##
+## When [param player_name] is empty, returns the first tracked player.
+func wait_for_client_player_spawn(
+	client: MultiplayerTree,
+	scene_name: StringName,
+	player_name: StringName = &"",
+) -> Node:
 	var scene := await wait_for_client_scene_spawn(client, scene_name)
-	var existing := scene.player_nodes()
-	if existing.size() > 0:
-		return existing[0]
+	if not scene:
+		return null
+	if player_name.is_empty():
+		var existing := scene.player_nodes()
+		if existing.size() > 0:
+			return existing[0]
+	else:
+		var existing_player := _find_scene_player(scene, player_name)
+		if existing_player:
+			return existing_player
 
-	if await wait_for(scene.player_spawned):
-		assert(false, "Timed out waiting for player to spawn in scene '%s'." % scene_name)
+	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
+	while true:
+		if player_name.is_empty():
+			var players := scene.player_nodes()
+			if players.size() > 0:
+				return players[0]
+		else:
+			var named_player := _find_scene_player(scene, player_name)
+			if named_player:
+				return named_player
+		await get_tree().process_frame
+		if timeout_timer.time_left <= 0:
+			assert(false,
+				"Timed out waiting for player in scene '%s'." % scene_name)
+			return null
+	return null
 
-	return scene.player_nodes()[0]
+
+# Finds a tracked player by node name.
+func _find_scene_player(
+	scene: MultiplayerScene,
+	player_name: StringName,
+) -> Node:
+	if not scene:
+		return null
+	for player: Node in scene.player_nodes():
+		if player.name == player_name:
+			return player
+	return null

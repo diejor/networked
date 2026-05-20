@@ -53,6 +53,7 @@ class TeleportPromise extends RefCounted:
 	## Survives the client node's lifetime - safe to await even when the client player
 	## is destroyed and respawned during the teleport handshake.
 	signal completed
+	var is_completed := false
 	var span: NetSpan # Reference to the initiating span
 
 
@@ -214,7 +215,7 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		from_scene,
 		target_tp.scene_path,
 		target_tp.node_path,
-		_tp_span.checkpoint()
+		_tp_span.checkpoint() if _tp_span else null
 	)
 
 # Internal RPC called by the client to request a teleport from the server.
@@ -404,8 +405,11 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
 	if promise:
 		_step("promise_resolved")
+		promise.is_completed = true
 		promise.completed.emit()
 		bucket.pending.erase(peer_id)
+	else:
+		_dbg.warn("Teleport commit had no pending promise for peer %d", [peer_id])
 	
 	_end_tp_span()
 

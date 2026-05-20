@@ -244,10 +244,19 @@ func _schedule_visibility_flush() -> void:
 
 
 ## Flushes gate snapshots, entity visibility, and observer events.
+##
+## Gate visibility runs in two passes around entity visibility so that
+## losing-admit peers despawn nested entities before the wrapper they
+## live under disappears. Without the split, the wrapper despawn would
+## arrive first on the client and cascade-free nested children, leaving
+## the server's subsequent per-entity despawn packets to fail with
+## [code]ERR_UNAUTHORIZED[/code] (no [code]recv_nodes[/code] entry).
 func flush() -> void:
 	_refresh_scheduled = false
-	_flush_gate_snapshots()
+	var transitions := _gather_gate_transitions()
+	_apply_gate_admits(transitions)
 	_flush_entity_visibility()
+	_apply_gate_revokes(transitions)
 	_flush_visibility_relay()
 	_flush_observer_relay()
 
@@ -255,23 +264,76 @@ func flush() -> void:
 ## Flushes only bound gate snapshots.
 ##
 ## Use before spawning a subtree whose admission gate must be visible
-## before child spawn packets are sent.
+## before child spawn packets are sent. Only additive admits are applied;
+## any pending revokes are re-queued for the next [method flush] so they
+## stay ordered after the nested entity despawns.
 func flush_gates() -> void:
-	_flush_gate_snapshots()
+	var transitions := _gather_gate_transitions()
+	_apply_gate_admits(transitions)
+	_requeue_gate_revokes(transitions)
 
 
 func _flush_visibility() -> void:
 	flush()
 
 
-func _flush_gate_snapshots() -> void:
+# Writes new gate data and groups peers by current verdict.
+# Returns {layer_id -> {"gate", "admits", "revokes"}}. Clears
+# [code]_dirty_gate_layers[/code]; callers that need to defer revokes
+# must re-queue them via [method _requeue_gate_revokes].
+func _gather_gate_transitions() -> Dictionary:
+	var out: Dictionary = {}
+	var mt := _tree()
+	if not is_instance_valid(mt) or mt.multiplayer_peer == null \
+			or not mt.multiplayer_api.is_server():
+		_dirty_gate_layers.clear()
+		return out
+	var peers := mt.multiplayer_api.get_peers()
 	for layer_id: StringName in _dirty_gate_layers.keys():
 		var gate: InterestGate = _gates.get(layer_id)
 		var layer := get_layer(layer_id)
 		if not is_instance_valid(gate) or layer == null:
 			continue
-		gate.apply_snapshot(layer.viewers_packed(), layer.policy)
+		gate.apply_snapshot_data(layer.viewers_packed(), layer.policy)
+		var admits: Array[int] = []
+		var revokes: Array[int] = []
+		for peer_id: int in peers:
+			if gate.verdict_for(peer_id):
+				admits.append(peer_id)
+			else:
+				revokes.append(peer_id)
+		out[layer_id] = {"gate": gate, "admits": admits, "revokes": revokes}
 	_dirty_gate_layers.clear()
+	return out
+
+
+func _apply_gate_admits(transitions: Dictionary) -> void:
+	for layer_id: StringName in transitions:
+		var info: Dictionary = transitions[layer_id]
+		var gate: InterestGate = info["gate"]
+		if is_instance_valid(gate):
+			gate.apply_admission_visibility_to(info["admits"])
+
+
+func _apply_gate_revokes(transitions: Dictionary) -> void:
+	for layer_id: StringName in transitions:
+		var info: Dictionary = transitions[layer_id]
+		var gate: InterestGate = info["gate"]
+		if is_instance_valid(gate):
+			gate.apply_admission_visibility_to(info["revokes"])
+
+
+func _requeue_gate_revokes(transitions: Dictionary) -> void:
+	var requeued := false
+	for layer_id: StringName in transitions:
+		var info: Dictionary = transitions[layer_id]
+		var revokes: Array = info["revokes"]
+		if revokes.is_empty():
+			continue
+		_dirty_gate_layers[layer_id] = true
+		requeued = true
+	if requeued:
+		_schedule_visibility_flush()
 
 
 func _flush_entity_visibility() -> void:

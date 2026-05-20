@@ -337,6 +337,8 @@ func _flush() -> Error:
 func hydrate_from_db() -> void:
 	if not database or table_name.is_empty():
 		return
+	if not _initialized:
+		_instantiate_sync()
 	var entity := database.table(table_name).fetch(_get_entity_id())
 	hydrate(entity.to_dict() if entity else {})
 

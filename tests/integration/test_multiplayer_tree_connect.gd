@@ -59,6 +59,10 @@ func test_host_player_starts_server_and_joins() -> void:
 	var server_node := get_node_or_null("Server")
 	assert_that(server_node).is_not_null()
 	assert_that(server_node).is_instanceof(MultiplayerTree)
+	
+	var services := server_node.find_children("*", "InterestService", true)
+	assert_that(services.size()).is_equal(1)
+	assert_that(server_node.get_service(InterestService)).is_equal(services[0])
 
 
 func test_listen_server_connect_player_spawns_player() -> void:
