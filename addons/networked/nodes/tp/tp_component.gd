@@ -32,8 +32,16 @@ var current_scene_name: String:
 	get:
 		return _resolve_scene_name(current_scene_path)
 
+## Seconds after a teleport commits during which [method is_settling]
+## returns [code]true[/code]. Destination-area [code]body_entered[/code]
+## handlers should short-circuit while settling to avoid ping-pong
+## when the snap position overlaps another teleporter.
+@export var settle_seconds: float = 0.5
+
 var _tp_mutex := AsyncMutex.new()
 var _tp_span: NetSpan  # Span for the current teleport operation
+var _tp_guard: AreaReparentGuard  # Holds owner's physics state during a TP.
+var _settle_until_msec: int = 0
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
@@ -61,6 +69,10 @@ func _init() -> void:
 	## TODO: move name conventions to NetwComponent
 	name = "TPComponent"
 	unique_name_in_owner = true
+	# _do_teleport pauses owner via PROCESS_MODE_DISABLED. Exempt
+	# this node so the commit RPC handler and span ticks survive
+	# the pause window.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _notification(what: int) -> void:
@@ -180,8 +192,19 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	current_scene_path = target_tp.scene_path
 	_step("scene_path_set", {"from": from_scene, "to": current_scene_name})
 
+	# Disable processing and mask the body off the PhysicsServer for the
+	# whole teleport. Suppresses phantom Area2D/3D enter/exit signals
+	# during reparent (godot#14578) and freezes input/physics/animations
+	# until the reveal completes in _rpc_teleport_committed. The TPLayer
+	# is a sibling CanvasLayer, so its AnimationPlayer keeps ticking.
+	_tp_guard = AreaReparentGuard.new(owner)
+
+	# On listen-server host the initiator is the server: scene state is
+	# already authoritative locally, so the save round-trip would just
+	# serialize and deserialize into the same node.
+	var is_host := multiplayer.is_server()
 	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
-	if save_component:
+	if save_component and not is_host:
 		save_component.push_to.call_deferred(MultiplayerPeer.TARGET_PEER_SERVER, true)
 		_step("save_pushed")
 		var timer := get_tree().create_timer(5.0)
@@ -189,8 +212,6 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 			_step("save_ack_timeout")
 	else:
 		_step("save_push_skipped")
-
-	_flush_player_position(owner)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -204,10 +225,6 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	if not multiplayer.is_server():
 		SynchronizersCache.sync_only_server(owner)
 
-	# disable physics and input on the player node during transition.
-	owner.set_physics_process(false)
-	owner.set_process_input(false)
-	
 	_step("rpc_sent")
 	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -255,29 +272,31 @@ func _request_teleport(username: String,
 	
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	tp_component.current_scene_path = to_scene_path
-	
-	var authority := player.get_multiplayer_authority()
-	var ctx := get_context()
-	
-	if authority == 1 and ctx and ctx.tree.is_listen_server():
-		span.step("client_synced")
-		await get_tree().physics_frame
-		await get_tree().physics_frame
-	
+
 	var to_scene_node := await _activate_destination(to_scene_path, span)
 	if not to_scene_node:
 		return
-	
+
+	# On listen-server the initiator already constructed a guard in
+	# _do_teleport on this same TPComponent; reuse it. On a dedicated
+	# server the server-side body is independent and needs its own.
+	var server_guard := tp_component._tp_guard
+	var owns_guard := false
+	if not server_guard:
+		server_guard = AreaReparentGuard.new(player)
+		tp_component._tp_guard = server_guard
+		owns_guard = true
+	# Flush physics state so the source area evicts the body from its
+	# body_map before reparent. Without this, godot#14578 fires a stale
+	# body_entered from cache when tree_entered re-fires in the new
+	# scene. Two physics_frames is what KoBeWi confirmed works.
+	await server_guard.flush()
 	_reparent_player(player, from_scene, to_scene_node, tp_path)
+	await server_guard.flush()
+	if owns_guard:
+		server_guard.release()
+		tp_component._tp_guard = null
 	span.end()
-
-
-func _flush_player_position(player: Node) -> void:
-	# Fix: Position Flush workaround for Godot issue #14578.
-	# Move far away to force the PhysicsServer to cleanly exit any Area2D overlaps
-	# This prevents the "!E" condition crash.
-	var far_away: Variant = Vector3(99999, 99999, 99999) if player is Node3D else Vector2(99999, 99999)
-	player.set("global_position", far_away)
 
 
 func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerScene:
@@ -341,8 +360,8 @@ func _teleported(scene: Node, _tp_path: String) -> void:
 	# Snap synchronously: child _ready re-runs (triggered by the recursive
 	# request_ready in _reparent_player) fire AFTER this lambda returns but
 	# BEFORE any deferred call. Camera2D.reset_smoothing in particular reads
-	# owner.global_position; if the snap is deferred, smoothing baselines on
-	# the (99999, 99999) flush position from _flush_player_position.
+	# owner.global_position; deferring the snap baselines smoothing on the
+	# pre-reparent position.
 	var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
 	if scene:
 		var tp_node: Node = scene.get_node_or_null(_tp_path)
@@ -388,18 +407,24 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_dbg.info("Teleport committed. Snapping local player to %s" % [str(snap_pos)])
 	_step("committed", {"snap_pos": str(snap_pos)})
 	_teleport_committed.emit()
-	_tp_mutex.unlock()
 	owner.set("global_position", snap_pos)
-
-	# Unlock the player now that we've arrived and snapped.
-	owner.set_physics_process(true)
-	owner.set_process_input(true)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
 		var phase := _tp_span.phase("transition_in") if _tp_span else null
 		await tp_layer.teleport_in()
 		if phase: phase.done()
+
+	# Open the settle window before restoring physics so the first
+	# body_entered the destination area fires after release lands
+	# inside the window.
+	_settle_until_msec = Time.get_ticks_msec() + int(settle_seconds * 1000.0)
+
+	# Restore physics and processing only after the reveal completes, so
+	# the player stays still and invisible to areas under the fade-in.
+	if _tp_guard:
+		_tp_guard.release()
+		_tp_guard = null
 
 	var bucket := _get_bucket()
 	var promise: TeleportPromise = bucket.pending.get(peer_id) if bucket else null
@@ -410,8 +435,28 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 		bucket.pending.erase(peer_id)
 	else:
 		_dbg.warn("Teleport commit had no pending promise for peer %d", [peer_id])
-	
+
+	# Unlock the mutex last so a second teleport cannot start mid-
+	# reveal and race against the in-flight commit.
+	_tp_mutex.unlock()
 	_end_tp_span()
+
+
+## [code]true[/code] for [member settle_seconds] after the last
+## teleport commit. Use in destination-area [code]body_entered[/code]
+## handlers to avoid ping-pong when the snap position lands on top of
+## another teleporter:
+## [codeblock]
+##     func _on_body_entered(body: Node) -> void:
+##         if not is_inside_tree() or not body.is_inside_tree():
+##             return
+##         var tp := body.get_node_or_null("%TPComponent") as TPComponent
+##         if tp and tp.is_settling():
+##             return
+##         tp.teleport(target)
+## [/codeblock]
+func is_settling() -> bool:
+	return Time.get_ticks_msec() < _settle_until_msec
 
 
 ## Adds [member owner] to the active scene in [param scene_mgr].

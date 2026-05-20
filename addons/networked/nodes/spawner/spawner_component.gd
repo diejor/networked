@@ -184,20 +184,6 @@ func _ready() -> void:
 		)
 	):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	if (
-		_is_local_client()
-		and _is_local_represented_peer()
-		and is_inside_tree()
-	):
-		var ctx := Netw.ctx(self)
-		if ctx:
-			var tp_layer := ctx.services.get_tp_layer()
-			if tp_layer:
-				_dbg.info(
-					"Local player %s ready. Playing teleport transition.",
-					[entity_id]
-				)
-				tp_layer.teleport_in()
 
 
 func _exit_tree() -> void:
@@ -409,11 +395,6 @@ func _is_local_represented_peer() -> bool:
 	if not multiplayer or multiplayer.multiplayer_peer == null:
 		return false
 	return peer_id == multiplayer.get_unique_id()
-
-
-func _is_local_client() -> bool:
-	var mt := MultiplayerTree.resolve(self)
-	return mt.is_local_client if mt else false
 
 
 func _on_peer_disconnected(disconnected_peer_id: int) -> void:

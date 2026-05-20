@@ -9,7 +9,6 @@
 [ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/nodes/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="8_asv01"]
-[ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 
 [sub_resource type="Resource" id="Resource_lpgch"]
 script = ExtResource("2_7ue45")
@@ -64,8 +63,6 @@ offset_right = 40.0
 offset_bottom = 40.0
 script = ExtResource("8_asv01")
 metadata/_custom_type_script = "uid://dfoggo64snch3"
-
-[node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
 [node name="ConnectServerUI" parent="." unique_id=99213129 instance=ExtResource("7_lgr22")]
 spawner_node = SubResource("Resource_wkp8b")

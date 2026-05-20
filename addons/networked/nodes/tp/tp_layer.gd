@@ -1,13 +1,5 @@
-## Concrete [TPLayerAPI] that drives an [AnimationPlayer] [code]"tp"[/code] clip and pauses the scene during transitions.
+## Concrete [TPLayerAPI] that drives an [AnimationPlayer] [code]"tp"[/code] clip.
 extends TPLayerAPI
-
-
-var scene_manager: MultiplayerSceneManager:
-	get:
-		var mt: MultiplayerTree = get_multiplayer_tree()
-		if not mt:
-			return null
-		return mt.get_service(MultiplayerSceneManager)
 
 
 func _ready() -> void:
@@ -16,14 +8,8 @@ func _ready() -> void:
 
 
 func teleport_animation(animation: Callable) -> void:
-	if scene_manager:
-		scene_manager.process_mode = Node.PROCESS_MODE_DISABLED
-
 	animation.call()
 	await transition_anim.animation_finished
-
-	if scene_manager:
-		scene_manager.process_mode = Node.PROCESS_MODE_INHERIT
 
 
 func teleport_in() -> void:
