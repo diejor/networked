@@ -13,6 +13,10 @@ var client_tree: MultiplayerTree
 
 
 func before_test() -> void:
+	var active_test := str(get("__active_test_case"))
+	if active_test == "test_host_player_starts_server_and_joins":
+		return
+
 	session = LocalLoopbackSession.new()
 	
 	_setup_server()
@@ -59,8 +63,14 @@ func test_host_player_starts_server_and_joins() -> void:
 	var server_node := get_node_or_null("Server")
 	assert_that(server_node).is_not_null()
 	assert_that(server_node).is_instanceof(MultiplayerTree)
+	auto_free(server_node)
 	
-	var services := server_node.find_children("*", "InterestService", true)
+	var services := server_node.find_children(
+		"*",
+		"InterestService",
+		true,
+		false
+	)
 	assert_that(services.size()).is_equal(1)
 	assert_that(server_node.get_service(InterestService)).is_equal(services[0])
 
