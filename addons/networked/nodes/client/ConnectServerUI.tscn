@@ -11,15 +11,15 @@ offset_left = 15.0
 offset_top = 104.0
 offset_right = 216.0
 offset_bottom = 135.0
-current_tab = 0
+current_tab = 1
 
 [node name="~" type="Control" parent="TabContainer" unique_id=1003231885]
+visible = false
 layout_mode = 2
 metadata/_tab_index = 0
 
 [node name="Connect To Server" parent="TabContainer" unique_id=628941669 instance=ExtResource("2_uhn4w")]
 unique_name_in_owner = true
-visible = false
 layout_mode = 2
 
 [connection signal="connect_player" from="TabContainer/Connect To Server" to="." method="_on_connect_player"]

@@ -71,14 +71,29 @@ func supports_embedded_server() -> bool:
 	return true
 
 
-## Returns [code]true[/code] if [method MultiplayerTree.connect_player] can
-## probe an existing local session through [code]"localhost"[/code].
+## Probes [param address] for a live local session without allocating a
+## [MultiplayerPeer] or producing side-effects.
 ##
-## Backends with session-id or lobby based joins should return
-## [code]false[/code] even when [method supports_embedded_server] is
-## [code]true[/code].
-func supports_local_probe() -> bool:
-	return supports_embedded_server()
+## Default implementation returns [method ProbeResult.unsupported].
+## Override in subclasses where a cheap, synchronous-ish reachability check
+## is meaningful (typically a [code]TCPServer.listen[/code] /
+## [code]PacketPeerUDP.bind[/code] bind-test on the configured port).
+## [br][br]
+## [param timeout] is a hint in seconds; backends may probe faster.
+func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
+	return ProbeResult.unsupported()
+
+
+## Returns UI metadata describing the address string this backend expects.
+##
+## Used by generic connect dialogs to render appropriate labels,
+## placeholders, and probe affordances. Default returns a generic
+## [AddressHint].
+func get_address_hint() -> AddressHint:
+	var hint := AddressHint.new()
+	hint.label = "Address"
+	hint.accepts_empty = true
+	return hint
 
 
 ## Called after this backend is duplicated by [MultiplayerTree]'s backend setter.

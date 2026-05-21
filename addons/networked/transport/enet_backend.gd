@@ -36,5 +36,39 @@ func create_join_peer(
 	Netw.dbg.info("ENet client connecting to %s:%d", [server_address, port])
 	return peer
 
+
+## Synchronous UDP bind-test on the configured port. ENet servers hold the
+## UDP port exclusively, so a failed bind means a server is presumed live.
+func probe(address: String, _timeout: float = 0.2) -> ProbeResult:
+	if not _is_local_address(address):
+		return ProbeResult.unsupported()
+
+	var probe_socket := PacketPeerUDP.new()
+	var err := probe_socket.bind(port)
+	if err == ERR_ALREADY_IN_USE:
+		return ProbeResult.reachable(0, { "via": "bind-test" })
+	if err != OK:
+		return ProbeResult.error(error_string(err))
+	probe_socket.close()
+	return ProbeResult.unreachable({ "via": "bind-test" })
+
+
+func get_address_hint() -> AddressHint:
+	return AddressHint.make(
+		"Server IP",
+		"localhost",
+		"Empty or 'localhost' connects to a local host. Use host:port or an "
+		+ "IPv4/IPv6 address for remote.",
+		true,
+		true
+	)
+
+
+func _is_local_address(address: String) -> bool:
+	return (address.is_empty()
+		or address == "localhost"
+		or address == "127.0.0.1")
+
+
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []

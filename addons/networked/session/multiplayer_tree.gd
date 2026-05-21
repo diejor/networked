@@ -737,23 +737,24 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	var err := await _prepare_session(join_payload)
 	if err != OK:
 		return err
-	
+
 	var url := join_payload.url
 	Netw.dbg.info(
 		"Connecting player %s to %s", [join_payload.username, url]
 	)
-	
+
 	if _is_local_url(url):
 		if backend.supports_embedded_server():
-			if backend.supports_local_probe():
-				var probe_url := url if not url.is_empty() else "localhost"
-				var probe_err: Error = await join(
-					probe_url, join_payload.username, 1.0, true
-				)
-				if probe_err == OK:
+			var probe_url := url if not url.is_empty() else "localhost"
+			var probe: ProbeResult = await backend.probe(probe_url, 0.2)
+			if probe.is_reachable():
+				Netw.dbg.debug("Probe found local server (%s); joining.", [probe])
+				var join_err := await join(probe_url, join_payload.username)
+				if join_err == OK:
 					submit_join(join_payload)
-					return OK
-			
+				return join_err
+
+			Netw.dbg.debug("Probe found no local server (%s); hosting.", [probe])
 			return await _host_player_logic(join_payload)
 		else:
 			# For backends that don't support embedded servers (like Steam),
@@ -765,10 +766,10 @@ func connect_player(join_payload: JoinPayload) -> Error:
 				submit_join(join_payload)
 				return OK
 			return host_err
-	
+
 	if OS.has_feature("web") and url.begins_with("ws"):
 		backend = WebSocketBackend.new()
-	
+
 	var join_err := await join(url, join_payload.username)
 	if join_err == OK:
 		submit_join(join_payload)

@@ -294,14 +294,14 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		
 	if not is_instance_valid(mt):
 		if not _trees.is_empty():
-			_dbg.warn(
+			_dbg.debug(
 				"Reporter: [CppError] no active span tree context - " + \
 				"attributing to first tree",
 				func(m): push_warning(m)
 			)
 			mt = _trees[0]
 		else:
-			_dbg.warn(
+			_dbg.debug(
 				"Reporter: [CppError] no active span and no trees - dropping",
 				func(m): push_warning(m)
 			)

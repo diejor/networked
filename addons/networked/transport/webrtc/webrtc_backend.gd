@@ -147,6 +147,17 @@ func get_join_address() -> String:
 		return _info_hash
 	return super.get_join_address()
 
+
+func get_address_hint() -> AddressHint:
+	return AddressHint.make(
+		"Room Hash",
+		"20-char hex",
+		"Room identifier copied from the host (also auto-copied to clipboard "
+		+ "on host).",
+		false,
+		false
+	)
+
 func peer_reset_state() -> void:
 	Netw.dbg.trace("WebRTCBackend: Resetting Peer State.")
 	if webrtc_peer:

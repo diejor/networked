@@ -100,11 +100,15 @@ func get_join_address() -> String:
 
 	return super.get_join_address()
 
-## Returns [code]false[/code] because Tube joins use session IDs, not
-## [code]"localhost"[/code]. Tube still supports embedded duplicate-host
-## startup through [method supports_embedded_server].
-func supports_local_probe() -> bool:
-	return false
+func get_address_hint() -> AddressHint:
+	return AddressHint.make(
+		"Session ID",
+		"",
+		"Tube session identifier copied from a host. Leave empty to create "
+		+ "a new session.",
+		true,
+		false
+	)
 
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	var warnings := PackedStringArray()

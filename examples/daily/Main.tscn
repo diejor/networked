@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="5_lpgch"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
-[ext_resource type="PackedScene" uid="uid://buvcsv4w31hx" path="res://addons/networked/nodes/client/ConnectServerUI.tscn" id="7_lgr22"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="Script" uid="uid://dfoggo64snch3" path="res://addons/networked/session/multiplayer_scene/active_scene_view.gd" id="8_asv01"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
@@ -15,30 +14,26 @@
 script = ExtResource("2_7ue45")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
-[sub_resource type="Resource" id="Resource_20pc6"]
+[sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "Player/SpawnerComponent"
 
-[sub_resource type="Resource" id="Resource_5vvyt"]
+[sub_resource type="Resource" id="Resource_7ehqo"]
 script = ExtResource("2_03owx")
 username = &"diego"
-spawner_component_path = SubResource("Resource_20pc6")
+spawner_component_path = SubResource("Resource_2dmkd")
+metadata/_custom_type_script = "uid://bu4t1igemybop"
 
 [sub_resource type="Resource" id="Resource_k3bnk"]
 script = ExtResource("5_lpgch")
-
-[sub_resource type="Resource" id="Resource_wkp8b"]
-script = ExtResource("3_lgr22")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/%SpawnerComponent"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 
 [node name="Client" type="Node" parent="." unique_id=185172770]
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
-init_join_payload = SubResource("Resource_5vvyt")
+init_join_payload = SubResource("Resource_7ehqo")
 use_listen_server = true
 auth_provider = SubResource("Resource_k3bnk")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
@@ -66,8 +61,3 @@ script = ExtResource("8_asv01")
 metadata/_custom_type_script = "uid://dfoggo64snch3"
 
 [node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
-
-[node name="ConnectServerUI" parent="." unique_id=99213129 instance=ExtResource("7_lgr22")]
-spawner_node = SubResource("Resource_wkp8b")
-
-[connection signal="connect_player" from="ConnectServerUI" to="Client" method="connect_player"]
