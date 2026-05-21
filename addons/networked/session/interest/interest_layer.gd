@@ -246,15 +246,11 @@ func viewers_packed() -> PackedInt32Array:
 
 func _emit_transitions(result: InterestDriver.Result) -> void:
 	for t in result.hide_transitions:
-		var entity: NetwEntity = t[0]
-		var peer: int = t[1]
-		interest_exit.emit(entity, peer)
-		entity.interest_exit.emit(peer)
+		interest_exit.emit(t.entity, t.peer)
+		t.entity.interest_exit.emit(t.peer)
 	for t in result.show_transitions:
-		var entity: NetwEntity = t[0]
-		var peer: int = t[1]
-		interest_enter.emit(entity, peer)
-		entity.interest_enter.emit(peer)
+		interest_enter.emit(t.entity, t.peer)
+		t.entity.interest_enter.emit(t.peer)
 
 
 func _service() -> InterestService:
