@@ -1,21 +1,25 @@
 ## Applies [NetwInterestLayer] state to Godot replication.
 ##
 ## One service lives under each [MultiplayerTree]. Layers are pure state;
-## this service installs entity visibility filters, drives transition
-## signals, updates bound [InterestGate] snapshots, and relays optional
-## observer events.
+## this service installs entity visibility filters, drives server-side
+## transition signals, updates bound [InterestGate] snapshots, and relays
+## optional owner-side observer events.
+##
+## [br][br]
+## Client-side [signal NetwInterestLayer.entity_visible] /
+## [signal NetwInterestLayer.entity_hidden] are delivered by different
+## transports depending on the layer:
+## [br]- Bound layers: the [InterestGate] tracks its subtree and admits
+## entities to the layer locally as they appear under the gate. No RPC.
+## [br]- Unbound layers: the server relays per-peer transitions over the
+## network. Relay and entity spawn can race during same-tick admit storms;
+## a bounded retry reconciles them.
 ##
 ## [br][br]
 ## Unbound layers do not replicate layer state. They affect the wire only
 ## by changing each entity [MultiplayerSynchronizer]'s visibility. Bound
 ## layers also replicate [member NetwInterestLayer.viewers] and
 ## [member NetwInterestLayer.policy] through their gate.
-##
-## [br][br]
-## Client-side [signal NetwInterestLayer.entity_visible] and
-## [signal NetwInterestLayer.entity_hidden] are transition events,
-## relayed from the server. They do not mean the client owns the layer's
-## [member NetwInterestLayer.entities] set.
 ##
 ## [br][br]
 ## Scene gates are parent visibility. Generic layers should refine
@@ -499,6 +503,10 @@ func _queue_visibility_event(
 		observer_peer: int, kind: int) -> void:
 	if not _is_server():
 		return
+	# Bound layers deliver client transitions through their gate's subtree
+	# tracking. Only unbound layers use this RPC relay.
+	if layer.bound_gate() != null:
+		return
 	assert(entity != null and is_instance_valid(entity.owner),
 			"InterestService: transition emitted for freed entity")
 	if observer_peer == 0 or observer_peer == MultiplayerPeer.TARGET_PEER_SERVER:
@@ -648,9 +656,9 @@ func _apply_visibility_event(mt: MultiplayerTree, event: _VisRelay) -> bool:
 	if not layer:
 		return true
 	if event.kind == Kind.ENTER:
-		layer.entity_visible.emit(entity)
+		layer._client_admit(entity)
 	else:
-		layer.entity_hidden.emit(entity)
+		layer._client_revoke(entity)
 	return true
 
 

@@ -55,20 +55,17 @@ func test_admission_makes_peer_visible() -> void:
 	assert_that(server_scene.scene_visibility_filter(peer_id)).is_true()
 
 
-func test_client_layer_entities_empty_even_after_admission() -> void:
-	# Spawn a player so the server's layer has entities, then verify
-	# the client's mirror of that layer carries no entity membership
-	# (entities are server-only state).
+func test_client_layer_entities_empty_until_gate_tracker() -> void:
+	# Bound-layer client transitions are intended to be driven by the
+	# InterestGate's subtree tracker. Until that tracker lands, the
+	# client side of a bound layer carries no entity membership.
+	# Flip this assertion once the gate tracker is in place.
 	harness.spawn_player(client0, TEST_PLAYER_MINIMAL)
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
-	# Server-side: layer has the player as an entity.
 	var server_layer := server_scene.layer
 	assert_that(server_layer.entities.is_empty()).is_false()
 
-	# Client-side: same layer id resolves to a NetwInterestLayer
-	# whose entities set is empty (client never receives entity
-	# membership over the wire).
 	var client_layer := client0.interest.layer(
 			server_scene.scene_layer_id())
 	assert_that(client_layer.entities.is_empty()).is_true()
