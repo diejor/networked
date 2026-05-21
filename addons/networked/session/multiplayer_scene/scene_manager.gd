@@ -44,15 +44,6 @@ signal scene_activated(scene: MultiplayerScene)
 ## Emitted when a [Scene] is removed from the tree.
 signal scene_despawned(scene: MultiplayerScene)
 
-## Emitted on the server after a client confirms it has spawned a scene
-## locally. The server's own ack fires the same signal with [code]peer_id == 1[/code].
-signal peer_received_scene(scene_name: StringName, peer_id: int)
-
-# Internal wake-up for [method admit_peers]. Re-emitted on every ack and on
-# admit timeout/peer-disconnect so concurrent admit waits can re-check their
-# pending sets from a single await point.
-signal _admit_wake()
-
 const SERVER_SCENE = preload("uid://dga0loylsa26i")
 const CLIENT_SCENE = preload("uid://cr2k17cu45app")
 const VIEWPORTS_DEBUG = preload("uid://xu4dh3epglir")
@@ -114,11 +105,6 @@ var scene_paths: Array[String]:
 var _scene_configs: Dictionary = {}
 var _scene_cache: Dictionary[String, PackedScene] = {}
 var _scene_paths: Dictionary[StringName, String] = {}
-
-# scene_name -> { peer_id -> true } — server-only record of which peers have
-# confirmed they hold a given scene locally. Used by [method admit_peers] to
-# short-circuit waits for peers that already have the scene.
-var _acked_by_scene: Dictionary[StringName, Dictionary] = {}
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -414,103 +400,47 @@ func handle_player_joined(rj: ResolvedJoin) -> void:
 		tree.player_scene_ready.emit(rj, target_scene)
 
 
-## Admits each peer in [param joiners] to [param scene_name], activating
-## the scene if needed, then awaits client acks that every listed peer has
-## the scene replicated locally before returning.
+## Batch counterpart to [method MultiplayerScene.connect_peer]: activates
+## [param scene_name] if needed, admits each peer in [param peer_ids] to
+## its gate, then flushes gate visibility synchronously so the scene
+## subtree replicates to those peers before any subsequent spawn packet
+## references it.
 ##
-## Use this for games that defer spawning until match start: peers join
-## the session without a [member JoinPayload.spawner_component_path],
-## accumulate via [method MultiplayerTree.get_joined_players], and a
-## single call here admits them all to the world scene before game code
-## spawns entities under it.
-##
-## [param timeout_sec] bounds how long the call will wait for outstanding
-## acks. On timeout an error is logged and the call returns; admission
-## itself has already happened.
-func admit_peers(
-	scene_name: StringName,
-	joiners: Array[ResolvedJoin],
-	timeout_sec: float = 5.0
-) -> void:
+## When [param peer_ids] is empty, defaults to every joiner with an empty
+## [member ResolvedJoin.scene_name] — i.e. peers that joined without a
+## [member JoinPayload.spawner_component_path].
+## [codeblock]
+## # Deferred-spawn match start — admit all pending joiners to World:
+## sm.connect_peers(&"World")
+## _rpc_match_started.rpc()
+## [/codeblock]
+func connect_peers(scene_name: StringName, peer_ids: Array[int] = []) -> void:
 	assert(multiplayer.is_server())
 
 	activate_scene(scene_name)
 	var scene := active_scenes.get(scene_name) as MultiplayerScene
 	if not scene:
 		Netw.dbg.error(
-			"admit_peers: scene '%s' not active.", [scene_name],
+			"connect_peers: scene '%s' not active.", [scene_name],
 			func(m): push_error(m)
 		)
 		return
 
-	for rj: ResolvedJoin in joiners:
-		scene.connect_peer(rj.peer_id)
-
 	var tree := MultiplayerTree.for_node(self)
+	var ids := peer_ids
+	if ids.is_empty() and tree:
+		ids = []
+		for rj: ResolvedJoin in tree.get_joined_players():
+			if rj.scene_name.is_empty():
+				ids.append(rj.peer_id)
+
+	for peer_id: int in ids:
+		scene.connect_peer(peer_id)
+
 	if tree:
 		var interest := tree.get_service(InterestService) as InterestService
 		if interest:
 			interest.flush_gates()
-
-	var pending: Dictionary[int, bool] = {}
-	for rj: ResolvedJoin in joiners:
-		if not _is_scene_acked(scene_name, rj.peer_id):
-			pending[rj.peer_id] = true
-	if pending.is_empty():
-		return
-
-	var on_ack := func(s: StringName, p: int) -> void:
-		if s == scene_name:
-			pending.erase(p)
-			if pending.is_empty():
-				_admit_wake.emit()
-	var on_disconnect := func(p: int) -> void:
-		if pending.erase(p) and pending.is_empty():
-			_admit_wake.emit()
-	var timed_out := [false]
-	var on_timeout := func() -> void:
-		timed_out[0] = true
-		_admit_wake.emit()
-
-	peer_received_scene.connect(on_ack)
-	if tree:
-		tree.peer_disconnected.connect(on_disconnect)
-	var timer := get_tree().create_timer(timeout_sec)
-	timer.timeout.connect(on_timeout)
-
-	while not pending.is_empty() and not timed_out[0]:
-		await _admit_wake
-
-	peer_received_scene.disconnect(on_ack)
-	if tree and tree.peer_disconnected.is_connected(on_disconnect):
-		tree.peer_disconnected.disconnect(on_disconnect)
-
-	if timed_out[0] and not pending.is_empty():
-		Netw.dbg.error(
-			"admit_peers('%s'): timed out after %.1fs waiting for peers %s.",
-			[scene_name, timeout_sec, pending.keys()],
-			func(m): push_error(m)
-		)
-
-
-# Client → server: this peer has scene [param scene_name] replicated locally.
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_ack_scene_received(scene_name: StringName) -> void:
-	if not multiplayer.is_server():
-		return
-	_record_scene_ack(scene_name, multiplayer.get_remote_sender_id())
-
-
-func _record_scene_ack(scene_name: StringName, peer_id: int) -> void:
-	if not _acked_by_scene.has(scene_name):
-		_acked_by_scene[scene_name] = {}
-	_acked_by_scene[scene_name][peer_id] = true
-	peer_received_scene.emit(scene_name, peer_id)
-
-
-func _is_scene_acked(scene_name: StringName, peer_id: int) -> bool:
-	var acked: Dictionary = _acked_by_scene.get(scene_name, {})
-	return acked.has(peer_id)
 
 
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
@@ -554,14 +484,10 @@ func _on_scene_spawned(node: Node) -> void:
 	var scene := node as MultiplayerScene
 	Netw.dbg.info("Scene spawned: %s", [scene.level.name])
 	active_scenes[scene.level.name] = scene
-	var scene_name := StringName(scene.level.name)
 	if multiplayer.is_server():
 		scene.despawned.connect(
-			_on_player_left_scene.bind(scene_name))
-		_apply_empty_action_if_needed.call_deferred(scene_name)
-		_record_scene_ack(scene_name, 1)
-	else:
-		_rpc_ack_scene_received.rpc_id(1, scene_name)
+			_on_player_left_scene.bind(StringName(scene.level.name)))
+		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
 
 
 func _on_player_left_scene(player: Node, scene_name: StringName) -> void:
@@ -575,7 +501,6 @@ func _on_scene_despawned(node: Node) -> void:
 	var scene := node as MultiplayerScene
 	Netw.dbg.info("Scene despawned: %s", [scene.level.name])
 	active_scenes.erase(scene.level.name)
-	_acked_by_scene.erase(StringName(scene.level.name))
 
 
 func _on_configured() -> void:

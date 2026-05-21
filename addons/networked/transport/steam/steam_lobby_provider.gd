@@ -287,8 +287,8 @@ func _has_steam_app_id() -> bool:
 func _apply_spacewar_fallback() -> void:
 	ProjectSettings.set_setting(STEAM_APP_ID_SETTING, SPACEWAR_APP_ID)
 	var reason := _steam_app_id_fallback_message()
-	Netw.dbg.error("SteamLobbyProvider: %s", [reason],
-		func(m): push_error(m))
+	Netw.dbg.warn("SteamLobbyProvider: %s", [reason],
+		func(m): push_warning(m))
 
 
 # Returns the actionable Steam app id setup hint.
