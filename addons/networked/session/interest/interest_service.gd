@@ -79,8 +79,6 @@ class _ObsRelay:
 
 var _observer_relay: Dictionary[int, Array] = {}
 var _visibility_relay: Dictionary[int, Array] = {}
-var _pending_visibility_events: Array[_VisRelay] = []
-var _pending_attempts: Array[int] = []
 
 
 func _enter_tree() -> void:
@@ -569,47 +567,30 @@ func _rpc_observer_events(events: Array) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_visibility_events(events: Array) -> void:
+	var mt := _tree()
+	if not is_instance_valid(mt):
+		return
 	for raw in events:
 		var event := _VisRelay.from_wire(raw)
 		if event == null:
 			continue
-		if not _apply_visibility_event(event):
-			_pending_visibility_events.append(event)
-			_pending_attempts.append(0)
-	if not _pending_visibility_events.is_empty():
-		_flush_pending_visibility_events.call_deferred()
-
-
-func _apply_visibility_event(event: _VisRelay) -> bool:
-	var mt := _tree()
-	if not is_instance_valid(mt):
-		return false
-	var node := mt.get_node_or_null(event.path)
-	if not is_instance_valid(node):
-		return event.kind != Kind.ENTER
-	var entity := NetwEntity.of(node)
-	if not entity:
-		return true
-	var layer := layer_for(event.layer_id)
-	if not layer:
-		return true
-	if event.kind == Kind.ENTER:
-		layer.entity_visible.emit(entity)
-	else:
-		layer.entity_hidden.emit(entity)
-	return true
-
-
-func _flush_pending_visibility_events() -> void:
-	var pending_events := _pending_visibility_events
-	var pending_attempts := _pending_attempts
-	_pending_visibility_events = []
-	_pending_attempts = []
-	for i in pending_events.size():
-		var event := pending_events[i]
-		var attempts := pending_attempts[i]
-		if not _apply_visibility_event(event) and attempts < 30:
-			_pending_visibility_events.append(event)
-			_pending_attempts.append(attempts + 1)
-	if not _pending_visibility_events.is_empty():
-		_flush_pending_visibility_events.call_deferred()
+		var node := mt.get_node_or_null(event.path)
+		if not is_instance_valid(node):
+			# Spawn order guarantees the node exists for ENTER events;
+			# missing node means the entity was already despawned.
+			if event.kind == Kind.ENTER:
+				Netw.dbg.warn(
+						"InterestService: ENTER for missing node '%s'",
+						[String(event.path)],
+						func(m): push_warning(m))
+			continue
+		var entity := NetwEntity.of(node)
+		if not entity:
+			continue
+		var layer := layer_for(event.layer_id)
+		if not layer:
+			continue
+		if event.kind == Kind.ENTER:
+			layer.entity_visible.emit(entity)
+		else:
+			layer.entity_hidden.emit(entity)

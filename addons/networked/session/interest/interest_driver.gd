@@ -93,11 +93,16 @@ func compute(
 		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary) -> Result:
 	var result := Result.new()
+	# Policy verdict depends only on (kind, viewers, peer), not on the
+	# entity. Compute it once per peer and reuse across the layer.
+	var verdict_by_peer: Dictionary = {}
+	for peer: int in peers:
+		verdict_by_peer[peer] = InterestPolicy.verdict(kind, viewers, peer)
 	for entity: NetwEntity in entities:
 		if not is_instance_valid(entity) \
 				or not is_instance_valid(entity.owner):
 			continue
-		_compute_entity(entity, peers, kind, viewers, result)
+		_compute_entity(entity, verdict_by_peer, result)
 	result.hide_transitions.sort_custom(_transition_deeper_first)
 	result.show_transitions.sort_custom(_transition_shallower_first)
 	return result
@@ -105,9 +110,7 @@ func compute(
 
 func _compute_entity(
 		entity: NetwEntity,
-		peers: Array[int],
-		kind: NetwInterestLayer.Policy,
-		viewers: Dictionary,
+		verdict_by_peer: Dictionary,
 		result: Result) -> void:
 	# Off-tree owners and syncs cannot be ordered by [method
 	# Node.get_path] (which the comparators call), and an off-tree
@@ -119,8 +122,8 @@ func _compute_entity(
 	var prev: Dictionary = _state.get(entity, {})
 	var per_entity: Dictionary = {}
 	result.new_state[entity] = per_entity
-	for peer: int in peers:
-		var now := InterestPolicy.verdict(kind, viewers, peer)
+	for peer: int in verdict_by_peer:
+		var now: bool = verdict_by_peer[peer]
 		per_entity[peer] = now
 		var was: bool = prev.get(peer, false)
 		if was == now:
