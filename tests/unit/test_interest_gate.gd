@@ -25,6 +25,10 @@ func _make_gate(id: StringName, parent: Node = null) -> InterestGate:
 	return gate
 
 
+func _make_entity(entity_name: String = "Ent") -> NetwEntity:
+	return NetwEntity.of(make_test_entity(mt, entity_name, 0, false))
+
+
 func test_gate_binds_layer_on_enter_tree() -> void:
 	var gate := _make_gate(&"a")
 	var layer := mt.interest.get_layer(&"a")
@@ -37,6 +41,20 @@ func test_gate_unbinds_on_exit_tree() -> void:
 	var layer := mt.interest.get_layer(&"a")
 	mt.remove_child(gate)
 	assert_that(layer.bound_gate()).is_null()
+
+
+func test_track_entity_delegates_to_bound_layer() -> void:
+	var gate := _make_gate(&"a")
+	var layer := mt.interest.layer(&"a")
+	var entity := _make_entity()
+
+	gate.track_entity(entity)
+	assert_that(layer.has_entity(entity)).is_true()
+	assert_that(gate.has_entity(entity)).is_true()
+
+	gate.untrack_entity(entity)
+	assert_that(layer.has_entity(entity)).is_false()
+	assert_that(gate.has_entity(entity)).is_false()
 
 
 func _service() -> InterestService:

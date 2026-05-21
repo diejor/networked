@@ -216,10 +216,39 @@ func has_entity(entity: NetwEntity) -> bool:
 	return _entities.has(entity)
 
 
+# Idempotent client-side membership path for bound gates. Unlike the
+# unbound RPC transition sink, this notifies InterestService so local
+# synchronizer visibility filters are installed.
+func _client_track_entity(entity: NetwEntity) -> void:
+	assert(entity != null,
+			"NetwInterestLayer._client_track_entity: entity is null")
+	if _entities.has(entity):
+		return
+	_entities[entity] = true
+	entity_added.emit(entity)
+	var s := _service()
+	if s:
+		s._on_layer_entity_changed(self, entity, true)
+	entity_visible.emit(entity)
+
+
+# Idempotent client-side counterpart to [method _client_track_entity].
+func _client_untrack_entity(entity: NetwEntity) -> void:
+	assert(entity != null,
+			"NetwInterestLayer._client_untrack_entity: entity is null")
+	if not _entities.has(entity):
+		return
+	_entities.erase(entity)
+	entity_removed.emit(entity)
+	driver.forget(entity)
+	var s := _service()
+	if s:
+		s._on_layer_entity_changed(self, entity, false)
+	entity_hidden.emit(entity)
+
+
 # Idempotent client-side admit. Adds [param entity] to [member entities]
-# and emits [signal entity_visible]. Called by transports that own
-# client-side admission for this layer (InterestGate for bound layers,
-# InterestService for unbound RPC relay).
+# and emits [signal entity_visible]. Used by unbound-layer RPC relay.
 func _client_admit(entity: NetwEntity) -> void:
 	assert(entity != null,
 			"NetwInterestLayer._client_admit: entity is null")

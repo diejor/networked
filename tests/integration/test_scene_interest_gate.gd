@@ -1,8 +1,8 @@
 ## Integration test for [MultiplayerScene]'s gate-backed scene
 ## admission. Covers default-deny (pre-admission peers see no
 ## entities under the scene) and post-admission visibility, and
-## asserts the client-side invariant that
-## [code]layer.entities[/code] stays empty.
+## asserts the client-side invariant that [code]layer.entities[/code]
+## is populated by [method InterestGate.track_entity].
 class_name TestSceneInterestGate
 extends NetworkedTestSuite
 
@@ -55,11 +55,9 @@ func test_admission_makes_peer_visible() -> void:
 	assert_that(server_scene.scene_visibility_filter(peer_id)).is_true()
 
 
-func test_client_layer_entities_empty_until_gate_tracker() -> void:
-	# Bound-layer client transitions are intended to be driven by the
-	# InterestGate's subtree tracker. Until that tracker lands, the
-	# client side of a bound layer carries no entity membership.
-	# Flip this assertion once the gate tracker is in place.
+func test_client_layer_entities_populated_after_admission() -> void:
+	# MultiplayerScene enrolls players through gate.track_entity, which
+	# feeds the bound layer's client tracking path.
 	harness.spawn_player(client0, TEST_PLAYER_MINIMAL)
 	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
 
@@ -68,4 +66,4 @@ func test_client_layer_entities_empty_until_gate_tracker() -> void:
 
 	var client_layer := client0.interest.layer(
 			server_scene.scene_layer_id())
-	assert_that(client_layer.entities.is_empty()).is_true()
+	assert_that(client_layer.entities.is_empty()).is_false()

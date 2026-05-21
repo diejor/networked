@@ -12,8 +12,8 @@
 ## filtering.
 ##
 ## [br][br]
-## A gate mirrors admission only. Entity membership remains server-owned,
-## and transition signals still live on [NetwInterestLayer].
+## A gate mirrors admission only. Entity membership and transition signals
+## still live on [NetwInterestLayer].
 ## [codeblock]
 ## var gate := InterestGate.new()
 ## gate.layer_id = &"arena:1"
@@ -61,6 +61,7 @@ var _layer: NetwInterestLayer
 var _applying_local: bool = false
 var _config_built: bool = false
 var _registered: bool = false
+var _client_entities: Dictionary[NetwEntity, bool] = {}
 
 
 func _init() -> void:
@@ -78,7 +79,59 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	_revoke_all_client_entities()
 	_unbind()
+
+
+## Enrolls [param entity] in this gate's bound layer. Idempotent.
+##
+## On the server, delegates to [method NetwInterestLayer.add_entity]. On
+## a client, records the local entity and admits it through the layer's
+## client tracking path so synchronizer visibility filters are installed.
+func track_entity(entity: NetwEntity) -> void:
+	if entity == null or _layer == null:
+		return
+	if _is_server():
+		_layer.add_entity(entity)
+		return
+	if _client_entities.has(entity):
+		return
+	_client_entities[entity] = true
+	_layer._client_track_entity(entity)
+
+
+## Removes [param entity] from this gate's bound layer. Idempotent.
+func untrack_entity(entity: NetwEntity) -> void:
+	if entity == null or _layer == null:
+		return
+	if _is_server():
+		_layer.remove_entity(entity)
+		return
+	if not _client_entities.has(entity):
+		return
+	_client_entities.erase(entity)
+	_layer._client_untrack_entity(entity)
+
+
+## Returns [code]true[/code] when this gate is tracking [param entity].
+func has_entity(entity: NetwEntity) -> bool:
+	if entity == null or _layer == null:
+		return false
+	if _is_server():
+		return _layer.has_entity(entity)
+	return _client_entities.has(entity)
+
+
+# Revokes local entities if the gate leaves before tracked subtree nodes
+# call [method untrack_entity].
+func _revoke_all_client_entities() -> void:
+	if _client_entities.is_empty() or _layer == null:
+		_client_entities.clear()
+		return
+	var entities := _client_entities.keys()
+	_client_entities.clear()
+	for entity: NetwEntity in entities:
+		_layer._client_untrack_entity(entity)
 
 
 ## Returns [code]true[/code] when [param peer_id] is in [member viewers].

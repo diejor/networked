@@ -9,11 +9,11 @@
 ## Client-side [signal NetwInterestLayer.entity_visible] /
 ## [signal NetwInterestLayer.entity_hidden] are delivered by different
 ## transports depending on the layer:
-## [br]- Bound layers: the [InterestGate] tracks its subtree and admits
-## entities to the layer locally as they appear under the gate. No RPC.
-## [br]- Unbound layers: the server relays per-peer transitions over the
-## network. Relay and entity spawn can race during same-tick admit storms;
-## a bounded retry reconciles them.
+## [br]- Bound layers: [InterestGate] admits local entities as they appear
+## under the gated subtree.
+## [br]- Unbound layers: the server relays transitions over the network.
+## Relay and entity spawn can race during same-tick admit storms; a bounded
+## retry reconciles them.
 ##
 ## [br][br]
 ## Unbound layers do not replicate layer state. They affect the wire only
@@ -266,8 +266,12 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 	var layer_ids: Dictionary = _entity_layers.get(entity, {}).duplicate()
 	for layer_id: StringName in layer_ids:
 		var layer := get_layer(layer_id)
-		if layer:
+		if not layer:
+			continue
+		if _is_server():
 			layer.remove_entity(entity)
+		else:
+			layer._client_untrack_entity(entity)
 	_uninstall_entity_filter(entity)
 	_dirty_entities.erase(entity)
 	assert(not _admit_count.has(entity),
@@ -503,8 +507,8 @@ func _queue_visibility_event(
 		observer_peer: int, kind: int) -> void:
 	if not _is_server():
 		return
-	# Bound layers deliver client transitions through their gate's subtree
-	# tracking. Only unbound layers use this RPC relay.
+	# Bound layers deliver client transitions through their gate's local
+	# entity tracking. Only unbound layers use this RPC relay.
 	if layer.bound_gate() != null:
 		return
 	assert(entity != null and is_instance_valid(entity.owner),

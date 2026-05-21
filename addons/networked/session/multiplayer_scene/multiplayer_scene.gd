@@ -199,9 +199,8 @@ func track_node(node: Node) -> void:
 				[node.name])
 		return
 	_tracked_nodes[node] = true
-	var l := layer
-	if l:
-		l.add_entity(entity)
+	if is_instance_valid(gate):
+		gate.track_entity(entity)
 	var on_spawned := _on_spawned.bind(node)
 	if not node.tree_entered.is_connected(on_spawned):
 		node.tree_entered.connect(on_spawned)
@@ -217,9 +216,8 @@ func untrack_node(node: Node) -> void:
 	var peer_id := _get_peer_id(node)
 	if not node.is_inside_tree():
 		var entity := NetwEntity.of(node)
-		var l := layer
-		if entity and l:
-			l.remove_entity(entity)
+		if entity and is_instance_valid(gate):
+			gate.untrack_entity(entity)
 	_tracked_nodes.erase(node)
 	var on_spawned := _on_spawned.bind(node)
 	if node.tree_entered.is_connected(on_spawned):
@@ -243,9 +241,8 @@ func _on_spawned(node: Node) -> void:
 	var entity := NetwEntity.of(node)
 	if entity != null:
 		_tracked_nodes[node] = true
-		var l := layer
-		if l:
-			l.add_entity(entity)
+		if is_instance_valid(gate):
+			gate.track_entity(entity)
 	if node.is_inside_tree():
 		spawned.emit(node)
 		player_spawned.emit(node)
@@ -266,9 +263,8 @@ func _on_despawned(node: Node) -> void:
 		return
 	var entity := NetwEntity.of(node)
 	if entity:
-		var l := layer
-		if l:
-			l.remove_entity(entity)
+		if is_instance_valid(gate):
+			gate.untrack_entity(entity)
 	_tracked_nodes.erase(node)
 	despawned.emit(node)
 	player_despawned.emit(node)
