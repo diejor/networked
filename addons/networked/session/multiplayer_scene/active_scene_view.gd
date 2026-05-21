@@ -33,9 +33,21 @@ func _enter_tree() -> void:
 		return
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	set_process(false)
 	resized.connect(_on_resized)
 	_mt.configured.connect(_subscribe_scene_manager)
 	_mt.local_player_changed.connect(_on_local_player_changed)
+
+
+func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	_sync_root_sized_rect()
+
+
+func _process(_dt: float) -> void:
+	if is_instance_valid(_target):
+		queue_redraw()
 
 
 func _on_local_player_changed(player: Node) -> void:
@@ -64,6 +76,7 @@ func _subscribe_scene_manager() -> void:
 	if sm:
 		sm.scene_despawned.connect(func(_s): _refresh.call_deferred())
 		sm.scene_spawned.connect(_watch_scene_for_local_player_arrival)
+		sm.scene_activated.connect(_on_scene_activated)
 		sm.startup_scenes_spawned.connect(_on_startup_scenes_spawned)
 		for scene: MultiplayerScene in sm.active_scenes.values():
 			_watch_scene_for_local_player_arrival(scene)
@@ -80,6 +93,10 @@ func _on_scene_player_spawned(_player: Node, _scene: MultiplayerScene) -> void:
 	_refresh.call_deferred()
 
 
+func _on_scene_activated(_scene: MultiplayerScene) -> void:
+	_refresh.call_deferred()
+
+
 func _on_startup_scenes_spawned() -> void:
 	_refresh.call_deferred()
 
@@ -90,10 +107,11 @@ func _refresh() -> void:
 		return
 	var player := _find_local_player()
 	if not is_instance_valid(player):
-		set_target(null)
+		set_target(_find_active_viewport())
 		return
 	var scene := MultiplayerTree.scene_for_node(player)
-	set_target(scene as Node as SubViewport if scene else null)
+	var viewport := scene as Node as SubViewport if scene else null
+	set_target(viewport if viewport else _find_active_viewport())
 
 
 func _find_local_player() -> Node:
@@ -111,6 +129,26 @@ func _find_local_player() -> Node:
 				return p
 			if NetwEntity.parse_peer(p.name) == local_id:
 				return p
+	return null
+
+
+# Returns an active host-rendered scene viewport when no local player is found.
+func _find_active_viewport() -> SubViewport:
+	if not _mt or not _mt.is_host:
+		return null
+	var sm := _mt.get_service(MultiplayerSceneManager)
+	if not sm:
+		return null
+	for scene: MultiplayerScene in sm.active_scenes.values():
+		if not is_instance_valid(scene):
+			continue
+		if not is_instance_valid(scene.level):
+			continue
+		if scene.level.process_mode == Node.PROCESS_MODE_DISABLED:
+			continue
+		var viewport := scene as Node as SubViewport
+		if viewport:
+			return viewport
 	return null
 
 
@@ -139,6 +177,7 @@ func set_target(viewport: SubViewport) -> void:
 			_target.tree_exiting.connect(_on_target_freed)
 		_dbg.info("ActiveSceneView now displays '%s'.", [_target.name])
 
+	set_process(is_instance_valid(_target))
 	queue_redraw()
 
 
@@ -190,9 +229,19 @@ func _on_target_freed() -> void:
 	if is_instance_valid(_target):
 		_restore_target_render_state()
 	_target = null
+	set_process(false)
 	queue_redraw()
 
 
 func _restore_target_render_state() -> void:
 	_target.render_target_update_mode = _previous_update_mode
 	_target.render_target_clear_mode = _previous_clear_mode
+
+
+# Makes the view fill the game window when parented under a plain Node.
+func _sync_root_sized_rect() -> void:
+	if get_parent() is Control:
+		return
+	var rect := get_tree().root.get_visible_rect()
+	position = Vector2.ZERO
+	size = rect.size

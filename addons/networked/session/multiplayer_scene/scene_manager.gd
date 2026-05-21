@@ -38,6 +38,9 @@ signal startup_scenes_spawned()
 ## Emitted when a new [Scene] has been instantiated and entered the tree.
 signal scene_spawned(scene: MultiplayerScene)
 
+## Emitted when an active scene's level is set to process normally.
+signal scene_activated(scene: MultiplayerScene)
+
 ## Emitted when a [Scene] is removed from the tree.
 signal scene_despawned(scene: MultiplayerScene)
 
@@ -275,6 +278,7 @@ func activate_scene(name: StringName) -> void:
 	
 	scene.level.process_mode = Node.PROCESS_MODE_INHERIT
 	Netw.dbg.info("Scene '%s' activated.", [name])
+	scene_activated.emit(scene)
 
 
 ## Sets the scene level's process mode to DISABLED.

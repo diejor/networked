@@ -46,6 +46,7 @@ metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
 [node name="SteamLobbyProvider" type="Node" parent="MultiplayerTree" unique_id=1067375394]
 script = ExtResource("9_p4o8j")
+allow_spacewar_fallback = true
 metadata/_custom_type_script = "uid://xxtg8cpj7yun"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]
