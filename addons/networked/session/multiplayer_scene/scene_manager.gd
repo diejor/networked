@@ -400,49 +400,6 @@ func handle_player_joined(rj: ResolvedJoin) -> void:
 		tree.player_scene_ready.emit(rj, target_scene)
 
 
-## Batch counterpart to [method MultiplayerScene.connect_peer]: activates
-## [param scene_name] if needed, admits each peer in [param peer_ids] to
-## its gate, then flushes gate visibility synchronously so the scene
-## subtree replicates to those peers before any subsequent spawn packet
-## references it.
-##
-## When [param peer_ids] is empty, defaults to every joiner with an empty
-## [member ResolvedJoin.scene_name] — i.e. peers that joined without a
-## [member JoinPayload.spawner_component_path].
-## [codeblock]
-## # Deferred-spawn match start — admit all pending joiners to World:
-## sm.connect_peers(&"World")
-## _rpc_match_started.rpc()
-## [/codeblock]
-func connect_peers(scene_name: StringName, peer_ids: Array[int] = []) -> void:
-	assert(multiplayer.is_server())
-
-	activate_scene(scene_name)
-	var scene := active_scenes.get(scene_name) as MultiplayerScene
-	if not scene:
-		Netw.dbg.error(
-			"connect_peers: scene '%s' not active.", [scene_name],
-			func(m): push_error(m)
-		)
-		return
-
-	var tree := MultiplayerTree.for_node(self)
-	var ids := peer_ids
-	if ids.is_empty() and tree:
-		ids = []
-		for rj: ResolvedJoin in tree.get_joined_players():
-			if rj.scene_name.is_empty():
-				ids.append(rj.peer_id)
-
-	for peer_id: int in ids:
-		scene.connect_peer(peer_id)
-
-	if tree:
-		var interest := tree.get_service(InterestService) as InterestService
-		if interest:
-			interest.flush_gates()
-
-
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
 	var node := scene.level.get_node(path)
 	assert(node is SpawnerComponent,
