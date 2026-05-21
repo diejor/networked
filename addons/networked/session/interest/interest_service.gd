@@ -83,6 +83,9 @@ class _ObsRelay:
 
 var _observer_relay: Dictionary[int, Array] = {}
 var _visibility_relay: Dictionary[int, Array] = {}
+var _pending_visibility_events: Array[_VisRelay] = []
+var _pending_attempts: Array[int] = []
+var _pending_visibility_flush_scheduled: bool = false
 
 
 func _enter_tree() -> void:
@@ -625,23 +628,62 @@ func _rpc_visibility_events(events: Array) -> void:
 		var event := _VisRelay.from_wire(raw)
 		if event == null:
 			continue
-		var node := mt.get_node_or_null(event.path)
-		if not is_instance_valid(node):
-			# Spawn order guarantees the node exists for ENTER events;
-			# missing node means the entity was already despawned.
-			if event.kind == Kind.ENTER:
-				Netw.dbg.warn(
-						"InterestService: ENTER for missing node '%s'",
-						[String(event.path)],
-						func(m): push_warning(m))
+		if not _apply_visibility_event(mt, event):
+			_pending_visibility_events.append(event)
+			_pending_attempts.append(0)
+	if not _pending_visibility_events.is_empty():
+		_schedule_pending_visibility_flush()
+
+
+func _apply_visibility_event(mt: MultiplayerTree, event: _VisRelay) -> bool:
+	if not is_instance_valid(mt):
+		return true
+	var node := mt.get_node_or_null(event.path)
+	if not is_instance_valid(node):
+		return event.kind != Kind.ENTER
+	var entity := NetwEntity.of(node)
+	if not entity:
+		return true
+	var layer := layer_for(event.layer_id)
+	if not layer:
+		return true
+	if event.kind == Kind.ENTER:
+		layer.entity_visible.emit(entity)
+	else:
+		layer.entity_hidden.emit(entity)
+	return true
+
+
+func _flush_pending_visibility_events() -> void:
+	_pending_visibility_flush_scheduled = false
+	var pending_events := _pending_visibility_events
+	var pending_attempts := _pending_attempts
+	_pending_visibility_events = []
+	_pending_attempts = []
+	var mt := _tree()
+	for i in pending_events.size():
+		var event := pending_events[i]
+		var attempts := pending_attempts[i]
+		if _apply_visibility_event(mt, event):
 			continue
-		var entity := NetwEntity.of(node)
-		if not entity:
+		if attempts < 30:
+			_pending_visibility_events.append(event)
+			_pending_attempts.append(attempts + 1)
 			continue
-		var layer := layer_for(event.layer_id)
-		if not layer:
-			continue
-		if event.kind == Kind.ENTER:
-			layer.entity_visible.emit(entity)
-		else:
-			layer.entity_hidden.emit(entity)
+		Netw.dbg.warn(
+				"InterestService: ENTER for missing node '%s'",
+				[String(event.path)],
+				func(m): push_warning(m))
+	if not _pending_visibility_events.is_empty():
+		_schedule_pending_visibility_flush()
+
+
+func _schedule_pending_visibility_flush() -> void:
+	if _pending_visibility_flush_scheduled:
+		return
+	if not is_inside_tree():
+		return
+	_pending_visibility_flush_scheduled = true
+	get_tree().process_frame.connect(
+			_flush_pending_visibility_events,
+			CONNECT_ONE_SHOT)

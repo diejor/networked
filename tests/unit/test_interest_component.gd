@@ -36,6 +36,26 @@ func _service() -> InterestService:
 	return mt.get_service(InterestService) as InterestService
 
 
+func test_visibility_enter_waits_for_delayed_node() -> void:
+	var layer := _layer(&"sight")
+	var visible: Array[NetwEntity] = []
+	layer.entity_visible.connect(
+			func(_entity: NetwEntity): visible.append(_entity))
+
+	_service()._rpc_visibility_events([
+		[NodePath("Delayed"), &"sight", InterestService.Kind.ENTER],
+	])
+	await drain_frames(get_tree(), 2)
+	assert_that(visible.is_empty()).is_true()
+
+	var root := _make_entity("Delayed")
+	var entity := NetwEntity.of(root)
+	await drain_frames(get_tree(), 2)
+
+	assert_that(visible).contains_exactly([entity])
+	assert_that(_service()._pending_visibility_events.is_empty()).is_true()
+
+
 # ---------------------------------------------------------------------------
 # Spawn-property contribution.
 # ---------------------------------------------------------------------------
