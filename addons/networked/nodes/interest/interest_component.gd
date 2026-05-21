@@ -134,8 +134,8 @@ func _is_server() -> bool:
 
 
 func _register_for(layer_id: StringName) -> void:
-	if layer_id.is_empty():
-		return
+	assert(not layer_id.is_empty(),
+			"InterestComponent: empty layer_id in layer_ids")
 	var entity := _resolve_entity()
 	if not entity:
 		return

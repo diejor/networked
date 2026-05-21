@@ -131,8 +131,12 @@ func set_policy(value: Policy) -> bool:
 
 ## Adds [param peer_id] to [member viewers]. Idempotent. Returns
 ## [code]true[/code] when the set changed.
+##
+## [param peer_id] must be non-zero.
 func add_viewer(peer_id: int) -> bool:
-	if peer_id == 0 or viewers.has(peer_id):
+	assert(peer_id != 0,
+			"NetwInterestLayer.add_viewer: peer_id must be non-zero")
+	if viewers.has(peer_id):
 		return false
 	viewers[peer_id] = true
 	viewer_added.emit(peer_id)
@@ -160,9 +164,13 @@ func has_viewer(peer_id: int) -> bool:
 
 
 ## Enrolls [param entity] in this layer. Idempotent.
+##
+## [param entity] must be non-null and own a live root node.
 func add_entity(entity: NetwEntity) -> bool:
-	if entity == null or not is_instance_valid(entity.owner):
-		return false
+	assert(entity != null,
+			"NetwInterestLayer.add_entity: entity is null")
+	assert(is_instance_valid(entity.owner),
+			"NetwInterestLayer.add_entity: entity.owner is freed")
 	if _entities.has(entity):
 		return false
 	_entities[entity] = true
@@ -174,8 +182,13 @@ func add_entity(entity: NetwEntity) -> bool:
 
 
 ## Removes [param entity] from this layer. Emits exits first.
+##
+## [param entity] must be non-null; passing an unknown entity is a
+## no-op for idempotent teardown.
 func remove_entity(entity: NetwEntity) -> bool:
-	if entity == null or not _entities.has(entity):
+	assert(entity != null,
+			"NetwInterestLayer.remove_entity: entity is null")
+	if not _entities.has(entity):
 		return false
 	var prev_view := driver.cached_view_for(entity)
 	for peer_id: int in prev_view:

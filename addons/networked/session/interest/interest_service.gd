@@ -34,12 +34,53 @@ var _dirty_entities: Dictionary[NetwEntity, bool] = {}
 var _dirty_gate_layers: Dictionary[StringName, bool] = {}
 var _refresh_scheduled: bool = false
 
-# Queued observer events keyed by owning peer id.
-# Event shape: [entity_path, layer_id, observer_peer, ObserverEvent].
-enum ObserverEvent { EXIT, ENTER }
+## Transition kind for relayed visibility / observer events.
+enum Kind { EXIT, ENTER }
+
+
+# Server-side queue payload for a peer's local-view transition.
+class _VisRelay:
+	extends RefCounted
+	var path: NodePath
+	var layer_id: StringName
+	var kind: int
+	func _init(p: NodePath, l: StringName, k: int) -> void:
+		path = p
+		layer_id = l
+		kind = k
+	func to_wire() -> Array:
+		return [path, layer_id, kind]
+	static func from_wire(raw: Variant) -> _VisRelay:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 3:
+			return null
+		return _VisRelay.new(raw[0], raw[1], raw[2])
+
+
+# Server-side queue payload for an owner-side observer transition.
+class _ObsRelay:
+	extends RefCounted
+	var path: NodePath
+	var layer_id: StringName
+	var observer_peer: int
+	var kind: int
+	func _init(
+			p: NodePath, l: StringName, o: int, k: int) -> void:
+		path = p
+		layer_id = l
+		observer_peer = o
+		kind = k
+	func to_wire() -> Array:
+		return [path, layer_id, observer_peer, kind]
+	static func from_wire(raw: Variant) -> _ObsRelay:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 4:
+			return null
+		return _ObsRelay.new(raw[0], raw[1], raw[2], raw[3])
+
+
 var _observer_relay: Dictionary[int, Array] = {}
 var _visibility_relay: Dictionary[int, Array] = {}
-var _pending_visibility_events: Array = []
+var _pending_visibility_events: Array[_VisRelay] = []
+var _pending_attempts: Array[int] = []
 
 
 func _enter_tree() -> void:
@@ -133,11 +174,14 @@ func _on_layer_entity_changed(
 
 
 ## Registers [param gate] as the network carrier for its layer.
+##
+## [param gate] must be valid and configured with a non-empty
+## [member InterestGate.layer_id].
 func register_gate(gate: InterestGate) -> void:
-	if not is_instance_valid(gate):
-		return
-	if gate.layer_id.is_empty():
-		return
+	assert(is_instance_valid(gate),
+			"InterestService.register_gate: gate is freed")
+	assert(not gate.layer_id.is_empty(),
+			"InterestService.register_gate: gate.layer_id is empty")
 	var existing: InterestGate = _gates.get(gate.layer_id)
 	if is_instance_valid(existing) and existing != gate:
 		push_error(
@@ -176,8 +220,7 @@ func _untrack_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
 
 
 func _install_entity_filter(entity: NetwEntity) -> void:
-	if entity == null or not is_instance_valid(entity.owner):
-		return
+	# Reached only via layer.add_entity, which asserts entity/owner.
 	if _entity_filters.has(entity):
 		return
 	var filter := func(peer_id: int) -> bool:
@@ -215,6 +258,7 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 		if layer:
 			layer.remove_entity(entity)
 	_uninstall_entity_filter(entity)
+	_dirty_entities.erase(entity)
 
 
 func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
@@ -223,8 +267,8 @@ func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
 
 
 func _mark_entity_dirty(entity: NetwEntity) -> void:
-	if entity == null:
-		return
+	assert(entity != null,
+			"InterestService: _mark_entity_dirty called with null entity")
 	_dirty_entities[entity] = true
 	_schedule_visibility_flush()
 
@@ -337,10 +381,10 @@ func _requeue_gate_revokes(transitions: Dictionary) -> void:
 
 
 func _flush_entity_visibility() -> void:
+	# tree_exiting eviction guarantees entries refer to live owners.
 	for entity: NetwEntity in _dirty_entities.keys():
-		if not is_instance_valid(entity) \
-				or not is_instance_valid(entity.owner):
-			continue
+		assert(is_instance_valid(entity.owner),
+				"InterestService: dirty entity outlived its owner")
 		for sync in entity.synchronizers():
 			if is_instance_valid(sync) and sync.is_inside_tree():
 				sync.update_visibility()
@@ -387,15 +431,15 @@ func _is_server() -> bool:
 func _on_layer_interest_enter(
 		entity: NetwEntity, peer_id: int,
 		layer: NetwInterestLayer) -> void:
-	_queue_visibility_event(layer, entity, peer_id, ObserverEvent.ENTER)
-	_queue_observer_event(layer, entity, peer_id, ObserverEvent.ENTER)
+	_queue_visibility_event(layer, entity, peer_id, Kind.ENTER)
+	_queue_observer_event(layer, entity, peer_id, Kind.ENTER)
 
 
 func _on_layer_interest_exit(
 		entity: NetwEntity, peer_id: int,
 		layer: NetwInterestLayer) -> void:
-	_queue_visibility_event(layer, entity, peer_id, ObserverEvent.EXIT)
-	_queue_observer_event(layer, entity, peer_id, ObserverEvent.EXIT)
+	_queue_visibility_event(layer, entity, peer_id, Kind.EXIT)
+	_queue_observer_event(layer, entity, peer_id, Kind.EXIT)
 
 
 func _queue_visibility_event(
@@ -403,8 +447,8 @@ func _queue_visibility_event(
 		observer_peer: int, kind: int) -> void:
 	if not _is_server():
 		return
-	if entity == null or not is_instance_valid(entity.owner):
-		return
+	assert(entity != null and is_instance_valid(entity.owner),
+			"InterestService: transition emitted for freed entity")
 	if observer_peer == 0 or observer_peer == MultiplayerPeer.TARGET_PEER_SERVER:
 		return
 	if not entity.owner.is_inside_tree():
@@ -413,11 +457,8 @@ func _queue_visibility_event(
 	if not _can_send_rpc_to_peer(mt, observer_peer):
 		return
 	var bucket: Array = _visibility_relay.get_or_add(observer_peer, [])
-	bucket.append([
-		mt.get_path_to(entity.owner),
-		layer.layer_id,
-		kind,
-	])
+	bucket.append(_VisRelay.new(
+			mt.get_path_to(entity.owner), layer.layer_id, kind))
 	_schedule_visibility_flush()
 
 
@@ -434,7 +475,10 @@ func _flush_visibility_relay() -> void:
 		var mt := _tree()
 		if not _can_send_rpc_to_peer(mt, observer_peer):
 			continue
-		_rpc_visibility_events.rpc_id(observer_peer, events)
+		var wire: Array = []
+		for e: _VisRelay in events:
+			wire.append(e.to_wire())
+		_rpc_visibility_events.rpc_id(observer_peer, wire)
 	_visibility_relay.clear()
 
 
@@ -443,8 +487,8 @@ func _queue_observer_event(
 		observer_peer: int, kind: int) -> void:
 	if not _is_server():
 		return
-	if entity == null or not is_instance_valid(entity.owner):
-		return
+	assert(entity != null and is_instance_valid(entity.owner),
+			"InterestService: transition emitted for freed entity")
 	if entity.peer_id == 0 or observer_peer == entity.peer_id:
 		return
 	if layer.bound_gate() != null:
@@ -459,12 +503,9 @@ func _queue_observer_event(
 		return
 	var owner_peer := entity.peer_id
 	var bucket: Array = _observer_relay.get_or_add(owner_peer, [])
-	bucket.append([
-		mt.get_path_to(entity.owner),
-		layer.layer_id,
-		observer_peer,
-		kind,
-	])
+	bucket.append(_ObsRelay.new(
+			mt.get_path_to(entity.owner),
+			layer.layer_id, observer_peer, kind))
 	_schedule_visibility_flush()
 
 
@@ -481,7 +522,10 @@ func _flush_observer_relay() -> void:
 		var mt := _tree()
 		if not _can_send_rpc_to_peer(mt, owner_peer):
 			continue
-		_rpc_observer_events.rpc_id(owner_peer, events)
+		var wire: Array = []
+		for e: _ObsRelay in events:
+			wire.append(e.to_wire())
+		_rpc_observer_events.rpc_id(owner_peer, wire)
 	_observer_relay.clear()
 
 
@@ -508,52 +552,48 @@ func _rpc_observer_events(events: Array) -> void:
 	if not is_instance_valid(mt):
 		return
 	for raw in events:
-		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 4:
+		var event := _ObsRelay.from_wire(raw)
+		if event == null:
 			continue
-		var path: NodePath = raw[0]
-		var layer_id: StringName = raw[1]
-		var observer_peer: int = raw[2]
-		var kind: int = raw[3]
-		var node := mt.get_node_or_null(path)
+		var node := mt.get_node_or_null(event.path)
 		if not is_instance_valid(node):
 			continue
 		var entity := NetwEntity.of(node)
 		if not entity:
 			continue
-		if kind == ObserverEvent.ENTER:
-			entity.observer_entered.emit(layer_id, observer_peer)
+		if event.kind == Kind.ENTER:
+			entity.observer_entered.emit(event.layer_id, event.observer_peer)
 		else:
-			entity.observer_left.emit(layer_id, observer_peer)
+			entity.observer_left.emit(event.layer_id, event.observer_peer)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_visibility_events(events: Array) -> void:
 	for raw in events:
-		if not _apply_visibility_event(raw):
-			_pending_visibility_events.append([raw, 0])
+		var event := _VisRelay.from_wire(raw)
+		if event == null:
+			continue
+		if not _apply_visibility_event(event):
+			_pending_visibility_events.append(event)
+			_pending_attempts.append(0)
 	if not _pending_visibility_events.is_empty():
 		_flush_pending_visibility_events.call_deferred()
 
 
-func _apply_visibility_event(raw: Variant) -> bool:
-	if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 3:
-		return true
-	var path: NodePath = raw[0]
-	var layer_id: StringName = raw[1]
-	var kind: int = raw[2]
+func _apply_visibility_event(event: _VisRelay) -> bool:
 	var mt := _tree()
 	if not is_instance_valid(mt):
 		return false
-	var node := mt.get_node_or_null(path)
+	var node := mt.get_node_or_null(event.path)
 	if not is_instance_valid(node):
-		return kind != ObserverEvent.ENTER
+		return event.kind != Kind.ENTER
 	var entity := NetwEntity.of(node)
 	if not entity:
 		return true
-	var layer := layer_for(layer_id)
+	var layer := layer_for(event.layer_id)
 	if not layer:
 		return true
-	if kind == ObserverEvent.ENTER:
+	if event.kind == Kind.ENTER:
 		layer.entity_visible.emit(entity)
 	else:
 		layer.entity_hidden.emit(entity)
@@ -561,14 +601,15 @@ func _apply_visibility_event(raw: Variant) -> bool:
 
 
 func _flush_pending_visibility_events() -> void:
-	var pending := _pending_visibility_events
+	var pending_events := _pending_visibility_events
+	var pending_attempts := _pending_attempts
 	_pending_visibility_events = []
-	for item in pending:
-		if typeof(item) != TYPE_ARRAY or (item as Array).size() != 2:
-			continue
-		var raw: Variant = item[0]
-		var attempts: int = item[1]
-		if not _apply_visibility_event(raw) and attempts < 30:
-			_pending_visibility_events.append([raw, attempts + 1])
+	_pending_attempts = []
+	for i in pending_events.size():
+		var event := pending_events[i]
+		var attempts := pending_attempts[i]
+		if not _apply_visibility_event(event) and attempts < 30:
+			_pending_visibility_events.append(event)
+			_pending_attempts.append(attempts + 1)
 	if not _pending_visibility_events.is_empty():
 		_flush_pending_visibility_events.call_deferred()
