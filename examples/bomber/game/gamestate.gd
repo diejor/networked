@@ -88,25 +88,19 @@ func get_player_list() -> Array:
 	return players.values()
 
 
-## Starts the match by activating [code]World[/code].
+## Starts the match by activating [code]World[/code] and admitting every
+## joined peer before bomber's custom spawner runs.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	_activate_world_scene()
+	var sm := ctx.services.get_scene_manager()
+	if sm:
+		await sm.admit_peers(&"World", ctx.tree.get_joined_players())
 	_rpc_match_started.rpc()
 
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_match_started() -> void:
 	match_started.emit()
-
-
-# Activates the bomber world.
-func _activate_world_scene() -> void:
-	var sm := ctx.services.get_scene_manager()
-	if not sm:
-		return
-	
-	sm.activate_scene(&"World")
 
 
 func end_game() -> void:

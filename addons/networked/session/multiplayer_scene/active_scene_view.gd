@@ -244,4 +244,4 @@ func _sync_root_sized_rect() -> void:
 		return
 	var rect := get_tree().root.get_visible_rect()
 	position = Vector2.ZERO
-	size = rect.size
+	set_deferred("size", rect.size)
