@@ -290,7 +290,6 @@ func _is_server() -> bool:
 func add_player(player: Node) -> void:
 	track_node(player)
 	register_player(player)
-	_flush_gate_now()
 	level.add_child(player)
 	player.owner = level
 	_flush_interest_now()
@@ -340,6 +339,7 @@ func register_player(player: Node) -> void:
 	_players_by_peer[peer_id] = weakref(player)
 	connect_peer(peer_id)
 	track_node(player)
+	_flush_gate_now()
 	var bound := _on_player_exiting.bind(player)
 	if not player.tree_exiting.is_connected(bound):
 		player.tree_exiting.connect(bound)

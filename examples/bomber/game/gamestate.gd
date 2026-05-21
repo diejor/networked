@@ -88,13 +88,12 @@ func get_player_list() -> Array:
 	return players.values()
 
 
-## Starts the match by activating [code]World[/code] and admitting every
-## pending joiner before bomber's custom spawner runs.
+## Starts the match by activating [code]World[/code]; admission cascades
+## through each player's [SpawnerComponent] as bomber's spawner fires.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
 	var sm := ctx.services.get_scene_manager()
-	if sm:
-		sm.connect_peers(&"World")
+	sm.activate_scene(&"World")
 	_rpc_match_started.rpc()
 
 
