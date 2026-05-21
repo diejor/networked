@@ -32,6 +32,10 @@ func _layer(layer_id: StringName) -> NetwInterestLayer:
 	return mt.interest.layer(layer_id)
 
 
+func _service() -> InterestService:
+	return mt.get_service(InterestService) as InterestService
+
+
 # ---------------------------------------------------------------------------
 # Spawn-property contribution.
 # ---------------------------------------------------------------------------
@@ -147,6 +151,28 @@ func test_admit_viewer_fires_interest_enter_on_entity() -> void:
 			func(peer: int): enters.append(peer))
 
 	layer.add_viewer(7)
-	layer.drive_now([7])
 
 	assert_that(enters).contains_exactly([7])
+	layer.remove_viewer(7)
+
+
+func test_off_tree_entity_keeps_admission_until_driven() -> void:
+	var layer := _layer(&"arena")
+	var root := Node.new()
+	root.name = "Player"
+	var entity := NetwEntity.new()
+	root.set_meta(NetwEntity.META_KEY, entity)
+	entity.owner = root
+	auto_free(root)
+
+	layer.add_viewer(7)
+	layer.add_entity(entity)
+	_service().flush()
+
+	assert_that(_service().can_peer_see_entity(7, entity)).is_true()
+
+	mt.add_child(root)
+	_service().flush()
+
+	assert_that(_service().can_peer_see_entity(7, entity)).is_true()
+	layer.remove_entity(entity)

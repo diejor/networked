@@ -2,8 +2,8 @@
 ##
 ## Uses [NetworkTestHarness] with a scene manager and test level scene.
 ## Players are spawned via [method NetworkTestHarness.spawn_player] which
-## bypasses the RPC chain and directly calls [method MultiplayerScene.add_player],
-## testing the server-side spawn path.
+## bypasses the RPC chain and directly calls
+## [method MultiplayerScene.add_player], testing the server-side spawn path.
 class_name TestPlayerSpawn
 extends NetworkedTestSuite
 
@@ -89,3 +89,24 @@ func test_two_players_in_same_scene() -> void:
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
 	assert_that(scene.connected_peers.has(peer_id_0)).is_true()
 	assert_that(scene.connected_peers.has(peer_id_1)).is_true()
+
+
+func test_clients_admit_each_other_replicas() -> void:
+	harness.spawn_player(client0, TEST_PLAYER_SCENE)
+	harness.spawn_player(client1, TEST_PLAYER_SCENE)
+
+	var name0 := harness.client_player_name(client0)
+	var name1 := harness.client_player_name(client1)
+	var client0_player1 := await harness.wait_for_client_player_spawn(
+			client0, &"TestLevel", name1)
+	var client1_player0 := await harness.wait_for_client_player_spawn(
+			client1, &"TestLevel", name0)
+	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
+	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
+	var service0 := client0.get_service(InterestService) as InterestService
+	var service1 := client1.get_service(InterestService) as InterestService
+
+	assert_that(service0.can_peer_see_entity(
+			peer_id_0, NetwEntity.of(client0_player1))).is_true()
+	assert_that(service1.can_peer_see_entity(
+			peer_id_1, NetwEntity.of(client1_player0))).is_true()

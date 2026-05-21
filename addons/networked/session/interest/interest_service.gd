@@ -30,6 +30,10 @@ var _gates: Dictionary[StringName, InterestGate] = {}
 var _entity_layers: Dictionary[NetwEntity, Dictionary] = {}
 var _entity_filters: Dictionary[NetwEntity, Callable] = {}
 var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = {}
+# Per-entity, per-peer count of layers currently admitting the peer.
+# Visibility filter reads this in O(1); maintained by the layer
+# interest_enter / interest_exit signal handlers.
+var _admit_count: Dictionary[NetwEntity, Dictionary] = {}
 var _dirty_entities: Dictionary[NetwEntity, bool] = {}
 var _dirty_gate_layers: Dictionary[StringName, bool] = {}
 var _refresh_scheduled: bool = false
@@ -134,12 +138,14 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 		return true
 	if peer_id == 0 or entity == null:
 		return false
-	var layer_ids: Dictionary = _entity_layers.get(entity, {})
-	for layer_id: StringName in layer_ids:
-		var layer := get_layer(layer_id)
-		if layer and layer.has_entity(entity) and layer.verdict_for(peer_id):
-			return true
-	return false
+	if not _is_server():
+		return _current_layer_verdict(peer_id, entity)
+	var per_peer: Dictionary = _admit_count.get(entity, {})
+	if per_peer.get(peer_id, 0) > 0:
+		return true
+	if not _dirty_entities.has(entity):
+		return false
+	return _current_layer_verdict(peer_id, entity)
 
 
 func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
@@ -257,6 +263,9 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 			layer.remove_entity(entity)
 	_uninstall_entity_filter(entity)
 	_dirty_entities.erase(entity)
+	assert(not _admit_count.has(entity),
+			"InterestService: admit_count leaked entries after layer removal")
+	_admit_count.erase(entity)
 
 
 func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
@@ -297,6 +306,7 @@ func flush() -> void:
 	_refresh_scheduled = false
 	var transitions := _gather_gate_transitions()
 	_apply_gate_admits(transitions)
+	_drive_dirty_entity_layers()
 	_flush_entity_visibility()
 	_apply_gate_revokes(transitions)
 	_flush_visibility_relay()
@@ -378,21 +388,50 @@ func _requeue_gate_revokes(transitions: Dictionary) -> void:
 		_schedule_visibility_flush()
 
 
+func _drive_dirty_entity_layers() -> void:
+	if not _is_server():
+		return
+	var layer_ids: Dictionary[StringName, bool] = {}
+	for entity: NetwEntity in _dirty_entities:
+		if not is_instance_valid(entity.owner):
+			continue
+		if not entity.owner.is_inside_tree():
+			continue
+		var layers: Dictionary = _entity_layers.get(entity, {})
+		for layer_id: StringName in layers:
+			layer_ids[layer_id] = true
+	for layer_id: StringName in layer_ids:
+		_drive_layer(get_layer(layer_id))
+
+
 func _flush_entity_visibility() -> void:
 	# tree_exiting eviction guarantees entries refer to live owners.
+	var still_dirty: Dictionary[NetwEntity, bool] = {}
 	for entity: NetwEntity in _dirty_entities.keys():
 		assert(is_instance_valid(entity.owner),
 				"InterestService: dirty entity outlived its owner")
+		if not entity.owner.is_inside_tree():
+			still_dirty[entity] = true
+			continue
 		for sync in entity.synchronizers():
 			if is_instance_valid(sync) and sync.is_inside_tree():
 				sync.update_visibility()
-	_dirty_entities.clear()
+	_dirty_entities = still_dirty
 
 
 func _drive_layer(layer: NetwInterestLayer) -> void:
 	if layer == null:
 		return
 	layer.drive_now(_live_peers(layer))
+
+
+func _current_layer_verdict(peer_id: int, entity: NetwEntity) -> bool:
+	var layer_ids: Dictionary = _entity_layers.get(entity, {})
+	for layer_id: StringName in layer_ids:
+		var layer := get_layer(layer_id)
+		if layer and layer.has_entity(entity) and layer.verdict_for(peer_id):
+			return true
+	return false
 
 
 func _live_peers(layer: NetwInterestLayer) -> Array[int]:
@@ -429,6 +468,8 @@ func _is_server() -> bool:
 func _on_layer_interest_enter(
 		entity: NetwEntity, peer_id: int,
 		layer: NetwInterestLayer) -> void:
+	var per_peer: Dictionary = _admit_count.get_or_add(entity, {})
+	per_peer[peer_id] = int(per_peer.get(peer_id, 0)) + 1
 	_queue_visibility_event(layer, entity, peer_id, Kind.ENTER)
 	_queue_observer_event(layer, entity, peer_id, Kind.ENTER)
 
@@ -436,6 +477,16 @@ func _on_layer_interest_enter(
 func _on_layer_interest_exit(
 		entity: NetwEntity, peer_id: int,
 		layer: NetwInterestLayer) -> void:
+	var per_peer: Dictionary = _admit_count.get(entity, {})
+	var next := int(per_peer.get(peer_id, 0)) - 1
+	assert(next >= 0,
+			"InterestService: admit_count underflow for entity/peer")
+	if next <= 0:
+		per_peer.erase(peer_id)
+		if per_peer.is_empty():
+			_admit_count.erase(entity)
+	else:
+		per_peer[peer_id] = next
 	_queue_visibility_event(layer, entity, peer_id, Kind.EXIT)
 	_queue_observer_event(layer, entity, peer_id, Kind.EXIT)
 
