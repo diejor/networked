@@ -243,5 +243,9 @@ func _sync_root_sized_rect() -> void:
 	if get_parent() is Control:
 		return
 	var rect := get_tree().root.get_visible_rect()
+	anchor_left = 0.0
+	anchor_top = 0.0
+	anchor_right = 0.0
+	anchor_bottom = 0.0
 	position = Vector2.ZERO
 	set_deferred("size", rect.size)
