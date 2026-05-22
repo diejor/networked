@@ -20,5 +20,6 @@ your scene.
    multiplayer_tree
    sessions_and_peers
    scenes_and_players
+   interest_management
    transport_backends
    context_and_services
