@@ -1,4 +1,4 @@
-## Pure-function layout solver for ActiveSceneView.
+## Pure-function layout solver for HostSceneView.
 ##
 ## Translates a [StretchSettings] + control rect into concrete values to push
 ## onto a [SubViewport]: its [code]size[/code], its [code]size_2d_override[/code]

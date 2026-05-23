@@ -1,14 +1,29 @@
-## Renders an active [SubViewport] scene into the host's root viewport.
+## Renders the host's currently-active [SubViewport] scene into the root viewport.
 ##
-## Add this as a child of [MultiplayerTree] in your main scene. On
-## listen-server hosts, this view pulls the local player's current scene
-## directly from the tree and [MultiplayerSceneManager], rather than being
-## pushed to by the scene manager.
+## On listen-server hosts, this view pulls the local player's current scene
+## from the [MultiplayerTree] and [MultiplayerSceneManager] and draws it
+## edge-to-edge so the host sees the game like a pure client does.
 ##
 ## [br][br]
-## Pure clients and dedicated servers do not need this node — pure clients
+## [b]You normally don't add this node yourself.[/b] [MultiplayerTree] adds
+## one automatically when [code]use_listen_server[/code] is enabled and no
+## existing [HostSceneView] descendant is found. Drop one into your scene
+## only when you need to customize [member stretch_override], reparent it
+## under a specific [Control], or otherwise deviate from the defaults.
+##
+## [br][br]
+## Pure clients and dedicated servers do not use this node — pure clients
 ## render their scene directly into root (via the world_2d swap in
 ## [code]ServerScene.tscn[/code]) and dedicated servers don't render at all.
+##
+## [br][br]
+## [b]Edge cases where the host sees something different from clients:[/b]
+## [br]- Custom [member stretch_override] diverging from project stretch settings.
+## [br]- Host-side UI parented above this view swallowing input via
+## [code]mouse_filter[/code].
+## [br]- Debug overlays drawn over the host viewport that don't exist on clients.
+## [br]- Brief "no local player yet" window where the view falls back to the
+## first active host-rendered scene viewport instead of the local player's scene.
 ##
 ## [br][br]
 ## [b]Layout:[/b] defaults to filling its parent rect (PRESET_FULL_RECT). When
@@ -16,7 +31,7 @@
 ## resize. Stretch behavior mirrors Godot's project-level
 ## [code]display/window/stretch/*[/code] settings via [StretchLayout]; assign
 ## [member stretch_override] to deviate per-view.
-class_name ActiveSceneView
+class_name HostSceneView
 extends Control
 
 ## Optional per-view stretch configuration. When [code]null[/code] (default),
@@ -40,7 +55,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	_mt = NetwServices.register(self, ActiveSceneView)
+	_mt = NetwServices.register(self, HostSceneView)
 	if not _mt:
 		return
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -72,7 +87,7 @@ func _exit_tree() -> void:
 		root.size_changed.disconnect(_sync_root_sized_rect)
 	clear_target()
 	_mt = null
-	NetwServices.unregister(self, ActiveSceneView)
+	NetwServices.unregister(self, HostSceneView)
 
 
 func _process(_dt: float) -> void:
@@ -106,7 +121,7 @@ func set_target(viewport: SubViewport) -> void:
 		_apply_layout()
 		if not _target.tree_exiting.is_connected(_on_target_freed):
 			_target.tree_exiting.connect(_on_target_freed)
-		_dbg.info("ActiveSceneView now displays '%s'.", [_target.name])
+		_dbg.info("HostSceneView now displays '%s'.", [_target.name])
 
 	set_process(is_instance_valid(_target))
 	queue_redraw()

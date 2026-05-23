@@ -420,15 +420,6 @@ func _get_configuration_warnings() -> PackedStringArray:
 			"No replication will happen."
 		)
 	
-	if use_listen_server:
-		if not find_service_node(ActiveSceneView):
-			warnings.append(
-				"use_listen_server is enabled but no ActiveSceneView was " +
-				"found as a descendant. The listen-server host will not " +
-				"be able to see the SubViewport the server-player is " +
-				"currently in."
-			)
-	
 	return warnings
 
 
@@ -438,6 +429,7 @@ func _enter_tree() -> void:
 
 	_mount_api()
 	_ensure_interest_service()
+	_ensure_host_scene_view()
 
 	for child in get_children():
 		if child is MultiplayerSceneManager:
@@ -461,6 +453,16 @@ func _enter_tree() -> void:
 			add_child(manager)
 			manager._configure_default(scene_path)
 			return
+
+
+func _ensure_host_scene_view() -> void:
+	if not use_listen_server:
+		return
+	if find_service_node(HostSceneView):
+		return
+	var view := HostSceneView.new()
+	view.name = &"HostSceneView"
+	add_child(view)
 
 
 static func _has_spawner_component(node: Node) -> bool:

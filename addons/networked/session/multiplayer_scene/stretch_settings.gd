@@ -1,4 +1,4 @@
-## Resolved 2D stretch configuration for an [ActiveSceneView].
+## Resolved 2D stretch configuration for a [HostSceneView].
 ##
 ## Mirrors the project-level [code]display/window/stretch/*[/code] knobs Godot
 ## applies to the root viewport, packaged so the host's SubViewport path can

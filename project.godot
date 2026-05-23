@@ -26,7 +26,6 @@ file_logging/enable_file_logging=true
 [display]
 
 window/subwindows/embed_subwindows=false
-window/stretch/scale=1.63
 
 [editor_plugins]
 
