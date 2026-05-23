@@ -3,7 +3,7 @@ extends CharacterBody2D
 
 @export_custom(PROPERTY_HINT_NONE, "suffix:px/s") var speed: float = 64
 
-@onready var input: MoveInputComponent = $InputComponent
+@onready var input: MoveInputComponent = %InputComponent
 
 
 func _physics_process(_delta: float) -> void:

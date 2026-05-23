@@ -1,0 +1,54 @@
+[configuration]
+entry_symbol = "laggy_multiplayer_peer_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+macos.single.debug = "./macos/liblaggy_multiplayer_peer.macos.template_debug.dylib"
+macos.double.debug = "./macos/liblaggy_multiplayer_peer.macos.template_debug.double.dylib"
+macos.single.release = "./macos/liblaggy_multiplayer_peer.macos.template_release.dylib"
+macos.double.release = "./macos/liblaggy_multiplayer_peer.macos.template_debug.double.dylib"
+
+ios.arm64.single.debug = "./ios/liblaggy_multiplayer_peer.ios.template_debug.arm64.dylib"
+ios.arm64.double.debug = "./ios/liblaggy_multiplayer_peer.ios.template_debug.arm64.double.dylib"
+ios.arm64.single.release = "./ios/liblaggy_multiplayer_peer.ios.template_release.arm64.dylib"
+ios.arm64.double.release = "./ios/liblaggy_multiplayer_peer.ios.template_release.arm64.double.dylib"
+
+windows.x86_32.single.debug = "./windows/laggy_multiplayer_peer.windows.template_debug.x86_32.dll"
+windows.x86_32.double.debug = "./windows/laggy_multiplayer_peer.windows.template_debug.x86_32.double.dll"
+windows.x86_32.single.release = "./windows/laggy_multiplayer_peer.windows.template_release.x86_32.dll"
+windows.x86_32.double.release = "./windows/laggy_multiplayer_peer.windows.template_release.x86_32.double.dll"
+
+windows.x86_64.single.debug = "./windows/laggy_multiplayer_peer.windows.template_debug.x86_64.dll"
+windows.x86_64.double.debug = "./windows/laggy_multiplayer_peer.windows.template_debug.x86_64.double.dll"
+windows.x86_64.single.release = "./windows/laggy_multiplayer_peer.windows.template_release.x86_64.dll"
+windows.x86_64.double.release = "./windows/laggy_multiplayer_peer.windows.template_release.x86_64.double.dll"
+
+linux.x86_64.single.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.x86_64.so"
+linux.x86_64.double.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.x86_64.double.so"
+linux.x86_64.single.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.x86_64.so"
+linux.x86_64.double.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.x86_64.double.so"
+
+linux.arm64.single.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.arm64.so"
+linux.arm64.double.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.arm64.double.so"
+linux.arm64.single.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.arm64.so"
+linux.arm64.double.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.arm64.double.so"
+
+linux.rv64.single.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.rv64.so"
+linux.rv64.double.debug = "./linux/liblaggy_multiplayer_peer.linux.template_debug.rv64.double.so"
+linux.rv64.single.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.rv64.so"
+linux.rv64.double.release = "./linux/liblaggy_multiplayer_peer.linux.template_release.rv64.double.so"
+
+android.x86_64.single.debug = "./android/liblaggy_multiplayer_peer.android.template_debug.x86_64.so"
+android.x86_64.double.debug = "./android/liblaggy_multiplayer_peer.android.template_debug.x86_64.double.so"
+android.x86_64.single.release = "./android/liblaggy_multiplayer_peer.android.template_release.x86_64.so"
+android.x86_64.double.release = "./android/liblaggy_multiplayer_peer.android.template_release.x86_64.double.so"
+
+android.arm64.single.debug = "./android/liblaggy_multiplayer_peer.android.template_debug.arm64.so"
+android.arm64.double.debug = "./android/liblaggy_multiplayer_peer.android.template_debug.arm64.double.so"
+android.arm64.single.release = "./android/liblaggy_multiplayer_peer.android.template_release.arm64.so"
+android.arm64.double.release = "./android/liblaggy_multiplayer_peer.android.template_release.arm64.double.so"
+
+web.wasm32.single.debug = "./web/liblaggy_multiplayer_peer.web.template_debug.wasm32.nothreads.wasm"
+web.wasm32.double.debug = "./web/liblaggy_multiplayer_peer.web.template_release.wasm32.double.nothreads.wasm"
+web.wasm32.single.release = "./web/liblaggy_multiplayer_peer.web.template_release.wasm32.nothreads.wasm"
+web.wasm32.double.release = "./web/liblaggy_multiplayer_peer.web.template_release.wasm32.double.nothreads.wasm"

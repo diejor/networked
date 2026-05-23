@@ -10,6 +10,26 @@
 [ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://addons/networked/nodes/input/move_input_component.gd" id="9_5h0xu"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/tick_interpolator.gd" id="9_wi0c6"]
 
+[sub_resource type="Resource" id="Resource_tdg3f"]
+script = ExtResource("5_cxr5p")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "MultiplayerSpawner"
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
+properties/0/path = NodePath("../..:position")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_5h0xu"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+
 [sub_resource type="GDScript" id="GDScript_tdg3f"]
 script/source = "extends Camera2D
 
@@ -24,44 +44,32 @@ func _ready() -> void:
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
 size = Vector2(84, 20)
 
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
-properties/0/path = NodePath("..:position")
-properties/0/spawn = true
-properties/0/replication_mode = 2
-
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_5h0xu"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/replication_mode = 0
-
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_kne1u"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/replication_mode = 2
-
-[sub_resource type="Resource" id="Resource_tdg3f"]
-script = ExtResource("5_cxr5p")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "MultiplayerSpawner"
-
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
 script = ExtResource("1_kne1u")
 speed = 256.0
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=1848961013]
-position_smoothing_enabled = true
-script = SubResource("GDScript_tdg3f")
+[node name="Components" type="Node" parent="." unique_id=962224737]
 
-[node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
-physics_interpolation_mode = 2
-texture = ExtResource("2_kpjcp")
+[node name="TPComponent" type="Node" parent="Components" unique_id=1784597384]
+unique_name_in_owner = true
+script = ExtResource("4_e80uo")
+starting_scene_path = SubResource("Resource_tdg3f")
+metadata/_custom_type_script = "uid://c4gt8tvkmcals"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
-position = Vector2(2, 60)
-shape = SubResource("RectangleShape2D_tdg3f")
+[node name="TickInterpolator" type="Node" parent="Components" unique_id=616016356]
+script = ExtResource("9_wi0c6")
+property_modes = Dictionary[StringName, int]({
+&"position": 1
+})
+metadata/_custom_type_script = "uid://b21bbqt166ive"
 
-[node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=2118460329]
+[node name="InputComponent" type="Node" parent="Components" unique_id=2127544558]
+unique_name_in_owner = true
+script = ExtResource("9_5h0xu")
+metadata/_custom_type_script = "uid://cwf8sf34fk0ib"
+
+[node name="SaveComponent" type="MultiplayerSynchronizer" parent="Components" unique_id=2118460329]
 unique_name_in_owner = true
 root_path = NodePath(".")
 replication_interval = 5.0
@@ -74,7 +82,8 @@ database = ExtResource("8_dgaqa")
 table_name = &"players"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
-[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1181938780]
+[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="Components" unique_id=1181938780]
+root_path = NodePath("../..")
 replication_config = SubResource("SceneReplicationConfig_5h0xu")
 script = ExtResource("5_dgaqa")
 authority_mode = 1
@@ -85,19 +94,14 @@ replication_interval = 0.25
 delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_kne1u")
 
-[node name="TPComponent" type="Node" parent="." unique_id=1784597384]
-unique_name_in_owner = true
-script = ExtResource("4_e80uo")
-starting_scene_path = SubResource("Resource_tdg3f")
-metadata/_custom_type_script = "uid://c4gt8tvkmcals"
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1848961013]
+position_smoothing_enabled = true
+script = SubResource("GDScript_tdg3f")
 
-[node name="TickInterpolator" type="Node" parent="." unique_id=616016356]
-script = ExtResource("9_wi0c6")
-property_modes = Dictionary[StringName, int]({
-&"position": 1
-})
-metadata/_custom_type_script = "uid://b21bbqt166ive"
+[node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
+physics_interpolation_mode = 2
+texture = ExtResource("2_kpjcp")
 
-[node name="InputComponent" type="Node" parent="." unique_id=2127544558]
-script = ExtResource("9_5h0xu")
-metadata/_custom_type_script = "uid://cwf8sf34fk0ib"
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
+position = Vector2(2, 60)
+shape = SubResource("RectangleShape2D_tdg3f")

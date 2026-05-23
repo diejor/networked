@@ -10,12 +10,16 @@
 
 [sub_resource type="Resource" id="Resource_lpgch"]
 script = ExtResource("2_7ue45")
+simulate_lag = true
+lag_min_delay = 0.09
+lag_max_delay = 0.234
+lag_packet_loss = 0.01
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/SpawnerComponent"
+node_path = "Player/Components/SpawnerComponent"
 
 [sub_resource type="Resource" id="Resource_7ehqo"]
 script = ExtResource("2_03owx")

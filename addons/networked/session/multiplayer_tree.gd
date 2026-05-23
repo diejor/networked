@@ -521,6 +521,7 @@ func host(quiet: bool = false) -> Error:
 	
 	_auth.prepare(auth_provider != null)
 	var peer: MultiplayerPeer = await backend.create_host_peer(self)
+	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 	
 	# Adopted-api backends (e.g. TubeBackend) drive their peer onto the swapped
@@ -578,6 +579,7 @@ func join(
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
+	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 	
 	if peer == null and not api_was_adopted:
@@ -649,6 +651,8 @@ func adopt_peer(
 		_auth.set_client_join_payload(join_payload)
 
 	_auth.prepare(auth_provider != null and join_payload != null)
+	if backend:
+		peer = backend.wrap_peer(peer)
 	api.multiplayer_peer = peer
 
 	var unique_id := peer.get_unique_id()
