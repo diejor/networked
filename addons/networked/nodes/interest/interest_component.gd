@@ -74,7 +74,7 @@ func _notification(what: int) -> void:
 	var entity := Netw.ctx(self).entity
 	if not entity:
 		return
-	entity.contribute_spawn_property(NodePath("InterestComponent:layer_ids"))
+	entity.contribute_spawn_property(self, &"layer_ids")
 
 
 func _enter_tree() -> void:

@@ -74,6 +74,7 @@ func _notification(what: int) -> void:
 		return
 	match what:
 		NOTIFICATION_PARENTED:
+			root_path = NodePath(".")
 			var entity := Netw.ctx(self).entity
 			if entity:
 				entity.set_save(self)
@@ -196,28 +197,21 @@ func get_value(key: StringName, default: Variant = null) -> Variant:
 	return bound_entity.get_value(key, default)
 
 
-## Adds a tracked property. Intended for use from
-## [signal NetwEntity.collecting_save_properties] handlers; equivalent to
-## [method ProxySynchronizer.register_property] but exposes the same flag layout
-## as [method SpawnerComponent.add_spawn_property] for symmetry. Idempotent on
-## duplicate [param virtual_name].
+## Adds a tracked property from [param source].
+##
+## The real path is resolved by [ProxySynchronizer] relative to this
+## component, so callers do not need to account for scene nesting.
+## Idempotent on duplicate [param virtual_name].
 func add_save_property(
 		virtual_name: StringName,
-		owner_relative_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		source: Node,
+		property: StringName,
+		mode: SceneReplicationConfig.ReplicationMode =
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = true,
 		watch: bool = true,
 ) -> void:
-	var path_str := str(owner_relative_path)
-	var translated := path_str
-	if owner:
-		var rel := str(get_path_to(owner))
-		if path_str.begins_with(":"):
-			translated = rel + path_str
-		elif rel != ".":
-			translated = rel + "/" + path_str
-	
-	register_property(virtual_name, NodePath(translated), mode, spawn, watch)
+	register_node_property(virtual_name, source, property, mode, spawn, watch)
 
 
 # Scene to entity transfer.

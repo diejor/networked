@@ -32,7 +32,8 @@ var _target_root: NodePath = NodePath(".")
 func register_property(
 		virtual_name: StringName,
 		real_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode =
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -46,11 +47,41 @@ func register_property(
 	_config.property_set_watch(vpath, _filter_watch(virtual_name, watch))
 
 
+## Registers [param property] from [param source] as [param virtual_name].
+##
+## The real path is resolved relative to this proxy's current root path.
+func register_node_property(
+		virtual_name: StringName,
+		source: Node,
+		property: StringName,
+		mode: SceneReplicationConfig.ReplicationMode =
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		spawn: bool = false,
+		watch: bool = true,
+) -> void:
+	var real_path := path_to_property(source, property)
+	if real_path.is_empty():
+		return
+	register_property(virtual_name, real_path, mode, spawn, watch)
+
+
+## Returns [param property] on [param source] relative to this proxy's root.
+func path_to_property(source: Node, property: StringName) -> NodePath:
+	var root := _path_root()
+	if root == null:
+		return NodePath("")
+	var rel := _relative_path(root, source)
+	if rel.is_empty():
+		return NodePath("")
+	return NodePath("%s:%s" % [rel, property])
+
+
 ## Alias for [method register_property].
 func track(
 		virtual_name: StringName,
 		real_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode =
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -102,6 +133,18 @@ func has_virtual_property(virtual_name: StringName) -> bool:
 ## high-latency save data) or [code]watch = true[/code] regardless of the input.
 func _filter_watch(_name: StringName, watch: bool) -> bool:
 	return watch
+
+
+func _path_root() -> Node:
+	if root_path == NodePath("."):
+		return self
+	return get_node_or_null(root_path)
+
+
+func _relative_path(source: Node, target: Node) -> NodePath:
+	if not is_instance_valid(source) or not is_instance_valid(target):
+		return NodePath("")
+	return source.get_path_to(target)
 
 
 func _get(property: StringName) -> Variant:

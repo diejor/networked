@@ -33,7 +33,7 @@ extends MultiplayerSynchronizer
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
 ##         var entity := Netw.ctx(self).entity
-##         entity.contribute_spawn_property(NodePath("..:my_property"))
+##         entity.contribute_spawn_property(self, &"my_property")
 ##         entity.spawning.connect(_on_spawning)
 ##
 ## func _on_spawning() -> void:

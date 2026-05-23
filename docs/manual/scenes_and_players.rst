@@ -113,8 +113,8 @@ Sibling components can extend the spawn packet without touching the
 spawner's exported config. From the
 :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`
 hook of the sibling, call
-:ref:`contribute_spawn_property() <class_NetwEntity>` with a node path that
-points to a property the synchronizer should bundle:
+:ref:`contribute_spawn_property() <class_NetwEntity>` with the source node
+and property the synchronizer should bundle:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -122,7 +122,7 @@ points to a property the synchronizer should bundle:
     func _notification(what: int) -> void:
         if what == NOTIFICATION_PARENTED:
             var entity := Netw.ctx(self).entity
-            entity.contribute_spawn_property(NodePath("..:health"))
+            entity.contribute_spawn_property(self, &"health")
             entity.spawning.connect(_on_spawning)
 
     func _on_spawning() -> void:

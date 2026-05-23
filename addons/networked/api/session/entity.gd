@@ -13,7 +13,7 @@
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
 ##         var entity := Netw.ctx(self).entity
-##         entity.contribute_spawn_property(NodePath("..:health"))
+##         entity.contribute_spawn_property(self, &"health")
 ##         entity.spawning.connect(_on_spawning)
 ##
 ## func _on_spawning() -> void:
@@ -27,6 +27,56 @@ const META_KEY := &"netw_entity"
 
 ## Semantic ownership marker derived from [member peer_id].
 enum Ownership { PEER, SERVER }
+
+
+# Buffered proxy-style property contribution.
+#
+# Keeps [method contribute_save_property] calls typed while the destination
+# [ProxySynchronizer] registers later during packed-scene construction.
+class _PropertyContribution extends RefCounted:
+	var source: Node
+	var virtual_name: StringName
+	var property: StringName
+	var mode: SceneReplicationConfig.ReplicationMode
+	var spawn: bool
+	var watch: bool
+	
+	func _init(
+			p_source: Node,
+			p_virtual_name: StringName,
+			p_property: StringName,
+			p_mode: SceneReplicationConfig.ReplicationMode,
+			p_spawn: bool,
+			p_watch: bool,
+	) -> void:
+		source = p_source
+		virtual_name = p_virtual_name
+		property = p_property
+		mode = p_mode
+		spawn = p_spawn
+		watch = p_watch
+
+	func matches(
+			p_virtual_name: StringName,
+			p_source: Node,
+			p_property: StringName,
+	) -> bool:
+		return (
+			virtual_name == p_virtual_name
+			and source == p_source
+			and property == p_property
+		)
+
+	func register_with(proxy: ProxySynchronizer) -> void:
+		proxy.register_node_property(
+			virtual_name,
+			source,
+			property,
+			mode,
+			spawn,
+			watch
+		)
+
 
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
@@ -87,7 +137,7 @@ var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
 var _pending_spawn_props: Array[NodePath] = []
-var _pending_save_props: Array = []
+var _pending_save_props: Array[_PropertyContribution] = []
 
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
 var _synchronizers_dirty: bool = true
@@ -133,6 +183,30 @@ static func parse_peer(node_name: String) -> int:
 ## Formats [param entity_id] and [param peer_id] as a node name.
 static func format_name(entity_id: String, peer_id: int) -> String:
 	return "%s|%d" % [entity_id, peer_id]
+
+
+## Returns a [NodePath] from [param source] to [param target].
+func relative_path(source: Node, target: Node) -> NodePath:
+	if not is_instance_valid(source) or not is_instance_valid(target):
+		return NodePath("")
+	return source.get_path_to(target)
+
+
+## Returns [param property] on [param source] relative to [param base].
+##
+## Defaults to the entity root, matching [SpawnerComponent]'s path space.
+func property_path(
+		source: Node,
+		property: StringName,
+		base: Node = null,
+) -> NodePath:
+	var root := base if base else owner
+	if not is_instance_valid(root):
+		return NodePath("")
+	var rel := relative_path(root, source)
+	if rel.is_empty():
+		return NodePath("")
+	return NodePath("%s:%s" % [rel, property])
 
 
 ## Encodes identity into [param node] and its [NetwEntity].
@@ -228,8 +302,8 @@ func get_spawner() -> SpawnerComponent:
 ## Buffered save-property contributions are flushed immediately.
 func set_save(save: SaveComponent) -> void:
 	_save_ref = weakref(save)
-	for c in _pending_save_props:
-		save.add_save_property(c[0], c[1], c[2], c[3], c[4])
+	for contribution in _pending_save_props:
+		contribution.register_with(save)
 	_pending_save_props.clear()
 
 
@@ -238,18 +312,23 @@ func get_save() -> SaveComponent:
 	return _save_ref.get_ref() as SaveComponent if _save_ref else null
 
 
-## Adds [param path] to the entity's spawn packet.
+## Adds [param property] from [param source] to the entity's spawn packet.
 ##
 ## Call from [constant Node.NOTIFICATION_PARENTED] so the property lands
-## before Godot decodes the spawn packet.
+## before Godot decodes the spawn packet. The path is resolved relative to
+## the entity root, so components do not need to account for scene nesting.
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
 ##         Netw.ctx(self).entity.contribute_spawn_property(
-##             NodePath("..:health")
+##             self,
+##             &"health"
 ##         )
 ## [/codeblock]
-func contribute_spawn_property(path: NodePath) -> void:
+func contribute_spawn_property(source: Node, property: StringName) -> void:
+	var path := property_path(source, property)
+	if path.is_empty():
+		return
 	var spawner := get_spawner()
 	if spawner:
 		spawner.add_spawn_property(path)
@@ -262,18 +341,49 @@ func contribute_spawn_property(path: NodePath) -> void:
 ##
 ## Calls before [SaveComponent] registers are buffered.
 func contribute_save_property(
+		source: Node,
 		virtual_name: StringName,
-		real_path: NodePath,
+		property: StringName,
 		mode: SceneReplicationConfig.ReplicationMode =
 				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
+	if property_path(source, property).is_empty():
+		return
 	var save := get_save()
 	if save:
-		save.add_save_property(virtual_name, real_path, mode, spawn, watch)
+		var contribution := _PropertyContribution.new(
+			source,
+			virtual_name,
+			property,
+			mode,
+			spawn,
+			watch
+		)
+		contribution.register_with(save)
 		return
-	_pending_save_props.append([virtual_name, real_path, mode, spawn, watch])
+	if _has_pending_save_property(virtual_name, source, property):
+		return
+	_pending_save_props.append(_PropertyContribution.new(
+		source,
+		virtual_name,
+		property,
+		mode,
+		spawn,
+		watch
+	))
+
+
+func _has_pending_save_property(
+		virtual_name: StringName,
+		source: Node,
+		property: StringName,
+) -> bool:
+	for contribution in _pending_save_props:
+		if contribution.matches(virtual_name, source, property):
+			return true
+	return false
 
 
 # ---------------------------------------------------------------------------

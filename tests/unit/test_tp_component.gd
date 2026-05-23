@@ -58,3 +58,27 @@ func test_spawn_initializes_current_scene_path_from_starting_scene() -> void:
 	
 	# It should have initialized current_scene_path from starting_scene_path
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
+
+
+func test_parented_contributes_paths_without_node_owner() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "Player"
+	
+	var components := Node.new()
+	components.name = "Components"
+	root.add_child(components)
+	
+	var tp := TPComponent.new()
+	components.add_child(tp)
+	
+	var save := SaveComponent.new()
+	components.add_child(save)
+	
+	var spawner := SpawnerComponent.new()
+	components.add_child(spawner)
+	
+	var spawn_path := NodePath("Components/TPComponent:current_scene_path")
+	var save_path := NodePath("../TPComponent:current_scene_path")
+	
+	assert_that(spawner.replication_config.has_property(spawn_path)).is_true()
+	assert_that(save.get_real_path(&"current_scene_path")).is_equal(save_path)

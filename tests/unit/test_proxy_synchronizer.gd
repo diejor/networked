@@ -78,6 +78,27 @@ func test_register_property_duplicate_is_ignored() -> void:
 	assert_that(proxy._properties.size()).is_equal(1)
 
 
+func test_register_node_property_uses_proxy_relative_path() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	var components := Node.new()
+	components.name = "Components"
+	root.add_child(components)
+	
+	var source := Node.new()
+	source.name = "State"
+	components.add_child(source)
+	
+	var proxy: StubProxy = auto_free(StubProxy.new())
+	proxy.name = "Proxy"
+	proxy.root_path = NodePath(".")
+	components.add_child(proxy)
+	
+	proxy.register_node_property(&"health", source, &"health")
+	assert_that(proxy.get_real_path(&"health")).is_equal(
+		NodePath("../State:health")
+	)
+
+
 func test_register_multiple_properties_all_present() -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
 	proxy.register_property(&"hp", NodePath(":hp"))

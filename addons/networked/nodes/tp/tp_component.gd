@@ -80,14 +80,14 @@ func _notification(what: int) -> void:
 		return
 	
 	var entity := Netw.ctx(self).entity
-	if not (entity or entity.owner):
+	if not entity or not entity.owner:
 		return
 	
-	var rel := entity.owner.get_path_to(self)
-	entity.contribute_spawn_property("%s:current_scene_path" % rel)
+	entity.contribute_spawn_property(self, &"current_scene_path")
 	entity.contribute_save_property(
+		self,
 		&"current_scene_path",
-		"%s:current_scene_path" % rel,
+		&"current_scene_path",
 	)
 
 
