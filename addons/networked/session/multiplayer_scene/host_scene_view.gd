@@ -12,24 +12,16 @@
 ## under a specific [Control], or otherwise deviate from the defaults.
 ##
 ## [br][br]
-## Pure clients and dedicated servers do not use this node — pure clients
-## render their scene directly into root (via the world_2d swap in
+## Pure clients and dedicated servers do not use this node pure clients
+## render their scene directly into root (via the [member Viewport.world_2d] swap in
 ## [code]ServerScene.tscn[/code]) and dedicated servers don't render at all.
 ##
 ## [br][br]
-## [b]Edge cases where the host sees something different from clients:[/b]
-## [br]- Custom [member stretch_override] diverging from project stretch settings.
-## [br]- Host-side UI parented above this view swallowing input via
-## [code]mouse_filter[/code].
-## [br]- Debug overlays drawn over the host viewport that don't exist on clients.
-## [br]- Brief "no local player yet" window where the view falls back to the
-## first active host-rendered scene viewport instead of the local player's scene.
-##
-## [br][br]
-## [b]Layout:[/b] defaults to filling its parent rect (PRESET_FULL_RECT). When
+## Defaults to filling its parent rect with
+## [constant Control.LayoutPresetMode.PRESET_FULL_RECT]. When
 ## parented under a plain [Node], the view re-syncs to the root window on
 ## resize. Stretch behavior mirrors Godot's project-level
-## [code]display/window/stretch/*[/code] settings via [StretchLayout]; assign
+## [code]display/window/stretch/*[/code] settings via [StretchLayout], assign
 ## [member stretch_override] to deviate per-view.
 class_name HostSceneView
 extends Control
