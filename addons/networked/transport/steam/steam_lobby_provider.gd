@@ -19,6 +19,9 @@ class_name SteamLobbyProvider
 extends LobbyProvider
 
 
+const STEAM_APP_ID_SETTING := "steam/initialization/app_id"
+const SPACEWAR_APP_ID := 480
+
 static var _instance: WeakRef = weakref(null)
 
 
@@ -43,6 +46,11 @@ var max_clients: int = 8
 
 ## If [code]true[/code], allows Steam to relay traffic when direct P2P fails.
 @export var allow_p2p_relay: bool = true
+
+## If [code]true[/code], uses Spacewar when
+## [code]steam/initialization/app_id[/code] is missing, empty, or
+## [code]0[/code]. This runtime fallback does not save project settings.
+@export var allow_spacewar_fallback: bool = false
 
 
 var _wrapper: SteamWrapper
@@ -79,6 +87,18 @@ func _enter_tree() -> void:
 		)
 		return
 
+	if not _has_steam_app_id():
+		if allow_spacewar_fallback:
+			_apply_spacewar_fallback()
+		else:
+			var reason := _steam_app_id_required_message()
+			assert(false, "SteamLobbyProvider: %s" % reason)
+			_init_ok = false
+			Netw.dbg.error("SteamLobbyProvider: %s", [reason],
+				func(m): push_error(m))
+			provider_unavailable.emit.call_deferred(reason)
+			return
+
 	var init_res: Dictionary = _wrapper.steam_init_ex()
 	var status: int = init_res.get(
 		"status",
@@ -89,7 +109,8 @@ func _enter_tree() -> void:
 		var reason := "Steam init failed (status %d)" % status
 		if status == SteamWrapper.InitResult.NO_STEAM_CLIENT:
 			reason += ": no Steam client running"
-		Netw.dbg.error("SteamLobbyProvider: %s", [reason])
+		Netw.dbg.error("SteamLobbyProvider: %s", [reason],
+			func(m): push_error(m))
 		provider_unavailable.emit.call_deferred(reason)
 		return
 
@@ -251,6 +272,41 @@ func _guard_ready(op: String) -> bool:
 		lobby_join_failed.emit("Steam unavailable")
 		return false
 	return true
+
+
+# Checks the GodotSteam app id setting before Steam initialization.
+func _has_steam_app_id() -> bool:
+	if not ProjectSettings.has_setting(STEAM_APP_ID_SETTING):
+		return false
+	var raw: Variant = ProjectSettings.get_setting(STEAM_APP_ID_SETTING)
+	var app_id := str(raw).strip_edges()
+	return not app_id.is_empty() and app_id != "0"
+
+
+# Applies the opt-in Spacewar app id fallback without saving it.
+func _apply_spacewar_fallback() -> void:
+	ProjectSettings.set_setting(STEAM_APP_ID_SETTING, SPACEWAR_APP_ID)
+	var reason := _steam_app_id_fallback_message()
+	Netw.dbg.warn("SteamLobbyProvider: %s", [reason],
+		func(m): push_warning(m))
+
+
+# Returns the actionable Steam app id setup hint.
+func _steam_app_id_required_message() -> String:
+	return (
+		"Project setting `%s` must not be empty or 0. Set it to " +
+		"your Steam app id, or use 480 for Spacewar while testing " +
+		"before you have one."
+	) % STEAM_APP_ID_SETTING
+
+
+# Returns the opt-in Spacewar fallback warning.
+func _steam_app_id_fallback_message() -> String:
+	return (
+		"Project setting `%s` is empty or 0. Using 480 (Spacewar) " +
+		"because `allow_spacewar_fallback` is enabled. Set this " +
+		"project setting to your Steam app id before publishing."
+	) % STEAM_APP_ID_SETTING
 
 
 func _on_lobby_created(connect_result: int, lobby_id: int) -> void:

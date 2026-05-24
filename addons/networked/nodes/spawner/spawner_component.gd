@@ -33,7 +33,7 @@ extends MultiplayerSynchronizer
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
 ##         var entity := Netw.ctx(self).entity
-##         entity.contribute_spawn_property(NodePath("..:my_property"))
+##         entity.contribute_spawn_property(self, &"my_property")
 ##         entity.spawning.connect(_on_spawning)
 ##
 ## func _on_spawning() -> void:
@@ -184,20 +184,6 @@ func _ready() -> void:
 		)
 	):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	if (
-		not multiplayer.is_server()
-		and _is_local_represented_peer()
-		and is_inside_tree()
-	):
-		var ctx := Netw.ctx(self)
-		if ctx:
-			var tp_layer := ctx.services.get_tp_layer()
-			if tp_layer:
-				_dbg.info(
-					"Local player %s ready. Playing teleport transition.",
-					[entity_id]
-				)
-				tp_layer.teleport_in()
 
 
 func _exit_tree() -> void:
@@ -376,20 +362,23 @@ func _sanitize_replication_config() -> void:
 		_coerce_to_spawn_only(replication_config, prop)
 
 
-# Registers the entity with the enclosing [SceneSynchronizer] so per-peer
-# scene visibility filters apply.
+# Registers the entity with the enclosing [MultiplayerScene] so per-peer
+# scene visibility filters apply. Scene-owned enrollment - the scene's
+# layer/gate is the authoritative admission state; [InterestComponent]
+# only handles additional generic layers.
 func _register_with_scene() -> void:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if not scene:
 		_dbg.debug(
 			"No enclosing MultiplayerScene for '%s'; skipping "
-			+ "SceneSynchronizer track.", [owner.name]
+			+ "scene track.", [owner.name]
 		)
 		return
 	if peer_id != 0:
 		scene.register_player(owner)
 		_assign_local_player_if_needed()
-	scene.synchronizer.track_node(owner)
+	else:
+		scene.track_node(owner)
 
 
 func _assign_local_player_if_needed() -> void:

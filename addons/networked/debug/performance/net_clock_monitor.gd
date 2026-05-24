@@ -82,14 +82,17 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 
 
 func _update_data_and_register(category: String, data: Dictionary) -> void:
+	var should_register := not _latest_data.has(category)
+
 	# Update persistent storage so existing callables see the new values.
 	if not _latest_data.has(category):
 		_latest_data[category] = data.duplicate()
 	else:
 		for k in data:
 			_latest_data[category][k] = data[k]
-	
-	_ensure_monitors_registered(category)
+
+	if should_register:
+		_ensure_monitors_registered(category)
 
 
 func _ensure_monitors_registered(category: String) -> void:

@@ -31,6 +31,10 @@ static var module_levels: Dictionary = {}
 static var _min_active_level: int = Level.NONE
 static var _effective_min_level: int = Level.NONE
 static var _effective_global_level: int = Level.NONE
+static var _test_buffering_enabled := false
+static var _test_logs_flushed := false
+static var _test_log_buffer: Array[Dictionary] = []
+static var _test_log_settings: NetwLogSettings = null
 static var _settings_stack: Array[NetwLogSettings] = []
 static var _addon_root: String = ""
 static var _runtime_initialized: bool = false
@@ -142,6 +146,10 @@ static func _recompute_min_level() -> void:
 	
 	_effective_min_level = _stack_min_level()
 	_effective_global_level = _compute_effective_global_level()
+	
+	if _test_buffering_enabled:
+		_effective_min_level = Level.TRACE
+		_effective_global_level = Level.TRACE
 
 
 static func _compute_effective_global_level() -> int:
@@ -208,7 +216,43 @@ static func push_settings(settings: NetwLogSettings) -> void:
 static func scoped(logl_str: String) -> NetwLogScope:
 	var settings := parse_logl(logl_str)
 	push_settings(settings)
+	if _test_buffering_enabled and not _test_logs_flushed:
+		_test_logs_flushed = true
+		_test_log_settings = settings
+		for entry in _test_log_buffer:
+			if entry.level >= get_effective_level(entry.module):
+				if entry.get("is_callable", false):
+					entry.msg.call()
+				else:
+					_print_direct(
+						entry.prefix,
+						entry.msg,
+						entry.args,
+						entry.level,
+						entry.module,
+						entry.site,
+						entry.link_call
+					)
+		_test_log_buffer.clear()
 	return NetwLogScope.new(settings)
+
+
+static func start_test_case_buffering() -> void:
+	_test_buffering_enabled = true
+	_test_log_buffer.clear()
+	_test_log_settings = null
+	_test_logs_flushed = (current_level != Level.NONE)
+	_recompute_min_level()
+
+
+static func stop_test_case_buffering() -> void:
+	if _test_log_settings:
+		_close_scope(_test_log_settings)
+		_test_log_settings = null
+	_test_buffering_enabled = false
+	_test_logs_flushed = false
+	_test_log_buffer.clear()
+	_recompute_min_level()
 
 
 ## Marks test overrides as owned by [NetworkedTestSessionHook].
@@ -386,6 +430,10 @@ static func dump_settings() -> void:
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func trace(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
+	if _test_buffering_enabled and not _test_logs_flushed:
+		var ctx := _get_context()
+		_print("[TRACE]", msg, args, Level.TRACE, ctx.module, ctx.site)
+		return
 	if Level.TRACE < _effective_min_level:
 		return
 	if not _is_debug:
@@ -401,6 +449,10 @@ static func trace(msg: Variant, args: Array = []) -> void:
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func debug(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
+	if _test_buffering_enabled and not _test_logs_flushed:
+		var ctx := _get_context()
+		_print("[DEBUG]", msg, args, Level.DEBUG, ctx.module, ctx.site)
+		return
 	if Level.DEBUG < _effective_min_level:
 		return
 	if not _is_debug:
@@ -416,6 +468,10 @@ static func debug(msg: Variant, args: Array = []) -> void:
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func info(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
+	if _test_buffering_enabled and not _test_logs_flushed:
+		var ctx := _get_context()
+		_print("[INFO]", msg, args, Level.INFO, ctx.module, ctx.site)
+		return
 	if Level.INFO < _effective_min_level:
 		return
 	if not _is_debug:
@@ -440,6 +496,22 @@ static func warn(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
 	_ensure_initialized()
+	if _test_buffering_enabled and not _test_logs_flushed:
+		var ctx := _get_context()
+		if typeof(msg) == TYPE_CALLABLE:
+			_test_log_buffer.append({
+				"prefix": "[WARN]",
+				"msg": msg,
+				"args": args,
+				"level": Level.WARN,
+				"module": ctx.module,
+				"site": ctx.site,
+				"link_call": link_call,
+				"is_callable": true
+			})
+		else:
+			_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site, link_call)
+		return
 	if Level.WARN < _effective_min_level:
 		return
 	if not _is_debug:
@@ -468,6 +540,24 @@ static func error(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()
 ) -> void:
 	_ensure_initialized()
+	if _test_buffering_enabled and not _test_logs_flushed:
+		var ctx := _get_context()
+		if typeof(msg) == TYPE_CALLABLE:
+			_test_log_buffer.append({
+				"prefix": "[ERROR]",
+				"msg": msg,
+				"args": args,
+				"level": Level.ERROR,
+				"module": ctx.module,
+				"site": ctx.site,
+				"link_call": link_call,
+				"is_callable": true
+			})
+		else:
+			_print(
+				"[ERROR]", msg, args, Level.ERROR, ctx.module, ctx.site, link_call
+			)
+		return
 	if Level.ERROR < _effective_min_level:
 		return
 	if not _is_debug:
@@ -526,6 +616,34 @@ static func _detect_test_log_override() -> String:
 
 
 static func _print(
+	prefix: String, 
+	msg: Variant, 
+	args: Array, 
+	level: int, 
+	module: String, 
+	site: String, 
+	link_call: Callable = Callable()
+) -> void:
+	if _test_buffering_enabled and not _test_logs_flushed:
+		_test_log_buffer.append({
+			"prefix": prefix,
+			"msg": msg,
+			"args": args,
+			"level": level,
+			"module": module,
+			"site": site,
+			"link_call": link_call
+		})
+		return
+	
+	if _test_buffering_enabled and _test_logs_flushed:
+		if level < get_effective_level(module):
+			return
+	
+	_print_direct(prefix, msg, args, level, module, site, link_call)
+
+
+static func _print_direct(
 	prefix: String, 
 	msg: Variant, 
 	args: Array, 

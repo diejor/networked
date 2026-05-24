@@ -16,8 +16,8 @@ extends MultiplayerSpawner
 ##
 ## [b]Spawned scenes are not visible to peers until admitted.[/b]
 ## Even after the server activates a scene, the wrapper's
-## [SceneSynchronizer] gates spawn-replication per peer. A peer only
-## receives the scene after [method SceneSynchronizer.connect_peer] is
+## [InterestGate] gates spawn-replication per peer. A peer only
+## receives the scene after [method MultiplayerScene.connect_peer] is
 ## called for it (typically transitively via [method MultiplayerScene.register_player]).
 ## See [MultiplayerScene] for the full invariant.
 ## [codeblock]
@@ -37,6 +37,9 @@ signal startup_scenes_spawned()
 
 ## Emitted when a new [Scene] has been instantiated and entered the tree.
 signal scene_spawned(scene: MultiplayerScene)
+
+## Emitted when an active scene's level is set to process normally.
+signal scene_activated(scene: MultiplayerScene)
 
 ## Emitted when a [Scene] is removed from the tree.
 signal scene_despawned(scene: MultiplayerScene)
@@ -160,6 +163,28 @@ func _get(property: StringName) -> Variant:
 	return _scene_configs[level_name].get(key, null)
 
 
+## Sets the [enum LoadMode] and [enum EmptyAction] policy for
+## [param scene_name] programmatically, equivalent to configuring the
+## scene through the inspector's [code]scene_config/...[/code] section.
+##
+## [param scene_name] is the basename of the registered scene file (e.g.
+## [code]&"Level1"[/code] for [code]res://levels/Level1.tscn[/code]).
+##
+## Useful for runtime policy changes (e.g. bomber/daily switching from
+## [constant LoadMode.ON_STARTUP] to [constant LoadMode.ON_DEMAND] for
+## post-match scenes) and for tests configuring lifecycle without
+## reaching into [code]_set("scene_config/...", ...)[/code].
+func set_scene_lifecycle_policy(
+	scene_name: StringName,
+	load_mode: LoadMode,
+	empty_action: EmptyAction,
+) -> void:
+	_scene_configs[scene_name] = {
+		"load_mode": load_mode,
+		"empty_action": empty_action,
+	}
+
+
 func _has_spawnable_scene_path(target_path: String) -> bool:
 	for i in get_spawnable_scene_count():
 		if get_spawnable_scene(i) == target_path:
@@ -275,6 +300,7 @@ func activate_scene(name: StringName) -> void:
 	
 	scene.level.process_mode = Node.PROCESS_MODE_INHERIT
 	Netw.dbg.info("Scene '%s' activated.", [name])
+	scene_activated.emit(scene)
 
 
 ## Sets the scene level's process mode to DISABLED.
@@ -421,7 +447,7 @@ func _resolve_hydrated_spawn_scene(
 
 func _apply_empty_action_if_needed(name: StringName) -> void:
 	var scene := active_scenes.get(name) as MultiplayerScene
-	if not scene or not scene.synchronizer.connected_peers.is_empty():
+	if not scene or not scene.connected_peers.is_empty():
 		return
 	var config := _get_config(name)
 	match config["empty_action"]:
@@ -438,7 +464,7 @@ func _on_scene_spawned(node: Node) -> void:
 	Netw.dbg.info("Scene spawned: %s", [scene.level.name])
 	active_scenes[scene.level.name] = scene
 	if multiplayer.is_server():
-		scene.player_despawned.connect(
+		scene.despawned.connect(
 			_on_player_left_scene.bind(StringName(scene.level.name)))
 		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
 

@@ -62,6 +62,25 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	assert_that(spawner.peer_id).is_equal(42)
 
 
+func test_netw_entity_is_template_is_false_without_spawner() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	var entity := NetwEntity.of(root)
+	
+	assert_that(entity.is_template).is_false()
+
+
+func test_netw_entity_is_template_forwards_from_spawner() -> void:
+	var root: Node2D = auto_free(Node2D.new())
+	var spawner := SpawnerComponent.new()
+	root.add_child(spawner)
+	spawner.owner = root
+	
+	var entity := NetwEntity.of(root)
+	entity.set_spawner(spawner)
+	
+	assert_that(entity.is_template).is_true()
+
+
 func test_add_spawn_property_adds_with_spawn_only_flags() -> void:
 	var spawner: SpawnerComponent = auto_free(SpawnerComponent.new())
 	var path := NodePath(":position")

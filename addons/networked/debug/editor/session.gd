@@ -312,6 +312,8 @@ func _on_session_unregistered(envelope: NetEnvelope, is_remote: bool = false) ->
 	peer_status_changed.emit(pk, false)
 	
 	if is_remote and plugin:
+		if not plugin.is_game_session_active(session_id):
+			return
 		plugin.send_to_game(session_id, "networked:remote_session_unregistered",
 				[envelope.to_dict()])
 
@@ -330,6 +332,8 @@ func _on_peer_event(envelope: NetEnvelope, connected: bool) -> void:
 
 func _on_clock_sample(envelope: NetEnvelope, is_remote: bool = false) -> void:
 	if is_remote and plugin:
+		if not plugin.is_game_session_active(session_id):
+			return
 		# Forward the remote clock sample back to the game process associated
 		# with this session. This allows the game process to register a
 		# Performance monitor for the remote peer.

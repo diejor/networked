@@ -29,9 +29,9 @@
 -    print_error(f'{state.current_class}.xml: Unresolved enum "{t}".', state)
 -
 -    return t
-+    # Fallback for Godot engine enums: link to external docs.
-+    # Downgrade error to warning for standalone addon builds.
-+    print_warning(f'{state.current_class}.xml: Unresolved enum "{t}". Linking to Godot docs.', state)
++    # Fallback for Godot engine enums: link to external docs silently.
++    # External resolution is the expected outcome for any enum outside the
++    # local addon XML set, so no warning is emitted.
 +    slug = sanitize_class_name(c).lower()
 +    return godot_external_link(t, c, fragment=f"enum_{slug}_{e}")
  

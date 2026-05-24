@@ -9,7 +9,7 @@ extends BackendPeer
 ## TCP port the server listens on.
 @export var port: int = 21253
 ## Hostname used for WSS connections when no explicit address is supplied.
-@export var public_host: String = "ws.diejor.tech"
+@export var public_host: String
 
 
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
@@ -42,6 +42,34 @@ func create_join_peer(
 	return peer
 
 
+## Synchronous bind-test on the configured port. If the port is already
+## bound, a server is presumed to be listening and the probe reports
+## reachable. Falls back to a brief TCP connect attempt for remote URLs.
+func probe(address: String, timeout: float = 0.2) -> ProbeResult:
+	if _is_local_address(address):
+		var probe_server := TCPServer.new()
+		var err := probe_server.listen(port)
+		if err == ERR_ALREADY_IN_USE:
+			return ProbeResult.reachable(0, { "via": "bind-test" })
+		if err != OK:
+			return ProbeResult.error(error_string(err))
+		probe_server.stop()
+		return ProbeResult.unreachable({ "via": "bind-test" })
+
+	return ProbeResult.unsupported()
+
+
+func get_address_hint() -> AddressHint:
+	var hint := AddressHint.make(
+		"Server URL",
+		"ws://localhost:%d" % port,
+		"Empty -> wss://%s. Use localhost or ws[s]:// URLs." % public_host,
+		true,
+		true
+	)
+	return hint
+
+
 ## Builds the WebSocket URL from [param server_address].
 ##
 ## Empty address maps to [code]wss://[member public_host][/code]; localhost
@@ -55,6 +83,17 @@ func build_url(server_address: String) -> String:
 		return "ws://localhost:" + str(port)
 
 	return "wss://" + server_address
+
+
+func _is_local_address(address: String) -> bool:
+	return (address.is_empty()
+		or address == "localhost"
+		or address == "127.0.0.1"
+		or address == "ws://localhost"
+		or address == "ws://127.0.0.1"
+		or address.begins_with("ws://localhost:")
+		or address.begins_with("ws://127.0.0.1:"))
+
 
 func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []

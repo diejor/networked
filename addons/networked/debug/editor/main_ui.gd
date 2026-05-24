@@ -53,6 +53,10 @@ var _dot_unknown: ImageTexture
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
+## Set while applying a pin sync from the plugin so item_collapsed doesn't
+## echo back into [method NetworkedDebuggerPlugin.set_peer_pinned].
+var _syncing_pin: bool = false
+
 
 func _ready() -> void:
 	custom_minimum_size.y = 250
@@ -111,7 +115,7 @@ func _apply_theme_styles() -> void:
 	_is_applying_theme = false
 
 
-# ─── Layout construction ──────────────────────────────────────────────────────
+# Layout construction
 
 func _build_layout() -> void:
 	_split = HSplitContainer.new()
@@ -128,6 +132,7 @@ func _build_layout() -> void:
 	_peer_tree.set_column_expand(0, true)
 	_peer_tree.item_edited.connect(_on_peer_tree_item_edited)
 	_peer_tree.button_clicked.connect(_on_peer_tree_button_clicked)
+	_peer_tree.item_collapsed.connect(_on_peer_tree_item_collapsed)
 	# Ensure root exists.
 	_peer_tree.create_item()
 	_split.add_child(_peer_tree)
@@ -152,7 +157,7 @@ func _build_layout() -> void:
 	_scroll.add_child(_grid)
 
 
-# ─── Session signal handlers ──────────────────────────────────────────────────
+# Session signal handlers
 
 func _on_peer_registered(
 	peer_key: String,
@@ -170,7 +175,7 @@ func _on_peer_registered(
 		_peer_tree.create_item()
 
 	var peer_item := _peer_tree.create_item(_peer_tree.get_root())
-	peer_item.set_metadata(0, {"is_remote": is_remote})
+	peer_item.set_metadata(0, {"is_remote": is_remote, "peer_key": peer_key})
 
 	peer_item.set_custom_color(0, color)
 
@@ -197,7 +202,16 @@ func _on_peer_registered(
 
 	_update_peer_display_name(peer_key, tree_name, display_name, is_server)
 
-	peer_item.set_collapsed(false)
+	# Default collapsed (unpinned). If the plugin has a prior pin decision for
+	# this peer (e.g. game restart, or UI created after a toggle), honor it.
+	# Guard so set_collapsed doesn't echo back into set_peer_pinned.
+	var already_pinned: bool = false
+	var plugin: NetworkedDebuggerPlugin = session.plugin if session else null
+	if plugin:
+		already_pinned = plugin.is_peer_pinned(peer_key)
+	_syncing_pin = true
+	peer_item.set_collapsed(not already_pinned)
+	_syncing_pin = false
 
 
 func _on_peer_identity_changed(peer_key: String, username: String) -> void:
@@ -412,7 +426,7 @@ func _add_panel_checkbox(
 	_checkbox_items[key] = child
 
 
-# ─── Checkbox toggle ──────────────────────────────────────────────────────────
+# Checkbox toggle
 
 func _on_peer_tree_item_edited() -> void:
 	var item: TreeItem = _peer_tree.get_edited()
@@ -432,6 +446,38 @@ func _on_peer_tree_item_edited() -> void:
 	else:
 		_deactivate_panel(key)
 	_rebuild_grid()
+
+
+## Fired when any tree item collapses/expands. Filters for peer-root items
+## (those carry [code]peer_key[/code] metadata) and forwards the new state to
+## the plugin as a pin request.
+func _on_peer_tree_item_collapsed(item: TreeItem) -> void:
+	if _syncing_pin or not item or not session or not session.plugin:
+		return
+	var meta: Variant = item.get_metadata(0)
+	if not meta is Dictionary:
+		return
+	var m: Dictionary = meta as Dictionary
+	var pk: String = m.get("peer_key", "")
+	if pk.is_empty():
+		return
+	var expanded: bool = not item.collapsed
+	(session.plugin as NetworkedDebuggerPlugin).set_peer_pinned(
+		pk, expanded, session.session_id
+	)
+
+
+## Applies a pin state from the plugin without re-emitting the signal back.
+func sync_peer_expanded(peer_key: String, expanded: bool) -> void:
+	if peer_key not in _peer_tree_items:
+		return
+	var item: TreeItem = _peer_tree_items[peer_key]
+	var desired_collapsed: bool = not expanded
+	if item.collapsed == desired_collapsed:
+		return
+	_syncing_pin = true
+	item.set_collapsed(desired_collapsed)
+	_syncing_pin = false
 
 
 func _on_peer_tree_button_clicked(
@@ -457,7 +503,7 @@ func _on_peer_tree_button_clicked(
 			var peers: Dictionary = session.get_peers()
 			var peer_info: Dictionary = peers.get(pk, {})
 			var peer_display: String = peer_info.get("display_name", pk)
-			var title_str := "%s · %s" % [peer_display, panel_display]
+			var title_str := "%s - %s" % [peer_display, panel_display]
 			_show_status_detail(title_str, level, summary)
 
 
@@ -479,7 +525,7 @@ func _show_status_detail(
 	var bullet_text := ""
 	var lines := summary.split("|")
 	for line in lines:
-		bullet_text += "[color=gray]•[/color] " + line.strip_edges() + "\n"
+		bullet_text += "[color=gray]*[/color] " + line.strip_edges() + "\n"
 
 	rtl.text = bullet_text
 	dialog.add_child(rtl)
@@ -521,7 +567,7 @@ func _activate_panel(
 
 	var panel: Control = _create_panel_control(pt, peer_key)
 	var panel_display: String = PanelDataAdapter.PANEL_DISPLAY_NAMES[pt]
-	var title_str: String = "%s · %s" % [peer_display, panel_display]
+	var title_str: String = "%s - %s" % [peer_display, panel_display]
 
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
 	_dbg.trace(
@@ -556,7 +602,7 @@ func _deactivate_panel(key: String) -> void:
 		_maximized_key = ""
 
 
-# ─── Grid layout ─────────────────────────────────────────────────────────────
+# Grid layout
 
 func _rebuild_grid() -> void:
 	# Remove all grid children without freeing them.
@@ -610,7 +656,7 @@ func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
 				_on_adapter_data_changed(key)
 
 
-# ─── Maximize / restore ───────────────────────────────────────────────────────
+# Maximize / restore
 
 func _on_maximize_requested(key: String) -> void:
 	if _maximized_key == key:
@@ -620,7 +666,7 @@ func _on_maximize_requested(key: String) -> void:
 	_rebuild_grid()
 
 
-# ─── Panel factory ────────────────────────────────────────────────────────────
+# Panel factory
 
 func _create_panel_control(
 	pt: PanelDataAdapter.PanelType,
@@ -700,7 +746,7 @@ func _create_panel_control(
 	return Control.new()
 
 
-# ─── Breakpoint forwarding ────────────────────────────────────────────────────
+# Breakpoint forwarding
 
 ## Called by [NetworkedDebuggerPlugin._breakpoint_set_in_tree].
 func on_breakpoint_changed(source: String, line: int, enabled: bool) -> void:
@@ -732,7 +778,7 @@ func on_breakpoints_cleared() -> void:
 			panel.sync_breakpoints_cleared()
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
+# Helpers
 
 static func _make_dot_texture(color: Color) -> ImageTexture:
 	var img := Image.create(10, 10, false, Image.FORMAT_RGBA8)

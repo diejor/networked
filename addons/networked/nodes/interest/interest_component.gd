@@ -1,27 +1,44 @@
-## Declares which interest layers an entity participates in.
+## Declares extra [NetwInterestLayer] memberships for an entity.
 ##
-## Sibling component placed under a [NetwEntity] root. Mirrors the
-## [SaveComponent] / [SpawnerComponent] pattern: contributes its
-## [member layer_ids] property to the spawner's spawn packet so the
-## value lands on the client before the entity enters its tree, then
-## registers the entity with the matching [InterestSynchronizer]
-## anchors through [NetwInterest].
+## Scene membership is owned by [MultiplayerScene]; this component adds
+## optional layers such as teams, sight cones, proximity buckets, or
+## stealth zones. [member layer_ids] is spawn-synced so client tools can
+## read the labels, but entity membership and visibility decisions stay
+## server-owned.
 ##
+## [br][br]
+## Add this as a sibling under the entity root. Mutating
+## [member layer_ids] while the node is in the tree updates server-side
+## layer membership immediately. Set [member report_observers] only when
+## the owner client needs to know which other peers can see this entity.
 ## [codeblock]
-##     # In the entity scene:
-##     %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
-## [/codeblock]
+## # Server: this entity participates in two extra layers.
+## %InterestComponent.layer_ids = [&"arena:1", &"team:blue"]
 ##
-## Membership transports as part of the entity's own spawn-sync; no
-## NodePaths or RPC mirroring on the wire.
+## # Owner client: react when other peers observe this entity.
+## %InterestComponent.report_observers = true
+## %InterestComponent.observer_entered.connect(func(layer_id, peer_id):
+##     show_seen_by(peer_id)
+## )
+## [/codeblock]
 class_name InterestComponent
 extends Node
 
 
-## Stable layer ids this entity belongs to. Resolved against
-## [member NetwInterest._anchors] at tree-enter. Mutating after
-## tree-enter is supported on the server; the new set replaces the
-## previous registration on the next driver pass.
+## Emitted on the owner client when [param peer_id] starts observing
+## this entity through [param layer_id].
+signal observer_entered(layer_id: StringName, peer_id: int)
+
+## Emitted on the owner client when [param peer_id] stops observing
+## this entity through [param layer_id].
+signal observer_left(layer_id: StringName, peer_id: int)
+
+
+## Stable extra layer ids this entity belongs to.
+##
+## The server registers the entity with these layers. Clients receive
+## the value for local UI/debugging only; client-side layer entity sets
+## remain empty.
 @export var layer_ids: Array[StringName] = []:
 	set(value):
 		var prev := layer_ids.duplicate()
@@ -29,10 +46,24 @@ extends Node
 		if is_inside_tree():
 			_apply_layer_diff(prev, layer_ids)
 
+## Enables owner-client observer transitions for this entity.
+##
+## This answers "who can see me?" Client code asking "what can I see?"
+## should connect to [signal NetwInterestLayer.entity_visible] instead.
+@export var report_observers: bool = false
+
 
 func _init() -> void:
 	name = "InterestComponent"
 	unique_name_in_owner = true
+
+
+## Returns the [InterestComponent] sibling under [param entity]'s root.
+static func of(entity: NetwEntity) -> InterestComponent:
+	if entity == null or not is_instance_valid(entity.owner):
+		return null
+	return entity.owner.get_node_or_null(^"%InterestComponent") \
+			as InterestComponent
 
 
 func _notification(what: int) -> void:
@@ -43,11 +74,14 @@ func _notification(what: int) -> void:
 	var entity := Netw.ctx(self).entity
 	if not entity:
 		return
-	entity.contribute_spawn_property(NodePath("InterestComponent:layer_ids"))
+	entity.contribute_spawn_property(self, &"layer_ids")
 
 
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
+		return
+	_bind_observer_signals()
+	if not _is_server():
 		return
 	for id in layer_ids:
 		_register_for(id)
@@ -56,20 +90,59 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	_unbind_observer_signals()
+	if not _is_server():
+		return
 	for id in layer_ids:
 		_unregister_for(id)
 
 
-func _register_for(layer_id: StringName) -> void:
-	if layer_id.is_empty():
+func _bind_observer_signals() -> void:
+	var entity := _resolve_entity()
+	if not entity:
 		return
+	if not entity.observer_entered.is_connected(_on_entity_observer_entered):
+		entity.observer_entered.connect(_on_entity_observer_entered)
+	if not entity.observer_left.is_connected(_on_entity_observer_left):
+		entity.observer_left.connect(_on_entity_observer_left)
+
+
+func _unbind_observer_signals() -> void:
+	var entity := _resolve_entity()
+	if not entity:
+		return
+	if entity.observer_entered.is_connected(_on_entity_observer_entered):
+		entity.observer_entered.disconnect(_on_entity_observer_entered)
+	if entity.observer_left.is_connected(_on_entity_observer_left):
+		entity.observer_left.disconnect(_on_entity_observer_left)
+
+
+func _on_entity_observer_entered(layer_id: StringName, peer_id: int) -> void:
+	observer_entered.emit(layer_id, peer_id)
+
+
+func _on_entity_observer_left(layer_id: StringName, peer_id: int) -> void:
+	observer_left.emit(layer_id, peer_id)
+
+
+func _is_server() -> bool:
+	if not is_inside_tree():
+		return true
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return true
+	return multiplayer.is_server()
+
+
+func _register_for(layer_id: StringName) -> void:
+	assert(not layer_id.is_empty(),
+			"InterestComponent: empty layer_id in layer_ids")
 	var entity := _resolve_entity()
 	if not entity:
 		return
 	var interest := _resolve_interest()
 	if not interest:
 		return
-	interest.register_entity_for_layer(layer_id, entity)
+	interest.layer(layer_id).add_entity(entity)
 
 
 func _unregister_for(layer_id: StringName) -> void:
@@ -81,7 +154,9 @@ func _unregister_for(layer_id: StringName) -> void:
 	var interest := _resolve_interest()
 	if not interest:
 		return
-	interest.unregister_entity_from_layer(layer_id, entity)
+	var layer := interest.get_layer(layer_id)
+	if layer:
+		layer.remove_entity(entity)
 
 
 func _apply_layer_diff(
@@ -95,9 +170,7 @@ func _apply_layer_diff(
 
 
 func _resolve_entity() -> NetwEntity:
-	# Walks from self via [method NetwEntity.of] so the resolution
-	# works whether or not [member Node.owner] has been assigned
-	# (packed-scene placement sets it; programmatic add_child does not).
+	# Works for packed-scene placement and programmatic add_child.
 	return NetwEntity.of(self)
 
 

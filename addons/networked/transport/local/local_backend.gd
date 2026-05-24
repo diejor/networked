@@ -42,6 +42,25 @@ func poll(_dt: float) -> void:
 		session.poll()
 
 
+func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
+	var s := session if session else LocalLoopbackSession.get_shared_session()
+	if s.has_live_server():
+		return ProbeResult.reachable(0, { "via": "in-process" })
+	return ProbeResult.unreachable()
+
+
+func get_address_hint() -> AddressHint:
+	var hint := AddressHint.make(
+		"",
+		"",
+		"In-process loopback. No address required.",
+		true,
+		true
+	)
+	hint.hides_address_field = true
+	return hint
+
+
 func _copy_from(source: BackendPeer) -> void:
 	session = (source as LocalLoopbackBackend).session
 

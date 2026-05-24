@@ -1,8 +1,0 @@
-[gd_scene format=3 uid="uid://bqw5lpbqkrgff"]
-
-[ext_resource type="Script" uid="uid://c0xlvld8td501" path="res://addons/networked/session/multiplayer_scene/scene_synchronizer.gd" id="1_bcbo6"]
-
-[node name="SceneSynchronizer" type="MultiplayerSynchronizer" unique_id=277649023]
-root_path = NodePath(".")
-public_visibility = false
-script = ExtResource("1_bcbo6")

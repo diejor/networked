@@ -10,6 +10,52 @@ class_name BackendPeer
 extends Resource
 
 
+
+@export_group("Lag Simulation")
+## If true, simulates network latency and packet loss using [LaggyMultiplayerPeer].
+@export var simulate_lag: bool = false
+## Minimum packet delay (latency) in seconds.
+@export_range(0.0, 1.0, 0.001, "or_greater", "suffix:s") var lag_min_delay: float = 0.1
+## Maximum packet delay (latency) in seconds.
+@export_range(0.0, 1.0, 0.001, "or_greater", "suffix:s") var lag_max_delay: float = 0.1
+## Packet loss ratio (0.0 to 1.0).
+@export_range(0.0, 1.0, 0.01) var lag_packet_loss: float = 0.0
+
+
+## Automatically decorates the [param base_peer] with [code]LaggyMultiplayerPeer[/code] if enabled.
+##
+## This uses dynamic reflection to avoid direct script dependencies on the GDExtension, 
+## meaning it is safe to use in projects that don't have the GDExtension loaded.
+func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
+	if not base_peer:
+		return null
+	if not simulate_lag:
+		return base_peer
+	
+	if not ClassDB.class_exists(&"LaggyMultiplayerPeer"):
+		Netw.dbg.warn(
+			"Lag simulation is enabled but GDExtension 'LaggyMultiplayerPeer' is not present in ClassDB.",
+			func(m): push_warning(m)
+		)
+		return base_peer
+	
+	Netw.dbg.info("Wrapping peer in LaggyMultiplayerPeer (delay: %.1f-%.1f ms, packet loss: %d%%)", [
+		lag_min_delay * 1000.0,
+		lag_max_delay * 1000.0,
+		int(lag_packet_loss * 100.0)
+	])
+	
+	var laggy_instance: Object = ClassDB.instantiate(&"LaggyMultiplayerPeer")
+	var wrapped_peer: MultiplayerPeer = laggy_instance.call(&"create", base_peer)
+	if wrapped_peer:
+		wrapped_peer.set(&"delay_minimum", lag_min_delay)
+		wrapped_peer.set(&"delay_maximum", lag_max_delay)
+		wrapped_peer.set(&"packet_loss", lag_packet_loss)
+		return wrapped_peer
+	
+	return base_peer
+
+
 ## Optional one-time setup hook called by [MultiplayerTree] before
 ## [method create_host_peer] or [method create_join_peer]. Use it to resolve
 ## scene-relative nodes or external services. Return [code]OK[/code] on success.
@@ -71,14 +117,29 @@ func supports_embedded_server() -> bool:
 	return true
 
 
-## Returns [code]true[/code] if [method MultiplayerTree.connect_player] can
-## probe an existing local session through [code]"localhost"[/code].
+## Probes [param address] for a live local session without allocating a
+## [MultiplayerPeer] or producing side-effects.
 ##
-## Backends with session-id or lobby based joins should return
-## [code]false[/code] even when [method supports_embedded_server] is
-## [code]true[/code].
-func supports_local_probe() -> bool:
-	return supports_embedded_server()
+## Default implementation returns [method ProbeResult.unsupported].
+## Override in subclasses where a cheap, synchronous-ish reachability check
+## is meaningful (typically a [code]TCPServer.listen[/code] /
+## [code]PacketPeerUDP.bind[/code] bind-test on the configured port).
+## [br][br]
+## [param timeout] is a hint in seconds; backends may probe faster.
+func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
+	return ProbeResult.unsupported()
+
+
+## Returns UI metadata describing the address string this backend expects.
+##
+## Used by generic connect dialogs to render appropriate labels,
+## placeholders, and probe affordances. Default returns a generic
+## [AddressHint].
+func get_address_hint() -> AddressHint:
+	var hint := AddressHint.new()
+	hint.label = "Address"
+	hint.accepts_empty = true
+	return hint
 
 
 ## Called after this backend is duplicated by [MultiplayerTree]'s backend setter.

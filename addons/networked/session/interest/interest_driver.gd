@@ -1,4 +1,4 @@
-## Pure transition computer for [InterestSynchronizer].
+## Pure transition computer for [NetwInterestLayer].
 ##
 ## Holds the per-(entity, peer) verdict cache. [method compute] takes
 ## the current entity set, peer list, and policy state, returns the
@@ -15,12 +15,21 @@
 ## [codeblock]
 ##     var driver := InterestDriver.new()
 ##     var result := driver.compute(entities, peers, kind, viewers)
-##     binding.apply(result.sync_hides, result.sync_shows)
 ##     emit_transitions(result.hide_transitions, result.show_transitions)
 ##     driver.commit(result)
 ## [/codeblock]
 class_name InterestDriver
 extends RefCounted
+
+
+## One per-(entity, peer) visibility change emitted by [method compute].
+class Transition:
+	extends RefCounted
+	var entity: NetwEntity
+	var peer: int
+	func _init(e: NetwEntity = null, p: int = 0) -> void:
+		entity = e
+		peer = p
 
 
 ## Output of one [method compute] pass. Transitions are sorted so the
@@ -30,14 +39,9 @@ extends RefCounted
 class Result:
 	extends RefCounted
 	## Per-(entity, peer) hide transitions, deep-first.
-	var hide_transitions: Array = []
+	var hide_transitions: Array[Transition] = []
 	## Per-(entity, peer) show transitions, shallow-first.
-	var show_transitions: Array = []
-	## Per-(sync, peer) hide tuples for [method
-	## MultiplayerSynchronizer.update_visibility], deep-first.
-	var sync_hides: Array = []
-	## Per-(sync, peer) show tuples, shallow-first.
-	var sync_shows: Array = []
+	var show_transitions: Array[Transition] = []
 	## Full new visibility state: [code]{entity: {peer: bool}}[/code].
 	var new_state: Dictionary = {}
 
@@ -53,9 +57,7 @@ func cached_verdict(entity: NetwEntity, peer_id: int) -> bool:
 
 
 ## Returns every peer currently cached as visible for [param entity].
-## Used by [method InterestSynchronizer.remove_entity] to emit
-## [signal InterestSynchronizer.interest_exit] before the entity goes
-## away.
+## Used to emit exit transitions before the entity leaves its layer.
 func cached_view_for(entity: NetwEntity) -> Dictionary:
 	return _state.get(entity, {}).duplicate()
 
@@ -69,8 +71,7 @@ func forget(entity: NetwEntity) -> Dictionary:
 
 
 ## Returns the peer ids the driver has ever cached a verdict for.
-## Used by [method InterestSynchronizer._live_peers] to drive
-## hide-transitions for peers removed from the viewer set.
+## Used to drive hide transitions for peers removed from the viewer set.
 func cached_peers() -> Array[int]:
 	var seen: Dictionary[int, bool] = {}
 	for entity in _state:
@@ -89,49 +90,49 @@ func cached_peers() -> Array[int]:
 func compute(
 		entities: Dictionary,
 		peers: Array[int],
-		kind: int,
+		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary) -> Result:
 	var result := Result.new()
+	# Policy verdict depends only on (kind, viewers, peer), not on the
+	# entity. Compute it once per peer and reuse across the layer.
+	var verdict_by_peer: Dictionary = {}
+	for peer: int in peers:
+		verdict_by_peer[peer] = InterestPolicy.verdict(kind, viewers, peer)
 	for entity: NetwEntity in entities:
 		if not is_instance_valid(entity) \
 				or not is_instance_valid(entity.owner):
 			continue
-		_compute_entity(entity, peers, kind, viewers, result)
-	result.sync_hides.sort_custom(_sync_deeper_first)
-	result.sync_shows.sort_custom(_sync_shallower_first)
-	result.hide_transitions.sort_custom(_entity_deeper_first)
-	result.show_transitions.sort_custom(_entity_shallower_first)
+		_compute_entity(entity, verdict_by_peer, result)
+	result.hide_transitions.sort_custom(_transition_deeper_first)
+	result.show_transitions.sort_custom(_transition_shallower_first)
 	return result
 
 
 func _compute_entity(
 		entity: NetwEntity,
-		peers: Array[int],
-		kind: int,
-		viewers: Dictionary,
+		verdict_by_peer: Dictionary,
 		result: Result) -> void:
+	# Off-tree owners and syncs cannot be ordered by [method
+	# Node.get_path] (which the comparators call), and an off-tree
+	# sync cannot be the target of [method
+	# MultiplayerSynchronizer.update_visibility] anyway. Skip both so
+	# the binding-apply phase only sees nodes the engine can act on.
+	if not entity.owner.is_inside_tree():
+		return
 	var prev: Dictionary = _state.get(entity, {})
 	var per_entity: Dictionary = {}
 	result.new_state[entity] = per_entity
-	for peer: int in peers:
-		var now := InterestPolicy.verdict(kind, viewers, peer)
+	for peer: int in verdict_by_peer:
+		var now: bool = verdict_by_peer[peer]
 		per_entity[peer] = now
 		var was: bool = prev.get(peer, false)
 		if was == now:
 			continue
-		var transition := [entity, peer]
+		var transition := Transition.new(entity, peer)
 		if now:
 			result.show_transitions.append(transition)
 		else:
 			result.hide_transitions.append(transition)
-		for sync in entity.synchronizers():
-			if not is_instance_valid(sync):
-				continue
-			var tup := [sync, peer]
-			if now:
-				result.sync_shows.append(tup)
-			else:
-				result.sync_hides.append(tup)
 
 
 ## Adopts [param result.new_state] as the current cache. Call after
@@ -149,21 +150,11 @@ func dump() -> Dictionary:
 # Sort comparators. Depth is measured via Node path name count so a
 # scripted scene tree and a runtime-built tree compare consistently.
 
-func _sync_deeper_first(a: Array, b: Array) -> bool:
-	return (a[0] as Node).get_path().get_name_count() \
-			> (b[0] as Node).get_path().get_name_count()
+func _transition_deeper_first(a: Transition, b: Transition) -> bool:
+	return a.entity.owner.get_path().get_name_count() \
+			> b.entity.owner.get_path().get_name_count()
 
 
-func _sync_shallower_first(a: Array, b: Array) -> bool:
-	return (a[0] as Node).get_path().get_name_count() \
-			< (b[0] as Node).get_path().get_name_count()
-
-
-func _entity_deeper_first(a: Array, b: Array) -> bool:
-	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
-			> (b[0] as NetwEntity).owner.get_path().get_name_count()
-
-
-func _entity_shallower_first(a: Array, b: Array) -> bool:
-	return (a[0] as NetwEntity).owner.get_path().get_name_count() \
-			< (b[0] as NetwEntity).owner.get_path().get_name_count()
+func _transition_shallower_first(a: Transition, b: Transition) -> bool:
+	return a.entity.owner.get_path().get_name_count() \
+			< b.entity.owner.get_path().get_name_count()

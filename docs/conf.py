@@ -27,9 +27,14 @@ extensions = [
     "gdscript",
     "godot_xref",
     "sphinx_copybutton",
+    "sphinx_tabs.tabs",
     "notfound.extension",
     "sphinxext.opengraph",
 ]
+
+# sphinx-tabs: keep generated tab labels stable across builds and disable the
+# JS "close tab" affordance that doesn't fit a docs-reading flow.
+sphinx_tabs_disable_tab_closing = True
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

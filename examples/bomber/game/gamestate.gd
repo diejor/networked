@@ -88,25 +88,18 @@ func get_player_list() -> Array:
 	return players.values()
 
 
-## Starts the match by activating [code]World[/code].
+## Starts the match by activating [code]World[/code]; admission cascades
+## through each player's [SpawnerComponent] as bomber's spawner fires.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	_activate_world_scene()
+	var sm := ctx.services.get_scene_manager()
+	sm.activate_scene(&"World")
 	_rpc_match_started.rpc()
 
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_match_started() -> void:
 	match_started.emit()
-
-
-# Activates the bomber world.
-func _activate_world_scene() -> void:
-	var sm := ctx.services.get_scene_manager()
-	if not sm:
-		return
-	
-	sm.activate_scene(&"World")
 
 
 func end_game() -> void:

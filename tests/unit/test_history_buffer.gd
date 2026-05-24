@@ -1,104 +1,72 @@
 ## Unit tests for [HistoryBuffer].
 ##
-## Exercises record retrieval, bracketing search, and ring-buffer eviction.
+## Covers record/retrieve, bracketing search, eviction, and capacity
+## normalization. The fuzz-driven oracle tests cross-check the
+## ring-buffer's invariants against a brute-force dictionary model.
 class_name TestHistoryBuffer
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
-func test_is_empty_true_on_new_buffer() -> void:
+func test_empty_buffer_state() -> void:
 	var buf := HistoryBuffer.new(4)
 	assert_that(buf.is_empty()).is_true()
 	assert_that(buf.size()).is_equal(0)
+	assert_that(buf.oldest_tick()).is_equal(-1)
+	assert_that(buf.newest_tick()).is_equal(-1)
+	assert_that(buf.get_at(0)).is_null()
+	assert_that(buf.get_at(123)).is_null()
+	assert_that(buf.has_tick_after(0)).is_false()
 
 
-func test_is_empty_false_after_record() -> void:
+func test_record_then_get_at(
+	tick: int,
+	value: Variant,
+	test_parameters := [
+		[0, "string-value"],
+		[10, 42],
+		[20, Vector2(3.0, 4.0)],
+		[1000, {&"k": &"v"}],
+	],
+) -> void:
 	var buf := HistoryBuffer.new(4)
-	buf.record(0, "x")
+	buf.record(tick, value)
+
 	assert_that(buf.is_empty()).is_false()
 	assert_that(buf.size()).is_equal(1)
+	assert_that(buf.get_at(tick)).is_equal(value)
+	assert_that(buf.get_at(tick + 1)).is_null()
+	assert_that(buf.oldest_tick()).is_equal(tick)
+	assert_that(buf.newest_tick()).is_equal(tick)
 
 
-func test_get_at_returns_null_on_empty_buffer() -> void:
-	var buf := HistoryBuffer.new(4)
-	assert_that(buf.get_at(0)).is_null()
+func test_find_bracketing_ticks(
+	recorded: Array,
+	query: int,
+	expected_prev: int,
+	expected_next: int,
+	test_parameters := [
+		# empty buffer -> (-1, -1) regardless of query
+		[[], 10, -1, -1],
+		# exact match -> prev is the matched tick, next is following tick
+		[[10, 20], 10, 10, 20],
+		# query strictly between -> tight bracket
+		[[10, 20], 15, 10, 20],
+		# query before everything -> prev=-1
+		[[10], 5, -1, 10],
+		# query past everything -> next=-1
+		[[10], 15, 10, -1],
+		# multi-entry query inside -> tight bracket
+		[[5, 10, 20, 30], 17, 10, 20],
+	],
+) -> void:
+	var buf := HistoryBuffer.new(8)
+	for t: int in recorded:
+		buf.record(t, t)
 
-
-func test_get_at_returns_recorded_value() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "hello")
-	assert_that(buf.get_at(10)).is_equal("hello")
-
-
-func test_get_at_returns_null_for_wrong_tick() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "hello")
-	assert_that(buf.get_at(11)).is_null()
-
-
-func test_get_at_handles_variant_types() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(1, Vector2(3.0, 4.0))
-	assert_that(buf.get_at(1)).is_equal(Vector2(3.0, 4.0))
-
-
-func test_get_at_distinguishes_multiple_ticks() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(1, "a")
-	buf.record(2, "b")
-	buf.record(3, "c")
-	assert_that(buf.get_at(1)).is_equal("a")
-	assert_that(buf.get_at(2)).is_equal("b")
-	assert_that(buf.get_at(3)).is_equal("c")
-
-
-func test_find_bracketing_ticks_exact_match() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "a")
-	buf.record(20, "b")
-	
 	var out := PackedInt32Array([0, 0])
-	buf.find_bracketing_ticks(10, 0, out)
-	assert_that(out[0]).is_equal(10)
-	assert_that(out[1]).is_equal(20)
-
-
-func test_find_bracketing_ticks_between_values() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "a")
-	buf.record(20, "b")
-	
-	var out := PackedInt32Array([0, 0])
-	buf.find_bracketing_ticks(15, 0, out)
-	assert_that(out[0]).is_equal(10)
-	assert_that(out[1]).is_equal(20)
-
-
-func test_find_bracketing_ticks_before_all() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "a")
-	
-	var out := PackedInt32Array([0, 0])
-	buf.find_bracketing_ticks(5, 0, out)
-	assert_that(out[0]).is_equal(-1)
-	assert_that(out[1]).is_equal(10)
-
-
-func test_find_bracketing_ticks_after_all() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(10, "a")
-	
-	var out := PackedInt32Array([0, 0])
-	buf.find_bracketing_ticks(15, 0, out)
-	assert_that(out[0]).is_equal(10)
-	assert_that(out[1]).is_equal(-1)
-
-
-func test_find_bracketing_ticks_empty() -> void:
-	var buf := HistoryBuffer.new(4)
-	var out := PackedInt32Array([0, 0])
-	buf.find_bracketing_ticks(10, 0, out)
-	assert_that(out[0]).is_equal(-1)
-	assert_that(out[1]).is_equal(-1)
+	buf.find_bracketing_ticks(query, 0, out)
+	assert_that(out[0]).is_equal(expected_prev)
+	assert_that(out[1]).is_equal(expected_next)
 
 
 func test_has_tick_after() -> void:
@@ -109,73 +77,79 @@ func test_has_tick_after() -> void:
 	assert_that(buf.has_tick_after(15)).is_false()
 
 
-func test_oldest_tick_returns_minus_one_on_empty() -> void:
-	var buf := HistoryBuffer.new(4)
-	assert_that(buf.oldest_tick()).is_equal(-1)
-
-
-func test_oldest_tick_returns_first_recorded() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(7, "a")
-	buf.record(9, "b")
-	assert_that(buf.oldest_tick()).is_equal(7)
-
-
-func test_newest_tick_returns_minus_one_on_empty() -> void:
-	var buf := HistoryBuffer.new(4)
-	assert_that(buf.newest_tick()).is_equal(-1)
-
-
-func test_newest_tick_returns_last_recorded() -> void:
-	var buf := HistoryBuffer.new(4)
-	buf.record(3, "a")
-	buf.record(5, "b")
-	assert_that(buf.newest_tick()).is_equal(5)
-
-
-func test_capacity_is_normalized_to_power_of_two() -> void:
+func test_capacity_normalized_to_power_of_two() -> void:
+	# Requested capacity 3 -> internal capacity 4.
 	var buf := HistoryBuffer.new(3)
-	# Internal capacity should be 4
-	buf.record(1, "one")
-	buf.record(2, "two")
-	buf.record(3, "three")
-	buf.record(4, "four")
-	
+	for tick in range(1, 5):
+		buf.record(tick, "v%d" % tick)
+
 	assert_that(buf.size()).is_equal(4)
-	assert_that(buf.get_at(1)).is_equal("one")
-	
-	buf.record(5, "five") # Now it should evict tick 1
+	assert_that(buf.get_at(1)).is_equal("v1")
+
+	buf.record(5, "v5")
 	assert_that(buf.get_at(1)).is_null()
 	assert_that(buf.size()).is_equal(4)
 
 
-func test_eviction_drops_oldest_when_full() -> void:
-	var buf := HistoryBuffer.new(2) # Capacity 2 is already power of two
-	buf.record(1, "one")
-	buf.record(2, "two")
-	buf.record(3, "three")  # tick 1 is evicted
+# fuzz: record monotonic ticks with random values; cross-check the
+# ring-buffer's view against an oracle keeping the last N inserts.
+func test_fuzz_record_matches_oracle(
+	fuzzer := Fuzzers.rangei(1, 1_000_000),
+	fuzzer_iterations := 20,
+) -> void:
+	var capacity := 4
+	var insert_count := 12
+	var buf := HistoryBuffer.new(capacity)
+	var oracle: Array = []  # of [tick, value]; trimmed to last `capacity`.
 
-	assert_that(buf.get_at(1)).is_null()
-	assert_that(buf.get_at(3)).is_equal("three")
-	assert_that(buf.size()).is_equal(2)
+	var base_tick: int = fuzzer.next_value()
+	for i in insert_count:
+		var tick := base_tick + i
+		var value := "value_%d" % tick
+		buf.record(tick, value)
+		oracle.append([tick, value])
+		if oracle.size() > capacity:
+			oracle.pop_front()
+
+	assert_that(buf.size()).is_equal(oracle.size())
+	assert_that(buf.oldest_tick()).is_equal(oracle.front()[0])
+	assert_that(buf.newest_tick()).is_equal(oracle.back()[0])
+
+	for entry: Array in oracle:
+		assert_that(buf.get_at(entry[0])).is_equal(entry[1])
+
+	# Anything evicted is gone.
+	for i in oracle.front()[0] - base_tick:
+		assert_that(buf.get_at(base_tick + i)).is_null()
 
 
-func test_oldest_tick_updates_after_eviction() -> void:
-	var buf := HistoryBuffer.new(2)
-	buf.record(1, "one")
-	buf.record(2, "two")
-	buf.record(3, "three")  # evicts tick 1
+# fuzz: random bracketing queries against a randomly populated buffer;
+# cross-check against a linear-search oracle on the same tick set.
+func test_fuzz_bracketing_matches_oracle(
+	fuzzer := Fuzzers.rangei(0, 50),
+	fuzzer_iterations := 20,
+) -> void:
+	var capacity := 8
+	var buf := HistoryBuffer.new(capacity)
+	var ticks: PackedInt32Array = []
 
-	assert_that(buf.oldest_tick()).is_equal(2)
+	# Build a strictly-increasing tick sequence.
+	var t := 0
+	for i in capacity:
+		t += 1 + (fuzzer.next_value() % 5)
+		buf.record(t, t)
+		ticks.append(t)
 
+	var query: int = fuzzer.next_value()
+	var expected_prev := -1
+	var expected_next := -1
+	for stored: int in ticks:
+		if stored <= query and stored > expected_prev:
+			expected_prev = stored
+		if stored > query and (expected_next == -1 or stored < expected_next):
+			expected_next = stored
 
-func test_full_wrap_around_all_slots() -> void:
-	var cap := 4
-	var buf := HistoryBuffer.new(cap)
-	for i in cap * 2:
-		buf.record(i, i * 10)
-
-	for i in cap:
-		assert_that(buf.get_at(i)).is_null()  # evicted
-	for i in range(cap, cap * 2):
-		assert_that(buf.get_at(i)).is_equal(i * 10)
+	var out := PackedInt32Array([0, 0])
+	buf.find_bracketing_ticks(query, 0, out)
+	assert_that(out[0]).is_equal(expected_prev)
+	assert_that(out[1]).is_equal(expected_next)

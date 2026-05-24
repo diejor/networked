@@ -55,8 +55,29 @@ signal api_swapped(
 )
 
 
-enum State { OFFLINE, CONNECTING, ONLINE, DISCONNECTING }
-enum Role { NONE, CLIENT, DEDICATED_SERVER, LISTEN_SERVER }
+## Session lifecycle state for this tree.
+enum State {
+	## No active [MultiplayerPeer] is mounted.
+	OFFLINE,
+	## A host, join, or adopt operation is configuring transport.
+	CONNECTING,
+	## The tree has an active [MultiplayerPeer] and configured services.
+	ONLINE,
+	## The tree is closing the active peer and clearing session state.
+	DISCONNECTING,
+}
+
+## Runtime role this tree plays in the current session.
+enum Role {
+	## No session role has been assigned yet.
+	NONE,
+	## This tree is connected to a remote server as a client.
+	CLIENT,
+	## This tree hosts the session without acting as a local client.
+	DEDICATED_SERVER,
+	## This tree hosts the session and also represents the local player.
+	LISTEN_SERVER,
+}
 
 const ADOPT_CONNECT_TIMEOUT := 15.0
 
@@ -162,10 +183,9 @@ func _warn_if_role_unset() -> void:
 ## by backends that bring their own api (see [signal api_swapped]).
 var api: SceneMultiplayer
 
-## Visibility and interest registry for this tree. Constructed in
-## [code]_init[/code] so descendants can rely on it being present
-## from their own [code]_enter_tree[/code]. See [NetwInterest] for
-## the public API.
+## Visibility and interest facade for this tree. Constructed in
+## [code]_init[/code]; backed by an [InterestService] child ensured
+## before descendant services enter the tree.
 var interest: NetwInterest
 
 ## [b]Deprecated.[/b] Use [member api]. Kept as a compatibility alias.
@@ -262,6 +282,7 @@ var _roster: SessionRoster = SessionRoster.new()
 var _auth: AuthCoordinator
 var _services: ServiceRegistry = ServiceRegistry.new()
 var _client_join_payload: JoinPayload
+var _interest_service: InterestService
 
 
 ## Registers a [Node] as a service for this session.
@@ -399,15 +420,6 @@ func _get_configuration_warnings() -> PackedStringArray:
 			"No replication will happen."
 		)
 	
-	if use_listen_server:
-		if not find_service_node(ActiveSceneView):
-			warnings.append(
-				"use_listen_server is enabled but no ActiveSceneView was " +
-				"found as a descendant. The listen-server host will not " +
-				"be able to see the SubViewport the server-player is " +
-				"currently in."
-			)
-	
 	return warnings
 
 
@@ -416,6 +428,8 @@ func _enter_tree() -> void:
 		return
 
 	_mount_api()
+	_ensure_interest_service()
+	_ensure_host_scene_view()
 
 	for child in get_children():
 		if child is MultiplayerSceneManager:
@@ -441,6 +455,16 @@ func _enter_tree() -> void:
 			return
 
 
+func _ensure_host_scene_view() -> void:
+	if not use_listen_server:
+		return
+	if find_service_node(HostSceneView):
+		return
+	var view := HostSceneView.new()
+	view.name = &"HostSceneView"
+	add_child(view)
+
+
 static func _has_spawner_component(node: Node) -> bool:
 	if node is SpawnerComponent:
 		return true
@@ -456,6 +480,8 @@ func _init() -> void:
 	_auth.set_auth_provider(auth_provider)
 	if not Engine.is_editor_hint():
 		api = SceneMultiplayer.new()
+		_interest_service = InterestService.new()
+		_interest_service.name = &"InterestService"
 		interest = NetwInterest.new(self)
 		tree_exiting.connect(_on_exiting)
 
@@ -495,6 +521,7 @@ func host(quiet: bool = false) -> Error:
 	
 	_auth.prepare(auth_provider != null)
 	var peer: MultiplayerPeer = await backend.create_host_peer(self)
+	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 	
 	# Adopted-api backends (e.g. TubeBackend) drive their peer onto the swapped
@@ -512,7 +539,7 @@ func host(quiet: bool = false) -> Error:
 	if peer != null:
 		api.multiplayer_peer = peer
 	
-	role = Role.DEDICATED_SERVER
+	role = Role.LISTEN_SERVER if use_listen_server else Role.DEDICATED_SERVER
 	state = State.ONLINE
 	_finalize_session()
 	_auth.synthesize_host_identity()
@@ -552,6 +579,7 @@ func join(
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
+	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 	
 	if peer == null and not api_was_adopted:
@@ -623,6 +651,8 @@ func adopt_peer(
 		_auth.set_client_join_payload(join_payload)
 
 	_auth.prepare(auth_provider != null and join_payload != null)
+	if backend:
+		peer = backend.wrap_peer(peer)
 	api.multiplayer_peer = peer
 
 	var unique_id := peer.get_unique_id()
@@ -713,23 +743,24 @@ func connect_player(join_payload: JoinPayload) -> Error:
 	var err := await _prepare_session(join_payload)
 	if err != OK:
 		return err
-	
+
 	var url := join_payload.url
 	Netw.dbg.info(
 		"Connecting player %s to %s", [join_payload.username, url]
 	)
-	
+
 	if _is_local_url(url):
 		if backend.supports_embedded_server():
-			if backend.supports_local_probe():
-				var probe_url := url if not url.is_empty() else "localhost"
-				var probe_err: Error = await join(
-					probe_url, join_payload.username, 1.0, true
-				)
-				if probe_err == OK:
+			var probe_url := url if not url.is_empty() else "localhost"
+			var probe: ProbeResult = await backend.probe(probe_url, 0.2)
+			if probe.is_reachable():
+				Netw.dbg.debug("Probe found local server (%s); joining.", [probe])
+				var join_err := await join(probe_url, join_payload.username)
+				if join_err == OK:
 					submit_join(join_payload)
-					return OK
-			
+				return join_err
+
+			Netw.dbg.debug("Probe found no local server (%s); hosting.", [probe])
 			return await _host_player_logic(join_payload)
 		else:
 			# For backends that don't support embedded servers (like Steam),
@@ -741,10 +772,10 @@ func connect_player(join_payload: JoinPayload) -> Error:
 				submit_join(join_payload)
 				return OK
 			return host_err
-	
+
 	if OS.has_feature("web") and url.begins_with("ws"):
 		backend = WebSocketBackend.new()
-	
+
 	var join_err := await join(url, join_payload.username)
 	if join_err == OK:
 		submit_join(join_payload)
@@ -1030,6 +1061,11 @@ func _rpc_request_disconnect(reason: String) -> void:
 	disconnect_requested.emit(peer_id, reason)
 
 
+## Broadcasts a server-shutdown notice to all connected clients.
+func notify_shutdown(reason: String) -> void:
+	_rpc_receive_notify_disconnect.rpc(reason)
+
+
 ## Sent by the server to notify clients it is shutting down.
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_receive_notify_disconnect(reason: String) -> void:
@@ -1066,6 +1102,42 @@ func _mount_api() -> void:
 	get_tree().set_multiplayer(api, root_path)
 	api.set_meta(&"_multiplayer_tree", self)
 	_bind_api_signals(api)
+
+
+func _ensure_interest_service() -> void:
+	if is_instance_valid(_interest_service) \
+			and is_ancestor_of(_interest_service):
+		return
+	
+	var existing := get_node_or_null("InterestService") \
+			as InterestService
+	if not existing:
+		existing = find_service_node(InterestService) \
+				as InterestService
+	if existing:
+		_free_unparented_interest_service(existing)
+		_interest_service = existing
+		return
+	
+	if is_instance_valid(_interest_service) \
+			and _interest_service.get_parent() == null:
+		add_child(_interest_service)
+		return
+	
+	_interest_service = InterestService.new()
+	_interest_service.name = &"InterestService"
+	add_child(_interest_service)
+
+
+# Frees the transient service created by _init when duplicate() copied one.
+func _free_unparented_interest_service(keep: InterestService) -> void:
+	if not is_instance_valid(_interest_service):
+		return
+	if _interest_service == keep:
+		return
+	if _interest_service.get_parent() != null:
+		return
+	_interest_service.free()
 
 
 # Replaces a fresh empty SceneMultiplayer at the api's old path. Godot 4 does

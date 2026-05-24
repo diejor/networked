@@ -50,11 +50,21 @@ func _get_configuration_warnings() -> PackedStringArray:
 
 
 func _on_body_entered(body: Node2D) -> void:
+	# Stale-signal guard: Area2D's body_map cache can re-fire body_entered
+	# during a reparent (godot#14578) with the body or area momentarily
+	# out of tree.
+	if not is_inside_tree() or not body.is_inside_tree():
+		return
 	var tp: TPComponent = body.get_node_or_null("%TPComponent")
 	if tp == null or not tp.is_multiplayer_authority():
 		return
-	
+	# Suppress the destination-area body_entered that fires when the snap
+	# position lands the body on top of another teleporter. Without this,
+	# arriving on a teleporter immediately re-triggers it.
+	if tp.is_settling():
+		return
+
 	assert(target_tp and target_tp.is_valid(), "AreaTP2D: `target_tp` is not valid.")
-	
+
 	teleport.emit(body)
 	tp.teleport.call_deferred(target_tp)

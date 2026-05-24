@@ -1,158 +1,99 @@
 ## Unit tests for [FileSystemBackend].
 class_name TestFileSystemBackend
-extends NetworkedTestSuite
-
-var backend: FileSystemBackend
-var test_dir: String
+extends NetwTestSuite
 
 
-func before_test() -> void:
-	test_dir = create_temp_dir("fs_backend_test")
-	backend = auto_free(FileSystemBackend.new())
-	backend.base_dir = test_dir
+func test_initialization_lifecycle_and_registry() -> void:
+	var fs_dir := create_temp_dir("fs_backend_init")
 
-
-func test_collision_detection_blocks_active_instances() -> void:
-	backend.initialize({})
-	
-	var second_backend := FileSystemBackend.new()
-	second_backend.base_dir = test_dir
-	
-	# Collision detection is internal; this test verifies no crash on overlap.
-	pass
-
-
-func test_self_cleaning_registry_allows_reuse_after_free() -> void:
-	var path := test_dir.path_join("reuse_test")
-	DirAccess.make_dir_recursive_absolute(path)
-	
-	var first := FileSystemBackend.new()
-	first.base_dir = path
-	first.initialize({})
-	
-	first = null
-	
-	var second := FileSystemBackend.new()
-	second.base_dir = path
-	var err := second.initialize({})
+	# 1. Initialize creates directories
+	var backend_1 := FileSystemBackend.new()
+	backend_1.base_dir = fs_dir
+	var err := backend_1.initialize({&"rocks": [&"health"]})
 	assert_that(err).is_equal(OK)
-
-
-func test_initialize_creates_table_directories() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
 	assert_that(
-		DirAccess.dir_exists_absolute(test_dir.path_join("rocks"))).is_true()
+		DirAccess.dir_exists_absolute(fs_dir.path_join("rocks"))
+	).is_true()
+
+	# Free backend_1 to clear registry lock
+	backend_1 = null
+
+	# 2. Initialize detects ghost tables (must warning/return OK)
+	DirAccess.make_dir_recursive_absolute(fs_dir.path_join("ghosts"))
+	var backend_ghost := FileSystemBackend.new()
+	backend_ghost.base_dir = fs_dir
+	var ghost_err := backend_ghost.initialize({&"rocks": [&"health"]})
+	assert_that(ghost_err).is_equal(OK)
+
+	# Free backend_ghost to clear registry lock
+	backend_ghost = null
+
+	# 3. Self-cleaning registry allows reuse after freeing
+	var backend_2 := FileSystemBackend.new()
+	backend_2.base_dir = fs_dir
+	var err_reuse := backend_2.initialize({&"rocks": [&"health"]})
+	assert_that(err_reuse).is_equal(OK)
+
+
+func test_crud_flow_and_querying(
+	use_text_format: bool,
+	test_parameters := [
+		[false],
+		[true],
+	]
+) -> void:
+	var fs_dir := create_temp_dir("fs_backend_crud_" + str(use_text_format))
+	var fs_backend: FileSystemBackend = auto_free(FileSystemBackend.new())
+	fs_backend.base_dir = fs_dir
+	fs_backend.use_text_format = use_text_format
+
+	# 1. Initialize
+	var schema := {&"rocks": [&"health", &"type"], &"players": [&"position"]}
+	var err := fs_backend.initialize(schema)
+	assert_that(err).is_equal(OK)
+
+	# Check table directories and file extension
+	var ext := ".tdict" if use_text_format else ".dict"
 	assert_that(
-		DirAccess.dir_exists_absolute(test_dir.path_join("players"))).is_true()
+		DirAccess.dir_exists_absolute(fs_dir.path_join("rocks"))
+	).is_true()
 
+	# 2. Upsert
+	fs_backend.upsert(&"rocks", &"r1", {&"health": 100, &"type": &"granite"})
+	fs_backend.upsert(&"rocks", &"r2", {&"health": 50, &"type": &"marble"})
 
-func test_initialize_detects_ghost_tables() -> void:
-	DirAccess.make_dir_recursive_absolute(test_dir.path_join("ghosts"))
+	# Verify file exists on disk
+	var file_path := fs_dir.path_join("rocks").path_join("r1" + ext)
+	assert_that(ResourceLoader.exists(file_path)).is_true()
 
-	var ghost_backend: FileSystemBackend = auto_free(FileSystemBackend.new())
-	ghost_backend.base_dir = test_dir
+	# 3. Find by ID
+	var r1 := fs_backend.find_by_id(&"rocks", &"r1")
+	assert_that(r1.get(&"health")).is_equal(100)
+	assert_that(r1.get(&"type")).is_equal(StringName("granite"))
 
-	var err: Error = ghost_backend.initialize({&"rocks": [&"health"]})
-	assert_that(err).is_equal(OK)
+	# 4. Upsert (Merge & Overwrite)
+	fs_backend.upsert(&"rocks", &"r1", {&"gold": 5})
+	fs_backend.upsert(&"rocks", &"r1", {&"health": 80})
 
+	var r1_updated := fs_backend.find_by_id(&"rocks", &"r1")
+	assert_that(r1_updated.get(&"health")).is_equal(80)
+	assert_that(r1_updated.get(&"gold")).is_equal(5)
 
-func test_upsert_creates_file() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 100})
-	var path := test_dir.path_join("rocks").path_join("rock_1.dict")
-	assert_that(ResourceLoader.exists(path)).is_true()
+	# 5. Find All (Query / Filter)
+	var all_rocks := fs_backend.find_all(&"rocks", {})
+	assert_that(all_rocks.size()).is_equal(2)
 
+	var granite_rocks := fs_backend.find_all(&"rocks", {&"type": &"granite"})
+	assert_that(granite_rocks.size()).is_equal(1)
+	assert_that(granite_rocks[0].get(&"health")).is_equal(80)
 
-func test_find_by_id_returns_stored_data() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 75})
-	var record := backend.find_by_id(&"rocks", &"rock_1")
-	assert_that(record.get(&"health")).is_equal(75)
+	var nonexistent := fs_backend.find_all(&"nonexistent", {})
+	assert_that(nonexistent.is_empty()).is_true()
 
+	# 6. Delete (Idempotent)
+	var del_err := fs_backend.delete(&"rocks", &"r1")
+	assert_that(del_err).is_equal(OK)
+	assert_that(fs_backend.find_by_id(&"rocks", &"r1").is_empty()).is_true()
 
-func test_find_by_id_returns_empty_for_missing_record() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	var record := backend.find_by_id(&"rocks", &"nonexistent")
-	assert_that(record.is_empty()).is_true()
-
-
-func test_upsert_merges_columns() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 100})
-	backend.upsert(&"rocks", &"rock_1", {&"gold": 5})
-
-	var record := backend.find_by_id(&"rocks", &"rock_1")
-	assert_that(record.get(&"health")).is_equal(100)
-	assert_that(record.get(&"gold")).is_equal(5)
-
-
-func test_upsert_overwrites_changed_columns() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 100})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 50})
-
-	var record := backend.find_by_id(&"rocks", &"rock_1")
-	assert_that(record.get(&"health")).is_equal(50)
-
-
-func test_find_all_returns_all_records() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"r1", {&"health": 10})
-	backend.upsert(&"rocks", &"r2", {&"health": 20})
-	backend.upsert(&"rocks", &"r3", {&"health": 30})
-
-	var all := backend.find_all(&"rocks", {})
-	assert_that(all.size()).is_equal(3)
-
-
-func test_find_all_with_filter_returns_matching_records() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"r1", {&"health": 10, &"type": &"granite"})
-	backend.upsert(&"rocks", &"r2", {&"health": 20, &"type": &"marble"})
-	backend.upsert(&"rocks", &"r3", {&"health": 30, &"type": &"granite"})
-
-	var granite := backend.find_all(&"rocks", {&"type": &"granite"})
-	assert_that(granite.size()).is_equal(2)
-
-
-func test_find_all_returns_empty_for_nonexistent_table() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	var records := backend.find_all(&"nonexistent", {})
-	assert_that(records.is_empty()).is_true()
-
-
-func test_delete_removes_file() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	backend.upsert(&"rocks", &"rock_1", {&"health": 100})
-	backend.delete(&"rocks", &"rock_1")
-
-	var record := backend.find_by_id(&"rocks", &"rock_1")
-	assert_that(record.is_empty()).is_true()
-
-
-func test_delete_is_idempotent_for_missing_record() -> void:
-	backend.initialize({&"rocks": [&"health"], &"players": [&"position"]})
-	var err := backend.delete(&"rocks", &"nonexistent")
-	assert_that(err).is_equal(OK)
-
-
-func test_text_format_writes_tdict_extension() -> void:
-	var text_backend: FileSystemBackend = auto_free(FileSystemBackend.new())
-	text_backend.base_dir = test_dir
-	text_backend.use_text_format = true
-	text_backend.initialize({&"items": []})
-
-	text_backend.upsert(&"items", &"sword", {&"damage": 15})
-	var path := test_dir.path_join("items").path_join("sword.tdict")
-	assert_that(ResourceLoader.exists(path)).is_true()
-
-
-func test_text_format_round_trips_data() -> void:
-	var text_backend: FileSystemBackend = auto_free(FileSystemBackend.new())
-	text_backend.base_dir = test_dir
-	text_backend.use_text_format = true
-	text_backend.initialize({&"items": []})
-
-	text_backend.upsert(&"items", &"bow", {&"damage": 8})
-	var record: Dictionary = text_backend.find_by_id(&"items", &"bow")
-	assert_that(record.get(&"damage")).is_equal(8)
+	var del_missing_err := fs_backend.delete(&"rocks", &"nonexistent")
+	assert_that(del_missing_err).is_equal(OK)

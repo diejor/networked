@@ -213,9 +213,14 @@ func _finalize_close() -> void:
 func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
 	Netw.dbg.trace("Disconnecting peer %d (scheduled).", [p_peer])
 
+	var other: LocalMultiplayerPeer = linked_peers.get(p_peer)
+
 	linked_peers.erase(p_peer)
 	_purge_packets_from(p_peer)
 	_peers_to_emit_disconnected.append(p_peer)
+
+	if other and not other._closed and not other._closing:
+		other._remote_closed(_unique_id, _is_server_peer)
 
 	if not _is_server_peer and p_peer == 1:
 		_connection_status = CONNECTION_DISCONNECTED

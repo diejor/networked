@@ -81,6 +81,17 @@ func test_close_emits_peer_disconnected_on_server() -> void:
 
 	client.close()  # notifies server synchronously via _remote_closed
 	client.poll()   # finalizes client close state
-	server.poll()   # drains queue → emits peer_disconnected(42)
+	server.poll()   # drains queue -> emits peer_disconnected(42)
 
 	assert_that(disconnected_ids).contains([42])
+
+
+func test_server_disconnect_peer_unlinks_client() -> void:
+	client.poll()
+
+	server.disconnect_peer(42)
+
+	assert_that(server.linked_peers.has(42)).is_false()
+	assert_that(client.linked_peers.has(1)).is_false()
+	assert_that(client._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_DISCONNECTED)

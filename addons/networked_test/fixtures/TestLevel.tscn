@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://addons/networked_test/fixtures/TestPlayerFull.tscn" id="1_player"]
+
+[node name="TestLevel" type="Node2D" unique_id=1635541640]
+
+[node name="TestPlayerFull" parent="." unique_id=754678470 instance=ExtResource("1_player")]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=686370673]
+_spawnable_scenes = PackedStringArray("uid://c5tj2gqmrl0mg", "uid://bpnpmprpg6p6b")
+spawn_path = NodePath("..")

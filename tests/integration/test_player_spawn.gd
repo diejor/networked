@@ -2,8 +2,8 @@
 ##
 ## Uses [NetworkTestHarness] with a scene manager and test level scene.
 ## Players are spawned via [method NetworkTestHarness.spawn_player] which
-## bypasses the RPC chain and directly calls [method MultiplayerScene.add_player],
-## testing the server-side spawn path.
+## bypasses the RPC chain and directly calls
+## [method MultiplayerScene.add_player], testing the server-side spawn path.
 class_name TestPlayerSpawn
 extends NetworkedTestSuite
 
@@ -18,10 +18,12 @@ var client1: MultiplayerTree
 func before_test() -> void:
 	harness = auto_free(NetworkTestHarness.new())
 	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_scene_manager(harness.get_server())
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	var sm_factory := func() -> MultiplayerSceneManager:
+		var sm := NetworkedTestSuite.create_scene_manager()
+		sm.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+		return sm
+	await harness.setup(sm_factory)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
@@ -71,7 +73,7 @@ func test_connect_peer_called_on_spawn() -> void:
 
 	var scene := harness.get_server_scene()
 	var peer_id := client0.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id)).is_true()
+	assert_that(scene.connected_peers.has(peer_id)).is_true()
 
 
 func test_two_players_in_same_scene() -> void:
@@ -85,5 +87,26 @@ func test_two_players_in_same_scene() -> void:
 
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id_0)).is_true()
-	assert_that(scene.synchronizer.connected_peers.has(peer_id_1)).is_true()
+	assert_that(scene.connected_peers.has(peer_id_0)).is_true()
+	assert_that(scene.connected_peers.has(peer_id_1)).is_true()
+
+
+func test_clients_admit_each_other_replicas() -> void:
+	harness.spawn_player(client0, TEST_PLAYER_SCENE)
+	harness.spawn_player(client1, TEST_PLAYER_SCENE)
+
+	var name0 := harness.client_player_name(client0)
+	var name1 := harness.client_player_name(client1)
+	var client0_player1 := await harness.wait_for_client_player_spawn(
+			client0, &"TestLevel", name1)
+	var client1_player0 := await harness.wait_for_client_player_spawn(
+			client1, &"TestLevel", name0)
+	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
+	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
+	var service0 := client0.get_service(InterestService) as InterestService
+	var service1 := client1.get_service(InterestService) as InterestService
+
+	assert_that(service0.can_peer_see_entity(
+			peer_id_0, NetwEntity.of(client0_player1))).is_true()
+	assert_that(service1.can_peer_see_entity(
+			peer_id_1, NetwEntity.of(client1_player0))).is_true()

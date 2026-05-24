@@ -39,13 +39,18 @@ func get_scene_manager() -> MultiplayerSceneManager:
 	return ctx.services.get_scene_manager() if ctx else null
 
 
-## Returns the [TPLayerAPI] for visual teleport transitions on the local client.
-## Always returns [code]null[/code] on the server.
+## Returns the [TPLayerAPI] for visual teleport transitions on the local
+## client. Dedicated servers return [code]null[/code]; listen-server hosts
+## can still return a layer because they also render a local client view.
 func get_tp_layer() -> TPLayerAPI:
-	if not is_inside_tree() or not multiplayer or multiplayer.is_server():
+	if not is_inside_tree() or not multiplayer:
+		return null
+	var mt := get_multiplayer_tree()
+	if not mt or not mt.is_local_client:
 		return null
 	var ctx := get_context()
-	if not ctx: return null
+	if not ctx:
+		return null
 	var tp_layer: TPLayerAPI = ctx.services.get_service(TPLayerAPI)
 	return tp_layer
 
@@ -71,7 +76,8 @@ func get_peer_context() -> NetwPeerContext:
 	return ctx.services.get_peer_context(self.multiplayer.get_unique_id())
 
 
-## Returns the typed bucket for [param bucket_type] from the local peer's context.
+## Returns the typed bucket for [param bucket_type] from the local peer's
+## context.
 ## Shorthand for [code]get_peer_context().get_bucket(bucket_type)[/code].
 func get_bucket(bucket_type) -> RefCounted:
 	var ctx := get_peer_context()

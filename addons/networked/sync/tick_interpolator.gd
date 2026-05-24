@@ -148,6 +148,7 @@ func reset() -> void:
 	
 	for state in _states:
 		state.reset()
+		state.apply_reset()
 	display_lag = _calculate_min_lag()
 	_was_starving = false
 	starvation_ticks = 0
@@ -816,6 +817,32 @@ class _PropertyState:
 		if is_relative and target_obj and interpolator \
 				and name in interpolator._cached_initial_offsets:
 			initial_offset = interpolator._cached_initial_offsets[name]
+
+	func apply_reset() -> void:
+		if not target_obj or not source_obj:
+			return
+		var current = source_obj.get(source_prop)
+		match output_mode:
+			VisualOutputMode.OWNER_TRANSFORM_COMPENSATED:
+				if not _apply_reset_owner_transform(current):
+					_apply_reset_source_delta()
+			VisualOutputMode.SOURCE_DELTA:
+				_apply_reset_source_delta()
+			_:
+				target_obj.set(target_prop, current)
+		last_written = current
+
+	func _apply_reset_source_delta() -> void:
+		if initial_offset == null:
+			return
+		target_obj.set(target_prop, initial_offset)
+
+	func _apply_reset_owner_transform(current: Variant) -> bool:
+		if target_obj is Node2D and interpolator.owner is Node2D:
+			return _apply_owner_transform_compensated_2d(current)
+		if target_obj is Node3D and interpolator.owner is Node3D:
+			return _apply_owner_transform_compensated_3d(current)
+		return false
 
 	func update_snapshot() -> void:
 		var current_val = source_obj.get(source_prop)

@@ -1,104 +1,59 @@
-## Tree-scoped registry that connects [InterestSynchronizer] anchors
-## to [NetwEntity] members by [code]layer_id[/code].
+## Lookup facade for one [MultiplayerTree]'s interest graph.
 ##
-## One instance lives on [member MultiplayerTree.interest] and is
-## available from any node via [code]Netw.ctx(self).interest[/code].
-## Anchors register themselves on tree entry; entities register through
-## the [code]layer_ids[/code] property contributed by
-## [InterestComponent]. The pending queue absorbs either registration
-## order so a late-arriving anchor still picks up earlier entities and
-## vice versa.
+## Exposed at [member MultiplayerTree.interest]. This object only
+## resolves layers; [NetwInterestLayer] owns mutation, policy, and
+## transition signals.
 ##
+## [br][br]
+## Server code usually creates layers through [method layer]. Client
+## code should only rely on layers mirrored by an [InterestGate], or on
+## observer signals relayed by [member InterestComponent.report_observers].
 ## [codeblock]
-##     var arena := Netw.ctx(self).interest.anchor_for(&"arena:1")
-##     if arena:
-##         arena.add_viewer(player.peer_id)
+## var arena := Netw.ctx(self).interest.layer(&"arena")
+## arena.add_entity(player_entity)
+## arena.add_viewer(player.peer_id)
 ## [/codeblock]
-##
-## This registry holds no replication state itself. Visibility filters
-## live on the [InterestSynchronizer] anchors; this class only
-## indexes them.
 class_name NetwInterest
 extends RefCounted
 
 
 var _tree_ref: WeakRef
-var _anchors: Dictionary[StringName, InterestSynchronizer] = {}
-var _pending_entities: Dictionary[StringName, Array] = {}
 
 
 func _init(mt: MultiplayerTree) -> void:
 	_tree_ref = weakref(mt)
 
 
-## Registers [param anchor] under its [member
-## InterestSynchronizer.layer_id]. Drains any entities that registered
-## for the same id while no anchor was present. Idempotent.
-func register_anchor(anchor: InterestSynchronizer) -> void:
-	if not is_instance_valid(anchor):
-		return
-	var id := anchor.layer_id
-	if id.is_empty():
-		return
-	if _anchors.get(id) == anchor:
-		return
-	_anchors[id] = anchor
-	var pending: Array = _pending_entities.get(id, [])
-	for entity: NetwEntity in pending:
-		if is_instance_valid(entity) and is_instance_valid(entity.owner):
-			anchor.add_entity(entity)
-	_pending_entities.erase(id)
+## Returns the layer for [param layer_id], creating it on first use.
+func layer(layer_id: StringName) -> NetwInterestLayer:
+	var service := _service()
+	return service.layer_for(layer_id) if service else null
 
 
-## Removes [param anchor] if it is the currently registered entry
-## under its [code]layer_id[/code]. Idempotent.
-func unregister_anchor(anchor: InterestSynchronizer) -> void:
-	if not is_instance_valid(anchor):
-		return
-	var id := anchor.layer_id
-	if id.is_empty():
-		return
-	if _anchors.get(id) == anchor:
-		_anchors.erase(id)
+## Returns the layer for [param layer_id], or [code]null[/code].
+func get_layer(layer_id: StringName) -> NetwInterestLayer:
+	var service := _service()
+	return service.get_layer(layer_id) if service else null
 
 
-## Returns the [InterestSynchronizer] registered under [param layer_id],
-## or [code]null[/code] when no anchor has registered with that id.
-func anchor_for(layer_id: StringName) -> InterestSynchronizer:
-	return _anchors.get(layer_id)
-
-
-## Returns every registered anchor as an array.
-func all_anchors() -> Array[InterestSynchronizer]:
-	var out: Array[InterestSynchronizer] = []
-	out.assign(_anchors.values())
+## Returns every known layer.
+func all_layers() -> Array[NetwInterestLayer]:
+	var service := _service()
+	if service:
+		return service.all_layers()
+	var out: Array[NetwInterestLayer] = []
 	return out
 
 
-## Registers [param entity] as a member of [param layer_id]. Enrolls
-## immediately when the anchor is already known; queues otherwise.
-func register_entity_for_layer(
-		layer_id: StringName, entity: NetwEntity) -> void:
-	if layer_id.is_empty() or entity == null:
-		return
-	var anchor: InterestSynchronizer = _anchors.get(layer_id)
-	if anchor:
-		anchor.add_entity(entity)
-		return
-	var queue: Array = _pending_entities.get_or_add(layer_id, [])
-	if entity not in queue:
-		queue.append(entity)
+func _service() -> InterestService:
+	var mt := _tree()
+	if not mt:
+		return null
+	var service := mt.get_service(InterestService) as InterestService
+	if service:
+		return service
+	return mt.find_service_node(InterestService) as InterestService
 
 
-## Reverses [method register_entity_for_layer]. Idempotent.
-func unregister_entity_from_layer(
-		layer_id: StringName, entity: NetwEntity) -> void:
-	if layer_id.is_empty() or entity == null:
-		return
-	var anchor: InterestSynchronizer = _anchors.get(layer_id)
-	if anchor:
-		anchor.remove_entity(entity)
-	var queue: Array = _pending_entities.get(layer_id, [])
-	queue.erase(entity)
-	if queue.is_empty():
-		_pending_entities.erase(layer_id)
+func _tree() -> MultiplayerTree:
+	return _tree_ref.get_ref() as MultiplayerTree if _tree_ref else null

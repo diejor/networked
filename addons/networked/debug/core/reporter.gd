@@ -20,8 +20,11 @@ static func set_enabled(enabled: bool) -> void:
 	_reporting_enabled = enabled
 	_reporting_checked = true
 	var reporter := _get_instance()
-	if reporter and enabled:
-		reporter._try_register_capture()
+	if reporter:
+		if enabled:
+			reporter._try_register_capture()
+		else:
+			reporter._unregister_capture()
 
 
 ## Property-style access for the singleton instance.
@@ -58,6 +61,7 @@ var _is_sending_manifest: bool = false
 var _clock_monitor: NetClockMonitor = null
 var _pending_zombie_checks: Array[SceneTreeTimer] = []
 var _trace_sink: Callable
+var _window_pin: NetWindowPin
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -79,9 +83,9 @@ static func _get_username(node: Node) -> String:
 ## This performs a deep reset, freeing all internal [NetDebugTreeContext]
 ## instances and clearing the [NetTrace] history.
 func reset_state() -> void:
+	_unregister_capture()
 	_reporting_checked = false
 	_reporting_enabled = false
-	_capture_registered = false
 
 	if _clock_monitor:
 		_clock_monitor.clear_all()
@@ -121,13 +125,21 @@ static func _get_instance() -> NetworkedDebugReporter:
 
 func _try_register_capture() -> void:
 	if _has_local_session() and not _capture_registered:
-		_capture_registered = true
 		EngineDebugger.register_message_capture(
 			"networked",
 			func(message: String, data: Array) -> bool:
 				_on_editor_message(message, data)
 				return true
 		)
+		_capture_registered = true
+
+
+func _unregister_capture() -> void:
+	if not _capture_registered:
+		return
+	_capture_registered = false
+	if EngineDebugger.has_method("unregister_message_capture"):
+		EngineDebugger.unregister_message_capture("networked")
 
 
 func _init() -> void:
@@ -164,12 +176,15 @@ func _enter_tree() -> void:
 	add_child(_watchdog)
 	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
 
-	var multi_instance := NetMultiInstance.new()
-	multi_instance.name = "NetMultiInstance"
-	add_child(multi_instance)
+	_window_pin = NetWindowPin.new()
+	_window_pin.name = "NetWindowPin"
+	_window_pin.geometry_reported.connect(_on_window_geometry_reported)
+	add_child(_window_pin)
 
 
 func _exit_tree() -> void:
+	_unregister_capture()
+
 	if not _debug_build():
 		Netw.dbg.unregister_reporter(self)
 		return
@@ -202,7 +217,6 @@ func register_tree(mt: MultiplayerTree) -> void:
 	
 	var ctx := NetDebugTreeContext.new(mt, self)
 	ctx.name = "NetDebugContext"
-	ctx.tree_ready.connect(func() -> void: Netw.dbg.tiling_requested.emit())
 	ctx.clock_pong_captured.connect(func(d: Dictionary) -> void: 
 		if _clock_monitor:
 			_clock_monitor.update_local_clock(mt, d)
@@ -280,14 +294,14 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 		
 	if not is_instance_valid(mt):
 		if not _trees.is_empty():
-			_dbg.warn(
+			_dbg.debug(
 				"Reporter: [CppError] no active span tree context - " + \
 				"attributing to first tree",
 				func(m): push_warning(m)
 			)
 			mt = _trees[0]
 		else:
-			_dbg.warn(
+			_dbg.debug(
 				"Reporter: [CppError] no active span and no trees - dropping",
 				func(m): push_warning(m)
 			)
@@ -889,8 +903,15 @@ func _on_editor_message(message: String, data: Array) -> void:
 		return
 		
 	match message:
-		"tiling_update":
-			Netw.dbg.tiling_requested.emit()
+		"pin_window", "networked:pin_window":
+			_dbg.trace("Reporter: [PinWindow] payload=%s", [str(data)])
+			if _window_pin and data.size() >= 1 and data[0] is Dictionary:
+				var d: Dictionary = data[0]
+				_window_pin.pin(d.get("rect", null))
+		"unpin_window", "networked:unpin_window":
+			_dbg.trace("Reporter: [UnpinWindow]")
+			if _window_pin:
+				_window_pin.unpin()
 		"watch_node":
 			_handle_watch_node(data[0])
 		"unwatch_node":
@@ -952,6 +973,22 @@ func _handle_visualizer_toggle(d: Dictionary) -> void:
 		context.apply_command(d)
 
 
+func _on_window_geometry_reported(rect: Rect2i) -> void:
+	if not EngineDebugger.is_active():
+		return
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		return
+	var mt := _first_valid_tree()
+	var payload := {
+		"position": rect.position,
+		"size": rect.size,
+	}
+	if is_instance_valid(mt):
+		emit_debug_event("networked:window_geometry", payload, mt)
+	else:
+		EngineDebugger.send_message("networked:window_geometry", [payload])
+
+
 # --- Message Queue ------------------------------------------------------------
 
 
@@ -1004,6 +1041,13 @@ func _flush_now() -> void:
 
 		emit_debug_event(entry[0], entry[1], entry_mt)
 	_message_queue.clear()
+
+
+func _first_valid_tree() -> MultiplayerTree:
+	for mt: MultiplayerTree in _trees:
+		if is_instance_valid(mt):
+			return mt
+	return null
 
 
 # --- Telemetry Helpers --------------------------------------------------------
