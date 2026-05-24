@@ -1,0 +1,53 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_2lw5h"]
+[ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="2_pdren"]
+[ext_resource type="Resource" uid="uid://bvmv6qjvcl56a" path="res://tests/test_db.tres" id="3_2lw5h"]
+[ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="3_tp"]
+[ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pdren"]
+properties/0/path = NodePath("..:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
+[sub_resource type="Resource" id="Resource_7io2v"]
+script = ExtResource("5_1efga")
+scene_path = "uid://bhif5a1uatdsl"
+node_path = "PlayerSpawner"
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
+properties/0/path = NodePath("..:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
+[node name="TestPlayerFull" type="Node2D" unique_id=754678470]
+
+[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1760842203]
+unique_name_in_owner = true
+script = ExtResource("1_2lw5h")
+authority_mode = 1
+metadata/_custom_type_script = "uid://bspawnrcomp001"
+
+[node name="SaveComponent" type="MultiplayerSynchronizer" parent="." unique_id=1400490498 groups=["persistent"]]
+unique_name_in_owner = true
+root_path = NodePath(".")
+replication_interval = 5.0
+delta_interval = 5.0
+replication_config = SubResource("SceneReplicationConfig_pdren")
+visibility_update_mode = 2
+public_visibility = false
+script = ExtResource("2_pdren")
+database = ExtResource("3_2lw5h")
+table_name = &"player"
+metadata/_custom_type_script = "uid://c72wanrudisxw"
+
+[node name="TPComponent" type="Node" parent="." unique_id=401292753]
+unique_name_in_owner = true
+script = ExtResource("3_tp")
+starting_scene_path = SubResource("Resource_7io2v")
+
+[node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=639682812]
+replication_config = SubResource("SceneReplicationConfig_1")
+
+[connection signal="tree_entered" from="." to="SpawnerComponent" method="_on_owner_tree_entered"]

@@ -163,6 +163,28 @@ func _get(property: StringName) -> Variant:
 	return _scene_configs[level_name].get(key, null)
 
 
+## Sets the [enum LoadMode] and [enum EmptyAction] policy for
+## [param scene_name] programmatically, equivalent to configuring the
+## scene through the inspector's [code]scene_config/...[/code] section.
+##
+## [param scene_name] is the basename of the registered scene file (e.g.
+## [code]&"Level1"[/code] for [code]res://levels/Level1.tscn[/code]).
+##
+## Useful for runtime policy changes (e.g. bomber/daily switching from
+## [constant LoadMode.ON_STARTUP] to [constant LoadMode.ON_DEMAND] for
+## post-match scenes) and for tests configuring lifecycle without
+## reaching into [code]_set("scene_config/...", ...)[/code].
+func set_scene_lifecycle_policy(
+	scene_name: StringName,
+	load_mode: LoadMode,
+	empty_action: EmptyAction,
+) -> void:
+	_scene_configs[scene_name] = {
+		"load_mode": load_mode,
+		"empty_action": empty_action,
+	}
+
+
 func _has_spawnable_scene_path(target_path: String) -> bool:
 	for i in get_spawnable_scene_count():
 		if get_spawnable_scene(i) == target_path:

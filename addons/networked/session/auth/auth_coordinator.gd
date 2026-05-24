@@ -53,7 +53,7 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 		Netw.dbg.error(
 			"Auth prepare failed: %s",
 			[error_string(prepare_err)],
-			func(m): push_error(m)
+ 			func(m): push_error(m)
 		)
 		return prepare_err
 	Netw.dbg.info("Auth: prepare succeeded for '%s'", [
