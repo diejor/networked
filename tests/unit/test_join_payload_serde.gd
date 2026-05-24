@@ -1,13 +1,25 @@
 ## Unit tests for [JoinPayload] serialization and deserialization.
 class_name TestJoinPayloadSerde
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
-func test_round_trip_preserves_username() -> void:
+func test_round_trip_preserves_payload(
+	username: String,
+	url: String,
+	peer_id: int,
+	is_debug: bool,
+	test_parameters := [
+		["alice", "localhost", 7, false],
+		["bob", "ws://example.com:4433", 0, true],
+		["carol", "", 42, false],
+		["", "127.0.0.1", -1, true],
+	]
+) -> void:
 	var original: JoinPayload = auto_free(JoinPayload.new())
-	original.username = "alice"
-	original.url = "localhost"
-	original.peer_id = 7
+	original.username = StringName(username)
+	original.url = url
+	original.peer_id = peer_id
+	original.is_debug = is_debug
 	original.spawner_component_path = SceneNodePath.new()
 
 	var bytes: PackedByteArray = original.serialize()
@@ -16,45 +28,7 @@ func test_round_trip_preserves_username() -> void:
 	var restored: JoinPayload = auto_free(JoinPayload.new())
 	restored.deserialize(bytes)
 
-	assert_that(restored.username).is_equal(StringName("alice"))
-	assert_that(restored.url).is_equal("localhost")
-	assert_that(restored.peer_id).is_equal(7)
-
-
-func test_round_trip_preserves_url() -> void:
-	var data: JoinPayload = auto_free(JoinPayload.new())
-	data.username = "bob"
-	data.url = "ws://example.com:4433"
-	data.peer_id = 0
-	data.spawner_component_path = SceneNodePath.new()
-
-	var bytes: PackedByteArray = data.serialize()
-	var restored: JoinPayload = auto_free(JoinPayload.new())
-	restored.deserialize(bytes)
-
-	assert_that(restored.url).is_equal("ws://example.com:4433")
-
-
-func test_serialize_returns_nonempty_bytes() -> void:
-	var data: JoinPayload = auto_free(JoinPayload.new())
-	data.username = "test"
-	data.url = ""
-	data.peer_id = 0
-	data.spawner_component_path = SceneNodePath.new()
-
-	assert_that(data.serialize().size()).is_greater(0)
-
-
-func test_deserialize_does_not_crash_on_valid_bytes() -> void:
-	var data: JoinPayload = auto_free(JoinPayload.new())
-	data.username = "carol"
-	data.url = "localhost"
-	data.peer_id = 42
-	data.spawner_component_path = SceneNodePath.new()
-
-	var bytes: PackedByteArray = data.serialize()
-
-	var restored: JoinPayload = auto_free(JoinPayload.new())
-	# Must not push_error or crash
-	restored.deserialize(bytes)
-	assert_that(restored.username).is_equal(StringName("carol"))
+	assert_that(restored.username).is_equal(StringName(username))
+	assert_that(restored.url).is_equal(url)
+	assert_that(restored.peer_id).is_equal(peer_id)
+	assert_that(restored.is_debug).is_equal(is_debug)

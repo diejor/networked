@@ -81,6 +81,7 @@ func _on_test_event(event: GdUnitEvent) -> void:
 		_close_test_debug_scope()
 		_close_test_log_scope()
 		_reset_debugger()
+		NetwLog.start_test_case_buffering()
 		if _test_log_overrides.has(event.test_name()):
 			_open_test_log_scope(_test_log_overrides[event.test_name()])
 
@@ -88,6 +89,7 @@ func _on_test_event(event: GdUnitEvent) -> void:
 		_assert_clean_state(event)
 		_close_test_debug_scope()
 		_close_test_log_scope()
+		NetwLog.stop_test_case_buffering()
 
 
 func _reset_debugger() -> void:
