@@ -20,6 +20,8 @@ func after_test() -> void:
 		mgr.free()
 
 
+#region Public lifecycle policy
+
 # Unconfigured levels read back the documented defaults via both the
 # typed [_get_config] dictionary and the property-string [_get] path.
 func test_default_config_for_unconfigured_level() -> void:
@@ -70,6 +72,10 @@ func test_lifecycle_policy_round_trip(
 	)
 
 
+#endregion
+
+#region Editor property routing
+
 # Property-string routing: scene_config/... is owned by this class, anything
 # else is rejected by `_set` and returns null from `_get`.
 func test_property_routing(
@@ -107,3 +113,5 @@ func test_levels_are_independent() -> void:
 	assert_that(config2["empty_action"]).is_equal(
 		MultiplayerSceneManager.EmptyAction.FREEZE
 	)
+
+#endregion

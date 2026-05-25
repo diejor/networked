@@ -1,13 +1,13 @@
 ## Integration tests for [TickInterpolator] with real in-process networking.
 class_name TestTickInterpolatorNetwork
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 const DELTA_INTERVAL := 0.05
 const TICKRATE       := 30
 const DISPLAY_OFFSET := 3
 const CONVERGE_WAIT  := 0.3
 
-var _harness: NetworkTestHarness
+var _harness: NetwTestHarness
 var _client:  MultiplayerTree
 
 var _server_player: Node2D
@@ -15,22 +15,17 @@ var _client_player:  Node2D
 
 
 func before_test() -> void:
-	_harness = auto_free(NetworkTestHarness.new())
-	add_child(_harness)
+	_harness = make_harness()
 	await _harness.setup()
-
-	_add_clock(_harness.get_server())
-
+	await _harness.add_clock(TICKRATE, DISPLAY_OFFSET)
 	_client = await _harness.add_client()
 
-	var client_clock := _add_clock(_client)
-	client_clock._on_tree_configured()
-	
+	var client_clock := _client.get_service(NetworkClock) as NetworkClock
 	if not client_clock.is_synchronized:
 		await timeout_await(client_clock.clock_synchronized)
 
 	_server_player = _build_server_node()
-	_harness.get_server().add_child(_server_player)
+	_harness.server().add_child(_server_player)
 
 	_client_player = _build_client_node()
 	_client.add_child(_client_player)
@@ -41,16 +36,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		await _harness.teardown()
-	await drain_frames(get_tree(), 3)
-
-
-func _add_clock(tree: MultiplayerTree) -> NetworkClock:
-	var clock := NetworkClock.new()
-	clock.name   = "NetworkClock"
-	clock.tickrate       = TICKRATE
-	clock.display_offset = DISPLAY_OFFSET
-	tree.add_child(clock)
-	return clock
+	super.after_test()
 
 
 func _make_replication_config() -> SceneReplicationConfig:

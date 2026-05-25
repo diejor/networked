@@ -266,6 +266,13 @@ func preload_scene(name: StringName) -> void:
 	Netw.dbg.info("Scene '%s' preloaded.", [name])
 
 
+## Returns [code]true[/code] when [param name] is cached by
+## [method preload_scene].
+func has_preloaded_scene(name: StringName) -> bool:
+	var path := _scene_paths.get(name, "")
+	return not path.is_empty() and _scene_cache.has(path)
+
+
 ## Instantiates and adds [param name] to the scene tree.
 func spawn_scene(name: StringName) -> void:
 	if active_scenes.has(name):
@@ -473,7 +480,7 @@ func _on_player_left_scene(player: Node, scene_name: StringName) -> void:
 	Netw.dbg.debug(
 		"Player left scene '%s'. Evaluating empty action.", [scene_name]
 	)
-	_apply_empty_action_if_needed(scene_name)
+	_apply_empty_action_if_needed.call_deferred(scene_name)
 
 
 func _on_scene_despawned(node: Node) -> void:
@@ -536,9 +543,22 @@ func _configure_default(scene_path: String) -> void:
 	)
 
 
-# Returns all scene paths set via [method _configure_default].
-# Used to restore configuration after [method Node.duplicate].
-func _get_configured_paths() -> Array[String]:
+## Returns all registered scene paths. The list includes inspector entries,
+## scenes added via [method add_spawnable_scene], and defaults registered
+## by [MultiplayerTree] when a world scene is dropped as a direct child.
+##
+## Useful for restoring configuration after [method Node.duplicate] and
+## for mirroring registration onto secondary scene managers (e.g. test
+## harnesses spinning up client peers).
+func get_configured_paths() -> Array[String]:
 	var paths: Array[String] = []
 	paths.assign(_scene_paths.values())
 	return paths
+
+
+## Returns the active [enum LoadMode] and [enum EmptyAction] policy for
+## [param scene_name] as a dictionary with keys [code]load_mode[/code] and
+## [code]empty_action[/code]. Unconfigured scenes return the documented
+## defaults ([constant LoadMode.ON_STARTUP], [constant EmptyAction.FREEZE]).
+func get_scene_lifecycle_policy(scene_name: StringName) -> Dictionary:
+	return _get_config(scene_name)

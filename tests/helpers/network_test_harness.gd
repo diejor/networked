@@ -24,7 +24,7 @@ func get_server_scene(scene_name: StringName = "") -> MultiplayerScene:
 
 
 func client_player_name(client: MultiplayerTree) -> StringName:
-	return player_name_for(client)
+	return _player_name_for(client)
 
 
 func wait_for_client_scene_spawn(client: MultiplayerTree, scene_name: StringName) -> MultiplayerScene:

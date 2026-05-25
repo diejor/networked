@@ -1,7 +1,7 @@
-## Base class for GdUnit4 tests that use the [code]networked[/code] addon.
+## GdUnit4 base class for tests that use the Networked addon.
 ##
-## Provides timeout-safe await helpers, a harness factory, log scope control,
-## and a small entity builder for unit tests.
+## Provides timeout-safe await helpers, a [NetwTestHarness] factory, log
+## controls, and a small entity builder for addon-internal unit tests.
 class_name NetwTestSuite
 extends GdUnitTestSuite
 
@@ -64,8 +64,10 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 		await tree.process_frame
 
 
-## Builds, parents, and auto-frees a [NetwTestHarness]. Always call
-## [code]await harness.setup(...)[/code] before driving it.
+## Builds, parents, and auto-frees a [NetwTestHarness].
+##
+## The returned harness has the GdUnit4 awaiter installed. Always call
+## [code]await harness.setup(...)[/code] before driving multiplayer flows.
 ##
 ## [codeblock]
 ## var harness := make_harness()

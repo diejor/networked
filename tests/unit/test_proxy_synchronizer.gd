@@ -37,7 +37,7 @@ class StubTickAware extends TickAwareSynchronizer:
 		_store[name] = value
 
 
-# region: registration -------------------------------------------------------
+#region Registration
 
 func test_register_property(
 	mode: int,
@@ -95,7 +95,9 @@ func test_register_node_property_uses_proxy_relative_path() -> void:
 	)
 
 
-# region: read/write dispatch ------------------------------------------------
+#endregion
+
+#region Read/write dispatch
 
 func test_set_get_dispatch(
 	prop: StringName,
@@ -134,7 +136,9 @@ func test_property_roundtrip_fuzz(
 	assert_that(proxy._get(&"v")).is_equal(value)
 
 
-# region: inspector / finalize -----------------------------------------------
+#endregion
+
+#region Inspector and finalize
 
 func test_get_property_list_exposes_registered_names() -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
@@ -162,7 +166,9 @@ func test_finalize_applies_config_to_replication_config() -> void:
 	).is_true()
 
 
-# region: tick-aware ---------------------------------------------------------
+#endregion
+
+#region Tick-aware synchronizer
 
 func test_finalize_with_tick_inserts_tick_first_always_no_spawn() -> void:
 	var sync: StubTickAware = auto_free(StubTickAware.new())
@@ -195,3 +201,5 @@ func test_tick_set_dispatch_isolates_tick_from_store() -> void:
 
 	sync._set(&"pos", Vector3.ONE)
 	assert_that(sync._store.get(&"pos")).is_equal(Vector3.ONE)
+
+#endregion

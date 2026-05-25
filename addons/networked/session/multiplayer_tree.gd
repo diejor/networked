@@ -831,7 +831,7 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 	var client_sm := get_service(MultiplayerSceneManager)
 	if client_sm:
 		var server_sm := server.get_service(MultiplayerSceneManager)
-		for path in client_sm._get_configured_paths():
+		for path in client_sm.get_configured_paths():
 			server_sm._configure_default(path)
 	
 	var host_err := await server.host(true)

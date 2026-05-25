@@ -89,8 +89,16 @@ signal pong_received(data: Dictionary)
 
 
 @export_group("Calibration")
-## The strategy used to align the local clock with the server.
-@export_enum("Snap", "Stretch") var sync_mode: int = 0
+## Strategy used to align the local clock with the server.
+enum SyncMode {
+	## Hard-jump the local tick to the calibrated target on every sample.
+	SNAP,
+	## Nudge the tick accumulator toward the target. Falls back to a snap
+	## when the divergence exceeds [member panic_snap_threshold].
+	STRETCH,
+}
+
+@export var sync_mode: SyncMode = SyncMode.SNAP
 
 
 ## The maximum allowed divergence before a hard Snap is forced.
@@ -270,6 +278,9 @@ func _enter_tree() -> void:
 	if not mt.configured.is_connected(configured.emit):
 		mt.configured.connect(configured.emit)
 
+	if mt.is_online():
+		_on_tree_configured.call_deferred()
+
 
 func _ready() -> void:
 	pass
@@ -439,7 +450,7 @@ func _calibrate(target_tick: int) -> void:
 	
 	if enable_drift_logging: _drift_samples.append(diff)
 	
-	if abs(diff) > panic_snap_threshold or sync_mode == 0:
+	if abs(diff) > panic_snap_threshold or sync_mode == SyncMode.SNAP:
 		tick = target_tick
 	else:
 		_tick_accumulator += diff * ticktime * stretch_nudge_factor

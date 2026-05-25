@@ -1,6 +1,6 @@
 ## Harness for movement tests requiring a synchronized [NetworkClock].
 ##
-## Wraps [NetworkTestHarness] and adds [NetworkClock] services to all peers.
+## Wraps [NetwTestHarness] and adds [NetworkClock] services to all peers.
 ## Provides [method sync_ticks_real] to reliably advance simulation in CI.
 class_name TickNetworkTestHarness
 extends Node
@@ -10,21 +10,18 @@ const DISPLAY_OFFSET := 3
 const DELTA_INTERVAL := 0.05
 
 var _runner: GdUnitSceneRunner
-var _inner: NetworkTestHarness
+var _inner: NetwTestHarness
 var _client: MultiplayerTree
-var _held_packets: Array[Dictionary] = []
 var _holding: bool = false
 
 
 func setup(runner: GdUnitSceneRunner) -> void:
 	_runner = runner
-	_inner = NetworkTestHarness.new()
+	_inner = NetwTestHarness.new()
 	_runner.scene().add_child(_inner)
 	await _inner.setup()
-	_add_clock(_inner.get_server())
+	await _inner.add_clock(TICKRATE, DISPLAY_OFFSET)
 	_client = await _inner.add_client()
-	var client_clock := _add_clock(_client)
-	client_clock._on_tree_configured()
 
 
 func teardown() -> void:
@@ -36,20 +33,11 @@ func teardown() -> void:
 
 
 func get_server() -> MultiplayerTree:
-	return _inner.get_server()
+	return _inner.server()
 
 
 func get_client() -> MultiplayerTree:
 	return _client
-
-
-func _add_clock(tree: MultiplayerTree) -> NetworkClock:
-	var clock := NetworkClock.new()
-	clock.name   = "NetworkClock"
-	clock.tickrate       = TICKRATE
-	clock.display_offset = DISPLAY_OFFSET
-	tree.add_child(clock)
-	return clock
 
 
 func _make_replication_config(prop_path: NodePath) -> SceneReplicationConfig:
@@ -180,7 +168,7 @@ func sync_ticks(n: int) -> void:
 ## This is more reliable than [method GdUnitSceneRunner.simulate_frames] in CI 
 ## because it anchors to the actual simulation clock signals.
 func sync_ticks_real(n: int) -> void:
-	var clock := _inner.get_server().get_service(NetworkClock) as NetworkClock
+	var clock := _inner.server().get_service(NetworkClock) as NetworkClock
 	if not clock:
 		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(n)
@@ -238,31 +226,13 @@ func show_window() -> void:
 	_runner.move_window_to_foreground()
 
 
-func _process(_delta: float) -> void:
-	if not _holding: return
-	var peer := _get_client_peer()
-	if not peer: return
-	_held_packets.append_array(peer._packet_queue)
-	peer._packet_queue.clear()
-
-
 func hold_client_packets() -> void:
 	_holding = true
+	_inner.hold_packets_to_client(_client)
 
 
 func release_client_packets() -> void:
-	if not _holding: return
+	if not _holding:
+		return
 	_holding = false
-	var peer := _get_client_peer()
-	if not peer: return
-	var existing := peer._packet_queue.duplicate()
-	peer._packet_queue.clear()
-	peer._packet_queue.append_array(_held_packets)
-	peer._packet_queue.append_array(existing)
-	_held_packets.clear()
-
-
-func _get_client_peer() -> LocalMultiplayerPeer:
-	var session := _inner.get_session()
-	if not session or session.client_peers.is_empty(): return null
-	return session.client_peers[0] as LocalMultiplayerPeer
+	_inner.release_packets_to_client(_client)

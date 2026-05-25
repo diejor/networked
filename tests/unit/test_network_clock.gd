@@ -1,8 +1,10 @@
 ## Unit tests for [NetworkClock].
 ##
-## Covers derived properties, the snap/stretch calibration paths, the
-## first-sync signal, [method NetworkClock.for_node] lookup, and the
-## physics-process tick loop in isolation.
+## Covers derived properties (public contract), the snap/stretch calibration
+## paths, the [code]clock_synchronized[/code] signal, [method NetworkClock.for_node]
+## lookup, and the physics-process tick loop in isolation. The calibration
+## and tick-loop tests are addon-internal coverage that intentionally call
+## private methods on the unit under test.
 class_name TestNetworkClock
 extends NetwTestSuite
 
@@ -25,7 +27,7 @@ func _make_clock_in_tree(
 	return clock
 
 
-# region: derived properties --------------------------------------------------
+#region Public properties
 
 func test_ticktime_is_reciprocal_of_tickrate(
 	tickrate: int,
@@ -51,73 +53,77 @@ func test_display_tick_with_offset(
 	assert_that(clock.display_tick).is_equal(expected)
 
 
-# region: calibration ---------------------------------------------------------
+#endregion
 
-# Snap mode (sync_mode = 0) jumps directly to the target regardless of the
-# magnitude or sign of the diff.
+#region Internal calibration algorithm
+
+# SNAP jumps directly to the target regardless of the magnitude or sign of
+# the diff.
 func test_calibrate_snap_always_jumps(
 	starting_tick: int,
 	target_tick: int,
 	test_parameters := [
-		[0,   50],    # large positive from zero
-		[100, 200],   # large positive
-		[100, 80],    # large negative
-		[10,  11],    # small diff -> still snaps (no stretch protection)
+		[0,   50],
+		[100, 200],
+		[100, 80],
+		[10,  11],
 	],
 ) -> void:
 	var clock := _make_clock()
-	clock.sync_mode = 0
+	clock.sync_mode = NetworkClock.SyncMode.SNAP
 	clock.tick = starting_tick
 	clock._calibrate(target_tick)
 	assert_that(clock.tick).is_equal(target_tick)
 
 
-# Stretch mode below panic threshold nudges the accumulator instead of
-# jumping; above the threshold it falls back to a hard snap.
-func test_calibrate_stretch_behaviour(
-	diff: int,
-	threshold: int,
-	expects_snap: bool,
-	test_parameters := [
-		[2,  100, false],   # small diff, well under threshold -> nudge
-		[10, 5,   true],    # diff exceeds threshold -> panic-snap
-	],
-) -> void:
+# STRETCH below the panic threshold nudges the accumulator instead of
+# jumping. The tick value stays put and the accumulator goes positive.
+func test_calibrate_stretch_nudges_small_diffs() -> void:
 	var clock := _make_clock(30)
-	clock.sync_mode = 1
-	clock.panic_snap_threshold = threshold
+	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.panic_snap_threshold = 100
 	clock.tick = 10
 	clock._tick_accumulator = 0.0
-	var target := clock.tick + diff
 
-	clock._calibrate(target)
+	clock._calibrate(12)
 
-	if expects_snap:
-		assert_that(clock.tick).is_equal(target)
-	else:
-		assert_that(clock.tick).is_equal(10)
-		assert_that(clock._tick_accumulator > 0.0).is_true()
+	assert_that(clock.tick).is_equal(10)
+	assert_that(clock._tick_accumulator > 0.0).is_true()
 
 
-# clock_synchronized fires exactly once: on the first calibration call.
-# Subsequent calls flip [is_synchronized] true but emit nothing further.
+# STRETCH falls back to a hard snap when the diff exceeds the panic
+# threshold.
+func test_calibrate_panic_snaps_above_threshold() -> void:
+	var clock := _make_clock(30)
+	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.panic_snap_threshold = 5
+	clock.tick = 10
+
+	clock._calibrate(20)
+
+	assert_that(clock.tick).is_equal(20)
+
+
+# clock_synchronized fires exactly once on the first calibration. Subsequent
+# calls flip [is_synchronized] true but emit nothing further.
 func test_calibrate_emits_synchronized_signal_once() -> void:
 	var clock := _make_clock()
-	var count := [0]
-	clock.clock_synchronized.connect(func() -> void: count[0] += 1)
+	var counter := SignalCounter.watch(clock.clock_synchronized)
 
 	assert_that(clock.is_synchronized).is_false()
 
 	clock._calibrate(1)
 	assert_that(clock.is_synchronized).is_true()
-	assert_that(count[0]).is_equal(1)
+	assert_that(counter.count).is_equal(1)
 
 	clock._calibrate(2)
 	clock._calibrate(3)
-	assert_that(count[0]).is_equal(1)
+	assert_that(counter.count).is_equal(1)
 
 
-# region: for_node lookup -----------------------------------------------------
+#endregion
+
+#region Clock lookup
 
 func test_for_node_returns_null_when_no_clock_registered() -> void:
 	var node := Node.new()
@@ -126,14 +132,17 @@ func test_for_node_returns_null_when_no_clock_registered() -> void:
 	assert_that(NetworkClock.for_node(node)).is_null()
 
 
+# for_node walks the node's multiplayer API and reads the registered clock
+# from a meta key. The SceneTree always provides a SceneMultiplayer at the
+# root in a test environment, so assert that precondition rather than
+# silently skipping when the cast fails.
 func test_for_node_returns_registered_clock() -> void:
 	var node := Node.new()
 	add_child(node)
 	auto_free(node)
 
 	var api := node.multiplayer as SceneMultiplayer
-	if not api:
-		return
+	assert_that(api).is_not_null()
 
 	var clock := _make_clock()
 	api.set_meta(&"_network_clock", clock)
@@ -143,7 +152,9 @@ func test_for_node_returns_registered_clock() -> void:
 	api.remove_meta(&"_network_clock")
 
 
-# region: physics_process tick loop -------------------------------------------
+#endregion
+
+#region Internal tick loop
 
 func test_physics_process_tick_advancement(
 	delta: float,
@@ -159,7 +170,11 @@ func test_physics_process_tick_advancement(
 	assert_that(clock.tick).is_equal(start_tick + expected_advance)
 
 
-func test_physics_process_tick_factor(
+# tick_factor exposes the fractional position within the current ticktime.
+# The interpolation-off branch uses wall-clock time since the last physics
+# frame, which is deterministic for synthetic _physics_process calls and is
+# the only path testable without a real physics step.
+func test_physics_process_tick_factor_without_interpolation(
 	delta: float,
 	expected_factor: float,
 	test_parameters := [
@@ -185,8 +200,8 @@ func test_on_tick_emit_count(
 	var clock := _make_clock_in_tree(10)
 	clock.max_ticks_per_frame = max_ticks
 
-	var count := [0]
-	clock.on_tick.connect(func(_d: float, _t: int) -> void: count[0] += 1)
-
+	var counter := SignalCounter.watch(clock.on_tick)
 	clock._physics_process(delta)
-	assert_that(count[0]).is_equal(expected_count)
+	assert_that(counter.count).is_equal(expected_count)
+
+#endregion

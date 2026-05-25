@@ -5,7 +5,8 @@
 Manual
 ======
 
-The manual is the reference companion to the :ref:`quick start <doc_quick_start>`.
+The manual is the reference companion to the
+:ref:`quick start <doc_quick_start>`.
 Where the quick start walks you through one scene in one
 sitting, the manual zooms in on each subsystem so you can pick the parts you
 need and ignore the parts you don't. Pages can be read in any order, but if
@@ -23,3 +24,4 @@ your scene.
    interest_management
    transport_backends
    context_and_services
+   testing

@@ -10,7 +10,6 @@
 
 [sub_resource type="Resource" id="Resource_lpgch"]
 script = ExtResource("2_7ue45")
-simulate_lag = true
 lag_min_delay = 0.09
 lag_max_delay = 0.234
 lag_packet_loss = 0.01
