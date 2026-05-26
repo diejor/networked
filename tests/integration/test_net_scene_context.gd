@@ -1,12 +1,12 @@
 ## Integration tests for [NetwContext] and [NetwSceneContext].
 class_name TestNetwContext
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE    := preload("res://tests/helpers/TestLevel.tscn")
+const TEST_LEVEL_SCENE    := preload("res://addons/networked_test/fixtures/TestLevel.tscn")
 const TEST_PLAYER_SCENE   := preload(
-	"res://tests/helpers/TestPlayerMinimal.tscn")
+	"res://addons/networked_test/fixtures/TestPlayerMinimal.tscn")
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 
@@ -21,12 +21,10 @@ var player1: Node
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness._get_scene_manager(harness.get_server()) \
-		.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
@@ -35,14 +33,14 @@ func before_test() -> void:
 	player1 = harness.spawn_player(client1, TEST_PLAYER_SCENE)
 
 	# Block until both players appear on each client so RPC paths are warm.
-	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
-	await harness.wait_for_client_player_spawn(client1, &"TestLevel")
+	await harness.wait_for_player(client0, &"TestLevel")
+	await harness.wait_for_player(client1, &"TestLevel")
 
-	server_ctx = harness.get_server_scene().get_context()
+	server_ctx = harness.scene_on_server().get_context()
 
-	var c0_scene := await harness.wait_for_client_scene_spawn(
+	var c0_scene := await harness.wait_for_scene(
 		client0, &"TestLevel")
-	var c1_scene := await harness.wait_for_client_scene_spawn(
+	var c1_scene := await harness.wait_for_scene(
 		client1, &"TestLevel")
 	client0_ctx = c0_scene.get_context()
 	client1_ctx = c1_scene.get_context()
@@ -54,7 +52,6 @@ func after_test() -> void:
 
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func test_get_players_returns_all_spawned() -> void:
@@ -85,13 +82,11 @@ func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
 
 
 func test_wait_for_players_suspends_until_player_enters() -> void:
-	var h: NetworkTestHarness = auto_free(NetworkTestHarness.new())
-	add_child(h)
-	await h.setup(NetworkedTestSuite.create_scene_manager)
-	h._get_scene_manager(h.get_server()).add_spawnable_scene(
-		TEST_LEVEL_SCENE.resource_path)
+	var h := make_harness()
+	await h.setup(NetwTestSuite.create_scene_manager)
+	h.register_spawnable_scene(TEST_LEVEL_SCENE)
 	var c: MultiplayerTree = await h.add_client()
-	var ctx: NetwContext = h.get_server_scene().get_context()
+	var ctx: NetwContext = h.scene_on_server().get_context()
 
 	var results := { "resolved": false }
 	(func():
@@ -167,7 +162,7 @@ func test_unpause_clears_tree_paused_and_emits_signal() -> void:
 
 
 func test_kick_disconnects_the_peer() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var peer0_id := client0.multiplayer_peer.get_unique_id()
 
 	var results := { "disconnected_id": -1 }
@@ -287,7 +282,7 @@ func test_player_leave_removes_entry_from_gate() -> void:
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_true()
 
-	harness.get_server_scene().untrack_node(player0)
+	harness.scene_on_server().untrack_node(player0)
 	await get_tree().process_frame
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_false()

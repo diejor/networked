@@ -3,7 +3,7 @@
 ## Uses the in-memory [MemoryBackend] stub (defined in [TestNetwBackend])
 ## so no disk I/O or scene tree is required.
 class_name TestSchemaDrift
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 ## Minimal in-memory backend for schema drift tests.

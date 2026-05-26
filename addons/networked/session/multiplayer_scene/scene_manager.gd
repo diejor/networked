@@ -5,7 +5,8 @@ extends MultiplayerSpawner
 ## Central authority that manages multiplayer scenes for all connected players.
 ##
 ## Extends [MultiplayerSpawner] to replicate scene levels to clients.
-## Add level scenes to the spawn list via the [member add_to_spawn_list] property.
+## Add level scenes to the spawn list via the
+## [member add_to_spawn_list] property.
 ##
 ## [b]Spawnable-scene registration must match on both sides.[/b]
 ## [MultiplayerSpawner] uses the spawnable-scenes list as an index-based
@@ -18,7 +19,8 @@ extends MultiplayerSpawner
 ## Even after the server activates a scene, the wrapper's
 ## [InterestGate] gates spawn-replication per peer. A peer only
 ## receives the scene after [method MultiplayerScene.connect_peer] is
-## called for it (typically transitively via [method MultiplayerScene.register_player]).
+## called for it, typically transitively via
+## [method MultiplayerScene.register_player].
 ## See [MultiplayerScene] for the full invariant.
 ## [codeblock]
 ## # Listen for scenes becoming available:
@@ -67,7 +69,10 @@ enum EmptyAction {
 }
 
 ## Helper property to add level scenes to the spawn list via the inspector.
-@export_custom(PROPERTY_HINT_ARRAY_TYPE, "24/17:SceneNodePath:MultiplayerSpawner")
+@export_custom(
+	PROPERTY_HINT_ARRAY_TYPE,
+	"24/17:SceneNodePath:MultiplayerSpawner"
+)
 var add_to_spawn_list: SceneNodePath:
 	set(value):
 		if Engine.is_editor_hint() and value != null:
@@ -268,7 +273,7 @@ func preload_scene(name: StringName) -> void:
 
 ## Returns [code]true[/code] when [param name] is cached by
 ## [method preload_scene].
-func has_preloaded_scene(name: StringName) -> bool:
+func is_scene_preloaded(name: StringName) -> bool:
 	var path := _scene_paths.get(name, "")
 	return not path.is_empty() and _scene_cache.has(path)
 
@@ -288,7 +293,8 @@ func spawn_scene(name: StringName) -> void:
 	spawn(path)
 
 
-## Ensures [param name] is spawned and forces its level's process mode to INHERIT.
+## Ensures [param name] is spawned and forces its level's process mode to
+## [constant Node.PROCESS_MODE_INHERIT].
 func activate_scene(name: StringName) -> void:
 	Netw.dbg.trace("activate_scene('%s') called.", [name])
 	if not active_scenes.has(name):

@@ -1,6 +1,6 @@
 ## Unit tests for [TickInterpolator] signal-based injection.
 class_name TestTickInterpolatorSignals
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 const P0 := Vector2(0.0, 0.0)

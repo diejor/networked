@@ -7,7 +7,7 @@
 ## [code]Netw.ctx(self).interest[/code] resolves to a real
 ## [NetwInterest]. No multiplayer peer is attached.
 class_name TestInterestComponent
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 var mt: MultiplayerTree

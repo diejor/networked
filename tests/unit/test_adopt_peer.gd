@@ -3,7 +3,7 @@
 ## Verifies the externally-produced-peer adoption path used by lobby
 ## providers, without going through a [BackendPeer].
 class_name TestAdoptPeer
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 func _make_tree() -> MultiplayerTree:

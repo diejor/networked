@@ -1,6 +1,6 @@
 ## Unit tests for [LocalMultiplayerPeer] routing and signals.
 class_name TestLocalMultiplayerPeer
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var server: LocalMultiplayerPeer
 var client: LocalMultiplayerPeer

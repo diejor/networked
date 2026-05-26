@@ -1,6 +1,6 @@
 ## Unit tests for [AsyncMutex] coroutine-safe locking.
 class_name TestAsyncMutex
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var mutex: AsyncMutex
 

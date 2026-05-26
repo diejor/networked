@@ -1,10 +1,12 @@
 ## Integration tests for [MultiplayerScene] peer isolation.
 class_name TestLobbyIsolation
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
+const TEST_LEVEL_SCENE := preload(
+	"res://addons/networked_test/fixtures/TestLevel.tscn"
+)
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var scene: MultiplayerScene
 var client0: MultiplayerTree
@@ -12,13 +14,11 @@ var client1: MultiplayerTree
 
 
 func before_test() -> void:
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	server_mgr = harness._get_scene_manager(harness.get_server())
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	server_mgr = harness.server_scene_manager()
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
@@ -30,7 +30,6 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func test_connected_peers_empty_initially() -> void:

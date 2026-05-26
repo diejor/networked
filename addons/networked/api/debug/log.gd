@@ -1,8 +1,10 @@
-## Static logging utility for the networked addon with per-module level overrides.
+## Static logging utility for the networked addon with per-module level
+## overrides.
 ##
-## Log calls resolve a per-module level by walking the dot-separated module hierarchy.
-## At runtime the first log call lazily detects the addon root and loads the active
-## [NetwLogSettings] profile from [code]ProjectSettings[/code].
+## Log calls resolve a per-module level by walking the dot-separated module
+## hierarchy. At runtime the first log call lazily detects the addon root and
+## loads the active [NetwLogSettings] profile from
+## [code]ProjectSettings[/code].
 ## [codeblock]
 ## Netw.dbg.info(self, "Player spawned: %s", [username])
 ## Netw.dbg.warn(self, "Connection attempt failed, retrying...")
@@ -46,10 +48,10 @@ const SETTING_ACTIVE_PROFILE = "networked/logging/active_profile"
 
 ## Initializes the logging system and loads the active profile.
 ##
-## Call this explicitly from [code]plugin.gd[/code] (editor) or a runtime entry
-## point. [param addon_root] - path such as [code]"res://addons/networked"[/code]
-## - makes module paths relative to the addon root so saved overrides survive
-## directory renames.
+## Call this explicitly from [code]plugin.gd[/code] (editor) or a runtime
+## entry point. [param addon_root] - path such as
+## [code]"res://addons/networked"[/code] - makes module paths relative to the
+## addon root so saved overrides survive directory renames.
 static func initialize(addon_root: String = "") -> void:
 	if not addon_root.is_empty():
 		_addon_root = addon_root.replace("res://", "").trim_suffix("/")
@@ -255,7 +257,7 @@ static func stop_test_case_buffering() -> void:
 	_recompute_min_level()
 
 
-## Marks test overrides as owned by [NetworkedTestSessionHook].
+## Marks test overrides as owned by [NetwTestSessionHook].
 static func set_test_hook_controls_overrides(enabled: bool) -> void:
 	_test_hook_controls_overrides = enabled
 
@@ -534,7 +536,11 @@ static func warn(
 ## call [code]push_error[/code] itself so the engine records the caller's
 ## file/line.
 ## [codeblock]
-## NetwLog.error("Critical: scene '%s' not found.", [scene_name], func(m): push_error(m))
+## NetwLog.error(
+##     "Critical: scene '%s' not found.",
+##     [scene_name],
+##     func(m): push_error(m)
+## )
 ## [/codeblock]
 static func error(
 	msg: Variant, args: Array = [], link_call: Callable = Callable()

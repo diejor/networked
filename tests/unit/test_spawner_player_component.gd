@@ -3,7 +3,7 @@
 ## Covers [NetwEntity] identity helpers, spawn-property collection,
 ## and [enum SpawnerComponent.AuthorityMode] behavior.
 class_name TestSpawnerComponent
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 func test_parse_peer_with_valid_name() -> void:

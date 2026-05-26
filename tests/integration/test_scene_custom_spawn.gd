@@ -1,28 +1,30 @@
 ## Integration tests for [method MultiplayerSceneManager.spawn].
 class_name TestLobbyCustomSpawn
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
-const TEST_LEVEL_2_SCENE := preload("res://tests/helpers/TestLevel2.tscn")
+const TEST_LEVEL_SCENE := preload(
+	"res://addons/networked_test/fixtures/TestLevel.tscn"
+)
+const TEST_LEVEL_2_SCENE := preload(
+	"res://addons/networked_test/fixtures/TestLevel2.tscn"
+)
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var client_mgr: MultiplayerSceneManager
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
-	server_mgr = harness._get_scene_manager(harness.get_server())
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
+	server_mgr = harness.server_scene_manager()
 	var client := await harness.add_client()
-	client_mgr = harness._get_scene_manager(client)
+	client_mgr = harness.scene_manager_for(client)
 
 
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func _set_spawn_fn(fn: Callable) -> void:
@@ -159,8 +161,11 @@ func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		return TEST_LEVEL_SCENE.instantiate()
 	)
-	server_mgr._set(&"scene_config/TestLevel/empty_action",
-		MultiplayerSceneManager.EmptyAction.DESTROY)
+	server_mgr.set_scene_lifecycle_policy(
+		&"TestLevel",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		MultiplayerSceneManager.EmptyAction.DESTROY
+	)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
 	await get_tree().process_frame
@@ -168,12 +173,16 @@ func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
 	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_false()
 
 
-func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn() -> void:
+func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn(
+) -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		return TEST_LEVEL_SCENE.instantiate()
 	)
-	server_mgr._set(&"scene_config/TestLevel/empty_action",
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+	server_mgr.set_scene_lifecycle_policy(
+		&"TestLevel",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE
+	)
 
 	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
 	await get_tree().process_frame

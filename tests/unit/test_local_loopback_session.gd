@@ -1,6 +1,6 @@
 ## Unit tests for [LocalLoopbackSession] and peer lifecycle.
 class_name TestLocalLoopbackSession
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var session: LocalLoopbackSession
 

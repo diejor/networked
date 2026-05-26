@@ -3,17 +3,20 @@
 ## Verifies that dropping a Level as a direct child of [MultiplayerTree]
 ## automatically routes joins and spawns players via a managed scene.
 class_name TestLobbylessJoin
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
+const TEST_LEVEL_SCENE := preload(
+	"res://addons/networked_test/fixtures/TestLevel.tscn"
+)
+const TEST_LEVEL_PATH := "res://addons/networked_test/fixtures/TestLevel.tscn"
+const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var client: MultiplayerTree
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
+	harness = make_harness()
 	await harness.setup(null, TEST_LEVEL_SCENE)
 	client = await harness.add_client()
 
@@ -21,17 +24,16 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func test_default_scene_created_on_server() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var scene := server.get_node_or_null("SceneManager/TestLevelScene")
 	assert_that(scene).is_not_null()
 
 
 func test_level_inside_scene_on_server() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)
@@ -39,17 +41,14 @@ func test_level_inside_scene_on_server() -> void:
 
 
 func test_player_spawns_in_level_after_join() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
-
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
-	join_payload.spawner_component_path = spawner_component_path
+	var join_payload := harness.make_join_payload(
+		username,
+		TEST_LEVEL_PATH,
+		SPAWNER_PATH
+	)
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -70,17 +69,14 @@ func test_player_spawns_in_level_after_join() -> void:
 
 
 func test_spawned_player_has_correct_username() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
-
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
-	join_payload.spawner_component_path = spawner_component_path
+	var join_payload := harness.make_join_payload(
+		username,
+		TEST_LEVEL_PATH,
+		SPAWNER_PATH
+	)
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -103,7 +99,7 @@ func test_spawned_player_has_correct_username() -> void:
 
 
 func test_scene_context_accessible_from_level_node() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var level := server.get_node_or_null(
 		"SceneManager/TestLevelScene/TestLevel"
 	)

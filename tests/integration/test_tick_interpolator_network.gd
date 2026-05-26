@@ -2,35 +2,26 @@
 class_name TestTickInterpolatorNetwork
 extends NetwTestSuite
 
-const DELTA_INTERVAL := 0.05
-const TICKRATE       := 30
-const DISPLAY_OFFSET := 3
-const CONVERGE_WAIT  := 0.3
-
-var _harness: NetwTestHarness
-var _client:  MultiplayerTree
-
-var _server_player: Node2D
-var _client_player:  Node2D
+var _runner: GdUnitSceneRunner
+var _harness: TickNetworkTestHarness
+var _env: TickSimulationEnvironment
 
 
 func before_test() -> void:
-	_harness = make_harness()
-	await _harness.setup()
-	await _harness.add_clock(TICKRATE, DISPLAY_OFFSET)
-	_client = await _harness.add_client()
+	_runner = scene_runner("res://tests/helpers/tick_test_stage.tscn")
+	_harness = auto_free(TickNetworkTestHarness.new())
 
-	var client_clock := _client.get_service(NetworkClock) as NetworkClock
-	if not client_clock.is_synchronized:
-		await timeout_await(client_clock.clock_synchronized)
+	add_child(_harness)
+	await _harness.setup(_runner)
+	_env = await _harness.create_environment(&"InterpTestPlayer")
+	await _harness.wait_for_clock_sync()
 
-	_server_player = _build_server_node()
-	_harness.server().add_child(_server_player)
+	var interpolator: TickInterpolator = _env.client_node.get_node(
+		"TickInterpolator"
+	)
+	interpolator.trace_interval = 0
 
-	_client_player = _build_client_node()
-	_client.add_child(_client_player)
-
-	await get_tree().process_frame
+	_harness.set_time_factor(10.0)
 
 
 func after_test() -> void:
@@ -39,108 +30,66 @@ func after_test() -> void:
 	super.after_test()
 
 
-func _make_replication_config() -> SceneReplicationConfig:
-	var cfg   := SceneReplicationConfig.new()
-	var ppath := NodePath(".:position")
-	cfg.add_property(ppath)
-	cfg.property_set_replication_mode(
-		ppath, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
-	cfg.property_set_spawn(ppath, false)
-	cfg.property_set_watch(ppath, true)
-	return cfg
-
-
-func _build_server_node() -> Node2D:
-	var player := Node2D.new()
-	player.name = "InterpTestPlayer"
-	player.set_multiplayer_authority(1)
-
-	var sync := MultiplayerSynchronizer.new()
-	sync.name = "Sync"
-	sync.replication_config = _make_replication_config()
-	sync.delta_interval = DELTA_INTERVAL
-	player.add_child(sync)
-
-	return player
-
-
-func _build_client_node() -> Node2D:
-	var player := Node2D.new()
-	player.name = "InterpTestPlayer"
-	player.set_multiplayer_authority(1)
-
-	var sync := MultiplayerSynchronizer.new()
-	sync.name = "Sync"
-	sync.replication_config = _make_replication_config()
-	sync.delta_interval = DELTA_INTERVAL
-	player.add_child(sync)
-
-	var interp := TickInterpolator.new()
-	interp.name = "TickInterpolator"
-	interp.property_modes = {&"position": TickInterpolator.Mode.LERP}
-	interp.trace_interval = 1
-	player.add_child(interp)
-
-	return player
-
-
-func _wait_until_converged(
-	node: Node2D,
+func _wait_for_client_position(
 	target: Vector2,
-	timeout: float = 1.0
-) -> bool:
-	var start_time := Time.get_ticks_msec()
-	while node.position.distance_to(target) > 5.0:
-		if Time.get_ticks_msec() - start_time > timeout * 1000:
-			return false
-		await get_tree().process_frame
-	return true
+	tolerance: Vector2,
+	max_frames: int = 120,
+) -> void:
+	for _i in max_frames:
+		var pos := _env.get_client_property(&"position") as Vector2
+		if pos.is_equal_approx(target) or (
+			absf(pos.x - target.x) <= tolerance.x
+			and absf(pos.y - target.y) <= tolerance.y
+		):
+			return
+		await _harness.sync_ticks(1)
+	fail("Timed out waiting for client position %s." % [target])
 
 
 func test_remote_player_converges_to_server_position() -> void:
 	var target := Vector2(300.0, 0.0)
-	_server_player.position = target
+	_env.set_server_property(&"position", target)
 
-	var ok := await _wait_until_converged(_client_player, target, CONVERGE_WAIT)
-	assert_bool(ok).is_true()
+	await _wait_for_client_position(target, Vector2(5.0, 5.0))
+
+	assert_vector(_env.get_client_property(&"position")).is_equal_approx(
+		target,
+		Vector2(5.0, 5.0)
+	)
 
 
 func test_teleport_snaps_instead_of_lerping() -> void:
-	var interp: TickInterpolator = _client_player.get_node("TickInterpolator")
-	interp.max_lerp_distance = 100.0 # Anything over 100 units should snap.
-	
+	var interpolator: TickInterpolator = _env.interpolator
+	interpolator.max_lerp_distance = 100.0
+
 	const START := Vector2(0.0, 0.0)
-	const JUMP  := Vector2(1000.0, 0.0)
-	
-	_server_player.position = START
-	await _wait_until_converged(_client_player, START, CONVERGE_WAIT)
-	
-	_server_player.position = JUMP
-	
-	# Wait for the synchronizer to fire (DELTA_INTERVAL = 50ms)
-	await get_tree().create_timer(0.06).timeout
-	
-	# Wait for display lag (100ms) to pass.
-	await get_tree().create_timer(0.1).timeout
-	
-	assert_vector(_client_player.position).is_equal_approx(
-		JUMP, Vector2(1.0, 1.0))
+	const JUMP := Vector2(1000.0, 0.0)
+
+	_env.set_server_property(&"position", START)
+	await _wait_for_client_position(START, Vector2(1.0, 1.0))
+
+	_env.set_server_property(&"position", JUMP)
+	await _wait_for_client_position(JUMP, Vector2(1.0, 1.0))
+
+	assert_vector(_env.get_client_property(&"position")).is_equal_approx(
+		JUMP,
+		Vector2(1.0, 1.0)
+	)
 
 
 func test_authority_handover_disables_interpolation() -> void:
 	const START := Vector2(0.0, 0.0)
 	const CLIENT_MOVE := Vector2(50.0, 50.0)
 
-	_server_player.position = START
-	await _wait_until_converged(_client_player, START, CONVERGE_WAIT)
-	
-	var client_id := _client.multiplayer.get_unique_id()
-	_server_player.set_multiplayer_authority(client_id)
-	_client_player.set_multiplayer_authority(client_id)
-	
-	_client_player.position = CLIENT_MOVE
-	
-	for _i in 10:
-		await get_tree().process_frame
-		
-	assert_vector(_client_player.position).is_equal(CLIENT_MOVE)
+	_env.set_server_property(&"position", START)
+	await _wait_for_client_position(START, Vector2(1.0, 1.0))
+
+	var client_id := _harness.get_client().multiplayer.get_unique_id()
+	_env.server_node.set_multiplayer_authority(client_id)
+	_env.client_node.set_multiplayer_authority(client_id)
+
+	_env.client_node.position = CLIENT_MOVE
+
+	await _harness.sync_ticks(10)
+
+	assert_vector(_env.client_node.position).is_equal(CLIENT_MOVE)

@@ -12,7 +12,7 @@ extends NetwTestSuite
 const _LEVEL: PackedScene = preload(
 	"res://addons/networked_test/fixtures/TestLevel.tscn"
 )
-const _NODE_PATH := "TestPlayerMinimal/SpawnerComponent"
+const _NODE_PATH := "TestPlayerFull/SpawnerComponent"
 
 
 func _payload_with_path(scene_path: String, node_path: String) -> JoinPayload:

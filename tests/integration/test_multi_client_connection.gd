@@ -1,14 +1,12 @@
 ## Integration tests for [MultiplayerPeer] connection and topology.
 class_name TestMultiClientConnection
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 
 
 func before_test() -> void:
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
+	harness = make_harness()
 	# No lobby manager — this suite only tests the connection layer.
 	# Tests add clients themselves so signal handlers can be connected first.
 	await harness.setup(null)
@@ -17,19 +15,18 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func test_server_is_online_after_connect() -> void:
 	await harness.add_client()
 	await harness.add_client()
-	assert_that(harness.get_server().is_online()).is_true()
+	assert_that(harness.server().is_online()).is_true()
 
 
 func test_all_clients_online_after_connect() -> void:
 	await harness.add_client()
 	await harness.add_client()
-	for client in harness.get_all_clients():
+	for client in harness.clients():
 		assert_that(client.is_online()).is_true()
 
 
@@ -44,13 +41,13 @@ func test_clients_have_distinct_peer_ids() -> void:
 func test_client_peer_ids_are_not_server_id() -> void:
 	await harness.add_client()
 	await harness.add_client()
-	for client in harness.get_all_clients():
+	for client in harness.clients():
 		assert_that(client.multiplayer_peer.get_unique_id()).is_not_equal(1)
 
 
 func test_server_emits_peer_connected_for_each_client() -> void:
 	var connected_ids: Array[int] = []
-	harness.get_server().peer_connected.connect(func(id: int) -> void:
+	harness.server().peer_connected.connect(func(id: int) -> void:
 		connected_ids.append(id)
 	)
 	await harness.add_client()
@@ -60,19 +57,17 @@ func test_server_emits_peer_connected_for_each_client() -> void:
 
 func test_three_clients_all_online() -> void:
 	harness.queue_free()
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
+	harness = make_harness()
 	await harness.setup(null)
 	await harness.add_client()
 	await harness.add_client()
 	await harness.add_client()
 
-	for client in harness.get_all_clients():
+	for client in harness.clients():
 		assert_that(client.is_online()).is_true()
 
 	var ids: Array[int] = []
-	for client in harness.get_all_clients():
+	for client in harness.clients():
 		ids.append(client.multiplayer_peer.get_unique_id())
 	# All IDs must be unique
 	assert_that(ids.size()).is_equal(

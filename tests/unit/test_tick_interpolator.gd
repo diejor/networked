@@ -4,7 +4,7 @@
 ## The test controls exactly which ticks fire and when process frames run,
 ## making assertions on [member Node2D.position] deterministic.
 class_name TestTickInterpolator
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 const P0 := Vector2(0.0, 0.0)

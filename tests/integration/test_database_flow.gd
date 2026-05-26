@@ -3,7 +3,7 @@
 ## Exercises the full persistence stack including schema registration,
 ## transactions, and drift policy enforcement.
 class_name TestDatabaseFlow
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var test_dir: String
 var db: NetwDatabase

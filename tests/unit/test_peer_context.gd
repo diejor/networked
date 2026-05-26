@@ -1,6 +1,6 @@
 ## Unit tests for [NetwPeerContext] bucket registry.
 class_name TestNetwPeerContext
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 class BucketA extends RefCounted:

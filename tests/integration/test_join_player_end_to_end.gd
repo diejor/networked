@@ -9,7 +9,7 @@ extends NetwTestSuite
 const _LEVEL: PackedScene = preload(
 	"res://addons/networked_test/fixtures/TestLevel.tscn"
 )
-const _SPAWNER_NODE_PATH := "TestPlayerMinimal/SpawnerComponent"
+const _SPAWNER_NODE_PATH := "TestPlayerFull/SpawnerComponent"
 
 var harness: NetwTestHarness
 var alice: MultiplayerTree

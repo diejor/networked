@@ -2,7 +2,7 @@
 ##
 ## Covers authority handover, snapping, teleportation, and feedback loops.
 class_name TestTickInterpolatorEdgeCases
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var _runner: GdUnitSceneRunner
 var _harness: TickNetworkTestHarness
@@ -30,7 +30,6 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		await _harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func test_authority_handover() -> void:

@@ -1,11 +1,11 @@
 ## Integration tests for [SaveComponent] with real multiplayer.
 class_name TestSaveFlow
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SAVE_SCENE := preload("res://tests/helpers/TestLevelSave.tscn")
+const TEST_LEVEL_SAVE_SCENE := preload("res://addons/networked_test/fixtures/TestLevelSave.tscn")
 const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var client0: MultiplayerTree
 var test_dir: String
 var backend: FileSystemBackend
@@ -19,12 +19,10 @@ func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend
 
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	var server_mgr := harness._get_scene_manager(harness.get_server())
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SAVE_SCENE.resource_path)
+	harness.register_spawnable_scene(TEST_LEVEL_SAVE_SCENE)
 
 	client0 = await harness.add_client()
 
@@ -33,7 +31,6 @@ func after_test() -> void:
 	clean_temp_dir()
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
 
 
 func _spawn_save_player() -> Node2D:
