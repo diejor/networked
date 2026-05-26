@@ -1,10 +1,11 @@
 ## Unit tests for [MultiplayerSceneManager] level configuration.
 ##
-## Verifies [method MultiplayerSceneManager._set],
-## [method MultiplayerSceneManager._get], and
-## [method MultiplayerSceneManager._get_config] behavior without networking.
-class_name TestLobbyManagerConfig
-extends NetworkedTestSuite
+## Covers the editor-integration path (`_set` / `_get` with
+## `scene_config/...` property strings) and the public
+## [method MultiplayerSceneManager.set_scene_lifecycle_policy] API,
+## both of which must write through to the same internal config.
+class_name TestSceneManagerConfig
+extends NetwTestSuite
 
 var mgr: MultiplayerSceneManager
 
@@ -19,89 +20,90 @@ func after_test() -> void:
 		mgr.free()
 
 
-func test_get_config_load_mode_defaults_to_on_startup() -> void:
+# Unconfigured levels read back the documented defaults via both the
+# typed [_get_config] dictionary and the property-string [_get] path.
+func test_default_config_for_unconfigured_level() -> void:
 	var config := mgr._get_config(&"UnknownLevel")
 	assert_that(config["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP)
-
-
-func test_get_config_empty_action_defaults_to_freeze() -> void:
-	var config := mgr._get_config(&"UnknownLevel")
+		MultiplayerSceneManager.LoadMode.ON_STARTUP
+	)
 	assert_that(config["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE)
-
-
-func test_set_returns_true_for_valid_config_property() -> void:
-	assert_that(mgr._set(&"scene_config/Level1/load_mode", 0)).is_true()
-
-
-func test_set_returns_false_for_unrelated_property() -> void:
-	assert_that(mgr._set(&"some_other_property", 42)).is_false()
-
-
-func test_set_stores_load_mode_on_demand() -> void:
-	mgr._set(&"scene_config/Level1/load_mode",
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
-	assert_that(mgr._get_config(&"Level1")["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
-
-
-func test_set_stores_empty_action_destroy() -> void:
-	mgr._set(&"scene_config/Level1/empty_action",
-		MultiplayerSceneManager.EmptyAction.DESTROY)
-	assert_that(mgr._get_config(&"Level1")["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.DESTROY)
-
-
-func test_set_stores_empty_action_keep_active() -> void:
-	mgr._set(&"scene_config/Level1/empty_action",
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
-	assert_that(mgr._get_config(&"Level1")["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
-
-
-func test_get_returns_null_for_unrelated_property() -> void:
-	assert_that(mgr._get(&"some_other_property")).is_null()
-
-
-func test_get_returns_default_load_mode_when_not_set() -> void:
+		MultiplayerSceneManager.EmptyAction.FREEZE
+	)
 	assert_that(mgr._get(&"scene_config/NewLevel/load_mode")).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP)
-
-
-func test_get_returns_default_empty_action_when_not_set() -> void:
+		MultiplayerSceneManager.LoadMode.ON_STARTUP
+	)
 	assert_that(mgr._get(&"scene_config/NewLevel/empty_action")).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE)
+		MultiplayerSceneManager.EmptyAction.FREEZE
+	)
 
 
-func test_get_reads_stored_load_mode() -> void:
-	mgr._set(&"scene_config/Level1/load_mode",
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
-	assert_that(mgr._get(&"scene_config/Level1/load_mode")).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
+# Both write paths (Phase C public API + the editor `_set`) must produce
+# identical results across the enum cross-product.
+func test_lifecycle_policy_round_trip(
+	use_public_api: bool,
+	load_mode: int,
+	empty_action: int,
+	test_parameters := [
+		[true,  MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		        MultiplayerSceneManager.EmptyAction.DESTROY],
+		[true,  MultiplayerSceneManager.LoadMode.ON_STARTUP,
+		        MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE],
+		[false, MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		        MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE],
+		[false, MultiplayerSceneManager.LoadMode.ON_STARTUP,
+		        MultiplayerSceneManager.EmptyAction.DESTROY],
+	],
+) -> void:
+	if use_public_api:
+		mgr.set_scene_lifecycle_policy(&"Level1", load_mode, empty_action)
+	else:
+		mgr._set(&"scene_config/Level1/load_mode", load_mode)
+		mgr._set(&"scene_config/Level1/empty_action", empty_action)
 
-
-func test_get_reads_stored_empty_action() -> void:
-	mgr._set(&"scene_config/Level1/empty_action",
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+	var config := mgr._get_config(&"Level1")
+	assert_that(config["load_mode"]).is_equal(load_mode)
+	assert_that(config["empty_action"]).is_equal(empty_action)
+	assert_that(mgr._get(&"scene_config/Level1/load_mode")).is_equal(load_mode)
 	assert_that(mgr._get(&"scene_config/Level1/empty_action")).is_equal(
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+		empty_action
+	)
 
 
-func test_two_levels_have_independent_load_modes() -> void:
-	mgr._set(&"scene_config/Level1/load_mode",
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
-	mgr._set(&"scene_config/Level2/load_mode",
-		MultiplayerSceneManager.LoadMode.ON_STARTUP)
-	assert_that(mgr._get_config(&"Level1")["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_DEMAND)
-	assert_that(mgr._get_config(&"Level2")["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP)
+# Property-string routing: scene_config/... is owned by this class, anything
+# else is rejected by `_set` and returns null from `_get`.
+func test_property_routing(
+	prop: StringName,
+	expected_set: bool,
+	test_parameters := [
+		[&"scene_config/Level1/load_mode", true],
+		[&"some_other_property",           false],
+	],
+) -> void:
+	assert_that(mgr._set(prop, 0)).is_equal(expected_set)
+	if not expected_set:
+		assert_that(mgr._get(prop)).is_null()
 
 
-func test_setting_one_level_does_not_affect_another() -> void:
-	mgr._set(&"scene_config/Level1/empty_action",
-		MultiplayerSceneManager.EmptyAction.DESTROY)
+func test_levels_are_independent() -> void:
+	mgr.set_scene_lifecycle_policy(
+		&"Level1",
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		MultiplayerSceneManager.EmptyAction.DESTROY,
+	)
+	# Level2 stays unconfigured -> reads documented defaults.
+	var config1 := mgr._get_config(&"Level1")
 	var config2 := mgr._get_config(&"Level2")
+
+	assert_that(config1["load_mode"]).is_equal(
+		MultiplayerSceneManager.LoadMode.ON_DEMAND
+	)
+	assert_that(config1["empty_action"]).is_equal(
+		MultiplayerSceneManager.EmptyAction.DESTROY
+	)
+	assert_that(config2["load_mode"]).is_equal(
+		MultiplayerSceneManager.LoadMode.ON_STARTUP
+	)
 	assert_that(config2["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE)
+		MultiplayerSceneManager.EmptyAction.FREEZE
+	)
