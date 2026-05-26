@@ -5,11 +5,14 @@
 class_name TestTPFlow
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel.tscn"
+const PlayerBuilder := preload(
+	"res://addons/networked_test/builders/player_builder.gd"
 )
-const TEST_LEVEL_2_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel2.tscn"
+const LevelBuilder := preload(
+	"res://addons/networked_test/builders/level_builder.gd"
+)
+const NetwPathNamespace := preload(
+	"res://addons/networked_test/builders/path_namespace.gd"
 )
 
 ## Node path from level root to the [SpawnerComponent] spawner.
@@ -21,6 +24,9 @@ var client1: MultiplayerTree
 var test_dir: String
 var backend: FileSystemBackend
 var db: NetwDatabase
+var player_packed: PackedScene
+var level_packed: PackedScene
+var level_2_packed: PackedScene
 
 
 func before_test() -> void:
@@ -30,11 +36,45 @@ func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend
 
+	var player_path := NetwPathNamespace.next_path("player", "TestPlayerFull")
+	var level_path := NetwPathNamespace.next_path("level", "TestLevel")
+	var level_2_path := NetwPathNamespace.next_path("level", "TestLevel2")
+
+	var player_builder: PlayerBuilder = PlayerBuilder.new("TestPlayerFull")
+	var _r1: PlayerBuilder = player_builder.with_spawner()
+	var _r2: PlayerBuilder = player_builder.with_save(db, &"players")
+	var _r3: PlayerBuilder = player_builder.with_tp(level_path, "PlayerSpawner")
+	player_packed = player_builder.pack(player_path)
+
+	var template_instance: Node = player_packed.instantiate()
+
+	var level_builder1: LevelBuilder = LevelBuilder.new("TestLevel")
+	var _r4: LevelBuilder = level_builder1.with_multiplayer_spawner(
+		"..", [player_packed]
+	)
+	var _r5: LevelBuilder = level_builder1.with_child(template_instance)
+	level_packed = level_builder1.pack(level_path)
+
+	var marker: Marker2D = Marker2D.new()
+	marker.name = "TPTarget"
+	marker.position = Vector2(100, 100)
+
+	var level_builder2: LevelBuilder = LevelBuilder.new("TestLevel2")
+	var _r6: LevelBuilder = level_builder2.with_multiplayer_spawner(
+		"..", [player_packed]
+	)
+	var _r7: LevelBuilder = level_builder2.with_child(template_instance)
+	var _r8: LevelBuilder = level_builder2.with_child(marker)
+	level_2_packed = level_builder2.pack(level_2_path)
+
+	template_instance.free()
+	marker.free()
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
-	harness.register_spawnable_scene(TEST_LEVEL_2_SCENE)
+	harness.register_spawnable_scene(level_packed)
+	harness.register_spawnable_scene(level_2_packed)
 
 	client0 = await harness.add_client()
 
@@ -90,7 +130,7 @@ func test_two_scenes_spawned() -> void:
 
 
 func test_tp_spawn_places_in_correct_scene() -> void:
-	var player := await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
+	var player := await _spawn_tp_player(level_packed.resource_path)
 
 	var server_mgr := harness.server_scene_manager()
 	var scene: MultiplayerScene = server_mgr.active_scenes.get(&"TestLevel")
@@ -98,7 +138,7 @@ func test_tp_spawn_places_in_correct_scene() -> void:
 
 
 func test_reparent_moves_player_between_scenes() -> void:
-	var server_player := await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
+	var server_player := await _spawn_tp_player(level_packed.resource_path)
 	var client_player := await harness.wait_for_player(
 		client0, &"TestLevel") as Node2D
 
@@ -109,14 +149,14 @@ func test_reparent_moves_player_between_scenes() -> void:
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
 	await _await_tp(client_tp.teleport(
-		_tp_target(TEST_LEVEL_2_SCENE.resource_path, "TPTarget")
+		_tp_target(level_2_packed.resource_path, "TPTarget")
 	))
 
 	assert_that(server_player.get_parent()).is_equal(scene2.level)
 
 
 func test_teleported_snaps_to_marker() -> void:
-	await _spawn_tp_player(TEST_LEVEL_SCENE.resource_path)
+	await _spawn_tp_player(level_packed.resource_path)
 	var client_player := await harness.wait_for_player(
 		client0, &"TestLevel") as Node2D
 
@@ -124,7 +164,7 @@ func test_teleported_snaps_to_marker() -> void:
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
 	await _await_tp(client_tp.teleport(
-		_tp_target(TEST_LEVEL_2_SCENE.resource_path, "TPTarget")
+		_tp_target(level_2_packed.resource_path, "TPTarget")
 	))
 
 	var client_player2 := await harness.wait_for_player(

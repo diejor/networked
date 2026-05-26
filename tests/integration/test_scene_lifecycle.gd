@@ -2,23 +2,30 @@
 class_name TestLobbyLifecycle
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel.tscn"
-)
-const TEST_LEVEL_2_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel2.tscn"
+const LevelBuilder := preload(
+	"res://addons/networked_test/builders/level_builder.gd"
 )
 
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
+var level_packed: PackedScene
+var level_2_packed: PackedScene
 
 
 func before_test() -> void:
+	var level_builder1: LevelBuilder = LevelBuilder.new("TestLevel")
+	var _r1: LevelBuilder = level_builder1.with_multiplayer_spawner()
+	level_packed = level_builder1.pack()
+	
+	var level_builder2: LevelBuilder = LevelBuilder.new("TestLevel2")
+	var _r2: LevelBuilder = level_builder2.with_multiplayer_spawner()
+	level_2_packed = level_builder2.pack()
+	
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
-	harness.register_spawnable_scene(TEST_LEVEL_2_SCENE)
+	harness.register_spawnable_scene(level_packed)
+	harness.register_spawnable_scene(level_2_packed)
 	await harness.add_client()
 
 
@@ -41,8 +48,8 @@ func test_on_demand_scene_skipped_at_startup() -> void:
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,
 		MultiplayerSceneManager.EmptyAction.FREEZE
 	)
-	h2.register_spawnable_scene(TEST_LEVEL_SCENE)
-	h2.register_spawnable_scene(TEST_LEVEL_2_SCENE)
+	h2.register_spawnable_scene(level_packed)
+	h2.register_spawnable_scene(level_2_packed)
 	await h2.add_client()
 
 	var mgr2 := h2.server_scene_manager()
@@ -55,7 +62,7 @@ func test_preload_scene_populates_cache() -> void:
 	server_mgr.destroy_scene(&"TestLevel2")
 	await get_tree().process_frame
 
-	var path := TEST_LEVEL_2_SCENE.resource_path
+	var path := level_2_packed.resource_path
 	server_mgr.preload_scene(&"TestLevel2")
 
 	assert_that(path).is_not_empty()
@@ -75,7 +82,7 @@ func test_spawn_after_preload_consumes_cache() -> void:
 	server_mgr.destroy_scene(&"TestLevel2")
 	await get_tree().process_frame
 
-	var path := TEST_LEVEL_2_SCENE.resource_path
+	var path := level_2_packed.resource_path
 	server_mgr.preload_scene(&"TestLevel2")
 	server_mgr.spawn_scene(&"TestLevel2")
 

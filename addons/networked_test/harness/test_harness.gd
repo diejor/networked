@@ -455,19 +455,54 @@ func add_host_player(
 	return tree
 
 
+## Registers a programmatically built [PackedScene] in the harness.
+##
+## Asserts that the harness session is a [LocalLoopbackSession]. Mirrors the
+## registration onto all currently connected clients.
+func register_built_scene(packed: PackedScene) -> void:
+	assert(
+		_session != null,
+		"register_built_scene: Harness must be set up."
+	)
+	var path := packed.resource_path
+	assert(
+		not path.is_empty(),
+		"register_built_scene: PackedScene must have a valid resource path."
+	)
+	var server_sm := server_scene_manager()
+	if server_sm:
+		server_sm.add_spawnable_scene(path)
+	for client in _clients:
+		var client_sm := scene_manager_for(client)
+		if client_sm:
+			client_sm.add_spawnable_scene(path)
+
+
 ## Spawns a player into a server scene, bypassing the RPC chain.
-## Returns the spawned player node.
+##
+## Accepts [param scene_or_builder] which can be a [PackedScene], a live [Node],
+## or a builder implementing [method build]. Returns the spawned player node.
 func spawn_player(
 	client: MultiplayerTree,
-	player_scene: PackedScene,
+	scene_or_builder: Variant,
 	scene_name: StringName = "",
 ) -> Node:
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var username: String = client.get_meta(&"_harness_username")
-
-	var player := player_scene.instantiate()
+	var player: Node
+	if scene_or_builder is PackedScene:
+		player = (scene_or_builder as PackedScene).instantiate()
+	elif scene_or_builder is Node:
+		player = scene_or_builder as Node
+	elif scene_or_builder.has_method("build"):
+		player = scene_or_builder.build() as Node
+	else:
+		assert(
+			false,
+			"spawn_player: expected PackedScene, Node, or builder."
+		)
+		return null
 	NetwEntity.bundle(player, peer_id, StringName(username))
-
 	var scene := scene_on_server(scene_name)
 	scene.add_player(player)
 	return player

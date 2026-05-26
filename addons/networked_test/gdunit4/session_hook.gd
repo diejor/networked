@@ -107,6 +107,10 @@ func _reset_debugger() -> void:
 
 
 func _assert_clean_state(event: GdUnitEvent) -> void:
+	# Clean up any dynamically compiled builder scenes from the ResourceCache
+	var path_ns := preload("res://addons/networked_test/builders/path_namespace.gd")
+	path_ns.reset()
+
 	var tree := Engine.get_main_loop() as SceneTree
 	if not tree:
 		return
