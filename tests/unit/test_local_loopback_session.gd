@@ -52,6 +52,39 @@ func test_poll_advances_all_clients_to_connected() -> void:
 		MultiplayerPeer.CONNECTION_CONNECTED)
 
 
+func test_client_close_notifies_server() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	var disconnected: Array[int] = []
+	server.peer_disconnected.connect(func(peer_id: int):
+		disconnected.append(peer_id)
+	)
+	session.poll()
+
+	var client_id := client._get_unique_id()
+	client.close()
+	session.poll()
+
+	assert_that(server.linked_peers.has(client_id)).is_false()
+	assert_that(disconnected).contains_exactly([client_id])
+
+
+func test_closed_client_does_not_block_new_client() -> void:
+	var first_client := session.create_client_peer()
+	session.poll()
+	first_client.close()
+	session.poll()
+
+	var second_client := session.create_client_peer()
+	session.poll()
+
+	assert_that(second_client._get_connection_status()).is_equal(
+		MultiplayerPeer.CONNECTION_CONNECTED)
+	assert_that(session.server_peer.linked_peers.has(
+		second_client._get_unique_id()
+	)).is_true()
+
+
 func test_reset_clears_server_and_all_clients() -> void:
 	session.create_client_peer()
 	session.create_client_peer()

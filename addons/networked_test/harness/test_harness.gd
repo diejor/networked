@@ -258,6 +258,53 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
+## Disconnects [param client] from the harness server without freeing it.
+## The client can be passed to [method reconnect_client] afterward.
+func disconnect_client(client: MultiplayerTree) -> void:
+	assert(_clients.has(client), "disconnect_client: unknown client tree.")
+	if not client.multiplayer_peer:
+		return
+
+	var peer := client.multiplayer_peer as LocalMultiplayerPeer
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	client.state = MultiplayerTree.State.DISCONNECTING
+	if peer:
+		_session.release_inbound_packets(peer)
+	client.multiplayer_peer.close()
+
+	var server_api := _server.multiplayer_api
+	await _wait_until(
+		func() -> bool: return not peer_id in server_api.get_peers(),
+		"server to unregister peer %d" % peer_id,
+	)
+
+	if client.api and client.api.has_multiplayer_peer():
+		client.api.multiplayer_peer = null
+	client.state = MultiplayerTree.State.OFFLINE
+	client.role = MultiplayerTree.Role.NONE
+	await get_tree().process_frame
+
+
+## Reconnects a client previously closed by [method disconnect_client].
+func reconnect_client(client: MultiplayerTree) -> void:
+	assert(_clients.has(client), "reconnect_client: unknown client tree.")
+	await _ensure_server_hosted()
+
+	var username: String = client.get_meta(&"_harness_username")
+	var join_err: Error = await client.join("localhost", username)
+	assert(
+		join_err == OK,
+		"Client reconnect failed: %s" % error_string(join_err)
+	)
+
+	var peer_id := client.multiplayer_peer.get_unique_id()
+	var server_api := _server.multiplayer_api
+	await _wait_until(
+		func() -> bool: return peer_id in server_api.get_peers(),
+		"server to register reconnected peer %d" % peer_id,
+	)
+
+
 #endregion
 
 #region Player flows
