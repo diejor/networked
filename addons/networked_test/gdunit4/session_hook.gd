@@ -109,10 +109,7 @@ func _reset_debugger() -> void:
 
 
 func _reset_global_test_state() -> void:
-	var path_ns := preload(
-		"res://addons/networked_test/builders/path_namespace.gd"
-	)
-	path_ns.reset()
+	NetwPathNamespace.reset()
 
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()

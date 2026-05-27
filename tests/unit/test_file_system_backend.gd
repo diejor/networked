@@ -35,6 +35,7 @@ func test_initialization_lifecycle_and_registry() -> void:
 	assert_that(err_reuse).is_equal(OK)
 
 
+@warning_ignore("unused_parameter")
 func test_crud_flow_and_querying(
 	use_text_format: bool,
 	test_parameters := [

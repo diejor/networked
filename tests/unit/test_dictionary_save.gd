@@ -51,6 +51,7 @@ func test_dict_conversions_and_iteration() -> void:
 	assert_that(visited.has(&"y")).is_true()
 
 
+@warning_ignore("unused_parameter")
 func test_serialization_round_trip(
 	key: StringName,
 	value: Variant,

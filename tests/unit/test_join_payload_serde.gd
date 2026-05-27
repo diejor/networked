@@ -14,6 +14,7 @@ func _round_trip(original: JoinPayload) -> JoinPayload:
 	return restored
 
 
+@warning_ignore("unused_parameter")
 func test_round_trip_preserves_scalars(
 	username: String,
 	url: String,

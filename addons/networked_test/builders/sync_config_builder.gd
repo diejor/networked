@@ -2,7 +2,7 @@
 ##
 ## Hard-wrapped to 80 columns.
 class_name SyncConfigBuilder
-extends Object
+extends RefCounted
 
 ## Replication mode constant representing NEVER.
 const NEVER = SceneReplicationConfig.REPLICATION_MODE_NEVER

@@ -2,7 +2,7 @@
 ##
 ## Hard-wrapped to 80 columns.
 class_name LevelBuilder
-extends Object
+extends RefCounted
 
 
 ## The unique name identifier for this level scene builder.

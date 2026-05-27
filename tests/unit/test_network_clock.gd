@@ -29,6 +29,7 @@ func _make_clock_in_tree(
 
 #region Public properties
 
+@warning_ignore("unused_parameter")
 func test_ticktime_is_reciprocal_of_tickrate(
 	tickrate: int,
 	test_parameters := [[20], [60]],
@@ -37,6 +38,7 @@ func test_ticktime_is_reciprocal_of_tickrate(
 	assert_that(absf(clock.ticktime - 1.0 / tickrate) < 0.0001).is_true()
 
 
+@warning_ignore("unused_parameter")
 func test_display_tick_with_offset(
 	tick: int,
 	offset: int,
@@ -59,6 +61,7 @@ func test_display_tick_with_offset(
 
 # SNAP jumps directly to the target regardless of the magnitude or sign of
 # the diff.
+@warning_ignore("unused_parameter")
 func test_calibrate_snap_always_jumps(
 	starting_tick: int,
 	target_tick: int,
@@ -156,6 +159,7 @@ func test_for_node_returns_registered_clock() -> void:
 
 #region Internal tick loop
 
+@warning_ignore("unused_parameter")
 func test_physics_process_tick_advancement(
 	delta: float,
 	expected_advance: int,
@@ -174,6 +178,7 @@ func test_physics_process_tick_advancement(
 # The interpolation-off branch uses wall-clock time since the last physics
 # frame, which is deterministic for synthetic _physics_process calls and is
 # the only path testable without a real physics step.
+@warning_ignore("unused_parameter")
 func test_physics_process_tick_factor_without_interpolation(
 	delta: float,
 	expected_factor: float,
@@ -188,6 +193,7 @@ func test_physics_process_tick_factor_without_interpolation(
 
 
 # on_tick fires once per advanced tick, up to [max_ticks_per_frame].
+@warning_ignore("unused_parameter")
 func test_on_tick_emit_count(
 	delta: float,
 	max_ticks: int,

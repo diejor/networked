@@ -74,6 +74,7 @@ func test_player_spawns_in_level_after_join() -> void:
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
 
+	@warning_ignore("redundant_await")
 	await assert_func(level, "get_node_or_null", [player_name]) \
 		.wait_until(1000) \
 		.is_not_null()
@@ -99,6 +100,7 @@ func test_spawned_player_has_correct_username() -> void:
 	var level := server.get_node_or_null(
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
+	@warning_ignore("redundant_await")
 	await assert_func(level, "get_node_or_null", [player_name]) \
 		.wait_until(1000) \
 		.is_not_null()

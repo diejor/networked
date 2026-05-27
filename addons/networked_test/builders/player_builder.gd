@@ -2,7 +2,7 @@
 ##
 ## Hard-wrapped to 80 columns.
 class_name PlayerBuilder
-extends Object
+extends RefCounted
 
 
 ## The unique name identifier for this player builder.

@@ -39,6 +39,7 @@ class StubTickAware extends TickAwareSynchronizer:
 
 #region Registration
 
+@warning_ignore("unused_parameter")
 func test_register_property(
 	mode: int,
 	spawn: bool,
@@ -99,6 +100,7 @@ func test_register_node_property_uses_proxy_relative_path() -> void:
 
 #region Read/write dispatch
 
+@warning_ignore("unused_parameter")
 func test_set_get_dispatch(
 	prop: StringName,
 	registered: bool,
@@ -122,6 +124,7 @@ func test_set_get_dispatch(
 
 # Fuzz any registered property through _set -> _store -> _get and assert
 # the variant round-trips byte-for-byte.
+@warning_ignore("unused_parameter")
 func test_property_roundtrip_fuzz(
 	fuzzer := Fuzzers.rangei(-1_000_000, 1_000_000),
 	fuzzer_iterations := 20,
@@ -130,7 +133,7 @@ func test_property_roundtrip_fuzz(
 	proxy.register_property(&"v", NodePath(":v"))
 
 	var raw: int = fuzzer.next_value()
-	var value := Vector2(float(raw % 1000), float(raw / 1000))
+	var value := Vector2(float(raw % 1000), floor(float(raw) / 1000.0))
 
 	assert_that(proxy._set(&"v", value)).is_true()
 	assert_that(proxy._get(&"v")).is_equal(value)

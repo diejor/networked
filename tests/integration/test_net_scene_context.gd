@@ -115,6 +115,7 @@ func test_suspend_signal_reaches_client_context() -> void:
 
 	server_ctx.scene.suspend("loading")
 
+	@warning_ignore("redundant_await")
 	await assert_signal(client0_ctx.scene) \
 		.wait_until(1000) \
 		.is_emitted("suspended", ["loading"])
@@ -125,6 +126,7 @@ func test_request_suspend_notifies_server() -> void:
 
 	client0_ctx.scene.request_suspend("brb")
 
+	@warning_ignore("redundant_await")
 	await assert_signal(server_ctx.scene) \
 		.wait_until(1000) \
 		.is_emitted(
@@ -139,7 +141,8 @@ func test_resume_signal_reaches_client_context() -> void:
 
 	server_ctx.scene.resume()
 
-	assert_signal(client1_ctx.scene) \
+	@warning_ignore("redundant_await")
+	await assert_signal(client1_ctx.scene) \
 		.wait_until(1000) \
 		.is_emitted("resumed")
 
@@ -176,6 +179,7 @@ func test_kick_disconnects_the_peer() -> void:
 
 	server_ctx.tree.kick(peer0_id)
 
+	@warning_ignore("redundant_await")
 	await assert_signal(server) \
 		.wait_until(1000) \
 		.is_emitted("peer_disconnected", [peer0_id])
@@ -188,6 +192,7 @@ func test_request_kick_notifies_server() -> void:
 	# client0 asks the server to kick client1.
 	client0_ctx.tree.request_kick(peer1_id, "griefing")
 
+	@warning_ignore("redundant_await")
 	await assert_signal(server_ctx.tree) \
 		.wait_until(1000) \
 		.is_emitted(
@@ -215,6 +220,7 @@ func test_countdown_started_signal_reaches_client() -> void:
 
 	server_ctx.scene.start_countdown(10)
 
+	@warning_ignore("redundant_await")
 	await assert_signal(client0_ctx.scene) \
 		.wait_until(1000) \
 		.is_emitted("countdown_started", [10])
@@ -255,6 +261,7 @@ func test_set_ready_propagates_to_server_gate_via_rpc() -> void:
 
 	c0_gate.set_ready(true)
 
+	@warning_ignore("redundant_await")
 	await assert_signal(server_gate) \
 		.wait_until(1000) \
 		.is_emitted(
@@ -272,6 +279,7 @@ func test_all_ready_fires_when_every_player_is_ready() -> void:
 	c0_gate.set_ready(true)
 	c1_gate.set_ready(true)
 
+	@warning_ignore("redundant_await")
 	await assert_signal(server_gate) \
 		.wait_until(1000) \
 		.is_emitted("all_ready")

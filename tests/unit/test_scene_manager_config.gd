@@ -43,6 +43,7 @@ func test_default_config_for_unconfigured_level() -> void:
 
 # Both write paths (Phase C public API + the editor `_set`) must produce
 # identical results across the enum cross-product.
+@warning_ignore("unused_parameter")
 func test_lifecycle_policy_round_trip(
 	use_public_api: bool,
 	load_mode: int,
@@ -79,6 +80,7 @@ func test_lifecycle_policy_round_trip(
 
 # Property-string routing: scene_config/... is owned by this class, anything
 # else is rejected by `_set` and returns null from `_get`.
+@warning_ignore("unused_parameter")
 func test_property_routing(
 	prop: StringName,
 	expected_set: bool,

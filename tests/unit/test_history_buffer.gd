@@ -20,6 +20,7 @@ func test_empty_buffer_state() -> void:
 	assert_that(buf.has_tick_after(0)).is_false()
 
 
+@warning_ignore("unused_parameter")
 func test_record_then_get_at(
 	tick: int,
 	value: Variant,
@@ -41,6 +42,7 @@ func test_record_then_get_at(
 	assert_that(buf.newest_tick()).is_equal(tick)
 
 
+@warning_ignore("unused_parameter")
 func test_bracketing_ticks(
 	recorded: Array,
 	query: int,
@@ -98,6 +100,7 @@ func test_capacity_normalized_to_power_of_two() -> void:
 
 # fuzz: record monotonic ticks; assert the buffer's view (size, oldest,
 # newest, get_at) agrees with an oracle keeping the last N inserts.
+@warning_ignore("unused_parameter")
 func test_buffer_view_matches_oracle(
 	fuzzer := Fuzzers.rangei(1, 1_000_000),
 	fuzzer_iterations := 20,
@@ -125,6 +128,7 @@ func test_buffer_view_matches_oracle(
 
 # fuzz: record monotonic ticks beyond capacity; assert that every tick
 # below the oracle's oldest entry has been evicted.
+@warning_ignore("unused_parameter")
 func test_evicted_ticks_return_null(
 	fuzzer := Fuzzers.rangei(1, 1_000_000),
 	fuzzer_iterations := 20,
@@ -144,6 +148,7 @@ func test_evicted_ticks_return_null(
 
 # fuzz: random bracketing queries against a randomly populated buffer;
 # cross-check against a linear-search oracle on the same tick set.
+@warning_ignore("unused_parameter")
 func test_bracketing_matches_linear_oracle(
 	fuzzer := Fuzzers.rangei(0, 50),
 	fuzzer_iterations := 20,

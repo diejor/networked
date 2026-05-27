@@ -37,15 +37,6 @@ static func reset() -> void:
 			res.take_over_path("")
 	_resources.clear()
 
-	# Safely reset builder counters dynamically to avoid circular preloads.
-	var lb := load(
-		"res://addons/networked_test/builders/level_builder.gd"
-	) as GDScript
-	if lb:
-		lb.reset_counter()
-	var pb := load(
-		"res://addons/networked_test/builders/player_builder.gd"
-	) as GDScript
-	if pb:
-		pb.reset_counter()
-
+	# Safely reset builder counters directly using global class names.
+	LevelBuilder.reset_counter()
+	PlayerBuilder.reset_counter()
