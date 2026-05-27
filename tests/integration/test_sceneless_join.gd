@@ -5,27 +5,26 @@
 class_name TestLobbylessJoin
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
-
 var harness: NetwTestHarness
 var client: MultiplayerTree
 var player_builder: PlayerBuilder
 var level_builder: LevelBuilder
+var spawner_path: String
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner()
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_spawner()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
-	level_builder = LevelBuilder.new("TestLevel") \
+	level_builder = LevelBuilder.new() \
 		.with_root(Node2D) \
 		.with_multiplayer_spawner("..", [player_builder.packed]) \
 		.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
+
+	spawner_path = "%s/SpawnerComponent" % player_builder.player_name
 
 	harness = make_harness()
 	await harness.setup(null, level_builder.packed)
@@ -60,7 +59,7 @@ func test_player_spawns_in_level_after_join() -> void:
 	var join_payload := harness.make_join_payload(
 		username,
 		level_builder.resource_path,
-		SPAWNER_PATH
+		spawner_path
 	)
 
 	client.request_join_player.rpc_id(
@@ -89,7 +88,7 @@ func test_spawned_player_has_correct_username() -> void:
 	var join_payload := harness.make_join_payload(
 		username,
 		level_builder.resource_path,
-		SPAWNER_PATH
+		spawner_path
 	)
 
 	client.request_join_player.rpc_id(

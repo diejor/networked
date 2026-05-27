@@ -4,15 +4,6 @@
 class_name PlayerBuilder
 extends Object
 
-const SceneAssembly := preload(
-	"res://addons/networked_test/builders/scene_assembly.gd"
-)
-const SyncConfigBuilder := preload(
-	"res://addons/networked_test/builders/sync_config_builder.gd"
-)
-const NetwPathNamespace := preload(
-	"res://addons/networked_test/builders/path_namespace.gd"
-)
 
 ## The unique name identifier for this player builder.
 var player_name: StringName
@@ -30,12 +21,21 @@ var _tp_level_scene_path: String = ""
 var _tp_spawner_node_path: String = ""
 var _player_sync_config_builder: SyncConfigBuilder = null
 
+static var _uid_counter: int = 0
 
-# Initializes the player builder with the given entity name.
-func _init(p_player_name: String) -> void:
+
+# Initializes the player builder. If no name is provided, a unique sequential name is auto-generated.
+func _init(p_player_name: String = "") -> void:
+	if p_player_name.is_empty():
+		_uid_counter += 1
+		p_player_name = "AutogenPlayer_%d" % _uid_counter
 	_name = p_player_name
 	player_name = StringName(p_player_name)
 
+
+## Resets the unique sequential name counter. Used in test teardown for determinism.
+static func reset_counter() -> void:
+	_uid_counter = 0
 
 ## Configures the custom root node class or script type.
 func with_root(type: Variant) -> PlayerBuilder:

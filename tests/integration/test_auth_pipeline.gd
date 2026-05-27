@@ -2,10 +2,9 @@
 class_name TestAuthPipeline
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
-
 var player_builder: PlayerBuilder
 var level_builder: LevelBuilder
+var spawner_path: String
 
 var harness: NetwTestHarness
 var server: MultiplayerTree
@@ -13,18 +12,18 @@ var client_tree: MultiplayerTree
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner()
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_spawner()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
-	level_builder = LevelBuilder.new("TestLevel") \
+	level_builder = LevelBuilder.new() \
 		.with_root(Node2D) \
 		.with_multiplayer_spawner("..", [player_builder.packed]) \
 		.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
+
+	spawner_path = "%s/SpawnerComponent" % player_builder.player_name
 
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
@@ -78,7 +77,7 @@ func _join_payload(username: String) -> JoinPayload:
 	return harness.make_join_payload(
 		username,
 		level_builder.resource_path,
-		SPAWNER_PATH
+		spawner_path
 	)
 
 

@@ -16,11 +16,10 @@ var level_builder: LevelBuilder
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
-		.with_root(Node2D)
+	player_builder = PlayerBuilder.new().with_root(Node2D)
 	player_builder.pack()
 
-	level_builder = LevelBuilder.new("TestLevel") \
+	level_builder = LevelBuilder.new() \
 		.with_root(Node2D) \
 		.with_multiplayer_spawner("..", [player_builder.packed])
 	level_builder.pack()

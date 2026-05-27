@@ -13,7 +13,7 @@ func before_test() -> void:
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
 	
-	level_builder = LevelBuilder.new("TestLevel") \
+	level_builder = LevelBuilder.new() \
 		.with_root(Node2D) \
 		.with_multiplayer_spawner()
 	level_builder.pack()

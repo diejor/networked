@@ -4,12 +4,6 @@
 class_name LevelBuilder
 extends Object
 
-const SceneAssembly := preload(
-	"res://addons/networked_test/builders/scene_assembly.gd"
-)
-const NetwPathNamespace := preload(
-	"res://addons/networked_test/builders/path_namespace.gd"
-)
 
 ## The unique name identifier for this level scene builder.
 var scene_name: StringName
@@ -25,12 +19,21 @@ var _spawn_path: String = ".."
 var _spawnable_scene_paths: Array[String] = []
 var _custom_children: Array[Node] = []
 
+static var _uid_counter: int = 0
 
-# Initializes the level builder with the given scene name.
-func _init(level_name: String) -> void:
+
+# Initializes the level builder. If no name is provided, a unique sequential name is auto-generated.
+func _init(level_name: String = "") -> void:
+	if level_name.is_empty():
+		_uid_counter += 1
+		level_name = "AutogenLevel_%d" % _uid_counter
 	_name = level_name
 	scene_name = StringName(level_name)
 
+
+## Resets the unique sequential name counter. Used in test teardown for determinism.
+static func reset_counter() -> void:
+	_uid_counter = 0
 
 ## Configures the level with a [MultiplayerSpawner].
 ##
