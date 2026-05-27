@@ -70,6 +70,7 @@ func after_test() -> void:
 	if api:
 		api.remove_meta(&"_network_clock")
 		api.remove_meta(&"_multiplayer_tree")
+	await super.after_test()
 
 
 func _tick() -> void:

@@ -30,6 +30,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		await _harness.teardown()
+	await super.after_test()
 
 
 func test_authority_handover() -> void:

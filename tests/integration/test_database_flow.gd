@@ -25,7 +25,7 @@ func after_test() -> void:
 	backend = null
 	FileSystemBackend._clear_path_registry()
 	await get_tree().process_frame
-	super.after_test()
+	await super.after_test()
 
 
 func _register_and_wait(table: StringName, columns: Array[StringName]) -> void:

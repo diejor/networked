@@ -33,6 +33,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func test_connected_peers_empty_initially() -> void:

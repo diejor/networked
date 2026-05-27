@@ -27,7 +27,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(_harness):
 		await _harness.teardown()
-	super.after_test()
+	await super.after_test()
 
 
 func _wait_for_client_position(

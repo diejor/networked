@@ -42,6 +42,7 @@ var _extra_sessions: Array[LocalLoopbackSession] = []
 var _clock_enabled: bool = false
 var _clock_tickrate: int = 30
 var _clock_display_offset: int = 3
+var _torn_down := false
 
 
 #region Generic awaits
@@ -93,13 +94,21 @@ func setup(
 	await get_tree().process_frame
 
 
-## Cleans up server, clients, and the session. Call in [code]after_test[/code].
+## Cleans up server, clients, and the session.
+##
+## [NetwTestSuite] calls this automatically for harnesses created through
+## [method NetwTestSuite.make_harness]. Direct users may call it explicitly;
+## repeated calls are ignored.
 ##
 ## Frees nodes before closing peers so each synchronizer's
 ## [code]_exit_tree[/code] fires while [code]recv_sync_ids[/code] is still
 ## consistent, avoiding stray "missing node" warnings from in-flight sync
 ## packets.
 func teardown() -> void:
+	if _torn_down:
+		return
+	_torn_down = true
+
 	var tree := Engine.get_main_loop() as SceneTree
 
 	if is_instance_valid(_server):
@@ -122,10 +131,15 @@ func teardown() -> void:
 
 	if _session:
 		_session.reset()
+	_session = null
+
 	for extra_session in _extra_sessions:
 		if extra_session:
 			extra_session.reset()
 	_extra_sessions.clear()
+	_scene_manager_src = null
+	_world_scene = null
+	awaiter = Callable()
 
 	if is_inside_tree():
 		get_parent().remove_child(self)

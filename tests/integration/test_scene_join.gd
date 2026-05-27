@@ -25,6 +25,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func test_server_spawns_scene_after_host() -> void:
@@ -44,8 +45,8 @@ func test_spawned_scene_is_scene_instance() -> void:
 
 
 func test_two_clients_both_connect_to_server_with_scene() -> void:
-	harness.queue_free()
-	harness = make_harness()
+	await harness.teardown()
+	harness = make_unmanaged_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	harness.register_spawnable_scene(level_builder.packed)
 	await harness.add_client()

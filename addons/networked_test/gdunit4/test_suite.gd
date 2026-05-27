@@ -11,6 +11,8 @@ const _GdUnitAwaiter := preload(
 	"res://addons/networked_test/gdunit4/gdunit_awaiter.gd"
 )
 
+var _netw_managed_harness: NetwTestHarness
+
 
 
 ## Awaits a condition to become true within [param timeout] seconds.
@@ -47,10 +49,12 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 		await tree.process_frame
 
 
-## Builds, parents, and auto-frees a [NetwTestHarness].
+## Builds, parents, and auto-tears down a [NetwTestHarness].
 ##
 ## The returned harness has the GdUnit4 awaiter installed. Always call
 ## [code]await harness.setup(...)[/code] before driving multiplayer flows.
+## A test case may create one managed harness; [method after_test] tears it
+## down automatically.
 ##
 ## [codeblock]
 ## var harness := make_harness()
@@ -58,6 +62,19 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 ## var client := await harness.add_client()
 ## [/codeblock]
 func make_harness() -> NetwTestHarness:
+	assert(
+		_netw_managed_harness == null,
+		"make_harness: harness already created."
+	)
+	_netw_managed_harness = make_unmanaged_harness()
+	return _netw_managed_harness
+
+
+## Builds, parents, and auto-frees an unmanaged [NetwTestHarness].
+##
+## Use this only for additional harnesses inside a test case. The caller must
+## explicitly call [code]await harness.teardown()[/code].
+func make_unmanaged_harness() -> NetwTestHarness:
 	var harness := NetwTestHarness.new()
 	harness.awaiter = _GdUnitAwaiter.get_awaiter()
 	add_child(harness)
@@ -111,4 +128,7 @@ func enable_debugger() -> void:
 
 
 func after_test() -> void:
+	if is_instance_valid(_netw_managed_harness):
+		await _netw_managed_harness.teardown()
+	_netw_managed_harness = null
 	clean_temp_dir()

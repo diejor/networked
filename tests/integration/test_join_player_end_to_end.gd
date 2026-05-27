@@ -36,6 +36,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	await harness.teardown()
+	await super.after_test()
 
 
 func test_join_player_spawns_into_named_scene() -> void:

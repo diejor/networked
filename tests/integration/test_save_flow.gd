@@ -46,9 +46,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	clean_temp_dir()
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func _spawn_save_player() -> Node2D:

@@ -32,7 +32,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	super.after_test()
+	await super.after_test()
 
 
 func test_client_is_online_after_connect_player() -> void:

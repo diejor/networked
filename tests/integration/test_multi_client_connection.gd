@@ -15,6 +15,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func test_server_is_online_after_connect() -> void:
@@ -56,8 +57,8 @@ func test_server_emits_peer_connected_for_each_client() -> void:
 
 
 func test_three_clients_all_online() -> void:
-	harness.queue_free()
-	harness = make_harness()
+	await harness.teardown()
+	harness = make_unmanaged_harness()
 	await harness.setup(null)
 	await harness.add_client()
 	await harness.add_client()

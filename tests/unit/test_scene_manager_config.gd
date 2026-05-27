@@ -18,6 +18,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(mgr):
 		mgr.free()
+	await super.after_test()
 
 
 #region Public lifecycle policy

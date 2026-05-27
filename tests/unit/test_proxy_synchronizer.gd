@@ -12,29 +12,29 @@ extends NetwTestSuite
 class StubProxy extends ProxySynchronizer:
 	var _store: Dictionary[StringName, Variant] = {}
 
-	func _read_property(name: StringName, _path: NodePath) -> Variant:
-		return _store.get(name)
+	func _read_property(_name: StringName, _path: NodePath) -> Variant:
+		return _store.get(_name)
 
 	func _write_property(
-		name: StringName,
+		_name: StringName,
 		_path: NodePath,
 		value: Variant
 	) -> void:
-		_store[name] = value
+		_store[_name] = value
 
 
 class StubTickAware extends TickAwareSynchronizer:
 	var _store: Dictionary[StringName, Variant] = {}
 
-	func _read_property(name: StringName, _path: NodePath) -> Variant:
-		return _store.get(name)
+	func _read_property(_name: StringName, _path: NodePath) -> Variant:
+		return _store.get(_name)
 
 	func _write_property(
-		name: StringName,
+		_name: StringName,
 		_path: NodePath,
 		value: Variant
 	) -> void:
-		_store[name] = value
+		_store[_name] = value
 
 
 #region Registration

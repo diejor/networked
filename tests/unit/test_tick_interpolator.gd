@@ -79,6 +79,7 @@ func after_test() -> void:
 			api.remove_meta(&"_network_clock")
 		if api.has_meta(&"_multiplayer_tree"):
 			api.remove_meta(&"_multiplayer_tree")
+	await super.after_test()
 
 
 ## Advances the clock by one tick, which fires [signal NetworkClock.after_tick]

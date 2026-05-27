@@ -31,7 +31,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	super.after_test()
+	await super.after_test()
 
 
 func test_on_startup_scenes_spawned_after_host() -> void:
@@ -40,7 +40,7 @@ func test_on_startup_scenes_spawned_after_host() -> void:
 
 
 func test_on_demand_scene_skipped_at_startup() -> void:
-	var h2 := make_harness()
+	var h2 := make_unmanaged_harness()
 	await h2.setup(NetwTestSuite.create_scene_manager)
 	h2.set_scene_policy(
 		level_2_builder.scene_name,

@@ -39,6 +39,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func test_scene_layer_id_matches_level_name() -> void:

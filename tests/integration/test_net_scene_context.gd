@@ -59,6 +59,7 @@ func after_test() -> void:
 
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 func test_get_players_returns_all_spawned() -> void:
@@ -89,7 +90,7 @@ func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
 
 
 func test_wait_for_players_suspends_until_player_enters() -> void:
-	var h := make_harness()
+	var h := make_unmanaged_harness()
 	await h.setup(NetwTestSuite.create_scene_manager)
 	h.register_spawnable_scene(level_builder.packed)
 	var c: MultiplayerTree = await h.add_client()
@@ -106,6 +107,7 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	h.spawn_player(c, player_builder.packed)
 	await wait_until(func(): return results.resolved)
 	assert_that(results.resolved).is_true()
+	await h.teardown()
 
 
 func test_suspend_signal_reaches_client_context() -> void:
@@ -137,7 +139,7 @@ func test_resume_signal_reaches_client_context() -> void:
 
 	server_ctx.scene.resume()
 
-	await assert_signal(client1_ctx.scene) \
+	assert_signal(client1_ctx.scene) \
 		.wait_until(1000) \
 		.is_emitted("resumed")
 

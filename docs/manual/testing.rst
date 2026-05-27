@@ -20,8 +20,8 @@ Writing a multiplayer test
 
 A good multiplayer test reads like the game itself. Spin up a harness, add
 peers, drive a flow, assert what the player sees. The harness owns peer
-registration, scene mirroring, and teardown ordering, so your test never
-names them.
+registration, scene mirroring, and teardown ordering. Harnesses created with
+``make_harness()`` are torn down automatically after each test case.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -45,9 +45,6 @@ names them.
         harness.register_spawnable_scene(LEVEL)
         alice = await harness.add_client()
 
-    func after_test() -> void:
-        await harness.teardown()
-
     func test_spawn_assigns_authority() -> void:
         var player := harness.spawn_player(alice, PLAYER)
         await harness.wait_for_player(alice, &"TestLevel")
@@ -59,6 +56,18 @@ If your test reaches into private addon state to make a multiplayer flow
 work, the harness is missing a public helper. Open an issue rather than
 working around it. The test should not know about peer registration timing,
 loopback transport setup, or frame drains.
+
+If a test needs its own cleanup, call the base hook last:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    func after_test() -> void:
+        get_tree().paused = false
+        await super.after_test()
+
+Use ``make_unmanaged_harness()`` only when one test case intentionally needs
+an extra harness. Unmanaged harnesses must be torn down explicitly.
 
 Three categories of test
 ------------------------

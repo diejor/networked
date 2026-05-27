@@ -73,9 +73,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	clean_temp_dir()
 	if is_instance_valid(harness):
 		await harness.teardown()
+	await super.after_test()
 
 
 ## Joins a player via the real RPC chain and overrides its database.
