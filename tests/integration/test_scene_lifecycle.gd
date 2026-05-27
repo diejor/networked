@@ -2,30 +2,29 @@
 class_name TestLobbyLifecycle
 extends NetwTestSuite
 
-const LevelBuilder := preload(
-	"res://addons/networked_test/builders/level_builder.gd"
-)
 
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
-var level_packed: PackedScene
-var level_2_packed: PackedScene
+var level_builder: LevelBuilder
+var level_2_builder: LevelBuilder
 
 
 func before_test() -> void:
-	var level_builder1: LevelBuilder = LevelBuilder.new("TestLevel")
-	var _r1: LevelBuilder = level_builder1.with_multiplayer_spawner()
-	level_packed = level_builder1.pack()
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_builder.pack()
 	
-	var level_builder2: LevelBuilder = LevelBuilder.new("TestLevel2")
-	var _r2: LevelBuilder = level_builder2.with_multiplayer_spawner()
-	level_2_packed = level_builder2.pack()
+	level_2_builder = LevelBuilder.new("TestLevel2") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_2_builder.pack()
 	
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
-	harness.register_spawnable_scene(level_packed)
-	harness.register_spawnable_scene(level_2_packed)
+	harness.register_spawnable_scene(level_builder.packed)
+	harness.register_spawnable_scene(level_2_builder.packed)
 	await harness.add_client()
 
 
@@ -36,139 +35,139 @@ func after_test() -> void:
 
 
 func test_on_startup_scenes_spawned_after_host() -> void:
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
 func test_on_demand_scene_skipped_at_startup() -> void:
 	var h2 := make_harness()
 	await h2.setup(NetwTestSuite.create_scene_manager)
 	h2.set_scene_policy(
-		&"TestLevel2",
+		level_2_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,
 		MultiplayerSceneManager.EmptyAction.FREEZE
 	)
-	h2.register_spawnable_scene(level_packed)
-	h2.register_spawnable_scene(level_2_packed)
+	h2.register_spawnable_scene(level_builder.packed)
+	h2.register_spawnable_scene(level_2_builder.packed)
 	await h2.add_client()
 
 	var mgr2 := h2.server_scene_manager()
-	assert_that(mgr2.active_scenes.has(&"TestLevel")).is_true()
-	assert_that(mgr2.active_scenes.has(&"TestLevel2")).is_false()
+	assert_that(mgr2.active_scenes.has(level_builder.scene_name)).is_true()
+	assert_that(mgr2.active_scenes.has(level_2_builder.scene_name)).is_false()
 	await h2.teardown()
 
 
 func test_preload_scene_populates_cache() -> void:
-	server_mgr.destroy_scene(&"TestLevel2")
+	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
-	var path := level_2_packed.resource_path
-	server_mgr.preload_scene(&"TestLevel2")
+	var path := level_2_builder.resource_path
+	server_mgr.preload_scene(level_2_builder.scene_name)
 
 	assert_that(path).is_not_empty()
-	assert_that(server_mgr.is_scene_preloaded(&"TestLevel2")).is_true()
+	assert_that(server_mgr.is_scene_preloaded(level_2_builder.scene_name)).is_true()
 
 
 func test_preload_scene_does_not_instantiate() -> void:
-	server_mgr.destroy_scene(&"TestLevel2")
+	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
-	server_mgr.preload_scene(&"TestLevel2")
+	server_mgr.preload_scene(level_2_builder.scene_name)
 
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_false()
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_false()
 
 
 func test_spawn_after_preload_consumes_cache() -> void:
-	server_mgr.destroy_scene(&"TestLevel2")
+	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
-	var path := level_2_packed.resource_path
-	server_mgr.preload_scene(&"TestLevel2")
-	server_mgr.spawn_scene(&"TestLevel2")
+	var path := level_2_builder.resource_path
+	server_mgr.preload_scene(level_2_builder.scene_name)
+	server_mgr.spawn_scene(level_2_builder.scene_name)
 
 	assert_that(path).is_not_empty()
-	assert_that(server_mgr.is_scene_preloaded(&"TestLevel2")).is_false()
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
+	assert_that(server_mgr.is_scene_preloaded(level_2_builder.scene_name)).is_false()
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
 func test_spawn_scene_adds_to_active_scenes() -> void:
-	server_mgr.destroy_scene(&"TestLevel2")
+	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
-	server_mgr.spawn_scene(&"TestLevel2")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
+	server_mgr.spawn_scene(level_2_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
 func test_spawn_scene_is_idempotent() -> void:
-	server_mgr.spawn_scene(&"TestLevel")
+	server_mgr.spawn_scene(level_builder.scene_name)
 	assert_that(server_mgr.active_scenes.size()).is_equal(2)
 
 
 func test_activate_scene_spawns_missing_scene() -> void:
-	server_mgr.destroy_scene(&"TestLevel2")
+	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel2")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
+	await server_mgr.activate_scene(level_2_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
 func test_activate_scene_sets_level_process_mode_to_inherit() -> void:
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	scene.level.process_mode = Node.PROCESS_MODE_DISABLED
 
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
+	await server_mgr.activate_scene(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
 func test_freeze_scene_sets_level_process_mode_disabled() -> void:
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
-	server_mgr.freeze_scene(&"TestLevel")
+	await server_mgr.activate_scene(level_builder.scene_name)
+	server_mgr.freeze_scene(level_builder.scene_name)
 
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
 
 func test_activate_after_freeze_restores_processing() -> void:
-	server_mgr.freeze_scene(&"TestLevel")
+	server_mgr.freeze_scene(level_builder.scene_name)
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
+	await server_mgr.activate_scene(level_builder.scene_name)
 
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
 func test_freeze_scene_keeps_entry_in_active_scenes() -> void:
-	server_mgr.freeze_scene(&"TestLevel")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
+	server_mgr.freeze_scene(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_destroy_scene_removes_from_active_scenes() -> void:
-	server_mgr.destroy_scene(&"TestLevel")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_false()
+	server_mgr.destroy_scene(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
 
 
 func test_destroy_scene_frees_the_scene_node() -> void:
-	var scene := server_mgr.active_scenes[&"TestLevel"]
-	server_mgr.destroy_scene(&"TestLevel")
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
+	server_mgr.destroy_scene(level_builder.scene_name)
 	await get_tree().process_frame
 	assert_that(is_instance_valid(scene)).is_false()
 
 
 func test_destroy_then_spawn_recreates_scene() -> void:
-	server_mgr.destroy_scene(&"TestLevel")
+	server_mgr.destroy_scene(level_builder.scene_name)
 	await get_tree().process_frame
 
-	server_mgr.spawn_scene(&"TestLevel")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
+	server_mgr.spawn_scene(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_freeze_empty_action_disables_level_on_despawn() -> void:
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	await server_mgr.activate_scene(level_builder.scene_name)
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 
 	var player := _join_player()
 	player.queue_free()
@@ -181,35 +180,35 @@ func test_freeze_empty_action_disables_level_on_despawn() -> void:
 
 func test_destroy_empty_action_removes_scene_on_despawn() -> void:
 	server_mgr.set_scene_lifecycle_policy(
-		&"TestLevel",
+		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_STARTUP,
 		MultiplayerSceneManager.EmptyAction.DESTROY
 	)
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	await server_mgr.activate_scene(level_builder.scene_name)
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 
 	var scene_ref: WeakRef = weakref(scene)
 	var player := _join_player()
 	player.queue_free()
 	await wait_until(
-		func(): return not server_mgr.active_scenes.has(&"TestLevel") \
+		func(): return not server_mgr.active_scenes.has(level_builder.scene_name) \
 			and not is_instance_valid(scene_ref.get_ref())
 	)
 
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_false()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
 	assert_that(is_instance_valid(scene_ref.get_ref())).is_false()
 
 
 func test_keep_active_empty_action_leaves_level_processing() -> void:
 	server_mgr.set_scene_lifecycle_policy(
-		&"TestLevel",
+		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_STARTUP,
 		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE
 	)
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	await server_mgr.activate_scene(level_builder.scene_name)
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 
 	var player := _join_player()
 	player.queue_free()
@@ -220,8 +219,8 @@ func test_keep_active_empty_action_leaves_level_processing() -> void:
 
 func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(&"TestLevel")
-	var scene := server_mgr.active_scenes[&"TestLevel"]
+	await server_mgr.activate_scene(level_builder.scene_name)
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
 
 	var first_player := _add_scene_player(scene, 1001, &"first")
 	var second_player := _add_scene_player(scene, 1002, &"second")
@@ -235,7 +234,7 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 
 
 func _join_player() -> Node:
-	var scene := server_mgr.active_scenes[&"TestLevel"] as MultiplayerScene
+	var scene := server_mgr.active_scenes[level_builder.scene_name] as MultiplayerScene
 	return _add_scene_player(scene, 1001, &"test_player")
 
 

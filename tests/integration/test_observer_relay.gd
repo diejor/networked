@@ -7,24 +7,33 @@
 class_name TestObserverRelay
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://addons/networked_test/fixtures/TestLevel.tscn")
-const TEST_PLAYER_SCENE := preload("res://addons/networked_test/fixtures/TestPlayerMinimal.tscn")
 
 var harness: NetwTestHarness
 var server_scene: MultiplayerScene
 var client0: MultiplayerTree
 var client1: MultiplayerTree
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
+	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
+		.with_root(Node2D)
+	player_builder.pack()
+
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed])
+	level_builder.pack()
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	harness.register_spawnable_scene(level_builder.packed)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
 
-	server_scene = harness.scene_on_server(&"TestLevel")
+	server_scene = harness.scene_on_server(level_builder.scene_name)
 
 
 func after_test() -> void:
@@ -38,23 +47,23 @@ func after_test() -> void:
 # `owner` is set so `%InterestComponent` resolves via the unique-
 # name path InterestComponent.of relies on.
 func _spawn_owner_with_component(report: bool) -> Node:
-	harness.spawn_player(client0, TEST_PLAYER_SCENE)
+	harness.spawn_player(client0, player_builder.packed)
 	var server_player := await harness.wait_for_player(
-			harness.server(), &"TestLevel")
+			harness.server(), level_builder.scene_name)
 	var component := InterestComponent.new()
 	component.report_observers = report
 	server_player.add_child(component)
 	component.owner = server_player
 	# Spawn the player on the client too so the relay's path lookup
 	# resolves to a live node on the receiving side.
-	await harness.wait_for_player(client0, &"TestLevel")
+	await harness.wait_for_player(client0, level_builder.scene_name)
 	return server_player
 
 
 func test_relay_fires_on_unbound_layer() -> void:
 	var server_player := await _spawn_owner_with_component(true)
 	var entity := NetwEntity.of(server_player)
-	await harness.admit_client_to_scene(client1, &"TestLevel")
+	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
 	var sight := server_tree.interest.layer(&"sight")
@@ -63,7 +72,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 	# Resolve the owner-side entity (on client0) to listen for the
 	# relayed signals.
 	var owner_player := await harness.wait_for_player(
-			client0, &"TestLevel")
+			client0, level_builder.scene_name)
 	var owner_entity := NetwEntity.of(owner_player)
 	var client1_layer := client1.interest.layer(&"sight")
 
@@ -104,14 +113,14 @@ func test_relay_fires_on_unbound_layer() -> void:
 func test_relay_silent_when_flag_off() -> void:
 	var server_player := await _spawn_owner_with_component(false)
 	var entity := NetwEntity.of(server_player)
-	await harness.admit_client_to_scene(client1, &"TestLevel")
+	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
 	var sight := server_tree.interest.layer(&"sight")
 	sight.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(
-			client0, &"TestLevel")
+			client0, level_builder.scene_name)
 	var owner_entity := NetwEntity.of(owner_player)
 
 	var entered: Array = []
@@ -136,7 +145,7 @@ func test_relay_skipped_for_gated_layer() -> void:
 	scene_layer.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(
-			client0, &"TestLevel")
+			client0, level_builder.scene_name)
 	var owner_entity := NetwEntity.of(owner_player)
 
 	var entered: Array = []

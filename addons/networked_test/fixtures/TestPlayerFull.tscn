@@ -7,9 +7,6 @@
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_1efga"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pdren"]
-properties/0/path = NodePath("..:position")
-properties/0/spawn = true
-properties/0/replication_mode = 1
 
 [sub_resource type="Resource" id="Resource_7io2v"]
 script = ExtResource("5_1efga")
@@ -19,7 +16,7 @@ node_path = "PlayerSpawner"
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath("..:position")
 properties/0/spawn = true
-properties/0/replication_mode = 1
+properties/0/replication_mode = 2
 
 [node name="TestPlayerFull" type="Node2D" unique_id=754678470]
 

@@ -2,12 +2,6 @@
 class_name TestSaveFlow
 extends NetwTestSuite
 
-const PlayerBuilder := preload(
-	"res://addons/networked_test/builders/player_builder.gd"
-)
-const LevelBuilder := preload(
-	"res://addons/networked_test/builders/level_builder.gd"
-)
 const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
 
 var harness: NetwTestHarness
@@ -15,8 +9,8 @@ var client0: MultiplayerTree
 var test_dir: String
 var backend: FileSystemBackend
 var db: NetwDatabase
-var player_packed: PackedScene
-var level_packed: PackedScene
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
@@ -26,24 +20,27 @@ func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend
 
-	var player_builder: PlayerBuilder = PlayerBuilder.new("TestPlayerWithSave")
-	var _r1: PlayerBuilder = player_builder.with_spawner()
-	var _r2: PlayerBuilder = player_builder.with_save(db, &"players_save")
-	player_packed = player_builder.pack()
+	player_builder = PlayerBuilder.new("TestPlayerWithSave") \
+		.with_root(Node2D) \
+		.with_spawner() \
+		.with_save(db, &"players_save") \
+		.with_player_sync(
+			SyncConfigBuilder.new().property("..:position", true)
+		)
+	player_builder.pack()
 
-	var template_instance: Node = player_packed.instantiate()
-	var level_builder: LevelBuilder = LevelBuilder.new("TestLevelSave")
-	var _r3: LevelBuilder = level_builder.with_multiplayer_spawner(
-		"..", [player_packed]
-	)
-	var _r4: LevelBuilder = level_builder.with_child(template_instance)
-	level_packed = level_builder.pack()
+	var template_instance: Node = player_builder.packed.instantiate()
+	level_builder = LevelBuilder.new("TestLevelSave") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed]) \
+		.with_child(template_instance)
+	level_builder.pack()
 	template_instance.free()
 
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness.register_spawnable_scene(level_packed)
+	harness.register_spawnable_scene(level_builder.packed)
 
 	client0 = await harness.add_client()
 
@@ -56,11 +53,13 @@ func after_test() -> void:
 
 func _spawn_save_player() -> Node2D:
 	var player := await harness.join_player(
-		client0, level_packed.resource_path, SPAWNER_PATH) as Node2D
+		client0, level_builder.resource_path, SPAWNER_PATH) as Node2D
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.database = db
 	save_comp.table_name = &"players"
+	NetwEntity.of(player).contribute_save_property(player, &"position", &"position")
+	save_comp.pull_from_scene()
 	save_comp._instantiate_sync()
 	await get_tree().process_frame
 

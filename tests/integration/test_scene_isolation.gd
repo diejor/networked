@@ -2,22 +2,25 @@
 class_name TestLobbyIsolation
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel.tscn"
-)
 
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var scene: MultiplayerScene
 var client0: MultiplayerTree
 var client1: MultiplayerTree
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_builder.pack()
+
+	harness.register_spawnable_scene(level_builder.packed)
 	server_mgr = harness.server_scene_manager()
 
 	client0 = await harness.add_client()

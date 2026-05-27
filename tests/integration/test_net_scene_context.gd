@@ -2,9 +2,8 @@
 class_name TestNetwContext
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE    := preload("res://addons/networked_test/fixtures/TestLevel.tscn")
-const TEST_PLAYER_SCENE   := preload(
-	"res://addons/networked_test/fixtures/TestPlayerMinimal.tscn")
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -21,27 +20,36 @@ var player1: Node
 
 
 func before_test() -> void:
+	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
+		.with_root(Node2D)
+	player_builder.pack()
+
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed])
+	level_builder.pack()
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	harness.register_spawnable_scene(level_builder.packed)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
 
-	player0 = harness.spawn_player(client0, TEST_PLAYER_SCENE)
-	player1 = harness.spawn_player(client1, TEST_PLAYER_SCENE)
+	player0 = harness.spawn_player(client0, player_builder.packed)
+	player1 = harness.spawn_player(client1, player_builder.packed)
 
 	# Block until both players appear on each client so RPC paths are warm.
-	await harness.wait_for_player(client0, &"TestLevel")
-	await harness.wait_for_player(client1, &"TestLevel")
+	await harness.wait_for_player(client0, level_builder.scene_name)
+	await harness.wait_for_player(client1, level_builder.scene_name)
 
 	server_ctx = harness.scene_on_server().get_context()
 
 	var c0_scene := await harness.wait_for_scene(
-		client0, &"TestLevel")
+		client0, level_builder.scene_name)
 	var c1_scene := await harness.wait_for_scene(
-		client1, &"TestLevel")
+		client1, level_builder.scene_name)
 	client0_ctx = c0_scene.get_context()
 	client1_ctx = c1_scene.get_context()
 
@@ -84,7 +92,7 @@ func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
 func test_wait_for_players_suspends_until_player_enters() -> void:
 	var h := make_harness()
 	await h.setup(NetwTestSuite.create_scene_manager)
-	h.register_spawnable_scene(TEST_LEVEL_SCENE)
+	h.register_spawnable_scene(level_builder.packed)
 	var c: MultiplayerTree = await h.add_client()
 	var ctx: NetwContext = h.scene_on_server().get_context()
 
@@ -96,7 +104,7 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	await get_tree().process_frame
 	assert_that(results.resolved).is_false()
 
-	h.spawn_player(c, TEST_PLAYER_SCENE)
+	h.spawn_player(c, player_builder.packed)
 	await wait_until(func(): return results.resolved)
 	assert_that(results.resolved).is_true()
 

@@ -2,20 +2,31 @@
 class_name TestMultiplayerTreeConnect
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel.tscn"
-)
-
 ## Path from the level root to the [SpawnerComponent] spawn template.
 const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
 var harness: NetwTestHarness
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
+	player_builder = PlayerBuilder.new("TestPlayerFull") \
+		.with_root(Node2D) \
+		.with_spawner()
+	player_builder.pack()
+
+	var template_instance: Node = player_builder.packed.instantiate()
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed]) \
+		.with_child(template_instance)
+	level_builder.pack()
+	template_instance.free()
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	harness.register_spawnable_scene(level_builder.packed)
 
 
 func after_test() -> void:
@@ -58,13 +69,13 @@ func test_listen_server_connect_player_spawns_player() -> void:
 	var tree := await harness.add_listen_server(
 		harness.make_join_payload(
 			"alice",
-			TEST_LEVEL_SCENE.resource_path,
+			level_builder.resource_path,
 			SPAWNER_PATH
 		)
 	)
 
 	assert_that(tree.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
 
-	var player := await harness.wait_for_player(tree, &"TestLevel")
+	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
 	assert_that(player.name).is_equal("alice|1")

@@ -6,22 +6,29 @@
 class_name TestSceneInterestGate
 extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload(
-	"res://addons/networked_test/fixtures/TestLevel.tscn"
-)
-const TEST_PLAYER_MINIMAL = preload("uid://bpnpmprpg6p6b")
 
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var server_scene: MultiplayerScene
 var client0: MultiplayerTree
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
+	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
+		.with_root(Node2D)
+	player_builder.pack()
+
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed])
+	level_builder.pack()
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	harness.register_spawnable_scene(TEST_LEVEL_SCENE)
+	harness.register_spawnable_scene(level_builder.packed)
 	server_mgr = harness.server_scene_manager()
 
 	client0 = await harness.add_client()
@@ -37,7 +44,7 @@ func after_test() -> void:
 
 func test_scene_layer_id_matches_level_name() -> void:
 	assert_that(String(server_scene.scene_layer_id())) \
-			.is_equal("scene:TestLevel")
+			.is_equal("scene:%s" % level_builder.scene_name)
 
 
 func test_default_deny_unadmitted_peer() -> void:
@@ -57,8 +64,8 @@ func test_admission_makes_peer_visible() -> void:
 func test_client_layer_entities_populated_after_admission() -> void:
 	# MultiplayerScene enrolls players through gate.track_entity, which
 	# feeds the bound layer's client tracking path.
-	harness.spawn_player(client0, TEST_PLAYER_MINIMAL)
-	await harness.wait_for_player(client0, &"TestLevel")
+	harness.spawn_player(client0, player_builder.packed)
+	await harness.wait_for_player(client0, level_builder.scene_name)
 
 	var server_layer := server_scene.layer
 	assert_that(server_layer.entities.is_empty()).is_false()

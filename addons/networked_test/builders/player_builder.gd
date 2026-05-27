@@ -14,8 +14,15 @@ const NetwPathNamespace := preload(
 	"res://addons/networked_test/builders/path_namespace.gd"
 )
 
+## The unique name identifier for this player builder.
+var player_name: StringName
+## The resource path assigned to the packed scene.
+var resource_path: String = ""
+## The compiled [PackedScene] after calling [method pack].
+var packed: PackedScene = null
+
 var _name: String
-var _root: Node = null
+var _root_type: Variant = Node
 var _has_spawner: bool = false
 var _save_database: Resource = null
 var _save_table: StringName = &""
@@ -25,9 +32,18 @@ var _player_sync_config_builder: SyncConfigBuilder = null
 
 
 # Initializes the player builder with the given entity name.
-func _init(player_name: String, base_node: Node = null) -> void:
-	_name = player_name
-	_root = base_node
+func _init(p_player_name: String) -> void:
+	_name = p_player_name
+	player_name = StringName(p_player_name)
+
+
+## Configures the custom root node class or script type.
+func with_root(type: Variant) -> PlayerBuilder:
+	var dummy = type.new()
+	assert(dummy is Node, "PlayerBuilder: root type must inherit from Node.")
+	dummy.free()
+	_root_type = type
+	return self
 
 
 ## Enables the [SpawnerComponent] on the player.
@@ -63,7 +79,7 @@ func with_player_sync(
 
 ## Composes and returns a live player node tree.
 func build() -> Node:
-	var root: Node = _root.duplicate() if _root != null else Node2D.new()
+	var root: Node = _root_type.new()
 	root.name = _name
 	
 	if _has_spawner:
@@ -76,15 +92,7 @@ func build() -> Node:
 		var save_comp := SaveComponent.new()
 		save_comp.set("database", _save_database)
 		save_comp.set("table_name", _save_table)
-		var save_cfg: SceneReplicationConfig = SceneReplicationConfig.new()
-		var pos_path: NodePath = NodePath("..:position")
-		save_cfg.add_property(pos_path)
-		save_cfg.property_set_spawn(pos_path, true)
-		save_cfg.property_set_replication_mode(
-			pos_path,
-			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE
-		)
-		save_comp.replication_config = save_cfg
+		save_comp.replication_config = SceneReplicationConfig.new()
 		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
 		
 	if not _tp_level_scene_path.is_empty():
@@ -113,7 +121,9 @@ func pack(custom_path: String = "") -> PackedScene:
 	var root: Node = build()
 	var path: String = custom_path if not custom_path.is_empty() else \
 			NetwPathNamespace.next_path("player", _name)
-	var packed: PackedScene = SceneAssembly.pack_with_path(root, path)
-	NetwPathNamespace.register_resource(packed)
+	var p: PackedScene = SceneAssembly.pack_with_path(root, path)
+	NetwPathNamespace.register_resource(p)
 	root.free()
-	return packed
+	packed = p
+	resource_path = path
+	return p
