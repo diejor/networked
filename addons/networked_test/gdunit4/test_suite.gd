@@ -12,23 +12,6 @@ const _GdUnitAwaiter := preload(
 )
 
 
-## Awaits a signal and fails the test if it times out.
-## [codeblock]
-## await timeout_await(my_signal, 1.0)
-## [/codeblock]
-func timeout_await(
-	target_signal: Signal,
-	timeout: float = DEFAULT_TIMEOUT
-) -> void:
-	var timer := get_tree().create_timer(timeout)
-	if await Async.timeout(target_signal, timer):
-		fail(
-			"Timed out waiting for signal '%s' after %.1f seconds." % [
-				target_signal.get_name(),
-				timeout,
-			]
-		)
-
 
 ## Awaits a condition to become true within [param timeout] seconds.
 func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:

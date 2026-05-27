@@ -58,10 +58,9 @@ func test_context_erased_on_peer_disconnect() -> void:
 	assert_that(server.has_peer_context(client_peer_id)).is_true()
 
 	client0.multiplayer_peer.close()
-	await wait_until(
-		func(): return not server.has_peer_context(client_peer_id))
-
-	assert_that(server.has_peer_context(client_peer_id)).is_false()
+	await assert_func(server, "has_peer_context", [client_peer_id]) \
+		.wait_until(1000) \
+		.is_false()
 
 
 func _spawn_save_player() -> void:

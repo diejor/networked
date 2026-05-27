@@ -84,8 +84,6 @@ func test_disconnect_peer_removes_visibility() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	scene.connect_peer(client_id)
 	scene.disconnect_peer(client_id)
-	await wait_until(
-		func(): return not scene.scene_visibility_filter(
-			client_id))
-	assert_that(scene.scene_visibility_filter(client_id)) \
-			.is_false()
+	await assert_func(scene, "scene_visibility_filter", [client_id]) \
+		.wait_until(1000) \
+		.is_false()

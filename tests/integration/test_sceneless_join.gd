@@ -73,12 +73,9 @@ func test_player_spawns_in_level_after_join() -> void:
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
 
-	await wait_until(
-		func(): return level != null \
-			and level.get_node_or_null(player_name) != null
-	)
-
-	assert_that(level.get_node_or_null(player_name)).is_not_null()
+	await assert_func(level, "get_node_or_null", [player_name]) \
+		.wait_until(1000) \
+		.is_not_null()
 
 
 func test_spawned_player_has_correct_username() -> void:
@@ -101,10 +98,9 @@ func test_spawned_player_has_correct_username() -> void:
 	var level := server.get_node_or_null(
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
-	await wait_until(
-		func(): return level != null \
-			and level.get_node_or_null(player_name) != null
-	)
+	await assert_func(level, "get_node_or_null", [player_name]) \
+		.wait_until(1000) \
+		.is_not_null()
 
 	var player := level.get_node(player_name)
 	var client_comp := SpawnerComponent.unwrap(player)
