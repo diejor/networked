@@ -72,7 +72,7 @@ func setup(_tree: MultiplayerTree) -> Error:
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer
 
 
-## Produces a [MultiplayerPeer] in client mode connecting to [param address].
+## Produces a [MultiplayerPeer] in client mode connecting to [param _address].
 ## May [code]await[/code]. Return [code]null[/code] to signal failure.
 @abstract
 func create_join_peer(
@@ -80,9 +80,10 @@ func create_join_peer(
 ) -> MultiplayerPeer
 
 
-## Returns editor configuration warnings specific to this backend for the given [param tree].
+## Returns editor configuration warnings specific to this backend for the
+## given [param _tree].
 @abstract
-func _get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray
+func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray
 
 
 ## Per-frame poll hook for backends that drive their own internal state
@@ -117,7 +118,7 @@ func supports_embedded_server() -> bool:
 	return true
 
 
-## Probes [param address] for a live local session without allocating a
+## Probes [param _address] for a live local session without allocating a
 ## [MultiplayerPeer] or producing side-effects.
 ##
 ## Default implementation returns [method ProbeResult.unsupported].
@@ -125,7 +126,7 @@ func supports_embedded_server() -> bool:
 ## is meaningful (typically a [code]TCPServer.listen[/code] /
 ## [code]PacketPeerUDP.bind[/code] bind-test on the configured port).
 ## [br][br]
-## [param timeout] is a hint in seconds; backends may probe faster.
+## [param _timeout] is a hint in seconds; backends may probe faster.
 func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
 	return ProbeResult.unsupported()
 
@@ -146,5 +147,5 @@ func get_address_hint() -> AddressHint:
 ##
 ## Override to preserve shared references that [method Resource.duplicate] would reset
 ## to their default values.
-func _copy_from(_source: BackendPeer) -> void:
+func copy_from(_source: BackendPeer) -> void:
 	pass

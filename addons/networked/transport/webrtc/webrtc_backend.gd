@@ -537,5 +537,5 @@ func _send_to_socket(ws: WebSocketPeer, data: Dictionary) -> void:
 		var json_str := JSON.stringify(data)
 		ws.send_text(json_str)
 
-func _get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
+func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
 	return []

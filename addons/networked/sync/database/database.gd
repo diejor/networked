@@ -110,8 +110,8 @@ func bind(component: SaveComponent, span: NetSpan = null) -> void:
 ##
 ## Repositories are cached — repeated calls for the same name return the same
 ## instance. The table does not need to be registered before calling this;
-## registration is done separately via [method _register_schema] or
-## [method declare_table].
+## registration happens automatically through [method bind] or explicitly
+## via [method declare_table].
 ## [codeblock lang=gdscript]
 ## var entity := db.table(&"players").fetch(username)
 ## [/codeblock]

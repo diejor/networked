@@ -131,7 +131,7 @@ func _warn_if_role_unset() -> void:
 		if not Engine.is_editor_hint():
 			if value:
 				backend = value.duplicate()
-				backend._copy_from(value)
+				backend.copy_from(value)
 			else:
 				backend = null
 		else:
@@ -401,7 +401,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 			"Please assign a functional derived class."
 		)
 	elif backend:
-		warnings.append_array(backend._get_backend_warnings(self))
+		warnings.append_array(backend.get_backend_warnings(self))
 	
 	var has_scene_manager := false
 	var has_sceneless_world := false
@@ -618,11 +618,11 @@ consider using `connect_player` instead of `join`.", func(m): push_error(m))
 ## server via [method submit_join] once adoption is complete.
 ## [br][br]
 ## Derives [member role] from [code]peer.get_unique_id()[/code]:
-## [code]1[/code] -> [code]LISTEN_SERVER[/code], otherwise [code]CLIENT[/code].
+## [code]1[/code] -> [constant Role.LISTEN_SERVER], otherwise [constant Role.CLIENT].
 ## [br][br]
 ## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is
 ## [code]null[/code] or already disconnected. Asserts the tree is
-## [code]OFFLINE[/code].
+## [constant State.OFFLINE].
 func adopt_peer(
 	peer: MultiplayerPeer, join_payload: JoinPayload = null
 ) -> Error:

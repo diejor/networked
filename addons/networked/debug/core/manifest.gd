@@ -4,7 +4,7 @@
 ## fields and call [code]super.to_dict()[/code] when serializing.
 ## [br][br]
 ## [b]Key invariant:[/b] [method to_dict] must produce the exact key set that
-## [code]ManifestFormatter.format[/code] expects. Do not rename keys without
+## [method ManifestFormatter.format] expects. Do not rename keys without
 ## updating the formatter.
 class_name NetManifest
 extends RefCounted

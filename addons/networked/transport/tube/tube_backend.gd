@@ -2,9 +2,9 @@
 ## TubeClient node.
 ##
 ## Assign a [code]NodePath[/code] to a TubeClient node in the scene. Call
-## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal -
-## the TubeClient owns its own [MultiplayerAPI], so this backend asks the tree
-## to adopt it via [method MultiplayerTree._adopt_api].
+## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal.
+## The TubeClient owns its own [MultiplayerAPI], which this backend installs
+## onto the tree during setup.
 ## [br][br]
 ## [b]Service Registration:[/b]
 ## During [method setup], this backend registers the [code]TubeClient[/code]
@@ -110,7 +110,7 @@ func get_address_hint() -> AddressHint:
 		false
 	)
 
-func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
+func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	var warnings := PackedStringArray()
 
 	if tube_client_path.is_empty():

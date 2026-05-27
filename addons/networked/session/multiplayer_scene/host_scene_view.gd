@@ -18,7 +18,7 @@
 ##
 ## [br][br]
 ## Defaults to filling its parent rect with
-## [constant Control.LayoutPresetMode.PRESET_FULL_RECT]. When
+## [constant Control.PRESET_FULL_RECT]. When
 ## parented under a plain [Node], the view re-syncs to the root window on
 ## resize. Stretch behavior mirrors Godot's project-level
 ## [code]display/window/stretch/*[/code] settings via [StretchLayout], assign

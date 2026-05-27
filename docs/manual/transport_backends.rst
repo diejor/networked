@@ -143,10 +143,12 @@ ones you need:
 - :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>`: return ``true`` if this backend can be
   the target of the localhost host-on-demand probe. Most transports return
   ``true``. Managed-lobby backends (Steam) return ``false``.
-- :ref:`supports_local_probe() <class_BackendPeer_method_supports_local_probe>`: return ``true`` if the backend can answer a
-  short :ref:`join() <class_MultiplayerTree_method_join>` probe without falsely succeeding when no server is
-  listening. ENet and WebSocket both qualify. Transports that defer
-  acceptance to an external lobby manager do not.
-- :godot:`_get_configuration_warnings() <Node#class_node_private_method__get_configuration_warnings>`: editor-time validation. Strings
-  returned here are surfaced as configuration warnings on the tree node so
-  misconfigured fields are caught before play.
+- :ref:`probe() <class_BackendPeer_method_probe>`: return a meaningful result
+  if the backend can answer a short
+  :ref:`join() <class_MultiplayerTree_method_join>` probe without falsely
+  succeeding when no server is listening. ENet and WebSocket both qualify.
+  Transports that defer acceptance to an external lobby manager do not.
+- :ref:`get_backend_warnings()
+  <class_BackendPeer_method_get_backend_warnings>`: editor-time validation.
+  Strings returned here are surfaced as configuration warnings on the tree
+  node so misconfigured fields are caught before play.

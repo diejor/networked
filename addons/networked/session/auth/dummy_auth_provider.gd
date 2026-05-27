@@ -10,18 +10,18 @@ class_name DummyAuthProvider
 extends NetwAuthProvider
 
 
-func _prepare(payload: JoinPayload) -> Error:
+func prepare(payload: JoinPayload) -> Error:
 	return OK
 
 
-func _get_credentials(payload: JoinPayload) -> PackedByteArray:
+func get_credentials(payload: JoinPayload) -> PackedByteArray:
 	return var_to_bytes({
 		"service": "dummy",
 		"username": payload.username,
 	})
 
 
-func _authenticate(peer_id: int, data: PackedByteArray) -> NetwIdentity:
+func authenticate(peer_id: int, data: PackedByteArray) -> NetwIdentity:
 	var creds := bytes_to_var(data)
 	if not creds or creds.get("service") != "dummy":
 		rejection_reason = "Invalid dummy auth credentials"
@@ -33,7 +33,7 @@ func _authenticate(peer_id: int, data: PackedByteArray) -> NetwIdentity:
 	return identity
 
 
-func _get_host_identity() -> NetwIdentity:
+func get_host_identity() -> NetwIdentity:
 	var identity := NetwIdentity.new()
 	identity.username = "host"
 	identity.external_id = "dummy_host"

@@ -120,7 +120,7 @@ func host_player(join_payload: JoinPayload) -> Error:
 
 ## Connects the local player to a session using [param join_payload].
 ##
-## Probes localhost when [param join_payload.url] is empty or localhost,
+## Probes localhost when [code]join_payload.url[/code] is empty or localhost,
 ## then either joins an existing server or spins up an embedded server
 ## by duplicating this tree into a sibling node.
 func connect_player(join_payload: JoinPayload) -> Error:

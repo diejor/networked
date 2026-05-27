@@ -2210,41 +2210,60 @@ def format_text_block(
                         if target_class_name in state.classes:
                             class_def = state.classes[target_class_name]
 
+                            # An unqualified ref defaults target_class_name to the
+                            # current class. If the symbol isn't found locally, the
+                            # fallback path below retargets to the first engine
+                            # ancestor and emits a valid :godot: link — so the
+                            # "unresolved" warning would describe a problem the
+                            # fallback handles silently. Qualified refs
+                            # (e.g. [member Foo.bar]) still warn, since the
+                            # fallback can't help when the target class is local.
+                            _ancestor_walker = class_def.inherits
+                            while _ancestor_walker is not None and _ancestor_walker in state.classes:
+                                _ancestor_walker = state.classes[_ancestor_walker].inherits
+                            suppress_unresolved_warning = (
+                                "." not in link_target and _ancestor_walker is not None
+                            )
+
                             if tag_state.name == "method":
                                 if target_name.startswith("_"):
                                     ref_type = "_private_method"
 
                                 if target_name not in class_def.methods:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                             elif tag_state.name == "constructor":
                                 if target_name not in class_def.constructors:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                             elif tag_state.name == "operator":
                                 if target_name not in class_def.operators:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                             elif tag_state.name == "member":
                                 ref_type = "_property"
 
                                 if target_name not in class_def.properties:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                                 elif class_def.properties[target_name].overrides is not None:
@@ -2255,26 +2274,29 @@ def format_text_block(
 
                             elif tag_state.name == "signal":
                                 if target_name not in class_def.signals:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                             elif tag_state.name == "annotation":
                                 if target_name not in class_def.annotations:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
 
                             elif tag_state.name == "theme_item":
                                 if target_name not in class_def.theme_items:
-                                    print_warning(
-                                        f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
-                                        state,
-                                    )
+                                    if not suppress_unresolved_warning:
+                                        print_warning(
+                                            f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
+                                            state,
+                                        )
                                     resolved = False
                                 else:
                                     # Needs theme data type to be properly linked, which we cannot get without a class.

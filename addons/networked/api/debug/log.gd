@@ -428,7 +428,7 @@ static func dump_settings() -> void:
 	print_rich("[color=cyan][b]---------------------------------[/b][/color]")
 
 
-## Logs a [code]TRACE[/code]-level message.
+## Logs a [constant Level.TRACE]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func trace(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
@@ -447,7 +447,7 @@ static func trace(msg: Variant, args: Array = []) -> void:
 		_print("[TRACE]", msg, args, Level.TRACE, ctx.module, ctx.site)
 
 
-## Logs a [code]DEBUG[/code]-level message.
+## Logs a [constant Level.DEBUG]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func debug(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
@@ -466,7 +466,7 @@ static func debug(msg: Variant, args: Array = []) -> void:
 		_print("[DEBUG]", msg, args, Level.DEBUG, ctx.module, ctx.site)
 
 
-## Logs an [code]INFO[/code]-level message.
+## Logs an [constant Level.INFO]-level message.
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 static func info(msg: Variant, args: Array = []) -> void:
 	_ensure_initialized()
@@ -485,7 +485,7 @@ static func info(msg: Variant, args: Array = []) -> void:
 		_print("[INFO]", msg, args, Level.INFO, ctx.module, ctx.site)
 
 
-## Logs a [code]WARN[/code]-level message and calls [code]push_warning[/code].
+## Logs a [constant Level.WARN]-level message and calls [code]push_warning[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 ## [br][br]
 ## Pass a [param link_call] to preserve the editor jump-click: the callable must
@@ -529,7 +529,7 @@ static func warn(
 			_print("[WARN]", msg, args, Level.WARN, ctx.module, ctx.site, link_call)
 
 
-## Logs an [code]ERROR[/code]-level message and calls [code]push_error[/code].
+## Logs an [constant Level.ERROR]-level message and calls [code]push_error[/code].
 ## Accepts optional [param args] for [code]%[/code]-style formatting.
 ## [br][br]
 ## Pass a [param link_call] to preserve the editor jump-click: the callable must

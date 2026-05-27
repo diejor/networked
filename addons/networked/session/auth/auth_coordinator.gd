@@ -48,7 +48,7 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	Netw.dbg.info("Auth: running prepare for '%s'", [
 		join_payload.username
 	])
-	var prepare_err := await _auth_provider._prepare(join_payload)
+	var prepare_err := await _auth_provider.prepare(join_payload)
 	if prepare_err != OK:
 		Netw.dbg.error(
 			"Auth prepare failed: %s",
@@ -84,7 +84,7 @@ func synthesize_host_identity() -> void:
 	if not _auth_provider:
 		return
 	Netw.dbg.info("Auth: synthesizing host identity for peer 1")
-	var host_identity := _auth_provider._get_host_identity()
+	var host_identity := _auth_provider.get_host_identity()
 	if host_identity:
 		Netw.dbg.info(
 			"Auth: host identity '%s' (service=%s) stored for peer 1",
@@ -167,7 +167,7 @@ func _on_peer_authenticating(peer_id: int) -> void:
 		return
 	
 	Netw.dbg.debug("Auth: sending credentials for peer %d", [peer_id])
-	var creds := _auth_provider._get_credentials(_client_join_payload)
+	var creds := _auth_provider.get_credentials(_client_join_payload)
 	if creds.is_empty():
 		Netw.dbg.error(
 			"Auth: provider returned empty credentials for peer %d",
@@ -206,7 +206,7 @@ func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
 		_api.complete_auth(peer_id)
 		return
 	Netw.dbg.info("Auth: validating credentials for peer %d", [peer_id])
-	var identity := _auth_provider._authenticate(peer_id, data)
+	var identity := _auth_provider.authenticate(peer_id, data)
 	if identity:
 		Netw.dbg.info(
 			"Auth: peer %d accepted as '%s' (service=%s)",

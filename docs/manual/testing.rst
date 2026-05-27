@@ -84,7 +84,7 @@ an addon maintainer matters. Keep the three categories visible.
   scenario demands it. Mark them with a region or a class doc comment so
   the reader knows why.
 - Internal algorithm tests. May call private methods such as
-  :ref:`_calibrate() <class_NetworkClock_private_method__calibrate>` on the
+  ``_calibrate()`` on the
   unit under test. The file structure should make the intent obvious. Use
   Godot code regions to fence them off.
 

@@ -1,7 +1,7 @@
 # Downgrade unresolved [method/member/signal/...] refs to warnings and emit external :godot: links instead of broken :ref: anchors; @GlobalScope guard.
 --- a/make_rst.py
 +++ b/make_rst.py
-@@ -2124,6 +2205,8 @@
+@@ -2124,39 +2205,66 @@
                          # but method, member, and theme_item have special cases.
                          ref_type = "_{}".format(tag_state.name)
  
@@ -10,41 +10,65 @@
                          if target_class_name in state.classes:
                              class_def = state.classes[target_class_name]
  
-@@ -2132,31 +2215,37 @@
++                            # An unqualified ref defaults target_class_name to the
++                            # current class. If the symbol isn't found locally, the
++                            # fallback path below retargets to the first engine
++                            # ancestor and emits a valid :godot: link — so the
++                            # "unresolved" warning would describe a problem the
++                            # fallback handles silently. Qualified refs
++                            # (e.g. [member Foo.bar]) still warn, since the
++                            # fallback can't help when the target class is local.
++                            _ancestor_walker = class_def.inherits
++                            while _ancestor_walker is not None and _ancestor_walker in state.classes:
++                                _ancestor_walker = state.classes[_ancestor_walker].inherits
++                            suppress_unresolved_warning = (
++                                "." not in link_target and _ancestor_walker is not None
++                            )
++
+                             if tag_state.name == "method":
+                                 if target_name.startswith("_"):
                                      ref_type = "_private_method"
  
                                  if target_name not in class_def.methods:
 -                                    print_error(
-+                                    print_warning(
-                                         f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
-                                         state,
-                                     )
-+                                    resolved = False
- 
+-                                        f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
+-                                        state,
+-                                    )
+-
 -                            elif tag_state.name == "constructor" and target_name not in class_def.constructors:
 -                                print_error(
 -                                    f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
 -                                    state,
 -                                )
-+                            elif tag_state.name == "constructor":
-+                                if target_name not in class_def.constructors:
-+                                    print_warning(
-+                                        f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
-+                                        state,
-+                                    )
-+                                    resolved = False
- 
+-
 -                            elif tag_state.name == "operator" and target_name not in class_def.operators:
 -                                print_error(
 -                                    f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
 -                                    state,
 -                                )
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved method reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
++                                    resolved = False
++
++                            elif tag_state.name == "constructor":
++                                if target_name not in class_def.constructors:
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved constructor reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
++                                    resolved = False
++
 +                            elif tag_state.name == "operator":
 +                                if target_name not in class_def.operators:
-+                                    print_warning(
-+                                        f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
-+                                        state,
-+                                    )
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved operator reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
 +                                    resolved = False
  
                              elif tag_state.name == "member":
@@ -52,15 +76,19 @@
  
                                  if target_name not in class_def.properties:
 -                                    print_error(
-+                                    print_warning(
-                                         f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
-                                         state,
-                                     )
+-                                        f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
+-                                        state,
+-                                    )
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved member reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
 +                                    resolved = False
  
                                  elif class_def.properties[target_name].overrides is not None:
                                      print_error(
-@@ -2164,24 +2253,29 @@
+@@ -2164,24 +2272,32 @@
                                          state,
                                      )
  
@@ -69,39 +97,46 @@
 -                                    f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
 -                                    state,
 -                                )
-+                            elif tag_state.name == "signal":
-+                                if target_name not in class_def.signals:
-+                                    print_warning(
-+                                        f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
-+                                        state,
-+                                    )
-+                                    resolved = False
- 
+-
 -                            elif tag_state.name == "annotation" and target_name not in class_def.annotations:
 -                                print_error(
 -                                    f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
 -                                    state,
 -                                )
++                            elif tag_state.name == "signal":
++                                if target_name not in class_def.signals:
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved signal reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
++                                    resolved = False
++
 +                            elif tag_state.name == "annotation":
 +                                if target_name not in class_def.annotations:
-+                                    print_warning(
-+                                        f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
-+                                        state,
-+                                    )
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved annotation reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
 +                                    resolved = False
  
                              elif tag_state.name == "theme_item":
                                  if target_name not in class_def.theme_items:
 -                                    print_error(
-+                                    print_warning(
-                                         f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
-                                         state,
-                                     )
+-                                        f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
+-                                        state,
+-                                    )
++                                    if not suppress_unresolved_warning:
++                                        print_warning(
++                                            f'{state.current_class}.xml: Unresolved theme property reference "{link_target}" in {context_name}.',
++                                            state,
++                                        )
 +                                    resolved = False
                                  else:
                                      # Needs theme data type to be properly linked, which we cannot get without a class.
                                      name = class_def.theme_items[target_name].data_name
-@@ -2195,7 +2289,8 @@
+@@ -2195,7 +2311,8 @@
  
                                  if link_target.find(".") == -1:
                                      # Also search in @GlobalScope as a last resort if no class was specified
@@ -111,7 +146,7 @@
  
                                  for search_class_def in search_class_defs:
                                      if target_name in search_class_def.constants:
-@@ -2210,23 +2305,74 @@
+@@ -2210,23 +2327,74 @@
                                                  break
  
                                  if not found:
@@ -201,7 +236,7 @@
                          escape_pre = True
                          escape_post = True
  
-@@ -2250,7 +2396,7 @@
+@@ -2250,7 +2418,7 @@
                                      found = True
                                      break
                              if not found:
@@ -210,7 +245,7 @@
                                      f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.',
                                      state,
                                  )
-@@ -2280,6 +2426,12 @@
+@@ -2280,6 +2448,12 @@
                          )
                          break
                      link_title = text[endq_pos + 1 : endurl_pos]

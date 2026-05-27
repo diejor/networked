@@ -60,7 +60,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-## Single entry point - called by [method NetworkedDebuggerPlugin._capture].
+## Single entry point - called when capture occurs.
 ## [br][br]
 ## [param data] is either:
 ## [br]- A single-element [Array] containing raw [PackedByteArray] envelope bytes.

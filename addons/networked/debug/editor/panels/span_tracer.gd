@@ -8,7 +8,7 @@
 ## caller info to toggle a GDScript breakpoint at that call site. The icon stays in
 ## sync with the script editor via [method sync_breakpoint] /
 ## [method sync_breakpoints_cleared], driven by
-## [method NetworkedDebuggerPlugin._breakpoint_set_in_tree].
+## [code]_breakpoint_set_in_tree[/code].
 ##
 ## [br][b]Jump to source[/b]: double-click any row (or press Enter while selected) to open
 ## the script at the call site in the editor.

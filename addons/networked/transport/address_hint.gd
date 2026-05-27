@@ -1,7 +1,7 @@
 ## UI metadata describing the address string a [BackendPeer] expects.
 ##
 ## Returned by [method BackendPeer.get_address_hint] so generic connect
-## dialogs (e.g. [code]ConnectToServerUI[/code]) can render appropriate
+## dialogs (e.g. [ConnectToServerUI]) can render appropriate
 ## labels, placeholders, and validation cues without knowing about each
 ## backend.
 @tool

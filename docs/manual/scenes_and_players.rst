@@ -51,7 +51,7 @@ When a level spawns, the manager wraps it in a
 level node underneath. The container does three useful things:
 
 1. It hooks every :godot:`MultiplayerSpawner <MultiplayerSpawner>` in the
-   level into the scene's :ref:`SceneSynchronizer <class_SceneSynchronizer>`
+   level into the scene's :ref:`InterestGate <class_InterestGate>`
    so per-peer visibility filters apply automatically. You get visibility
    filtering for free without touching the engine API.
 2. It tracks the players currently inside the scene, emitting signals

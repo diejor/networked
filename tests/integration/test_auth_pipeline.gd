@@ -81,9 +81,9 @@ func _join_payload(username: String) -> JoinPayload:
 	)
 
 
-## Auth provider whose _prepare always fails.
+## Auth provider whose prepare always fails.
 class _FailingPrepareAuth:
 	extends NetwAuthProvider
 
-	func _prepare(_payload: JoinPayload) -> Error:
+	func prepare(_payload: JoinPayload) -> Error:
 		return ERR_UNAUTHORIZED

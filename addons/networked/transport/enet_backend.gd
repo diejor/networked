@@ -70,5 +70,5 @@ func _is_local_address(address: String) -> bool:
 		or address == "127.0.0.1")
 
 
-func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
+func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []

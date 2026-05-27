@@ -8,7 +8,7 @@
 ## ctx.services.get_scene_manager()
 ## if ctx.has_scene():
 ##     await ctx.scene.wait_for_players(4)
-## ctx.entity.collecting_spawn_properties.connect(_on_collect)
+## ctx.entity.spawning.connect(_on_spawning)
 ## [/codeblock]
 ##
 ## [b]Per-member nullability:[/b] Each facade resolves independently

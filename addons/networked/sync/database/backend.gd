@@ -13,7 +13,7 @@ extends Resource
 
 
 ## Called once after all schemas have been registered via
-## [method NetwDatabase._register_schema].
+## [method NetwDatabase.declare_table] or [method NetwDatabase.bind].
 ## Use this to create directories, open connections, or validate existing
 ## data on disk. [param schema] maps each table name to its declared column
 ## names.
