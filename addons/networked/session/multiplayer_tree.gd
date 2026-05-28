@@ -177,7 +177,7 @@ func _warn_if_role_unset() -> void:
 		auth_provider = value
 		if _auth:
 			_auth.set_auth_provider(value)
-			_auth.prepare(value != null)
+			_auth.prepare()
 
 ## The owned [SceneMultiplayer] for this tree. Constructed in [code]_init[/code]
 ## and mounted on [code]_enter_tree[/code] so child nodes can use the api in
@@ -521,7 +521,7 @@ func host(quiet: bool = false) -> Error:
 			)
 		return setup_err
 	
-	_auth.prepare(auth_provider != null)
+	_auth.prepare()
 	var peer: MultiplayerPeer = await backend.create_host_peer(self)
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
@@ -611,7 +611,7 @@ func _open_join_transport(
 			)
 		return setup_err
 
-	_auth.prepare(auth_provider != null and _client_join_payload != null)
+	_auth.prepare()
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
@@ -732,7 +732,7 @@ func adopt_peer(
 		_client_join_payload = join_payload
 		_auth.set_client_join_payload(join_payload)
 
-	_auth.prepare(auth_provider != null and join_payload != null)
+	_auth.prepare()
 	if backend:
 		peer = backend.wrap_peer(peer)
 	api.multiplayer_peer = peer
