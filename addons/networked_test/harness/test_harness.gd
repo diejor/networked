@@ -187,7 +187,10 @@ func add_client() -> MultiplayerTree:
 	if _clock_enabled:
 		_add_clock_node(client)
 
-	var join_err: Error = await client.join("localhost", username)
+	var payload := make_join_payload(username)
+	var join_err: Error = await client.join_direct(
+		client.backend, "localhost", payload
+	)
 	assert(
 		join_err == OK,
 		"Client %d join() failed: %s" % [index, error_string(join_err)],
@@ -305,7 +308,10 @@ func reconnect_client(client: MultiplayerTree) -> void:
 	await _ensure_server_hosted()
 
 	var username: String = client.get_meta(&"_harness_username")
-	var join_err: Error = await client.join("localhost", username)
+	var payload := make_join_payload(username)
+	var join_err: Error = await client.join_direct(
+		client.backend, "localhost", payload
+	)
 	assert(
 		join_err == OK,
 		"Client reconnect failed: %s" % error_string(join_err)
@@ -390,7 +396,7 @@ func join_player(
 	return scene.level.get_node_or_null(player_path)
 
 
-## Builds a [JoinPayload] for [method MultiplayerTree.connect_player].
+## Builds a [JoinPayload] for harness-driven session entry.
 ##
 ## Leave [param level_scene_path] and [param spawner_node_path] empty for
 ## sceneless joins that should not spawn a player.
@@ -398,11 +404,9 @@ func make_join_payload(
 	username: String,
 	level_scene_path: String = "",
 	spawner_node_path: String = "",
-	url: String = "localhost",
 ) -> JoinPayload:
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
-	join_payload.url = url
 	if not level_scene_path.is_empty() and not spawner_node_path.is_empty():
 		var spawner_component_path := SceneNodePath.new()
 		spawner_component_path.scene_path = level_scene_path
@@ -419,16 +423,18 @@ func add_listen_server(
 	var tree := _create_player_tree("HarnessListenServer")
 	tree.use_listen_server = true
 	tree.auth_provider = auth_provider
-	var err: Error = await tree.connect_player(join_payload)
+	var err: Error = await tree.auto_connect_player(
+		tree.backend, tree.backend.get_join_address(), join_payload
+	)
 	assert(
 		err == OK,
-		"listen-server connect_player() failed: %s" % error_string(err)
+		"listen-server auto_connect_player() failed: %s" % error_string(err)
 	)
 	return tree
 
 
 ## Creates a client tree that joins the harness server via
-## [method MultiplayerTree.connect_player].
+## [method MultiplayerTree.auto_connect_player].
 func add_connect_player(
 	join_payload: JoinPayload,
 	auth_provider: NetwAuthProvider = null,
@@ -437,10 +443,12 @@ func add_connect_player(
 		"HarnessConnectPlayer",
 		auth_provider
 	)
-	var err: Error = await tree.connect_player(join_payload)
+	var err: Error = await tree.auto_connect_player(
+		tree.backend, tree.backend.get_join_address(), join_payload
+	)
 	assert(
 		err == OK,
-		"connect_player() failed: %s" % error_string(err)
+		"auto_connect_player() failed: %s" % error_string(err)
 	)
 	return tree
 

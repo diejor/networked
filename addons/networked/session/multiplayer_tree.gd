@@ -149,8 +149,9 @@ func _warn_if_role_unset() -> void:
 		
 		update_configuration_warnings()
 
-## When set, [method connect_player] is called automatically on
-## [code]_ready[/code].
+## When set, [method auto_connect_player] is called automatically on
+## [code]_ready[/code] against [member backend] and
+## [method BackendPeer.get_join_address].
 @export var init_join_payload: JoinPayload
 
 ## On headless builds, automatically calls [method host] on
@@ -167,9 +168,10 @@ func _warn_if_role_unset() -> void:
 		use_listen_server = value
 		update_configuration_warnings()
 
-## Optional authentication provider. When set, [method connect_player]
-## runs the auth pipeline before opening transport. When [code]null[/code],
-## auth is skipped and the client-claimed username is trusted.
+## Optional authentication provider. When set, [method join_direct] and
+## [method auto_connect_player] run the auth pipeline before opening
+## transport. When [code]null[/code], auth is skipped and the
+## client-claimed username is trusted.
 @export var auth_provider: NetwAuthProvider:
 	set(value):
 		auth_provider = value
@@ -546,17 +548,51 @@ func host(quiet: bool = false) -> Error:
 	return OK
 
 
-## Connects to an active server at [param server_address].
+## Opens the configured transport against [param server_address] and submits
+## [param join_payload] once the connection is live.
 ##
-## Awaits [signal connected_to_server] with the specified [param timeout].
-## Returns [code]ERR_CANT_CONNECT[/code] if no response arrives in time.
-func join(
+## Reassigns [member backend] to [param backend] (duplicated via the setter).
+## Validates the payload, prepares the auth pipeline, asks the backend for a
+## client peer, awaits [signal connected_to_server] with [param timeout], then
+## calls [method submit_join]. Returns [code]ERR_CANT_CONNECT[/code] on timeout
+## or [code]ERR_INVALID_PARAMETER[/code] on a null backend/payload.
+func join_direct(
+	backend: BackendPeer,
+	server_address: String,
+	join_payload: JoinPayload,
+	timeout: float = 5.0,
+	quiet: bool = false,
+) -> Error:
+	assert(state == State.OFFLINE, "Must be offline to join.")
+	if backend == null:
+		Netw.dbg.error(
+			"join_direct: backend is null.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+
+	self.backend = backend
+	var prepare_err := await _prepare_session(join_payload)
+	if prepare_err != OK:
+		return prepare_err
+
+	var join_err := await _open_join_transport(
+		server_address, join_payload.username, timeout, quiet
+	)
+	if join_err == OK:
+		submit_join(join_payload)
+	return join_err
+
+
+# Transport-only join: assumes _prepare_session has already run and
+# _client_join_payload is set. Used by both join_direct (after preparing)
+# and _host_player_logic (in fallback paths where preparation already
+# happened).
+func _open_join_transport(
 	server_address: String,
 	username: String,
 	timeout: float = 5.0,
-	quiet: bool = false
+	quiet: bool = false,
 ) -> Error:
-	assert(state == State.OFFLINE, "Must be offline to join.")
 	Netw.dbg.trace(
 		"MultiplayerTree: Joining at %s with username %s.",
 		[server_address, username]
@@ -564,7 +600,7 @@ func join(
 	state = State.CONNECTING
 	backend.peer_reset_state()
 	var prior_api := api
-	
+
 	var setup_err: Error = await backend.setup(self)
 	if setup_err != OK:
 		state = State.OFFLINE
@@ -574,14 +610,14 @@ func join(
 				func(m): push_error(m)
 			)
 		return setup_err
-	
+
 	_auth.prepare(auth_provider != null and _client_join_payload != null)
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
-	
+
 	if peer == null and not api_was_adopted:
 		state = State.OFFLINE
 		if not quiet:
@@ -590,22 +626,68 @@ func join(
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
-	
+
 	if peer != null:
 		api.multiplayer_peer = peer
-	
+
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer):
 		state = State.OFFLINE
 		if not quiet:
-			Netw.dbg.error("Connection timed out. Server probably is not up, \
-consider using `connect_player` instead of `join`.", func(m): push_error(m))
+			Netw.dbg.error(
+				"Connection timed out. Server probably is not up; consider "
+				+ "auto_connect_player if you want host-as-fallback.",
+				func(m): push_error(m)
+			)
 		return ERR_CANT_CONNECT
-	
+
 	role = Role.CLIENT
 	state = State.ONLINE
 	_finalize_session()
 	return OK
+
+
+## Probes [param server_address] with [param backend]; joins it if reachable
+## and falls back to [method host_player] otherwise.
+##
+## Replaces the localhost-or-remote heuristics that used to live on
+## [code]connect_player[/code]. Callers pass the backend and address
+## explicitly -- there is no URL scheme inspection or transport sniffing.
+## For backends that cannot probe ([method BackendPeer.supports_embedded_server]
+## returns [code]false[/code]), this always hosts.
+func auto_connect_player(
+	backend: BackendPeer,
+	server_address: String,
+	join_payload: JoinPayload,
+) -> Error:
+	assert(state == State.OFFLINE, "Must be offline to connect.")
+	if backend == null:
+		Netw.dbg.error(
+			"auto_connect_player: backend is null.", func(m): push_error(m)
+		)
+		return ERR_INVALID_PARAMETER
+
+	self.backend = backend
+
+	if not self.backend.supports_embedded_server():
+		var host_err := await host(true)
+		if host_err == OK:
+			role = Role.LISTEN_SERVER
+			await host_ready
+			submit_join(join_payload)
+		return host_err
+
+	var probe: ProbeResult = await self.backend.probe(server_address, 0.2)
+	if probe.is_reachable():
+		Netw.dbg.debug(
+			"auto_connect_player: probe reachable (%s); joining.", [probe]
+		)
+		return await join_direct(self.backend, server_address, join_payload)
+
+	Netw.dbg.debug(
+		"auto_connect_player: probe unreachable (%s); hosting.", [probe]
+	)
+	return await host_player(join_payload)
 
 ## Adopts a pre-connected [param peer] without going through a [BackendPeer].
 ##
@@ -722,8 +804,9 @@ func disconnect_player() -> void:
 ## Validates [param join_payload] and starts this instance as a network host
 ## (either directly as a listen-server or by spinning up an embedded server).
 ##
-## Bypasses the localhost probing found in [method connect_player].
-## Returns [code]OK[/code] on success.
+## Use directly when the caller knows they are hosting; for probe-then-host
+## behavior see [method auto_connect_player]. Returns [code]OK[/code] on
+## success.
 func host_player(join_payload: JoinPayload) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	var err := await _prepare_session(join_payload)
@@ -731,55 +814,6 @@ func host_player(join_payload: JoinPayload) -> Error:
 		return err
 	
 	return await _host_player_logic(join_payload)
-
-
-## Validates [param join_payload], probes for an existing localhost server,
-## then either joins it or spins up an embedded server by duplicating this
-## tree into a sibling node.
-##
-## Returns [code]OK[/code] on success.
-func connect_player(join_payload: JoinPayload) -> Error:
-	assert(state == State.OFFLINE, "Must be offline to connect.")
-	var err := await _prepare_session(join_payload)
-	if err != OK:
-		return err
-
-	var url := join_payload.url
-	Netw.dbg.info(
-		"Connecting player %s to %s", [join_payload.username, url]
-	)
-
-	if _is_local_url(url):
-		if backend.supports_embedded_server():
-			var probe_url := url if not url.is_empty() else "localhost"
-			var probe: ProbeResult = await backend.probe(probe_url, 0.2)
-			if probe.is_reachable():
-				Netw.dbg.debug("Probe found local server (%s); joining.", [probe])
-				var join_err := await join(probe_url, join_payload.username)
-				if join_err == OK:
-					submit_join(join_payload)
-				return join_err
-
-			Netw.dbg.debug("Probe found no local server (%s); hosting.", [probe])
-			return await _host_player_logic(join_payload)
-		else:
-			# For backends that don't support embedded servers (like Steam),
-			# local URL means we should just host a lobby.
-			var host_err := await host(true)
-			if host_err == OK:
-				role = Role.LISTEN_SERVER
-				await host_ready
-				submit_join(join_payload)
-				return OK
-			return host_err
-
-	if OS.has_feature("web") and url.begins_with("ws"):
-		backend = WebSocketBackend.new()
-
-	var join_err := await join(url, join_payload.username)
-	if join_err == OK:
-		submit_join(join_payload)
-	return join_err
 
 
 func _prepare_session(join_payload: JoinPayload) -> Error:
@@ -811,7 +845,7 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 			submit_join(join_payload)
 			return OK
 		elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
-			var join_err := await join(
+			var join_err := await _open_join_transport(
 				backend.get_join_address(), join_payload.username
 			)
 			if join_err == OK:
@@ -819,7 +853,7 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 			return join_err
 		else:
 			return host_err
-	
+
 	var server := duplicate() as MultiplayerTree
 	server.is_server = true
 	server.name = "Server"
@@ -827,16 +861,16 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 	server.auto_host_headless = false
 	get_parent().add_child.call_deferred(server)
 	await get_tree().process_frame
-	
+
 	var client_sm := get_service(MultiplayerSceneManager)
 	if client_sm:
 		var server_sm := server.get_service(MultiplayerSceneManager)
 		for path in client_sm.get_configured_paths():
 			server_sm._configure_default(path)
-	
+
 	var host_err := await server.host(true)
 	if host_err == OK:
-		var join_err := await join(
+		var join_err := await _open_join_transport(
 			server.backend.get_join_address(), join_payload.username
 		)
 		if join_err == OK:
@@ -844,7 +878,7 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 		return join_err
 	elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:
 		server.queue_free.call_deferred()
-		var join_err := await join(
+		var join_err := await _open_join_transport(
 			backend.get_join_address(), join_payload.username
 		)
 		if join_err == OK:
@@ -882,18 +916,16 @@ func _await_adopted_client_connected() -> Error:
 	return OK
 
 
-func _is_local_url(url: String) -> bool:
-	return url.is_empty() or "localhost" in url or "127.0.0.1" in url
-
-
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	
-	if init_join_payload:
+
+	if init_join_payload and backend:
 		init_join_payload.is_debug = true
-		connect_player(init_join_payload)
-	
+		auto_connect_player(
+			backend, backend.get_join_address(), init_join_payload
+		)
+
 	if auto_host_headless and DisplayServer.get_name() == "headless":
 		if use_listen_server:
 			await host()

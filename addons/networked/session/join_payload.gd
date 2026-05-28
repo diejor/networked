@@ -1,8 +1,10 @@
-## Serializable data bag describing a player attempting to connect to a session.
+## Serializable in-game join data describing a player entering a session.
 ##
-## Pass a populated instance to [method MultiplayerTree.connect_player] to
-## authenticate and spawn a player, or serialize it for transmission via
-## [method serialize].
+## Pass a populated instance to [method MultiplayerTree.join_direct],
+## [method MultiplayerTree.host_player], or
+## [method MultiplayerTree.auto_connect_player]. Transport identity
+## (backend, address) is supplied separately by the caller and is not
+## part of this payload.
 class_name JoinPayload
 extends Serde
 
@@ -15,10 +17,6 @@ extends Serde
 ## tracks the owner scene correctly.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
 var spawner_component_path: SceneNodePath
-
-## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a
-## local session.
-@export var url: String
 
 ## Assigned by the server after receiving the connection request.
 ##
@@ -57,7 +55,6 @@ func serialize() -> PackedByteArray:
 		spawner_component_path = (
 			spawner_component_path.as_uid() if spawner_component_path else ""
 		),
-		url = url,
 		peer_id = peer_id,
 		is_debug = is_debug,
 	}
@@ -72,6 +69,5 @@ func deserialize(bytes: PackedByteArray) -> void:
 
 	username = data.username
 	spawner_component_path = SceneNodePath.new(data.spawner_component_path)
-	url = data.url
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)

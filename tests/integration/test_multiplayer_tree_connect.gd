@@ -1,4 +1,5 @@
-## Integration tests for [method MultiplayerTree.connect_player].
+## Integration tests for [method MultiplayerTree.auto_connect_player] and
+## [method MultiplayerTree.host_player].
 class_name TestMultiplayerTreeConnect
 extends NetwTestSuite
 
@@ -35,7 +36,7 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_client_is_online_after_connect_player() -> void:
+func test_client_is_online_after_auto_connect_player() -> void:
 	var tree := await harness.add_connect_player(
 		harness.make_join_payload("alice")
 	)
@@ -65,7 +66,7 @@ func test_host_player_starts_server_and_joins() -> void:
 	assert_that(server_tree.get_service(InterestService)).is_equal(services[0])
 
 
-func test_listen_server_connect_player_spawns_player() -> void:
+func test_listen_server_auto_connect_player_spawns_player() -> void:
 	var tree := await harness.add_listen_server(
 		harness.make_join_payload(
 			"alice",

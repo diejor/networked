@@ -5,7 +5,10 @@
 ## [b]Client side:[/b]
 ## [br]1. [method prepare] -- before transport opens. Populates
 ##     [JoinPayload] with metadata. Returns [constant OK] to proceed,
-##     or an [enum Error] to abort [method MultiplayerTree.connect_player].
+##     or an [enum Error] to abort the entry call
+##     ([method MultiplayerTree.join_direct],
+##     [method MultiplayerTree.host_player], or
+##     [method MultiplayerTree.auto_connect_player]).
 ## [br]2. [method get_credentials] -- during Godot's auth phase.
 ##     Returns proof bytes sent via [method SceneMultiplayer.send_auth].
 ##
@@ -37,7 +40,7 @@ var rejection_reason: String
 ## to proceed, or an [enum Error] to abort the connection.
 ##
 ## [b]Note:[/b] Implementations may [code]await[/code] HTTP calls or
-## browser flows. [MultiplayerTree.connect_player] awaits this method.
+## browser flows. The owning entry call awaits this method.
 func prepare(payload: JoinPayload) -> Error:
 	return OK
 

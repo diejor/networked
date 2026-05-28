@@ -111,21 +111,53 @@ func is_online() -> bool:
 
 ## Starts the instance as a network host using [param join_payload].
 ##
-## Bypasses the localhost probing found in [method connect_player],
-## making it faster when the caller knows they are hosting.
+## Use this when the caller knows they are hosting; otherwise see
+## [method auto_connect_player].
 func host_player(join_payload: JoinPayload) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return await mt.host_player(join_payload) if mt else ERR_UNCONFIGURED
 
 
-## Connects the local player to a session using [param join_payload].
+## Opens the transport against [param server_address] using [param backend]
+## and submits [param join_payload] once connected.
 ##
-## Probes localhost when [code]join_payload.url[/code] is empty or localhost,
-## then either joins an existing server or spins up an embedded server
-## by duplicating this tree into a sibling node.
-func connect_player(join_payload: JoinPayload) -> Error:
+## See [method MultiplayerTree.join_direct].
+func join_direct(
+	backend: BackendPeer,
+	server_address: String,
+	join_payload: JoinPayload,
+	timeout: float = 5.0,
+	quiet: bool = false,
+) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return await mt.connect_player(join_payload) if mt else ERR_UNCONFIGURED
+	if not mt:
+		return ERR_UNCONFIGURED
+	return await mt.join_direct(
+		backend, server_address, join_payload, timeout, quiet
+	)
+
+
+## Probes [param server_address] with [param backend]; joins if reachable,
+## hosts otherwise. See [method MultiplayerTree.auto_connect_player].
+func auto_connect_player(
+	backend: BackendPeer,
+	server_address: String,
+	join_payload: JoinPayload,
+) -> Error:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	if not mt:
+		return ERR_UNCONFIGURED
+	return await mt.auto_connect_player(backend, server_address, join_payload)
+
+
+## Returns the tree's configured [BackendPeer], or [code]null[/code].
+##
+## Exposed so callers can pass the existing backend to [method join_direct]
+## or [method auto_connect_player] without holding a direct
+## [MultiplayerTree] reference.
+func get_backend() -> BackendPeer:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.backend if mt else null
 
 
 ## Adopts a pre-connected [param peer] without going through a backend.
