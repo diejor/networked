@@ -1,10 +1,15 @@
-## Test-only helpers for standalone [ENetBackend] integration tests.
+## Static helpers for ENet-based integration tests.
 ##
-## The harness ([NetwTestHarness]) is built around [LocalLoopbackBackend] and
-## cannot exercise the [SceneMultiplayer] auth handshake that
-## [method BackendPeer.query_server_info] depends on. These helpers stand up
-## isolated ENet hosts and clients that drive real UDP sockets so probe-style
-## flows can be verified end-to-end.
+## [NetwTestHarness] is built around [LocalLoopbackBackend]: it gives cheap
+## multi-tree-in-process gameplay tests, deterministic packet flow, and
+## packet hold/release for race-condition tests. Those features rely on the
+## in-process custom peer and do not generalize to real transports.
+## [br][br]
+## This helper covers the complementary case: tests that need real UDP
+## sockets to exercise transport-specific behavior -- the auth-phase
+## handshake behind [method BackendPeer.query_server_info], ENet-level
+## disconnect/reconnect semantics, and so on. The two are not meant to
+## compose; pick the one whose contract matches the unit under test.
 class_name EnetTestSupport
 extends RefCounted
 

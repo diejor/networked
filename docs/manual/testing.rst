@@ -69,6 +69,33 @@ If a test needs its own cleanup, call the base hook last:
 Use ``make_unmanaged_harness()`` only when one test case intentionally needs
 an extra harness. Unmanaged harnesses must be torn down explicitly.
 
+Transport-specific tests
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+:ref:`NetwTestHarness <class_NetwTestHarness>` is built around
+:ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>` and does not
+generalize to real transports. For tests that need real UDP sockets --
+exercising the auth-phase handshake behind
+:ref:`query_server_info() <class_BackendPeer_method_query_server_info>`,
+ENet-level disconnect semantics, port-aware addressing -- use
+:ref:`EnetTestSupport <class_EnetTestSupport>` instead. The two helpers
+are complementary, not composable; pick the one whose contract matches
+the unit under test.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    func test_probe_returns_player_count() -> void:
+        var host := await EnetTestSupport.start_host(self)
+        var client_backend := EnetTestSupport.make_client_backend(host.port)
+
+        var result: ServerInfoResult = await client_backend.query_server_info(
+            "127.0.0.1", 2.0
+        )
+        assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+
+        await EnetTestSupport.stop_tree(host.tree)
+
 Three categories of test
 ------------------------
 
