@@ -93,32 +93,43 @@ or grey out a *Disconnect* button can subscribe once and be done.
 The connection flow
 -------------------
 
-The high-level entry point is
-:ref:`connect_player() <class_MultiplayerTree_method_connect_player>`. It
-takes a :ref:`JoinPayload <class_JoinPayload>` (the bundle of
-"who I am, what I want, where I am going") and decides whether to host or
-to join based on the payload's :ref:`url <class_JoinPayload_property_url>`. The flow looks like this:
+There are four entry methods, each for a different intent. All take a
+:ref:`JoinPayload <class_JoinPayload>` describing the player; transport
+identity (backend, address) is passed separately so the payload carries no
+URL or transport-specific fields.
+
+- :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`:
+  query the address, join if a live server answers, otherwise host. The
+  zero-config path for local development and listen-server games.
+- :ref:`join_direct() <class_MultiplayerTree_method_join_direct>`: open
+  the configured backend against a known address as a client. Use when the
+  caller knows there is a server.
+- :ref:`host_player() <class_MultiplayerTree_method_host_player>`: start
+  this tree as the host. Use when the caller knows it is hosting.
+- :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>`: attach a
+  pre-connected :godot:`MultiplayerPeer <MultiplayerPeer>` produced by an
+  external system (Steam lobby, matchmaker) without going through a
+  :ref:`BackendPeer <class_BackendPeer>`.
+
+A typical local flow looks like this:
 
 1. Validate the payload (username non-empty, spawner path resolvable).
 2. Run the auth pipeline on the payload, if an
    :ref:`auth_provider <class_MultiplayerTree_property_auth_provider>` is
    assigned.
-3. If the URL is local **and** the backend supports embedded servers, probe
-   for an existing listener (a short :ref:`join() <class_MultiplayerTree_method_join>` with a 1s timeout). If the
-   probe succeeds, we are now a client. If it fails, host instead.
-4. If the URL is remote, just join.
-5. After the transport hand-off, send the resolved payload to the server
+3. (auto-connect only) call
+   :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
+   against the address. A reply with ``is_local_listener = true`` means
+   join; anything else means host.
+4. After the transport hand-off, send the resolved payload to the server
    via :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`.
-6. The server validates, resolves identity, broadcasts the accepted player
+5. The server validates, resolves identity, broadcasts the accepted player
    to all peers, and emits
    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`
    everywhere, including locally on the new peer.
 
-For scripts that want to bypass the auto-host probe, the lower-level
-:ref:`host() <class_MultiplayerTree_method_host>` and
-:ref:`join() <class_MultiplayerTree_method_join>` methods are still
-available. They are also the entry points used by the embedded-server flow
-internally.
+For the protocol behind ``query_server_info`` and probe isolation, see
+:doc:`pre_game_connection`.
 
 If the peer is produced by an external system (a Steam lobby, a matchmaking
 service) and is already connected by the time you get it, hand it directly

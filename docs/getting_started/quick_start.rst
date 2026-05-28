@@ -130,8 +130,9 @@ Joining the session
 
 You now have a scene that can host, but nothing tells it to. The simplest
 way to drive the connection is from a script attached to the ``Main`` root.
-A :ref:`JoinPayload <class_JoinPayload>` describes who is connecting, where
-they want to spawn, and (optionally) where the server lives:
+A :ref:`JoinPayload <class_JoinPayload>` describes who is connecting and
+where they want to spawn. Transport identity (backend, address) is passed
+separately to the entry method:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -148,25 +149,22 @@ they want to spawn, and (optionally) where the server lives:
 
         var join := JoinPayload.new()
         join.username = "alice"
-        join.url = ""  # empty == localhost
         join.spawner_component_path = spawner_path
 
-        client.connect_player(join)
+        client.auto_connect_player(client.backend, "localhost", join)
 
-The :ref:`url <class_JoinPayload_property_url>` field follows a simple rule: an empty string or anything
-containing ``"localhost"`` or ``"127.0.0.1"`` is treated as a request to host
-locally. The tree probes the configured backend for a running server first;
-if nothing is listening, it spins one up next to the client (or, when
-:ref:`use_listen_server <class_MultiplayerTree_property_use_listen_server>` is enabled on the tree, hosts directly on the same
-node). For LAN or internet servers, set :ref:`url <class_JoinPayload_property_url>` to an IP address or hostname
-and the tree will create a client peer that connects to it.
+:ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
+queries the address for a live local server first; if one answers, it joins
+as a client, otherwise it falls back to hosting. For LAN or internet
+servers, call :ref:`join_direct() <class_MultiplayerTree_method_join_direct>`
+explicitly with the remote address instead.
 
 .. tip::
 
     You can skip the script entirely while prototyping. Set the inspector
     field :button:`Init Join Payload` on the :ref:`MultiplayerTree <class_MultiplayerTree>`
     to a :ref:`JoinPayload <class_JoinPayload>` resource and the tree will
-    call :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
+    call :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project

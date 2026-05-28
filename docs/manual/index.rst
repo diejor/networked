@@ -20,6 +20,7 @@ your scene.
 
    multiplayer_tree
    sessions_and_peers
+   pre_game_connection
    scenes_and_players
    interest_management
    transport_backends

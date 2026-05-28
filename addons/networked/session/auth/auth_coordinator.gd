@@ -3,7 +3,17 @@ extends RefCounted
 ## Internal coordinator for [MultiplayerTree] authentication hooks.
 ##
 ## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthProvider] and stores
-## accepted identities or rejection reasons in [SessionRoster].
+## accepted identities or rejection reasons in [SessionRoster]. Dispatches
+## the always-on [code]NPRB[/code]/[code]NHEL[/code] auth protocol so server
+## browsers can query metadata without entering [code]get_peers()[/code].
+## [br][br]
+## [b]auth_timeout dependency:[/b] probe peers are not closed by the server;
+## the probing client owns the peer and closes it after receiving the reply.
+## Stragglers (crashed or malicious probers) are reaped by
+## [code]SceneMultiplayer.auth_timeout[/code] (default 3s). Setting
+## [code]auth_timeout = 0[/code] disables this cleanup and lets probe slots
+## accumulate up to [constant MAX_ACTIVE_PROBES]; do not do that on
+## production hosts.
 
 ## Maximum probe replies per second before further probes are answered
 ## with [constant AuthProtocol.ProbeStatus.BUSY].

@@ -141,13 +141,17 @@ ones you need:
 - :ref:`peer_reset_state() <class_BackendPeer_method_peer_reset_state>`: called whenever a session ends. Clear any
   cached lobby/login state your backend holds.
 - :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>`: return ``true`` if this backend can be
-  the target of the localhost host-on-demand probe. Most transports return
-  ``true``. Managed-lobby backends (Steam) return ``false``.
-- :ref:`probe() <class_BackendPeer_method_probe>`: return a meaningful result
-  if the backend can answer a short
-  :ref:`join() <class_MultiplayerTree_method_join>` probe without falsely
-  succeeding when no server is listening. ENet and WebSocket both qualify.
-  Transports that defer acceptance to an external lobby manager do not.
+  the target of
+  :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`'s
+  host-on-demand fallback. Most transports return ``true``. Managed-lobby
+  backends (Steam) return ``false``.
+- :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`:
+  the default implementation runs the ``NPRB`` auth handshake (see
+  :doc:`pre_game_connection`) and works for any backend whose peer can drive
+  :godot:`SceneMultiplayer <SceneMultiplayer>` auth. Override to return
+  :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`
+  on transports that cannot (session-id-based: Steam, in-process Local,
+  Tube).
 - :ref:`get_backend_warnings()
   <class_BackendPeer_method_get_backend_warnings>`: editor-time validation.
   Strings returned here are surfaced as configuration warnings on the tree
