@@ -860,7 +860,8 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 		var host_err := await host(true)
 		if host_err == OK:
 			role = Role.LISTEN_SERVER
-			await host_ready
+			if get_service(MultiplayerSceneManager):
+				await host_ready
 			submit_join(join_payload)
 			return OK
 		elif host_err == ERR_ALREADY_IN_USE or host_err == ERR_CANT_CREATE:

@@ -161,7 +161,15 @@ func query_server_info(
 		var status: int = decoded.status
 		match status:
 			AuthProtocol.ProbeStatus.OK:
+				# OK replies carry ServerInfo; empty packets are request-shaped.
+				if decoded.payload.is_empty():
+					return
 				var info := ServerInfo.from_payload(decoded.payload)
+				if info == null:
+					state.result = ServerInfoResult.error(
+						"malformed NPRB info payload"
+					)
+					return
 				var latency := Time.get_ticks_msec() - start_ms
 				state.result = ServerInfoResult.ok(info, latency)
 			AuthProtocol.ProbeStatus.BUSY:
@@ -213,6 +221,8 @@ func query_server_info(
 	if peer:
 		peer.close()
 	transient_api.multiplayer_peer = null
+	await loop.process_frame
+	await loop.process_frame
 
 	if state.result == null:
 		return ServerInfoResult.timeout(

@@ -1,0 +1,91 @@
+## Test-only helpers for standalone [ENetBackend] integration tests.
+##
+## The harness ([NetwTestHarness]) is built around [LocalLoopbackBackend] and
+## cannot exercise the [SceneMultiplayer] auth handshake that
+## [method BackendPeer.query_server_info] depends on. These helpers stand up
+## isolated ENet hosts and clients that drive real UDP sockets so probe-style
+## flows can be verified end-to-end.
+class_name EnetTestSupport
+extends RefCounted
+
+
+const _PORT_RANGE_START := 30000
+const _PORT_RANGE_SIZE := 100
+
+
+## Builds and hosts a fresh [MultiplayerTree] backed by [ENetBackend] on the
+## first available port in the test range.
+##
+## [param parent] receives the tree as a child. [param source] is optionally
+## assigned to the tree's [member MultiplayerTree.server_info_source].
+##
+## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
+## [code]port[/code] (the bound UDP port), and [code]backend[/code] (the
+## host's [ENetBackend], duplicated by the tree's setter).
+static func start_host(
+	parent: Node,
+	source: ServerInfoSource = null,
+) -> Dictionary:
+	for candidate in range(_PORT_RANGE_START, _PORT_RANGE_START + _PORT_RANGE_SIZE):
+		var tree := MultiplayerTree.new()
+		tree.name = "EnetHost_%d" % candidate
+		tree.auto_host_headless = false
+		tree.server_info_source = source
+
+		var backend := ENetBackend.new()
+		backend.port = candidate
+		tree.backend = backend
+		parent.add_child(tree)
+
+		var err: Error = await tree.host(true)
+		if err == OK:
+			return { tree = tree, port = candidate, backend = tree.backend }
+
+		tree.queue_free()
+		await parent.get_tree().process_frame
+
+	push_error(
+		"EnetTestSupport: could not bind any port in [%d, %d)" % [
+			_PORT_RANGE_START, _PORT_RANGE_START + _PORT_RANGE_SIZE,
+		]
+	)
+	return {}
+
+
+## Builds a client-side [ENetBackend] configured to talk to [param port].
+##
+## Returned backend is not attached to any tree; pass it directly to
+## [method BackendPeer.query_server_info] or to
+## [method MultiplayerTree.join_direct].
+static func make_client_backend(port: int) -> ENetBackend:
+	var backend := ENetBackend.new()
+	backend.port = port
+	return backend
+
+
+## Builds an offline client [MultiplayerTree] wired with an ENet backend
+## targeting [param port]. The tree is added under [param parent] but has not
+## connected to anything.
+static func make_client_tree(
+	parent: Node,
+	port: int,
+	name_suffix: String = "",
+) -> MultiplayerTree:
+	var tree := MultiplayerTree.new()
+	tree.name = "EnetClient%s" % name_suffix
+	tree.auto_host_headless = false
+	tree.backend = make_client_backend(port)
+	parent.add_child(tree)
+	return tree
+
+
+## Tears down [param tree] and drains the SceneTree so the UDP socket is
+## released before the next test begins.
+static func stop_tree(tree: MultiplayerTree) -> void:
+	if not is_instance_valid(tree):
+		return
+	var scene_tree := tree.get_tree()
+	tree.queue_free()
+	if scene_tree:
+		for i in 3:
+			await scene_tree.process_frame

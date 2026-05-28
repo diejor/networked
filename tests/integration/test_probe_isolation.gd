@@ -1,0 +1,85 @@
+## Verifies that NPRB probes never enter the server's [code]get_peers()[/code]
+## or trigger [signal SceneMultiplayer.peer_connected].
+##
+## This is the load-bearing invariant that justifies running probes through
+## the auth phase rather than on a sidecar port.
+class_name TestProbeIsolation
+extends NetwTestSuite
+
+
+var _connected_peers: Array[int] = []
+
+
+func _on_peer_connected(peer_id: int) -> void:
+	_connected_peers.append(peer_id)
+
+
+func test_probes_do_not_register_peers() -> void:
+	var host := await EnetTestSupport.start_host(self)
+	assert_that(host).is_not_empty()
+
+	var host_tree: MultiplayerTree = host.tree
+	var host_api := host_tree.api
+	host_api.peer_connected.connect(_on_peer_connected)
+
+	var client_backend := EnetTestSupport.make_client_backend(host.port)
+	for i in 5:
+		var result: ServerInfoResult = await client_backend.query_server_info(
+			"127.0.0.1", 1.0
+		)
+		assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+		assert_array(host_api.get_peers()).is_empty()
+
+	# Drain a few frames in case a delayed peer_connected fires post-probe.
+	await drain_frames(get_tree(), 5)
+
+	assert_array(_connected_peers).is_empty()
+	assert_array(host_api.get_peers()).is_empty()
+
+	host_api.peer_connected.disconnect(_on_peer_connected)
+	await EnetTestSupport.stop_tree(host_tree)
+
+
+func test_concurrent_probes_drain_and_some_return_busy() -> void:
+	var host := await EnetTestSupport.start_host(self)
+	assert_that(host).is_not_empty()
+
+	var host_tree: MultiplayerTree = host.tree
+	var host_api := host_tree.api
+
+	var client_backend := EnetTestSupport.make_client_backend(host.port)
+	var probe_count := 20
+	var results: Array[ServerInfoResult] = []
+	var pending := probe_count
+
+	for i in probe_count:
+		var callable := func() -> void:
+			var r: ServerInfoResult = await client_backend.query_server_info(
+				"127.0.0.1", 2.0
+			)
+			results.append(r)
+			pending -= 1
+		callable.call()
+
+	await wait_until(func() -> bool: return pending == 0, 8.0)
+
+	var ok_count := 0
+	var busy_count := 0
+	for r in results:
+		match r.status:
+			ServerInfoResult.Status.OK: ok_count += 1
+			ServerInfoResult.Status.BUSY: busy_count += 1
+	# Beyond the rate window, the rest are answered BUSY.
+	assert_int(ok_count).is_greater(0)
+	assert_int(busy_count).is_greater(0)
+	assert_int(ok_count + busy_count).is_equal(probe_count)
+
+	# Pending peers drain once clients close + auth_timeout reaps stragglers.
+	await wait_until(
+		func() -> bool: return host_api.get_authenticating_peers().is_empty(),
+		(host_api.auth_timeout + 1.0)
+	)
+	assert_array(host_api.get_authenticating_peers()).is_empty()
+	assert_array(host_api.get_peers()).is_empty()
+
+	await EnetTestSupport.stop_tree(host_tree)
