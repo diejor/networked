@@ -179,6 +179,16 @@ func _warn_if_role_unset() -> void:
 			_auth.set_auth_provider(value)
 			_auth.prepare()
 
+## Builds the [ServerInfo] returned to clients probing this tree via
+## [method BackendPeer.query_server_info]. When [code]null[/code], a
+## [DefaultServerInfoSource] is used (reports live player count and
+## [code]is_local_listener = true[/code]).
+@export var server_info_source: ServerInfoSource:
+	set(value):
+		server_info_source = value
+		if _auth:
+			_auth.set_server_info_source(value)
+
 ## The owned [SceneMultiplayer] for this tree. Constructed in [code]_init[/code]
 ## and mounted on [code]_enter_tree[/code] so child nodes can use the api in
 ## their own [code]_ready[/code] / [code]_enter_tree[/code]. May be replaced
@@ -480,6 +490,8 @@ func _init() -> void:
 	_auth = AuthCoordinator.new(_roster)
 	_auth.set_roster(_roster)
 	_auth.set_auth_provider(auth_provider)
+	_auth.set_tree(self)
+	_auth.set_server_info_source(server_info_source)
 	if not Engine.is_editor_hint():
 		api = SceneMultiplayer.new()
 		_interest_service = InterestService.new()
@@ -647,14 +659,19 @@ func _open_join_transport(
 	return OK
 
 
-## Probes [param server_address] with [param backend]; joins it if reachable
-## and falls back to [method host_player] otherwise.
+## Queries [param server_address] with [param backend]; joins if a live
+## local listener replies, falls back to [method host_player] otherwise.
 ##
 ## Replaces the localhost-or-remote heuristics that used to live on
 ## [code]connect_player[/code]. Callers pass the backend and address
 ## explicitly -- there is no URL scheme inspection or transport sniffing.
-## For backends that cannot probe ([method BackendPeer.supports_embedded_server]
-## returns [code]false[/code]), this always hosts.
+## The host/join decision goes through
+## [method BackendPeer.query_server_info]: a reply with
+## [member ServerInfo.is_local_listener] set triggers join, anything else
+## (UNSUPPORTED, UNREACHABLE, TIMEOUT, ERROR) falls through to hosting.
+## For backends that cannot embed a server
+## ([method BackendPeer.supports_embedded_server] returns [code]false[/code]),
+## this always hosts.
 func auto_connect_player(
 	backend: BackendPeer,
 	server_address: String,
@@ -677,15 +694,17 @@ func auto_connect_player(
 			submit_join(join_payload)
 		return host_err
 
-	var probe: ProbeResult = await self.backend.probe(server_address, 0.2)
-	if probe.is_reachable():
+	var result: ServerInfoResult = await self.backend.query_server_info(
+		server_address, 0.2
+	)
+	if result.is_ok() and result.info and result.info.is_local_listener:
 		Netw.dbg.debug(
-			"auto_connect_player: probe reachable (%s); joining.", [probe]
+			"auto_connect_player: live listener (%s); joining.", [result]
 		)
 		return await join_direct(self.backend, server_address, join_payload)
 
 	Netw.dbg.debug(
-		"auto_connect_player: probe unreachable (%s); hosting.", [probe]
+		"auto_connect_player: no live listener (%s); hosting.", [result]
 	)
 	return await host_player(join_payload)
 
@@ -804,7 +823,7 @@ func disconnect_player() -> void:
 ## Validates [param join_payload] and starts this instance as a network host
 ## (either directly as a listen-server or by spinning up an embedded server).
 ##
-## Use directly when the caller knows they are hosting; for probe-then-host
+## Use directly when the caller knows they are hosting; for query-then-host
 ## behavior see [method auto_connect_player]. Returns [code]OK[/code] on
 ## success.
 func host_player(join_payload: JoinPayload) -> Error:

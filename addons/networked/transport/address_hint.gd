@@ -29,8 +29,9 @@ var validator_regex: String = ""
 ## (typically meaning "use default / public host").
 var accepts_empty: bool = false
 
-## If [code]true[/code], the backend implements [method BackendPeer.probe]
-## with a meaningful answer. UIs can hide a probe button otherwise.
+## If [code]true[/code], the backend implements
+## [method BackendPeer.query_server_info] with a meaningful answer. UIs
+## can hide a probe button otherwise.
 var supports_probe: bool = false
 
 ## If [code]true[/code], this backend has no notion of an external address

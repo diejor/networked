@@ -5,10 +5,17 @@ extends RefCounted
 ## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthProvider] and stores
 ## accepted identities or rejection reasons in [SessionRoster].
 
+## Maximum probe replies per second before further probes are answered
+## with [constant AuthProtocol.ProbeStatus.BUSY].
+const PROBE_RATE_LIMIT := 10
+
 var _api: SceneMultiplayer
 var _auth_provider: NetwAuthProvider
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
+var _tree: MultiplayerTree
+var _server_info_source: ServerInfoSource
+var _probe_timestamps_ms: Array[int] = []
 
 
 func _init(roster = null) -> void:
@@ -38,6 +45,18 @@ func set_auth_provider(provider: NetwAuthProvider) -> void:
 ## Stores the join payload used to build client auth credentials.
 func set_client_join_payload(payload: JoinPayload) -> void:
 	_client_join_payload = payload
+
+
+## Stores the owning tree so probe replies can build a [ServerInfo] from
+## live session state.
+func set_tree(tree: MultiplayerTree) -> void:
+	_tree = tree
+
+
+## Sets the [ServerInfoSource] used to build probe replies. When
+## [code]null[/code], a [DefaultServerInfoSource] is created on first use.
+func set_server_info_source(source: ServerInfoSource) -> void:
+	_server_info_source = source
 
 
 ## Runs provider preparation before transport opens.
@@ -133,6 +152,7 @@ func clear() -> void:
 	bind_api(null)
 	_auth_provider = null
 	_client_join_payload = null
+	_probe_timestamps_ms.clear()
 
 
 func _unbind_api() -> void:
@@ -265,15 +285,44 @@ func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
 		_api.disconnect_peer(peer_id)
 
 
-# Handles a probe request. Step 3 ships a no-op reply (status=UNSUPPORTED)
-# that still preserves the isolation invariant: the peer is disconnected
-# from the authenticating state without ever entering get_peers(). Step 4
-# replaces the reply body with a serialized [ServerInfo] derived from the
-# tree's configured ServerInfoSource.
+# Handles a probe request. Builds a [ServerInfo] via the tree's configured
+# [ServerInfoSource], encodes it into an NPRB reply, and disconnects the
+# probing peer without ever completing auth. Excess probes within
+# [constant PROBE_RATE_LIMIT] are answered with BUSY.
 func _handle_probe(peer_id: int, _data: PackedByteArray) -> void:
 	Netw.dbg.debug("Auth: peer %d probe request received", [peer_id])
+
+	if _is_rate_limited():
+		Netw.dbg.debug(
+			"Auth: peer %d probe rate-limited (busy)", [peer_id]
+		)
+		var busy := AuthProtocol.encode_probe_reply(
+			AuthProtocol.ProbeStatus.BUSY
+		)
+		_api.send_auth(peer_id, busy)
+		_api.disconnect_peer(peer_id)
+		return
+
+	var source := _server_info_source
+	if source == null:
+		source = DefaultServerInfoSource.new()
+
+	var info := source.build_server_info(_tree)
+	var payload := ServerInfo.to_payload(info)
 	var reply := AuthProtocol.encode_probe_reply(
-		AuthProtocol.ProbeStatus.UNSUPPORTED
+		AuthProtocol.ProbeStatus.OK, payload
 	)
 	_api.send_auth(peer_id, reply)
 	_api.disconnect_peer(peer_id)
+
+
+# Records the current probe timestamp and returns whether the latest one
+# exceeded the per-second cap. Keeps the ring trimmed to the cap size.
+func _is_rate_limited() -> bool:
+	var now_ms := Time.get_ticks_msec()
+	var window_start_ms := now_ms - 1000
+	while _probe_timestamps_ms.size() > 0 \
+			and _probe_timestamps_ms[0] < window_start_ms:
+		_probe_timestamps_ms.pop_front()
+	_probe_timestamps_ms.push_back(now_ms)
+	return _probe_timestamps_ms.size() > PROBE_RATE_LIMIT

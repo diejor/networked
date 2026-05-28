@@ -100,6 +100,14 @@ func get_join_address() -> String:
 
 	return super.get_join_address()
 
+## Tube routes through session IDs rather than a reachable address, so the
+## SceneMultiplayer-based probe handshake does not apply.
+func query_server_info(
+	_address: String, _timeout: float = 2.0,
+) -> ServerInfoResult:
+	return ServerInfoResult.unsupported()
+
+
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Session ID",

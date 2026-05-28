@@ -42,23 +42,6 @@ func create_join_peer(
 	return peer
 
 
-## Synchronous bind-test on the configured port. If the port is already
-## bound, a server is presumed to be listening and the probe reports
-## reachable. Falls back to a brief TCP connect attempt for remote URLs.
-func probe(address: String, timeout: float = 0.2) -> ProbeResult:
-	if _is_local_address(address):
-		var probe_server := TCPServer.new()
-		var err := probe_server.listen(port)
-		if err == ERR_ALREADY_IN_USE:
-			return ProbeResult.reachable(0, { "via": "bind-test" })
-		if err != OK:
-			return ProbeResult.error(error_string(err))
-		probe_server.stop()
-		return ProbeResult.unreachable({ "via": "bind-test" })
-
-	return ProbeResult.unsupported()
-
-
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.make(
 		"Server URL",
@@ -83,16 +66,6 @@ func build_url(server_address: String) -> String:
 		return "ws://localhost:" + str(port)
 
 	return "wss://" + server_address
-
-
-func _is_local_address(address: String) -> bool:
-	return (address.is_empty()
-		or address == "localhost"
-		or address == "127.0.0.1"
-		or address == "ws://localhost"
-		or address == "ws://127.0.0.1"
-		or address.begins_with("ws://localhost:")
-		or address.begins_with("ws://127.0.0.1:"))
 
 
 func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:

@@ -1,7 +1,9 @@
-## [BackendPeer] that routes packets through an in-process [LocalLoopbackSession].
+## [BackendPeer] that routes packets through an in-process
+## [LocalLoopbackSession].
 ##
-## Used automatically by [MultiplayerTree] when running on the web with a non-WebRTC backend,
-## ensuring a fast, allocation-free loopback without any real network sockets.
+## Used automatically by [MultiplayerTree] when running on the web with a
+## non-WebRTC backend, ensuring a fast, allocation-free loopback without any
+## real network sockets.
 @tool
 class_name LocalLoopbackBackend
 extends BackendPeer
@@ -42,11 +44,22 @@ func poll(_dt: float) -> void:
 		session.poll()
 
 
-func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
-	var s := session if session else LocalLoopbackSession.get_shared_session()
-	if s.has_live_server():
-		return ProbeResult.reachable(0, { "via": "in-process" })
-	return ProbeResult.unreachable()
+## Reports a live in-process server without running the auth probe handshake.
+##
+## Loopback clients and servers share a [LocalLoopbackSession], so discovery
+## can inspect that session directly. When no server is live, callers should
+## keep the old host fallback behavior.
+func query_server_info(
+	_address: String, _timeout: float = 2.0,
+) -> ServerInfoResult:
+	if not session:
+		session = LocalLoopbackSession.get_shared_session()
+	if session.has_live_server():
+		var info := ServerInfo.new()
+		info.is_local_listener = true
+		info.players = session.server_peer.linked_peers.size()
+		return ServerInfoResult.ok(info)
+	return ServerInfoResult.unsupported()
 
 
 func get_address_hint() -> AddressHint:

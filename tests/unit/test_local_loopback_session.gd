@@ -94,7 +94,7 @@ func test_reset_clears_server_and_all_clients() -> void:
 
 
 func test_session_is_independent_of_shared_singleton() -> void:
-	# GDUnit4 compares Resources by content, not identity — use instance ID
+	# GDUnit4 compares Resources by content, not identity - use instance ID
 	assert_that(session.get_instance_id()).is_not_equal(
 		LocalLoopbackSession.get_shared_session().get_instance_id()
 	)
@@ -103,8 +103,30 @@ func test_session_is_independent_of_shared_singleton() -> void:
 
 
 func test_get_client_peer_delegates_to_create() -> void:
-	# get_client_peer() is backward-compat — each call creates a new peer
+	# get_client_peer() is backward-compat - each call creates a new peer
 	var c1 := session.get_client_peer()
 	var c2 := session.get_client_peer()
 	assert_that(c1).is_not_equal(c2)
 	assert_that(session.client_peers.size()).is_equal(2)
+
+
+func test_backend_query_reports_live_server() -> void:
+	session.get_server_peer()
+	session.create_client_peer()
+	var backend := LocalLoopbackBackend.new()
+	backend.session = session
+
+	var result: ServerInfoResult = await backend.query_server_info("")
+
+	assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+	assert_that(result.info.is_local_listener).is_true()
+	assert_that(result.info.players).is_equal(1)
+
+
+func test_backend_query_without_live_server_is_unsupported() -> void:
+	var backend := LocalLoopbackBackend.new()
+	backend.session = session
+
+	var result: ServerInfoResult = await backend.query_server_info("")
+
+	assert_int(result.status).is_equal(ServerInfoResult.Status.UNSUPPORTED)

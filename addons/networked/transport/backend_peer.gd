@@ -118,17 +118,107 @@ func supports_embedded_server() -> bool:
 	return true
 
 
-## Probes [param _address] for a live local session without allocating a
-## [MultiplayerPeer] or producing side-effects.
+## Queries [param address] for live [ServerInfo] without allocating a
+## persistent peer or entering the server's [code]get_peers()[/code].
 ##
-## Default implementation returns [method ProbeResult.unsupported].
-## Override in subclasses where a cheap, synchronous-ish reachability check
-## is meaningful (typically a [code]TCPServer.listen[/code] /
-## [code]PacketPeerUDP.bind[/code] bind-test on the configured port).
+## The default implementation opens a transient [SceneMultiplayer], asks the
+## backend for a client peer via [method create_join_peer], sends an
+## [code]NPRB[/code] auth packet (see [AuthProtocol]), and decodes the reply
+## into a [ServerInfo]. Backends that cannot run a SceneMultiplayer auth
+## handshake (session-id transports like Steam, in-process Local) override
+## this to return [method ServerInfoResult.unsupported].
 ## [br][br]
-## [param _timeout] is a hint in seconds; backends may probe faster.
-func probe(_address: String, _timeout: float = 0.2) -> ProbeResult:
-	return ProbeResult.unsupported()
+## [param timeout] is the maximum total time to wait for a reply.
+func query_server_info(
+	address: String, timeout: float = 2.0,
+) -> ServerInfoResult:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null:
+		return ServerInfoResult.error("no SceneTree available")
+
+	var transient_api := SceneMultiplayer.new()
+	var peer: MultiplayerPeer = await create_join_peer(null, address, "")
+	if peer == null:
+		return ServerInfoResult.unreachable(
+			"backend produced no peer for %s" % address
+		)
+
+	transient_api.multiplayer_peer = peer
+	var start_ms := Time.get_ticks_msec()
+	var state := { result = null }
+
+	var on_authenticating := func(peer_id: int) -> void:
+		if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
+			return
+		var req := AuthProtocol.encode_probe_request()
+		transient_api.send_auth(peer_id, req)
+
+	var on_auth_received := func(_peer_id: int, data: PackedByteArray) -> void:
+		var decoded := AuthProtocol.decode_probe_reply(data)
+		if not decoded.ok:
+			state.result = ServerInfoResult.error("malformed NPRB reply")
+			return
+		var status: int = decoded.status
+		match status:
+			AuthProtocol.ProbeStatus.OK:
+				var info := ServerInfo.from_payload(decoded.payload)
+				var latency := Time.get_ticks_msec() - start_ms
+				state.result = ServerInfoResult.ok(info, latency)
+			AuthProtocol.ProbeStatus.BUSY:
+				state.result = ServerInfoResult.busy(
+					"server reported BUSY"
+				)
+			AuthProtocol.ProbeStatus.UNSUPPORTED:
+				state.result = ServerInfoResult.unsupported()
+			_:
+				state.result = ServerInfoResult.error(
+					"server reported status %d" % status
+				)
+
+	var on_connection_failed := func() -> void:
+		if state.result == null:
+			state.result = ServerInfoResult.unreachable(
+				"connection failed"
+			)
+
+	var on_authentication_failed := func(_peer_id: int) -> void:
+		if state.result == null:
+			state.result = ServerInfoResult.unreachable(
+				"peer authentication failed"
+			)
+
+	transient_api.peer_authenticating.connect(on_authenticating)
+	transient_api.connection_failed.connect(on_connection_failed)
+	transient_api.peer_authentication_failed.connect(
+		on_authentication_failed
+	)
+	transient_api.auth_callback = on_auth_received
+
+	var deadline_ms := Time.get_ticks_msec() + int(timeout * 1000.0)
+	while state.result == null and Time.get_ticks_msec() < deadline_ms:
+		transient_api.poll()
+		await loop.process_frame
+
+	transient_api.auth_callback = Callable()
+	if transient_api.peer_authenticating.is_connected(on_authenticating):
+		transient_api.peer_authenticating.disconnect(on_authenticating)
+	if transient_api.connection_failed.is_connected(on_connection_failed):
+		transient_api.connection_failed.disconnect(on_connection_failed)
+	if transient_api.peer_authentication_failed.is_connected(
+		on_authentication_failed
+	):
+		transient_api.peer_authentication_failed.disconnect(
+			on_authentication_failed
+		)
+	if peer:
+		peer.close()
+	transient_api.multiplayer_peer = null
+
+	if state.result == null:
+		return ServerInfoResult.timeout(
+			"query_server_info(%s) expired after %.2fs" % [address, timeout]
+		)
+	return state.result
 
 
 ## Returns UI metadata describing the address string this backend expects.
