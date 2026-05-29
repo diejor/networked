@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bb2nsfunxlw3a"]
 
-[ext_resource type="Script" path="res://addons/networked/connect/server_browser.gd" id="1_browser"]
+[ext_resource type="Script" uid="uid://dul4xw2brak8q" path="res://addons/networked/connect/server_browser.gd" id="1_browser"]
 
-[node name="ServerBrowser" type="Control"]
+[node name="ServerBrowser" type="Control" unique_id=779699592]
 custom_minimum_size = Vector2(480, 360)
 layout_mode = 3
 anchors_preset = 15
@@ -10,122 +10,139 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 script = ExtResource("1_browser")
 
-[node name="VBox" type="VBoxContainer" parent="."]
-anchors_preset = 15
+[node name="VBox" type="VBoxContainer" parent="." unique_id=1577878363]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 0
 
-[node name="HeaderBar" type="HBoxContainer" parent="VBox"]
+[node name="HeaderBar" type="HBoxContainer" parent="VBox" unique_id=91681348]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="TitleLabel" type="Label" parent="VBox/HeaderBar"]
+[node name="TitleLabel" type="Label" parent="VBox/HeaderBar" unique_id=1227329273]
 layout_mode = 2
 text = "Servers"
 
-[node name="CountLabel" type="Label" parent="VBox/HeaderBar"]
+[node name="CountLabel" type="Label" parent="VBox/HeaderBar" unique_id=1869018482]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0"
 
-[node name="Spacer" type="Control" parent="VBox/HeaderBar"]
+[node name="Spacer" type="Control" parent="VBox/HeaderBar" unique_id=1373926971]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RefreshButton" type="Button" parent="VBox/HeaderBar"]
+[node name="RefreshButton" type="Button" parent="VBox/HeaderBar" unique_id=8474569]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Refresh"
 
-[node name="AddButton" type="Button" parent="VBox/HeaderBar"]
+[node name="AddButton" type="Button" parent="VBox/HeaderBar" unique_id=144256590]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Add server"
 
-[node name="Banner" type="HBoxContainer" parent="VBox"]
+[node name="HostButton" type="Button" parent="VBox/HeaderBar" unique_id=244684290]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Host"
+
+[node name="Banner" type="HBoxContainer" parent="VBox" unique_id=1639544727]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="BannerLabel" type="Label" parent="VBox/Banner"]
+[node name="BannerLabel" type="Label" parent="VBox/Banner" unique_id=1962583213]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Provider unavailable"
 
-[node name="Scroll" type="ScrollContainer" parent="VBox"]
+[node name="Scroll" type="ScrollContainer" parent="VBox" unique_id=1883071379]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ListBox" type="VBoxContainer" parent="VBox/Scroll"]
+[node name="ListBox" type="VBoxContainer" parent="VBox/Scroll" unique_id=1580670751]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 0
 
-[node name="EmptyState" type="VBoxContainer" parent="VBox"]
+[node name="EmptyState" type="VBoxContainer" parent="VBox" unique_id=243887221]
 unique_name_in_owner = true
-visible = false
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
 
-[node name="EmptyLabel" type="Label" parent="VBox/EmptyState"]
+[node name="EmptyLabel" type="Label" parent="VBox/EmptyState" unique_id=304150975]
 layout_mode = 2
 text = "No servers yet"
 horizontal_alignment = 1
 
-[node name="Details" type="PanelContainer" parent="VBox"]
+[node name="Details" type="PanelContainer" parent="VBox" unique_id=1904405629]
 layout_mode = 2
 
-[node name="DetailsMargin" type="MarginContainer" parent="VBox/Details"]
+[node name="DetailsMargin" type="MarginContainer" parent="VBox/Details" unique_id=725424778]
 layout_mode = 2
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 8
 
-[node name="DetailsLabel" type="Label" parent="VBox/Details/DetailsMargin"]
+[node name="DetailsLabel" type="Label" parent="VBox/Details/DetailsMargin" unique_id=1731181434]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Select a server to see details"
 
-[node name="Footer" type="HBoxContainer" parent="VBox"]
+[node name="Footer" type="HBoxContainer" parent="VBox" unique_id=1294175829]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="UsernameLabel" type="Label" parent="VBox/Footer"]
+[node name="UsernameLabel" type="Label" parent="VBox/Footer" unique_id=702332015]
 layout_mode = 2
 text = "Username"
 
-[node name="UsernameEdit" type="LineEdit" parent="VBox/Footer"]
+[node name="UsernameEdit" type="LineEdit" parent="VBox/Footer" unique_id=1479713677]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 placeholder_text = "Player"
 
-[node name="EditButton" type="Button" parent="VBox/Footer"]
+[node name="SpawnerLabel" type="Label" parent="VBox/Footer" unique_id=139344017]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Spawn at"
+
+[node name="SpawnerPicker" type="OptionButton" parent="VBox/Footer" unique_id=276009706]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+
+[node name="EditButton" type="Button" parent="VBox/Footer" unique_id=90336573]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "Edit"
 
-[node name="RemoveButton" type="Button" parent="VBox/Footer"]
+[node name="RemoveButton" type="Button" parent="VBox/Footer" unique_id=817579714]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "Remove"
 
-[node name="Spacer" type="Control" parent="VBox/Footer"]
+[node name="Spacer" type="Control" parent="VBox/Footer" unique_id=935290639]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="JoinButton" type="Button" parent="VBox/Footer"]
+[node name="JoinButton" type="Button" parent="VBox/Footer" unique_id=244038645]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true

@@ -20,8 +20,34 @@ const _ROW_SCENE := preload(
 ## Backends offered by the Add-Server popup.
 @export var backend_templates: Array[BackendPeer] = []
 
+## Spawner candidates the user picks from in the footer. Each entry is
+## stamped onto [member JoinPayload.spawner_component_path] at dispatch
+## time so the server knows where to place the joining player. Leave
+## empty to dispatch without a spawner (server falls back to its
+## default).
+@export_custom(
+	PROPERTY_HINT_ARRAY_TYPE,
+	"24/17:SceneNodePath:SpawnerComponent",
+)
+var spawner_options: Array[SceneNodePath] = []
+
 ## Path to the [MultiplayerTree] joined direct/provider rows feed.
 @export var tree_path: NodePath
+
+## When [code]true[/code], hides this browser after the local player enters
+## an active scene and shows it again when [member tree_path] disconnects or
+## returns offline.
+@export var hide_when_session_active: bool = true:
+	set(value):
+		hide_when_session_active = value
+		if not is_inside_tree():
+			return
+		if value:
+			_bind_session_visibility_signals(_resolve_tree())
+			_sync_session_visibility()
+		else:
+			_unbind_session_visibility_signals()
+			show()
 
 ## Path used for [ServerList] persistence.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
@@ -31,21 +57,26 @@ var _list: ServerList
 var _registry: ProviderRegistry
 var _probes: ProbeManager
 var _popup: ServerBrowserPopup
+var _host_popup: ServerBrowserHostPopup
 var _selected_row: ServerBrowserRow
 var _provider_results: Dictionary = {}
 var _direct_rows: Array[ServerBrowserRow] = []
 var _tree_cache: MultiplayerTree
+var _visibility_tree: MultiplayerTree
 
 
 @onready var _count_label: Label = %CountLabel
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _add_button: Button = %AddButton
+@onready var _host_button: Button = %HostButton
 @onready var _banner: HBoxContainer = %Banner
 @onready var _banner_label: Label = %BannerLabel
 @onready var _list_box: VBoxContainer = %ListBox
 @onready var _empty_state: VBoxContainer = %EmptyState
 @onready var _details_label: Label = %DetailsLabel
 @onready var _username_edit: LineEdit = %UsernameEdit
+@onready var _spawner_picker: OptionButton = %SpawnerPicker
+@onready var _spawner_label: Label = %SpawnerLabel
 @onready var _edit_button: Button = %EditButton
 @onready var _remove_button: Button = %RemoveButton
 @onready var _join_button: Button = %JoinButton
@@ -66,14 +97,29 @@ func _ready() -> void:
 	add_child(_popup)
 	_popup.submitted.connect(_on_popup_submitted)
 
+	_host_popup = preload(
+		"res://addons/networked/connect/server_browser_host_popup.tscn"
+	).instantiate()
+	add_child(_host_popup)
+	_host_popup.submitted.connect(_on_host_submitted)
+
+	_populate_spawner_picker()
 	_refresh_button.pressed.connect(refresh)
 	_add_button.pressed.connect(_on_add_pressed)
+	_host_button.pressed.connect(_on_host_pressed)
 	_edit_button.pressed.connect(_on_edit_pressed)
 	_remove_button.pressed.connect(_on_remove_pressed)
 	_join_button.pressed.connect(_on_join_pressed)
 
 	_clear_selection()
+	_bind_session_visibility_signals(_resolve_tree())
+	_sync_session_visibility()
 	refresh()
+
+
+# Clears session visibility hooks before the browser leaves the tree.
+func _exit_tree() -> void:
+	_unbind_session_visibility_signals()
 
 
 ## Registers [param provider] under [param id] so its lobbies show as
@@ -266,6 +312,45 @@ func _on_add_pressed() -> void:
 	_popup.open_add()
 
 
+func _on_host_pressed() -> void:
+	_host_popup.set_choices(backend_templates, _registry.list_providers())
+	_host_popup.open()
+
+
+func _on_host_submitted(
+	kind: ServerBrowserHostPopup.Kind,
+	choice: Variant,
+	display_name: String,
+) -> void:
+	var tree := _resolve_tree()
+	if tree == null:
+		push_warning(
+			"ServerBrowser: tree_path is not set or resolves to null"
+		)
+		return
+	_bind_session_visibility_signals(tree)
+	var payload := _build_payload(_username_edit.text)
+	match kind:
+		ServerBrowserHostPopup.Kind.DIRECT:
+			var template := choice as BackendPeer
+			if template == null:
+				return
+			tree.backend = template
+			var err := await tree.host_player(payload)
+			_hide_after_successful_session(err)
+		ServerBrowserHostPopup.Kind.PROVIDER:
+			var provider := _registry.get_provider(choice as StringName)
+			if provider == null:
+				push_warning(
+					"ServerBrowser: no provider for %s" % choice
+				)
+				return
+			provider.create_lobby(display_name)
+			await provider.lobby_created
+			var err := await provider.bind(NetwTree.new(tree), payload)
+			_hide_after_successful_session(err)
+
+
 func _on_edit_pressed() -> void:
 	if _selected_row == null or not _selected_row.target.is_direct():
 		return
@@ -303,12 +388,14 @@ func _on_join_pressed() -> void:
 			"ServerBrowser: tree_path is not set or resolves to null"
 		)
 		return
+	_bind_session_visibility_signals(tree)
 	var target := _selected_row.target
 	var payload := _build_payload(_username_edit.text)
 	if target.is_direct():
-		await tree.auto_connect_player(
+		var err := await tree.auto_connect_player(
 			target.make_backend_instance(), target.address, payload
 		)
+		_hide_after_successful_session(err)
 		return
 
 	var provider := _registry.get_provider(target.provider_id)
@@ -319,7 +406,8 @@ func _on_join_pressed() -> void:
 		return
 	provider.join_lobby(target.remote_id)
 	var peer: MultiplayerPeer = await provider.peer_ready
-	await tree.adopt_peer(peer, payload)
+	var err := await tree.adopt_peer(peer, payload)
+	_hide_after_successful_session(err)
 
 
 func _resolve_tree() -> MultiplayerTree:
@@ -331,7 +419,128 @@ func _resolve_tree() -> MultiplayerTree:
 	return _tree_cache
 
 
+# Subscribes to the target session's in-game/offline transitions.
+func _bind_session_visibility_signals(tree: MultiplayerTree) -> void:
+	if not hide_when_session_active or tree == null:
+		return
+	if _visibility_tree == tree:
+		return
+	_unbind_session_visibility_signals()
+	_visibility_tree = tree
+	tree.local_player_changed.connect(_on_tree_local_player_changed)
+	tree.player_scene_ready.connect(_on_tree_player_scene_ready)
+	tree.server_disconnected.connect(_show_after_session_closed)
+	tree.state_changed.connect(_on_tree_state_changed)
+
+
+# Removes visibility signal hooks from the last resolved session tree.
+func _unbind_session_visibility_signals() -> void:
+	if _visibility_tree == null or not is_instance_valid(_visibility_tree):
+		_visibility_tree = null
+		return
+	if _visibility_tree.local_player_changed.is_connected(
+		_on_tree_local_player_changed
+	):
+		_visibility_tree.local_player_changed.disconnect(
+			_on_tree_local_player_changed
+		)
+	if _visibility_tree.player_scene_ready.is_connected(
+		_on_tree_player_scene_ready
+	):
+		_visibility_tree.player_scene_ready.disconnect(
+			_on_tree_player_scene_ready
+		)
+	if _visibility_tree.server_disconnected.is_connected(
+		_show_after_session_closed
+	):
+		_visibility_tree.server_disconnected.disconnect(
+			_show_after_session_closed
+		)
+	if _visibility_tree.state_changed.is_connected(_on_tree_state_changed):
+		_visibility_tree.state_changed.disconnect(_on_tree_state_changed)
+	_visibility_tree = null
+
+
+# Hides when this client gets its represented player node.
+func _on_tree_local_player_changed(player: Node) -> void:
+	if player != null:
+		hide()
+	elif (
+		_visibility_tree != null
+		and _visibility_tree.state == MultiplayerTree.State.OFFLINE
+	):
+		_show_after_session_closed()
+
+
+# Hides the browser once the local player reaches an active scene.
+func _on_tree_player_scene_ready(
+	_rj: ResolvedJoin,
+	_scene: MultiplayerScene,
+) -> void:
+	hide()
+
+
+# Restores the browser when the session returns to its offline state.
+func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
+	if new_state == MultiplayerTree.State.OFFLINE:
+		_show_after_session_closed()
+
+
+# Restores the browser after a server disconnect signal.
+func _show_after_session_closed() -> void:
+	show()
+
+
+# Applies the exported auto-hide behavior to the current session state.
+func _sync_session_visibility() -> void:
+	if not hide_when_session_active:
+		return
+	var tree := _resolve_tree()
+	if tree != null and tree.local_player != null:
+		hide()
+	else:
+		show()
+
+
+# Hides after this browser successfully opens a session.
+func _hide_after_successful_session(err: Error) -> void:
+	if err == OK and hide_when_session_active:
+		hide()
+
+
 func _build_payload(username: String) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
+	var spawner := _selected_spawner()
+	if spawner != null:
+		payload.spawner_component_path = spawner
 	return payload
+
+
+func _populate_spawner_picker() -> void:
+	_spawner_picker.clear()
+	if spawner_options.is_empty():
+		_spawner_picker.visible = false
+		_spawner_label.visible = false
+		return
+	for path in spawner_options:
+		_spawner_picker.add_item(_spawner_label_for(path))
+	_spawner_picker.visible = true
+	_spawner_label.visible = true
+
+
+func _spawner_label_for(path: SceneNodePath) -> String:
+	if path == null:
+		return "(none)"
+	if path.node_path.is_empty():
+		return path.scene_path
+	return path.node_path
+
+
+func _selected_spawner() -> SceneNodePath:
+	if spawner_options.is_empty():
+		return null
+	var idx := maxi(0, _spawner_picker.selected)
+	if idx >= spawner_options.size():
+		return null
+	return spawner_options[idx]

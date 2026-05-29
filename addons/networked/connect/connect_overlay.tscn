@@ -82,6 +82,20 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Player"
 
+[node name="SpawnerRow" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+
+[node name="SpawnerLabel" type="Label" parent="Panel/Margin/VBox/SpawnerRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Spawn at"
+
+[node name="SpawnerPicker" type="OptionButton" parent="Panel/Margin/VBox/SpawnerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="Spacer" type="Control" parent="Panel/Margin/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
