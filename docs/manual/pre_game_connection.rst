@@ -179,3 +179,60 @@ disables this cleanup -- do not do that on hosts that accept probes.
     substitute for transport-level protection. Hosts exposed to hostile
     internet traffic should sit behind a CDN, a firewall, or ENet's
     bandwidth caps the same as any other UDP server.
+
+Server browser recipe
+---------------------
+
+The ``addons/networked/connect/`` subtree ships the primitives needed
+to build a Minecraft-style server browser on top of
+``query_server_info``:
+
+- :ref:`JoinTarget <class_JoinTarget>` -- one row in the list. Either
+  a direct target (``backend`` + ``address``) or an external one
+  (``provider_id`` + ``remote_id`` resolved through a
+  ``ProviderRegistry``). The ``backend`` field is a template;
+  ``make_backend_instance()`` returns a fresh duplicate so probe and
+  join paths do not share runtime state.
+- :ref:`ServerList <class_ServerList>` -- a typed array of targets
+  persisted to ``user://servers.tres``. ``load_or_new()`` is empty on
+  first run; ``save()`` writes the current list back.
+- :ref:`ProbeSession <class_ProbeSession>` -- thin wrapper that calls
+  ``query_server_info`` on a fresh backend instance and emits the
+  result.
+- :ref:`ProbeManager <class_ProbeManager>` -- a ``Node`` that caps
+  concurrent sessions (``max_concurrent``, default 6) below the
+  server-side ``MAX_ACTIVE_PROBES`` cap. ``cancel_all()`` suppresses
+  pending callbacks but does not abort the inner
+  ``query_server_info`` -- transient peers tear themselves down on
+  their own timeout/completion path.
+- :ref:`ProviderRegistry <class_ProviderRegistry>` -- a ``Node``
+  mapping ``StringName`` ids to ``LobbyProvider`` instances. The
+  browser looks providers up at join time by ``JoinTarget.provider_id``.
+
+The reference scene at
+``addons/networked/connect/server_browser.tscn`` wires these together:
+it loads the persisted list, fires one probe per direct target through
+a ``ProbeManager``, and renders rows grouped by source. Direct rows
+dispatch through ``MultiplayerTree.auto_connect_player``; provider
+rows look up the provider in the registry, call ``join_lobby`` with
+``target.remote_id``, await ``peer_ready``, and dispatch through
+``MultiplayerTree.adopt_peer``.
+
+Wiring it up looks like:
+
+.. code-block:: gdscript
+
+    var browser := preload(
+        "res://addons/networked/connect/server_browser.tscn"
+    ).instantiate()
+    browser.tree_path = tree.get_path()
+    browser.backend_templates = [ENetBackend.new(), WebSocketBackend.new()]
+    add_child(browser)
+
+    # Optional: surface lobbies from a SteamLobbyProvider in the same list.
+    browser.register_provider(&"steam", steam_provider)
+
+A minimal address-only form lives at
+``addons/networked/connect/connect_overlay.tscn`` for projects that do
+not need the full browser. It emits a single ``connect_requested``
+signal carrying a direct ``JoinTarget``.
