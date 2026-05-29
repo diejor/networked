@@ -12,6 +12,16 @@ extends Button
 ## update the details panel.
 signal selected(target: JoinTarget)
 
+## Emitted when the user right-clicks the row.
+signal context_requested(
+	target: JoinTarget,
+	row: ServerBrowserRow,
+	screen_position: Vector2,
+)
+
+## Emitted when the user double-clicks the row.
+signal activated(target: JoinTarget, row: ServerBrowserRow)
+
 
 var target: JoinTarget
 var result: ServerInfoResult
@@ -45,6 +55,30 @@ func set_result(p_result: ServerInfoResult) -> void:
 
 func _on_pressed() -> void:
 	selected.emit(target)
+
+
+func _gui_input(event: InputEvent) -> void:
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event == null:
+		return
+	if (
+		mouse_event.button_index == MOUSE_BUTTON_LEFT
+		and mouse_event.double_click
+		and mouse_event.pressed
+	):
+		accept_event()
+		activated.emit(target, self)
+		return
+	if mouse_event.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	if not mouse_event.pressed:
+		return
+	accept_event()
+	context_requested.emit(
+		target,
+		self,
+		get_screen_position() + mouse_event.position
+	)
 
 
 func _refresh() -> void:

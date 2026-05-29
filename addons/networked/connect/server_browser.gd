@@ -16,6 +16,10 @@ const _ROW_SCENE := preload(
 	"res://addons/networked/connect/server_browser_row.tscn"
 )
 
+const _ROW_MENU_JOIN := 1
+const _ROW_MENU_EDIT := 2
+const _ROW_MENU_REMOVE := 3
+
 
 ## Backends offered by the Add-Server popup.
 @export var backend_templates: Array[BackendPeer] = []
@@ -59,6 +63,7 @@ var _probes: ProbeManager
 var _popup: ServerBrowserPopup
 var _host_popup: ServerBrowserHostPopup
 var _join_popup: ServerBrowserJoinPopup
+var _row_menu: PopupMenu
 var _selected_row: ServerBrowserRow
 var _provider_results: Dictionary = {}
 var _direct_rows: Array[ServerBrowserRow] = []
@@ -80,9 +85,6 @@ var _pending_host_display_name: String = ""
 @onready var _list_box: VBoxContainer = %ListBox
 @onready var _empty_state: VBoxContainer = %EmptyState
 @onready var _details_label: Label = %DetailsLabel
-@onready var _edit_button: Button = %EditButton
-@onready var _remove_button: Button = %RemoveButton
-@onready var _join_button: Button = %JoinButton
 
 
 func _ready() -> void:
@@ -113,12 +115,13 @@ func _ready() -> void:
 	_join_popup.set_spawner_options(spawner_options)
 	_join_popup.submitted.connect(_on_join_submitted)
 
+	_row_menu = PopupMenu.new()
+	add_child(_row_menu)
+	_row_menu.id_pressed.connect(_on_row_menu_id_pressed)
+
 	_refresh_button.pressed.connect(refresh)
 	_add_button.pressed.connect(_on_add_pressed)
 	_host_button.pressed.connect(_on_host_pressed)
-	_edit_button.pressed.connect(_on_edit_pressed)
-	_remove_button.pressed.connect(_on_remove_pressed)
-	_join_button.pressed.connect(_on_join_pressed)
 
 	_clear_selection()
 	_bind_session_visibility_signals(_resolve_tree())
@@ -200,6 +203,8 @@ func _instance_row(target: JoinTarget) -> ServerBrowserRow:
 	_list_box.add_child(row)
 	row.bind_target(target)
 	row.selected.connect(_on_row_selected.bind(row))
+	row.context_requested.connect(_on_row_context_requested)
+	row.activated.connect(_on_row_activated)
 	return row
 
 
@@ -245,13 +250,11 @@ func _on_row_selected(_target: JoinTarget, row: ServerBrowserRow) -> void:
 		_selected_row.button_pressed = false
 	_selected_row = row
 	_update_details()
-	_update_footer()
 
 
 func _clear_selection() -> void:
 	_selected_row = null
 	_update_details()
-	_update_footer()
 
 
 func _update_details() -> void:
@@ -279,16 +282,44 @@ func _update_details() -> void:
 	_details_label.text = "\n".join(lines)
 
 
-func _update_footer() -> void:
-	var has_selection := _selected_row != null and _selected_row.target != null
-	var is_direct := has_selection and _selected_row.target.is_direct()
-	_edit_button.disabled = not is_direct
-	_remove_button.disabled = not is_direct
-	_join_button.disabled = not has_selection
-	if has_selection and not _selected_row.target.is_direct():
-		_join_button.text = "Join lobby"
-	else:
-		_join_button.text = "Join"
+func _on_row_context_requested(
+	_target: JoinTarget,
+	row: ServerBrowserRow,
+	screen_position: Vector2,
+) -> void:
+	if row == null or row.target == null:
+		return
+	_on_row_selected(row.target, row)
+	row.button_pressed = true
+	_populate_row_menu(row.target)
+	_row_menu.popup(Rect2i(Vector2i(screen_position), Vector2i.ZERO))
+
+
+func _on_row_menu_id_pressed(id: int) -> void:
+	match id:
+		_ROW_MENU_JOIN:
+			_begin_join_selected()
+		_ROW_MENU_EDIT:
+			_on_edit_pressed()
+		_ROW_MENU_REMOVE:
+			_on_remove_pressed()
+
+
+func _on_row_activated(_target: JoinTarget, row: ServerBrowserRow) -> void:
+	if row == null or row.target == null:
+		return
+	_on_row_selected(row.target, row)
+	row.button_pressed = true
+	_begin_join_selected()
+
+
+func _populate_row_menu(target: JoinTarget) -> void:
+	_row_menu.clear()
+	_row_menu.add_item("Join", _ROW_MENU_JOIN)
+	if target.is_direct():
+		_row_menu.add_separator()
+		_row_menu.add_item("Edit", _ROW_MENU_EDIT)
+		_row_menu.add_item("Remove", _ROW_MENU_REMOVE)
 
 
 func _status_text(result: ServerInfoResult) -> String:
@@ -400,7 +431,7 @@ func _on_popup_submitted(target: JoinTarget, persist: bool) -> void:
 	refresh()
 
 
-func _on_join_pressed() -> void:
+func _begin_join_selected() -> void:
 	if _selected_row == null or _selected_row.target == null:
 		return
 	_pending_join_target = _selected_row.target

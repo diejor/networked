@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_7ue45"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
+[ext_resource type="Script" uid="uid://bo5uh52f6sln5" path="res://addons/networked/session/default_server_info_source.gd" id="3_k3bnk"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
 [ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="7_7ue45"]
@@ -16,6 +17,10 @@ lag_min_delay = 0.09
 lag_max_delay = 0.234
 lag_packet_loss = 0.01
 metadata/_custom_type_script = "uid://cgyucu72xh732"
+
+[sub_resource type="Resource" id="Resource_xoeqs"]
+script = ExtResource("3_k3bnk")
+metadata/_custom_type_script = "uid://bo5uh52f6sln5"
 
 [sub_resource type="Resource" id="Resource_k3bnk"]
 script = ExtResource("8_lpgch")
@@ -36,6 +41,7 @@ node_path = "Player/Components/SpawnerComponent"
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
 use_listen_server = true
+server_info_source = SubResource("Resource_xoeqs")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
