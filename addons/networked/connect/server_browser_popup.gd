@@ -125,15 +125,26 @@ func _on_confirm() -> void:
 	if template == null:
 		return
 	var target: JoinTarget = _editing if _editing else JoinTarget.new()
-	target.display_name = (
-		_name_edit.text if not _name_edit.text.is_empty()
-		else _address_edit.text
-	)
 	target.address = _address_edit.text
 	target.backend = template
+	target.display_name = (
+		_name_edit.text if not _name_edit.text.is_empty()
+		else _display_address(target)
+	)
 	hide()
 	submitted.emit(target, _save_check.button_pressed)
 
 
 func _on_cancel() -> void:
 	hide()
+
+
+func _display_address(target: JoinTarget) -> String:
+	var address := target.address.strip_edges()
+	if not address.is_empty():
+		return address
+	if target.backend == null:
+		return "-"
+	if target.backend.has_method("build_url"):
+		return str(target.backend.call("build_url", ""))
+	return target.backend.get_join_address()

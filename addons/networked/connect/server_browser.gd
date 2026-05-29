@@ -262,7 +262,7 @@ func _update_details() -> void:
 	var r := _selected_row.result
 	var lines: PackedStringArray = []
 	if t.is_direct():
-		lines.append("Address: %s" % t.address)
+		lines.append("Address: %s" % _display_address(t))
 		lines.append("Backend: %s" % _backend_label(t.backend))
 		lines.append("Status: %s" % _status_text(r))
 		lines.append("Latency: %s" % (
@@ -572,3 +572,16 @@ func _backend_label(backend: BackendPeer) -> String:
 	if backend.resource_path.is_empty() or "::" in backend.resource_path:
 		return backend.get_class()
 	return backend.resource_path.get_file()
+
+
+func _display_address(target: JoinTarget) -> String:
+	if target == null:
+		return "-"
+	var address := target.address.strip_edges()
+	if not address.is_empty():
+		return address
+	if target.backend == null:
+		return "-"
+	if target.backend.has_method("build_url"):
+		return str(target.backend.call("build_url", ""))
+	return target.backend.get_join_address()

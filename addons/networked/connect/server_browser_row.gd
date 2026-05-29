@@ -58,7 +58,7 @@ func _refresh() -> void:
 		_status_label.text = ""
 		return
 
-	_name_label.text = target.display_name
+	_name_label.text = _display_name()
 	_badge_label.text = "[%s]" % (
 		"direct" if target.is_direct() else String(target.provider_id)
 	)
@@ -114,3 +114,22 @@ func _render_provider_metrics() -> void:
 		_players_label.text = "-"
 	_ping_label.text = "."
 	_status_label.text = "OK" if info else "..."
+
+
+func _display_name() -> String:
+	if not target.display_name.strip_edges().is_empty():
+		return target.display_name
+	if target.is_direct():
+		return _display_address()
+	return "(unnamed)"
+
+
+func _display_address() -> String:
+	var address := target.address.strip_edges()
+	if not address.is_empty():
+		return address
+	if target.backend == null:
+		return "-"
+	if target.backend.has_method("build_url"):
+		return str(target.backend.call("build_url", ""))
+	return target.backend.get_join_address()
