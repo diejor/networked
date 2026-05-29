@@ -182,6 +182,6 @@ to the dying tree.
 
     Networked never assumes you want to reconnect on the same tree
     instance. Tear it down, free it, and add a fresh one. The addon is
-    cheap to instantiate. The "Connecting…" UI in
-    ``addons/networked/nodes/client/ConnectServerUI.tscn`` follows that
-    pattern and is a good model to copy.
+    cheap to instantiate. The minimal
+    ``addons/networked/connect/connect_overlay.tscn`` example follows
+    that pattern and is a good model to copy.

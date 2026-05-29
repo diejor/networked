@@ -1,9 +1,9 @@
 ## UI metadata describing the address string a [BackendPeer] expects.
 ##
 ## Returned by [method BackendPeer.get_address_hint] so generic connect
-## dialogs (e.g. [ConnectToServerUI]) can render appropriate
-## labels, placeholders, and validation cues without knowing about each
-## backend.
+## dialogs (e.g. the server browser's Add-Server popup) can render
+## appropriate labels, placeholders, and validation cues without
+## knowing about each backend.
 @tool
 class_name AddressHint
 extends RefCounted
