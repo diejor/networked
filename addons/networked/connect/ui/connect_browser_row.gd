@@ -1,26 +1,17 @@
-## One row in the server browser. Renders a [JoinTarget] and the
-## latest [ServerInfoResult] for it (if any).
-##
-## Emits [signal pressed] when the user clicks the row so the browser
-## can update its selection.
-@tool
-class_name ServerBrowserRow
+## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
+## latest [ServerInfoResult]. Selection and context signals bubble
+## back to the browser.
+class_name ConnectBrowserRow
 extends Button
 
 
-## Emitted when the user clicks the row. The browser uses this to
-## update the details panel.
 signal selected(target: JoinTarget)
-
-## Emitted when the user right-clicks the row.
 signal context_requested(
 	target: JoinTarget,
-	row: ServerBrowserRow,
+	row: ConnectBrowserRow,
 	screen_position: Vector2,
 )
-
-## Emitted when the user double-clicks the row.
-signal activated(target: JoinTarget, row: ServerBrowserRow)
+signal activated(target: JoinTarget, row: ConnectBrowserRow)
 
 
 var target: JoinTarget
@@ -39,15 +30,11 @@ func _ready() -> void:
 	_refresh()
 
 
-## Populates the row from [param p_target] and re-renders.
 func bind_target(p_target: JoinTarget) -> void:
 	target = p_target
 	_refresh()
 
 
-## Updates the row with a fresh probe result (direct rows) or live
-## lobby info (provider rows). Pass [code]null[/code] to clear the
-## status cells (probe in flight).
 func set_result(p_result: ServerInfoResult) -> void:
 	result = p_result
 	_refresh()
@@ -75,9 +62,7 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	accept_event()
 	context_requested.emit(
-		target,
-		self,
-		get_screen_position() + mouse_event.position
+		target, self, get_screen_position() + mouse_event.position
 	)
 
 
@@ -154,16 +139,5 @@ func _display_name() -> String:
 	if not target.display_name.strip_edges().is_empty():
 		return target.display_name
 	if target.is_direct():
-		return _display_address()
+		return ConnectUiShared.format_address(target)
 	return "(unnamed)"
-
-
-func _display_address() -> String:
-	var address := target.address.strip_edges()
-	if not address.is_empty():
-		return address
-	if target.backend == null:
-		return "-"
-	if target.backend.has_method("build_url"):
-		return str(target.backend.call("build_url", ""))
-	return target.backend.get_join_address()

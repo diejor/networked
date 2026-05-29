@@ -247,7 +247,8 @@ func _on_peer_authentication_failed(peer_id: int) -> void:
 		# reply, or [code]auth_timeout[/code] reaped a straggler.
 		Netw.dbg.debug("Auth: probe peer %d released", [peer_id])
 		return
-	Netw.dbg.warn("Auth failed for peer %d", [peer_id])
+	Netw.dbg.warn("Auth failed for peer %d", [peer_id],
+		func(m): push_warning(m))
 
 
 func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:

@@ -52,6 +52,11 @@ var max_clients: int = 8
 ## [code]0[/code]. This runtime fallback does not save project settings.
 @export var allow_spacewar_fallback: bool = false
 
+## When [code]true[/code], lobbies owned by the local Steam account are
+## hidden and rejected. Steam does not support testing two local peers
+## through one account reliably.
+@export var reject_own_lobbies: bool = true
+
 
 var _wrapper: SteamWrapper
 var _lobby_id: int = 0
@@ -208,6 +213,15 @@ func join_lobby(lobby_id: int) -> void:
 		return
 	if lobby_id <= 0:
 		lobby_join_failed.emit("Invalid lobby id")
+		return
+	if reject_own_lobbies and _is_own_lobby(lobby_id):
+		Netw.dbg.warn(
+			"SteamLobbyProvider: refusing to join own lobby %d.",
+			[lobby_id]
+		)
+		lobby_join_failed.emit(
+			"Cannot join a Steam lobby owned by the same account"
+		)
 		return
 	if _pending_join_lobby_id != 0:
 		Netw.dbg.debug(
@@ -404,6 +418,14 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 	var out: Array[LobbyInfo] = []
 	for raw_id in lobbies:
 		var id := int(raw_id)
+		if reject_own_lobbies and _is_own_lobby(id):
+			Netw.dbg.warn(
+				"SteamLobbyProvider: ignoring own lobby %d in browse " +
+				"results. Steam local testing requires a second account.",
+				[id],
+				func(m): push_warning(m)
+			)
+			continue
 		var info := LobbyInfo.make(
 			id,
 			_wrapper.get_lobby_data(id, "name"),
@@ -449,3 +471,10 @@ func _build_peer() -> MultiplayerPeer:
 		return null
 	_wrapper.configure_peer(peer, not disable_nagle, allow_p2p_relay)
 	return peer
+
+
+func _is_own_lobby(lobby_id: int) -> bool:
+	if _wrapper == null:
+		return false
+	var local_id := _wrapper.get_steam_id()
+	return local_id != 0 and _wrapper.get_lobby_owner(lobby_id) == local_id

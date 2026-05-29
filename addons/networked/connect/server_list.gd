@@ -4,7 +4,6 @@
 ## survives across sessions. Use [method load_or_new] to read and
 ## [method save] to write; the resource itself is just a typed array
 ## wrapper.
-@tool
 class_name ServerList
 extends Resource
 

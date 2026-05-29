@@ -2,7 +2,8 @@
 ##
 ## Two-layer split, made visible in the scene tree:
 ##
-## - [ServerBrowser] handles direct connections and provider lobbies.
+## - [ConnectBrowser] handles direct connections and provider lobbies,
+##   driven by a [ConnectSession] this script owns.
 ## - [InLobby] talks to [NetwTree] / [NetwContext]. The roster, the host-only
 ##   Start button, and game start all live there. It only consults
 ##   [LobbyProvider] for [method LobbyProvider.get_member_name] and
@@ -10,7 +11,7 @@
 ##   operations.
 ##
 ## This script is the bridge: it owns the state swap and coordinates with
-## [ServerBrowser] to enter the session.
+## [ConnectBrowser] to enter the session.
 extends Control
 
 enum State { PRE_LOBBY, IN_LOBBY }
@@ -18,7 +19,7 @@ enum State { PRE_LOBBY, IN_LOBBY }
 @warning_ignore("unused_private_class_variable")
 @onready var _title: Label = %TitleLabel
 @onready var _status: Label = %StatusLabel
-@onready var _browser: ServerBrowser = %ServerBrowser
+@onready var _browser: ConnectBrowser = %ConnectBrowser
 @onready var _in_lobby: Control = %InLobby
 @onready var gamestate: BomberGamestate = %Gamestate
 @onready var multiplayer_tree: MultiplayerTree = %MultiplayerTree
@@ -26,6 +27,7 @@ enum State { PRE_LOBBY, IN_LOBBY }
 @onready var _ctx: NetwContext = Netw.ctx(multiplayer_tree)
 
 var _provider: LobbyProvider
+var _session: ConnectSession
 
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
@@ -34,14 +36,17 @@ func _ready() -> void:
 	_provider = _ctx.services.get_service(LobbyProvider)
 	assert(_provider)
 
-	_browser.tree_path = _browser.get_path_to(multiplayer_tree)
-	_browser.register_provider(&"steam", _provider)
-	_browser.session_entered.connect(_on_browser_session_entered)
+	_session = ConnectSession.new()
+	add_child(_session)
+	_session.bind_tree(multiplayer_tree)
+	_session.register_provider(&"steam", _provider)
+	_session.load_server_list()
 
-	# Register the default WebSocket backend template for direct IP connection
 	var ws_backend := WebSocketBackend.new()
 	ws_backend.port = 10567
 	_browser.backend_templates = [ws_backend]
+	_browser.session = _session
+	_session.session_entered.connect(_on_browser_session_entered)
 
 	_in_lobby.setup(_provider, _ctx)
 	_in_lobby.start_requested.connect(_on_start_requested)
@@ -124,7 +129,7 @@ func _on_game_error(text: String) -> void:
 # Restores the pre-lobby state and refreshes the browser list.
 func _back_to_pre_lobby() -> void:
 	_pending_title = ""
-	_browser.refresh()
+	_session.refresh()
 	_set_state(State.PRE_LOBBY)
 
 

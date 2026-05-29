@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://b2sxgkfktbrow"]
 
-[ext_resource type="Script" path="res://addons/networked/connect/server_browser_row.gd" id="1_row"]
+[ext_resource type="Script" path="res://addons/networked/connect/ui/connect_browser_row.gd" id="1_row"]
 
-[node name="ServerBrowserRow" type="Button"]
+[node name="ConnectBrowserRow" type="Button"]
 custom_minimum_size = Vector2(0, 36)
 toggle_mode = true
 alignment = 0

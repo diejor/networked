@@ -16,7 +16,6 @@
 ## primitive ([code]int[/code] or [code]String[/code]). The browser
 ## passes [member remote_id] back to [method LobbyProvider.join_lobby]
 ## unchanged.
-@tool
 class_name JoinTarget
 extends Resource
 
