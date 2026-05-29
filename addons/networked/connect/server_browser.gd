@@ -58,11 +58,17 @@ var _registry: ProviderRegistry
 var _probes: ProbeManager
 var _popup: ServerBrowserPopup
 var _host_popup: ServerBrowserHostPopup
+var _join_popup: ServerBrowserJoinPopup
 var _selected_row: ServerBrowserRow
 var _provider_results: Dictionary = {}
 var _direct_rows: Array[ServerBrowserRow] = []
 var _tree_cache: MultiplayerTree
 var _visibility_tree: MultiplayerTree
+var _last_username: String = "Player"
+var _pending_join_target: JoinTarget
+var _pending_host_kind: int = -1
+var _pending_host_choice: Variant
+var _pending_host_display_name: String = ""
 
 
 @onready var _count_label: Label = %CountLabel
@@ -74,9 +80,6 @@ var _visibility_tree: MultiplayerTree
 @onready var _list_box: VBoxContainer = %ListBox
 @onready var _empty_state: VBoxContainer = %EmptyState
 @onready var _details_label: Label = %DetailsLabel
-@onready var _username_edit: LineEdit = %UsernameEdit
-@onready var _spawner_picker: OptionButton = %SpawnerPicker
-@onready var _spawner_label: Label = %SpawnerLabel
 @onready var _edit_button: Button = %EditButton
 @onready var _remove_button: Button = %RemoveButton
 @onready var _join_button: Button = %JoinButton
@@ -103,7 +106,13 @@ func _ready() -> void:
 	add_child(_host_popup)
 	_host_popup.submitted.connect(_on_host_submitted)
 
-	_populate_spawner_picker()
+	_join_popup = preload(
+		"res://addons/networked/connect/server_browser_join_popup.tscn"
+	).instantiate()
+	add_child(_join_popup)
+	_join_popup.set_spawner_options(spawner_options)
+	_join_popup.submitted.connect(_on_join_submitted)
+
 	_refresh_button.pressed.connect(refresh)
 	_add_button.pressed.connect(_on_add_pressed)
 	_host_button.pressed.connect(_on_host_pressed)
@@ -322,6 +331,17 @@ func _on_host_submitted(
 	choice: Variant,
 	display_name: String,
 ) -> void:
+	_pending_join_target = null
+	_pending_host_kind = kind
+	_pending_host_choice = choice
+	_pending_host_display_name = display_name
+	_join_popup.open(_last_username, "Host server", "Host")
+
+
+func _host_with_options(
+	username: String,
+	spawner: SceneNodePath,
+) -> void:
 	var tree := _resolve_tree()
 	if tree == null:
 		push_warning(
@@ -329,26 +349,29 @@ func _on_host_submitted(
 		)
 		return
 	_bind_session_visibility_signals(tree)
-	var payload := _build_payload(_username_edit.text)
-	match kind:
+	var payload := _build_payload(username, spawner)
+	match _pending_host_kind:
 		ServerBrowserHostPopup.Kind.DIRECT:
-			var template := choice as BackendPeer
+			var template := _pending_host_choice as BackendPeer
 			if template == null:
 				return
 			tree.backend = template
 			var err := await tree.host_player(payload)
 			_hide_after_successful_session(err)
 		ServerBrowserHostPopup.Kind.PROVIDER:
-			var provider := _registry.get_provider(choice as StringName)
+			var provider := _registry.get_provider(
+				_pending_host_choice as StringName
+			)
 			if provider == null:
 				push_warning(
-					"ServerBrowser: no provider for %s" % choice
+					"ServerBrowser: no provider for %s" % _pending_host_choice
 				)
 				return
-			provider.create_lobby(display_name)
+			provider.create_lobby(_pending_host_display_name)
 			await provider.lobby_created
 			var err := await provider.bind(NetwTree.new(tree), payload)
 			_hide_after_successful_session(err)
+	_pending_host_kind = -1
 
 
 func _on_edit_pressed() -> void:
@@ -382,6 +405,21 @@ func _on_popup_submitted(target: JoinTarget, persist: bool) -> void:
 func _on_join_pressed() -> void:
 	if _selected_row == null or _selected_row.target == null:
 		return
+	_pending_join_target = _selected_row.target
+	_pending_host_kind = -1
+	_join_popup.open(_last_username)
+
+
+func _on_join_submitted(
+	username: String,
+	spawner: SceneNodePath,
+) -> void:
+	_last_username = username
+	if _pending_host_kind != -1:
+		await _host_with_options(username, spawner)
+		return
+	if _pending_join_target == null:
+		return
 	var tree := _resolve_tree()
 	if tree == null:
 		push_warning(
@@ -389,8 +427,9 @@ func _on_join_pressed() -> void:
 		)
 		return
 	_bind_session_visibility_signals(tree)
-	var target := _selected_row.target
-	var payload := _build_payload(_username_edit.text)
+	var target := _pending_join_target
+	_pending_join_target = null
+	var payload := _build_payload(username, spawner)
 	if target.is_direct():
 		var err := await tree.auto_connect_player(
 			target.make_backend_instance(), target.address, payload
@@ -508,39 +547,19 @@ func _hide_after_successful_session(err: Error) -> void:
 		hide()
 
 
-func _build_payload(username: String) -> JoinPayload:
+func _build_payload(username: String, spawner: SceneNodePath) -> JoinPayload:
 	var payload := JoinPayload.new()
-	payload.username = username
-	var spawner := _selected_spawner()
+	var clean_username := username.strip_edges()
+	payload.username = clean_username if not clean_username.is_empty() \
+		else "Player"
+	if spawner == null:
+		spawner = _default_spawner()
 	if spawner != null:
 		payload.spawner_component_path = spawner
 	return payload
 
 
-func _populate_spawner_picker() -> void:
-	_spawner_picker.clear()
-	if spawner_options.is_empty():
-		_spawner_picker.visible = false
-		_spawner_label.visible = false
-		return
-	for path in spawner_options:
-		_spawner_picker.add_item(_spawner_label_for(path))
-	_spawner_picker.visible = true
-	_spawner_label.visible = true
-
-
-func _spawner_label_for(path: SceneNodePath) -> String:
-	if path == null:
-		return "(none)"
-	if path.node_path.is_empty():
-		return path.scene_path
-	return path.node_path
-
-
-func _selected_spawner() -> SceneNodePath:
+func _default_spawner() -> SceneNodePath:
 	if spawner_options.is_empty():
 		return null
-	var idx := maxi(0, _spawner_picker.selected)
-	if idx >= spawner_options.size():
-		return null
-	return spawner_options[idx]
+	return spawner_options[0]

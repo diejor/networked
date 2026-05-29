@@ -54,9 +54,16 @@ metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1294966314]
-
-[node name="ServerBrowser" parent="CanvasLayer" unique_id=653109877 instance=ExtResource("8_7ue45")]
+[node name="ServerBrowser" parent="Client" unique_id=653109877 instance=ExtResource("8_7ue45")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -180.0
+offset_right = 240.0
+offset_bottom = 180.0
 backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
-tree_path = NodePath("../../Client")
+tree_path = NodePath("..")
