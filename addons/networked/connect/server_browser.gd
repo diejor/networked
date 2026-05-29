@@ -263,9 +263,7 @@ func _update_details() -> void:
 	var lines: PackedStringArray = []
 	if t.is_direct():
 		lines.append("Address: %s" % t.address)
-		lines.append("Backend: %s" % (
-			t.backend.get_class() if t.backend else "-"
-		))
+		lines.append("Backend: %s" % _backend_label(t.backend))
 		lines.append("Status: %s" % _status_text(r))
 		lines.append("Latency: %s" % (
 			"%d ms" % r.latency_ms if r and r.is_ok() else "-"
@@ -563,3 +561,14 @@ func _default_spawner() -> SceneNodePath:
 	if spawner_options.is_empty():
 		return null
 	return spawner_options[0]
+
+
+func _backend_label(backend: BackendPeer) -> String:
+	if backend == null:
+		return "-"
+	var script := backend.get_script()
+	if script and not script.get_global_name().is_empty():
+		return script.get_global_name()
+	if backend.resource_path.is_empty() or "::" in backend.resource_path:
+		return backend.get_class()
+	return backend.resource_path.get_file()

@@ -54,10 +54,7 @@ func _populate_backend_picker() -> void:
 		_backend_picker.disabled = true
 		return
 	for backend in backend_templates:
-		var name := backend.resource_path.get_file()
-		if name.is_empty():
-			name = backend.get_class()
-		_backend_picker.add_item(name)
+		_backend_picker.add_item(_template_label(backend))
 	var hide_picker := backend_templates.size() <= 1
 	_backend_picker.visible = not hide_picker
 	_backend_label.visible = not hide_picker
@@ -84,6 +81,21 @@ func _selected_template() -> BackendPeer:
 	if idx >= backend_templates.size():
 		return null
 	return backend_templates[idx]
+
+
+func _template_label(backend: BackendPeer) -> String:
+	if backend == null:
+		return "-"
+	if backend.resource_path.is_empty() or "::" in backend.resource_path:
+		return _backend_class_name(backend)
+	return backend.resource_path.get_file()
+
+
+func _backend_class_name(backend: BackendPeer) -> String:
+	var script := backend.get_script()
+	if script and not script.get_global_name().is_empty():
+		return script.get_global_name()
+	return backend.get_class()
 
 
 func _on_connect_pressed() -> void:

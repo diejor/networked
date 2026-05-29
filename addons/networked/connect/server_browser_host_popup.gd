@@ -73,10 +73,18 @@ func open() -> void:
 
 
 func _template_label(backend: BackendPeer) -> String:
-	var name := backend.resource_path.get_file()
-	if name.is_empty():
-		name = backend.get_class()
-	return name
+	if backend == null:
+		return "-"
+	if backend.resource_path.is_empty() or "::" in backend.resource_path:
+		return _backend_class_name(backend)
+	return backend.resource_path.get_file()
+
+
+func _backend_class_name(backend: BackendPeer) -> String:
+	var script := backend.get_script()
+	if script and not script.get_global_name().is_empty():
+		return script.get_global_name()
+	return backend.get_class()
 
 
 func _on_confirm() -> void:

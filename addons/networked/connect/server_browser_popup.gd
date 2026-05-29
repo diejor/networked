@@ -43,10 +43,7 @@ func set_templates(templates: Array[BackendPeer]) -> void:
 		return
 	_backend_picker.clear()
 	for backend in _templates:
-		var name := backend.resource_path.get_file()
-		if name.is_empty():
-			name = backend.get_class()
-		_backend_picker.add_item(name)
+		_backend_picker.add_item(_template_label(backend))
 
 
 ## Opens the popup in Add mode with empty fields.
@@ -106,6 +103,21 @@ func _selected_template() -> BackendPeer:
 	if idx >= _templates.size():
 		return null
 	return _templates[idx]
+
+
+func _template_label(backend: BackendPeer) -> String:
+	if backend == null:
+		return "-"
+	if backend.resource_path.is_empty() or "::" in backend.resource_path:
+		return _backend_class_name(backend)
+	return backend.resource_path.get_file()
+
+
+func _backend_class_name(backend: BackendPeer) -> String:
+	var script := backend.get_script()
+	if script and not script.get_global_name().is_empty():
+		return script.get_global_name()
+	return backend.get_class()
 
 
 func _on_confirm() -> void:
