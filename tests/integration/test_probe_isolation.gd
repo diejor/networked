@@ -40,6 +40,14 @@ func test_probes_do_not_register_peers() -> void:
 	await EnetTestSupport.stop_tree(host_tree)
 
 
+# Helper method to run a single probe query as a regular method. This avoids
+# GDScript lambda capture/closure GC bugs with concurrent asynchronous awaits.
+func _run_probe(backend: ENetBackend, results: Array, state: Dictionary) -> void:
+	var r: ServerInfoResult = await backend.query_server_info("127.0.0.1", 2.0)
+	results.append(r)
+	state.pending -= 1
+
+
 func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	var host := await EnetTestSupport.start_host(self)
 	assert_that(host).is_not_empty()
@@ -50,18 +58,13 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	var client_backend := EnetTestSupport.make_client_backend(host.port)
 	var probe_count := 20
 	var results: Array[ServerInfoResult] = []
-	var pending := probe_count
+	var state := { pending = probe_count }
 
 	for i in probe_count:
-		var callable := func() -> void:
-			var r: ServerInfoResult = await client_backend.query_server_info(
-				"127.0.0.1", 2.0
-			)
-			results.append(r)
-			pending -= 1
-		callable.call()
+		_run_probe(client_backend, results, state)
+		await get_tree().process_frame
 
-	await wait_until(func() -> bool: return pending == 0, 8.0)
+	await wait_until(func() -> bool: return state.pending == 0, 8.0)
 
 	var ok_count := 0
 	var busy_count := 0
