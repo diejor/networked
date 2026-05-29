@@ -1,0 +1,132 @@
+[gd_scene format=3 uid="uid://bb2nsfunxlw3a"]
+
+[ext_resource type="Script" path="res://addons/networked/connect/server_browser.gd" id="1_browser"]
+
+[node name="ServerBrowser" type="Control"]
+custom_minimum_size = Vector2(480, 360)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_browser")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="HeaderBar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="VBox/HeaderBar"]
+layout_mode = 2
+text = "Servers"
+
+[node name="CountLabel" type="Label" parent="VBox/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="Spacer" type="Control" parent="VBox/HeaderBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshButton" type="Button" parent="VBox/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh"
+
+[node name="AddButton" type="Button" parent="VBox/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add server"
+
+[node name="Banner" type="HBoxContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="BannerLabel" type="Label" parent="VBox/Banner"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Provider unavailable"
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ListBox" type="VBoxContainer" parent="VBox/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="EmptyState" type="VBoxContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+
+[node name="EmptyLabel" type="Label" parent="VBox/EmptyState"]
+layout_mode = 2
+text = "No servers yet"
+horizontal_alignment = 1
+
+[node name="Details" type="PanelContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="DetailsMargin" type="MarginContainer" parent="VBox/Details"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="DetailsLabel" type="Label" parent="VBox/Details/DetailsMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Select a server to see details"
+
+[node name="Footer" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="UsernameLabel" type="Label" parent="VBox/Footer"]
+layout_mode = 2
+text = "Username"
+
+[node name="UsernameEdit" type="LineEdit" parent="VBox/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+placeholder_text = "Player"
+
+[node name="EditButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Edit"
+
+[node name="RemoveButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Remove"
+
+[node name="Spacer" type="Control" parent="VBox/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="JoinButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Join"
