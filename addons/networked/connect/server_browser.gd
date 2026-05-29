@@ -196,7 +196,7 @@ func _rebuild_rows() -> void:
 		var lobbies: Array = _provider_results[id]
 		if lobbies.is_empty():
 			continue
-		_add_section_header(String(id).to_upper())
+		_add_section_header(String(id).capitalize())
 		for lobby in lobbies:
 			var target := _lobby_to_target(id, lobby as LobbyInfo)
 			var row := _instance_row(target)
@@ -279,7 +279,7 @@ func _update_details() -> void:
 		lines.append("Players: %s" % _players_text(r))
 		lines.append("Saved: Yes")
 	else:
-		lines.append("Provider: %s" % String(t.provider_id))
+		lines.append("Provider: %s" % String(t.provider_id).capitalize())
 		lines.append("Lobby ID: %s" % str(t.remote_id))
 		lines.append("Status: %s" % _status_text(r))
 		lines.append("Players: %s" % _players_text(r))

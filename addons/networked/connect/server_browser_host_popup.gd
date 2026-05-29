@@ -61,7 +61,7 @@ func set_choices(
 		c.kind = Kind.PROVIDER
 		c.provider_id = id
 		_choices.append(c)
-		_picker.add_item("Provider: %s" % String(id))
+		_picker.add_item("Provider: %s" % String(id).capitalize())
 
 
 ## Resets the form and shows the popup.

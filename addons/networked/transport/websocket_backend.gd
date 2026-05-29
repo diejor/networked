@@ -10,6 +10,8 @@ extends BackendPeer
 @export var port: int = 21253
 ## Hostname used for WSS connections when no explicit address is supplied.
 @export var public_host: String
+## Maximum number of simultaneous client connections allowed by the server.
+@export var max_clients: int = 32
 
 
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
