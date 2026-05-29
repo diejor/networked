@@ -55,15 +55,23 @@ func get_address_hint() -> AddressHint:
 
 ## Builds the WebSocket URL from [param server_address].
 ##
-## Empty address maps to [code]wss://[member public_host][/code]; localhost
-## maps to [code]ws://localhost:[member port][/code]; anything else maps to
-## [code]wss://[param server_address][/code].
+## Empty address maps to [code]wss://[member public_host][/code] when
+## [member public_host] is configured, falling back to localhost otherwise.
+## Localhost maps to [code]ws://localhost:[member port][/code]. If the address
+## is already a full [code]ws://[/code] or [code]wss://[/code] URL, it is
+## returned as-is.
 func build_url(server_address: String) -> String:
 	if server_address.is_empty():
-		return "wss://" + public_host
+		if not public_host.is_empty():
+			return "wss://" + public_host
+		return "ws://localhost:" + str(port)
 
 	if server_address == "localhost" or server_address == "127.0.0.1":
 		return "ws://localhost:" + str(port)
+
+	if server_address.begins_with("ws://") or \
+		server_address.begins_with("wss://"):
+		return server_address
 
 	return "wss://" + server_address
 
