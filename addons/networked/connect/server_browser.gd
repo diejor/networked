@@ -12,6 +12,11 @@ class_name ServerBrowser
 extends Control
 
 
+## Emitted when a connection or hosting attempt completes successfully.
+signal session_entered
+
+
+
 const _ROW_SCENE := preload(
 	"res://addons/networked/connect/server_browser_row.tscn"
 )
@@ -239,10 +244,10 @@ func _on_provider_list_updated(
 
 
 func _on_probe_result(
-	result: ServerInfoResult, row: ServerBrowserRow
+	result: ServerInfoResult, row: Variant
 ) -> void:
 	if is_instance_valid(row):
-		row.set_result(result)
+		(row as ServerBrowserRow).set_result(result)
 
 
 func _on_row_selected(_target: JoinTarget, row: ServerBrowserRow) -> void:
@@ -386,6 +391,8 @@ func _host_with_options(
 				return
 			tree.backend = template
 			var err := await tree.host_player(payload)
+			if err == OK:
+				session_entered.emit()
 			_hide_after_successful_session(err)
 		ServerBrowserHostPopup.Kind.PROVIDER:
 			var provider := _registry.get_provider(
@@ -399,6 +406,8 @@ func _host_with_options(
 			provider.create_lobby(_pending_host_display_name)
 			await provider.lobby_created
 			var err := await provider.bind(NetwTree.new(tree), payload)
+			if err == OK:
+				session_entered.emit()
 			_hide_after_successful_session(err)
 	_pending_host_kind = -1
 
@@ -463,6 +472,8 @@ func _on_join_submitted(
 		var err := await tree.auto_connect_player(
 			target.make_backend_instance(), target.address, payload
 		)
+		if err == OK:
+			session_entered.emit()
 		_hide_after_successful_session(err)
 		return
 
@@ -473,8 +484,10 @@ func _on_join_submitted(
 		)
 		return
 	provider.join_lobby(target.remote_id)
-	var peer: MultiplayerPeer = await provider.peer_ready
-	var err := await tree.adopt_peer(peer, payload)
+	await provider.peer_ready
+	var err := await provider.bind(NetwTree.new(tree), payload)
+	if err == OK:
+		session_entered.emit()
 	_hide_after_successful_session(err)
 
 

@@ -2,18 +2,15 @@
 ##
 ## Two-layer split, made visible in the scene tree:
 ##
-## - [PreLobby] talks to [LobbyProvider] only. Social membership lives there:
-##   browsing lobbies, creating, joining. The multiplayer session does not
-##   exist yet.
+## - [ServerBrowser] handles direct connections and provider lobbies.
 ## - [InLobby] talks to [NetwTree] / [NetwContext]. The roster, the host-only
 ##   Start button, and game start all live there. It only consults
 ##   [LobbyProvider] for [method LobbyProvider.get_member_name] and
 ##   [method LobbyProvider.leave_lobby] - the two genuinely cross-layer
 ##   operations.
 ##
-## This script is the bridge: it owns the state swap and calls
-## [method LobbyProvider.bind] at the boundary where the lobby layer hands
-## the produced peer to the session layer.
+## This script is the bridge: it owns the state swap and coordinates with
+## [ServerBrowser] to enter the session.
 extends Control
 
 enum State { PRE_LOBBY, IN_LOBBY }
@@ -21,7 +18,7 @@ enum State { PRE_LOBBY, IN_LOBBY }
 @warning_ignore("unused_private_class_variable")
 @onready var _title: Label = %TitleLabel
 @onready var _status: Label = %StatusLabel
-@onready var _pre_lobby: Control = %PreLobby
+@onready var _browser: ServerBrowser = %ServerBrowser
 @onready var _in_lobby: Control = %InLobby
 @onready var gamestate: BomberGamestate = %Gamestate
 @onready var multiplayer_tree: MultiplayerTree = %MultiplayerTree
@@ -37,8 +34,15 @@ func _ready() -> void:
 	_provider = _ctx.services.get_service(LobbyProvider)
 	assert(_provider)
 
-	_pre_lobby.status_message.connect(_set_status)
-	_pre_lobby.setup(_provider)
+	_browser.tree_path = _browser.get_path_to(multiplayer_tree)
+	_browser.register_provider(&"steam", _provider)
+	_browser.session_entered.connect(_on_browser_session_entered)
+
+	# Register the default WebSocket backend template for direct IP connection
+	var ws_backend := WebSocketBackend.new()
+	ws_backend.port = 10567
+	_browser.backend_templates = [ws_backend]
+
 	_in_lobby.setup(_provider, _ctx)
 	_in_lobby.start_requested.connect(_on_start_requested)
 
@@ -55,31 +59,28 @@ func _ready() -> void:
 	_set_state(State.PRE_LOBBY)
 
 
+# Triggered when the lobby provider reports a new lobby created by local host.
 func _on_lobby_created(lobby_id: int) -> void:
 	_pending_title = "Lobby %d (you)" % lobby_id
-	_enter_lobby(lobby_id)
 
 
+# Triggered when the lobby provider reports the local client joined a lobby.
 func _on_lobby_joined(lobby_id: int) -> void:
 	_pending_title = "Lobby %d" % lobby_id
-	_enter_lobby(lobby_id)
 
 
-func _enter_lobby(_lobby_id: int) -> void:
-	if _provider == null:
-		return
+# Transition to the InLobby screen when the server browser enters a session.
+func _on_browser_session_entered() -> void:
+	var local_id := multiplayer.get_unique_id()
+	var rj := multiplayer_tree.get_joined_player(local_id)
+	if rj:
+		gamestate.player_name = rj.username
 
-	var pname := _provider.get_local_member_name()
-	gamestate.player_name = pname
-	
-	var jp := JoinPayload.new()
-	jp.username = pname
-	
-	var err := await _provider.bind(_ctx.tree, jp)
-	if err != OK:
-		_set_status("Bind failed: %s" % error_string(err))
-		_pre_lobby.reset_buttons()
-		return
+	if _pending_title.is_empty():
+		if multiplayer_tree.role == MultiplayerTree.Role.LISTEN_SERVER:
+			_pending_title = "Direct Host (you)"
+		else:
+			_pending_title = "Direct Client"
 
 	_in_lobby.set_title(_pending_title)
 	_in_lobby.refresh()
@@ -120,17 +121,21 @@ func _on_game_error(text: String) -> void:
 		_back_to_pre_lobby()
 
 
+# Restores the pre-lobby state and refreshes the browser list.
 func _back_to_pre_lobby() -> void:
-	_pre_lobby.reset_buttons()
+	_pending_title = ""
+	_browser.refresh()
 	_set_state(State.PRE_LOBBY)
 
 
+# Updates the active lobby screen view.
 func _set_state(s: State) -> void:
 	_state = s
-	_pre_lobby.visible = (s == State.PRE_LOBBY)
+	_browser.visible = (s == State.PRE_LOBBY)
 	_in_lobby.visible = (s == State.IN_LOBBY)
 
 
+# Updates the status message label display.
 func _set_status(text: String) -> void:
 	_status.text = text
 	_status.visible = not text.is_empty()
