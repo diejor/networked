@@ -1,3 +1,4 @@
+@tool
 ## Integration tests for [ProbeManager] over a real ENet transport.
 ##
 ## The manager wraps [method BackendPeer.query_server_info], which is
@@ -78,9 +79,9 @@ func test_cancel_all_suppresses_callbacks() -> void:
 	add_child(manager)
 
 	var target := _make_target(host.port)
-	var fired: int = 0
+	var fired := [0]
 	var on_done := func(_r: ServerInfoResult) -> void:
-		fired += 1
+		fired[0] += 1
 
 	for i in 6:
 		manager.query(target, on_done)
@@ -97,7 +98,7 @@ func test_cancel_all_suppresses_callbacks() -> void:
 			break
 
 	assert_int(manager.active_count()).is_equal(0)
-	assert_int(fired).is_equal(0)
+	assert_int(fired[0]).is_equal(0)
 
 	manager.queue_free()
 	await EnetTestSupport.stop_tree(host.tree)

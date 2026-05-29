@@ -37,7 +37,7 @@ metadata/_custom_type_script = "uid://bo5uh52f6sln5"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 
-[node name="ConnectBrowser" parent="." unique_id=653109877 instance=ExtResource("8_7ue45")]
+[node name="ConnectBrowser" parent="." unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -47,9 +47,10 @@ offset_left = 336.0
 offset_top = 144.0
 offset_right = 816.0
 offset_bottom = 504.0
+tree = NodePath("../Client")
 backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
-tree_path = NodePath("../Client")
+server_list_path = "user://daily/servers.tres"
 
 [node name="Client" type="Node" parent="." unique_id=185172770]
 script = ExtResource("2_r0du0")

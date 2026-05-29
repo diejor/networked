@@ -61,6 +61,7 @@ offset_left = -240.0
 offset_top = -180.0
 offset_right = 240.0
 offset_bottom = 180.0
+server_list_path = "user://bomber/servers.tres"
 
 [node name="InLobby" parent="." unique_id=788442195 instance=ExtResource("11_in")]
 unique_name_in_owner = true

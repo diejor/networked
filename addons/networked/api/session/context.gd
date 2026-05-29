@@ -13,8 +13,9 @@
 ##
 ## [b]Per-member nullability:[/b] Each facade resolves independently
 ## under its own constraints, so any of [member tree], [member services],
-## [member scene], or [member entity] may be [code]null[/code]:
-## [br]- [member tree], [member services] need an enclosing
+## [member connect], [member scene], or [member entity] may be
+## [code]null[/code]:
+## [br]- [member tree], [member services], [member connect] need an enclosing
 ##   [MultiplayerTree] in the live tree.
 ## [br]- [member scene] needs an enclosing [MultiplayerScene].
 ## [br]- [member entity] only needs a parent chain, so it resolves even
@@ -39,6 +40,22 @@ var tree: NetwTree
 ## [MultiplayerTree] is found.
 var services: NetwServices
 
+## Pre-game connect facade over the tree's canonical [ConnectSession].
+## Built lazily on first access (and memoized) so repeated access does not
+## stack signal relays. [code]null[/code] when no enclosing
+## [MultiplayerTree] is found. See [NetwConnect].
+var connect: NetwConnect:
+	get:
+		if _connect:
+			return _connect
+		if not is_instance_valid(_mt):
+			return null
+		var session := _mt.get_connect_session()
+		if session == null:
+			return null
+		_connect = NetwConnect.new(session)
+		return _connect
+
 ## Visibility and interest registry for the enclosing
 ## [MultiplayerTree]. [code]null[/code] when no enclosing tree is
 ## found. See [NetwInterest] for the public API.
@@ -50,6 +67,11 @@ var scene: NetwScene
 
 # Origin node passed to [method for_node]; used for lazy entity resolution.
 var _origin: Node
+
+# Enclosing tree retained so [member connect] can lazily build its facade.
+var _mt: MultiplayerTree
+# Memoized backing for [member connect].
+var _connect: NetwConnect
 
 ## Per-owner orchestration hub. Resolves on first access by walking from
 ## [member _origin] to the entity root. [code]null[/code] when
@@ -63,6 +85,7 @@ func _init(
 		scene_ctx: NetwScene = null,
 		origin: Node = null,
 ) -> void:
+	_mt = mt
 	if mt:
 		tree = NetwTree.new(mt)
 		services = NetwServices.new(mt)

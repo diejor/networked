@@ -480,6 +480,30 @@ func _ensure_host_scene_view() -> void:
 	add_child(view)
 
 
+## Returns the session-canonical [ConnectSession], creating and registering
+## one on first access. One per tree.
+##
+## Lazy by design: dedicated/headless trees that never open a browser pay
+## nothing (no [ProbeManager]/[ProviderRegistry], no signal traffic). Wrap the
+## result in a [NetwConnect] via [member NetwContext.connect] rather than
+## caching the raw node.
+func get_connect_session() -> ConnectSession:
+	if Engine.is_editor_hint():
+		return null
+	var registered := get_service(ConnectSession) as ConnectSession
+	if is_instance_valid(registered):
+		return registered
+	var existing := find_service_node(ConnectSession) as ConnectSession
+	if existing:
+		register_service(existing)
+		return existing
+	var session := ConnectSession.new()
+	session.name = &"ConnectSession"
+	add_child(session)              # _ready() auto-binds to this tree
+	register_service(session)       # discoverable via the service registry
+	return session
+
+
 static func _has_spawner_component(node: Node) -> bool:
 	if node is SpawnerComponent:
 		return true

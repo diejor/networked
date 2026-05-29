@@ -12,7 +12,7 @@ func test_query_returns_unsupported_without_signaling() -> void:
 	var backend := WebRTCBackend.new()
 
 	var start_ms := Time.get_ticks_msec()
-	var result: ServerInfoResult = await backend.query_server_info(
+	var result: ServerInfoResult = backend.query_server_info(
 		"deadbeefdeadbeefdead", 2.0
 	)
 	var elapsed_ms := Time.get_ticks_msec() - start_ms

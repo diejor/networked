@@ -3,7 +3,7 @@
 ## Two-layer split, made visible in the scene tree:
 ##
 ## - [ConnectBrowser] handles direct connections and provider lobbies,
-##   driven by a [ConnectSession] this script owns.
+##   driving the tree's canonical [ConnectSession] via [NetwConnect].
 ## - [InLobby] talks to [NetwTree] / [NetwContext]. The roster, the host-only
 ##   Start button, and game start all live there. It only consults
 ##   [LobbyProvider] for [method LobbyProvider.get_member_name] and
@@ -27,7 +27,7 @@ enum State { PRE_LOBBY, IN_LOBBY }
 @onready var _ctx: NetwContext = Netw.ctx(multiplayer_tree)
 
 var _provider: LobbyProvider
-var _session: ConnectSession
+var _connect: NetwConnect
 
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
@@ -36,17 +36,18 @@ func _ready() -> void:
 	_provider = _ctx.services.get_service(LobbyProvider)
 	assert(_provider)
 
-	_session = ConnectSession.new()
-	add_child(_session)
-	_session.bind_tree(multiplayer_tree)
-	_session.register_provider(&"steam", _provider)
-	_session.load_server_list()
+	_connect = _ctx.connect
+	_connect.register_provider(&"steam", _provider)
+	_connect.load_server_list()
 
 	var ws_backend := WebSocketBackend.new()
 	ws_backend.port = 10567
 	_browser.backend_templates = [ws_backend]
-	_browser.session = _session
-	_session.session_entered.connect(_on_browser_session_entered)
+	# The browser sits outside the MultiplayerTree subtree, so point it at the
+	# tree explicitly; it then drives the same canonical session this script's
+	# facade wraps. (Runtime assignment re-resolves the browser's facade.)
+	_browser.tree = multiplayer_tree
+	_connect.session_entered.connect(_on_browser_session_entered)
 
 	_in_lobby.setup(_provider, _ctx)
 	_in_lobby.start_requested.connect(_on_start_requested)
@@ -129,7 +130,7 @@ func _on_game_error(text: String) -> void:
 # Restores the pre-lobby state and refreshes the browser list.
 func _back_to_pre_lobby() -> void:
 	_pending_title = ""
-	_session.refresh()
+	_connect.refresh()
 	_set_state(State.PRE_LOBBY)
 
 

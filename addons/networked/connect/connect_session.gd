@@ -1,20 +1,35 @@
-## Headless facade over the connect subsystem.
+## The engine behind the server browser: holds the live server list and runs
+## host / join.
 ##
-## Owns a [ProbeManager], a [ProviderRegistry], and the live list of
-## [JoinTarget]s (direct + provider-discovered). UIs observe via
-## signals. The same [ConnectSession] can drive the reference
-## [ConnectBrowser] or a custom UI.
+## Most games never touch this directly -- they go through [NetwConnect]
+## ([code]Netw.ctx(self).connect[/code]), which wraps the one canonical
+## session the [MultiplayerTree] owns. Reach for [ConnectSession] when you are
+## building a [b]custom browser UI[/b] and want the raw node: it keeps the list
+## of [JoinTarget]s (typed-in addresses plus lobbies discovered through
+## providers like Steam), probes them for status, and drives the actual
+## host / join handshake.
 ##
-## Persistence is opt-in. By default targets live in memory only.
-## Call [method load_server_list] / [method save_server_list] to
-## persist, or pass [code]persist = true[/code] to
-## [method add_target] / [method remove_target].
+## [br][br]
+## Constructing your own is a handful of lines:
+## [codeblock]
+## var session := ConnectSession.new()
+## add_child(session)                   # auto-binds to the enclosing tree
+## session.register_provider(&"steam", steam_provider)
+## session.load_server_list()           # restore saved direct servers
+## session.target_updated.connect(_on_status)
+## session.refresh()                    # probe everything
+## await session.join(chosen_target, payload)
+## [/codeblock]
 ##
-## Lifecycle: instance the session, [method add_child] it, then
-## [method bind_tree] the [MultiplayerTree] that hosts/joins should
-## feed. Optionally [method register_provider] before
-## [method refresh]. Use [method host] and [method join] for the
-## two entry points.
+## [br][br]
+## [b]Tree binding:[/b] host and join need a [MultiplayerTree]. A session added
+## under a tree binds to it automatically; otherwise call [method bind_tree].
+##
+## [br][br]
+## [b]Persistence is opt-in:[/b] targets live in memory until you
+## [method load_server_list] / [method save_server_list] (or pass
+## [code]persist = true[/code] to [method add_target] /
+## [method remove_target]). Provider lobbies are always ephemeral.
 class_name ConnectSession
 extends Node
 
@@ -99,6 +114,14 @@ func _init() -> void:
 func _ready() -> void:
 	_ensure_internals()
 	_parent_internals()
+	# Auto-bind to the enclosing tree when none was set explicitly. Makes
+	# bind_tree() optional for the canonical session the tree owns; a
+	# standalone session (e.g. unit tests) resolves nothing and stays unbound
+	# until bind_tree() is called with an arbitrary tree.
+	if _tree == null:
+		var tree := MultiplayerTree.resolve(self)
+		if tree:
+			bind_tree(tree)
 
 
 func _exit_tree() -> void:
@@ -115,6 +138,9 @@ func bind_tree(tree: MultiplayerTree) -> void:
 		return
 	_unbind_tree_signals()
 	_tree = tree
+	Netw.dbg.debug(
+		"ConnectSession bound to tree '%s'.", [_tree.name]
+	)
 	_bind_tree_signals()
 
 
@@ -139,6 +165,7 @@ func register_provider(id: StringName, provider: LobbyProvider) -> void:
 	var unavailable_cb := _on_provider_unavailable.bind(id)
 	if not provider.provider_unavailable.is_connected(unavailable_cb):
 		provider.provider_unavailable.connect(unavailable_cb)
+	Netw.dbg.debug("ConnectSession provider registered: %s.", [String(id)])
 
 
 ## Removes the provider registered under [param id], if any.
@@ -178,10 +205,19 @@ func get_provider_ids() -> Array[StringName]:
 ## direct targets the UI is adding by hand.
 func add_target(target: JoinTarget, persist: bool = false) -> void:
 	if target == null:
+		Netw.dbg.warn("ConnectSession add_target ignored null target.")
 		return
 	if _direct_targets.has(target):
+		Netw.dbg.trace(
+			"ConnectSession add_target ignored duplicate: %s.",
+			[_target_summary(target)]
+		)
 		return
 	_direct_targets.append(target)
+	Netw.dbg.info(
+		"ConnectSession added direct target %s (persist=%s, direct=%d).",
+		[_target_summary(target), str(persist), _direct_targets.size()]
+	)
 	target_added.emit(target)
 	if persist:
 		save_server_list()
@@ -193,9 +229,17 @@ func add_target(target: JoinTarget, persist: bool = false) -> void:
 func remove_target(target: JoinTarget, persist: bool = false) -> void:
 	var idx := _direct_targets.find(target)
 	if idx < 0:
+		Netw.dbg.trace(
+			"ConnectSession remove_target ignored missing target: %s.",
+			[_target_summary(target)]
+		)
 		return
 	_direct_targets.remove_at(idx)
 	_results.erase(target)
+	Netw.dbg.info(
+		"ConnectSession removed direct target %s (persist=%s, direct=%d).",
+		[_target_summary(target), str(persist), _direct_targets.size()]
+	)
 	target_removed.emit(target)
 	if persist:
 		save_server_list()
@@ -246,6 +290,10 @@ func load_server_list(path: String = server_list_path) -> void:
 	server_list_path = path
 	var loaded := ServerList.load_or_new(path)
 	server_list = loaded
+	Netw.dbg.info(
+		"ConnectSession loaded %d direct target(s) from %s.",
+		[loaded.targets.size(), path]
+	)
 	_replace_direct_targets(loaded.targets)
 
 
@@ -258,7 +306,18 @@ func save_server_list(path: String = server_list_path) -> Error:
 	if server_list == null:
 		server_list = ServerList.new()
 	server_list.targets = _direct_targets.duplicate()
-	return ServerList.save(server_list, path)
+	var err := ServerList.save(server_list, path)
+	if err == OK:
+		Netw.dbg.info(
+			"ConnectSession saved %d direct target(s) to %s.",
+			[_direct_targets.size(), path]
+		)
+	else:
+		Netw.dbg.error(
+			"ConnectSession failed saving %d direct target(s) to %s: %s.",
+			[_direct_targets.size(), path, error_string(err)]
+		)
+	return err
 
 
 # -- Probing & refresh ------------------------------------------------------
@@ -267,13 +326,24 @@ func save_server_list(path: String = server_list_path) -> Error:
 ## asks every registered provider to refresh its lobby list.
 func refresh() -> void:
 	_ensure_internals()
+	Netw.dbg.debug(
+		"ConnectSession refresh: direct=%d providers=%d.",
+		[_direct_targets.size(), _provider_order.size()]
+	)
 	if _probes:
 		_probes.cancel_all()
 	for target in _direct_targets:
+		Netw.dbg.trace(
+			"ConnectSession probing direct target %s.",
+			[_target_summary(target)]
+		)
 		_probes.query(target, _on_probe_result.bind(target))
 	for id in _provider_order:
 		var provider := _registry.get_provider(id)
 		if provider:
+			Netw.dbg.trace(
+				"ConnectSession refreshing provider %s.", [String(id)]
+			)
 			provider.list_lobbies()
 
 
@@ -282,7 +352,11 @@ func refresh() -> void:
 func probe(target: JoinTarget) -> void:
 	_ensure_internals()
 	if target == null:
+		Netw.dbg.warn("ConnectSession probe ignored null target.")
 		return
+	Netw.dbg.debug(
+		"ConnectSession probing target %s.", [_target_summary(target)]
+	)
 	_probes.query(target, _on_probe_result.bind(target))
 
 
@@ -295,15 +369,22 @@ func probe(target: JoinTarget) -> void:
 ## emits [signal host_failed] with a human-readable reason.
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	if config == null:
+		Netw.dbg.warn("ConnectSession host failed: host config is null.")
 		host_failed.emit("host config is null")
 		return ERR_INVALID_PARAMETER
 	if payload == null:
+		Netw.dbg.warn("ConnectSession host failed: join payload is null.")
 		host_failed.emit("join payload is null")
 		return ERR_INVALID_PARAMETER
 	var tree := get_tree_bound()
 	if tree == null:
+		Netw.dbg.warn("ConnectSession host failed: no bound tree.")
 		host_failed.emit("no MultiplayerTree bound; call bind_tree first")
 		return ERR_UNCONFIGURED
+	Netw.dbg.info(
+		"ConnectSession host requested (direct=%s, user=%s).",
+		[str(config.is_direct()), String(payload.username)]
+	)
 	host_started.emit()
 	if config.is_direct():
 		var backend := config.make_backend_instance()
@@ -347,17 +428,30 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 ## reason.
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if target == null:
+		Netw.dbg.warn("ConnectSession join failed: target is null.")
 		join_failed.emit(null, "target is null")
 		return ERR_INVALID_PARAMETER
 	if payload == null:
+		Netw.dbg.warn(
+			"ConnectSession join failed for %s: payload is null.",
+			[_target_summary(target)]
+		)
 		join_failed.emit(target, "join payload is null")
 		return ERR_INVALID_PARAMETER
 	var tree := get_tree_bound()
 	if tree == null:
+		Netw.dbg.warn(
+			"ConnectSession join failed for %s: no bound tree.",
+			[_target_summary(target)]
+		)
 		join_failed.emit(
 			target, "no MultiplayerTree bound; call bind_tree first"
 		)
 		return ERR_UNCONFIGURED
+	Netw.dbg.info(
+		"ConnectSession join requested: %s (user=%s).",
+		[_target_summary(target), String(payload.username)]
+	)
 	join_started.emit(target)
 	if target.is_direct():
 		var backend := target.make_backend_instance()
@@ -476,6 +570,10 @@ func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 
 func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 	_results[target] = result
+	Netw.dbg.debug(
+		"ConnectSession probe result for %s: %s.",
+		[_target_summary(target), str(result)]
+	)
 	target_updated.emit(target, result)
 
 
@@ -501,6 +599,10 @@ func _on_provider_list_updated(
 		info.max_players = lobby.max_players
 		_results[t] = ServerInfoResult.ok(info)
 	_provider_targets[id] = fresh
+	Netw.dbg.debug(
+		"ConnectSession provider %s refreshed: %d lobby target(s).",
+		[String(id), fresh.size()]
+	)
 	for target in fresh:
 		target_added.emit(target)
 		target_updated.emit(target, _results[target])
@@ -508,6 +610,10 @@ func _on_provider_list_updated(
 
 
 func _on_provider_unavailable(reason: String, id: StringName) -> void:
+	Netw.dbg.warn(
+		"ConnectSession provider %s unavailable: %s.",
+		[String(id), reason]
+	)
 	provider_unavailable.emit(id, reason)
 
 
@@ -519,6 +625,23 @@ func _replace_direct_targets(loaded: Array[JoinTarget]) -> void:
 	for target in loaded:
 		_direct_targets.append(target)
 		target_added.emit(target)
+
+
+func _target_summary(target: JoinTarget) -> String:
+	if target == null:
+		return "<null>"
+	if target.is_direct():
+		var address := target.address
+		if target.backend != null:
+			var join_address := target.backend.get_join_address()
+			if not join_address.is_empty():
+				address = join_address
+		return "%s (%s)" % [target.display_name, address]
+	return "%s (%s:%s)" % [
+		target.display_name,
+		String(target.provider_id),
+		str(target.remote_id),
+	]
 
 
 func _ensure_internals() -> void:

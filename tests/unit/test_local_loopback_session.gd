@@ -116,6 +116,7 @@ func test_backend_query_reports_live_server() -> void:
 	var backend := LocalLoopbackBackend.new()
 	backend.session = session
 
+	@warning_ignore("redundant_await")
 	var result: ServerInfoResult = await backend.query_server_info("")
 
 	assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
@@ -127,6 +128,7 @@ func test_backend_query_without_live_server_is_unsupported() -> void:
 	var backend := LocalLoopbackBackend.new()
 	backend.session = session
 
+	@warning_ignore("redundant_await")
 	var result: ServerInfoResult = await backend.query_server_info("")
 
 	assert_int(result.status).is_equal(ServerInfoResult.Status.UNSUPPORTED)

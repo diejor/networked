@@ -1,12 +1,26 @@
-## Reference UI for [ConnectSession]. Renders the live target list,
-## offers Add / Host / Refresh buttons, and routes user input through
-## the merged [ConnectPopup].
+## A drop-in server browser UI -- server list, Add / Host / Refresh, and a
+## join flow, ready to use.
 ##
-## The app may inject its own [member session] via the export, if
-## none is supplied, the browser auto-creates one as a child, binds
-## [member tree_path] to it, and loads the persisted server list at
-## [member server_list_path]. Custom UIs are expected to drive
-## [ConnectSession] directly without touching this scene.
+## Drop this scene into your lobby, point it at your [MultiplayerTree], and
+## players can browse saved servers, watch live status, host a new game, or
+## join one with no glue code. Under the hood it drives the tree's canonical
+## [ConnectSession] through a [NetwConnect] for you.
+##
+## [br][br]
+## Configure it in the inspector or from code:
+## [codeblock]
+## var browser := $ConnectBrowser
+## browser.tree = $MultiplayerTree            # which tree to host / join on
+## browser.backend_templates = [ENetBackend.new()]  # transports to offer
+## browser.server_list_path = "user://servers.tres" # where saved servers live
+## [/codeblock]
+##
+## [br][br]
+## Place the browser [i]under[/i] the [MultiplayerTree] and it finds the tree
+## by itself; otherwise set [member tree] (this works even when the tree lives
+## in a different scene). Want a different look? Build your own UI on
+## [NetwConnect] / [ConnectSession] -- this scene is just the reference
+## implementation.
 class_name ConnectBrowser
 extends Control
 
@@ -23,22 +37,27 @@ const _ROW_MENU_EDIT := 2
 const _ROW_MENU_REMOVE := 3
 
 
-## Pre-built [ConnectSession] supplied by the app. When [code]null[/code]
-## the browser instantiates and parents one itself. The
-## auto-created session also binds [member tree_path] and loads
-## [member server_list_path].
-@export var session: ConnectSession:
+## The [MultiplayerTree] whose canonical [ConnectSession] this browser
+## drives, accessed through a [NetwConnect] facade. When left [code]null[/code]
+## the browser resolves the enclosing tree from its own position via
+## [code]Netw.ctx(self)[/code]. Assigning at runtime re-resolves and rebinds.
+@export var tree: MultiplayerTree:
 	set(value):
-		if _session == value:
+		if _tree == value:
 			return
 		_unbind_session_signals()
-		_session = value
+		_tree = value
+		_connect = null
 		if is_inside_tree():
+			_resolve_connect()
 			_bind_session_signals()
+			_load_server_list()
 			_rebuild_from_session()
 			_clear_selection()
+			if _connect:
+				_connect.refresh()
 	get:
-		return _session
+		return _tree
 
 ## Backends offered by the Add Server and Host popups.
 @export var backend_templates: Array[BackendPeer] = []
@@ -50,23 +69,19 @@ const _ROW_MENU_REMOVE := 3
 )
 var spawner_options: Array[SceneNodePath] = []
 
-## Path to the [MultiplayerTree] used for host / join. Only consulted
-## when the browser auto-creates its [member session].
-@export var tree_path: NodePath
-
 ## When [code]true[/code], hides this browser on
-## [signal ConnectSession.session_entered] and shows it again on
-## [signal ConnectSession.session_left]. UI policy only.
+## [signal NetwConnect.session_entered] and shows it again on
+## [signal NetwConnect.session_left]. UI policy only.
 @export var hide_when_session_active: bool = true
 
-## Path used when auto-creating the [member session] for persistence
-## of direct targets.
+## Path used to load and persist direct targets shown by this browser.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
 
 
 var _popup: ConnectPopup
 var _row_menu: PopupMenu
-var _session: ConnectSession
+var _connect: NetwConnect
+var _tree: MultiplayerTree
 var _rows: Dictionary = {}  # JoinTarget -> ConnectBrowserRow
 var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
@@ -84,14 +99,9 @@ var _last_username: String = "Player"
 
 
 func _ready() -> void:
-	if session == null:
-		session = ConnectSession.new()
-		add_child(session)
-		if not tree_path.is_empty():
-			var tree := get_node_or_null(tree_path) as MultiplayerTree
-			if tree:
-				session.bind_tree(tree)
-		session.load_server_list(server_list_path)
+	if _connect == null:
+		_resolve_connect()
+	_load_server_list()
 
 	_popup = _POPUP_SCENE.instantiate()
 	add_child(_popup)
@@ -113,65 +123,79 @@ func _ready() -> void:
 
 	_rebuild_from_session()
 	_clear_selection()
-	session.refresh()
+	if _connect:
+		_connect.refresh()
 
 
 func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
+# Resolves the NetwConnect facade from the configured tree, falling back to
+# this node's own position when no tree was assigned.
+func _resolve_connect() -> void:
+	var origin: Node = _tree if _tree != null else self
+	_connect = Netw.ctx(origin).connect
+
+
+# Loads the browser-owned direct target list into the resolved facade.
+func _load_server_list() -> void:
+	if _connect != null:
+		_connect.load_server_list(server_list_path)
+
+
 func _bind_session_signals() -> void:
-	if session == null:
+	if _connect == null:
 		return
-	if not session.target_added.is_connected(_on_target_added):
-		session.target_added.connect(_on_target_added)
-	if not session.target_removed.is_connected(_on_target_removed):
-		session.target_removed.connect(_on_target_removed)
-	if not session.target_updated.is_connected(_on_target_updated):
-		session.target_updated.connect(_on_target_updated)
-	if not session.session_entered.is_connected(_on_session_entered):
-		session.session_entered.connect(_on_session_entered)
-	if not session.session_left.is_connected(_on_session_left):
-		session.session_left.connect(_on_session_left)
-	if not session.host_failed.is_connected(_show_banner):
-		session.host_failed.connect(_show_banner)
-	if not session.join_failed.is_connected(_on_join_failed):
-		session.join_failed.connect(_on_join_failed)
-	if not session.provider_unavailable.is_connected(
+	if not _connect.target_added.is_connected(_on_target_added):
+		_connect.target_added.connect(_on_target_added)
+	if not _connect.target_removed.is_connected(_on_target_removed):
+		_connect.target_removed.connect(_on_target_removed)
+	if not _connect.target_updated.is_connected(_on_target_updated):
+		_connect.target_updated.connect(_on_target_updated)
+	if not _connect.session_entered.is_connected(_on_session_entered):
+		_connect.session_entered.connect(_on_session_entered)
+	if not _connect.session_left.is_connected(_on_session_left):
+		_connect.session_left.connect(_on_session_left)
+	if not _connect.host_failed.is_connected(_show_banner):
+		_connect.host_failed.connect(_show_banner)
+	if not _connect.join_failed.is_connected(_on_join_failed):
+		_connect.join_failed.connect(_on_join_failed)
+	if not _connect.provider_unavailable.is_connected(
 		_on_provider_unavailable
 	):
-		session.provider_unavailable.connect(_on_provider_unavailable)
+		_connect.provider_unavailable.connect(_on_provider_unavailable)
 
 
 func _unbind_session_signals() -> void:
-	if session == null:
+	if _connect == null:
 		return
-	if session.target_added.is_connected(_on_target_added):
-		session.target_added.disconnect(_on_target_added)
-	if session.target_removed.is_connected(_on_target_removed):
-		session.target_removed.disconnect(_on_target_removed)
-	if session.target_updated.is_connected(_on_target_updated):
-		session.target_updated.disconnect(_on_target_updated)
-	if session.session_entered.is_connected(_on_session_entered):
-		session.session_entered.disconnect(_on_session_entered)
-	if session.session_left.is_connected(_on_session_left):
-		session.session_left.disconnect(_on_session_left)
-	if session.host_failed.is_connected(_show_banner):
-		session.host_failed.disconnect(_show_banner)
-	if session.join_failed.is_connected(_on_join_failed):
-		session.join_failed.disconnect(_on_join_failed)
-	if session.provider_unavailable.is_connected(_on_provider_unavailable):
-		session.provider_unavailable.disconnect(_on_provider_unavailable)
+	if _connect.target_added.is_connected(_on_target_added):
+		_connect.target_added.disconnect(_on_target_added)
+	if _connect.target_removed.is_connected(_on_target_removed):
+		_connect.target_removed.disconnect(_on_target_removed)
+	if _connect.target_updated.is_connected(_on_target_updated):
+		_connect.target_updated.disconnect(_on_target_updated)
+	if _connect.session_entered.is_connected(_on_session_entered):
+		_connect.session_entered.disconnect(_on_session_entered)
+	if _connect.session_left.is_connected(_on_session_left):
+		_connect.session_left.disconnect(_on_session_left)
+	if _connect.host_failed.is_connected(_show_banner):
+		_connect.host_failed.disconnect(_show_banner)
+	if _connect.join_failed.is_connected(_on_join_failed):
+		_connect.join_failed.disconnect(_on_join_failed)
+	if _connect.provider_unavailable.is_connected(_on_provider_unavailable):
+		_connect.provider_unavailable.disconnect(_on_provider_unavailable)
 
 
 func _rebuild_from_session() -> void:
 	for child in _list_box.get_children():
 		child.queue_free()
 	_rows.clear()
-	if session == null:
+	if _connect == null:
 		_update_counter()
 		return
-	for target in session.get_targets():
+	for target in _connect.get_targets():
 		_add_row(target)
 	_update_counter()
 
@@ -180,7 +204,7 @@ func _add_row(target: JoinTarget) -> void:
 	var row := _ROW_SCENE.instantiate() as ConnectBrowserRow
 	_list_box.add_child(row)
 	row.bind_target(target)
-	var existing := session.get_result(target)
+	var existing := _connect.get_result(target)
 	if existing != null:
 		row.set_result(existing)
 	row.selected.connect(_on_row_selected.bind(row))
@@ -303,18 +327,18 @@ func _on_add_pressed() -> void:
 
 
 func _on_refresh_pressed() -> void:
-	if session != null:
-		session.refresh()
+	if _connect != null:
+		_connect.refresh()
 
 
 func _on_host_pressed() -> void:
-	if session == null:
+	if _connect == null:
 		return
 	_popup.set_templates(backend_templates)
 	_popup.set_spawner_options(spawner_options)
 	_popup.open_host(
 		backend_templates,
-		session.get_provider_ids(),
+		_connect.get_provider_ids(),
 		_last_username,
 	)
 
@@ -336,23 +360,23 @@ func _open_edit_for_selected() -> void:
 func _remove_selected() -> void:
 	if _selected_row == null or not _selected_row.target.is_direct():
 		return
-	session.remove_target(_selected_row.target, true)
+	_connect.remove_target(_selected_row.target, true)
 
 
 func _on_target_submitted(target: JoinTarget, persist: bool) -> void:
-	if not session.get_direct_targets().has(target):
-		session.add_target(target, persist)
+	if not _connect.get_direct_targets().has(target):
+		_connect.add_target(target, persist)
 	elif persist:
-		session.save_server_list()
+		_connect.save_server_list(server_list_path)
 	_clear_selection()
-	session.refresh()
+	_connect.refresh()
 
 
 func _on_host_submitted(
 	config: ConnectHostConfig, payload: JoinPayload
 ) -> void:
 	_last_username = String(payload.username)
-	await session.host(config, payload)
+	await _connect.host(config, payload)
 
 
 func _on_join_submitted(payload: JoinPayload) -> void:
@@ -360,7 +384,7 @@ func _on_join_submitted(payload: JoinPayload) -> void:
 	var target := _selected_row.target if _selected_row else null
 	if target == null:
 		return
-	await session.join(target, payload)
+	await _connect.join(target, payload)
 
 
 func _on_session_entered() -> void:

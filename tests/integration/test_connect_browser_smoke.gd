@@ -1,10 +1,10 @@
+@tool
 ## Headless smoke test for [ConnectSession] + [ConnectBrowser]:
 ## drive a session against a live host, assert the public API
 ## (signals, get_result) reports a probed direct target as OK.
 ##
-## Reaches into the browser's session via the typed export rather
-## than walking its scene tree, so the test does not break when the
-## reference UI's node layout changes.
+## Uses the tree-owned [ConnectSession] path the reference browser resolves
+## through [NetwConnect].
 class_name TestConnectBrowserSmoke
 extends NetwTestSuite
 
@@ -44,12 +44,16 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	list.targets = [target]
 	ServerList.save(list, temp_path)
 
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	var session := tree.get_connect_session()
+	session.load_server_list(temp_path)
+
 	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
+	browser.tree = tree
 	browser.server_list_path = temp_path
 	add_child(browser)
-
-	var session: ConnectSession = browser.session
-	assert_that(session).is_not_null()
 
 	var loaded := session.get_direct_targets()
 	assert_int(loaded.size()).is_equal(1)
@@ -68,5 +72,43 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	assert_int(result.info.players).is_equal(1)
 
 	browser.queue_free()
+	tree.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
 	await EnetTestSupport.stop_tree(host.tree)
+
+
+# Default-resolution path: a browser placed under a MultiplayerTree with no
+# injected session resolves and drives the tree's canonical ConnectSession.
+func test_browser_resolves_tree_canonical_session() -> void:
+	var temp_path := "user://_test_connect_browser_%d.tres" % (
+		Time.get_ticks_usec()
+	)
+	ServerList.save(ServerList.new(), temp_path)
+
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	var canonical := tree.get_connect_session()
+	assert_that(canonical).is_not_null()
+
+	var browser: ConnectBrowser = _BROWSER_SCENE.instantiate()
+	browser.server_list_path = temp_path
+	tree.add_child(browser)
+	await get_tree().process_frame
+
+	var count_label := browser.get_node("%CountLabel") as Label
+	assert_str(count_label.text).is_equal("0")
+
+	# A target added through the canonical session reaches the browser UI,
+	# proving the browser bound to the same session's relayed signals.
+	var target := JoinTarget.new()
+	target.address = "203.0.113.1"
+	target.backend = ENetBackend.new()
+	canonical.add_target(target)
+	await get_tree().process_frame
+
+	assert_str(count_label.text).is_equal("1")
+
+	browser.queue_free()
+	tree.queue_free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))

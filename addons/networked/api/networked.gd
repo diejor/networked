@@ -8,6 +8,8 @@
 ## [br]- [member NetwContext.services] -- backend systems such as the
 ##   [NetworkClock] and [MultiplayerSceneManager], plus custom services
 ##   you register yourself. See [NetwServices].
+## [br]- [member NetwContext.connect] -- pre-game connect / server browser
+##   API (host, join, target list). See [NetwConnect].
 ## [br]- [member NetwContext.scene] -- lobby logic (readiness gates,
 ##   countdowns, player waiting). See [NetwScene].
 ##
