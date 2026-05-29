@@ -31,13 +31,20 @@ class _Choice:
 var _choices: Array[_Choice] = []
 
 
-@onready var _picker: OptionButton = %ChoicePicker
-@onready var _name_edit: LineEdit = %NameEdit
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+var _picker: OptionButton
+var _name_edit: LineEdit
+var _confirm_button: Button
+var _cancel_button: Button
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	_picker = %ChoicePicker
+	_name_edit = %NameEdit
+	_confirm_button = %ConfirmButton
+	_cancel_button = %CancelButton
+
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
 
@@ -48,6 +55,8 @@ func set_choices(
 	templates: Array[BackendPeer],
 	provider_ids: Array[StringName],
 ) -> void:
+	if Engine.is_editor_hint():
+		return
 	_choices.clear()
 	_picker.clear()
 	for backend in templates:
@@ -66,6 +75,8 @@ func set_choices(
 
 ## Resets the form and shows the popup.
 func open() -> void:
+	if Engine.is_editor_hint():
+		return
 	_name_edit.text = ""
 	if _picker.item_count > 0:
 		_picker.selected = 0

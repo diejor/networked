@@ -20,16 +20,26 @@ var _editing: JoinTarget
 var _templates: Array[BackendPeer] = []
 
 
-@onready var _title_label: Label = %TitleLabel
-@onready var _backend_picker: OptionButton = %BackendPicker
-@onready var _address_edit: LineEdit = %AddressEdit
-@onready var _name_edit: LineEdit = %NameEdit
-@onready var _save_check: CheckBox = %SaveCheck
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+var _title_label: Label
+var _backend_picker: OptionButton
+var _address_edit: LineEdit
+var _name_edit: LineEdit
+var _save_check: CheckBox
+var _confirm_button: Button
+var _cancel_button: Button
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	_title_label = %TitleLabel
+	_backend_picker = %BackendPicker
+	_address_edit = %AddressEdit
+	_name_edit = %NameEdit
+	_save_check = %SaveCheck
+	_confirm_button = %ConfirmButton
+	_cancel_button = %CancelButton
+
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(_on_cancel)
 	_backend_picker.item_selected.connect(_on_backend_changed)
@@ -38,6 +48,8 @@ func _ready() -> void:
 ## Sets the backend templates the picker offers. Call before opening
 ## the popup.
 func set_templates(templates: Array[BackendPeer]) -> void:
+	if Engine.is_editor_hint():
+		return
 	_templates = templates
 	if _backend_picker == null:
 		return
@@ -48,6 +60,8 @@ func set_templates(templates: Array[BackendPeer]) -> void:
 
 ## Opens the popup in Add mode with empty fields.
 func open_add() -> void:
+	if Engine.is_editor_hint():
+		return
 	_editing = null
 	_title_label.text = "Add server"
 	_confirm_button.text = "Add"
@@ -62,6 +76,8 @@ func open_add() -> void:
 
 ## Opens the popup in Edit mode populated from [param target].
 func open_edit(target: JoinTarget) -> void:
+	if Engine.is_editor_hint():
+		return
 	_editing = target
 	_title_label.text = "Edit server"
 	_confirm_button.text = "Save"

@@ -15,21 +15,32 @@ signal submitted(username: String, spawner: SceneNodePath)
 var _spawner_options: Array[SceneNodePath] = []
 
 
-@onready var _username_edit: LineEdit = %UsernameEdit
-@onready var _title: Label = %Title
-@onready var _spawner_row: HBoxContainer = %SpawnerRow
-@onready var _spawner_picker: OptionButton = %SpawnerPicker
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
+var _username_edit: LineEdit
+var _title: Label
+var _spawner_row: HBoxContainer
+var _spawner_picker: OptionButton
+var _confirm_button: Button
+var _cancel_button: Button
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	_username_edit = %UsernameEdit
+	_title = %Title
+	_spawner_row = %SpawnerRow
+	_spawner_picker = %SpawnerPicker
+	_confirm_button = %ConfirmButton
+	_cancel_button = %CancelButton
+
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
 
 
 ## Sets the spawn locations shown in the popup.
 func set_spawner_options(options: Array[SceneNodePath]) -> void:
+	if Engine.is_editor_hint():
+		return
 	_spawner_options = options.duplicate()
 	_spawner_picker.clear()
 	if _spawner_options.is_empty():
@@ -46,6 +57,8 @@ func open(
 	title: String = "Join server",
 	confirm_text: String = "Join",
 ) -> void:
+	if Engine.is_editor_hint():
+		return
 	_title.text = title
 	_confirm_button.text = confirm_text
 	_username_edit.text = username
