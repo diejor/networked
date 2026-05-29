@@ -124,8 +124,8 @@ A typical local flow looks like this:
    assigned.
 3. (auto-connect only) call
    :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
-   against the address. A reply with ``is_local_listener = true`` means
-   join; anything else means host.
+   against the address. An :ref:`OK <class_ServerInfoResult_constant_OK>`
+   reply means a server is listening, so join; anything else means host.
 4. After the transport hand-off, send the resolved payload to the server
    via :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`.
 5. The server validates, resolves identity, broadcasts the accepted player

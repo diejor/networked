@@ -7,9 +7,9 @@ This page covers the gap between "I have a configured
 :ref:`BackendPeer <class_BackendPeer>`" and "I am in a session". It
 explains the four entry methods on
 :ref:`MultiplayerTree <class_MultiplayerTree>`, the :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
-probe used to discover live local servers, the auth protocol that carries
-both probes and normal hellos, and the lifecycle limits that protect a
-host from probe storms.
+probe used to discover live servers on cheap direct transports, the auth
+protocol that carries both probes and normal hellos, and the lifecycle
+limits that protect a host from probe storms.
 
 Entry methods
 -------------
@@ -63,8 +63,13 @@ A pre-game UI, such as a server browser, a "join localhost or host?" prompt,
 or a recent-servers list, needs to know whether an address has a live
 server *without* opening a full session. That is what
 :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
-does: the backend opens a transient peer, sends one auth-phase packet,
-decodes the reply, and tears down.
+does on cheap direct transports (ENet, WebSocket): the backend opens a
+transient peer via :ref:`AuthProbeClient <class_AuthProbeClient>`, sends one
+auth-phase packet on the same port a real join would use, decodes the reply,
+and tears down. It is *not* a universal probe - brokered transports (Steam,
+WebRTC trackers) override :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
+with their own discovery or return
+:ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`.
 
 .. code-block:: gdscript
 
@@ -106,13 +111,18 @@ tell a live local host from a closed port. Override for richer metadata:
         info.motd = "Friday night session"
         return info
 
-Backends that cannot run a SceneMultiplayer auth handshake (session-id
-transports: Steam, in-process Local, Tube) override
-:ref:`query_server_info() <class_BackendPeer_method_query_server_info>` to return
-:ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`.
+The same-port probe is opt-in: only cheap direct transports (ENet,
+WebSocket) enable it by delegating to
+:ref:`AuthProbeClient <class_AuthProbeClient>`. The
+:ref:`BackendPeer <class_BackendPeer>` default returns
+:ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`,
+so session-id transports (Steam, in-process Local, Tube) and WebRTC (whose
+auth handshake requires a full, expensive ICE round trip) stay unsupported
+unless they implement their own discovery.
 :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
-treats :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>` as "no listener available" and falls through to
-hosting.
+treats any non-:ref:`OK <class_ServerInfoResult_constant_OK>` result
+(including :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>`) as
+"no listener available" and falls through to hosting.
 
 The auth protocol
 -----------------
@@ -146,9 +156,10 @@ The probe lifecycle is **client-owned**:
 
 1. Client opens a transient peer and connects.
 2. Client sends :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` in the :godot:`peer_authenticating <SceneMultiplayer>` callback.
-3. Server's :godot:`auth_callback <SceneMultiplayer>` decodes the magic, builds a
-   :ref:`ServerInfo <class_ServerInfo>` from the configured
-   :ref:`ServerInfoSource <class_ServerInfoSource>`, and sends the reply.
+3. Server's :godot:`auth_callback <SceneMultiplayer>` decodes the magic and
+   dispatches ``NPRB`` to :ref:`AuthProbeResponder <class_AuthProbeResponder>`,
+   which builds a :ref:`ServerInfo <class_ServerInfo>` from the configured
+   :ref:`ServerInfoSource <class_ServerInfoSource>` and sends the reply.
 4. Client decodes the reply, returns the
    :ref:`ServerInfoResult <class_ServerInfoResult>`, and closes its peer.
 5. Server sees the peer disconnect (or :godot:`auth_timeout <SceneMultiplayer>` reaps it) and
@@ -161,11 +172,11 @@ probe.
 
 Two limits protect the host from misbehaving probers:
 
-- PROBE_RATE_LIMIT (10/sec by default on :ref:`AuthCoordinator <class_AuthCoordinator>`): a rolling cap on probe
+- PROBE_RATE_LIMIT (10/sec by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a rolling cap on probe
   replies per second. Excess probes get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>` until the window
   reopens.
-- MAX_ACTIVE_PROBES (32 by default on :ref:`AuthCoordinator <class_AuthCoordinator>`): a cap on concurrent pending
-  probes tracked by the coordinator. Excess probes also get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>`.
+- MAX_ACTIVE_PROBES (32 by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a cap on concurrent pending
+  probes tracked by the responder. Excess probes also get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>`.
 
 Stragglers (clients that crash before closing, or that never close on
 purpose) are cleaned up by
@@ -201,7 +212,7 @@ to build a Minecraft-style server browser on top of
   result.
 - :ref:`ProbeManager <class_ProbeManager>` - a :godot:`Node <Node>` that caps
   concurrent sessions (:ref:`ProbeManager.max_concurrent <class_ProbeManager_property_max_concurrent>`, default 6) below the
-  server-side MAX_ACTIVE_PROBES cap on :ref:`AuthCoordinator <class_AuthCoordinator>`. :ref:`ProbeManager.cancel_all() <class_ProbeManager_method_cancel_all>` suppresses
+  server-side MAX_ACTIVE_PROBES cap on :ref:`AuthProbeResponder <class_AuthProbeResponder>`. :ref:`ProbeManager.cancel_all() <class_ProbeManager_method_cancel_all>` suppresses
   pending callbacks but does not abort the inner
   :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` - transient peers tear themselves down on
   their own timeout/completion path.

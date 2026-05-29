@@ -669,9 +669,9 @@ func _open_join_transport(
 ## [code]connect_player[/code]. Callers pass the backend and address
 ## explicitly, as there is no URL scheme inspection or transport sniffing.
 ## The host/join decision goes through
-## [method BackendPeer.query_server_info]: a reply with
-## [member ServerInfo.is_local_listener] set triggers join, anything else
-## (UNSUPPORTED, UNREACHABLE, TIMEOUT, ERROR) falls through to hosting.
+## [method BackendPeer.query_server_info]: an [constant ServerInfoResult.Status.OK]
+## reply means a server is listening, so this joins; anything else
+## (UNSUPPORTED, UNREACHABLE, TIMEOUT, BUSY, ERROR) falls through to hosting.
 ## For backends that cannot embed a server
 ## ([method BackendPeer.supports_embedded_server] returns [code]false[/code]),
 ## this always hosts.
@@ -700,7 +700,7 @@ func auto_connect_player(
 	var result: ServerInfoResult = await self.backend.query_server_info(
 		server_address, 0.2
 	)
-	if result.is_ok() and result.info and result.info.is_local_listener:
+	if result.is_ok():
 		Netw.dbg.debug(
 			"auto_connect_player: live listener (%s); joining.", [result]
 		)

@@ -3,36 +3,16 @@ extends RefCounted
 ## Internal coordinator for [MultiplayerTree] authentication hooks.
 ##
 ## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthProvider] and stores
-## accepted identities or rejection reasons in [SessionRoster]. Dispatches
-## the always-on [code]NPRB[/code]/[code]NHEL[/code] auth protocol so server
-## browsers can query metadata without entering [code]get_peers()[/code].
-## [br][br]
-## [b]auth_timeout dependency:[/b] probe peers are not closed by the server.
-## The probing client owns the peer and closes it after receiving the reply.
-## Stragglers (crashed or malicious probers) are reaped by
-## [code]SceneMultiplayer.auth_timeout[/code] (default 3s). Setting
-## [code]auth_timeout = 0[/code] disables this cleanup and lets probe slots
-## accumulate up to [constant MAX_ACTIVE_PROBES]. Do not do that on
-## production hosts.
-
-## Maximum probe replies per second before further probes are answered
-## with [constant AuthProtocol.ProbeStatus.BUSY].
-const PROBE_RATE_LIMIT := 10
-
-## Upper bound on concurrent pending probes. Bounds the
-## [member _probe_peer_ids] dictionary, and excess probes get BUSY. Pairs with
-## [SceneMultiplayer]'s [code]auth_timeout[/code], which reaps probe peers
-## the client never closed.
-const MAX_ACTIVE_PROBES := 32
+## accepted identities or rejection reasons in [SessionRoster]. Validates
+## [code]NHEL[/code] client hellos; [code]NPRB[/code] server-browser probes
+## that ride the same auth phase are dispatched to [AuthProbeResponder] so
+## this class stays about authentication.
 
 var _api: SceneMultiplayer
 var _auth_provider: NetwAuthProvider
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
-var _tree: MultiplayerTree
-var _server_info_source: ServerInfoSource
-var _probe_timestamps_ms: Array[int] = []
-var _probe_peer_ids: Dictionary[int, bool] = {}
+var _probe_responder := AuthProbeResponder.new()
 
 
 func _init(roster = null) -> void:
@@ -48,9 +28,10 @@ func set_roster(roster: SessionRoster) -> void:
 func bind_api(api: SceneMultiplayer) -> void:
 	if _api == api:
 		return
-	
+
 	_unbind_api()
 	_api = api
+	_probe_responder.bind_api(api)
 	_connect_auth_signals()
 
 
@@ -65,15 +46,16 @@ func set_client_join_payload(payload: JoinPayload) -> void:
 
 
 ## Stores the owning tree so probe replies can build a [ServerInfo] from
-## live session state.
+## live session state. Delegates to [AuthProbeResponder].
 func set_tree(tree: MultiplayerTree) -> void:
-	_tree = tree
+	_probe_responder.set_tree(tree)
 
 
 ## Sets the [ServerInfoSource] used to build probe replies. When
 ## [code]null[/code], a [DefaultServerInfoSource] is created on first use.
+## Delegates to [AuthProbeResponder].
 func set_server_info_source(source: ServerInfoSource) -> void:
-	_server_info_source = source
+	_probe_responder.set_server_info_source(source)
 
 
 ## Runs provider preparation before transport opens.
@@ -169,14 +151,14 @@ func clear() -> void:
 	bind_api(null)
 	_auth_provider = null
 	_client_join_payload = null
-	_probe_timestamps_ms.clear()
-	_probe_peer_ids.clear()
+	_probe_responder.clear()
 
 
 func _unbind_api() -> void:
 	if not _api:
 		return
-	
+
+	_probe_responder.bind_api(null)
 	_api.auth_callback = Callable()
 	if _api.peer_authenticating.is_connected(_on_peer_authenticating):
 		_api.peer_authenticating.disconnect(_on_peer_authenticating)
@@ -242,10 +224,7 @@ func _on_peer_authenticating(peer_id: int) -> void:
 
 
 func _on_peer_authentication_failed(peer_id: int) -> void:
-	if _probe_peer_ids.erase(peer_id):
-		# Expected for probes: client closed its peer after receiving the
-		# reply, or [code]auth_timeout[/code] reaped a straggler.
-		Netw.dbg.debug("Auth: probe peer %d released", [peer_id])
+	if _probe_responder.note_auth_failed(peer_id):
 		return
 	Netw.dbg.warn("Auth failed for peer %d", [peer_id],
 		func(m): push_warning(m))
@@ -256,7 +235,7 @@ func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
 		AuthProtocol.Kind.HELLO:
 			_handle_hello(peer_id, data)
 		AuthProtocol.Kind.PROBE:
-			_handle_probe(peer_id, data)
+			_probe_responder.handle(peer_id)
 		_:
 			Netw.dbg.warn(
 				"Auth: peer %d sent unknown auth payload (%d bytes); "
@@ -307,49 +286,3 @@ func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
 			"Auth rejected for peer %d: %s", [peer_id, reason]
 		)
 		_api.disconnect_peer(peer_id)
-
-
-# Handles a probe request. Builds a [ServerInfo] via the tree's configured
-# [ServerInfoSource], encodes it into an NPRB reply, and lets the client
-# close. SceneMultiplayer's auth_timeout reaps stragglers. Excess probes
-# (rate or concurrency cap) are answered with BUSY.
-#
-# Probe peers are tracked in [member _probe_peer_ids] so the matching
-# peer_authentication_failed signal (fired when the client closes or
-# auth_timeout reaps) does not produce a misleading warning.
-func _handle_probe(peer_id: int, _data: PackedByteArray) -> void:
-	Netw.dbg.debug("Auth: peer %d probe request received", [peer_id])
-	_probe_peer_ids[peer_id] = true
-
-	if _is_rate_limited() or _probe_peer_ids.size() > MAX_ACTIVE_PROBES:
-		Netw.dbg.debug(
-			"Auth: peer %d probe deferred (busy)", [peer_id]
-		)
-		var busy := AuthProtocol.encode_probe_reply(
-			AuthProtocol.ProbeStatus.BUSY
-		)
-		_api.send_auth(peer_id, busy)
-		return
-
-	var source := _server_info_source
-	if source == null:
-		source = DefaultServerInfoSource.new()
-
-	var info := source.build_server_info(_tree)
-	var payload := ServerInfo.to_payload(info)
-	var reply := AuthProtocol.encode_probe_reply(
-		AuthProtocol.ProbeStatus.OK, payload
-	)
-	_api.send_auth(peer_id, reply)
-
-
-# Records the current probe timestamp and returns whether the latest one
-# exceeded the per-second cap. Keeps the ring trimmed to the window.
-func _is_rate_limited() -> bool:
-	var now_ms := Time.get_ticks_msec()
-	var window_start_ms := now_ms - 1000
-	while _probe_timestamps_ms.size() > 0 \
-			and _probe_timestamps_ms[0] < window_start_ms:
-		_probe_timestamps_ms.pop_front()
-	_probe_timestamps_ms.push_back(now_ms)
-	return _probe_timestamps_ms.size() > PROBE_RATE_LIMIT

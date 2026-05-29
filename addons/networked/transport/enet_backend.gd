@@ -37,6 +37,15 @@ func create_join_peer(
 	return peer
 
 
+## Direct ENet hosts answer the same-port [code]NPRB[/code] probe during the
+## [SceneMultiplayer] auth phase. See [AuthProbeClient].
+func query_server_info(
+	address: String, timeout: float = 2.0,
+) -> ServerInfoResult:
+	var probe := AuthProbeClient.new(self)
+	return await probe.query(address, timeout)
+
+
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Server IP",

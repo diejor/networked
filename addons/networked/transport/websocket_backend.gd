@@ -44,6 +44,17 @@ func create_join_peer(
 	return peer
 
 
+## Direct WebSocket hosts answer the same-port [code]NPRB[/code] probe during
+## the [SceneMultiplayer] auth phase. [method create_join_peer] builds the
+## correct [code]ws[s]://[/code] URL via [method build_url], so the probe
+## targets the same endpoint a real join would. See [AuthProbeClient].
+func query_server_info(
+	address: String, timeout: float = 2.0,
+) -> ServerInfoResult:
+	var probe := AuthProbeClient.new(self)
+	return await probe.query(address, timeout)
+
+
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.make(
 		"Server URL",

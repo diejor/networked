@@ -159,6 +159,17 @@ func get_address_hint() -> AddressHint:
 		false
 	)
 
+## WebRTC discovery rides the WebTorrent tracker, not a same-port
+## [SceneMultiplayer] auth probe. Inheriting the default probe would force a
+## full ICE handshake (10+ s) on every server-browser refresh, so we report
+## [method ServerInfoResult.unsupported] here. A tracker-based liveness probe
+## can replace this later.
+func query_server_info(
+	_address: String, _timeout: float = 2.0,
+) -> ServerInfoResult:
+	return ServerInfoResult.unsupported()
+
+
 func peer_reset_state() -> void:
 	Netw.dbg.trace("WebRTCBackend: Resetting Peer State.")
 	if webrtc_peer:

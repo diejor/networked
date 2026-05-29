@@ -149,12 +149,15 @@ ones you need:
   host-on-demand fallback. Most transports return ``true``. Managed-lobby
   backends (Steam) return ``false``.
 - :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`:
-  the default implementation runs the ``NPRB`` auth handshake (see
-  :doc:`pre_game_connection`) and works for any backend whose peer can drive
-  :godot:`SceneMultiplayer <SceneMultiplayer>` auth. Override to return
-  :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`
-  on transports that cannot (session-id-based: Steam, in-process Local,
-  Tube).
+  the default returns
+  :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>` -
+  probing is opt-in. Cheap direct
+  :godot:`SceneMultiplayer <SceneMultiplayer>` transports (ENet, WebSocket)
+  override it to delegate to
+  :ref:`AuthProbeClient.query() <class_AuthProbeClient_method_query>`, which
+  rides the ``NPRB`` auth handshake on the same port (see
+  :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
+  discover through their own mechanisms and stay unsupported.
 - :ref:`get_backend_warnings()
   <class_BackendPeer_method_get_backend_warnings>`: editor-time validation.
   Strings returned here are surfaced as configuration warnings on the tree
