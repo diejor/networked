@@ -1,8 +1,9 @@
 ## [BackendPeer] implementation that uses WebRTC for peer-to-peer NAT traversal.
 ##
 ## Peers discover each other through WebTorrent-compatible tracker servers using a
-## shared [code]info_hash[/code] room ID. On [method host] the hash is copied to the
-## clipboard; clients pass that hash to [method join].
+## shared [code]info_hash[/code] room ID. On [method host] the hash is copied
+## to the clipboard; clients pass that hash to
+## [method MultiplayerTree.join_direct].
 @tool
 class_name WebRTCBackend
 extends BackendPeer

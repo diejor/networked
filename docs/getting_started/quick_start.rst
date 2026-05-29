@@ -44,8 +44,11 @@ server, a hot-seat lobby on a single machine. The three nodes you
 will meet in this quick start are the moving parts of every session.
 
 - :ref:`MultiplayerTree <class_MultiplayerTree>` is the entry point. You add
-  it to your scene, give it a transport (a :ref:`BackendPeer <class_BackendPeer>`),
-  and call :ref:`host() <class_MultiplayerTree_method_host>` or :ref:`join() <class_MultiplayerTree_method_join>` on it. It owns its own
+  it to your scene, give it a transport (a
+  :ref:`BackendPeer <class_BackendPeer>`), and call its session entry methods:
+  :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>`,
+  :ref:`direct join <class_MultiplayerTree_method_join_direct>`, or
+  :ref:`host player <class_MultiplayerTree_method_host_player>`. It owns its own
   :godot:`SceneMultiplayer <SceneMultiplayer>` and installs it onto the scene
   tree, so every descendant gets the correct :godot:`multiplayer <Node#class_node_property_multiplayer>` property
   automatically.
@@ -222,4 +225,3 @@ with :ref:`SaveComponent <class_SaveComponent>`, and the
 If you want to see a complete, larger project, the ``examples/bomber`` scene
 in the repository runs the same APIs across a lobby, multiple connected
 players, and a per-peer authoritative bomb spawner.
-

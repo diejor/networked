@@ -12,8 +12,9 @@ which players have been accepted into the world.
 
 Most user code never instantiates the tree manually. You add it as a node in
 the editor, fill in its inspector fields, and then either let it connect on
-:godot:`_ready() <Node#class_node_private_method__ready>` (via :button:`Init Join Payload`) or drive it from a script with
-:ref:`connect_player() <class_MultiplayerTree_method_connect_player>`. This
+:godot:`_ready() <Node#class_node_private_method__ready>` (via
+:button:`Init Join Payload`) or drive it from a script with
+:ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>`. This
 page describes the lifecycle, the role and state machine, custom transports,
 and embedded servers.
 
@@ -34,10 +35,12 @@ Two tree placements are common:
   start uses. The tree hosts or joins, and child level scenes are spawned
   beneath it.
 - A ``Client`` tree with an automatically-spawned sibling ``Server`` tree. When
-  :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` is
-  called with a local URL on a backend that supports embedded servers, the
-  tree duplicates itself, names the copy ``Server``, calls :ref:`host() <class_MultiplayerTree_method_host>` on it,
-  and then calls :ref:`join() <class_MultiplayerTree_method_join>` on the original. Both trees end up under the
+  :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` is
+  called against a local address on a backend that supports embedded servers,
+  the tree duplicates itself, names the copy ``Server``, calls
+  :ref:`host() <class_MultiplayerTree_method_host>` on it, and then calls
+  :ref:`direct join <class_MultiplayerTree_method_join_direct>` on the original.
+  Both trees end up under the
   same parent and share no state beyond the loopback transport. This is the
   default for in-editor playtesting on desktop backends.
 
@@ -67,7 +70,9 @@ values are:
 - :ref:`DEDICATED_SERVER <class_MultiplayerTree_constant_DEDICATED_SERVER>`: this tree is hosting and is **not** also a player.
 - :ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>`: this tree is hosting and is also a local player.
 
-The role is decided during :ref:`host() <class_MultiplayerTree_method_host>` / :ref:`join() <class_MultiplayerTree_method_join>` / :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>` and
+The role is decided during :ref:`host() <class_MultiplayerTree_method_host>`,
+:ref:`direct join <class_MultiplayerTree_method_join_direct>`, or
+:ref:`adopt peer <class_MultiplayerTree_method_adopt_peer>` and
 does not change for the lifetime of the session. The convenience properties
 :ref:`is_host <class_MultiplayerTree_property_is_host>` and
 :ref:`is_local_client <class_MultiplayerTree_property_is_local_client>` cover

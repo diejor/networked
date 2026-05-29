@@ -6,15 +6,18 @@ extends Node
 ## [SceneMultiplayer] API.
 ##
 ## Assign a [BackendPeer] (e.g. [ENetBackend], [WebSocketBackend]), then call
-## [method host] or [method join] to start a session. Add a
-## [MultiplayerSceneManager] as a child to manage multiple scenes, or drop a
-## world scene directly as a child to use a single auto-configured scene.
+## [method auto_connect_player], [method join_direct], or [method host_player]
+## to start a session. Add a [MultiplayerSceneManager] as a child to manage
+## multiple scenes, or drop a world scene directly as a child to use a single
+## auto-configured scene.
 ## [codeblock]
-## # Server
-## await multiplayer_tree.host()
-##
-## # Client
-## var err = await multiplayer_tree.join("192.168.1.5", "PlayerOne")
+## var payload := JoinPayload.new()
+## payload.username = "PlayerOne"
+## var err := await multiplayer_tree.auto_connect_player(
+##     backend,
+##     "192.168.1.5",
+##     payload
+## )
 ## if err != OK:
 ##     push_error("Join failed: %s" % error_string(err))
 ## [/codeblock]
@@ -49,7 +52,7 @@ signal state_changed(old_state: State, new_state: State)
 
 ## Emitted when the owned [SceneMultiplayer] is replaced (e.g. by a Tube
 ## transport that brings its own api). Both [param old_api] and [param new_api]
-## may be valid; consumers that cached the previous reference should rebind.
+## may be valid. Consumers that cached the previous reference should rebind.
 signal api_swapped(
 	old_api: SceneMultiplayer, new_api: SceneMultiplayer, reason: String
 )
@@ -196,7 +199,7 @@ func _warn_if_role_unset() -> void:
 var api: SceneMultiplayer
 
 ## Visibility and interest facade for this tree. Constructed in
-## [code]_init[/code]; backed by an [InterestService] child ensured
+## [code]_init[/code], backed by an [InterestService] child ensured
 ## before descendant services enter the tree.
 var interest: NetwInterest
 
@@ -539,8 +542,8 @@ func host(quiet: bool = false) -> Error:
 	var api_was_adopted := api != prior_api
 	
 	# Adopted-api backends (e.g. TubeBackend) drive their peer onto the swapped
-	# api themselves and return null; non-adopting backends returning null are
-	# real failures.
+	# api themselves and return null, while non-adopting backends returning null
+	# are real failures.
 	if peer == null and not api_was_adopted:
 		state = State.OFFLINE
 		if not quiet:
@@ -659,12 +662,12 @@ func _open_join_transport(
 	return OK
 
 
-## Queries [param server_address] with [param backend]; joins if a live
+## Queries [param server_address] with [param backend], and joins if a live
 ## local listener replies, falls back to [method host_player] otherwise.
 ##
 ## Replaces the localhost-or-remote heuristics that used to live on
 ## [code]connect_player[/code]. Callers pass the backend and address
-## explicitly -- there is no URL scheme inspection or transport sniffing.
+## explicitly, as there is no URL scheme inspection or transport sniffing.
 ## The host/join decision goes through
 ## [method BackendPeer.query_server_info]: a reply with
 ## [member ServerInfo.is_local_listener] set triggers join, anything else
@@ -711,9 +714,9 @@ func auto_connect_player(
 ## Adopts a pre-connected [param peer] without going through a [BackendPeer].
 ##
 ## For transports (e.g. Steam lobbies) where the peer is produced by an
-## external lobby flow rather than by [method host] / [method join]. The peer
-## must be connecting or connected; client adoption waits for Godot to emit
-## [signal connected_to_server] before finalizing the session.
+## external lobby flow rather than by [method host] / [method join_direct].
+## The peer must be connecting or connected, and client adoption waits for
+## Godot to emit [signal connected_to_server] before finalizing the session.
 ## [br][br]
 ## If [param join_payload] is provided, it is automatically submitted to the
 ## server via [method submit_join] once adoption is complete.
@@ -823,7 +826,7 @@ func disconnect_player() -> void:
 ## Validates [param join_payload] and starts this instance as a network host
 ## (either directly as a listen-server or by spinning up an embedded server).
 ##
-## Use directly when the caller knows they are hosting; for query-then-host
+## Use directly when the caller knows they are hosting. For query-then-host
 ## behavior see [method auto_connect_player]. Returns [code]OK[/code] on
 ## success.
 func host_player(join_payload: JoinPayload) -> Error:

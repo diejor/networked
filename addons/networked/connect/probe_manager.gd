@@ -7,7 +7,7 @@
 ## below [member SceneMultiplayer.auth_timeout] (3.0s) to avoid racing
 ## the server-side reaper.
 ## [br][br]
-## Submit work via [method query]; cancel everything in flight with
+## Submit work via [method query], and cancel everything in flight with
 ## [method cancel_all]. BUSY replies are propagated unchanged - the UI
 ## decides whether to retry or render "busy".
 class_name ProbeManager
@@ -34,7 +34,7 @@ var _queue: Array[_PendingQuery] = []
 
 ## Enqueues a probe for [param target]. [param on_done] is called with
 ## the [ServerInfoResult]. If the active count is below
-## [member max_concurrent], the probe starts immediately; otherwise it
+## [member max_concurrent], the probe starts immediately. Otherwise it
 ## waits until a slot frees.
 ##
 ## [param timeout] overrides [member default_timeout] when > 0.

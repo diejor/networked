@@ -3,7 +3,7 @@
 ##
 ## Browsers add the registry under their scene and call
 ## [method register] with each available provider. [JoinTarget]s carry
-## the provider id in [member JoinTarget.provider_id]; the join
+## the provider id in [member JoinTarget.provider_id]. The join
 ## dispatch looks the provider up via [method get_provider].
 class_name ProviderRegistry
 extends Node

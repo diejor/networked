@@ -7,12 +7,12 @@ extends RefCounted
 ## the always-on [code]NPRB[/code]/[code]NHEL[/code] auth protocol so server
 ## browsers can query metadata without entering [code]get_peers()[/code].
 ## [br][br]
-## [b]auth_timeout dependency:[/b] probe peers are not closed by the server;
-## the probing client owns the peer and closes it after receiving the reply.
+## [b]auth_timeout dependency:[/b] probe peers are not closed by the server.
+## The probing client owns the peer and closes it after receiving the reply.
 ## Stragglers (crashed or malicious probers) are reaped by
 ## [code]SceneMultiplayer.auth_timeout[/code] (default 3s). Setting
 ## [code]auth_timeout = 0[/code] disables this cleanup and lets probe slots
-## accumulate up to [constant MAX_ACTIVE_PROBES]; do not do that on
+## accumulate up to [constant MAX_ACTIVE_PROBES]. Do not do that on
 ## production hosts.
 
 ## Maximum probe replies per second before further probes are answered
@@ -20,7 +20,7 @@ extends RefCounted
 const PROBE_RATE_LIMIT := 10
 
 ## Upper bound on concurrent pending probes. Bounds the
-## [member _probe_peer_ids] dictionary; excess probes get BUSY. Pairs with
+## [member _probe_peer_ids] dictionary, and excess probes get BUSY. Pairs with
 ## [SceneMultiplayer]'s [code]auth_timeout[/code], which reaps probe peers
 ## the client never closed.
 const MAX_ACTIVE_PROBES := 32
@@ -101,7 +101,7 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 ## Installs the Networked auth dispatcher on the tree's SceneMultiplayer.
 ##
 ## The callback is installed unconditionally so the dispatcher can
-## multiplex hello packets and probe requests; whether a
+## multiplex hello packets and probe requests. Whether a
 ## [NetwAuthProvider] is configured only affects how HELLO bodies are
 ## validated.
 func prepare() -> void:

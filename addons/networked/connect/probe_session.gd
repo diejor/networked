@@ -7,7 +7,7 @@
 ## [b]Cancellation:[/b] [method cancel] suppresses the [signal completed]
 ## emission only. [method BackendPeer.query_server_info] owns its
 ## transient peer and handles teardown on its own
-## timeout/completion path; this wrapper cannot close the inner peer
+## timeout/completion path. This wrapper cannot close the inner peer
 ## early.
 class_name ProbeSession
 extends RefCounted

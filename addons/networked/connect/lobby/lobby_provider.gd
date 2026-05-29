@@ -12,8 +12,8 @@
 ##   on [code]_enter_tree[/code].
 ## [br]- Emit [signal peer_ready] once a connected peer exists.
 ## [br]- Emit [signal lobby_list_updated] with clear-then-fill semantics.
-## [br]- Treat [method create_lobby] and [method join_lobby] as fire-and-forget;
-##   completion is reported via signals.
+## [br]- Treat [method create_lobby] and [method join_lobby] as fire-and-forget.
+##   Completion is reported via signals.
 @abstract
 class_name LobbyProvider
 extends Node
@@ -77,7 +77,7 @@ func get_peer() -> MultiplayerPeer
 
 
 ## Resolves a Godot multiplayer [param peer_id] to a human-readable display
-## name. Default returns [code]"Player %d"[/code]; transport-specific
+## name. Default returns [code]"Player %d"[/code], or transport-specific
 ## providers (Steam, Discord, ...) should override to resolve personas.
 func get_member_name(peer_id: int) -> String:
 	return "Player %d" % peer_id

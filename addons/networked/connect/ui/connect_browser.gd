@@ -2,7 +2,7 @@
 ## offers Add / Host / Refresh buttons, and routes user input through
 ## the merged [ConnectPopup].
 ##
-## The app may inject its own [member session] via the export; if
+## The app may inject its own [member session] via the export, if
 ## none is supplied, the browser auto-creates one as a child, binds
 ## [member tree_path] to it, and loads the persisted server list at
 ## [member server_list_path]. Custom UIs are expected to drive
@@ -24,7 +24,7 @@ const _ROW_MENU_REMOVE := 3
 
 
 ## Pre-built [ConnectSession] supplied by the app. When [code]null[/code]
-## the browser instantiates and parents one itself; the
+## the browser instantiates and parents one itself. The
 ## auto-created session also binds [member tree_path] and loads
 ## [member server_list_path].
 @export var session: ConnectSession:
@@ -190,7 +190,7 @@ func _add_row(target: JoinTarget) -> void:
 
 
 func _on_target_added(target: JoinTarget) -> void:
-	if _rows.has(target):
+	if _rows.has(target): 
 		return
 	_add_row(target)
 	_update_counter()

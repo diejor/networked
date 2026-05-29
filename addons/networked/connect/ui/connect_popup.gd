@@ -1,6 +1,6 @@
 ## Modal form for the four flows the [ConnectBrowser] needs: adding
 ## or editing a saved [JoinTarget], hosting a session, and joining a
-## selected target. Each flow toggles a subset of the form rows; the
+## selected target. Each flow toggles a subset of the form rows, and the
 ## right one fires a typed signal on confirm.
 class_name ConnectPopup
 extends PopupPanel
@@ -104,7 +104,7 @@ func open_edit(target: JoinTarget) -> void:
 
 
 ## Opens the popup as a Host form with [param templates] and
-## [param provider_ids] in the choice picker; [param default_username]
+## [param provider_ids] in the choice picker, where [param default_username]
 ## seeds the username field.
 func open_host(
 	templates: Array[BackendPeer],

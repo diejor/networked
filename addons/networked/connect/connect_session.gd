@@ -2,7 +2,7 @@
 ##
 ## Owns a [ProbeManager], a [ProviderRegistry], and the live list of
 ## [JoinTarget]s (direct + provider-discovered). UIs observe via
-## signals; the same [ConnectSession] can drive the reference
+## signals. The same [ConnectSession] can drive the reference
 ## [ConnectBrowser] or a custom UI.
 ##
 ## Persistence is opt-in. By default targets live in memory only.
@@ -30,7 +30,7 @@ signal target_removed(target: JoinTarget)
 signal target_updated(target: JoinTarget, result: ServerInfoResult)
 
 ## A provider's lobby list refreshed. Raw provider feed for callers
-## that want to observe per-provider state; most UIs should consume
+## that want to observe per-provider state, though most UIs should consume
 ## the unified target signals above instead.
 signal provider_list_updated(
 	provider_id: StringName, lobbies: Array[LobbyInfo]
@@ -174,7 +174,7 @@ func get_provider_ids() -> Array[StringName]:
 ## change is written to disk immediately.
 ##
 ## Provider-discovered targets arrive via
-## [signal LobbyProvider.lobby_list_updated]; call this only for
+## [signal LobbyProvider.lobby_list_updated]. Call this only for
 ## direct targets the UI is adding by hand.
 func add_target(target: JoinTarget, persist: bool = false) -> void:
 	if target == null:
@@ -289,9 +289,9 @@ func probe(target: JoinTarget) -> void:
 # -- Host & join ------------------------------------------------------------
 
 ## Hosts a new session. [param config] supplies the transport
-## (backend template or provider id) plus server name; [param payload]
+## (backend template or provider id) plus server name. The [param payload]
 ## carries player identity (username, spawner path). Returns OK on
-## success, an [enum @GlobalScope.Error] otherwise; failure also
+## success, or an [enum @GlobalScope.Error] otherwise. Failure also
 ## emits [signal host_failed] with a human-readable reason.
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	if config == null:
@@ -342,8 +342,8 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 
 ## Joins [param target]. [param payload] carries player identity.
-## Returns OK on success, an [enum @GlobalScope.Error] otherwise;
-## failure also emits [signal join_failed] with a human-readable
+## Returns OK on success, or an [enum @GlobalScope.Error] otherwise.
+## Failure also emits [signal join_failed] with a human-readable
 ## reason.
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if target == null:

@@ -83,7 +83,9 @@ server, which validates it, runs the auth pipeline, resolves field defaults,
 and only then broadcasts an acceptance to every peer. The handshake looks
 like this:
 
-1. :ref:`connect_player() <class_MultiplayerTree_method_connect_player>`: the transport peer becomes connected.
+1. :ref:`direct join <class_MultiplayerTree_method_join_direct>` or
+   :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>`:
+   the transport peer becomes connected.
 2. :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`: the payload is serialized and sent to
    the server via the
    :ref:`request_join_player <class_MultiplayerTree_method_request_join_player>`
@@ -99,9 +101,11 @@ like this:
    :ref:`local_player_joined <class_MultiplayerTree_signal_local_player_joined>`
    fires in addition.
 
-You will rarely call :ref:`submit_join() <class_MultiplayerTree_method_submit_join>` yourself. The
-:ref:`connect_player() <class_MultiplayerTree_method_connect_player>` flow
-does it for you. But you can intercept any step:
+You will rarely call :ref:`submit join <class_MultiplayerTree_method_submit_join>`
+yourself. The
+:ref:`direct join <class_MultiplayerTree_method_join_direct>` and
+:ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` flows
+do it for you. But you can intercept any step:
 
 - Provide an :ref:`auth_provider <class_NetwAuthProvider>` to validate
   credentials before the join is accepted.

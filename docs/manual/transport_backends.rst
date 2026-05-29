@@ -50,11 +50,14 @@ loopback, and both will get you through the entire
      - No
      - Adopts a peer produced by Steam's lobby system. The tree uses
        :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>` rather
-       than going through :ref:`host() <class_MultiplayerTree_method_host>`/:ref:`join() <class_MultiplayerTree_method_join>`.
+       than going through
+       :ref:`host player <class_MultiplayerTree_method_host_player>` or
+       :ref:`direct join <class_MultiplayerTree_method_join_direct>`.
 
 The "embedded server" column matters when you call
-:ref:`connect_player() <class_MultiplayerTree_method_connect_player>` with
-a local URL. Backends that report :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
+:ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` with
+a local address. Backends that report
+:ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
 in the host-on-demand flow described in
 :ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.

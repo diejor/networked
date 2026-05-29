@@ -17,8 +17,8 @@ extends Resource
 @export var backend: BackendPeer
 
 ## Provider id registered in [ProviderRegistry]. Empty means a direct
-## host through [member backend]; non-empty routes the host request
-## through the provider's [method LobbyProvider.create_lobby].
+## host through [member backend], while a non-empty value routes the
+## host request through the provider's [method LobbyProvider.create_lobby].
 @export var provider_id: StringName = &""
 
 ## Display name for the created session (provider lobby name or

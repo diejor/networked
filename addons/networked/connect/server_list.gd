@@ -2,7 +2,7 @@
 ##
 ## Saved as a [code].tres[/code] under [code]user://[/code] so it
 ## survives across sessions. Use [method load_or_new] to read and
-## [method save] to write; the resource itself is just a typed array
+## [method save] to write. The resource itself is just a typed array
 ## wrapper.
 class_name ServerList
 extends Resource
