@@ -1,0 +1,62 @@
+## Modal form for clients to configure join options (username, spawner).
+class_name JoinPopup
+extends PopupPanel
+
+
+signal submitted(payload: JoinPayload)
+
+
+var _spawner_options: Array[SceneNodePath] = []
+
+
+@onready var _username_edit: LineEdit = %UsernameEdit
+@onready var _spawner_row: HBoxContainer = %SpawnerRow
+@onready var _spawner_picker: OptionButton = %SpawnerPicker
+@onready var _confirm_button: Button = %ConfirmButton
+@onready var _cancel_button: Button = %CancelButton
+
+
+func _ready() -> void:
+	_confirm_button.pressed.connect(_on_confirm)
+	_cancel_button.pressed.connect(hide)
+
+
+## Opens the join popup.
+func open_join(
+	spawner_options: Array[SceneNodePath],
+	default_username: String,
+) -> void:
+	_spawner_options = spawner_options.duplicate()
+	_username_edit.text = default_username
+	_populate_spawner_picker()
+	_spawner_row.visible = not _spawner_options.is_empty()
+	popup_centered()
+
+
+func _populate_spawner_picker() -> void:
+	_spawner_picker.clear()
+	for path in _spawner_options:
+		_spawner_picker.add_item(ConnectUiShared.format_spawner_label(path))
+	if _spawner_picker.item_count > 0:
+		_spawner_picker.selected = 0
+
+
+func _selected_spawner() -> SceneNodePath:
+	if _spawner_options.is_empty():
+		return null
+	var idx := maxi(0, _spawner_picker.selected)
+	if idx >= _spawner_options.size():
+		return null
+	return _spawner_options[idx]
+
+
+func _on_confirm() -> void:
+	var payload := JoinPayload.new()
+	var typed := _username_edit.text.strip_edges()
+	payload.username = StringName(typed) if not typed.is_empty() else &"Player"
+	var spawner := _selected_spawner()
+	if spawner != null:
+		payload.spawner_component_path = spawner
+		
+	hide()
+	submitted.emit(payload)

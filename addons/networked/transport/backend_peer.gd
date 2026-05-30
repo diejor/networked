@@ -152,3 +152,8 @@ func get_address_hint() -> AddressHint:
 ## to their default values.
 func copy_from(_source: BackendPeer) -> void:
 	pass
+
+
+## Returns the user-facing friendly name for this backend.
+func get_display_name() -> String:
+	return "Generic"

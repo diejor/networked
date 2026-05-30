@@ -96,8 +96,8 @@ func test_browser_resolves_tree_canonical_session() -> void:
 	tree.add_child(browser)
 	await get_tree().process_frame
 
-	var count_label := browser.get_node("%CountLabel") as Label
-	assert_str(count_label.text).is_equal("0")
+	var list_box := browser.get_node("%ListBox") as VBoxContainer
+	assert_int(list_box.get_child_count()).is_equal(0)
 
 	# A target added through the canonical session reaches the browser UI,
 	# proving the browser bound to the same session's relayed signals.
@@ -107,7 +107,7 @@ func test_browser_resolves_tree_canonical_session() -> void:
 	canonical.add_target(target)
 	await get_tree().process_frame
 
-	assert_str(count_label.text).is_equal("1")
+	assert_int(list_box.get_child_count()).is_equal(1)
 
 	browser.queue_free()
 	tree.queue_free()

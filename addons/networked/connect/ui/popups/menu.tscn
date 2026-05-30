@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://ejy2sut6uiqc"]
+
+[ext_resource type="Script" path="res://addons/networked/connect/ui/popups/menu.gd" id="1_menu"]
+
+[node name="Menu" type="PopupMenu" unique_id=834260369]
+oversampling_override = 1.0
+size = Vector2i(103, 100)
+visible = true
+item_count = 4
+item_0/text = "Join"
+item_0/id = 0
+item_1/id = 1
+item_1/separator = true
+item_2/text = "Edit"
+item_2/id = 2
+item_3/text = "Remove"
+item_3/id = 3
+script = ExtResource("1_menu")

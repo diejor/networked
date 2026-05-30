@@ -139,6 +139,11 @@ func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return warnings
 
 
+## Returns the user-facing friendly name for this backend.
+func get_display_name() -> String:
+	return "Tube"
+
+
 class TubeWrapper:
 	enum State { IDLE, CREATING_SESSION, SESSION_CREATED, JOINING_SESSION, SESSION_JOINED }
 

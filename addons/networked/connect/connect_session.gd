@@ -77,6 +77,9 @@ signal session_left()
 ## explicit path is supplied.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
 
+## True if the active join handshake was explicitly aborted.
+var join_aborted_flag: bool = false
+
 
 ## Optional persistence handle. Null until [method load_server_list]
 ## assigns one (or a caller sets it directly). When set,
@@ -299,7 +302,8 @@ func save_server_list(path: String = server_list_path) -> Error:
 	else:
 		Netw.dbg.error(
 			"ConnectSession failed saving %d saved target(s) to %s: %s.",
-			[_saved_targets.size(), path, error_string(err)]
+			[_saved_targets.size(), path, error_string(err)],
+			func(m): push_error(m)
 		)
 	return err
 
@@ -381,7 +385,9 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	tree.backend = backend
 	var err := await tree.host_player(payload)
 	if err != OK:
-		host_failed.emit("backend host_player failed (err %d)" % err)
+		host_failed.emit(
+			"backend host_player failed (%s)" % error_string(err)
+		)
 		return err
 
 	session_entered.emit()
@@ -417,14 +423,28 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		[_target_summary(target), String(payload.username)]
 	)
 	join_started.emit(target)
+	join_aborted_flag = false
 
 	var err := await tree.join(target, payload)
 	if err != OK:
-		join_failed.emit(target, "connect failed (err %d)" % err)
+		if join_aborted_flag:
+			join_failed.emit(target, "Connection aborted by user")
+		else:
+			join_failed.emit(
+				target, "connect failed (%s)" % error_string(err)
+			)
 		return err
 
 	session_entered.emit()
 	return OK
+
+
+## Aborts the active connection attempt on the bound MultiplayerTree.
+func abort_join() -> void:
+	var tree := get_tree_bound()
+	if tree != null:
+		join_aborted_flag = true
+		tree.abort_join()
 
 
 # -- Internals --------------------------------------------------------------

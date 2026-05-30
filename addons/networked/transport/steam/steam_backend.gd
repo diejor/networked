@@ -123,3 +123,8 @@ func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
 func copy_from(source: BackendPeer) -> void:
 	if source is SteamBackend:
 		server_name = source.server_name
+
+
+## Returns the user-facing friendly name for this backend.
+func get_display_name() -> String:
+	return "Steam"

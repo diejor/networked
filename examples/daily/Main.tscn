@@ -10,19 +10,7 @@
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="8_7ue45"]
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="8_lpgch"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
-
-[sub_resource type="Resource" id="Resource_k3bnk"]
-script = ExtResource("8_lpgch")
-metadata/_custom_type_script = "uid://dqd358q7xpmeq"
-
-[sub_resource type="Resource" id="Resource_xg3i6"]
-script = ExtResource("2_7ue45")
-metadata/_custom_type_script = "uid://cgyucu72xh732"
-
-[sub_resource type="Resource" id="Resource_2dmkd"]
-script = ExtResource("3_lgr22")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/Components/SpawnerComponent"
+[ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/webrtc_backend.gd" id="10_xg3i6"]
 
 [sub_resource type="Resource" id="Resource_lpgch"]
 script = ExtResource("2_7ue45")
@@ -35,22 +23,24 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 script = ExtResource("3_k3bnk")
 metadata/_custom_type_script = "uid://bo5uh52f6sln5"
 
-[node name="Main" type="Node2D" unique_id=1724093845]
+[sub_resource type="Resource" id="Resource_k3bnk"]
+script = ExtResource("8_lpgch")
+metadata/_custom_type_script = "uid://dqd358q7xpmeq"
 
-[node name="ConnectBrowser" parent="." unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 336.0
-offset_top = 144.0
-offset_right = 816.0
-offset_bottom = 504.0
-tree = NodePath("../Client")
-backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6")])
-spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
-server_list_path = "user://daily/servers.tres"
+[sub_resource type="Resource" id="Resource_xg3i6"]
+script = ExtResource("2_7ue45")
+metadata/_custom_type_script = "uid://cgyucu72xh732"
+
+[sub_resource type="Resource" id="Resource_7ehqo"]
+script = ExtResource("10_xg3i6")
+metadata/_custom_type_script = "uid://covt80wkpucga"
+
+[sub_resource type="Resource" id="Resource_2dmkd"]
+script = ExtResource("3_lgr22")
+scene_path = "uid://bqi7mvxdnvgch"
+node_path = "Player/Components/SpawnerComponent"
+
+[node name="Main" type="Node2D" unique_id=1724093845]
 
 [node name="Client" type="Node" parent="." unique_id=185172770]
 script = ExtResource("2_r0du0")
@@ -74,3 +64,20 @@ scene_config/Level2/empty_action = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
+
+[node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = -180.0
+offset_right = 240.0
+offset_bottom = 180.0
+tree = NodePath("../../Client")
+backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo")])
+spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
+server_list_path = "user://daily/servers.tres"

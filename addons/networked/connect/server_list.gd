@@ -31,4 +31,13 @@ static func load_or_new(path: String = DEFAULT_PATH) -> ServerList:
 static func save(list: ServerList, path: String = DEFAULT_PATH) -> Error:
 	if list == null:
 		return ERR_INVALID_PARAMETER
+	var base_dir := path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(base_dir):
+		var err := DirAccess.make_dir_recursive_absolute(base_dir)
+		if err != OK:
+			Netw.dbg.error(
+				"ServerList: failed to create parent directory %s: %s.",
+				[base_dir, error_string(err)]
+			)
+			return err
 	return ResourceSaver.save(list, path)

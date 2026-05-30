@@ -551,3 +551,8 @@ func _send_to_socket(ws: WebSocketPeer, data: Dictionary) -> void:
 
 func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
 	return []
+
+
+## Returns the user-facing friendly name for this backend.
+func get_display_name() -> String:
+	return "WebRTC"

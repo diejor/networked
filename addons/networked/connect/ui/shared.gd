@@ -10,9 +10,22 @@ extends RefCounted
 static func format_backend_label(backend: BackendPeer) -> String:
 	if backend == null:
 		return "-"
+	if backend.has_method("get_display_name"):
+		var custom_name := backend.get_display_name()
+		if not custom_name.is_empty() and custom_name != "Generic":
+			return custom_name
+	var name: String
 	if backend.resource_path.is_empty() or "::" in backend.resource_path:
-		return _backend_class_name(backend)
-	return backend.resource_path.get_file()
+		name = _backend_class_name(backend)
+	else:
+		name = backend.resource_path.get_file().get_basename()
+	if name.ends_with("Backend"):
+		name = name.trim_suffix("Backend")
+	elif name.ends_with("_backend"):
+		name = name.trim_suffix("_backend")
+	elif name.ends_with("-backend"):
+		name = name.trim_suffix("-backend")
+	return name
 
 
 ## Displayable address for [param target] — its explicit address if

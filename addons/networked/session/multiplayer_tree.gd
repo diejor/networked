@@ -212,6 +212,7 @@ var multiplayer_peer: MultiplayerPeer:
 	get: return api.multiplayer_peer if api else null
 
 var _tree_name: String = ""
+var _join_aborted: bool = false
 
 ## The local player node for this tree.
 ## [br][br]
@@ -600,6 +601,7 @@ func join(
 	quiet: bool = false,
 ) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to join.")
+	_join_aborted = false
 	if target == null:
 		Netw.dbg.error("join: target is null.", func(m): push_error(m))
 		return ERR_INVALID_PARAMETER
@@ -657,6 +659,9 @@ func _open_join_transport(
 	var peer: MultiplayerPeer = await backend.create_join_peer(
 		self, server_address, username
 	)
+	if _join_aborted:
+		state = State.OFFLINE
+		return ERR_CANT_CONNECT
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
@@ -673,12 +678,11 @@ func _open_join_transport(
 		api.multiplayer_peer = peer
 
 	var timer := get_tree().create_timer(timeout)
-	if await Async.timeout(connected_to_server, timer):
+	if await Async.timeout(connected_to_server, timer) or _join_aborted:
 		state = State.OFFLINE
-		if not quiet:
+		if not quiet and not _join_aborted:
 			Netw.dbg.error(
-				"Connection timed out. Server probably is not up; consider "
-				+ "join_or_host if you want host-as-fallback.",
+				"Connection timed out. Server probably is not up.",
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
@@ -747,6 +751,19 @@ func is_online() -> bool:
 		and not api.multiplayer_peer is OfflineMultiplayerPeer
 		and api.multiplayer_peer.get_connection_status()
 			== MultiplayerPeer.CONNECTION_CONNECTED)
+
+
+## Aborts the active connecting handshake and returns the tree to
+## OFFLINE state.
+func abort_join() -> void:
+	if state != State.CONNECTING:
+		return
+	_join_aborted = true
+	Netw.dbg.info("MultiplayerTree: aborting connection handshake.")
+	if api and api.has_multiplayer_peer():
+		api.multiplayer_peer.close()
+		api.multiplayer_peer = OfflineMultiplayerPeer.new()
+	state = State.OFFLINE
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server

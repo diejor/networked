@@ -80,3 +80,8 @@ func copy_from(source: BackendPeer) -> void:
 
 func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
 	return []
+
+
+## Returns the user-facing friendly name for this backend.
+func get_display_name() -> String:
+	return "Local"
