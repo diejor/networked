@@ -1,15 +1,14 @@
 ## The server browser API: list servers, host a game, or join one.
 ##
 ## This is your entry point for everything that happens [i]before[/i] a match
-## begins, discovering servers (typed-in addresses and provider lobbies like
+## begins, discovering servers (typed-in addresses and directory lobbies like
 ## Steam), probing them for status, and finally hosting or joining. Once you
-## are in a session, use to [NetwTree] for in-game
-## operations.
+## are in a session, use [NetwTree] for in-game operations.
 ##
 ## [br][br]
 ## Most methods here take or return a [JoinTarget]: one
-## connectable server in the list a direct address you typed in, or a lobby
-## discovered through a provider. You join one, probe one for status, and
+## connectable server in the list, a saved address you typed in, or a lobby
+## discovered through a directory. You join one, probe one for status, and
 ## add or remove your own. See [JoinTarget] for the details.
 ##
 ## [br][br]
@@ -39,17 +38,16 @@
 ##
 ## [br][br]
 ## [b]The live list.[/b] The session holds an in-memory list of targets: the
-## [i]direct[/i] ones you add or load from disk (an [member JoinTarget.address]
-## reached through a [BackendPeer]), plus lobbies that registered [i]providers[/i]
-## discover. [method get_targets] returns the whole list; [method get_direct_targets]
-## and [method get_provider_targets] return each half.
+## [i]saved[/i] ones you add or load from disk (a [member JoinTarget.address]
+## reached through a [BackendPeer]), plus lobbies that registered directories
+## discover. [method get_targets] returns the whole list; [method get_saved_targets]
+## and [method get_discovered_targets] return each half.
 ##
 ## [br][br]
-## [b]Providers.[/b] A [LobbyProvider] is a platform lobby integration (Steam,
-## etc.) you [method register_provider] under an id like [code]&"steam"[/code].
-## On [method refresh] each provider reports its current lobbies, which fold
-## into the live list as provider targets; a target carrying that id later
-## hosts / joins through that provider.
+## [b]Directories.[/b] A [LobbyDirectory] is a platform lobby integration (Steam,
+## etc.) you [method register_directory] under an id like [code]&"steam"[/code].
+## On [method refresh] each directory reports its current lobbies, which fold
+## into the live list as directory targets.
 ##
 ## [br][br]
 ## [b]Probing.[/b] [method refresh] (all targets) and [method probe] (one) ask
@@ -60,27 +58,25 @@
 ##
 ## [br][br]
 ## [b]Entering a session.[/b] [method host] and [method join] are where the
-## connect layer hands off to the [MultiplayerTree]: a direct target sets the
-## tree's [BackendPeer] and opens transport (host, or probe-then-auto-connect),
-## while a provider target negotiates a lobby and binds the resulting peer into
-## the tree. Either way [signal session_entered] fires on success, and
-## [signal session_left] when the tree later goes offline.
+## connect layer hands off to the [MultiplayerTree]: a target sets the
+## tree's [BackendPeer] and opens transport. [signal session_entered] fires on
+## success, and [signal session_left] when the tree later goes offline.
 class_name NetwConnect
 extends RefCounted
 
 
-## A direct or provider-discovered target was added to the live list.
+## A saved or directory-discovered target was added to the live list.
 signal target_added(target: JoinTarget)
 ## A target was removed from the live list.
 signal target_removed(target: JoinTarget)
 ## A new probe result or live lobby snapshot landed for [param target].
 signal target_updated(target: JoinTarget, result: ServerInfoResult)
-## A provider's lobby list refreshed.
-signal provider_list_updated(
-	provider_id: StringName, lobbies: Array[LobbyInfo]
+## A directory's lobby list refreshed.
+signal directory_list_updated(
+	directory_id: StringName, lobbies: Array[LobbyInfo]
 )
-## A registered provider reported that its transport is unavailable.
-signal provider_unavailable(provider_id: StringName, reason: String)
+## A registered directory reported that its transport is unavailable.
+signal directory_unavailable(directory_id: StringName, reason: String)
 ## A join attempt began against [param target].
 signal join_started(target: JoinTarget)
 ## A join attempt failed. [param reason] is a human-readable string.
@@ -103,8 +99,8 @@ func _init(session: ConnectSession) -> void:
 	session.target_added.connect(target_added.emit)
 	session.target_removed.connect(target_removed.emit)
 	session.target_updated.connect(target_updated.emit)
-	session.provider_list_updated.connect(provider_list_updated.emit)
-	session.provider_unavailable.connect(provider_unavailable.emit)
+	session.directory_list_updated.connect(directory_list_updated.emit)
+	session.directory_unavailable.connect(directory_unavailable.emit)
 	session.join_started.connect(join_started.emit)
 	session.join_failed.connect(join_failed.emit)
 	session.host_started.connect(host_started.emit)
@@ -121,17 +117,14 @@ func is_valid() -> bool:
 # -- Host & join ------------------------------------------------------------
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the
-## transport (a direct [BackendPeer], or a provider id) and the server name;
-## [param payload] is the local player's identity. On failure also emits [signal host_failed], on success
-## [signal session_entered].
+## transport and the server name; [param payload] is the local player's identity.
+## On failure also emits [signal host_failed], on success [signal session_entered].
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.host(config, payload) if s else ERR_UNCONFIGURED
 
 
-## Joins [param target] on the bound [MultiplayerTree]. A direct target builds
-## its backend and auto-connects to the address. A provider target negotiates
-## the lobby and binds the resulting peer into the tree. [param payload] is the
+## Joins [param target] on the bound [MultiplayerTree]. [param payload] is the
 ## local player's identity. Returns [code]OK[/code] or an [enum Error]; on
 ## failure also emits [signal join_failed], on success [signal session_entered].
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
@@ -141,7 +134,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 
 # -- Probing & refresh ------------------------------------------------------
 
-## Re-probes every target and asks each registered provider to refresh its
+## Re-probes every target and asks each registered directory to refresh its
 ## lobby list. Results arrive asynchronously via [signal target_updated].
 func refresh() -> void:
 	var s := _ref.get_ref() as ConnectSession
@@ -160,43 +153,41 @@ func probe(target: JoinTarget) -> void:
 
 # -- Target list ------------------------------------------------------------
 
-## Adds a direct [param target] to the live list and emits
-## [signal target_added]. Set [param persist] to also write it to the saved
-## server list. (Provider lobbies are discovered, not added this way.)
+## Adds a saved [param target] to the live list and emits [signal target_added].
+## Set [param persist] to also write it to the saved server list.
 func add_target(target: JoinTarget, persist: bool = false) -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if s:
 		s.add_target(target, persist)
 
 
-## Removes a direct [param target] from the live list and emits
-## [signal target_removed]. Set [param persist] to also drop it from the saved
-## server list.
+## Removes a saved [param target] from the live list and emits [signal target_removed].
+## Set [param persist] to also drop it from the saved server list.
 func remove_target(target: JoinTarget, persist: bool = false) -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if s:
 		s.remove_target(target, persist)
 
 
-## Returns the whole live list -- direct targets first, then each provider's
+## Returns the whole live list -- saved targets first, then each directory's
 ## discovered lobbies.
 func get_targets() -> Array[JoinTarget]:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_targets() if s else []
 
 
-## Returns only the direct (address-based) targets -- the ones you added or
-## loaded, not provider lobbies.
-func get_direct_targets() -> Array[JoinTarget]:
+## Returns only the saved (address-based) targets -- the ones you added or
+## loaded, not directory lobbies.
+func get_saved_targets() -> Array[JoinTarget]:
 	var s := _ref.get_ref() as ConnectSession
-	return s.get_direct_targets() if s else []
+	return s.get_saved_targets() if s else []
 
 
-## Returns the lobbies the provider registered under [param provider_id]
+## Returns the lobbies the directory registered under [param directory_id]
 ## reported on the last [method refresh].
-func get_provider_targets(provider_id: StringName) -> Array[JoinTarget]:
+func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 	var s := _ref.get_ref() as ConnectSession
-	return s.get_provider_targets(provider_id) if s else []
+	return s.get_discovered_targets(directory_id) if s else []
 
 
 ## Returns the latest [ServerInfoResult] cached for [param target], or
@@ -207,40 +198,39 @@ func get_result(target: JoinTarget) -> ServerInfoResult:
 	return s.get_result(target) if s else null
 
 
-# -- Providers --------------------------------------------------------------
+# -- Directories -------------------------------------------------------------
 
-## Registers [param provider] (a platform lobby integration such as [SteamLobbyProvider])
-## under [param id]. Its lobbies then appear as targets on [method refresh].
-func register_provider(id: StringName, provider: LobbyProvider) -> void:
+## Registers [param directory] under [param id]. Its lobbies then appear
+## as targets on [method refresh].
+func register_directory(id: StringName, directory: LobbyDirectory) -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if s:
-		s.register_provider(id, provider)
+		s.register_directory(id, directory)
 
 
-## Removes the provider registered under [param id], if any.
-func unregister_provider(id: StringName) -> void:
+## Removes the directory registered under [param id], if any.
+func unregister_directory(id: StringName) -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if s:
-		s.unregister_provider(id)
+		s.unregister_directory(id)
 
 
-## Returns the provider registered under [param id], or null.
-func get_provider(id: StringName) -> LobbyProvider:
+## Returns the directory registered under [param id], or null.
+func get_directory(id: StringName) -> LobbyDirectory:
 	var s := _ref.get_ref() as ConnectSession
-	return s.get_provider(id) if s else null
+	return s.get_directory(id) if s else null
 
 
-## Returns the ids of all registered providers, in registration order.
-func get_provider_ids() -> Array[StringName]:
+## Returns the ids of all registered directories, in registration order.
+func get_directory_ids() -> Array[StringName]:
 	var s := _ref.get_ref() as ConnectSession
-	return s.get_provider_ids() if s else []
+	return s.get_directory_ids() if s else []
 
 
 # -- Persistence ------------------------------------------------------------
 
-## Loads the saved direct targets from disk into the live list, replacing the
-## current direct targets (provider lobbies are untouched). Omit [param path]
-## to use the session's configured default.
+## Loads the saved targets from disk into the live list, replacing the
+## current saved targets. Omit [param path] to use the session's configured default.
 func load_server_list(path: String = "") -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if not s:
@@ -251,7 +241,7 @@ func load_server_list(path: String = "") -> void:
 		s.load_server_list(path)
 
 
-## Writes the current direct targets to disk. Omit [param path] to use the
+## Writes the current saved targets to disk. Omit [param path] to use the
 ## session's configured default. Returns the [enum Error] from saving.
 func save_server_list(path: String = "") -> Error:
 	var s := _ref.get_ref() as ConnectSession

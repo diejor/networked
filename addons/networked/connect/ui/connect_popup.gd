@@ -1,40 +1,33 @@
-## Modal form for the four flows the [ConnectBrowser] needs: adding
-## or editing a saved [JoinTarget], hosting a session, and joining a
-## selected target. Each flow toggles a subset of the form rows, and the
-## right one fires a typed signal on confirm.
+## Modal form for adding/editing targets, hosting, and joining.
+##
+## Toggles row visibility based on the active flow and fires the matching
+## signal on confirmation.
 class_name ConnectPopup
 extends PopupPanel
 
 
-enum Form { ADD, EDIT, HOST, JOIN }
+enum Form { ADD, EDIT, HOST, JOIN, JOIN_DIRECT }
 
 
 ## Emitted in ADD or EDIT mode. [param persist] reflects the "Save
 ## to server list" checkbox.
 signal target_submitted(target: JoinTarget, persist: bool)
 
-## Emitted in HOST mode. The same [JoinPayload] shape carries the
-## hosting player's identity.
+## Emitted in HOST mode.
 signal host_submitted(config: ConnectHostConfig, payload: JoinPayload)
 
-## Emitted in JOIN mode for the target supplied to [method open_join].
+## Emitted in JOIN mode.
 signal join_submitted(payload: JoinPayload)
+
+## Emitted in JOIN_DIRECT mode.
+signal join_direct_submitted(target: JoinTarget, payload: JoinPayload)
 
 ## Emitted when the user cancels.
 signal cancelled
 
 
-class _HostChoice extends RefCounted:
-	var direct_template: BackendPeer
-	var provider_id: StringName
-
-	func is_direct() -> bool:
-		return provider_id == &""
-
-
 var _mode: Form = Form.ADD
 var _templates: Array[BackendPeer] = []
-var _host_choices: Array[_HostChoice] = []
 var _spawner_options: Array[SceneNodePath] = []
 var _editing: JoinTarget = null
 var _pending_target: JoinTarget = null
@@ -43,8 +36,6 @@ var _pending_target: JoinTarget = null
 @onready var _title: Label = %TitleLabel
 @onready var _backend_row: HBoxContainer = %BackendRow
 @onready var _backend_picker: OptionButton = %BackendPicker
-@onready var _choice_row: HBoxContainer = %ChoiceRow
-@onready var _choice_picker: OptionButton = %ChoicePicker
 @onready var _address_row: HBoxContainer = %AddressRow
 @onready var _address_edit: LineEdit = %AddressEdit
 @onready var _name_row: HBoxContainer = %NameRow
@@ -65,13 +56,12 @@ func _ready() -> void:
 	_backend_picker.item_selected.connect(_on_backend_changed)
 
 
-## Sets the backend templates offered in ADD/EDIT and HOST modes.
+## Sets the backend templates offered in picker dropdowns.
 func set_templates(templates: Array[BackendPeer]) -> void:
 	_templates = templates
 
 
-## Sets the spawner choices shown in HOST/JOIN modes. Hidden when
-## empty.
+## Sets the spawner choices shown in HOST/JOIN modes.
 func set_spawner_options(options: Array[SceneNodePath]) -> void:
 	_spawner_options = options.duplicate()
 
@@ -103,25 +93,22 @@ func open_edit(target: JoinTarget) -> void:
 	popup_centered()
 
 
-## Opens the popup as a Host form with [param templates] and
-## [param provider_ids] in the choice picker, where [param default_username]
-## seeds the username field.
+## Opens the popup as a Host form.
 func open_host(
 	templates: Array[BackendPeer],
-	provider_ids: Array[StringName],
 	default_username: String,
 ) -> void:
 	_mode = Form.HOST
 	_show_host_mode()
 	_name_edit.text = ""
 	_username_edit.text = default_username
-	_populate_host_choices(templates, provider_ids)
+	set_templates(templates)
+	_populate_backend_picker()
 	_populate_spawner_picker()
 	popup_centered()
 
 
-## Opens the popup as a Join form for [param target] with
-## [param default_username] seeded in the username field.
+## Opens the popup as a Join form.
 func open_join(target: JoinTarget, default_username: String) -> void:
 	_mode = Form.JOIN
 	_pending_target = target
@@ -131,11 +118,23 @@ func open_join(target: JoinTarget, default_username: String) -> void:
 	popup_centered()
 
 
+## Opens the popup as a Join Direct form.
+func open_join_direct(default_username: String) -> void:
+	_mode = Form.JOIN_DIRECT
+	_editing = null
+	_show_join_direct_mode()
+	_address_edit.text = ""
+	_username_edit.text = default_username
+	_populate_backend_picker()
+	_populate_spawner_picker()
+	_refresh_address_hint()
+	popup_centered()
+
+
 func _show_target_mode(title: String, confirm: String) -> void:
 	_title.text = title
 	_confirm_button.text = confirm
 	_backend_row.visible = true
-	_choice_row.visible = false
 	_address_row.visible = true
 	_name_row.visible = true
 	_name_label.text = "Display name"
@@ -147,8 +146,7 @@ func _show_target_mode(title: String, confirm: String) -> void:
 func _show_host_mode() -> void:
 	_title.text = "Host server"
 	_confirm_button.text = "Host"
-	_backend_row.visible = false
-	_choice_row.visible = true
+	_backend_row.visible = true
 	_address_row.visible = false
 	_name_row.visible = true
 	_name_label.text = "Server name"
@@ -161,8 +159,18 @@ func _show_join_mode() -> void:
 	_title.text = "Join server"
 	_confirm_button.text = "Join"
 	_backend_row.visible = false
-	_choice_row.visible = false
 	_address_row.visible = false
+	_name_row.visible = false
+	_save_check.visible = false
+	_username_row.visible = true
+	_spawner_row.visible = not _spawner_options.is_empty()
+
+
+func _show_join_direct_mode() -> void:
+	_title.text = "Join Direct"
+	_confirm_button.text = "Join"
+	_backend_row.visible = true
+	_address_row.visible = true
 	_name_row.visible = false
 	_save_check.visible = false
 	_username_row.visible = true
@@ -175,27 +183,6 @@ func _populate_backend_picker() -> void:
 		_backend_picker.add_item(ConnectUiShared.format_backend_label(backend))
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
-
-
-func _populate_host_choices(
-	templates: Array[BackendPeer], provider_ids: Array[StringName]
-) -> void:
-	_host_choices.clear()
-	_choice_picker.clear()
-	for backend in templates:
-		var c := _HostChoice.new()
-		c.direct_template = backend
-		_host_choices.append(c)
-		_choice_picker.add_item(
-			"Direct: %s" % ConnectUiShared.format_backend_label(backend)
-		)
-	for id in provider_ids:
-		var c := _HostChoice.new()
-		c.provider_id = id
-		_host_choices.append(c)
-		_choice_picker.add_item("Provider: %s" % String(id).capitalize())
-	if _choice_picker.item_count > 0:
-		_choice_picker.selected = 0
 
 
 func _populate_spawner_picker() -> void:
@@ -222,15 +209,6 @@ func _selected_template() -> BackendPeer:
 	if idx >= _templates.size():
 		return null
 	return _templates[idx]
-
-
-func _selected_host_choice() -> _HostChoice:
-	if _host_choices.is_empty():
-		return null
-	var idx := maxi(0, _choice_picker.selected)
-	if idx >= _host_choices.size():
-		return null
-	return _host_choices[idx]
 
 
 func _selected_spawner() -> SceneNodePath:
@@ -275,20 +253,27 @@ func _on_confirm() -> void:
 			hide()
 			target_submitted.emit(target, _save_check.button_pressed)
 		Form.HOST:
-			var choice := _selected_host_choice()
-			if choice == null:
+			var template := _selected_template()
+			if template == null:
 				return
 			var config := ConnectHostConfig.new()
-			if choice.is_direct():
-				config.backend = choice.direct_template
-			else:
-				config.provider_id = choice.provider_id
+			config.backend = template
 			config.server_name = _name_edit.text
 			hide()
 			host_submitted.emit(config, _build_payload())
 		Form.JOIN:
 			hide()
 			join_submitted.emit(_build_payload())
+		Form.JOIN_DIRECT:
+			var template := _selected_template()
+			if template == null:
+				return
+			var target := JoinTarget.new()
+			target.address = _address_edit.text
+			target.backend = template
+			target.display_name = ConnectUiShared.format_address(target)
+			hide()
+			join_direct_submitted.emit(target, _build_payload())
 
 
 func _on_cancel() -> void:

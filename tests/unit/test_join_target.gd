@@ -3,17 +3,6 @@ class_name TestJoinTarget
 extends NetwTestSuite
 
 
-func test_default_is_direct() -> void:
-	var t := JoinTarget.new()
-	assert_bool(t.is_direct()).is_true()
-	assert_that(t.provider_id).is_equal(&"")
-
-
-func test_non_empty_provider_id_is_not_direct() -> void:
-	var t := JoinTarget.new()
-	t.provider_id = &"steam"
-	assert_bool(t.is_direct()).is_false()
-
 
 func test_make_backend_instance_returns_null_when_template_missing() -> void:
 	var t := JoinTarget.new()
@@ -41,7 +30,6 @@ func test_tres_roundtrip_preserves_fields() -> void:
 	template.port = 7777
 	var original := JoinTarget.new()
 	original.display_name = "Co-op Sandbox"
-	original.provider_id = &""
 	original.backend = template
 	original.address = "play.example.com"
 	original.metadata = {"region": "eu"}

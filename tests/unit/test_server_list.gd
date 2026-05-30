@@ -27,8 +27,8 @@ func test_save_then_load_roundtrips_targets() -> void:
 
 	var t2 := JoinTarget.new()
 	t2.display_name = "katie's lobby"
-	t2.provider_id = &"steam"
-	t2.remote_id = 76561197960265728
+	t2.backend = SteamBackend.new()
+	t2.address = "76561197960265728"
 
 	var list := ServerList.new()
 	list.targets = [t1, t2]
@@ -39,10 +39,9 @@ func test_save_then_load_roundtrips_targets() -> void:
 	var loaded := ServerList.load_or_new(path)
 	assert_that(loaded.targets.size()).is_equal(2)
 	assert_that(loaded.targets[0].display_name).is_equal("Dusk LAN")
-	assert_bool(loaded.targets[0].is_direct()).is_true()
 	assert_int((loaded.targets[0].backend as ENetBackend).port).is_equal(7000)
-	assert_that(loaded.targets[1].provider_id).is_equal(&"steam")
-	assert_bool(loaded.targets[1].is_direct()).is_false()
+	assert_that(loaded.targets[1].display_name).is_equal("katie's lobby")
+	assert_bool(loaded.targets[1].backend is SteamBackend).is_true()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 

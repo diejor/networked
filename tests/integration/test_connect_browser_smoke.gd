@@ -55,7 +55,7 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	browser.server_list_path = temp_path
 	add_child(browser)
 
-	var loaded := session.get_direct_targets()
+	var loaded := session.get_saved_targets()
 	assert_int(loaded.size()).is_equal(1)
 	var loaded_target: JoinTarget = loaded[0]
 

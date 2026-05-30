@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_wto4k"]
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
-[ext_resource type="Script" uid="uid://xxtg8cpj7yun" path="res://addons/networked/transport/steam/steam_lobby_provider.gd" id="9_p4o8j"]
+[ext_resource type="Script" path="res://addons/networked/transport/steam/steam_lobby_directory.gd" id="9_p4o8j"]
 
 [sub_resource type="Resource" id="Resource_mrsco"]
 script = ExtResource("3_d22dq")
@@ -41,7 +41,7 @@ script = ExtResource("5_gbknk")
 script = ExtResource("7_wto4k")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="SteamLobbyProvider" type="Node" parent="MultiplayerTree" unique_id=1067375394]
+[node name="SteamLobbyDirectory" type="Node" parent="MultiplayerTree" unique_id=1067375394]
 script = ExtResource("9_p4o8j")
 allow_spacewar_fallback = true
 metadata/_custom_type_script = "uid://xxtg8cpj7yun"

@@ -18,8 +18,12 @@ func test_no_listener_falls_through_to_host() -> void:
 	var tree := EnetTestSupport.make_client_tree(self, 29100, "_solo")
 	tree.use_listen_server = true
 
-	var err: Error = await tree.auto_connect_player(
-		tree.backend, "127.0.0.1", _make_payload("alice")
+	var target := JoinTarget.new()
+	target.backend = tree.backend
+	target.address = "127.0.0.1"
+
+	var err: Error = await tree.join_or_host(
+		target, _make_payload("alice")
 	)
 
 	assert_int(err).is_equal(OK)
@@ -34,8 +38,12 @@ func test_live_listener_joins_as_client() -> void:
 	assert_that(host).is_not_empty()
 
 	var client := EnetTestSupport.make_client_tree(self, host.port, "_join")
-	var err: Error = await client.auto_connect_player(
-		client.backend, "127.0.0.1", _make_payload("bob")
+	var target := JoinTarget.new()
+	target.backend = client.backend
+	target.address = "127.0.0.1"
+
+	var err: Error = await client.join_or_host(
+		target, _make_payload("bob")
 	)
 
 	assert_int(err).is_equal(OK)

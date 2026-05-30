@@ -42,10 +42,13 @@ func test_prepare_failure_aborts_connect() -> void:
 	var auth := _FailingPrepareAuth.new()
 	client_tree.auth_provider = auth
 
-	var err := await client_tree.auto_connect_player(
-		client_tree.backend,
-		client_tree.backend.get_join_address(),
-		_join_payload("alice"),
+	var target := JoinTarget.new()
+	target.backend = client_tree.backend
+	target.address = client_tree.backend.get_join_address()
+
+	var err := await client_tree.join_or_host(
+		target,
+		_join_payload("alice")
 	)
 	assert_that(err).is_not_equal(OK)
 	assert_that(client_tree.is_online()).is_false()
@@ -69,10 +72,13 @@ func test_no_auth_provider_trusts_client_username() -> void:
 
 	var joined_rjs: Array[ResolvedJoin] = []
 	server.player_joined.connect(func(rj): joined_rjs.append(rj))
-	var err := await client_tree.auto_connect_player(
-		client_tree.backend,
-		client_tree.backend.get_join_address(),
-		_join_payload("bob"),
+	var target := JoinTarget.new()
+	target.backend = client_tree.backend
+	target.address = client_tree.backend.get_join_address()
+
+	var err := await client_tree.join_or_host(
+		target,
+		_join_payload("bob")
 	)
 	assert_that(err).is_equal(OK)
 	await wait_until(func(): return joined_rjs.size() == 1)

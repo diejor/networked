@@ -7,25 +7,13 @@ class_name TestConnectSession
 extends NetwTestSuite
 
 
-class _MockProvider:
-	extends LobbyProvider
-	var create_called_with: String = ""
-	var join_called_with: Variant = null
-	var list_calls: int = 0
+class _MockDirectory:
+	extends LobbyDirectory
+
 	var canned_lobbies: Array[LobbyInfo] = []
-	var fail_reason: String = ""
-
-	func create_lobby(server_name: String) -> void:
-		create_called_with = server_name
-		if not fail_reason.is_empty():
-			lobby_join_failed.emit(fail_reason)
-		else:
-			lobby_created.emit(1)
-
-	func join_lobby(lobby_id) -> void:
-		join_called_with = lobby_id
-		if not fail_reason.is_empty():
-			lobby_join_failed.emit(fail_reason)
+	var list_calls: int = 0
+	var host_called_with: String = ""
+	var join_called_with: int = 0
 
 	func list_lobbies() -> void:
 		list_calls += 1
@@ -34,7 +22,19 @@ class _MockProvider:
 	func leave_lobby() -> void:
 		pass
 
-	func get_peer() -> MultiplayerPeer:
+	func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+		var target := JoinTarget.new()
+		target.address = str(lobby.id)
+		target.backend = ENetBackend.new()
+		target.display_name = lobby.lobby_name
+		return target
+
+	func host_lobby(server_name: String) -> MultiplayerPeer:
+		host_called_with = server_name
+		return null
+
+	func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+		join_called_with = lobby_id
 		return null
 
 
@@ -104,7 +104,7 @@ func test_load_server_list_emits_target_added_per_entry() -> void:
 
 	session.load_server_list(path)
 	assert_int(added.size()).is_equal(2)
-	assert_int(session.get_direct_targets().size()).is_equal(2)
+	assert_int(session.get_saved_targets().size()).is_equal(2)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	session.queue_free()
 
@@ -121,36 +121,36 @@ func test_remove_target_emits_and_clears_result() -> void:
 
 	assert_int(removed.size()).is_equal(1)
 	assert_that(removed[0]).is_same(target)
-	assert_int(session.get_direct_targets().size()).is_equal(0)
+	assert_int(session.get_saved_targets().size()).is_equal(0)
 	session.queue_free()
 
 
-func test_register_provider_and_refresh_dispatches_provider_targets() -> void:
+func test_register_directory_and_refresh_dispatches_targets() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
 
-	var provider := _MockProvider.new()
-	add_child(provider)
+	var directory := _MockDirectory.new()
+	add_child(directory)
 	var info := LobbyInfo.make(42, "Mock Lobby", 2, 8, {})
-	provider.canned_lobbies = [info]
+	directory.canned_lobbies = [info]
 
-	var provider_emitted: Array = []
-	session.provider_list_updated.connect(
-		func(id, _l): provider_emitted.append(id)
+	var directory_emitted: Array = []
+	session.directory_list_updated.connect(
+		func(id, _l): directory_emitted.append(id)
 	)
 	var added: Array = []
 	session.target_added.connect(func(t): added.append(t))
 
-	session.register_provider(&"mock", provider)
+	session.register_directory(&"mock", directory)
 	session.refresh()
 
-	assert_int(provider.list_calls).is_equal(1)
-	assert_int(provider_emitted.size()).is_equal(1)
-	assert_that(provider_emitted[0]).is_equal(&"mock")
+	assert_int(directory.list_calls).is_equal(1)
+	assert_int(directory_emitted.size()).is_equal(1)
+	assert_that(directory_emitted[0]).is_equal(&"mock")
 	assert_int(added.size()).is_equal(1)
-	assert_int(session.get_provider_targets(&"mock").size()).is_equal(1)
+	assert_int(session.get_discovered_targets(&"mock").size()).is_equal(1)
 
-	provider.queue_free()
+	directory.queue_free()
 	session.queue_free()
 
 
@@ -173,7 +173,7 @@ func test_join_without_tree_emits_join_failed() -> void:
 	session.queue_free()
 
 
-func test_join_provider_missing_emits_join_failed() -> void:
+func test_join_missing_backend_emits_join_failed() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
 	# Bind a fresh tree so the no-tree branch doesn't fire first.
@@ -182,8 +182,7 @@ func test_join_provider_missing_emits_join_failed() -> void:
 	session.bind_tree(tree)
 
 	var target := JoinTarget.new()
-	target.provider_id = &"absent"
-	target.remote_id = 1
+	target.backend = null
 
 	var captured: Array = []
 	session.join_failed.connect(
@@ -194,9 +193,9 @@ func test_join_provider_missing_emits_join_failed() -> void:
 	payload.username = &"alice"
 	var err := await session.join(target, payload)
 
-	assert_int(err).is_equal(ERR_DOES_NOT_EXIST)
+	assert_int(err).is_equal(ERR_INVALID_PARAMETER)
 	assert_int(captured.size()).is_equal(1)
-	assert_bool(captured[0].contains("absent")).is_true()
+	assert_bool(captured[0].contains("failed")).is_true()
 
 	tree.queue_free()
 	session.queue_free()

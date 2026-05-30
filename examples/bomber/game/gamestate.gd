@@ -60,7 +60,10 @@ func join_game(ip: String, _player_name: String) -> void:
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 
-	ctx.tree.join_direct(ctx.tree.get_backend(), ip, jp)
+	var target := JoinTarget.new()
+	target.backend = ctx.tree.get_backend()
+	target.address = ip
+	ctx.tree.join(target, jp)
 
 
 func host_game(_player_name: String) -> void:

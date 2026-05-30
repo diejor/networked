@@ -3,7 +3,7 @@
 ## Peers discover each other through WebTorrent-compatible tracker servers using a
 ## shared [code]info_hash[/code] room ID. On [method host] the hash is copied
 ## to the clipboard; clients pass that hash to
-## [method MultiplayerTree.join_direct].
+## [method MultiplayerTree.join].
 @tool
 class_name WebRTCBackend
 extends BackendPeer

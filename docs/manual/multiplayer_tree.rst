@@ -38,11 +38,14 @@ Two tree placements are common:
   :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` is
   called against a local address on a backend that supports embedded servers,
   the tree duplicates itself, names the copy ``Server``, calls
-  :ref:`host() <class_MultiplayerTree_method_host>` on it, and then calls
-  :ref:`direct join <class_MultiplayerTree_method_join_direct>` on the original.
-  Both trees end up under the
-  same parent and share no state beyond the loopback transport. This is the
-  default for in-editor playtesting on desktop backends.
+   :ref:`host() <class_MultiplayerTree_method_host>` on it, and then calls
+   :ref:`join <class_MultiplayerTree_method_join>` on the original.
+   Both trees end up under the
+   same parent and share no state beyond the loopback transport. This is the
+   default for in-editor playtesting on desktop backends.
+   Both trees end up under the
+   same parent and share no state beyond the loopback transport. This is the
+   default for in-editor playtesting on desktop backends.
 
 If your backend supports it and you would rather not pay for the duplicate
 node, set :button:`Use Listen Server` on the tree. The same node will accept
@@ -70,9 +73,8 @@ values are:
 - :ref:`DEDICATED_SERVER <class_MultiplayerTree_constant_DEDICATED_SERVER>`: this tree is hosting and is **not** also a player.
 - :ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>`: this tree is hosting and is also a local player.
 
-The role is decided during :ref:`host() <class_MultiplayerTree_method_host>`,
-:ref:`direct join <class_MultiplayerTree_method_join_direct>`, or
-:ref:`adopt peer <class_MultiplayerTree_method_adopt_peer>` and
+The role is decided during :ref:`host() <class_MultiplayerTree_method_host>` or
+:ref:`join <class_MultiplayerTree_method_join>` and
 does not change for the lifetime of the session. The convenience properties
 :ref:`is_host <class_MultiplayerTree_property_is_host>` and
 :ref:`is_local_client <class_MultiplayerTree_property_is_local_client>` cover
@@ -98,7 +100,7 @@ or grey out a *Disconnect* button can subscribe once and be done.
 The connection flow
 -------------------
 
-There are four entry methods, each for a different intent. All take a
+There are three entry methods, each for a different intent. All take a
 :ref:`JoinPayload <class_JoinPayload>` describing the player; transport
 identity (backend, address) is passed separately so the payload carries no
 URL or transport-specific fields.
@@ -106,15 +108,11 @@ URL or transport-specific fields.
 - :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`:
   query the address, join if a live server answers, otherwise host. The
   zero-config path for local development and listen-server games.
-- :ref:`join_direct() <class_MultiplayerTree_method_join_direct>`: open
-  the configured backend against a known address as a client. Use when the
+- :ref:`join() <class_MultiplayerTree_method_join>`: open
+  the target backend against a known address as a client. Use when the
   caller knows there is a server.
 - :ref:`host_player() <class_MultiplayerTree_method_host_player>`: start
   this tree as the host. Use when the caller knows it is hosting.
-- :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>`: attach a
-  pre-connected :godot:`MultiplayerPeer <MultiplayerPeer>` produced by an
-  external system (Steam lobby, matchmaker) without going through a
-  :ref:`BackendPeer <class_BackendPeer>`.
 
 A typical local flow looks like this:
 
@@ -136,12 +134,14 @@ A typical local flow looks like this:
 For the protocol behind ``query_server_info`` and probe isolation, see
 :doc:`pre_game_connection`.
 
-If the peer is produced by an external system (a Steam lobby, a matchmaking
-service) and is already connected by the time you get it, hand it directly
-to :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>`. The tree
-will skip the backend setup, plug the peer into its
-:godot:`SceneMultiplayer <SceneMultiplayer>`, and finalize as a :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>`
-or :ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>` based on the peer's unique ID.
+Matches from external matchmaking and lobby systems (like Steam lobbies) are
+unified under the exact same API: the directory service packages the matching
+lobby ID and backend template into a :ref:`JoinTarget <class_JoinTarget>`
+which is passed directly to :ref:`join() <class_MultiplayerTree_method_join>`.
+The tree then initializes the backend (e.g. `SteamBackend`) and finalizes the
+session as a :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>` or
+:ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>` identically
+to ENet or WebSocket connections.
 
 Signals you will actually wire
 ------------------------------

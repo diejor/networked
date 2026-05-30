@@ -45,14 +45,12 @@ loopback, and both will get you through the entire
      - Yes
      - Requires a signalling server. Useful for matchmade lobbies without
        running your own authoritative server.
-   * - Steam lobby
-     - No (Steam-managed)
+   * - :ref:`SteamBackend <class_SteamBackend>`
      - No
-     - Adopts a peer produced by Steam's lobby system. The tree uses
-       :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>` rather
-       than going through
-       :ref:`host player <class_MultiplayerTree_method_host_player>` or
-       :ref:`direct join <class_MultiplayerTree_method_join_direct>`.
+     - No
+     - Matchmaking P2P lobbies routed through the Steamworks SDK.
+       Hosts or joins using the unified :ref:`MultiplayerTree.host() <class_MultiplayerTree_method_host>`
+       and :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>` APIs.
 
 The "embedded server" column matters when you call
 :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` with
@@ -125,13 +123,14 @@ Returning ``null`` from one of the ``create_*_peer`` methods is the
 canonical way to signal failure to the tree. Pair it with an error log so
 the failure is visible.
 
-Some transports do not fit the request/response shape. Steam lobbies and
-WebRTC matchmaking, for example, produce a peer asynchronously from an
-external pipeline. For those, return ``null`` from :ref:`create_host_peer() <class_BackendPeer_method_create_host_peer>` and
-instead drive the new peer directly onto the tree's
-:ref:`api <class_MultiplayerTree_property_api>` (the "adopted API" pattern
-used by the `tube <https://github.com/koopmyers/tube>`__ backend). The tree detects that its API has been
-swapped and treats the missing return value as success, not failure.
+Some transports do not fit the instantaneous request/response shape.
+Steam lobbies and WebRTC matchmaking, for example, produce a peer
+asynchronously from an external matchmaking pipeline. Since
+:ref:`create_host_peer() <class_BackendPeer_method_create_host_peer>` and
+:ref:`create_join_peer() <class_BackendPeer_method_create_join_peer>` support
+asynchronous ``await`` statements, custom backends can easily suspend
+execution while they bring up external lobby architectures, returning a
+fully-connected, active ``MultiplayerPeer`` once the handshake finishes.
 
 Lifecycle hooks
 ~~~~~~~~~~~~~~~

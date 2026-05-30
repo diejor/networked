@@ -48,6 +48,11 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Add server"
 
+[node name="JoinDirectButton" type="Button" parent="VBox/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Join direct"
+
 [node name="HostButton" type="Button" parent="VBox/HeaderBar"]
 unique_name_in_owner = true
 layout_mode = 2

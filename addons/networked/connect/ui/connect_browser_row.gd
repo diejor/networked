@@ -1,6 +1,5 @@
 ## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
-## latest [ServerInfoResult]. Selection and context signals bubble
-## back to the browser.
+## latest [ServerInfoResult].
 class_name ConnectBrowserRow
 extends Button
 
@@ -78,22 +77,22 @@ func _refresh() -> void:
 		return
 
 	_name_label.text = _display_name()
-	_badge_label.text = "[%s]" % (
-		"direct" if target.is_direct() else String(target.provider_id)
-	)
+	
+	var backend_label := "unknown"
+	if target.backend != null:
+		backend_label = ConnectUiShared.format_backend_label(target.backend)
+	_badge_label.text = "[%s]" % backend_label
 
-	if target.is_direct():
-		_render_direct_metrics()
-	else:
-		_render_provider_metrics()
+	_render_metrics()
 
 
-func _render_direct_metrics() -> void:
+func _render_metrics() -> void:
 	if result == null:
 		_players_label.text = "-"
 		_ping_label.text = "-"
 		_status_label.text = "..."
 		return
+
 	match result.status:
 		ServerInfoResult.Status.OK:
 			var info := result.info
@@ -101,7 +100,10 @@ func _render_direct_metrics() -> void:
 				"%d/%d" % [info.players, info.max_players]
 				if info else "-"
 			)
-			_ping_label.text = "%d ms" % result.latency_ms
+			_ping_label.text = (
+				"%d ms" % result.latency_ms
+				if result.latency_ms >= 0 else "."
+			)
 			_status_label.text = "OK"
 		ServerInfoResult.Status.BUSY:
 			_players_label.text = "FULL"
@@ -116,28 +118,20 @@ func _render_direct_metrics() -> void:
 			_ping_label.text = "-"
 			_status_label.text = "TIMEOUT"
 		ServerInfoResult.Status.UNSUPPORTED:
-			_players_label.text = "-"
-			_ping_label.text = "-"
-			_status_label.text = "UNSUPPORTED"
+			var info := result.info
+			_players_label.text = (
+				"%d/%d" % [info.players, info.max_players]
+				if info else "-"
+			)
+			_ping_label.text = "."
+			_status_label.text = "OK" if info else "UNSUPPORTED"
 		_:
 			_players_label.text = "-"
 			_ping_label.text = "-"
 			_status_label.text = "ERROR"
 
 
-func _render_provider_metrics() -> void:
-	var info := result.info if result else null
-	if info:
-		_players_label.text = "%d/%d" % [info.players, info.max_players]
-	else:
-		_players_label.text = "-"
-	_ping_label.text = "."
-	_status_label.text = "OK" if info else "..."
-
-
 func _display_name() -> String:
 	if not target.display_name.strip_edges().is_empty():
 		return target.display_name
-	if target.is_direct():
-		return ConnectUiShared.format_address(target)
-	return "(unnamed)"
+	return ConnectUiShared.format_address(target)

@@ -14,17 +14,17 @@ limits that protect a host from probe storms.
 Entry methods
 -------------
 
-Picking an entry method is a question of intent. All four take a
+Picking an entry method is a question of intent. All three take a
 :ref:`JoinPayload <class_JoinPayload>` describing the player. Transport
-identity (backend, address) is supplied as separate arguments, so the
-payload carries no URL or transport state.
+identity (backend, address) is supplied via a :ref:`JoinTarget <class_JoinTarget>`
+passed to the method, so the payload itself carries no transport state.
 
 :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
     Query the address; if a live local server answers, join it as a client,
     otherwise host. The zero-config path for local development and
     listen-server games.
 
-:ref:`join_direct() <class_MultiplayerTree_method_join_direct>`
+:ref:`join() <class_MultiplayerTree_method_join>`
     Open the backend against a known address as a client. Use when the
     caller already knows there is a server, such as when a server browser row was
     clicked, or an invite was accepted.
@@ -33,28 +33,25 @@ payload carries no URL or transport state.
     Start this tree as the host. Use when the caller already knows it is
     hosting, for example, when a "Host Game" button was clicked.
 
-:ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>`
-    Attach a pre-connected :godot:`MultiplayerPeer <MultiplayerPeer>`
-    produced by an external system (Steam lobby, matchmaker). Skips the
-    backend setup, plugs the peer into the tree's api, and finalizes role
-    based on the peer's unique id.
-
 .. code-block:: gdscript
 
     var join := JoinPayload.new()
     join.username = "alice"
 
+    # Build the join target (specifying backend and address).
+    var target := JoinTarget.new()
+    target.backend = WebSocketBackend.new()
+    target.address = "localhost"
+
     # Auto-detect: join if someone is hosting locally, else host.
-    await tree.auto_connect_player(tree.backend, "localhost", join)
+    await tree.auto_connect_player(target, join)
 
     # Explicit join to a known remote server.
-    await tree.join_direct(tree.backend, "203.0.113.42", join)
+    target.address = "203.0.113.42"
+    await tree.join(target, join)
 
     # Explicit host.
     await tree.host_player(join)
-
-    # Adopt a peer produced by a lobby provider.
-    await tree.adopt_peer(steam_peer, join)
 
 Discovering live servers
 ------------------------
@@ -198,10 +195,11 @@ The ``addons/networked/connect/`` subtree ships the primitives needed
 to build a Minecraft-style server browser on top of
 ``query_server_info``:
 
-- :ref:`JoinTarget <class_JoinTarget>` - one row in the list. Either
-  a direct target (:ref:`JoinTarget.backend <class_JoinTarget_property_backend>` + :ref:`JoinTarget.address <class_JoinTarget_property_address>`) or an external one
-  (:ref:`JoinTarget.provider_id <class_JoinTarget_property_provider_id>` + :ref:`JoinTarget.remote_id <class_JoinTarget_property_remote_id>` resolved through a
-  :ref:`ProviderRegistry <class_ProviderRegistry>`). The :ref:`JoinTarget.backend <class_JoinTarget_property_backend>` field is a template, and
+- :ref:`JoinTarget <class_JoinTarget>` - one row in the list. It bundles a
+  :ref:`BackendPeer <class_BackendPeer>` template and an
+  :ref:`address <class_JoinTarget_property_address>` string (e.g. host:port
+  or Steam lobby ID) along with display labels and metadata. The
+  :ref:`JoinTarget.backend <class_JoinTarget_property_backend>` field is a template, and
   :ref:`JoinTarget.make_backend_instance() <class_JoinTarget_method_make_backend_instance>` returns a fresh duplicate so probe and
   join paths do not share runtime state.
 - :ref:`ServerList <class_ServerList>` - a typed array of targets
@@ -216,18 +214,15 @@ to build a Minecraft-style server browser on top of
   pending callbacks but does not abort the inner
   :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` - transient peers tear themselves down on
   their own timeout/completion path.
-- :ref:`ProviderRegistry <class_ProviderRegistry>` - a :godot:`Node <Node>`
-  mapping :godot:`StringName <StringName>` ids to :ref:`LobbyProvider <class_LobbyProvider>` instances. The
-  browser looks providers up at join time by :ref:`JoinTarget.provider_id <class_JoinTarget_property_provider_id>`.
+- :ref:`DirectoryRegistry <class_DirectoryRegistry>` - a :godot:`Node <Node>`
+  mapping :godot:`StringName <StringName>` ids to :ref:`LobbyDirectory <class_LobbyDirectory>` instances.
 
 The reference scene at
 ``addons/networked/connect/server_browser.tscn`` wires these together:
-it loads the persisted list, fires one probe per direct target through
-a :ref:`ProbeManager <class_ProbeManager>`, and renders rows grouped by source. Direct rows
-dispatch through :ref:`MultiplayerTree.auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`. Provider
-rows look up the provider in the registry, call :ref:`LobbyProvider.join_lobby() <class_LobbyProvider_method_join_lobby>` with
-:ref:`JoinTarget.remote_id <class_JoinTarget_property_remote_id>`, await :ref:`LobbyProvider.peer_ready <class_LobbyProvider_signal_peer_ready>`, and dispatch through
-:ref:`MultiplayerTree.adopt_peer() <class_MultiplayerTree_method_adopt_peer>`.
+it loads the persisted list, fires one probe per saved target through
+a :ref:`ProbeManager <class_ProbeManager>`, and renders rows grouped by provenance.
+All rows dispatch uniformly through :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>`
+regardless of the underlying transport backend.
 
 Wiring it up looks like:
 
@@ -236,14 +231,15 @@ Wiring it up looks like:
     var browser := preload(
         "res://addons/networked/connect/server_browser.tscn"
     ).instantiate()
-    browser.tree_path = tree.get_path()
+    browser.tree = multiplayer_tree
     browser.backend_templates = [ENetBackend.new(), WebSocketBackend.new()]
     add_child(browser)
 
-    # Optional: surface lobbies from a SteamLobbyProvider in the same list.
-    browser.register_provider(&"steam", steam_provider)
+    # Optional: surface lobbies from a SteamLobbyDirectory in the same list.
+    var session := Netw.ctx(multiplayer_tree).connect
+    session.register_directory(&"steam", steam_directory)
 
 A minimal address-only form lives at
 ``addons/networked/connect/connect_overlay.tscn`` for projects that do
 not need the full browser. It emits a single ``connect_requested``
-signal carrying a direct :ref:`JoinTarget <class_JoinTarget>`.
+signal carrying a :ref:`JoinTarget <class_JoinTarget>`.

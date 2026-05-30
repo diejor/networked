@@ -587,35 +587,38 @@ func host(quiet: bool = false) -> Error:
 	return OK
 
 
-## Opens the configured transport against [param server_address] and submits
-## [param join_payload] once the connection is live.
+## Opens the configured transport against the [param target] address and
+## submits [param join_payload] once the connection is live.
 ##
-## Reassigns [member backend] to [param backend] (duplicated via the setter).
-## Validates the payload, prepares the auth pipeline, asks the backend for a
-## client peer, awaits [signal connected_to_server] with [param timeout], then
-## calls [method submit_join]. Returns [code]ERR_CANT_CONNECT[/code] on timeout
-## or [code]ERR_INVALID_PARAMETER[/code] on a null backend/payload.
-func join_direct(
-	backend: BackendPeer,
-	server_address: String,
+## Duplicates the backend template from [param target], assigns it to the tree
+## and opens the connection. Returns [code]ERR_CANT_CONNECT[/code] on timeout
+## or [code]ERR_INVALID_PARAMETER[/code] on a null target/backend/payload.
+func join(
+	target: JoinTarget,
 	join_payload: JoinPayload,
 	timeout: float = 5.0,
 	quiet: bool = false,
 ) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to join.")
-	if backend == null:
+	if target == null:
+		Netw.dbg.error("join: target is null.", func(m): push_error(m))
+		return ERR_INVALID_PARAMETER
+
+	var backend_instance := target.make_backend_instance()
+	if backend_instance == null:
 		Netw.dbg.error(
-			"join_direct: backend is null.", func(m): push_error(m)
+			"join: target has no backend template.",
+			func(m): push_error(m)
 		)
 		return ERR_INVALID_PARAMETER
 
-	self.backend = backend
+	self.backend = backend_instance
 	var prepare_err := await _prepare_session(join_payload)
 	if prepare_err != OK:
 		return prepare_err
 
 	var join_err := await _open_join_transport(
-		server_address, join_payload.username, timeout, quiet
+		target.address, join_payload.username, timeout, quiet
 	)
 	if join_err == OK:
 		submit_join(join_payload)
@@ -623,7 +626,7 @@ func join_direct(
 
 
 # Transport-only join: assumes _prepare_session has already run and
-# _client_join_payload is set. Used by both join_direct (after preparing)
+# _client_join_payload is set. Used by both join (after preparing)
 # and _host_player_logic (in fallback paths where preparation already
 # happened).
 func _open_join_transport(
@@ -675,7 +678,7 @@ func _open_join_transport(
 		if not quiet:
 			Netw.dbg.error(
 				"Connection timed out. Server probably is not up; consider "
-				+ "auto_connect_player if you want host-as-fallback.",
+				+ "join_or_host if you want host-as-fallback.",
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
@@ -686,32 +689,33 @@ func _open_join_transport(
 	return OK
 
 
-## Queries [param server_address] with [param backend], and joins if a live
-## local listener replies, falls back to [method host_player] otherwise.
+## Queries the address in [param target] and joins if a live local listener
+## replies, falls back to hosting a listen server otherwise.
 ##
-## Replaces the localhost-or-remote heuristics that used to live on
-## [code]connect_player[/code]. Callers pass the backend and address
-## explicitly, as there is no URL scheme inspection or transport sniffing.
 ## The host/join decision goes through
 ## [method BackendPeer.query_server_info]: an [constant ServerInfoResult.Status.OK]
 ## reply means a server is listening, so this joins; anything else
-## (UNSUPPORTED, UNREACHABLE, TIMEOUT, BUSY, ERROR) falls through to hosting.
-## For backends that cannot embed a server
-## ([method BackendPeer.supports_embedded_server] returns [code]false[/code]),
+## falls through to hosting. For non-embedded backends (where
+## [method BackendPeer.supports_embedded_server] returns [code]false[/code])
 ## this always hosts.
-func auto_connect_player(
-	backend: BackendPeer,
-	server_address: String,
+func join_or_host(
+	target: JoinTarget,
 	join_payload: JoinPayload,
 ) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to connect.")
-	if backend == null:
+	if target == null:
+		Netw.dbg.error("join_or_host: target is null.", func(m): push_error(m))
+		return ERR_INVALID_PARAMETER
+
+	var backend_instance := target.make_backend_instance()
+	if backend_instance == null:
 		Netw.dbg.error(
-			"auto_connect_player: backend is null.", func(m): push_error(m)
+			"join_or_host: target has no backend template.",
+			func(m): push_error(m)
 		)
 		return ERR_INVALID_PARAMETER
 
-	self.backend = backend
+	self.backend = backend_instance
 
 	if not self.backend.supports_embedded_server():
 		var host_err := await host(true)
@@ -722,89 +726,18 @@ func auto_connect_player(
 		return host_err
 
 	var result: ServerInfoResult = await self.backend.query_server_info(
-		server_address, 0.2
+		target.address, 0.2
 	)
 	if result.is_ok():
 		Netw.dbg.debug(
-			"auto_connect_player: live listener (%s); joining.", [result]
+			"join_or_host: live listener (%s); joining.", [result]
 		)
-		return await join_direct(self.backend, server_address, join_payload)
+		return await join(target, join_payload)
 
 	Netw.dbg.debug(
-		"auto_connect_player: no live listener (%s); hosting.", [result]
+		"join_or_host: no live listener (%s); hosting.", [result]
 	)
 	return await host_player(join_payload)
-
-## Adopts a pre-connected [param peer] without going through a [BackendPeer].
-##
-## For transports (e.g. Steam lobbies) where the peer is produced by an
-## external lobby flow rather than by [method host] / [method join_direct].
-## The peer must be connecting or connected, and client adoption waits for
-## Godot to emit [signal connected_to_server] before finalizing the session.
-## [br][br]
-## If [param join_payload] is provided, it is automatically submitted to the
-## server via [method submit_join] once adoption is complete.
-## [br][br]
-## Derives [member role] from [code]peer.get_unique_id()[/code]:
-## [code]1[/code] -> [constant Role.LISTEN_SERVER], otherwise [constant Role.CLIENT].
-## [br][br]
-## Returns [code]ERR_INVALID_PARAMETER[/code] if [param peer] is
-## [code]null[/code] or already disconnected. Asserts the tree is
-## [constant State.OFFLINE].
-func adopt_peer(
-	peer: MultiplayerPeer, join_payload: JoinPayload = null
-) -> Error:
-	assert(state == State.OFFLINE, "Must be offline to adopt a peer.")
-	if peer == null:
-		Netw.dbg.error(
-			"adopt_peer: peer is null.", func(m): push_error(m)
-		)
-		return ERR_INVALID_PARAMETER
-	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
-		Netw.dbg.error(
-			"adopt_peer: peer is not connected.", func(m): push_error(m)
-		)
-		return ERR_INVALID_PARAMETER
-
-	Netw.dbg.trace("MultiplayerTree: Adopting external peer.")
-	state = State.CONNECTING
-	
-	if join_payload:
-		var prepare_err := await _auth.prepare_join_payload(join_payload)
-		if prepare_err != OK:
-			state = State.OFFLINE
-			return prepare_err
-		
-		_client_join_payload = join_payload
-		_auth.set_client_join_payload(join_payload)
-
-	_auth.prepare()
-	if backend:
-		peer = backend.wrap_peer(peer)
-	api.multiplayer_peer = peer
-
-	var unique_id := peer.get_unique_id()
-	if unique_id == MultiplayerPeer.TARGET_PEER_SERVER:
-		role = Role.LISTEN_SERVER
-	else:
-		role = Role.CLIENT
-
-	if role == Role.CLIENT:
-		var connect_err := await _await_adopted_client_connected()
-		if connect_err != OK:
-			state = State.OFFLINE
-			role = Role.NONE
-			return connect_err
-
-	state = State.ONLINE
-	_finalize_session()
-
-	if join_payload:
-		submit_join(join_payload)
-
-	if role == Role.LISTEN_SERVER:
-		_auth.synthesize_host_identity()
-	return OK
 
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
@@ -851,7 +784,7 @@ func disconnect_player() -> void:
 ## (either directly as a listen-server or by spinning up an embedded server).
 ##
 ## Use directly when the caller knows they are hosting. For query-then-host
-## behavior see [method auto_connect_player]. Returns [code]OK[/code] on
+## behavior see [method join_or_host]. Returns [code]OK[/code] on
 ## success.
 func host_player(join_payload: JoinPayload) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
@@ -969,9 +902,10 @@ func _ready() -> void:
 
 	if init_join_payload and backend:
 		init_join_payload.is_debug = true
-		auto_connect_player(
-			backend, backend.get_join_address(), init_join_payload
-		)
+		var target := JoinTarget.new()
+		target.backend = backend
+		target.address = backend.get_join_address()
+		join_or_host(target, init_join_payload)
 
 	if auto_host_headless and DisplayServer.get_name() == "headless":
 		if use_listen_server:

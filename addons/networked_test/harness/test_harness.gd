@@ -188,9 +188,10 @@ func add_client() -> MultiplayerTree:
 		_add_clock_node(client)
 
 	var payload := make_join_payload(username)
-	var join_err: Error = await client.join_direct(
-		client.backend, "localhost", payload
-	)
+	var target := JoinTarget.new()
+	target.backend = client.backend
+	target.address = "localhost"
+	var join_err: Error = await client.join(target, payload)
 	assert(
 		join_err == OK,
 		"Client %d join() failed: %s" % [index, error_string(join_err)],
@@ -309,9 +310,10 @@ func reconnect_client(client: MultiplayerTree) -> void:
 
 	var username: String = client.get_meta(&"_harness_username")
 	var payload := make_join_payload(username)
-	var join_err: Error = await client.join_direct(
-		client.backend, "localhost", payload
-	)
+	var target := JoinTarget.new()
+	target.backend = client.backend
+	target.address = "localhost"
+	var join_err: Error = await client.join(target, payload)
 	assert(
 		join_err == OK,
 		"Client reconnect failed: %s" % error_string(join_err)
@@ -423,12 +425,13 @@ func add_listen_server(
 	var tree := _create_player_tree("HarnessListenServer")
 	tree.use_listen_server = true
 	tree.auth_provider = auth_provider
-	var err: Error = await tree.auto_connect_player(
-		tree.backend, tree.backend.get_join_address(), join_payload
-	)
+	var target := JoinTarget.new()
+	target.backend = tree.backend
+	target.address = tree.backend.get_join_address()
+	var err: Error = await tree.join_or_host(target, join_payload)
 	assert(
 		err == OK,
-		"listen-server auto_connect_player() failed: %s" % error_string(err)
+		"listen-server join_or_host() failed: %s" % error_string(err)
 	)
 	return tree
 
@@ -443,12 +446,13 @@ func add_connect_player(
 		"HarnessConnectPlayer",
 		auth_provider
 	)
-	var err: Error = await tree.auto_connect_player(
-		tree.backend, tree.backend.get_join_address(), join_payload
-	)
+	var target := JoinTarget.new()
+	target.backend = tree.backend
+	target.address = tree.backend.get_join_address()
+	var err: Error = await tree.join_or_host(target, join_payload)
 	assert(
 		err == OK,
-		"auto_connect_player() failed: %s" % error_string(err)
+		"join_or_host() failed: %s" % error_string(err)
 	)
 	return tree
 

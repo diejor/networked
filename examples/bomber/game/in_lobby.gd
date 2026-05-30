@@ -2,26 +2,25 @@
 ##
 ## Bound primarily to [NetwTree] / [NetwContext]: the roster comes from
 ## accepted [signal NetwTree.player_joined] data, and the host-only "Start"
-## button is gated on
-## [method NetwTree.is_listen_server]. The [LobbyProvider] is only consulted
-## for the two genuinely cross-layer operations - resolving display names
-## from peer ids, and leaving the social lobby on top of disconnecting the
-## multiplayer session.
+## button is gated on [method NetwTree.is_listen_server]. The [LobbyDirectory]
+## is only consulted for resolving display names and leaving the social lobby.
 extends Control
 
+
 signal start_requested()
+
 
 @onready var _title: Label = %LobbyTitleLabel
 @onready var _member_list: ItemList = %MemberList
 @onready var _start_btn: Button = %StartButton
 @onready var _leave_btn: Button = %LeaveButton
 
-var _provider: LobbyProvider
+var _directory: LobbyDirectory
 var _ctx: NetwContext
 
 
-func setup(provider: LobbyProvider, ctx: NetwContext) -> void:
-	_provider = provider
+func setup(directory: LobbyDirectory, ctx: NetwContext) -> void:
+	_directory = directory
 	_ctx = ctx
 
 	_ctx.tree.peer_connected.connect(func(_id: int) -> void: refresh())
@@ -63,7 +62,7 @@ func refresh() -> void:
 
 
 func _on_leave_pressed() -> void:
-	if _provider:
-		_provider.leave_lobby()
+	if _directory:
+		_directory.leave_lobby()
 	if _ctx:
 		await _ctx.tree.disconnect_player()

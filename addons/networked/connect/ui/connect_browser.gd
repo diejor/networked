@@ -5,22 +5,6 @@
 ## players can browse saved servers, watch live status, host a new game, or
 ## join one with no glue code. Under the hood it drives the tree's canonical
 ## [ConnectSession] through a [NetwConnect] for you.
-##
-## [br][br]
-## Configure it in the inspector or from code:
-## [codeblock]
-## var browser := $ConnectBrowser
-## browser.tree = $MultiplayerTree            # which tree to host / join on
-## browser.backend_templates = [ENetBackend.new()]  # transports to offer
-## browser.server_list_path = "user://servers.tres" # where saved servers live
-## [/codeblock]
-##
-## [br][br]
-## Place the browser [i]under[/i] the [MultiplayerTree] and it finds the tree
-## by itself; otherwise set [member tree] (this works even when the tree lives
-## in a different scene). Want a different look? Build your own UI on
-## [NetwConnect] / [ConnectSession] -- this scene is just the reference
-## implementation.
 class_name ConnectBrowser
 extends Control
 
@@ -38,9 +22,7 @@ const _ROW_MENU_REMOVE := 3
 
 
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
-## drives, accessed through a [NetwConnect] facade. When left [code]null[/code]
-## the browser resolves the enclosing tree from its own position via
-## [code]Netw.ctx(self)[/code]. Assigning at runtime re-resolves and rebinds.
+## drives, accessed through a [NetwConnect] facade.
 @export var tree: MultiplayerTree:
 	set(value):
 		if _tree == value:
@@ -71,10 +53,10 @@ var spawner_options: Array[SceneNodePath] = []
 
 ## When [code]true[/code], hides this browser on
 ## [signal NetwConnect.session_entered] and shows it again on
-## [signal NetwConnect.session_left]. UI policy only.
+## [signal NetwConnect.session_left].
 @export var hide_when_session_active: bool = true
 
-## Path used to load and persist direct targets shown by this browser.
+## Path used to load and persist saved targets shown by this browser.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
 
 
@@ -90,6 +72,7 @@ var _last_username: String = "Player"
 @onready var _count_label: Label = %CountLabel
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _add_button: Button = %AddButton
+@onready var _join_direct_button: Button = %JoinDirectButton
 @onready var _host_button: Button = %HostButton
 @onready var _list_box: VBoxContainer = %ListBox
 @onready var _empty_state: VBoxContainer = %EmptyState
@@ -110,6 +93,7 @@ func _ready() -> void:
 	_popup.target_submitted.connect(_on_target_submitted)
 	_popup.host_submitted.connect(_on_host_submitted)
 	_popup.join_submitted.connect(_on_join_submitted)
+	_popup.join_direct_submitted.connect(_on_join_direct_submitted)
 
 	_row_menu = PopupMenu.new()
 	add_child(_row_menu)
@@ -117,6 +101,7 @@ func _ready() -> void:
 
 	_refresh_button.pressed.connect(_on_refresh_pressed)
 	_add_button.pressed.connect(_on_add_pressed)
+	_join_direct_button.pressed.connect(_on_join_direct_pressed)
 	_host_button.pressed.connect(_on_host_pressed)
 
 	_bind_session_signals()
@@ -131,14 +116,13 @@ func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
-# Resolves the NetwConnect facade from the configured tree, falling back to
-# this node's own position when no tree was assigned.
+# Resolves the NetwConnect facade from the configured tree.
 func _resolve_connect() -> void:
 	var origin: Node = _tree if _tree != null else self
 	_connect = Netw.ctx(origin).connect
 
 
-# Loads the browser-owned direct target list into the resolved facade.
+# Loads the browser-owned saved target list into the resolved facade.
 func _load_server_list() -> void:
 	if _connect != null:
 		_connect.load_server_list(server_list_path)
@@ -161,10 +145,10 @@ func _bind_session_signals() -> void:
 		_connect.host_failed.connect(_show_banner)
 	if not _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.connect(_on_join_failed)
-	if not _connect.provider_unavailable.is_connected(
-		_on_provider_unavailable
+	if not _connect.directory_unavailable.is_connected(
+		_on_directory_unavailable
 	):
-		_connect.provider_unavailable.connect(_on_provider_unavailable)
+		_connect.directory_unavailable.connect(_on_directory_unavailable)
 
 
 func _unbind_session_signals() -> void:
@@ -184,8 +168,8 @@ func _unbind_session_signals() -> void:
 		_connect.host_failed.disconnect(_show_banner)
 	if _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.disconnect(_on_join_failed)
-	if _connect.provider_unavailable.is_connected(_on_provider_unavailable):
-		_connect.provider_unavailable.disconnect(_on_provider_unavailable)
+	if _connect.directory_unavailable.is_connected(_on_directory_unavailable):
+		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
 
 
 func _rebuild_from_session() -> void:
@@ -263,25 +247,21 @@ func _update_details() -> void:
 	var t := _selected_row.target
 	var r := _selected_row.result
 	var lines: PackedStringArray = []
-	if t.is_direct():
-		lines.append("Address: %s" % ConnectUiShared.format_address(t))
-		lines.append(
-			"Backend: %s" % ConnectUiShared.format_backend_label(t.backend)
+	
+	var is_saved := _connect.get_saved_targets().has(t)
+	
+	lines.append("Address: %s" % ConnectUiShared.format_address(t))
+	lines.append(
+		"Backend: %s" % ConnectUiShared.format_backend_label(t.backend)
+	)
+	lines.append("Status: %s" % _status_text(r))
+	lines.append(
+		"Latency: %s" % (
+			"%d ms" % r.latency_ms if r and r.is_ok() else "-"
 		)
-		lines.append("Status: %s" % _status_text(r))
-		lines.append(
-			"Latency: %s" % (
-				"%d ms" % r.latency_ms if r and r.is_ok() else "-"
-			)
-		)
-		lines.append("Players: %s" % _players_text(r))
-		lines.append("Saved: Yes")
-	else:
-		lines.append("Provider: %s" % String(t.provider_id).capitalize())
-		lines.append("Lobby ID: %s" % str(t.remote_id))
-		lines.append("Status: %s" % _status_text(r))
-		lines.append("Players: %s" % _players_text(r))
-		lines.append("Saved: No - ephemeral")
+	)
+	lines.append("Players: %s" % _players_text(r))
+	lines.append("Saved: %s" % ("Yes" if is_saved else "No - ephemeral"))
 	_details_label.text = "\n".join(lines)
 
 
@@ -294,9 +274,11 @@ func _on_row_context_requested(
 		return
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
+	
+	var is_saved := _connect.get_saved_targets().has(row.target)
 	_row_menu.clear()
 	_row_menu.add_item("Join", _ROW_MENU_JOIN)
-	if row.target.is_direct():
+	if is_saved:
 		_row_menu.add_separator()
 		_row_menu.add_item("Edit", _ROW_MENU_EDIT)
 		_row_menu.add_item("Remove", _ROW_MENU_REMOVE)
@@ -326,6 +308,11 @@ func _on_add_pressed() -> void:
 	_popup.open_add()
 
 
+func _on_join_direct_pressed() -> void:
+	_popup.set_templates(backend_templates)
+	_popup.open_join_direct(_last_username)
+
+
 func _on_refresh_pressed() -> void:
 	if _connect != null:
 		_connect.refresh()
@@ -334,13 +321,8 @@ func _on_refresh_pressed() -> void:
 func _on_host_pressed() -> void:
 	if _connect == null:
 		return
-	_popup.set_templates(backend_templates)
 	_popup.set_spawner_options(spawner_options)
-	_popup.open_host(
-		backend_templates,
-		_connect.get_provider_ids(),
-		_last_username,
-	)
+	_popup.open_host(backend_templates, _last_username)
 
 
 func _open_join_for_selected() -> void:
@@ -351,20 +333,20 @@ func _open_join_for_selected() -> void:
 
 
 func _open_edit_for_selected() -> void:
-	if _selected_row == null or not _selected_row.target.is_direct():
+	if _selected_row == null or not _connect.get_saved_targets().has(_selected_row.target):
 		return
 	_popup.set_templates(backend_templates)
 	_popup.open_edit(_selected_row.target)
 
 
 func _remove_selected() -> void:
-	if _selected_row == null or not _selected_row.target.is_direct():
+	if _selected_row == null or not _connect.get_saved_targets().has(_selected_row.target):
 		return
 	_connect.remove_target(_selected_row.target, true)
 
 
 func _on_target_submitted(target: JoinTarget, persist: bool) -> void:
-	if not _connect.get_direct_targets().has(target):
+	if not _connect.get_saved_targets().has(target):
 		_connect.add_target(target, persist)
 	elif persist:
 		_connect.save_server_list(server_list_path)
@@ -387,6 +369,11 @@ func _on_join_submitted(payload: JoinPayload) -> void:
 	await _connect.join(target, payload)
 
 
+func _on_join_direct_submitted(target: JoinTarget, payload: JoinPayload) -> void:
+	_last_username = String(payload.username)
+	await _connect.join(target, payload)
+
+
 func _on_session_entered() -> void:
 	if hide_when_session_active:
 		hide()
@@ -401,8 +388,8 @@ func _on_join_failed(_target: JoinTarget, reason: String) -> void:
 	_show_banner(reason)
 
 
-func _on_provider_unavailable(
-	_provider_id: StringName,
+func _on_directory_unavailable(
+	_directory_id: StringName,
 	reason: String,
 ) -> void:
 	_show_banner(reason)

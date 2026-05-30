@@ -1,18 +1,9 @@
 ## Bomber lobby shell.
 ##
-## Two-layer split, made visible in the scene tree:
-##
-## - [ConnectBrowser] handles direct connections and provider lobbies,
-##   driving the tree's canonical [ConnectSession] via [NetwConnect].
-## - [InLobby] talks to [NetwTree] / [NetwContext]. The roster, the host-only
-##   Start button, and game start all live there. It only consults
-##   [LobbyProvider] for [method LobbyProvider.get_member_name] and
-##   [method LobbyProvider.leave_lobby] - the two genuinely cross-layer
-##   operations.
-##
 ## This script is the bridge: it owns the state swap and coordinates with
 ## [ConnectBrowser] to enter the session.
 extends Control
+
 
 enum State { PRE_LOBBY, IN_LOBBY }
 
@@ -26,34 +17,32 @@ enum State { PRE_LOBBY, IN_LOBBY }
 
 @onready var _ctx: NetwContext = Netw.ctx(multiplayer_tree)
 
-var _provider: LobbyProvider
+var _directory: LobbyDirectory
 var _connect: NetwConnect
 
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
 
-func _ready() -> void:
-	_provider = _ctx.services.get_service(LobbyProvider)
-	assert(_provider)
 
+func _ready() -> void:
 	_connect = _ctx.connect
-	_connect.register_provider(&"steam", _provider)
+
+	var steam_dir := _ctx.services.get_service(SteamLobbyDirectory)
+	if steam_dir:
+		_directory = steam_dir
+		_connect.register_directory(&"steam", steam_dir)
+
 	_connect.load_server_list()
 
 	var ws_backend := WebSocketBackend.new()
 	ws_backend.port = 10567
-	_browser.backend_templates = [ws_backend]
-	# The browser sits outside the MultiplayerTree subtree, so point it at the
-	# tree explicitly; it then drives the same canonical session this script's
-	# facade wraps. (Runtime assignment re-resolves the browser's facade.)
+	var steam_backend := SteamBackend.new()
+	_browser.backend_templates = [ws_backend, steam_backend]
 	_browser.tree = multiplayer_tree
 	_connect.session_entered.connect(_on_browser_session_entered)
 
-	_in_lobby.setup(_provider, _ctx)
+	_in_lobby.setup(_directory, _ctx)
 	_in_lobby.start_requested.connect(_on_start_requested)
-
-	_provider.lobby_created.connect(_on_lobby_created)
-	_provider.lobby_joined.connect(_on_lobby_joined)
 
 	_ctx.tree.server_disconnecting.connect(_on_server_disconnecting)
 	_ctx.tree.server_disconnected.connect(_on_server_disconnected)
@@ -65,16 +54,6 @@ func _ready() -> void:
 	_set_state(State.PRE_LOBBY)
 
 
-# Triggered when the lobby provider reports a new lobby created by local host.
-func _on_lobby_created(lobby_id: int) -> void:
-	_pending_title = "Lobby %d (you)" % lobby_id
-
-
-# Triggered when the lobby provider reports the local client joined a lobby.
-func _on_lobby_joined(lobby_id: int) -> void:
-	_pending_title = "Lobby %d" % lobby_id
-
-
 # Transition to the InLobby screen when the server browser enters a session.
 func _on_browser_session_entered() -> void:
 	var local_id := multiplayer.get_unique_id()
@@ -84,9 +63,17 @@ func _on_browser_session_entered() -> void:
 
 	if _pending_title.is_empty():
 		if multiplayer_tree.role == MultiplayerTree.Role.LISTEN_SERVER:
-			_pending_title = "Direct Host (you)"
+			if multiplayer_tree.backend is SteamBackend:
+				_pending_title = "Lobby %s (you)" % \
+					multiplayer_tree.backend.get_join_address()
+			else:
+				_pending_title = "Direct Host (you)"
 		else:
-			_pending_title = "Direct Client"
+			if multiplayer_tree.backend is SteamBackend:
+				_pending_title = "Lobby %s" % \
+					multiplayer_tree.backend.get_join_address()
+			else:
+				_pending_title = "Direct Client"
 
 	_in_lobby.set_title(_pending_title)
 	_in_lobby.refresh()

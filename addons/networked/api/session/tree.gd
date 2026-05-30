@@ -118,13 +118,12 @@ func host_player(join_payload: JoinPayload) -> Error:
 	return await mt.host_player(join_payload) if mt else ERR_UNCONFIGURED
 
 
-## Opens the transport against [param server_address] using [param backend]
-## and submits [param join_payload] once connected.
+## Opens the transport against the [param target] address and submits
+## [param join_payload] once connected.
 ##
-## See [method MultiplayerTree.join_direct].
-func join_direct(
-	backend: BackendPeer,
-	server_address: String,
+## See [method MultiplayerTree.join].
+func join(
+	target: JoinTarget,
 	join_payload: JoinPayload,
 	timeout: float = 5.0,
 	quiet: bool = false,
@@ -132,43 +131,30 @@ func join_direct(
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return ERR_UNCONFIGURED
-	return await mt.join_direct(
-		backend, server_address, join_payload, timeout, quiet
-	)
+	return await mt.join(target, join_payload, timeout, quiet)
 
 
-## Probes [param server_address] with [param backend]; joins if reachable,
-## hosts otherwise. See [method MultiplayerTree.auto_connect_player].
-func auto_connect_player(
-	backend: BackendPeer,
-	server_address: String,
+## Probes the target address; joins if reachable, hosts otherwise.
+##
+## See [method MultiplayerTree.join_or_host].
+func join_or_host(
+	target: JoinTarget,
 	join_payload: JoinPayload,
 ) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return ERR_UNCONFIGURED
-	return await mt.auto_connect_player(backend, server_address, join_payload)
+	return await mt.join_or_host(target, join_payload)
 
 
 ## Returns the tree's configured [BackendPeer], or [code]null[/code].
 ##
-## Exposed so callers can pass the existing backend to [method join_direct]
-## or [method auto_connect_player] without holding a direct
+## Exposed so callers can pass the existing backend to [method join]
+## or [method join_or_host] without holding a direct
 ## [MultiplayerTree] reference.
 func get_backend() -> BackendPeer:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.backend if mt else null
-
-
-## Adopts a pre-connected [param peer] without going through a backend.
-##
-## For lobby flows (e.g. Steam) where the peer is produced externally.
-## See [method MultiplayerTree.adopt_peer].
-func adopt_peer(
-	peer: MultiplayerPeer, join_payload: JoinPayload = null
-) -> Error:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return await mt.adopt_peer(peer, join_payload) if mt else ERR_UNCONFIGURED
 
 
 ## Returns the current connection state.
