@@ -44,23 +44,7 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
 ## drives, accessed through a [NetwConnect] facade.
-@export var tree: MultiplayerTree:
-	set(value):
-		if _tree == value:
-			return
-		_unbind_session_signals()
-		_tree = value
-		_connect = null
-		if is_inside_tree():
-			_resolve_connect()
-			_bind_session_signals()
-			_load_server_list()
-			_rebuild_from_session()
-			_clear_selection()
-			if _connect:
-				_connect.refresh()
-	get:
-		return _tree
+@export var tree: MultiplayerTree
 
 ## Backends offered by the Add Server and Host popups.
 @export var backend_templates: Array[BackendPeer] = []
@@ -88,13 +72,12 @@ var _join_direct_popup: JoinDirectPopup
 var _connecting_popup: ConnectingPopup
 var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
-var _connect: NetwConnect
+
 var _tree: MultiplayerTree
 var _rows: Dictionary = {}  # JoinTarget -> Row
 var _selected_row: Row
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
-
 
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _add_button: Button = %AddButton
@@ -114,10 +97,9 @@ var _last_join_payload: JoinPayload = null
 @onready var _details_remove_button: Button = %DetailsRemoveButton
 @onready var _details_join_button: Button = %DetailsJoinButton
 
+@onready var _connect := Netw.ctx(tree if tree != null else self).connect
 
 func _ready() -> void:
-	if _connect == null:
-		_resolve_connect()
 	_load_server_list()
 
 	_add_popup = _ADD_POPUP_SCENE.instantiate()
@@ -168,12 +150,6 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_unbind_session_signals()
-
-
-# Resolves the NetwConnect facade from the configured tree.
-func _resolve_connect() -> void:
-	var origin: Node = _tree if _tree != null else self
-	_connect = Netw.ctx(origin).connect
 
 
 # Loads the browser-owned saved target list into the resolved facade.

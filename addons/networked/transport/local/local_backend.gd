@@ -77,11 +77,6 @@ func get_address_hint() -> AddressHint:
 func copy_from(source: BackendPeer) -> void:
 	session = (source as LocalLoopbackBackend).session
 
-
-func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	return []
-
-
 ## Returns the user-facing friendly name for this backend.
 func get_display_name() -> String:
 	return "Local"

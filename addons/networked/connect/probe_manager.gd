@@ -30,7 +30,10 @@ class _PendingQuery:
 
 var _active: Array[ProbeSession] = []
 var _queue: Array[_PendingQuery] = []
-var tree: MultiplayerTree
+
+
+func _init() -> void:
+	name = "ProbeManager"
 
 
 ## Enqueues a probe for [param target]. [param on_done] is called with
@@ -77,7 +80,7 @@ func _pump() -> void:
 
 
 func _start(pending: _PendingQuery) -> void:
-	var session := ProbeSession.new(pending.target, pending.timeout, tree)
+	var session := ProbeSession.new(pending.target, pending.timeout)
 	_active.append(session)
 	_run_session(session, pending.on_done)
 

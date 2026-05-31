@@ -9,9 +9,6 @@ extends BackendPeer
 ## The shared in-process WebRTC loopback session.
 var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
 
-func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	return []
-
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	if not session.has_live_server():
 		session.reset()

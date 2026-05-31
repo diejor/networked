@@ -56,11 +56,6 @@ func get_address_hint() -> AddressHint:
 		true
 	)
 
-
-func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	return []
-
-
 ## Returns the user-facing friendly name for this backend.
 func get_display_name() -> String:
 	return "ENet"

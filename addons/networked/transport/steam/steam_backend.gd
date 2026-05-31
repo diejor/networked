@@ -54,58 +54,14 @@ func supports_embedded_server() -> bool:
 	return false
 
 
+## Lobby status comes from the directory's lobby list (see
+## [method LobbyDirectory.list_lobbies]), so a Steam target carries its
+## [ServerInfo] without a separate probe. Saved Steam targets stay
+## [method ServerInfoResult.unsupported].
 func query_server_info(
-	address: String, timeout: float = 2.0
+	_address: String, _timeout: float = 2.0
 ) -> ServerInfoResult:
-	# Metadata-only lobby probe. This must not create or join a Steam peer.
-	if not address.is_valid_int():
-		return ServerInfoResult.error("Invalid Steam lobby ID.")
-
-	var lobby_id := int(address)
-	if _dir == null or not _dir.is_inside_tree():
-		return ServerInfoResult.unsupported()
-
-	var wrapper := _dir._wrapper
-	if wrapper == null or not wrapper.is_available():
-		return ServerInfoResult.error("Steam not available.")
-
-	if not wrapper.request_lobby_data(lobby_id):
-		return ServerInfoResult.error("Lobby query failed to send.")
-
-	var result_box := [null]
-	var on_data_updated = func(
-		success: int, p_lobby_id: int, _member_id: int
-	) -> void:
-		if p_lobby_id == lobby_id:
-			if success == 1:
-				var lobby_name := wrapper.get_lobby_data(lobby_id, "name")
-				var players := wrapper.get_num_lobby_members(lobby_id)
-				var max_players := wrapper.get_lobby_member_limit(lobby_id)
-				var info := ServerInfo.new()
-				info.motd = lobby_name
-				info.players = players
-				info.max_players = max_players
-				info.metadata = {"lobby_id": str(lobby_id)}
-				result_box[0] = ServerInfoResult.ok(info)
-			else:
-				result_box[0] = ServerInfoResult.error(
-					"Lobby does not exist."
-				)
-
-	wrapper.lobby_data_update.connect(on_data_updated)
-
-	var deadline := Time.get_ticks_msec() + int(timeout * 1000.0)
-	var tree := _dir.get_tree()
-	while result_box[0] == null and Time.get_ticks_msec() < deadline:
-		if not is_instance_valid(tree):
-			break
-		await tree.process_frame
-
-	wrapper.lobby_data_update.disconnect(on_data_updated)
-
-	if result_box[0] != null:
-		return result_box[0]
-	return ServerInfoResult.timeout()
+	return ServerInfoResult.unsupported()
 
 
 func get_address_hint() -> AddressHint:
@@ -116,11 +72,6 @@ func get_address_hint() -> AddressHint:
 		false,
 		false
 	)
-
-
-func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray:
-	return []
-
 
 func copy_from(source: BackendPeer) -> void:
 	if source is SteamBackend:

@@ -157,7 +157,3 @@ ones you need:
   rides the ``NPRB`` auth handshake on the same port (see
   :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
   discover through their own mechanisms and stay unsupported.
-- :ref:`get_backend_warnings()
-  <class_BackendPeer_method_get_backend_warnings>`: editor-time validation.
-  Strings returned here are surfaced as configuration warnings on the tree
-  node so misconfigured fields are caught before play.

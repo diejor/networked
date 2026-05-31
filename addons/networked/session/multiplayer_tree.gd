@@ -125,10 +125,15 @@ func _warn_if_role_unset() -> void:
 			+ "Connect to 'configured' before reading is_host/is_local_client."
 		)
 
-## The transport implementation used for this session.
+## Default and active transport for this tree.
 ##
-## Example: [ENetBackend], [WebSocketBackend], [WebRTCBackend].
-## The resource is automatically duplicated at runtime to ensure isolation.
+## Example: [ENetBackend], [WebSocketBackend], [WebRTCBackend]. Used as the
+## authored default by unattended starts ([member init_join_payload] and
+## headless [member auto_host_headless]), and as the live transport slot
+## host / join write to. [method join] (from a [JoinTarget]) and
+## [method ConnectSession.host] (from a [ConnectHostConfig]) overwrite it
+## with their own backend, so browser-driven flows do not depend on this
+## value. The resource is duplicated at runtime to ensure isolation.
 @export var backend: BackendPeer:
 	set(value):
 		if not Engine.is_editor_hint():
@@ -152,10 +157,6 @@ func _warn_if_role_unset() -> void:
 		
 		update_configuration_warnings()
 
-## When set, [method auto_connect_player] is called automatically on
-## [code]_ready[/code] against [member backend] and
-## [method BackendPeer.get_join_address].
-@export var init_join_payload: JoinPayload
 
 ## On headless builds, automatically calls [method host] on
 ## [code]_ready[/code].
@@ -181,6 +182,12 @@ func _warn_if_role_unset() -> void:
 		if _auth:
 			_auth.set_auth_provider(value)
 			_auth.prepare()
+
+@export_group("Session")
+## When set, [method auto_connect_player] is called automatically on
+## [code]_ready[/code] against [member backend] and
+## [method BackendPeer.get_join_address].
+@export var init_join_payload: JoinPayload
 
 ## Builds the [ServerInfo] returned to clients probing this tree via
 ## [method BackendPeer.query_server_info]. When [code]null[/code], a
@@ -406,18 +413,12 @@ static func scene_for_node(node: Node) -> MultiplayerScene:
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
 	
-	if not backend:
-		warnings.append(
-			"A BackendPeer resource must be assigned to the 'backend' property."
-		)
-	elif backend.get_script() != null and \
+	if backend and backend.get_script() != null and \
 			backend.get_script().get_global_name() == "BackendPeer":
 		warnings.append(
 			"The assigned backend is the abstract 'BackendPeer' class. " + \
 			"Please assign a functional derived class."
 		)
-	elif backend:
-		warnings.append_array(backend.get_backend_warnings(self))
 	
 	var has_scene_manager := false
 	var has_sceneless_world := false

@@ -79,13 +79,6 @@ func create_join_peer(
 	_tree: MultiplayerTree, _address: String, _username: String = ""
 ) -> MultiplayerPeer
 
-
-## Returns editor configuration warnings specific to this backend for the
-## given [param _tree].
-@abstract
-func get_backend_warnings(_tree: MultiplayerTree) -> PackedStringArray
-
-
 ## Per-frame poll hook for backends that drive their own internal state
 ## (e.g. WebRTC signaling sockets, in-process loopback queues).
 ##

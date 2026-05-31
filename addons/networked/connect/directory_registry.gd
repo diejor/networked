@@ -9,6 +9,8 @@ extends Node
 
 var _directories: Dictionary = {}
 
+func _init() -> void:
+	name = "DirectoryRegistry"
 
 ## Adds [param directory] under [param id]. Replaces any existing
 ## registration for the same id.

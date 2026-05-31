@@ -88,11 +88,6 @@ func build_url(server_address: String) -> String:
 
 	return "wss://" + server_address
 
-
-func get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	return []
-
-
 ## Returns the user-facing friendly name for this backend.
 func get_display_name() -> String:
 	return "WebSocket"
