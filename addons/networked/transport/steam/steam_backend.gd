@@ -14,7 +14,9 @@ var _dir: SteamLobbyDirectory
 
 
 func setup(_tree: MultiplayerTree) -> Error:
-	_dir = _tree.get_service(SteamLobbyDirectory)
+	_dir = _tree.get_service(SteamLobbyDirectory) as SteamLobbyDirectory
+	if _dir == null:
+		_dir = _tree.get_service(LobbyDirectory) as SteamLobbyDirectory
 	if _dir == null:
 		Netw.dbg.warn(
 			"SteamBackend: SteamLobbyDirectory service not registered."
@@ -43,8 +45,8 @@ func create_join_peer(
 
 
 func get_join_address() -> String:
-	if _dir != null and _dir.has_method("get_lobby_id"):
-		return str(_dir.call("get_lobby_id"))
+	if _dir != null:
+		return str(_dir.get_lobby_id())
 	return ""
 
 
@@ -55,12 +57,13 @@ func supports_embedded_server() -> bool:
 func query_server_info(
 	address: String, timeout: float = 2.0
 ) -> ServerInfoResult:
+	# Metadata-only lobby probe. This must not create or join a Steam peer.
 	if not address.is_valid_int():
 		return ServerInfoResult.error("Invalid Steam lobby ID.")
 
 	var lobby_id := int(address)
 	if _dir == null or not _dir.is_inside_tree():
-		return ServerInfoResult.error("Steam backend not ready.")
+		return ServerInfoResult.unsupported()
 
 	var wrapper := _dir._wrapper
 	if wrapper == null or not wrapper.is_available():
@@ -91,13 +94,12 @@ func query_server_info(
 
 	wrapper.lobby_data_update.connect(on_data_updated)
 
-	var time_left := timeout
+	var deadline := Time.get_ticks_msec() + int(timeout * 1000.0)
 	var tree := _dir.get_tree()
-	while result_box[0] == null and time_left > 0.0:
+	while result_box[0] == null and Time.get_ticks_msec() < deadline:
 		if not is_instance_valid(tree):
 			break
 		await tree.process_frame
-		time_left -= tree.get_process_delta_time()
 
 	wrapper.lobby_data_update.disconnect(on_data_updated)
 

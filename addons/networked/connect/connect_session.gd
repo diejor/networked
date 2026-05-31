@@ -125,6 +125,8 @@ func bind_tree(tree: MultiplayerTree) -> void:
 		return
 	_unbind_tree_signals()
 	_tree = tree
+	if _probes != null:
+		_probes.tree = _tree
 	Netw.dbg.debug(
 		"ConnectSession bound to tree '%s'.", [_tree.name]
 	)
@@ -546,6 +548,8 @@ func _target_summary(target: JoinTarget) -> String:
 func _ensure_internals() -> void:
 	if _probes == null:
 		_probes = ProbeManager.new()
+	if _tree != null:
+		_probes.tree = _tree
 	if _directories == null:
 		_directories = DirectoryRegistry.new()
 	_parent_internals()

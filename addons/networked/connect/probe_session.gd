@@ -20,14 +20,20 @@ signal completed(result: ServerInfoResult)
 
 var target: JoinTarget
 var timeout: float
+var tree: MultiplayerTree
 
 var _cancelled: bool = false
 var _finished: bool = false
 
 
-func _init(p_target: JoinTarget, p_timeout: float = 2.0) -> void:
+func _init(
+	p_target: JoinTarget,
+	p_timeout: float = 2.0,
+	p_tree: MultiplayerTree = null,
+) -> void:
 	target = p_target
 	timeout = p_timeout
+	tree = p_tree
 
 
 ## Runs the probe and emits [signal completed] with the
@@ -44,6 +50,8 @@ func run() -> ServerInfoResult:
 		var bad := ServerInfoResult.error("ProbeSession: target has no backend")
 		_emit(bad)
 		return bad
+	if backend is SteamBackend and tree != null:
+		await backend.setup(tree)
 
 	var result: ServerInfoResult = await backend.query_server_info(
 		target.address, timeout
