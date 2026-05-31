@@ -8,13 +8,15 @@ extends MultiplayerSpawner
 ## Add level scenes to the spawn list via the
 ## [member add_to_spawn_list] property.
 ##
+## [br][br]
 ## [b]Spawnable-scene registration must match on both sides.[/b]
 ## [MultiplayerSpawner] uses the spawnable-scenes list as an index-based
-## protocol; if the server and client lists differ, spawns are dropped
+## protocol, if the server and client lists differ, spawns are dropped
 ## silently on the client. Each [MultiplayerSceneManager] logs its
 ## registered set at [code]info[/code] level on configure for
 ## diff-friendly debugging.
 ##
+## [br][br]
 ## [b]Spawned scenes are not visible to peers until admitted.[/b]
 ## Even after the server activates a scene, the wrapper's
 ## [InterestGate] gates spawn-replication per peer. A peer only
@@ -89,14 +91,6 @@ var add_to_spawn_list: SceneNodePath:
 ##
 ## Signature: [code]func(data: Variant) -> Node[/code]
 var level_spawn_function: Callable
-
-## Server-side strategy for spawning a player when a join is accepted.
-##
-## [code]null[/code] (the default for an explicitly placed manager) means no
-## auto-spawn -- gameplay handles [signal MultiplayerTree.player_joined]
-## itself. The auto-configured manager created for a dropped world scene is
-## assigned a [SpawnerComponentPolicy] so the zero-config path keeps working.
-@export var spawn_policy: SpawnPolicy
 
 ## Per-scene spawn data used by [method activate_scene].
 var scene_spawn_data: Dictionary[StringName, Variant] = {}
@@ -230,9 +224,6 @@ func _enter_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree"
 	)
 	
-	if not mt.player_joined.is_connected(handle_player_joined):
-		mt.player_joined.connect(handle_player_joined)
-	
 	if not mt.configured.is_connected(configured.emit):
 		mt.configured.connect(configured.emit)
 
@@ -246,9 +237,6 @@ func _exit_tree() -> void:
 		is_instance_valid(mt),
 		"SceneManager must be a descendant of a MultiplayerTree"
 	)
-	
-	if mt.player_joined.is_connected(handle_player_joined):
-		mt.player_joined.disconnect(handle_player_joined)
 	
 	if mt.configured.is_connected(configured.emit):
 		mt.configured.disconnect(configured.emit)
@@ -302,8 +290,9 @@ func spawn_scene(name: StringName) -> void:
 
 
 ## Ensures [param name] is spawned and forces its level's process mode to
-## [constant Node.PROCESS_MODE_INHERIT].
-func activate_scene(name: StringName) -> void:
+## [constant Node.PROCESS_MODE_INHERIT]. Returns the [MultiplayerScene], or
+## [code]null[/code] if activation failed.
+func activate_scene(name: StringName) -> MultiplayerScene:
 	Netw.dbg.trace("activate_scene('%s') called.", [name])
 	if not active_scenes.has(name):
 		if level_spawn_function.is_valid():
@@ -311,17 +300,18 @@ func activate_scene(name: StringName) -> void:
 			spawn(data)
 		else:
 			spawn_scene(name)
-	
+
 	var scene := active_scenes.get(name) as MultiplayerScene
 	if not scene:
 		Netw.dbg.error(
 			"Failed to activate scene '%s'.", [name], func(m): push_error(m)
 		)
-		return
-	
+		return null
+
 	scene.level.process_mode = Node.PROCESS_MODE_INHERIT
 	Netw.dbg.info("Scene '%s' activated.", [name])
 	scene_activated.emit(scene)
+	return scene
 
 
 ## Sets the scene level's process mode to DISABLED.
@@ -413,19 +403,6 @@ func _spawn_scene_node(data: Variant) -> Node:
 	scene.tree_exited.connect(scene_despawned.emit.bind(scene))
 	
 	return scene
-
-
-## Called by [MultiplayerTree] to handle an accepted player join.
-##
-## Delegates to [member spawn_policy]. When no policy is configured this is a
-## no-op -- gameplay is expected to handle
-## [signal MultiplayerTree.player_joined] itself (see the bomber example).
-func handle_player_joined(rj: ResolvedJoin) -> void:
-	if not multiplayer.is_server():
-		return
-	if spawn_policy == null:
-		return
-	await spawn_policy.spawn(rj, self)
 
 
 ## Server-side. Returns the [MultiplayerScene] a freshly instantiated

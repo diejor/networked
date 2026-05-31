@@ -51,6 +51,7 @@ script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
 use_listen_server = true
 server_info_source = SubResource("Resource_xoeqs")
+spawn_policy = SubResource("Resource_spwn")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
@@ -61,7 +62,6 @@ metadata/_custom_type_script = "uid://domi8t23qrsdh"
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
 spawn_path = NodePath(".")
 script = ExtResource("7_trn2v")
-spawn_policy = SubResource("Resource_spwn")
 scene_config/Level1/load_mode = 1
 scene_config/Level1/empty_action = 1
 scene_config/Level2/load_mode = 1

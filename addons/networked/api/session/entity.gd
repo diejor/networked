@@ -1,9 +1,18 @@
-## Runtime identity record for one networked entity root.
+## Runtime identity record for one networked entity root, player or
+## server-owned.
 ##
-## [SpawnerComponent] creates and drives the entity lifecycle; sibling
-## components use [NetwEntity] to share identity, spawn properties,
-## save properties, and interest signals without hard dependencies on
-## each other.
+## [SpawnerComponent] creates and drives the entity lifecycle. Sibling
+## components use [NetwEntity] to share identity ([member entity_id],
+## [member peer_id]), contribute to the spawn packet
+## ([method contribute_spawn_property]) and saved state
+## ([method contribute_save_property]), and observe visibility
+## ([signal interest_enter], [signal interest_exit]) without hard
+## dependencies on each other.
+##
+## [br][br]
+## [member peer_id] classifies the entity. A non-zero value is a player and
+## names the peer it represents. [code]0[/code] is a server-owned entity such
+## as an NPC or world object. See [member is_player] and [enum Ownership].
 ##
 ## [br][br]
 ## The entity root is the node carrying [constant META_KEY]. In packed
@@ -25,8 +34,15 @@ extends RefCounted
 
 const META_KEY := &"netw_entity"
 
-## Semantic ownership marker derived from [member peer_id].
-enum Ownership { PEER, SERVER }
+## Whether an entity represents a joined peer or the server, derived from
+## [member peer_id].
+enum Ownership {
+	## Represents a joined peer. A player. [member peer_id] is non-zero.
+	PEER,
+	## Server-owned entity such as an NPC or world object. [member peer_id]
+	## is [code]0[/code].
+	SERVER,
+}
 
 
 # Buffered proxy-style property contribution.
@@ -114,16 +130,32 @@ var owner: Node
 ## Stable display/save/debug label for this entity.
 var entity_id: StringName = &""
 
-## Joined peer this entity represents.
+## Peer id of the joined player this entity represents (the same id carried by
+## [member ResolvedJoin.peer_id]), or [code]0[/code] for a server-owned entity
+## (NPC, prop, world object).
 ##
-## [code]0[/code] means a server-owned world entity. Non-zero values
-## drive player registration, local-player tracking, and disconnect
-## despawn.
+## A non-zero value drives [method MultiplayerScene.register_player],
+## [member MultiplayerTree.local_player] tracking, and an automatic
+## [method SpawnerComponent.despawn] when its peer disconnects. This is the
+## source of the player test. See [member is_player].
 var peer_id := 0
 
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
 	get: return Ownership.PEER if peer_id != 0 else Ownership.SERVER
+
+## [code]true[/code] when this entity represents a joined player rather than a
+## server-owned entity. The canonical player test across the addon. Equivalent
+## to [code]ownership == Ownership.PEER[/code] and to a non-zero
+## [member peer_id].
+## [codeblock]
+## # A projectile hit some entity; only react if it was a player.
+## var entity := NetwEntity.of(hit_node)
+## if entity and entity.is_player:
+##     eliminate_player(entity.peer_id)
+## [/codeblock]
+var is_player: bool:
+	get: return peer_id != 0
 
 ## Returns [member SpawnerComponent.is_template] for this entity's
 ## registered spawner.

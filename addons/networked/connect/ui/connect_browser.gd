@@ -74,8 +74,8 @@ var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
 
 var _tree: MultiplayerTree
-var _rows: Dictionary = {}  # JoinTarget -> Row
-var _selected_row: Row
+var _rows: Dictionary = {}  # JoinTarget -> ConnectBrowserRow
+var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
 
@@ -215,7 +215,7 @@ func _rebuild_from_session() -> void:
 
 
 func _add_row(target: JoinTarget) -> void:
-	var row := _ROW_SCENE.instantiate() as Row
+	var row := _ROW_SCENE.instantiate() as ConnectBrowserRow
 	_list_box.add_child(row)
 	row.bind_target(target)
 	var existing := _connect.get_result(target)
@@ -235,7 +235,7 @@ func _on_target_added(target: JoinTarget) -> void:
 
 
 func _on_target_removed(target: JoinTarget) -> void:
-	var row: Row = _rows.get(target)
+	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.queue_free()
 		_rows.erase(target)
@@ -245,7 +245,7 @@ func _on_target_removed(target: JoinTarget) -> void:
 
 
 func _on_target_updated(target: JoinTarget, result: ServerInfoResult) -> void:
-	var row: Row = _rows.get(target)
+	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.set_result(result)
 	if _selected_row != null and _selected_row.target == target:
@@ -257,7 +257,7 @@ func _update_counter() -> void:
 	_empty_state.visible = total == 0
 
 
-func _on_row_selected(_target: JoinTarget, row: Row) -> void:
+func _on_row_selected(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 	if _selected_row and is_instance_valid(_selected_row):
 		_selected_row.button_pressed = false
 	_selected_row = row
@@ -332,7 +332,7 @@ func _create_detail_item(
 
 func _on_row_context_requested(
 	_target: JoinTarget,
-	row: Row,
+	row: ConnectBrowserRow,
 	screen_position: Vector2,
 ) -> void:
 	if row == null or row.target == null:
@@ -354,7 +354,7 @@ func _on_row_menu_id_pressed(id: int) -> void:
 			_remove_selected()
 
 
-func _on_row_activated(_target: JoinTarget, row: Row) -> void:
+func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 	if row == null or row.target == null:
 		return
 	_on_row_selected(row.target, row)

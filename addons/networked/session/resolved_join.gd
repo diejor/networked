@@ -15,7 +15,7 @@ var peer_id: int
 var username: StringName
 
 ## Opaque spawn intent, interpreted server-side by
-## [member MultiplayerSceneManager.spawn_policy]. Empty when no spawn intent
+## [member MultiplayerTree.spawn_policy]. Empty when no spawn intent
 ## was provided. See [member JoinPayload.spawn].
 var spawn: Dictionary = {}
 

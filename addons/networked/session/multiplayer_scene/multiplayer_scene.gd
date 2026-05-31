@@ -5,24 +5,16 @@ extends Node
 ## level subtree.
 ##
 ## Spawned by [MultiplayerSceneManager]. Holds [member level], a
-## [NetwInterestLayer] (canonical admission + entity state) addressed
-## by [method scene_layer_id], and an [InterestGate] ([member gate])
-## that projects the layer's [code]viewers[/code] and [code]policy[/code]
-## over spawn-sync so peers receive scene-level admission atomically
-## with the subtree.
+## [NetwInterestLayer] addressed by [method scene_layer_id], and an 
+## [InterestGate] ([member gate]) that sends the layer's [code]viewers[/code] 
+## and [code]policy[/code] over spawn-sync so peers receive scene-level admission 
+## atomically with the subtree.
 ##
 ## [br][br]
-## Default-deny visibility: a peer sees nothing under this scene
-## until the server calls [method connect_peer] - normally
-## transitively from [method register_player] in the join flow. A
-## scene with no admitted peers is invisible to every client by
-## design.
-##
-## [br][br]
-## [method scene_layer_id] is [code]&"scene:<level-name>"[/code].
-## [member MultiplayerSceneManager.active_scenes] keys by
-## [member level] [code].name[/code], so concurrent same-named scenes
-## are not supported.
+## A peer sees nothing under this scene until the server calls 
+## [method connect_peer], normally transitively from [method register_player] 
+## in the join flow. A scene with no admitted peers is invisible to every client 
+## by design.
 
 ## The [InterestGate] that carries scene-admission state for this scene.
 @export var gate: InterestGate
@@ -62,8 +54,11 @@ signal player_despawned(node: Node)
 ## automatic join event. See [signal player_entered] for spawn detection.
 signal player_ready(rj: ResolvedJoin)
 
-## Active [NetwSceneReadiness] gates registered via [method NetwScene.create_readiness_gate].
+# Active readiness gates registered via NetwScene.
 var _readiness_gates: Array[WeakRef] = []
+# Players indexed by peer. Weak so the scene observes players without owning
+# them: the level subtree and spawner drive their lifecycle, and freed players
+# null out here to be pruned lazily by get_players().
 var _players_by_peer: Dictionary[int, WeakRef] = {}
 var _tracked_nodes: Dictionary[Node, bool] = {}
 
@@ -318,7 +313,7 @@ func complete_player_transfer(player: Node) -> void:
 
 ## Admits [param player]'s peer, enrolls the player as a tracked
 ## entity in this scene's layer, and indexes the player by peer id.
-## Scene-owned enrollment - do not delegate to [InterestComponent].
+## Scene-owned enrollment. Do not delegate to [InterestComponent].
 func register_player(player: Node) -> void:
 	var peer_id := _get_peer_id(player)
 	if peer_id == 0:
@@ -341,6 +336,11 @@ func register_player(player: Node) -> void:
 		player.tree_exiting.connect(bound)
 
 
+## Returns the live player nodes registered in this scene.
+##
+## A player is an entity with [member NetwEntity.is_player], registered via
+## [method register_player]. The scene indexes players weakly and does not own
+## them, so freed players are pruned from the registry on read.
 func get_players() -> Array[Node]:
 	var players: Array[Node] = []
 	var stale_peers: Array[int] = []
@@ -405,15 +405,13 @@ func _flush_gate_now() -> void:
 # Readiness gate helpers
 # ---------------------------------------------------------------------------
 
-## Registers a [NetwSceneReadiness] gate to receive peer join/leave and
-## readiness-change updates. Called internally by [NetwScene].
+# Registers a readiness gate to receive peer updates; called by NetwScene.
 func _register_readiness_gate(readiness_gate: NetwSceneReadiness) -> void:
 	_cleanup_dead_gates()
 	_readiness_gates.append(weakref(readiness_gate))
 
 
-## Applies a readiness change from the server and broadcasts to scene peers.
-## Called directly when the server/host calls [method NetwSceneReadiness.set_ready].
+# Applies a readiness change from the server and broadcasts to scene peers.
 func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 	_rpc_receive_ready_changed(peer_id, is_ready)
 	for target_peer_id: int in connected_peers:
@@ -421,8 +419,7 @@ func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 			rpc_id(target_peer_id, "_rpc_receive_ready_changed", peer_id, is_ready)
 
 
-## Notifies all registered gates that a player entered the scene.
-## Called by [NetwScene] from [code]_on_spawned[/code].
+# Notifies all registered gates that a player entered the scene.
 func _notify_gates_player_added(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
 		var readiness_gate := wr.get_ref() as NetwSceneReadiness
@@ -430,8 +427,7 @@ func _notify_gates_player_added(peer_id: int) -> void:
 			readiness_gate._add_peer(peer_id)
 
 
-## Notifies all registered gates that a player left the scene.
-## Called by [NetwScene] from [code]_on_despawned[/code].
+# Notifies all registered gates that a player left the scene.
 func _notify_gates_player_removed(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
 		var readiness_gate := wr.get_ref() as NetwSceneReadiness
@@ -457,21 +453,19 @@ func _get_peer_id(node: Node) -> int:
 # RPCs - suspend / resume (soft, signal-only, game code decides what to do)
 # ---------------------------------------------------------------------------
 
-## Sent by the server to notify all clients that the scene has been suspended.
+# Sent by the server to notify all clients that the scene has been suspended.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_suspend(reason: String) -> void:
 	get_context().scene.suspended.emit(reason)
 
 
-## Sent by the server to notify all clients that the scene has been resumed.
+# Sent by the server to notify all clients that the scene has been resumed.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_resume() -> void:
 	get_context().scene.resumed.emit()
 
 
-## Sent by a client to ask the server to suspend the scene.
-## The server emits [signal NetwScene.suspend_requested]; game code decides
-## whether to honour the request by calling [method NetwScene.suspend].
+# Client request to suspend; server emits NetwScene.suspend_requested.
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_request_suspend(reason: String) -> void:
 	if not multiplayer.is_server():
@@ -485,25 +479,25 @@ func _rpc_request_suspend(reason: String) -> void:
 # RPCs - countdown
 # ---------------------------------------------------------------------------
 
-## Sent by the server when a new countdown starts.
+# Sent by the server when a new countdown starts.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_started(seconds: int) -> void:
 	get_context().scene.countdown_started.emit(seconds)
 
 
-## Sent by the server on each countdown tick.
+# Sent by the server on each countdown tick.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_tick(seconds_left: int) -> void:
 	get_context().scene.countdown_tick.emit(seconds_left)
 
 
-## Sent by the server when the countdown reaches zero.
+# Sent by the server when the countdown reaches zero.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_finished() -> void:
 	get_context().scene.countdown_finished.emit()
 
 
-## Sent by the server when a running countdown is cancelled.
+# Sent by the server when a running countdown is cancelled.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_countdown_cancelled() -> void:
 	get_context().scene.countdown_cancelled.emit()
@@ -513,7 +507,7 @@ func _rpc_receive_countdown_cancelled() -> void:
 # RPCs - readiness
 # ---------------------------------------------------------------------------
 
-## Sent by a client to report their ready state to the server.
+# Sent by a client to report their ready state to the server.
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_request_set_ready(is_ready: bool) -> void:
 	if not multiplayer.is_server():
@@ -523,7 +517,7 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 	_handle_set_ready(peer_id, is_ready)
 
 
-## Broadcast by the server to synchronise a readiness change on scene peers.
+# Broadcast by the server to synchronise a readiness change on scene peers.
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:

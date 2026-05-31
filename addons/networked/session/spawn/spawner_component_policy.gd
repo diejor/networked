@@ -2,25 +2,31 @@
 class_name SpawnerComponentPolicy
 extends SpawnPolicy
 
-## Default [SpawnPolicy]: routes a joining player into a managed scene and
-## spawns them at a [SpawnerComponent] the client selected. Reproduces the
-## addon's classic "join auto-spawns a player" behavior.
+## The default [SpawnPolicy]. Routes a joining player into a managed scene and
+## spawns them at the [SpawnerComponent] the client picked.
 ##
-## The client authors the target by serializing this policy's
-## [method to_dict] into [member JoinPayload.spawn] (see
-## [method from_scene_node_path]). The server's configured instance is
-## stateless: [method spawn] reads the target from [member ResolvedJoin.spawn].
+## [br][br]
+## The target is a [member scene_name] plus a [member spawner_path] into that
+## scene. The client picks them (see [method from_scene_node_path]) and the
+## server reads them back in [method spawn]. See [SpawnPolicy] for the
+## client and server split.
 
-## Target scene basename (e.g. [code]&"Level1"[/code]). Used only for
-## client-side authoring of the [method to_dict] payload.
+## Target scene basename (e.g. [code]&"Level1"[/code]). The client sets this
+## before joining. See [method from_scene_node_path].
 @export var scene_name: StringName
 
-## Path to the [SpawnerComponent] within the target scene. Used only for
-## client-side authoring of the [method to_dict] payload.
+## Path to the [SpawnerComponent] within [member scene_name]. The client sets
+## this before joining. See [method from_scene_node_path].
 @export var spawner_path: NodePath
 
 
-## Builds an authoring policy from a [SceneNodePath] picker selection.
+## Builds a policy from a [SceneNodePath] picker selection, ready to serialize
+## into the join payload.
+## [codeblock]
+## # Client: a connect popup picked a spawner.
+## var policy := SpawnerComponentPolicy.from_scene_node_path(picked)
+## payload.spawn = policy.to_dict()
+## [/codeblock]
 static func from_scene_node_path(path: SceneNodePath) -> SpawnerComponentPolicy:
 	var policy := SpawnerComponentPolicy.new()
 	if path:
@@ -36,24 +42,21 @@ func to_dict() -> Dictionary:
 	}
 
 
-func spawn(rj: ResolvedJoin, mgr: MultiplayerSceneManager) -> void:
+func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 	var target_scene_name := StringName(rj.spawn.get("scene_name", &""))
 	var target_spawner_path: NodePath = rj.spawn.get("spawner_path", NodePath())
 	if target_scene_name.is_empty():
-		return
+		return null
 
-	await mgr.activate_scene(target_scene_name)
-	var scene := mgr.active_scenes.get(target_scene_name) as MultiplayerScene
+	var mgr := ctx.services.get_scene_manager()
+	var scene := await mgr.activate_scene(target_scene_name)
 	assert(scene, "activate_scene must guarantee scene presence")
 
 	var spawner := _spawner_in(scene, target_spawner_path)
 	var player := spawner.instantiate_player(rj)
 	var target_scene := await mgr._resolve_hydrated_spawn_scene(player, scene)
 	target_scene.add_player(player)
-
-	var tree := MultiplayerTree.for_node(mgr)
-	if tree:
-		tree.player_scene_ready.emit(rj, target_scene)
+	return target_scene
 
 
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:

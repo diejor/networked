@@ -13,7 +13,7 @@ extends Serde
 
 ## Opaque spawn intent, produced by a [SpawnPolicy]'s
 ## [method SpawnPolicy.to_dict]. The server's configured
-## [member MultiplayerSceneManager.spawn_policy] interprets it. Empty when
+## [member MultiplayerTree.spawn_policy] interprets it. Empty when
 ## the client expresses no spawn intent.
 @export var spawn: Dictionary = {}
 

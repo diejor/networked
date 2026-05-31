@@ -1,16 +1,16 @@
 ## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
 ## latest [ServerInfoResult].
-class_name Row
+class_name ConnectBrowserRow
 extends Control
 
 
 signal selected(target: JoinTarget)
 signal context_requested(
 	target: JoinTarget,
-	row: Row,
+	row: ConnectBrowserRow,
 	screen_position: Vector2,
 )
-signal activated(target: JoinTarget, row: Row)
+signal activated(target: JoinTarget, row: ConnectBrowserRow)
 
 
 var target: JoinTarget

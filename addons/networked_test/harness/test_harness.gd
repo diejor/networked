@@ -182,6 +182,7 @@ func add_client() -> MultiplayerTree:
 		if sm:
 			_configure_client_scene_manager(sm)
 			client.add_child(sm)
+			_ensure_default_spawn_policy(client)
 
 	_clients.append(client)
 	if _clock_enabled:
@@ -700,11 +701,14 @@ func _instantiate_scene_manager() -> MultiplayerSceneManager:
 		sm = (_scene_manager_src as Callable).call()
 	elif _scene_manager_src is MultiplayerSceneManager:
 		sm = _scene_manager_src as MultiplayerSceneManager
-	# Harness-created managers auto-spawn joining players, matching the
-	# addon's zero-config world behavior, unless the test wired its own policy.
-	if sm and sm.spawn_policy == null:
-		sm.spawn_policy = SpawnerComponentPolicy.new()
 	return sm
+
+
+# Harness trees auto-spawn joining players, matching the addon's zero-config
+# world behavior, unless the test wired its own policy.
+func _ensure_default_spawn_policy(tree: MultiplayerTree) -> void:
+	if tree.spawn_policy == null:
+		tree.spawn_policy = SpawnerComponentPolicy.new()
 
 
 # Mirrors server scene replication config onto a newly created client manager.
@@ -747,6 +751,7 @@ func _create_player_tree(
 		if sm:
 			_configure_client_scene_manager(sm)
 			tree.add_child(sm)
+			_ensure_default_spawn_policy(tree)
 
 	if _clock_enabled:
 		_add_clock_node(tree)
@@ -789,6 +794,7 @@ func _setup_server() -> void:
 		var sm := _instantiate_scene_manager()
 		if sm:
 			_server.add_child(sm)
+			_ensure_default_spawn_policy(_server)
 
 
 func _find_scene_player(

@@ -1,34 +1,63 @@
 @tool
+@abstract
 class_name SpawnPolicy
 extends Resource
 
-## Server-side strategy that turns an accepted [ResolvedJoin] into a spawned
-## player. Configured on a [MultiplayerSceneManager] via
-## [member MultiplayerSceneManager.spawn_policy]; [code]null[/code] means the
-## session does not auto-spawn on join (gameplay handles
-## [signal MultiplayerTree.player_joined] itself).
+## Server-side strategy for spawning a player once their join is accepted.
 ##
-## [b]Stateless per join.[/b] A single policy instance is shared across every
-## join (and rides along when the tree is duplicated for the server), so
-## [method spawn] must read its inputs from [member ResolvedJoin.spawn] into
-## locals rather than storing them on the policy. The exported fields exist
-## only to author the client-side [member ResolvedJoin.spawn] payload via
-## [method to_dict].
+## Assign it to [member MultiplayerTree.spawn_policy]. A [code]null[/code]
+## policy means the session does not auto-spawn, and gameplay drives
+## [signal MultiplayerTree.player_joined] itself. [SpawnerComponentPolicy] is
+## the built-in default.
 ##
+## [br][br]
+## A policy spans two peers. The joining client fills the exported fields and
+## serializes them through [method to_dict] into [member JoinPayload.spawn].
+## The server reads that same data back from [member ResolvedJoin.spawn] in
+## [method spawn] and creates the player.
 ## [codeblock]
-## # Client authoring (e.g. a connect popup):
-## payload.spawn = SpawnerComponentPolicy.from_scene_node_path(picked).to_dict()
+## # A custom policy that spawns the player at a named point.
+## class_name SpawnAtPoint
+## extends SpawnPolicy
+##
+## @export var point_name: StringName
+##
+## func to_dict() -> Dictionary:
+##     return { "point": point_name }
+##
+## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
+##     var point: StringName = rj.spawn.get("point", &"")
+##     var mgr := ctx.services.get_scene_manager()
+##     var scene := await mgr.activate_scene(&"Arena")
+##     # ...add the player to scene at point...
+##     return scene
 ## [/codeblock]
 
 
-## Server-only. Spawns the player described by [param rj] using [param mgr]'s
-## scene services. Reads spawn intent from [member ResolvedJoin.spawn]; a
-## policy that needs no client input may ignore it. Override in a subclass.
-func spawn(_rj: ResolvedJoin, _mgr: MultiplayerSceneManager) -> void:
-	assert(false, "SpawnPolicy.spawn must be overridden by a subclass.")
+## Server-only. Spawns the player for the accepted join [param rj] and returns
+## the [MultiplayerScene] they entered, or [code]null[/code]. The tree emits
+## [signal MultiplayerTree.player_scene_ready] with that scene.
+## [br][br]
+## Read the client's spawn intent from [member ResolvedJoin.spawn] and reach
+## scene services through [param ctx].
+## [codeblock]
+## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
+##     var point: StringName = rj.spawn.get("point", &"")
+##     var mgr := ctx.services.get_scene_manager()
+##     var scene := await mgr.activate_scene(&"Arena")
+##     # ...add the player to scene at point...
+##     return scene
+## [/codeblock]
+@abstract
+func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene
 
 
-## Returns the wire-schema dictionary the client stores in
-## [member JoinPayload.spawn]. Override to describe this policy's inputs.
-func to_dict() -> Dictionary:
-	return {}
+## Serializes this policy's exported fields into the spawn-intent dictionary
+## the client stores in [member JoinPayload.spawn]. Mirror the keys
+## [method spawn] reads back.
+## [codeblock]
+## func to_dict() -> Dictionary:
+##     return { "point": point_name }
+## [/codeblock]
+@abstract
+func to_dict() -> Dictionary

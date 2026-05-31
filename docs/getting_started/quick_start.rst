@@ -166,10 +166,11 @@ explicitly with the remote address instead.
 
     Dropping a world scene (one containing a ``SpawnerComponent``) directly
     as a child of the :ref:`MultiplayerTree <class_MultiplayerTree>` auto-creates
-    a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` with a
-    :ref:`SpawnerComponentPolicy <class_SpawnerComponentPolicy>`, so joining
-    players spawn automatically without any spawn-handling code. An explicitly
-    placed manager leaves ``spawn_policy`` unset, so you control spawning from
+    a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` and assigns
+    the tree a :ref:`SpawnerComponentPolicy <class_SpawnerComponentPolicy>`, so
+    joining players spawn automatically without any spawn-handling code. A tree
+    without a dropped world scene leaves ``spawn_policy`` unset, so you control
+    spawning from
     :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` instead.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
