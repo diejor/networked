@@ -152,7 +152,7 @@ separately to the entry method:
 
         var join := JoinPayload.new()
         join.username = "alice"
-        join.spawner_component_path = spawner_path
+        join.spawn = SpawnerComponentPolicy.from_scene_node_path(spawner_path).to_dict()
 
         client.auto_connect_player(client.backend, "localhost", join)
 
@@ -164,10 +164,13 @@ explicitly with the remote address instead.
 
 .. tip::
 
-    You can skip the script entirely while prototyping. Set the inspector
-    field :button:`Init Join Payload` on the :ref:`MultiplayerTree <class_MultiplayerTree>`
-    to a :ref:`JoinPayload <class_JoinPayload>` resource and the tree will
-    call :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
+    Dropping a world scene (one containing a ``SpawnerComponent``) directly
+    as a child of the :ref:`MultiplayerTree <class_MultiplayerTree>` auto-creates
+    a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` with a
+    :ref:`SpawnerComponentPolicy <class_SpawnerComponentPolicy>`, so joining
+    players spawn automatically without any spawn-handling code. An explicitly
+    placed manager leaves ``spawn_policy`` unset, so you control spawning from
+    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` instead.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project

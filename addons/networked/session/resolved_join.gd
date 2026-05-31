@@ -14,13 +14,10 @@ var peer_id: int
 ## The player's display name.
 var username: StringName
 
-## Name of the target scene (derived from spawner_component_path).
-## Empty when no spawner path was provided.
-var scene_name: StringName
-
-## Node path to the spawner within the target scene.
-## Empty when no spawner path was provided.
-var spawner_path: NodePath
+## Opaque spawn intent, interpreted server-side by
+## [member MultiplayerSceneManager.spawn_policy]. Empty when no spawn intent
+## was provided. See [member JoinPayload.spawn].
+var spawn: Dictionary = {}
 
 ## Whether this connection used debug initialization data.
 var is_debug: bool
@@ -32,8 +29,7 @@ func serialize() -> PackedByteArray:
 	var dict: Dictionary = {
 		peer_id = peer_id,
 		username = username,
-		scene_name = scene_name,
-		spawner_path = spawner_path,
+		spawn = spawn,
 		is_debug = is_debug,
 	}
 	return var_to_bytes(dict)
@@ -46,7 +42,6 @@ static func deserialize(bytes: PackedByteArray) -> ResolvedJoin:
 	var rj := ResolvedJoin.new()
 	rj.peer_id = data.peer_id
 	rj.username = data.username
-	rj.scene_name = data.scene_name
-	rj.spawner_path = data.spawner_path
+	rj.spawn = data.get("spawn", {})
 	rj.is_debug = data.get("is_debug", false)
 	return rj

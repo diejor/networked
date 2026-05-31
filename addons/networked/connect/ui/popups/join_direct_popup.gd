@@ -105,7 +105,7 @@ func _on_confirm() -> void:
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"
 	var spawner := _selected_spawner()
 	if spawner != null:
-		payload.spawner_component_path = spawner
-		
+		payload.spawn = SpawnerComponentPolicy.from_scene_node_path(spawner).to_dict()
+
 	hide()
 	submitted.emit(target, payload)

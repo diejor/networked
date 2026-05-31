@@ -90,6 +90,14 @@ var add_to_spawn_list: SceneNodePath:
 ## Signature: [code]func(data: Variant) -> Node[/code]
 var level_spawn_function: Callable
 
+## Server-side strategy for spawning a player when a join is accepted.
+##
+## [code]null[/code] (the default for an explicitly placed manager) means no
+## auto-spawn -- gameplay handles [signal MultiplayerTree.player_joined]
+## itself. The auto-configured manager created for a dropped world scene is
+## assigned a [SpawnerComponentPolicy] so the zero-config path keeps working.
+@export var spawn_policy: SpawnPolicy
+
 ## Per-scene spawn data used by [method activate_scene].
 var scene_spawn_data: Dictionary[StringName, Variant] = {}
 
@@ -409,39 +417,20 @@ func _spawn_scene_node(data: Variant) -> Node:
 
 ## Called by [MultiplayerTree] to handle an accepted player join.
 ##
-## Activates the target scene, dispatches to the configured spawner, and
-## emits [signal MultiplayerTree.player_scene_ready].
-## [br][br]
-## When [member ResolvedJoin.scene_name] is empty (no
-## [member JoinPayload.spawner_component_path] was provided), this is a no-op.
+## Delegates to [member spawn_policy]. When no policy is configured this is a
+## no-op -- gameplay is expected to handle
+## [signal MultiplayerTree.player_joined] itself (see the bomber example).
 func handle_player_joined(rj: ResolvedJoin) -> void:
 	if not multiplayer.is_server():
 		return
-
-	if rj.scene_name.is_empty():
+	if spawn_policy == null:
 		return
-
-	await activate_scene(rj.scene_name)
-	var scene := active_scenes.get(rj.scene_name) as MultiplayerScene
-	assert(scene, "activate_scene must guarantee scene presence")
-
-	var spawner := _spawner_in(scene, rj.spawner_path)
-	var player := spawner.instantiate_player(rj)
-	var target_scene := await _resolve_hydrated_spawn_scene(player, scene)
-	target_scene.add_player(player)
-
-	var tree := MultiplayerTree.for_node(self)
-	if tree:
-		tree.player_scene_ready.emit(rj, target_scene)
+	await spawn_policy.spawn(rj, self)
 
 
-func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
-	var node := scene.level.get_node(path)
-	assert(node is SpawnerComponent,
-		"ResolvedJoin.spawner_path didn't point at a SpawnerComponent")
-	return node
-
-
+## Server-side. Returns the [MultiplayerScene] a freshly instantiated
+## [param player] should enter, honoring a [TPComponent]'s stored scene over
+## [param fallback_scene]. Used by [SpawnPolicy] implementations.
 func _resolve_hydrated_spawn_scene(
 	player: Node, fallback_scene: MultiplayerScene
 ) -> MultiplayerScene:

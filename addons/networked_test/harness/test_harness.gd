@@ -376,7 +376,9 @@ func join_player(
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
-	join_payload.spawner_component_path = spawner_component_path
+	join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
+		spawner_component_path
+	).to_dict()
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -413,7 +415,9 @@ func make_join_payload(
 		var spawner_component_path := SceneNodePath.new()
 		spawner_component_path.scene_path = level_scene_path
 		spawner_component_path.node_path = spawner_node_path
-		join_payload.spawner_component_path = spawner_component_path
+		join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
+			spawner_component_path
+		).to_dict()
 	return join_payload
 
 
@@ -689,13 +693,18 @@ func _ensure_server_hosted() -> void:
 
 
 func _instantiate_scene_manager() -> MultiplayerSceneManager:
+	var sm: MultiplayerSceneManager = null
 	if _scene_manager_src is PackedScene:
-		return (_scene_manager_src as PackedScene).instantiate()
+		sm = (_scene_manager_src as PackedScene).instantiate()
 	elif _scene_manager_src is Callable:
-		return (_scene_manager_src as Callable).call()
+		sm = (_scene_manager_src as Callable).call()
 	elif _scene_manager_src is MultiplayerSceneManager:
-		return _scene_manager_src as MultiplayerSceneManager
-	return null
+		sm = _scene_manager_src as MultiplayerSceneManager
+	# Harness-created managers auto-spawn joining players, matching the
+	# addon's zero-config world behavior, unless the test wired its own policy.
+	if sm and sm.spawn_policy == null:
+		sm.spawn_policy = SpawnerComponentPolicy.new()
+	return sm
 
 
 # Mirrors server scene replication config onto a newly created client manager.

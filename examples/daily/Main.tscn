@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="8_lpgch"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/webrtc_backend.gd" id="10_xg3i6"]
+[ext_resource type="Script" uid="uid://dwa0bhinxigbm" path="res://addons/networked/session/spawn/spawner_component_policy.gd" id="11_spwn"]
 
 [sub_resource type="Resource" id="Resource_lpgch"]
 script = ExtResource("2_7ue45")
@@ -22,6 +23,9 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 [sub_resource type="Resource" id="Resource_xoeqs"]
 script = ExtResource("3_k3bnk")
 metadata/_custom_type_script = "uid://bo5uh52f6sln5"
+
+[sub_resource type="Resource" id="Resource_spwn"]
+script = ExtResource("11_spwn")
 
 [sub_resource type="Resource" id="Resource_k3bnk"]
 script = ExtResource("8_lpgch")
@@ -57,6 +61,7 @@ metadata/_custom_type_script = "uid://domi8t23qrsdh"
 _spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
 spawn_path = NodePath(".")
 script = ExtResource("7_trn2v")
+spawn_policy = SubResource("Resource_spwn")
 scene_config/Level1/load_mode = 1
 scene_config/Level1/empty_action = 1
 scene_config/Level2/load_mode = 1

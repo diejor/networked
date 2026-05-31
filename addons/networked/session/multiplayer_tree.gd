@@ -128,8 +128,8 @@ func _warn_if_role_unset() -> void:
 ## Default and active transport for this tree.
 ##
 ## Example: [ENetBackend], [WebSocketBackend], [WebRTCBackend]. Used as the
-## authored default by unattended starts ([member init_join_payload] and
-## headless [member auto_host_headless]), and as the live transport slot
+## authored default by unattended starts (headless
+## [member auto_host_headless]), and as the live transport slot
 ## host / join write to. [method join] (from a [JoinTarget]) and
 ## [method ConnectSession.host] (from a [ConnectHostConfig]) overwrite it
 ## with their own backend, so browser-driven flows do not depend on this
@@ -184,10 +184,6 @@ func _warn_if_role_unset() -> void:
 			_auth.prepare()
 
 @export_group("Session")
-## When set, [method auto_connect_player] is called automatically on
-## [code]_ready[/code] against [member backend] and
-## [method BackendPeer.get_join_address].
-@export var init_join_payload: JoinPayload
 
 ## Builds the [ServerInfo] returned to clients probing this tree via
 ## [method BackendPeer.query_server_info]. When [code]null[/code], a
@@ -467,6 +463,10 @@ func _enter_tree() -> void:
 			child.queue_free()
 			var manager := MultiplayerSceneManager.new()
 			manager.name = &"SceneManager"
+			# Zero-config world: auto-spawn joining players at the picked
+			# SpawnerComponent. An explicitly placed manager defaults to no
+			# policy and leaves spawning to gameplay.
+			manager.spawn_policy = SpawnerComponentPolicy.new()
 			add_child(manager)
 			manager._configure_default(scene_path)
 			return
@@ -855,7 +855,6 @@ func _host_player_logic(join_payload: JoinPayload) -> Error:
 	var server := duplicate() as MultiplayerTree
 	server.is_server = true
 	server.name = "Server"
-	server.init_join_payload = null
 	server.auto_host_headless = false
 	get_parent().add_child.call_deferred(server)
 	await get_tree().process_frame
@@ -917,13 +916,6 @@ func _await_adopted_client_connected() -> Error:
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-
-	if init_join_payload and backend:
-		init_join_payload.is_debug = true
-		var target := JoinTarget.new()
-		target.backend = backend
-		target.address = backend.get_join_address()
-		join_or_host(target, init_join_payload)
 
 	if auto_host_headless and DisplayServer.get_name() == "headless":
 		if use_listen_server:

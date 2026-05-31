@@ -29,11 +29,11 @@ func get_joined_player(peer_id: int) -> ResolvedJoin:
 	return _joined_players.get(peer_id) as ResolvedJoin
 
 ## Stores resolved join data. Returns [code]true[/code] if it was newly added,
-## or updated from a sceneless state to a level-carrying state.
+## or updated from a spawn-less state to a spawn-carrying state.
 func remember_joined_player(rj: ResolvedJoin) -> bool:
 	if _joined_players.has(rj.peer_id):
 		var existing := _joined_players[rj.peer_id]
-		if existing.scene_name.is_empty() and not rj.scene_name.is_empty():
+		if existing.spawn.is_empty() and not rj.spawn.is_empty():
 			_joined_players[rj.peer_id] = rj
 			return true
 		return false
