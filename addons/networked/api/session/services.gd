@@ -90,6 +90,13 @@ func get_service(type: Script) -> Node:
 	return mt.get_service(type) if mt else null
 
 
+## Returns every registered service whose script is [param base] or a
+## subclass of it. See [method MultiplayerTree.get_services].
+func get_services(base: Script) -> Array[Node]:
+	var mt := _tree_ref.get_ref() as MultiplayerTree
+	return mt.get_services(base) if mt else []
+
+
 # ---------------------------------------------------------------------------
 # Static registration helpers
 # ---------------------------------------------------------------------------

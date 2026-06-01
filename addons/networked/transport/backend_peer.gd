@@ -143,6 +143,16 @@ func query_server_info(
 	return ServerInfoResult.unsupported()
 
 
+## Seconds [MultiplayerTree] should allow a connect attempt before timing out.
+##
+## The default matches the historical fixed budget. Backends with a slower or
+## self-healing connect path (a retrying WebRTC join) widen it. Return
+## [code]-1[/code] to declare the backend self-managed, leaving the terminal
+## outcome to its own signals plus a safety-net ceiling.
+func connect_timeout_hint() -> float:
+	return 5.0
+
+
 ## Returns the [AddressHint] for connect UI fields.
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.new()

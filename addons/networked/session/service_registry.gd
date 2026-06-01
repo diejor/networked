@@ -39,6 +39,27 @@ func get_service(type: Script) -> Node:
 	return _services.get(type)
 
 
+## Returns every registered service whose script is [param base] or a
+## subclass of it, in registration order.
+func get_services(base: Script) -> Array[Node]:
+	var out: Array[Node] = []
+	for type in _services:
+		if _script_is_a(type, base):
+			out.append(_services[type])
+	return out
+
+
+# Walks the script base chain to test whether [param script] derives from
+# [param base].
+static func _script_is_a(script: Script, base: Script) -> bool:
+	var s := script
+	while s:
+		if s == base:
+			return true
+		s = s.get_base_script()
+	return false
+
+
 ## Clears all registered services.
 func clear() -> void:
 	_services.clear()

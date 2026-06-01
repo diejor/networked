@@ -72,6 +72,12 @@ signal session_entered()
 signal session_left()
 
 
+## Ceiling applied when a backend declares its connect path self-managed
+## ([method BackendPeer.connect_timeout_hint] returns a negative value), so a
+## buggy backend can never wedge a join open forever.
+const SELF_MANAGED_TIMEOUT_CEILING := 30.0
+
+
 ## Path used for [ServerList] persistence by
 ## [method load_server_list] / [method save_server_list] when no
 ## explicit path is supplied.
@@ -129,6 +135,7 @@ func bind_tree(tree: MultiplayerTree) -> void:
 		"ConnectSession bound to tree '%s'.", [_tree.name]
 	)
 	_bind_tree_signals()
+	_sync_tree_directories()
 
 
 ## Returns the currently bound [MultiplayerTree], or [code]null[/code].
@@ -139,8 +146,11 @@ func get_tree_bound() -> MultiplayerTree:
 # -- Directories -------------------------------------------------------------
 
 ## Registers [param directory] under [param id] so its lobbies appear
-## in [method get_targets]. Must be called before [method refresh] for
-## the directory's lobbies to be polled.
+## in [method get_targets].
+##
+## A [LobbyDirectory] placed under the bound [MultiplayerTree] is adopted
+## automatically (keyed by its node name) on [method refresh], so call this
+## only for an off-tree directory or to pin a specific [param id].
 func register_directory(id: StringName, directory: LobbyDirectory) -> void:
 	_ensure_internals()
 	_directories.register(id, directory)
@@ -314,6 +324,7 @@ func save_server_list(path: String = server_list_path) -> Error:
 ## asks every registered directory to refresh its lobby list.
 func refresh() -> void:
 	_ensure_internals()
+	_sync_tree_directories()
 	Netw.dbg.debug(
 		"ConnectSession refresh: saved=%d directories=%d.",
 		[_saved_targets.size(), _directories_order.size()]
@@ -425,8 +436,12 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	join_aborted_flag = false
 
 	# Failure is reported via join_failed below, so keep the tree quiet to
-	# avoid logging the timeout as a redundant hard error.
-	var err := await tree.join(target, payload, 5.0, true)
+	# avoid logging the timeout as a redundant hard error. The backend authors
+	# the budget so a retry-aware transport gets a wider window; a self-managed
+	# backend (hint < 0) falls back to a safety-net ceiling.
+	var hint := target.backend.connect_timeout_hint() if target.backend else 5.0
+	var timeout := hint if hint > 0.0 else SELF_MANAGED_TIMEOUT_CEILING
+	var err := await tree.join(target, payload, timeout, true)
 	if err != OK:
 		if join_aborted_flag:
 			join_failed.emit(target, "Connection aborted by user")
@@ -449,6 +464,26 @@ func abort_join() -> void:
 
 
 # -- Internals --------------------------------------------------------------
+
+# Adopts every LobbyDirectory service under the bound tree that is not already
+# registered, keyed by node name. Manual register_directory entries are left
+# alone, so explicit ids and off-tree directories keep working.
+func _sync_tree_directories() -> void:
+	if _tree == null:
+		return
+	for service in _tree.get_services(LobbyDirectory):
+		var directory := service as LobbyDirectory
+		if directory == null or _is_directory_registered(directory):
+			continue
+		register_directory(StringName(directory.name), directory)
+
+
+func _is_directory_registered(directory: LobbyDirectory) -> bool:
+	for id in _directories_order:
+		if _directories.get_directory(id) == directory:
+			return true
+	return false
+
 
 func _bind_tree_signals() -> void:
 	if _tree == null or _tree_signals_bound:

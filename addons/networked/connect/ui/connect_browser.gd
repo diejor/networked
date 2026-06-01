@@ -5,6 +5,14 @@
 ## players can browse saved servers, watch live status, host a new game, or
 ## join one with no glue code. Under the hood it drives the tree's canonical
 ## [ConnectSession] through a [NetwConnect] for you.
+##
+## [br][br]
+## The browser finds its session in three steps, first wins: an explicit
+## [method bind], then the [member tree] export, then its own ancestry. Drop it
+## under the tree for zero config, or hand a parent owned facade through
+## [method bind] when it lives elsewhere in the scene. Lobby directories are
+## discovered from the tree by [ConnectSession], so there is no per directory
+## wiring here.
 class_name ConnectBrowser
 extends Control
 
@@ -44,17 +52,14 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
 ## drives, accessed through a [NetwConnect] facade.
+##
+## Resolution order is [method bind] first, then this export, then the
+## browser's own ancestry. Leave it unset when the browser is a descendant of
+## the tree or when a parent calls [method bind].
 @export var tree: MultiplayerTree
 
 ## Backends offered by the Add Server and Host popups.
 @export var backend_templates: Array[BackendPeer] = []
-
-## [LobbyDirectory] nodes registered with the session on
-## [method Node._ready], so their lobbies appear on [method NetwConnect.refresh].
-##
-## Each directory registers under its own [member Node.name], so name the nodes
-## distinctly (for example [code]"steam"[/code] or [code]"webrtc"[/code]).
-@export var directories: Array[LobbyDirectory] = []
 
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
@@ -86,6 +91,11 @@ var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
 
+# Facade supplied by bind(); takes priority over export/ancestry resolution.
+var _bound_connect: NetwConnect
+# Guards _setup_session against running twice (bind() then the deferred path).
+var _session_ready: bool = false
+
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _add_button: Button = %AddButton
 @onready var _join_direct_button: Button = %JoinDirectButton
@@ -104,11 +114,10 @@ var _last_join_payload: JoinPayload = null
 @onready var _details_remove_button: Button = %DetailsRemoveButton
 @onready var _details_join_button: Button = %DetailsJoinButton
 
-@onready var _connect := Netw.ctx(tree if tree != null else self).connect
+var _connect: NetwConnect
+
 
 func _ready() -> void:
-	_load_server_list()
-
 	_add_popup = _ADD_POPUP_SCENE.instantiate()
 	add_child(_add_popup)
 	_add_popup.submitted.connect(_on_target_submitted)
@@ -146,42 +155,43 @@ func _ready() -> void:
 	_details_remove_button.pressed.connect(_on_details_remove_pressed)
 	_details_join_button.pressed.connect(_on_details_join_pressed)
 
-
-	_bind_session_signals()
-	_register_directories()
-
-	_rebuild_from_session()
 	_clear_selection()
-	if _connect:
-		_connect.refresh()
+
+	# Fallback path: if no parent calls bind() this frame, self-resolve once
+	# parent _ready() has had a chance to assign the tree export.
+	_setup_session.call_deferred()
 
 
 func _exit_tree() -> void:
-	_unregister_directories()
 	_unbind_session_signals()
 
 
-# Registers each configured directory under its node name.
-func _register_directories() -> void:
+## Drives this browser from [param connect], the resolved [NetwConnect] for the
+## target tree. Prefer this over the [member tree] export when the browser does
+## not sit under the [MultiplayerTree]. A parent typically calls
+## [code]browser.bind(Netw.ctx(tree).connect)[/code].
+func bind(connect: NetwConnect) -> void:
+	_bound_connect = connect
+	if is_inside_tree():
+		_setup_session()
+
+
+# Resolves the facade (bind > tree export > ancestry), wires session signals,
+# and pulls the first list. Runs at most once.
+func _setup_session() -> void:
+	if _session_ready:
+		return
+	if _bound_connect != null and _bound_connect.is_valid():
+		_connect = _bound_connect
+	else:
+		_connect = Netw.ctx(tree if tree != null else self).connect
 	if _connect == null:
 		return
-	for directory in directories:
-		if directory != null:
-			_connect.register_directory(StringName(directory.name), directory)
-
-
-func _unregister_directories() -> void:
-	if _connect == null:
-		return
-	for directory in directories:
-		if directory != null:
-			_connect.unregister_directory(StringName(directory.name))
-
-
-# Loads the browser-owned saved target list into the resolved facade.
-func _load_server_list() -> void:
-	if _connect != null:
-		_connect.load_server_list(server_list_path)
+	_session_ready = true
+	_connect.load_server_list(server_list_path)
+	_bind_session_signals()
+	_rebuild_from_session()
+	_connect.refresh()
 
 
 func _bind_session_signals() -> void:

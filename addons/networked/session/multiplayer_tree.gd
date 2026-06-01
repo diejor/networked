@@ -351,6 +351,16 @@ func get_service(type: Script) -> Node:
 	return _services.get_service(type)
 
 
+## Returns every registered service whose script is [param base] or a
+## subclass of it, in registration order.
+##
+## Unlike [method get_service] this returns the whole family, so callers can
+## collect every [LobbyDirectory] under the tree without knowing each concrete
+## subtype.
+func get_services(base: Script) -> Array[Node]:
+	return _services.get_services(base)
+
+
 ## Scans descendant nodes for one whose type matches [param type].
 ##
 ## Unlike [method get_service], this works before descendants call

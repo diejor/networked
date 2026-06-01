@@ -7,7 +7,7 @@
 ## reserves one well known board hash that every host and browser announces on,
 ## and tunnels a JSON room card through the announce [code]sdp[/code] field. No
 ## WebRTC handshake happens on the board. The room connection itself is a
-## separate [WebRTCBackend] keyed by the room hash.
+## separate [TrackerWebRTCBackend] keyed by the room hash.
 ## [codeblock]
 ## board hash = sha1(uid + ":board")[:20]
 ##
@@ -18,6 +18,7 @@
 ##   browser query -> reaches hosts -> hosts answer with their room card
 ##   host card     -> reaches browsers -> read straight off the offer
 ##
+## reach per announce = board_fanout peers (one offer pairs one swarm peer)
 ## list_lobbies collects cards for browse_window then emits clear-then-fill
 ## [/codeblock]
 ## [br][br]
@@ -31,16 +32,17 @@
 ## room the tree is hosting whenever it reaches
 ## [constant MultiplayerTree.State.ONLINE] as a host over a [WebRTCBackend], so
 ## the [ConnectSession] host path
-## ([code]tree.backend = WebRTCBackend[/code]) and [method host_lobby] both
-## light up the board automatically. Browsers join through
-## [method make_join_target], which stamps a [WebRTCBackend] with the room hash.
+## ([code]tree.backend = TrackerWebRTCBackend.new()[/code]) and
+## [method host_lobby] both light up the board automatically. Browsers join
+## through [method make_join_target], which stamps a [TrackerWebRTCBackend] with
+## the room hash.
 @tool
-class_name WebRTCDirectory
+class_name WebTorrentDirectory
 extends LobbyDirectory
 
 
 ## WebTorrent compatible tracker URLs used for the board, shared with the
-## [WebRTCBackend] the directory stamps onto join targets.
+## [TrackerWebRTCBackend] the directory stamps onto join targets.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.webtorrent.dev"
@@ -72,7 +74,7 @@ var max_clients: int = 8
 @export_range(1, 50) var board_fanout: int = 16
 
 
-var _tracker: WebRTCTrackerClient = null
+var _tracker: WebTorrentTrackerClient = null
 var _board_hash := ""
 var _peer_id := ""
 
@@ -105,7 +107,6 @@ func _enter_tree() -> void:
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
 	NetwServices.register(self)
-	NetwServices.register(self, LobbyDirectory)
 	var mt := MultiplayerTree.resolve(self)
 	if mt:
 		_bind_tree_signals(mt)
@@ -165,7 +166,7 @@ func _maintain_board(dt: float) -> void:
 
 	# Idle past the grace: release the sockets until interest returns.
 	if _tracker != null:
-		Netw.dbg.debug("WebRTCDirectory: board idle, closing trackers.")
+		Netw.dbg.debug("WebTorrentDirectory: board idle, closing trackers.")
 		_tracker.close()
 		_tracker = null
 	_reconnect_acc = 0.0
@@ -196,7 +197,7 @@ func list_lobbies() -> void:
 	_collecting = true
 	_collect_left = browse_window
 	_query_acc = 0.7   # query on the next process tick
-	Netw.dbg.debug("WebRTCDirectory: browsing board %s.", [_board_hash])
+	Netw.dbg.debug("WebTorrentDirectory: browsing board %s.", [_board_hash])
 
 
 func leave_lobby() -> void:
@@ -216,7 +217,7 @@ func make_join_target(lobby: LobbyInfo) -> JoinTarget:
 func host_lobby(server_name: String) -> MultiplayerPeer:
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
-		Netw.dbg.warn("WebRTCDirectory: host_lobby found no MultiplayerTree.")
+		Netw.dbg.warn("WebTorrentDirectory: host_lobby found no MultiplayerTree.")
 		return null
 	_pending_room_name = server_name
 	tree.backend = _make_backend()
@@ -226,7 +227,7 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 	if err != OK:
 		_pending_room_name = ""
 		Netw.dbg.error(
-			"WebRTCDirectory: host_player failed: %s", [error_string(err)]
+			"WebTorrentDirectory: host_player failed: %s", [error_string(err)]
 		)
 		return null
 	# Advertising is started by the State.ONLINE observer.
@@ -237,7 +238,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var room_hash := String(_id_to_hash.get(lobby_id, ""))
 	if room_hash.is_empty():
 		Netw.dbg.warn(
-			"WebRTCDirectory: join_lobby_peer unknown id %d. " +
+			"WebTorrentDirectory: join_lobby_peer unknown id %d. " +
 			"Call list_lobbies first or join through make_join_target.",
 			[lobby_id]
 		)
@@ -253,7 +254,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var err: Error = await tree.join(target, payload)
 	if err != OK:
 		Netw.dbg.error(
-			"WebRTCDirectory: join failed: %s", [error_string(err)]
+			"WebTorrentDirectory: join failed: %s", [error_string(err)]
 		)
 		return null
 	return tree.api.multiplayer_peer
@@ -269,7 +270,7 @@ func advertise_room(
 ) -> void:
 	if room_hash.length() != 20:
 		Netw.dbg.warn(
-			"WebRTCDirectory: refusing to advertise malformed room hash '%s'.",
+			"WebTorrentDirectory: refusing to advertise malformed room hash '%s'.",
 			[room_hash]
 		)
 		return
@@ -282,7 +283,7 @@ func advertise_room(
 	_advertise_acc = advertise_interval   # announce on the next process tick
 	_ensure_tracker()
 	Netw.dbg.info(
-		"WebRTCDirectory: advertising room %s as '%s'.",
+		"WebTorrentDirectory: advertising room %s as '%s'.",
 		[room_hash, _room_name]
 	)
 
@@ -294,7 +295,7 @@ func stop_advertising() -> void:
 	_advertising = false
 	_room_hash = ""
 	_players = 1
-	Netw.dbg.debug("WebRTCDirectory: stopped advertising.")
+	Netw.dbg.debug("WebTorrentDirectory: stopped advertising.")
 
 
 # -- Tree observation -------------------------------------------------------
@@ -344,7 +345,7 @@ func _count_players() -> int:
 func _ensure_tracker() -> void:
 	if _tracker != null:
 		return
-	_tracker = WebRTCTrackerClient.new()
+	_tracker = WebTorrentTrackerClient.new()
 	_tracker.message_received.connect(_on_message)
 	if _tracker.connect_to(trackers) != OK:
 		# Latch so the 5s reconnect loop reports one outage, not one per retry.
@@ -426,7 +427,7 @@ func _emit_collected() -> void:
 	for room_hash in _collected:
 		out.append(_collected[room_hash])
 	Netw.dbg.debug(
-		"WebRTCDirectory: browse found %d room(s).", [out.size()]
+		"WebTorrentDirectory: browse found %d room(s).", [out.size()]
 	)
 	lobby_list_updated.emit(out)
 
@@ -470,7 +471,7 @@ func _announce_with_card(card: Dictionary) -> Dictionary:
 
 
 func _make_backend() -> WebRTCBackend:
-	var template := WebRTCBackend.new()
+	var template := TrackerWebRTCBackend.new()
 	template.trackers = trackers
 	# clone() runs copy_from, so trackers/server_name/ice_servers all ride along.
 	return template.clone()

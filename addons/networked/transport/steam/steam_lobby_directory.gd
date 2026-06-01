@@ -115,8 +115,6 @@ func _enter_tree() -> void:
 	_wrapper.connect_signal("join_requested", _on_join_requested)
 
 	NetwServices.register(self)
-	NetwServices.register(self, LobbyDirectory)
-
 
 	var mt := MultiplayerTree.resolve(self)
 	if mt:

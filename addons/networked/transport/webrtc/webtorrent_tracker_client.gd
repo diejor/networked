@@ -3,11 +3,11 @@
 ## A tracker connection is a swarm rendezvous keyed by a 20 char
 ## [code]info_hash[/code]. This client owns the [WebSocketPeer] set, drives
 ## connect and close detection, and surfaces every decoded message so an owner
-## can run its own announce protocol on top. [WebRTCBackend] uses it to relay
-## SDP offers and answers. [WebRTCDirectory] uses it to gossip room cards on a
-## board hash.
+## can run its own announce protocol on top. [TrackerSignaler] uses it to relay
+## SDP offers and answers. [WebTorrentDirectory] uses it to gossip room cards on
+## a board hash.
 ## [codeblock]
-## var tracker := WebRTCTrackerClient.new()
+## var tracker := WebTorrentTrackerClient.new()
 ## tracker.message_received.connect(_on_message)
 ## tracker.socket_opened.connect(_announce_to)   # send first announce
 ## tracker.connect_to(trackers)
@@ -17,7 +17,7 @@
 ##
 ## tracker.broadcast(announce_payload)           # to all open sockets
 ## [/codeblock]
-class_name WebRTCTrackerClient
+class_name WebTorrentTrackerClient
 extends RefCounted
 
 ## Emitted when the first tracker socket reaches the open state.
@@ -48,7 +48,7 @@ func connect_to(urls: Array[String]) -> Error:
 	close()
 	var now := Time.get_ticks_usec()
 	for url in urls:
-		Netw.dbg.trace("WebRTCTrackerClient: connecting to %s", [url])
+		Netw.dbg.trace("WebTorrentTrackerClient: connecting to %s", [url])
 		var ws := WebSocketPeer.new()
 		if ws.connect_to_url(url) == OK:
 			ws.set_meta("url", url)
@@ -56,11 +56,11 @@ func connect_to(urls: Array[String]) -> Error:
 			_sockets.append(ws)
 		else:
 			Netw.dbg.warn(
-				"WebRTCTrackerClient: failed to connect %s", [url],
+				"WebTorrentTrackerClient: failed to connect %s", [url],
 				func(m): push_warning(m)
 			)
 	Netw.dbg.debug(
-		"WebRTCTrackerClient: %d/%d tracker socket(s) opening.",
+		"WebTorrentTrackerClient: %d/%d tracker socket(s) opening.",
 		[_sockets.size(), urls.size()]
 	)
 	if _sockets.is_empty():
@@ -98,7 +98,7 @@ func poll() -> void:
 			if not ws.has_meta("opened"):
 				ws.set_meta("opened", true)
 				Netw.dbg.debug(
-					"WebRTCTrackerClient: tracker open: %s",
+					"WebTorrentTrackerClient: tracker open: %s",
 					[ws.get_meta("url", "unknown")]
 				)
 				if not _any_open:
@@ -167,14 +167,14 @@ func _decode(packet: PackedByteArray) -> void:
 # Logs tracker protocol notices without raising engine warnings.
 func _log_tracker_notice(packet_text: String) -> void:
 	Netw.dbg.debug(
-		"WebRTCTrackerClient: tracker notice %s",
+		"WebTorrentTrackerClient: tracker notice %s",
 		[packet_text]
 	)
 
 
 func _warn_dropped(ws: WebSocketPeer, why: String) -> void:
 	Netw.dbg.warn(
-		"WebRTCTrackerClient: tracker %s: %s",
+		"WebTorrentTrackerClient: tracker %s: %s",
 		[why, ws.get_meta("url", "unknown")],
 		func(m): push_warning(m)
 	)

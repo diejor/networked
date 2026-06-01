@@ -27,18 +27,12 @@ var _pending_title: String = ""
 func _ready() -> void:
 	_connect = _ctx.connect
 
-	var steam_dir := _ctx.services.get_service(SteamLobbyDirectory)
-	if steam_dir:
-		_directory = steam_dir
-		_connect.register_directory(&"steam", steam_dir)
+	# The directory is auto-discovered by ConnectSession; the lobby only needs
+	# the handle for the in-lobby member list.
+	_directory = _ctx.services.get_service(SteamLobbyDirectory)
 
-	_connect.load_server_list()
-
-	var ws_backend := WebSocketBackend.new()
-	ws_backend.port = 10567
-	var steam_backend := SteamBackend.new()
-	_browser.backend_templates = [ws_backend, steam_backend]
-	_browser.tree = multiplayer_tree
+	# Backends and templates are configured on the ConnectBrowser in lobby.tscn.
+	_browser.bind(_connect)
 	_connect.session_entered.connect(_on_browser_session_entered)
 
 	_in_lobby.setup(_directory, _ctx)

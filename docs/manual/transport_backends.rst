@@ -70,6 +70,38 @@ lobby and let peers in" semantics.
    joins until the host tab is focused again. Prefer a relay or dedicated host
    when web-hosted rooms must stay reachable in the background.
 
+WebRTC signaling
+---------------
+
+The WebRTC transport keeps two jobs apart. The
+:ref:`WebRTCSession <class_WebRTCSession>` owns the peer machinery and speaks
+only engine multiplayer ids. The transport-specific addressing lives behind a
+:ref:`WebRTCSignaler <class_WebRTCSignaler>`, which carries SDP and ICE to the
+other peer. :ref:`WebRTCBackend <class_WebRTCBackend>` wires the two together,
+so a subclass picks a transport by returning a signaler.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+     class_name MySignalingBackend
+     extends WebRTCBackend
+
+     func _make_signaler() -> WebRTCSignaler:
+         return MySignaler.new()  # dedicated server, matchmaker, relay
+
+:ref:`TrackerWebRTCBackend <class_TrackerWebRTCBackend>` is the default. Its
+:ref:`TrackerSignaler <class_TrackerSignaler>` rendezvouses peers on a
+WebTorrent tracker swarm with no signaling server, and
+:ref:`WebTorrentDirectory <class_WebTorrentDirectory>` gossips room listings on
+the same trackers.
+
+.. note::
+
+   Tracker discovery is best-effort gossip, not a reliable directory query.
+   When web-hosted rooms must stay reachable behind a backgrounded tab, or
+   discovery must be dependable, run a relay or dedicated host behind a custom
+   signaler instead of leaning on the swarm.
+
 Configuring a backend
 ---------------------
 
