@@ -473,6 +473,7 @@ func add_host_player(
 	auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
 	var tree := _create_player_tree("HarnessHostPlayer")
+	tree.desired_role = MultiplayerTree.Role.CLIENT
 	tree.auth_provider = auth_provider
 	var err: Error = await tree.host_player(join_payload)
 	assert(err == OK, "host_player() failed: %s" % error_string(err))

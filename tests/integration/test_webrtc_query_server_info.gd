@@ -21,4 +21,4 @@ func test_query_returns_unsupported_without_signaling() -> void:
 	# Returns without touching trackers/ICE, so it is effectively instant.
 	assert_int(elapsed_ms).is_less(1000)
 	# No signaling sockets were opened by the probe.
-	assert_array(backend._sockets).is_empty()
+	assert_that(backend._tracker).is_null()
