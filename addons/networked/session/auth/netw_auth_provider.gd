@@ -6,9 +6,9 @@
 ## [br]1. [method prepare] -- before transport opens. Populates
 ##     [JoinPayload] with metadata. Returns [constant OK] to proceed,
 ##     or an [enum Error] to abort the entry call
-##     ([method MultiplayerTree.join_direct],
+##     ([method MultiplayerTree.join],
 ##     [method MultiplayerTree.host_player], or
-##     [method MultiplayerTree.auto_connect_player]).
+##     [method MultiplayerTree.join_or_host]).
 ## [br]2. [method get_credentials] -- during Godot's auth phase.
 ##     Returns proof bytes sent via [method SceneMultiplayer.send_auth].
 ##

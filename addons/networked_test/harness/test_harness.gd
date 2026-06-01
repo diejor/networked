@@ -1,11 +1,8 @@
-## Multi-peer test rig for Networked multiplayer tests.
+## Test rig for one in process multiplayer session.
 ##
-## Creates one server plus N clients in a single [SceneTree], all wired
-## through a fresh [LocalLoopbackSession]. Tests should drive multiplayer
-## flows through this public surface instead of reaching into transport or
-## scene-manager internals.
-##
-## Usage:
+## [member server], [method add_client], [method join_player], and
+## [method teardown] keep tests on the public session surface while
+## [LocalLoopbackSession] carries packets inside one [SceneTree].
 ## [codeblock]
 ## var harness := make_harness()
 ## await harness.setup(NetwTestSuite.create_scene_manager)
@@ -16,18 +13,18 @@
 ##     "uid://...",
 ##     "Player/Components/SpawnerComponent"
 ## )
+## await harness.teardown()
 ## [/codeblock]
 class_name NetwTestHarness
 extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 
-## Awaiter contract: [code]func(Signal, float, String) -> bool[/code].
-## returns [code]true[/code] on timeout, [code]false[/code] on success.
-## Defaults to a [code]push_error[/code]-backed implementation so the
-## harness works in plain Godot without a test framework.
-## [method NetwTestSuite.make_harness] swaps in the GdUnit4-aware
-## adapter automatically.
+## Awaiter used by [method wait_for] and internal waits.
+##
+## The callable receives [code](Signal, float, String)[/code]. It returns
+## [code]true[/code] on timeout and [code]false[/code] on success.
+## [method NetwTestSuite.make_harness] installs the GdUnit4 adapter.
 var awaiter: Callable = _default_awaiter
 
 signal _wait_satisfied()
@@ -47,10 +44,9 @@ var _torn_down := false
 
 #region Generic awaits
 
-## Awaits [param target_signal] with the harness's default timeout.
-## Returns [code]true[/code] on timeout, [code]false[/code] on success.
-## Timeouts are reported via [member awaiter]. The GdUnit4 adapter
-## surfaces them as test failures.
+## Awaits [param target_signal] through [member awaiter].
+##
+## Returns [code]true[/code] on timeout and [code]false[/code] on success.
 func wait_for(
 	target_signal: Signal,
 	timeout: float = DEFAULT_TIMEOUT,
@@ -72,17 +68,15 @@ func _default_awaiter(sig: Signal, timeout: float, label: String) -> bool:
 
 #region Lifecycle
 
-## Creates a fresh session and server node.
+## Creates the [LocalLoopbackSession] and server [MultiplayerTree].
 ##
 ## Does not host yet. Register spawnable scenes with
 ## [method register_spawnable_scene] before calling [method add_client].
-## Must be awaited; waits one frame for [code]_ready[/code]
-## to fire before returning.
-##
-## [param scene_manager_src] accepts:
-## [br]- [PackedScene]: instantiated to produce a [MultiplayerSceneManager].
-## [br]- [Callable]: called to produce a [MultiplayerSceneManager].
-## [br]- [code]null[/code]: no scene manager is created (sceneless join tests).
+## [codeblock]
+## await harness.setup(NetwTestSuite.create_scene_manager)
+## harness.register_spawnable_scene(LEVEL)
+## var client := await harness.add_client()
+## [/codeblock]
 func setup(
 	scene_manager_src: Variant = null,
 	world_scene: PackedScene = null,
@@ -94,16 +88,11 @@ func setup(
 	await get_tree().process_frame
 
 
-## Cleans up server, clients, and the session.
+## Frees harness peers and resets loopback sessions.
 ##
 ## [NetwTestSuite] calls this automatically for harnesses created through
-## [method NetwTestSuite.make_harness]. Direct users may call it explicitly;
-## repeated calls are ignored.
-##
-## Frees nodes before closing peers so each synchronizer's
-## [code]_exit_tree[/code] fires while [code]recv_sync_ids[/code] is still
-## consistent, avoiding stray "missing node" warnings from in-flight sync
-## packets.
+## [method NetwTestSuite.make_harness]. Direct users may call it explicitly.
+## Repeated calls are ignored.
 func teardown() -> void:
 	if _torn_down:
 		return
@@ -154,9 +143,14 @@ func teardown() -> void:
 
 #region Peers
 
-## Creates a new client, connects it to the server, and returns it.
-## Hosts the server automatically on the first call so tests have a chance
-## to call [method register_spawnable_scene] after [method setup] returns.
+## Creates and joins a client [MultiplayerTree].
+##
+## The first call hosts [method server] after
+## [method register_spawnable_scene] has had a chance to configure scenes.
+## [codeblock]
+## var client := await harness.add_client()
+## assert_bool(client.is_online()).is_true()
+## [/codeblock]
 func add_client() -> MultiplayerTree:
 	await _ensure_server_hosted()
 
@@ -165,7 +159,7 @@ func add_client() -> MultiplayerTree:
 
 	var client := MultiplayerTree.new()
 	client.name = "HarnessClient%d" % index
-	client.is_server = false
+	client.desired_role = MultiplayerTree.Role.CLIENT
 	client.set_meta(&"_harness_username", username)
 
 	if _world_scene:
@@ -239,7 +233,7 @@ func server_scene_manager() -> MultiplayerSceneManager:
 	return scene_manager_for(_server)
 
 
-## Creates a [NetworkClock] on the server and all clients.
+## Creates a [NetworkClock] on [method server] and every client.
 ##
 ## Clients created after this call receive the same clock before joining.
 ## Existing clients are awaited until [signal NetworkClock.clock_synchronized]
@@ -277,7 +271,8 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
-## Disconnects [param client] from the harness server without freeing it.
+## Disconnects [param client] without freeing it.
+##
 ## The client can be passed to [method reconnect_client] afterward.
 func disconnect_client(client: MultiplayerTree) -> void:
 	assert(_clients.has(client), "disconnect_client: unknown client tree.")
@@ -332,13 +327,10 @@ func reconnect_client(client: MultiplayerTree) -> void:
 
 #region Player flows
 
-## Admits [param client] to [param scene_name] on the server by calling
-## [method MultiplayerScene.connect_peer] directly, bypassing the
-## player-join flow. Useful when a test must assert client-side visibility
-## without spawning a player into the scene.
+## Admits [param client] to [param scene_name] without spawning a player.
 ##
-## Awaits until the client's [MultiplayerSceneManager] reports the scene
-## as active.
+## Calls [method MultiplayerScene.connect_peer] on [method server] and waits
+## for [param client] to activate the scene.
 func admit_client_to_scene(
 	client: MultiplayerTree,
 	scene_name: StringName,
@@ -353,17 +345,18 @@ func admit_client_to_scene(
 	return await wait_for_scene(client, scene_name)
 
 
-## Sends the real [code]request_join_player[/code] RPC from [param client]
-## to the server, triggering the full [code]_on_player_joined[/code]
-## production chain.
+## Sends [method MultiplayerTree.request_join_player] from [param client].
 ##
-## [param level_scene_path] must be a registered spawnable scene whose
-## filename (no extension) matches the level root node name (e.g.
-## [code]"TestLevel.tscn"[/code] -> root [code]"TestLevel"[/code]).
-## [param spawner_node_path] is relative to the level root
-## (e.g. [code]"TestPlayerFull/SpawnerComponent"[/code]).
-##
-## Returns the spawned player node from the server scene.
+## [param level_scene_path] must be registered with
+## [method register_spawnable_scene]. [param spawner_node_path] is relative to
+## that scene root.
+## [codeblock]
+## var player := await harness.join_player(
+##     client,
+##     LEVEL,
+##     "Player/Components/SpawnerComponent"
+## )
+## [/codeblock]
 func join_player(
 	client: MultiplayerTree,
 	level_scene_path: String,
@@ -401,7 +394,7 @@ func join_player(
 	return scene.level.get_node_or_null(player_path)
 
 
-## Builds a [JoinPayload] for harness-driven session entry.
+## Builds a [JoinPayload] for harness driven session entry.
 ##
 ## Leave [param level_scene_path] and [param spawner_node_path] empty for
 ## sceneless joins that should not spawn a player.
@@ -422,13 +415,13 @@ func make_join_payload(
 	return join_payload
 
 
-## Creates a standalone listen-server tree and connects its local player.
+## Creates a standalone listen server and connects its local player.
 func add_listen_server(
 	join_payload: JoinPayload,
 	auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
 	var tree := _create_player_tree("HarnessListenServer")
-	tree.use_listen_server = true
+	tree.desired_role = MultiplayerTree.Role.LISTEN_SERVER
 	tree.auth_provider = auth_provider
 	var target := JoinTarget.new()
 	target.backend = tree.backend
@@ -441,8 +434,8 @@ func add_listen_server(
 	return tree
 
 
-## Creates a client tree that joins the harness server via
-## [method MultiplayerTree.auto_connect_player].
+## Creates a client tree that joins the harness server through
+## [method MultiplayerTree.join_or_host].
 func add_connect_player(
 	join_payload: JoinPayload,
 	auth_provider: NetwAuthProvider = null,
@@ -473,7 +466,7 @@ func create_connect_player_tree(
 	return tree
 
 
-## Creates a standalone player tree and drives
+## Creates a standalone player host through
 ## [method MultiplayerTree.host_player].
 func add_host_player(
 	join_payload: JoinPayload,
@@ -509,7 +502,7 @@ func register_built_scene(packed: PackedScene) -> void:
 			client_sm.add_spawnable_scene(path)
 
 
-## Spawns a player into a server scene, bypassing the RPC chain.
+## Spawns a player into a server scene without the join RPC.
 ##
 ## Accepts [param scene_or_builder] which can be a [PackedScene], a live [Node],
 ## or a builder implementing [method build]. Returns the spawned player node.
@@ -539,7 +532,7 @@ func spawn_player(
 	return player
 
 
-## Returns the server-side player node name for [param client].
+## Returns the server side player node name for [param client].
 func player_name_for(client: MultiplayerTree) -> StringName:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
@@ -550,12 +543,15 @@ func player_name_for(client: MultiplayerTree) -> StringName:
 
 #region Scene configuration
 
-## Registers [param scene] as a spawnable scene on the server.
+## Registers [param scene] as spawnable on [method server].
 ##
 ## Accepts a [PackedScene] or a [code]res://[/code] path. The path is
-## mirrored onto every client created by subsequent [method add_client]
-## calls. Must be called between [method setup] and the first
-## [method add_client] so the registration reaches every client.
+## mirrored onto clients created by [method add_client].
+## [codeblock]
+## await harness.setup(NetwTestSuite.create_scene_manager)
+## harness.register_spawnable_scene(LEVEL)
+## var client := await harness.add_client()
+## [/codeblock]
 func register_spawnable_scene(scene: Variant) -> void:
 	var path: String
 	if scene is PackedScene:
@@ -574,14 +570,17 @@ func register_spawnable_scene(scene: Variant) -> void:
 	sm.add_spawnable_scene(path)
 
 
-## Configures the server's lifecycle policy for [param scene_name],
-## forwarding to [method MultiplayerSceneManager.set_scene_lifecycle_policy].
+## Configures the server lifecycle policy for [param scene_name].
 ##
-## [b]Call window:[/b] after [method setup] returns and [i]before[/i] the
-## first [method add_client] call. At that point the server's scene manager
-## exists but no peers have been registered, so the policy applies cleanly
-## to every subsequent join. Calling it later still works, but only affects
-## scenes spawned afterward.
+## Call after [method setup] and before [method add_client] to apply it to
+## every joined client.
+## [codeblock]
+## harness.set_scene_policy(
+##     &"Arena",
+##     MultiplayerSceneManager.LoadMode.ON_DEMAND,
+##     MultiplayerSceneManager.EmptyAction.DESPAWN
+## )
+## [/codeblock]
 func set_scene_policy(
 	scene_name: StringName,
 	load_mode: MultiplayerSceneManager.LoadMode,
@@ -596,8 +595,9 @@ func set_scene_policy(
 
 #region Scene waits
 
-## Returns the named active scene from the server's scene manager, or the
-## first active scene if [param scene_name] is empty.
+## Returns an active [MultiplayerScene] from [method server_scene_manager].
+##
+## Empty [param scene_name] returns the first active scene.
 func scene_on_server(scene_name: StringName = "") -> MultiplayerScene:
 	var server_sm := server_scene_manager()
 	if scene_name.is_empty():
@@ -605,8 +605,7 @@ func scene_on_server(scene_name: StringName = "") -> MultiplayerScene:
 	return server_sm.active_scenes.get(scene_name)
 
 
-## Waits for [param scene_name] to become active on [param client]'s
-## scene manager.
+## Waits for [param scene_name] to become active on [param client].
 func wait_for_scene(
 	client: MultiplayerTree,
 	scene_name: StringName,
@@ -659,9 +658,7 @@ func wait_for_player(
 
 #region Internals
 
-# Routes a predicate wait through [member awaiter] so timeouts surface as
-# clean framework failures instead of runtime asserts. Returns
-# [code]true[/code] on timeout, [code]false[/code] on success.
+# Routes predicate waits through awaiter.
 func _wait_until(
 	cond: Callable,
 	label: String,
@@ -704,14 +701,13 @@ func _instantiate_scene_manager() -> MultiplayerSceneManager:
 	return sm
 
 
-# Harness trees auto-spawn joining players, matching the addon's zero-config
-# world behavior, unless the test wired its own policy.
+# Installs the default spawn policy unless the test supplied one.
 func _ensure_default_spawn_policy(tree: MultiplayerTree) -> void:
 	if tree.spawn_policy == null:
 		tree.spawn_policy = SpawnerComponentPolicy.new()
 
 
-# Mirrors server scene replication config onto a newly created client manager.
+# Mirrors server scene config onto a new client manager.
 func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
 	var server_sm := server_scene_manager()
 	if not server_sm:
@@ -778,7 +774,7 @@ func _add_clock_node(mt: MultiplayerTree) -> NetworkClock:
 func _setup_server() -> void:
 	_server = MultiplayerTree.new()
 	_server.name = "HarnessServer"
-	_server.is_server = true
+	_server.desired_role = MultiplayerTree.Role.DEDICATED_SERVER
 	_server.auto_host_headless = false
 
 	if _world_scene:

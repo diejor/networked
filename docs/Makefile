@@ -23,13 +23,19 @@ api:
 		echo "or see .github/actions/build-docs-classes/action.yml for the CI flow."; \
 		exit 1; \
 	}
-	@mkdir -p api
+	rm -rf api_new api_filtered_new classes_new
+	@mkdir -p api_new
 	@echo "[1/3] Extracting class XML via godot --doctool..."
-	godot --doctool "$(CURDIR)/api" --gdscript-docs . --headless --path .. --quit
+	godot --doctool "$(CURDIR)/api_new" --gdscript-docs . --headless --path .. --quit
+	rm -rf api
+	mv api_new api
 	@echo "[2/3] Filtering private members..."
-	python tools/filter_private.py api api_filtered
+	python tools/filter_private.py api api_filtered_new
 	@echo "[3/3] Generating RST into classes/..."
-	python tools/make_rst.py api_filtered --output classes
+	python tools/make_rst.py api_filtered_new --output classes_new
+	rm -rf api_filtered classes
+	mv api_filtered_new api_filtered
+	mv classes_new classes
 	@echo
 	@echo "Class reference updated. Run 'make html' next."
 

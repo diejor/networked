@@ -1,44 +1,35 @@
-## UI metadata describing the address string a [BackendPeer] expects.
+## UI hint for the address accepted by a [BackendPeer].
 ##
-## Returned by [method BackendPeer.get_address_hint] so generic connect
-## dialogs (e.g. the server browser's Add-Server popup) can render
-## appropriate labels, placeholders, and validation cues without
-## knowing about each backend.
+## [method BackendPeer.get_address_hint] returns this for generic connect
+## dialogs.
 @tool
 class_name AddressHint
 extends RefCounted
 
 
-## Human-readable label for the address field, e.g. [code]"Server IP"[/code],
-## [code]"Room Hash"[/code], [code]"Session ID"[/code].
+## Label for the address field.
 var label: String = "Address"
 
-## Placeholder shown in an empty field, e.g. [code]"localhost"[/code],
-## [code]"20-char hex"[/code].
+## Placeholder shown in an empty field.
 var placeholder: String = ""
 
-## Longer description of what the user should type, surfaced as tooltip
-## or help text.
+## Help text for tooltips or inline hints.
 var help_text: String = ""
 
-## Optional regular expression the address must match. Empty string means
-## any input is accepted.
+## Optional regular expression for validation.
 var validator_regex: String = ""
 
-## If [code]true[/code], the backend accepts an empty address string
-## (typically meaning "use default / public host").
+## [code]true[/code] when an empty address is valid.
 var accepts_empty: bool = false
 
-## If [code]true[/code], the backend implements
-## [method BackendPeer.query_server_info] with a meaningful answer. UIs
-## can hide a probe button otherwise.
+## [code]true[/code] when [method BackendPeer.query_server_info] is useful.
 var supports_probe: bool = false
 
-## If [code]true[/code], this backend has no notion of an external address
-## (e.g. in-process loopback). UIs can hide the address field entirely.
+## [code]true[/code] when address input should be hidden.
 var hides_address_field: bool = false
 
 
+## Creates an [AddressHint] from the common UI fields.
 static func make(
 	p_label: String,
 	p_placeholder: String = "",

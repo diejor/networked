@@ -1,9 +1,20 @@
-## Abstract base resource for network transports used by [MultiplayerTree].
+## Abstract transport contract for [MultiplayerTree].
 ##
-## Subclass this to implement a new transport (ENet, WebSocket, WebRTC, etc.).
-## Override [method create_host_peer] and [method create_join_peer] to produce
-## a [MultiplayerPeer]; the [MultiplayerTree] owns the [SceneMultiplayer] and
-## assigns the returned peer onto it.
+## [MultiplayerTree] owns [member MultiplayerTree.api] and calls this resource
+## to create, poll, probe, and reset the active [MultiplayerPeer].
+## [codeblock]
+## func create_host_peer(tree: MultiplayerTree) -> MultiplayerPeer:
+##     var peer := ENetMultiplayerPeer.new()
+##     peer.create_server(port)
+##     return peer
+##
+## func create_join_peer(
+##     tree: MultiplayerTree, address: String, username: String = ""
+## ) -> MultiplayerPeer:
+##     var peer := ENetMultiplayerPeer.new()
+##     peer.create_client(address, port)
+##     return peer
+## [/codeblock]
 @tool
 @abstract
 class_name BackendPeer
@@ -12,20 +23,23 @@ extends Resource
 
 
 @export_group("Lag Simulation")
-## If true, simulates network latency and packet loss using [LaggyMultiplayerPeer].
+## Enables [LaggyMultiplayerPeer] wrapping in [method wrap_peer].
 @export var simulate_lag: bool = false
-## Minimum packet delay (latency) in seconds.
-@export_range(0.0, 1.0, 0.001, "or_greater", "suffix:s") var lag_min_delay: float = 0.1
-## Maximum packet delay (latency) in seconds.
-@export_range(0.0, 1.0, 0.001, "or_greater", "suffix:s") var lag_max_delay: float = 0.1
-## Packet loss ratio (0.0 to 1.0).
+## Minimum simulated packet delay in seconds.
+@export_range(
+	0.0, 1.0, 0.001, "or_greater", "suffix:s"
+) var lag_min_delay: float = 0.1
+## Maximum simulated packet delay in seconds.
+@export_range(
+	0.0, 1.0, 0.001, "or_greater", "suffix:s"
+) var lag_max_delay: float = 0.1
+## Simulated packet loss ratio.
 @export_range(0.0, 1.0, 0.01) var lag_packet_loss: float = 0.0
 
 
-## Automatically decorates the [param base_peer] with [code]LaggyMultiplayerPeer[/code] if enabled.
+## Wraps [param base_peer] with [LaggyMultiplayerPeer] when enabled.
 ##
-## This uses dynamic reflection to avoid direct script dependencies on the GDExtension, 
-## meaning it is safe to use in projects that don't have the GDExtension loaded.
+## Dynamic construction keeps projects without the extension loadable.
 func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 	if not base_peer:
 		return null
@@ -34,16 +48,20 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 	
 	if not ClassDB.class_exists(&"LaggyMultiplayerPeer"):
 		Netw.dbg.warn(
-			"Lag simulation is enabled but GDExtension 'LaggyMultiplayerPeer' is not present in ClassDB.",
+			"Lag simulation is enabled but LaggyMultiplayerPeer is missing.",
 			func(m): push_warning(m)
 		)
 		return base_peer
 	
-	Netw.dbg.info("Wrapping peer in LaggyMultiplayerPeer (delay: %.1f-%.1f ms, packet loss: %d%%)", [
-		lag_min_delay * 1000.0,
-		lag_max_delay * 1000.0,
-		int(lag_packet_loss * 100.0)
-	])
+	Netw.dbg.info(
+		"Wrapping peer in LaggyMultiplayerPeer "
+		+ "(delay: %.1f-%.1f ms, packet loss: %d%%)",
+		[
+			lag_min_delay * 1000.0,
+			lag_max_delay * 1000.0,
+			int(lag_packet_loss * 100.0),
+		]
+	)
 	
 	var laggy_instance: Object = ClassDB.instantiate(&"LaggyMultiplayerPeer")
 	var wrapped_peer: MultiplayerPeer = laggy_instance.call(&"create", base_peer)
@@ -56,82 +74,76 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 	return base_peer
 
 
-## Optional one-time setup hook called by [MultiplayerTree] before
-## [method create_host_peer] or [method create_join_peer]. Use it to resolve
-## scene-relative nodes or external services. Return [code]OK[/code] on success.
+## Prepares this backend for [method create_host_peer] or
+## [method create_join_peer].
+##
+## Override to resolve scene services or external handles.
 func setup(_tree: MultiplayerTree) -> Error:
 	return OK
 
 
 ## Produces a [MultiplayerPeer] in server mode. May [code]await[/code].
 ##
-## Return [code]null[/code] to signal failure; the tree will treat this as
-## [code]ERR_CANT_CREATE[/code]. The tree assigns the returned peer onto its
-## owned [SceneMultiplayer].
+## Return [code]null[/code] to signal [code]ERR_CANT_CREATE[/code].
+## [MultiplayerTree] mounts the returned peer on [member MultiplayerTree.api].
 @abstract
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer
 
 
 ## Produces a [MultiplayerPeer] in client mode connecting to [param _address].
+##
 ## May [code]await[/code]. Return [code]null[/code] to signal failure.
 @abstract
 func create_join_peer(
 	_tree: MultiplayerTree, _address: String, _username: String = ""
 ) -> MultiplayerPeer
 
-## Per-frame poll hook for backends that drive their own internal state
-## (e.g. WebRTC signaling sockets, in-process loopback queues).
+## Polls backend state outside [member MultiplayerTree.api].
 ##
-## The tree polls the owned [SceneMultiplayer] separately - do not poll the
-## api here.
+## [MultiplayerTree] polls [member MultiplayerTree.api] separately.
 func poll(_dt: float) -> void:
 	pass
 
 
-## Closes and clears any backend-side state. Called by [MultiplayerTree] before
-## opening a new session and on teardown. Override to release transport-specific
-## handles (e.g. tracker sockets, lobby memberships).
+## Clears backend state before a new session or teardown.
 func peer_reset_state() -> void:
 	pass
 
 
 ## Returns the address clients should use to join a hosted session.
 ##
-## Override in subclasses that use dynamic addresses (e.g. room codes). Defaults to [code]"localhost"[/code].
+## Override in subclasses that use dynamic addresses or room codes.
 func get_join_address() -> String:
 	return "localhost"
 
 
-## Returns [code]true[/code] if this backend supports spinning up an embedded
-## server on a local machine (e.g. ENet, WebSocket).
+## Returns [code]true[/code] when [method MultiplayerTree.join_or_host] can
+## create an embedded server.
 ##
-## Return [code]false[/code] for backends that rely on external lobby systems
-## (e.g. Steam).
+## Lobby mediated transports should return [code]false[/code].
 func supports_embedded_server() -> bool:
 	return true
 
 
-## Queries [param _address] for live [ServerInfo] without allocating a
-## persistent peer or entering the server's [code]get_peers()[/code].
+## Looks up [ServerInfo] for [param _address] without joining the server.
 ##
-## The default is [method ServerInfoResult.unsupported]: probing is opt-in.
-## Cheap direct [SceneMultiplayer] transports (ENet, WebSocket) override this
-## to create an [AuthProbeClient], which rides the auth phase with an
-## [code]NPRB[/code] packet on the same port. Brokered transports (Steam,
-## WebRTC trackers) implement their own discovery or stay unsupported.
-## [br][br]
-## [param _timeout] is the maximum total time to wait for a reply.
+## The default result is [method ServerInfoResult.unsupported]. Backends with a
+## lightweight connection path can override this with [AuthProbeClient].
+## Directory based backends can return cached metadata or keep the default.
+## [codeblock]
+## # Lightweight connection. Probe the same endpoint that join would use.
+## return await AuthProbeClient.new(self).query(address, timeout)
+##
+## # Directory metadata. Use cached lobby data, or report unsupported.
+## return ServerInfoResult.unsupported()
+## [/codeblock]
 func query_server_info(
 	_address: String, _timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
 
-## Returns UI metadata describing the address string this backend expects.
-##
-## Used by generic connect dialogs to render appropriate labels,
-## placeholders, and probe affordances. Default returns a generic
-## [AddressHint].
+## Returns the [AddressHint] for connect UI fields.
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.new()
 	hint.label = "Address"
@@ -139,14 +151,13 @@ func get_address_hint() -> AddressHint:
 	return hint
 
 
-## Called after this backend is duplicated by [MultiplayerTree]'s backend setter.
+## Copies state after [member MultiplayerTree.backend] duplicates this resource.
 ##
-## Override to preserve shared references that [method Resource.duplicate] would reset
-## to their default values.
+## Override for shared references that [method Resource.duplicate] would reset.
 func copy_from(_source: BackendPeer) -> void:
 	pass
 
 
-## Returns the user-facing friendly name for this backend.
+## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "Generic"

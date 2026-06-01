@@ -1,30 +1,45 @@
-## [BackendPeer] implementation using Godot's built-in [ENetMultiplayerPeer].
+## [BackendPeer] implementation using [ENetMultiplayerPeer].
 ##
 ## Suitable for LAN and direct IP connections. Not available in web exports.
+## [codeblock]
+## var target := JoinTarget.new()
+## target.backend = ENetBackend.new()
+## target.address = "127.0.0.1"
+## [/codeblock]
 @tool
 class_name ENetBackend
 extends BackendPeer
 
-## UDP port the server listens on and clients connect to.
+## UDP port used by [method create_host_peer] and [method create_join_peer].
 @export var port: int = 21253
 ## Maximum number of simultaneous client connections allowed by the server.
 @export var max_clients: int = 32
 
+## Implements [method BackendPeer.create_host_peer] with
+## [method ENetMultiplayerPeer.create_server].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("ENetBackend: create_host_peer called.")
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)
 	if err != OK:
-		Netw.dbg.warn("ENet create_server failed: %s", [error_string(err)],
-		func(m): push_warning(m))
+		Netw.dbg.warn(
+			"ENet create_server failed: %s",
+			[error_string(err)],
+			func(m): push_warning(m)
+		)
 		return null
 	Netw.dbg.info("ENet server ready on port %d", [port])
 	return peer
 
+## Implements [method BackendPeer.create_join_peer] with
+## [method ENetMultiplayerPeer.create_client].
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("ENetBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"ENetBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	var peer := ENetMultiplayerPeer.new()
 	if server_address.is_empty():
 		server_address = "localhost"
@@ -37,8 +52,9 @@ func create_join_peer(
 	return peer
 
 
-## Direct ENet hosts answer the same-port [code]NPRB[/code] probe during the
-## [SceneMultiplayer] auth phase. See [AuthProbeClient].
+## Implements [method BackendPeer.query_server_info] with [AuthProbeClient].
+##
+## ENet can probe the same host and port that [method create_join_peer] uses.
 func query_server_info(
 	address: String, timeout: float = 2.0,
 ) -> ServerInfoResult:
@@ -46,6 +62,7 @@ func query_server_info(
 	return await probe.query(address, timeout)
 
 
+## Returns a probed [code]"Server IP"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Server IP",
@@ -56,6 +73,6 @@ func get_address_hint() -> AddressHint:
 		true
 	)
 
-## Returns the user-facing friendly name for this backend.
+## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "ENet"

@@ -14,9 +14,9 @@ Most user code never instantiates the tree manually. You add it as a node in
 the editor, fill in its inspector fields, and then either let it connect on
 :godot:`_ready() <Node#class_node_private_method__ready>` (via
 :button:`Init Join Payload`) or drive it from a script with
-:ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>`. This
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`. This
 page describes the lifecycle, the role and state machine, custom transports,
-and embedded servers.
+and configured roles.
 
 A tree in the scene
 -------------------
@@ -32,31 +32,21 @@ tree-owned API, not the global default.
 Two tree placements are common:
 
 - A single tree at the top of the gameplay scene. This is what the quick
-  start uses. The tree hosts or joins, and child level scenes are spawned
-  beneath it.
-- A ``Client`` tree with an automatically-spawned sibling ``Server`` tree. When
-  :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` is
-  called against a local address on a backend that supports embedded servers,
-  the tree duplicates itself, names the copy ``Server``, calls
-   :ref:`host() <class_MultiplayerTree_method_host>` on it, and then calls
-   :ref:`join <class_MultiplayerTree_method_join>` on the original.
-   Both trees end up under the
-   same parent and share no state beyond the loopback transport. This is the
-   default for in-editor playtesting on desktop backends.
-   Both trees end up under the
-   same parent and share no state beyond the loopback transport. This is the
-   default for in-editor playtesting on desktop backends.
-
-If your backend supports it and you would rather not pay for the duplicate
-node, set :button:`Use Listen Server` on the tree. The same node will accept
-remote peers and represent the local host player at the same time.
-
-.. note::
-
-    Listen-server mode is opt-in for now. The reason is historical. The
-    duplicate-tree layout was the default for a long time, and several
-    examples still rely on it. The flag will eventually flip to default-on
-    once the example projects have migrated.
+  start uses. By default,
+  :ref:`desired_role <class_MultiplayerTree_property_desired_role>`
+  is :ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>`,
+  so the tree can accept remote peers and represent the local host player
+  at the same time.
+- A ``Client`` tree configured with
+  :ref:`desired_role <class_MultiplayerTree_property_desired_role>` set to
+  :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>`. When
+  :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` or
+  :ref:`host_player() <class_MultiplayerTree_method_host_player>` needs to
+  host, the tree duplicates itself, names the copy ``Server``, hosts that
+  sibling as a
+  :ref:`DEDICATED_SERVER <class_MultiplayerTree_constant_DEDICATED_SERVER>`,
+  and then joins the original client tree to it. Use this when you want a
+  separate in-process server node for desktop playtesting or debugging.
 
 Roles and states
 ----------------
@@ -91,11 +81,21 @@ or grey out a *Disconnect* button can subscribe once and be done.
 
 .. warning::
 
-    Reading :ref:`is_host <class_MultiplayerTree_property_is_host>` or :ref:`is_local_client <class_MultiplayerTree_property_is_local_client>` before the tree has finished
+    Reading :ref:`is_host <class_MultiplayerTree_property_is_host>` or
+    :ref:`is_local_client <class_MultiplayerTree_property_is_local_client>`
+    before the tree has finished
     configuring is a programmer error. The role is still :ref:`NONE <class_MultiplayerTree_constant_NONE>` and the
     addon will log a warning. Connect to the
     :ref:`configured <class_MultiplayerTree_signal_configured>` signal
     instead, or guard the read with :ref:`state <class_MultiplayerTree_property_state>` == :ref:`ONLINE <class_MultiplayerTree_constant_ONLINE>`.
+
+The :ref:`desired_role <class_MultiplayerTree_property_desired_role>`
+property records what the tree should become when a session starts. The
+default is :ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>`.
+Set it to :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>` to force the
+embedded sibling server flow, or to
+:ref:`DEDICATED_SERVER <class_MultiplayerTree_constant_DEDICATED_SERVER>` for
+headless hosts that should never submit a local player payload.
 
 The connection flow
 -------------------
@@ -105,7 +105,7 @@ There are three entry methods, each for a different intent. All take a
 identity (backend, address) is passed separately so the payload carries no
 URL or transport-specific fields.
 
-- :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`:
+- :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`:
   query the address, join if a live server answers, otherwise host. The
   zero-config path for local development and listen-server games.
 - :ref:`join() <class_MultiplayerTree_method_join>`: open
@@ -120,7 +120,7 @@ A typical local flow looks like this:
 2. Run the auth pipeline on the payload, if an
    :ref:`auth_provider <class_MultiplayerTree_property_auth_provider>` is
    assigned.
-3. (auto-connect only) call
+3. (:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` only) call
    :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
    against the address. An :ref:`OK <class_ServerInfoResult_constant_OK>`
    reply means a server is listening, so join; anything else means host.
@@ -139,8 +139,8 @@ unified under the exact same API: the directory service packages the matching
 lobby ID and backend template into a :ref:`JoinTarget <class_JoinTarget>`
 which is passed directly to :ref:`join() <class_MultiplayerTree_method_join>`.
 The tree then initializes the backend (e.g. `SteamBackend`) and finalizes the
-session as a :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>` or
-:ref:`LISTEN_SERVER <class_MultiplayerTree_constant_LISTEN_SERVER>` identically
+session through :ref:`join() <class_MultiplayerTree_method_join>` or
+:ref:`host_player() <class_MultiplayerTree_method_host_player>` identically
 to ENet or WebSocket connections.
 
 Signals you will actually wire

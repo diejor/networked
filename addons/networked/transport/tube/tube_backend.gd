@@ -1,19 +1,15 @@
-## [BackendPeer] implementation that delegates transport to a duck-typed
-## TubeClient node.
+## [BackendPeer] implementation backed by a [code]TubeClient[/code] node.
 ##
 ## Add exactly one [code]TubeClient[/code] descendant under the
 ## [MultiplayerTree]. Call [method MultiplayerTree.host] or
 ## [method MultiplayerTree.join] as normal. The TubeClient owns its own
-## [MultiplayerAPI], which this backend installs onto the tree during setup.
-## [br][br]
-## [b]Service Registration:[/b]
-## During [method setup], this backend registers the [code]TubeClient[/code]
-## node as a session-wide service.
+## [SceneMultiplayer], which [method setup] adopts into
+## [member MultiplayerTree.api].
 ## [codeblock]
-## # Retrieve the TubeClient from a component
+## # Retrieve the TubeClient from a component.
 ## var tube = ctx.services.get_service(TubeClient)
 ## if tube:
-##     print("Session ID: ", tube.session_id)
+##     print(tube.session_id)
 ## [/codeblock]
 @tool
 class_name TubeBackend
@@ -21,8 +17,7 @@ extends BackendPeer
 
 var tube: TubeWrapper
 
-## Finds the [code]TubeClient[/code] under [param tree] and wires it into the
-## backend.
+## Resolves the [code]TubeClient[/code] and adopts its [SceneMultiplayer].
 ##
 ## Returns [code]ERR_UNCONFIGURED[/code] if no [code]TubeClient[/code] exists,
 ## or [code]ERR_INVALID_DATA[/code] if the match is ambiguous or invalid.
@@ -66,9 +61,10 @@ func setup(tree: MultiplayerTree) -> Error:
 	return OK
 
 
-## Creates a new Tube session and copies the session ID to the clipboard.
-## Returns [code]null[/code] because the Tube transport owns its own peer; the
-## tree continues to drive its api directly.
+## Creates a Tube session and copies its session id to the clipboard.
+##
+## Returns [code]null[/code] because [method setup] already adopted the
+## transport api into [member MultiplayerTree.api].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("TubeBackend: create_host_peer called.")
 	assert(tube != null, "Backend needs to `setup()` first.")
@@ -86,13 +82,17 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 
 	return null
 
-## Joins the Tube session identified by [param server_address]. Returns
-## [code]null[/code]; the TubeClient already configured its peer onto the
-## adopted api.
+## Joins the Tube session identified by [param server_address].
+##
+## Returns [code]null[/code] because [code]TubeClient[/code] configures the
+## peer on the adopted api.
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("TubeBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"TubeBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	assert(tube != null, "Backend needs to `setup()` first.")
 
 	tube.join_session(server_address)
@@ -100,12 +100,14 @@ func create_join_peer(
 
 	return null
 
+## Leaves the active Tube session and unregisters its service.
 func peer_reset_state() -> void:
 	if tube != null:
 		if tube.state != TubeWrapper.State.IDLE:
 			tube.leave_session()
 		NetwServices.unregister(tube._node)
 
+## Returns the active Tube session id, or the parent default.
 func get_join_address() -> String:
 
 	if tube != null and not tube.session_id.is_empty():
@@ -113,14 +115,16 @@ func get_join_address() -> String:
 
 	return super.get_join_address()
 
-## Tube routes through session IDs rather than a reachable address, so the
-## SceneMultiplayer-based probe handshake does not apply.
+## Keeps [method BackendPeer.query_server_info] unsupported for Tube ids.
+##
+## Tube session ids do not support a lightweight [AuthProbeClient] connection.
 func query_server_info(
 	_address: String, _timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
 
+## Returns a [code]"Session ID"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Session ID",
@@ -131,7 +135,7 @@ func get_address_hint() -> AddressHint:
 		false
 	)
 
-## Returns the user-facing friendly name for this backend.
+## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "Tube"
 

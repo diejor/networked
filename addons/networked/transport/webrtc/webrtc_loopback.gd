@@ -1,14 +1,15 @@
-## [BackendPeer] that routes packets through an in-process [WebRTCLoopbackSession].
+## [BackendPeer] that routes packets through [WebRTCLoopbackSession].
 ##
-## Uses the full WebRTC offer/answer/ICE handshake entirely in memory, so it works
-## in web exports without real WebRTC sockets.
+## Uses the WebRTC offer, answer, and ICE handshake entirely in memory. This
+## keeps web exports on the WebRTC code path without external signaling.
 @tool
 class_name WebRTCLoopbackBackend
 extends BackendPeer
 
-## The shared in-process WebRTC loopback session.
+## Shared WebRTC loopback session.
 var session: WebRTCLoopbackSession = preload("uid://d2u1yyaikw2sh")
 
+## Implements [method BackendPeer.create_host_peer] with [member session].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	if not session.has_live_server():
 		session.reset()
@@ -19,6 +20,7 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.info("WebRTC loopback server ready.")
 	return session.get_server_peer()
 
+## Implements [method BackendPeer.create_join_peer] with [member session].
 func create_join_peer(
 	_tree: MultiplayerTree, _server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
@@ -29,6 +31,7 @@ func create_join_peer(
 	Netw.dbg.info("WebRTC loopback client ready.")
 	return session.get_client_peer()
 
+## Implements [method BackendPeer.poll] by polling [member session].
 func poll(_dt: float) -> void:
 	if session:
 		session.poll()

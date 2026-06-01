@@ -16,7 +16,7 @@ func _make_payload(username: String) -> JoinPayload:
 
 func test_no_listener_falls_through_to_host() -> void:
 	var tree := EnetTestSupport.make_client_tree(self, 29100, "_solo")
-	tree.use_listen_server = true
+	tree.desired_role = MultiplayerTree.Role.LISTEN_SERVER
 
 	var target := JoinTarget.new()
 	target.backend = tree.backend

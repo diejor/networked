@@ -14,4 +14,4 @@ extends Resource
 ## Builds a fresh [ServerInfo] for [param tree]. Called on the host inside
 ## the auth callback; must not mutate session state.
 @abstract
-func build_server_info(_tree: MultiplayerTree) -> ServerInfo
+func build_server_info(tree: MultiplayerTree) -> ServerInfo

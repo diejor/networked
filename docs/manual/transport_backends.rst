@@ -53,10 +53,12 @@ loopback, and both will get you through the entire
        and :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>` APIs.
 
 The "embedded server" column matters when you call
-:ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>` with
-a local address. Backends that report
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` with a
+local address while
+:ref:`desired_role <class_MultiplayerTree_property_desired_role>` is
+:ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>`. Backends that report
 :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
-in the host-on-demand flow described in
+in the host on demand flow described in
 :ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.
 
@@ -144,8 +146,8 @@ ones you need:
   cached lobby/login state your backend holds.
 - :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>`: return ``true`` if this backend can be
   the target of
-  :ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`'s
-  host-on-demand fallback. Most transports return ``true``. Managed-lobby
+  :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`'s
+  host on demand fallback. Most transports return ``true``. Managed-lobby
   backends (Steam) return ``false``.
 - :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`:
   the default returns

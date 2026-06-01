@@ -1,9 +1,16 @@
-## [BackendPeer] implementation that uses WebRTC for peer-to-peer NAT traversal.
+## [BackendPeer] implementation using WebRTC tracker signaling.
 ##
-## Peers discover each other through WebTorrent-compatible tracker servers using a
-## shared [code]info_hash[/code] room ID. On [method host] the hash is copied
-## to the clipboard; clients pass that hash to
-## [method MultiplayerTree.join].
+## Peers discover each other through WebTorrent compatible tracker servers.
+## [method create_host_peer] emits [signal room_created] with the room hash.
+## [method create_join_peer] accepts that hash as its address.
+## [codeblock]
+## tree.backend = WebRTCBackend.new()
+## await tree.host_player(payload)
+##
+## target.backend = WebRTCBackend.new()
+## target.address = room_hash
+## await tree.join(target, payload)
+## [/codeblock]
 @tool
 class_name WebRTCBackend
 extends BackendPeer
@@ -12,10 +19,10 @@ extends BackendPeer
 signal signaling_connected
 ## Emitted when all tracker connections close.
 signal signaling_disconnected
-## Emitted on the host when the room hash is ready to share. [param room_id] is the 20-character hex hash.
+## Emitted on the host when the room hash is ready to share.
 signal room_created(room_id: String)
 
-## WebTorrent-compatible tracker URLs used for signaling.
+## WebTorrent compatible tracker URLs used for signaling.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.files.fm:7073/announce",
@@ -25,7 +32,11 @@ signal room_created(room_id: String)
 ## ICE server definitions passed to each [WebRTCPeerConnection].
 @export var ice_servers: Array[Dictionary] = [
 	{ "urls": ["stun:stun.l.google.com:19302"] },
-	{ "urls": ["turn:openrelay.metered.ca:80"], "username": "openrelayproject", "credential": "openrelayproject" }
+	{
+		"urls": ["turn:openrelay.metered.ca:80"],
+		"username": "openrelayproject",
+		"credential": "openrelayproject",
+	}
 ]
 
 var webrtc_peer: WebRTCMultiplayerPeer = null
@@ -42,7 +53,7 @@ var _peer_map := {}
 var _local_godot_id := 0
 var _announce_timer := 0.0
 
-## Creates a WebRTC server peer, connects to trackers, and emits [signal room_created] with the room hash.
+## Implements [method BackendPeer.create_host_peer] for a WebRTC room.
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("WebRTCBackend: create_host_peer called.")
 	_is_server = true
@@ -74,16 +85,21 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 
 	var tracker_err := _connect_trackers()
 	if tracker_err != OK:
-		Netw.dbg.error("WebRTC tracker connect failed: %s", [error_string(tracker_err)])
+		Netw.dbg.error(
+			"WebRTC tracker connect failed: %s",
+			[error_string(tracker_err)]
+		)
 		return null
 	return peer
 
-## Connects to the room identified by [param server_address] (the 20-char hash
-## or any string that hashes to one).
+## Implements [method BackendPeer.create_join_peer] for a WebRTC room hash.
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("WebRTCBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"WebRTCBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	_is_server = false
 	_local_godot_id = randi() % 1000000 + 2
 	_local_peer_id = _generate_peer_id(_local_godot_id)
@@ -108,15 +124,21 @@ func create_join_peer(
 
 	_bind_webrtc_signals(peer)
 	webrtc_peer = peer
-	Netw.dbg.trace("Client Peer Created. Generating initial WebRTC Connection to Server...")
+	Netw.dbg.trace(
+		"Client Peer Created. Generating initial WebRTC Connection to Server."
+	)
 	_create_peer_connection(1, "")
 
 	var tracker_err := _connect_trackers()
 	if tracker_err != OK:
-		Netw.dbg.error("WebRTC tracker connect failed: %s", [error_string(tracker_err)])
+		Netw.dbg.error(
+			"WebRTC tracker connect failed: %s",
+			[error_string(tracker_err)]
+		)
 		return null
 	return peer
 
+## Implements [method BackendPeer.poll] for tracker and WebRTC state.
 func poll(dt: float) -> void:
 	if webrtc_peer:
 		webrtc_peer.poll()
@@ -143,12 +165,14 @@ func _on_webrtc_peer_connected(id: int) -> void:
 func _on_webrtc_peer_disconnected(id: int) -> void:
 	Netw.dbg.info("WebRTC Native Connection Lost with Godot ID: %d", [id])
 
+## Returns the active room hash, or the parent default.
 func get_join_address() -> String:
 	if not _info_hash.is_empty():
 		return _info_hash
 	return super.get_join_address()
 
 
+## Returns a [code]"Room Hash"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Room Hash",
@@ -159,17 +183,17 @@ func get_address_hint() -> AddressHint:
 		false
 	)
 
-## WebRTC discovery rides the WebTorrent tracker, not a same-port
-## [SceneMultiplayer] auth probe. Inheriting the default probe would force a
-## full ICE handshake (10+ s) on every server-browser refresh, so we report
-## [method ServerInfoResult.unsupported] here. A tracker-based liveness probe
-## can replace this later.
+## Keeps [method BackendPeer.query_server_info] unsupported for room hashes.
+##
+## WebRTC discovery uses tracker signaling. An [AuthProbeClient] probe would
+## need a full ICE handshake, which is too expensive for browser refresh.
 func query_server_info(
 	_address: String, _timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
 
+## Clears tracker sockets, room state, and the active WebRTC peer.
 func peer_reset_state() -> void:
 	Netw.dbg.trace("WebRTCBackend: Resetting Peer State.")
 	if webrtc_peer:
@@ -479,7 +503,12 @@ func _on_session_description_created(
 	Netw.dbg.trace("Sending [%s] payload to tracker.", [type.to_upper()])
 	_broadcast(msg)
 
-func _on_ice_candidate_created(media: String, index: int, name: String, remote_peer_id: String) -> void:
+func _on_ice_candidate_created(
+	media: String,
+	index: int,
+	name: String,
+	remote_peer_id: String,
+) -> void:
 	var target_peer := remote_peer_id
 	if not _is_server:
 		if _server_wt_id.is_empty():
@@ -549,6 +578,6 @@ func _send_to_socket(ws: WebSocketPeer, data: Dictionary) -> void:
 		var json_str := JSON.stringify(data)
 		ws.send_text(json_str)
 
-## Returns the user-facing friendly name for this backend.
+## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebRTC"

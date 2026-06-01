@@ -49,7 +49,6 @@ node_path = "Player/Components/SpawnerComponent"
 [node name="Client" type="Node" parent="." unique_id=185172770]
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_lpgch")
-use_listen_server = true
 server_info_source = SubResource("Resource_xoeqs")
 spawn_policy = SubResource("Resource_spwn")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"

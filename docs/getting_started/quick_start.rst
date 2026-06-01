@@ -46,8 +46,8 @@ will meet in this quick start are the moving parts of every session.
 - :ref:`MultiplayerTree <class_MultiplayerTree>` is the entry point. You add
   it to your scene, give it a transport (a
   :ref:`BackendPeer <class_BackendPeer>`), and call its session entry methods:
-  :ref:`auto-connect <class_MultiplayerTree_method_auto_connect_player>`,
-  :ref:`direct join <class_MultiplayerTree_method_join_direct>`, or
+  :ref:`join or host <class_MultiplayerTree_method_join_or_host>`,
+  :ref:`join <class_MultiplayerTree_method_join>`, or
   :ref:`host player <class_MultiplayerTree_method_host_player>`. It owns its own
   :godot:`SceneMultiplayer <SceneMultiplayer>` and installs it onto the scene
   tree, so every descendant gets the correct :godot:`multiplayer <Node#class_node_property_multiplayer>` property
@@ -154,13 +154,17 @@ separately to the entry method:
         join.username = "alice"
         join.spawn = SpawnerComponentPolicy.from_scene_node_path(spawner_path).to_dict()
 
-        client.auto_connect_player(client.backend, "localhost", join)
+        var target := JoinTarget.new()
+        target.backend = client.backend
+        target.address = "localhost"
 
-:ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
+        await client.join_or_host(target, join)
+
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
 queries the address for a live local server first; if one answers, it joins
 as a client, otherwise it falls back to hosting. For LAN or internet
-servers, call :ref:`join_direct() <class_MultiplayerTree_method_join_direct>`
-explicitly with the remote address instead.
+servers, build a :ref:`JoinTarget <class_JoinTarget>` for the server and
+call :ref:`join() <class_MultiplayerTree_method_join>` instead.
 
 .. tip::
 

@@ -19,7 +19,7 @@ Picking an entry method is a question of intent. All three take a
 identity (backend, address) is supplied via a :ref:`JoinTarget <class_JoinTarget>`
 passed to the method, so the payload itself carries no transport state.
 
-:ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
     Query the address; if a live local server answers, join it as a client,
     otherwise host. The zero-config path for local development and
     listen-server games.
@@ -43,8 +43,8 @@ passed to the method, so the payload itself carries no transport state.
     target.backend = WebSocketBackend.new()
     target.address = "localhost"
 
-    # Auto-detect: join if someone is hosting locally, else host.
-    await tree.auto_connect_player(target, join)
+    # Probe first. Join if someone is hosting locally, else host.
+    await tree.join_or_host(target, join)
 
     # Explicit join to a known remote server.
     target.address = "203.0.113.42"
@@ -116,7 +116,7 @@ WebSocket) enable it by delegating to
 so session-id transports (Steam, in-process Local, Tube) and WebRTC (whose
 auth handshake requires a full, expensive ICE round trip) stay unsupported
 unless they implement their own discovery.
-:ref:`auto_connect_player() <class_MultiplayerTree_method_auto_connect_player>`
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
 treats any non-:ref:`OK <class_ServerInfoResult_constant_OK>` result
 (including :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>`) as
 "no listener available" and falls through to hosting.

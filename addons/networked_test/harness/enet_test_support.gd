@@ -61,7 +61,7 @@ static func start_host(
 ##
 ## Returned backend is not attached to any tree; pass it directly to
 ## [method BackendPeer.query_server_info] or to
-## [method MultiplayerTree.join_direct].
+## [method MultiplayerTree.join].
 static func make_client_backend(port: int) -> ENetBackend:
 	var backend := ENetBackend.new()
 	backend.port = port

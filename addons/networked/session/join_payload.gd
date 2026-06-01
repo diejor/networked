@@ -1,10 +1,9 @@
 ## Serializable in-game join data describing a player entering a session.
 ##
-## Pass a populated instance to [method MultiplayerTree.join_direct],
+## Pass a populated instance to [method MultiplayerTree.join],
 ## [method MultiplayerTree.host_player], or
-## [method MultiplayerTree.auto_connect_player]. Transport identity
-## (backend, address) is supplied separately by the caller and is not
-## part of this payload.
+## [method MultiplayerTree.join_or_host]. Transport identity is supplied
+## separately by a [JoinTarget] and is not part of this payload.
 class_name JoinPayload
 extends Serde
 

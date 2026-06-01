@@ -1,7 +1,12 @@
 ## [BackendPeer] implementation using [WebSocketMultiplayerPeer].
 ##
-## Supports both [code]ws://[/code] (local) and [code]wss://[/code] (production) connections
-## and is compatible with web exports.
+## Supports local [code]ws://[/code] and production [code]wss://[/code]
+## connections. Compatible with web exports.
+## [codeblock]
+## var target := JoinTarget.new()
+## target.backend = WebSocketBackend.new()
+## target.address = "ws://localhost:21253"
+## [/codeblock]
 @tool
 class_name WebSocketBackend
 extends BackendPeer
@@ -14,23 +19,33 @@ extends BackendPeer
 @export var max_clients: int = 32
 
 
+## Implements [method BackendPeer.create_host_peer] with
+## [method WebSocketMultiplayerPeer.create_server].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("WebSocketBackend: create_host_peer called.")
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var err := peer.create_server(port)
 	if err != OK:
-		Netw.dbg.warn("WebSocket create_server failed: %s", [error_string(err)],
-		func(m): push_warning(m))
+		Netw.dbg.warn(
+			"WebSocket create_server failed: %s",
+			[error_string(err)],
+			func(m): push_warning(m)
+		)
 		return null
 	Netw.dbg.info("WebSocket server ready on *:%d", [port])
 	return peer
 
 
+## Implements [method BackendPeer.create_join_peer] with
+## [method WebSocketMultiplayerPeer.create_client].
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("WebSocketBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"WebSocketBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var url := build_url(server_address)
@@ -44,10 +59,10 @@ func create_join_peer(
 	return peer
 
 
-## Direct WebSocket hosts answer the same-port [code]NPRB[/code] probe during
-## the [SceneMultiplayer] auth phase. [method create_join_peer] builds the
-## correct [code]ws[s]://[/code] URL via [method build_url], so the probe
-## targets the same endpoint a real join would. See [AuthProbeClient].
+## Implements [method BackendPeer.query_server_info] with [AuthProbeClient].
+##
+## [method build_url] normalizes [param address] before the probe opens a
+## temporary WebSocket connection.
 func query_server_info(
 	address: String, timeout: float = 2.0,
 ) -> ServerInfoResult:
@@ -55,6 +70,7 @@ func query_server_info(
 	return await probe.query(address, timeout)
 
 
+## Returns a probed [code]"Server URL"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.make(
 		"Server URL",
@@ -72,7 +88,7 @@ func get_address_hint() -> AddressHint:
 ## [member public_host] is configured, falling back to localhost otherwise.
 ## Localhost maps to [code]ws://localhost:[member port][/code]. If the address
 ## is already a full [code]ws://[/code] or [code]wss://[/code] URL, it is
-## returned as-is.
+## returned unchanged.
 func build_url(server_address: String) -> String:
 	if server_address.is_empty():
 		if not public_host.is_empty():
@@ -88,6 +104,6 @@ func build_url(server_address: String) -> String:
 
 	return "wss://" + server_address
 
-## Returns the user-facing friendly name for this backend.
+## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebSocket"

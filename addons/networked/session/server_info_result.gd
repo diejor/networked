@@ -1,6 +1,6 @@
 ## Outcome of [method BackendPeer.query_server_info].
 ##
-## Replaces the deleted [code]ProbeResult[/code]. Carries either a populated
+## Replaces the deleted [code skip-lint]ProbeResult[/code]. Carries either a populated
 ## [ServerInfo] (on [constant Status.OK]) or a categorical failure reason.
 ## Use the static helpers — [method ok], [method unreachable], [method timeout],
 ## [method unsupported], [method busy], [method error] — to build instances.

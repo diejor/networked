@@ -39,16 +39,34 @@ if errorlevel 1 (
     echo or see .github\actions\build-docs-classes\action.yml for the CI flow.
     exit /b 1
 )
-if not exist api mkdir api
+if exist api_new rmdir /s /q api_new
+if exist api_filtered_new rmdir /s /q api_filtered_new
+if exist classes_new rmdir /s /q classes_new
+mkdir api_new
 echo [1/3] Extracting class XML via godot --doctool...
-godot --doctool "%CD%\api" --gdscript-docs . --headless --path .. --quit
-if errorlevel 1 exit /b %errorlevel%
+call godot --doctool "%CD%\api_new" --gdscript-docs . --headless --path .. --quit
+if errorlevel 1 (
+    if exist api_new rmdir /s /q api_new
+    exit /b %errorlevel%
+)
+if exist api rmdir /s /q api
+ren api_new api
 echo [2/3] Filtering private members...
-python tools\filter_private.py api api_filtered
-if errorlevel 1 exit /b %errorlevel%
+python tools\filter_private.py api api_filtered_new
+if errorlevel 1 (
+    if exist api_filtered_new rmdir /s /q api_filtered_new
+    exit /b %errorlevel%
+)
 echo [3/3] Generating RST into classes\...
-python tools\make_rst.py api_filtered --output classes
-if errorlevel 1 exit /b %errorlevel%
+python tools\make_rst.py api_filtered_new --output classes_new
+if errorlevel 1 (
+    if exist classes_new rmdir /s /q classes_new
+    exit /b %errorlevel%
+)
+if exist api_filtered rmdir /s /q api_filtered
+if exist classes rmdir /s /q classes
+ren api_filtered_new api_filtered
+ren classes_new classes
 echo.
 echo Class reference updated. Run .\make.bat html next.
 goto end

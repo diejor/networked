@@ -56,7 +56,7 @@ func query(
 
 
 ## Cancels every in-flight session and clears the pending queue.
-## Cancelled sessions will not fire their [param on_done] callbacks.
+## Cancelled sessions will not fire queued completion callbacks.
 func cancel_all() -> void:
 	_queue.clear()
 	for session in _active:
