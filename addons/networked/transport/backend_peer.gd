@@ -158,6 +158,21 @@ func copy_from(_source: BackendPeer) -> void:
 	pass
 
 
+## Returns a configured copy of this backend template.
+##
+## [method Resource.duplicate] resets the shared references that
+## [method copy_from] restores, so a bare [method Resource.duplicate] yields a
+## half-built instance. This pairs the two so no caller can forget the second
+## step.
+## [codeblock]
+## var inst := template.clone()    # duplicate() + copy_from(template)
+## [/codeblock]
+func clone() -> BackendPeer:
+	var inst := duplicate() as BackendPeer
+	inst.copy_from(self)
+	return inst
+
+
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "Generic"

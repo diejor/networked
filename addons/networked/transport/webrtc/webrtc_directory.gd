@@ -61,6 +61,16 @@ var max_clients: int = 8
 ## Seconds between room card re-announces while advertising.
 @export_range(0.5, 10.0, 0.1, "suffix:s") var advertise_interval: float = 2.0
 
+## Seconds the board stays warm after the last interest (advertising or
+## browsing) before its tracker sockets close. Set to 0 to close immediately
+## once idle. [method list_lobbies] and [method advertise_room] reopen on demand.
+@export_range(0, 120) var board_idle_timeout: float = 30.0
+
+## Distinct offers emitted per board announce. A WebTorrent tracker pairs one
+## offer per distinct swarm peer, so reach per announce equals this fanout, not
+## [code]numwant[/code]. Higher values converge faster at the cost of bandwidth.
+@export_range(1, 50) var board_fanout: int = 16
+
 
 var _tracker: WebRTCTrackerClient = null
 var _board_hash := ""
@@ -82,6 +92,8 @@ var _id_to_hash: Dictionary = {}   # synthetic int id -> room_hash
 var _next_id := 1
 
 var _reconnect_acc := 0.0
+var _idle_acc := 0.0
+var _provider_unavailable_latched := false
 
 ## Seconds to wait before reconnecting a board whose sockets all dropped.
 const BOARD_RECONNECT_COOLDOWN := 5.0
@@ -137,8 +149,30 @@ func _process(dt: float) -> void:
 			_emit_collected()
 
 
-# Keeps the board socket warm, reconnecting after a cooldown when it drops.
+# Keeps the board warm while there is interest (advertising or browsing) and a
+# short idle grace after, then closes its sockets so an idle directory does not
+# squat on trackers. Interest reopens the board on demand.
 func _maintain_board(dt: float) -> void:
+	if _advertising or _collecting:
+		_idle_acc = 0.0
+		_keep_board_warm(dt)
+		return
+
+	_idle_acc += dt
+	if _idle_acc < board_idle_timeout:
+		_keep_board_warm(dt)
+		return
+
+	# Idle past the grace: release the sockets until interest returns.
+	if _tracker != null:
+		Netw.dbg.debug("WebRTCDirectory: board idle, closing trackers.")
+		_tracker.close()
+		_tracker = null
+	_reconnect_acc = 0.0
+
+
+# Reconnects a warm board whose sockets all dropped, after a cooldown.
+func _keep_board_warm(dt: float) -> void:
 	if _tracker == null:
 		_ensure_tracker()
 		_reconnect_acc = 0.0
@@ -313,7 +347,12 @@ func _ensure_tracker() -> void:
 	_tracker = WebRTCTrackerClient.new()
 	_tracker.message_received.connect(_on_message)
 	if _tracker.connect_to(trackers) != OK:
-		provider_unavailable.emit("No WebRTC tracker reachable for the board.")
+		# Latch so the 5s reconnect loop reports one outage, not one per retry.
+		if not _provider_unavailable_latched:
+			_provider_unavailable_latched = true
+			provider_unavailable.emit("No WebRTC tracker reachable for the board.")
+	else:
+		_provider_unavailable_latched = false
 
 
 func _on_message(data: Dictionary) -> void:
@@ -412,22 +451,29 @@ func _room_metadata(card: Dictionary) -> Dictionary:
 
 
 func _announce_with_card(card: Dictionary) -> Dictionary:
+	# One offer reaches one swarm peer, so fan out board_fanout distinct offers
+	# (same sdp, distinct offer_id) to reach that many peers per announce.
+	var sdp := JSON.stringify(card)
+	var offers: Array = []
+	for i in board_fanout:
+		offers.append({
+			"offer_id": _generate_hash(),
+			"offer": { "type": "offer", "sdp": sdp }
+		})
 	return {
 		"action": "announce",
 		"info_hash": _board_hash,
 		"peer_id": _peer_id,
-		"numwant": 50,
-		"offers": [{
-			"offer_id": _generate_hash(),
-			"offer": { "type": "offer", "sdp": JSON.stringify(card) }
-		}]
+		"numwant": board_fanout,
+		"offers": offers
 	}
 
 
 func _make_backend() -> WebRTCBackend:
-	var backend := WebRTCBackend.new()
-	backend.trackers = trackers.duplicate()
-	return backend
+	var template := WebRTCBackend.new()
+	template.trackers = trackers
+	# clone() runs copy_from, so trackers/server_name/ice_servers all ride along.
+	return template.clone()
 
 
 func _generate_hash() -> String:

@@ -322,7 +322,9 @@ func _parse_packet(data: Dictionary) -> void:
 			_handle_candidate(godot_id, payload)
 		else:
 			var offer_id := String(data.get("offer_id", ""))
-			if _handled_offers.has(remote_peer_id):
+			if _has_handled_signal(
+				_handled_offers, remote_peer_id, offer_id, payload
+			):
 				Netw.dbg.trace(
 					"Ignoring duplicate [OFFER] from Godot ID: %d",
 					[godot_id]
@@ -331,7 +333,9 @@ func _parse_packet(data: Dictionary) -> void:
 			Netw.dbg.debug("Received [OFFER] from Godot ID: %d", [godot_id])
 			_peer_map[remote_peer_id + "_offer_id"] = offer_id
 			if _handle_offer(godot_id, payload):
-				_handled_offers[remote_peer_id] = offer_id
+				_mark_handled_signal(
+					_handled_offers, remote_peer_id, offer_id, payload
+				)
 			else:
 				_peer_map.erase(remote_peer_id + "_offer_id")
 	

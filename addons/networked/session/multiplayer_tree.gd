@@ -148,8 +148,7 @@ func _warn_if_role_unset() -> void:
 	set(value):
 		if not Engine.is_editor_hint():
 			if value:
-				backend = value.duplicate()
-				backend.copy_from(value)
+				backend = value.clone()
 			else:
 				backend = null
 		else:

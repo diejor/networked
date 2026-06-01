@@ -33,6 +33,4 @@ extends Resource
 func make_backend_instance() -> BackendPeer:
 	if backend == null:
 		return null
-	var inst := backend.duplicate() as BackendPeer
-	inst.copy_from(backend)
-	return inst
+	return backend.clone()
