@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="8_7ue45"]
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="8_lpgch"]
+[ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webrtc_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/webrtc_backend.gd" id="10_xg3i6"]
 [ext_resource type="Script" uid="uid://dwa0bhinxigbm" path="res://addons/networked/session/spawn/spawner_component_policy.gd" id="11_spwn"]
@@ -37,6 +38,7 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_7ehqo"]
 script = ExtResource("10_xg3i6")
+server_name = null
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [sub_resource type="Resource" id="Resource_2dmkd"]
@@ -69,9 +71,13 @@ metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
+[node name="WebRTCDirectory" type="Node" parent="Client" unique_id=667483632]
+script = ExtResource("8_xoeqs")
+metadata/_custom_type_script = "uid://d1xugn0ypbbto"
+
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
 
-[node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
+[node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 node_paths=PackedStringArray("tree", "directories") instance=ExtResource("8_7ue45")]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -83,5 +89,6 @@ offset_right = 240.0
 offset_bottom = 180.0
 tree = NodePath("../../Client")
 backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo")])
+directories = [NodePath("../../Client/WebRTCDirectory")]
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
 server_list_path = "user://daily/servers.tres"

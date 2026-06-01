@@ -379,8 +379,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 		host_failed.emit("host config has no backend template")
 		return ERR_INVALID_PARAMETER
 
-	if backend is SteamBackend:
-		backend.server_name = config.server_name
+	_apply_host_config(backend, config)
 
 	tree.backend = backend
 	var err := await tree.host_player(payload)
@@ -425,7 +424,9 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	join_started.emit(target)
 	join_aborted_flag = false
 
-	var err := await tree.join(target, payload)
+	# Failure is reported via join_failed below, so keep the tree quiet to
+	# avoid logging the timeout as a redundant hard error.
+	var err := await tree.join(target, payload, 5.0, true)
 	if err != OK:
 		if join_aborted_flag:
 			join_failed.emit(target, "Connection aborted by user")
@@ -471,6 +472,18 @@ func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 		session_left.emit()
 
 
+func _apply_host_config(
+	backend: BackendPeer,
+	config: ConnectHostConfig,
+) -> void:
+	if backend is SteamBackend:
+		var steam := backend as SteamBackend
+		steam.server_name = config.server_name
+	elif backend is WebRTCBackend:
+		var webrtc := backend as WebRTCBackend
+		webrtc.server_name = config.server_name
+
+
 func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 	_results[target] = result
 	Netw.dbg.debug(
@@ -501,7 +514,8 @@ func _on_directory_list_updated(
 			var info := ServerInfo.new()
 			info.players = lobby.players
 			info.max_players = lobby.max_players
-			_results[t] = ServerInfoResult.ok(info)
+			info.metadata = lobby.metadata.duplicate()
+			_results[t] = ServerInfoResult.ok(info, -1)
 
 	_discovered[id] = fresh
 	Netw.dbg.debug(

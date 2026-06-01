@@ -49,6 +49,13 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Backends offered by the Add Server and Host popups.
 @export var backend_templates: Array[BackendPeer] = []
 
+## [LobbyDirectory] nodes registered with the session on
+## [method Node._ready], so their lobbies appear on [method NetwConnect.refresh].
+##
+## Each directory registers under its own [member Node.name], so name the nodes
+## distinctly (for example [code]"steam"[/code] or [code]"webrtc"[/code]).
+@export var directories: Array[LobbyDirectory] = []
+
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
 	PROPERTY_HINT_ARRAY_TYPE,
@@ -141,6 +148,7 @@ func _ready() -> void:
 
 
 	_bind_session_signals()
+	_register_directories()
 
 	_rebuild_from_session()
 	_clear_selection()
@@ -149,7 +157,25 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	_unregister_directories()
 	_unbind_session_signals()
+
+
+# Registers each configured directory under its node name.
+func _register_directories() -> void:
+	if _connect == null:
+		return
+	for directory in directories:
+		if directory != null:
+			_connect.register_directory(StringName(directory.name), directory)
+
+
+func _unregister_directories() -> void:
+	if _connect == null:
+		return
+	for directory in directories:
+		if directory != null:
+			_connect.unregister_directory(StringName(directory.name))
 
 
 # Loads the browser-owned saved target list into the resolved facade.

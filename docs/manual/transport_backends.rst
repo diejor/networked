@@ -62,6 +62,14 @@ in the host on demand flow described in
 :ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.
 
+.. note::
+
+   Browser-hosted WebRTC rooms that rely on tracker signalling are full
+   peer-to-peer hosts. Background tabs can heavily throttle Godot processing,
+   WebSocket polling, and timers, which can make the room disappear or stall
+   joins until the host tab is focused again. Prefer a relay or dedicated host
+   when web-hosted rooms must stay reachable in the background.
+
 Configuring a backend
 ---------------------
 
