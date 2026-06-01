@@ -144,27 +144,37 @@ def filter_private_elements(root: ET.Element) -> None:
                     parent.remove(elem)
 
 
+DEFAULT_ADDONS = ("networked", "networked_test")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Filter Godot doctool XML to only include classes from addons/networked."
+        description="Filter Godot doctool XML to only include classes from selected addons."
     )
     parser.add_argument("input_dir", help="Directory containing XML files.")
     parser.add_argument("output_dir", help="Directory to write filtered XML files.")
     parser.add_argument(
         "--addon-dir",
+        action="append",
         default=None,
-        help="Path to the addon directory to scan for class_name declarations "
-             "(e.g. addons/networked). Defaults to addons/networked relative to project root.",
+        help="Path to an addon directory to scan for class_name declarations. "
+             "Repeat for multiple addons. "
+             f"Defaults to addons/{{{','.join(DEFAULT_ADDONS)}}} relative to project root.",
     )
     args = parser.parse_args()
 
-    if args.addon_dir is None:
+    if not args.addon_dir:
         # input_dir is typically docs/api; project root is two levels up
         project_root = Path(args.input_dir).resolve().parent.parent
-        args.addon_dir = str(project_root / "addons" / "networked")
+        args.addon_dir = [str(project_root / "addons" / name) for name in DEFAULT_ADDONS]
 
-    print(f"Scanning addon: {args.addon_dir}")
-    allowed_names, allowed_auto = scan_addon_for_class_names(args.addon_dir)
+    allowed_names: set[str] = set()
+    allowed_auto: set[str] = set()
+    for addon_dir in args.addon_dir:
+        print(f"Scanning addon: {addon_dir}")
+        names, auto = scan_addon_for_class_names(addon_dir)
+        allowed_names |= names
+        allowed_auto |= auto
     print(f"Found {len(allowed_names)} allowed class names: {sorted(allowed_names)}")
     print(f"Found {len(allowed_auto)} auto-named scripts")
 

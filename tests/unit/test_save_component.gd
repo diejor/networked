@@ -2,7 +2,7 @@
 ##
 ## All tests run without a [SceneTree], network, or spawner.
 class_name TestSaveComponent
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 var test_dir: String
 var backend: FileSystemBackend

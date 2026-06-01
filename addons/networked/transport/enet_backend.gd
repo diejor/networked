@@ -1,30 +1,45 @@
-## [BackendPeer] implementation using Godot's built-in [ENetMultiplayerPeer].
+## [BackendPeer] implementation using [ENetMultiplayerPeer].
 ##
 ## Suitable for LAN and direct IP connections. Not available in web exports.
+## [codeblock]
+## var target := JoinTarget.new()
+## target.backend = ENetBackend.new()
+## target.address = "127.0.0.1"
+## [/codeblock]
 @tool
 class_name ENetBackend
 extends BackendPeer
 
-## UDP port the server listens on and clients connect to.
+## UDP port used by [method create_host_peer] and [method create_join_peer].
 @export var port: int = 21253
 ## Maximum number of simultaneous client connections allowed by the server.
 @export var max_clients: int = 32
 
+## Implements [method BackendPeer.create_host_peer] with
+## [method ENetMultiplayerPeer.create_server].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("ENetBackend: create_host_peer called.")
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)
 	if err != OK:
-		Netw.dbg.warn("ENet create_server failed: %s", [error_string(err)],
-		func(m): push_warning(m))
+		Netw.dbg.warn(
+			"ENet create_server failed: %s",
+			[error_string(err)],
+			func(m): push_warning(m)
+		)
 		return null
 	Netw.dbg.info("ENet server ready on port %d", [port])
 	return peer
 
+## Implements [method BackendPeer.create_join_peer] with
+## [method ENetMultiplayerPeer.create_client].
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("ENetBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"ENetBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	var peer := ENetMultiplayerPeer.new()
 	if server_address.is_empty():
 		server_address = "localhost"
@@ -37,22 +52,17 @@ func create_join_peer(
 	return peer
 
 
-## Synchronous UDP bind-test on the configured port. ENet servers hold the
-## UDP port exclusively, so a failed bind means a server is presumed live.
-func probe(address: String, _timeout: float = 0.2) -> ProbeResult:
-	if not _is_local_address(address):
-		return ProbeResult.unsupported()
-
-	var probe_socket := PacketPeerUDP.new()
-	var err := probe_socket.bind(port)
-	if err == ERR_ALREADY_IN_USE:
-		return ProbeResult.reachable(0, { "via": "bind-test" })
-	if err != OK:
-		return ProbeResult.error(error_string(err))
-	probe_socket.close()
-	return ProbeResult.unreachable({ "via": "bind-test" })
+## Implements [method BackendPeer.query_server_info] with [AuthProbeClient].
+##
+## ENet can probe the same host and port that [method create_join_peer] uses.
+func query_server_info(
+	address: String, timeout: float = 2.0,
+) -> ServerInfoResult:
+	var probe := AuthProbeClient.new(self)
+	return await probe.query(address, timeout)
 
 
+## Returns a probed [code]"Server IP"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Server IP",
@@ -63,12 +73,6 @@ func get_address_hint() -> AddressHint:
 		true
 	)
 
-
-func _is_local_address(address: String) -> bool:
-	return (address.is_empty()
-		or address == "localhost"
-		or address == "127.0.0.1")
-
-
-func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	return []
+## Returns the display name for this backend.
+func get_display_name() -> String:
+	return "ENet"

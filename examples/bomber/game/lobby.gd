@@ -1,49 +1,48 @@
 ## Bomber lobby shell.
 ##
-## Two-layer split, made visible in the scene tree:
-##
-## - [PreLobby] talks to [LobbyProvider] only. Social membership lives there:
-##   browsing lobbies, creating, joining. The multiplayer session does not
-##   exist yet.
-## - [InLobby] talks to [NetwTree] / [NetwContext]. The roster, the host-only
-##   Start button, and game start all live there. It only consults
-##   [LobbyProvider] for [method LobbyProvider.get_member_name] and
-##   [method LobbyProvider.leave_lobby] - the two genuinely cross-layer
-##   operations.
-##
-## This script is the bridge: it owns the state swap and calls
-## [method LobbyProvider.bind] at the boundary where the lobby layer hands
-## the produced peer to the session layer.
+## This script is the bridge: it owns the state swap and coordinates with
+## [ConnectBrowser] to enter the session.
 extends Control
+
 
 enum State { PRE_LOBBY, IN_LOBBY }
 
 @warning_ignore("unused_private_class_variable")
 @onready var _title: Label = %TitleLabel
 @onready var _status: Label = %StatusLabel
-@onready var _pre_lobby: Control = %PreLobby
+@onready var _browser: ConnectBrowser = %ConnectBrowser
 @onready var _in_lobby: Control = %InLobby
 @onready var gamestate: BomberGamestate = %Gamestate
 @onready var multiplayer_tree: MultiplayerTree = %MultiplayerTree
 
 @onready var _ctx: NetwContext = Netw.ctx(multiplayer_tree)
 
-var _provider: LobbyProvider
+var _directory: LobbyDirectory
+var _connect: NetwConnect
 
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
 
+
 func _ready() -> void:
-	_provider = _ctx.services.get_service(LobbyProvider)
-	assert(_provider)
+	_connect = _ctx.connect
 
-	_pre_lobby.status_message.connect(_set_status)
-	_pre_lobby.setup(_provider)
-	_in_lobby.setup(_provider, _ctx)
+	var steam_dir := _ctx.services.get_service(SteamLobbyDirectory)
+	if steam_dir:
+		_directory = steam_dir
+		_connect.register_directory(&"steam", steam_dir)
+
+	_connect.load_server_list()
+
+	var ws_backend := WebSocketBackend.new()
+	ws_backend.port = 10567
+	var steam_backend := SteamBackend.new()
+	_browser.backend_templates = [ws_backend, steam_backend]
+	_browser.tree = multiplayer_tree
+	_connect.session_entered.connect(_on_browser_session_entered)
+
+	_in_lobby.setup(_directory, _ctx)
 	_in_lobby.start_requested.connect(_on_start_requested)
-
-	_provider.lobby_created.connect(_on_lobby_created)
-	_provider.lobby_joined.connect(_on_lobby_joined)
 
 	_ctx.tree.server_disconnecting.connect(_on_server_disconnecting)
 	_ctx.tree.server_disconnected.connect(_on_server_disconnected)
@@ -55,31 +54,26 @@ func _ready() -> void:
 	_set_state(State.PRE_LOBBY)
 
 
-func _on_lobby_created(lobby_id: int) -> void:
-	_pending_title = "Lobby %d (you)" % lobby_id
-	_enter_lobby(lobby_id)
+# Transition to the InLobby screen when the server browser enters a session.
+func _on_browser_session_entered() -> void:
+	var local_id := multiplayer.get_unique_id()
+	var rj := multiplayer_tree.get_joined_player(local_id)
+	if rj:
+		gamestate.player_name = rj.username
 
-
-func _on_lobby_joined(lobby_id: int) -> void:
-	_pending_title = "Lobby %d" % lobby_id
-	_enter_lobby(lobby_id)
-
-
-func _enter_lobby(_lobby_id: int) -> void:
-	if _provider == null:
-		return
-
-	var pname := _provider.get_local_member_name()
-	gamestate.player_name = pname
-	
-	var jp := JoinPayload.new()
-	jp.username = pname
-	
-	var err := await _provider.bind(_ctx.tree, jp)
-	if err != OK:
-		_set_status("Bind failed: %s" % error_string(err))
-		_pre_lobby.reset_buttons()
-		return
+	if _pending_title.is_empty():
+		if multiplayer_tree.role == MultiplayerTree.Role.LISTEN_SERVER:
+			if multiplayer_tree.backend is SteamBackend:
+				_pending_title = "Lobby %s (you)" % \
+					multiplayer_tree.backend.get_join_address()
+			else:
+				_pending_title = "Direct Host (you)"
+		else:
+			if multiplayer_tree.backend is SteamBackend:
+				_pending_title = "Lobby %s" % \
+					multiplayer_tree.backend.get_join_address()
+			else:
+				_pending_title = "Direct Client"
 
 	_in_lobby.set_title(_pending_title)
 	_in_lobby.refresh()
@@ -120,17 +114,21 @@ func _on_game_error(text: String) -> void:
 		_back_to_pre_lobby()
 
 
+# Restores the pre-lobby state and refreshes the browser list.
 func _back_to_pre_lobby() -> void:
-	_pre_lobby.reset_buttons()
+	_pending_title = ""
+	_connect.refresh()
 	_set_state(State.PRE_LOBBY)
 
 
+# Updates the active lobby screen view.
 func _set_state(s: State) -> void:
 	_state = s
-	_pre_lobby.visible = (s == State.PRE_LOBBY)
+	_browser.visible = (s == State.PRE_LOBBY)
 	_in_lobby.visible = (s == State.IN_LOBBY)
 
 
+# Updates the status message label display.
 func _set_status(text: String) -> void:
 	_status.text = text
 	_status.visible = not text.is_empty()

@@ -199,7 +199,7 @@ func phase(phase_name: String) -> NetSpanPhase:
 ## Captures the current span state as a [CheckpointToken] for causal linking.
 ## [br][br]
 ## Pass the returned token to [method NetTrace.begin] or
-## [method NetTrace.begin_peer] via the [param follows_from] parameter to
+## [method NetTrace.begin_peer] via the [code]follows_from[/code] parameter to
 ## declare an explicit causal relationship between this span and the new one.
 ## [br][br]
 ## [param step_label] is optional - use it when the token represents a specific

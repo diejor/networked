@@ -1,6 +1,6 @@
 ## Validated player identity produced by an auth provider.
 ##
-## Returned by [method NetwAuthProvider._authenticate] and stored in
+## Returned by [method NetwAuthProvider.authenticate] and stored in
 ## [NetwIdentityBucket] on the server. The [member username] field is
 ## server-authoritative -- [method MultiplayerTree.request_join_player]
 ## uses it to override the client-claimed username.

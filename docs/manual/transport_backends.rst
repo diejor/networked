@@ -45,17 +45,20 @@ loopback, and both will get you through the entire
      - Yes
      - Requires a signalling server. Useful for matchmade lobbies without
        running your own authoritative server.
-   * - Steam lobby
-     - No (Steam-managed)
+   * - :ref:`SteamBackend <class_SteamBackend>`
      - No
-     - Adopts a peer produced by Steam's lobby system. The tree uses
-       :ref:`adopt_peer() <class_MultiplayerTree_method_adopt_peer>` rather
-       than going through :ref:`host() <class_MultiplayerTree_method_host>`/:ref:`join() <class_MultiplayerTree_method_join>`.
+     - No
+     - Matchmaking P2P lobbies routed through the Steamworks SDK.
+       Hosts or joins using the unified :ref:`MultiplayerTree.host() <class_MultiplayerTree_method_host>`
+       and :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>` APIs.
 
 The "embedded server" column matters when you call
-:ref:`connect_player() <class_MultiplayerTree_method_connect_player>` with
-a local URL. Backends that report :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
-in the host-on-demand flow described in
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` with a
+local address while
+:ref:`desired_role <class_MultiplayerTree_property_desired_role>` is
+:ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>`. Backends that report
+:ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>` participate
+in the host on demand flow described in
 :ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.
 
@@ -122,13 +125,14 @@ Returning ``null`` from one of the ``create_*_peer`` methods is the
 canonical way to signal failure to the tree. Pair it with an error log so
 the failure is visible.
 
-Some transports do not fit the request/response shape. Steam lobbies and
-WebRTC matchmaking, for example, produce a peer asynchronously from an
-external pipeline. For those, return ``null`` from :ref:`create_host_peer() <class_BackendPeer_method_create_host_peer>` and
-instead drive the new peer directly onto the tree's
-:ref:`api <class_MultiplayerTree_property_api>` (the "adopted API" pattern
-used by the `tube <https://github.com/koopmyers/tube>`__ backend). The tree detects that its API has been
-swapped and treats the missing return value as success, not failure.
+Some transports do not fit the instantaneous request/response shape.
+Steam lobbies and WebRTC matchmaking, for example, produce a peer
+asynchronously from an external matchmaking pipeline. Since
+:ref:`create_host_peer() <class_BackendPeer_method_create_host_peer>` and
+:ref:`create_join_peer() <class_BackendPeer_method_create_join_peer>` support
+asynchronous ``await`` statements, custom backends can easily suspend
+execution while they bring up external lobby architectures, returning a
+fully-connected, active ``MultiplayerPeer`` once the handshake finishes.
 
 Lifecycle hooks
 ~~~~~~~~~~~~~~~
@@ -141,12 +145,17 @@ ones you need:
 - :ref:`peer_reset_state() <class_BackendPeer_method_peer_reset_state>`: called whenever a session ends. Clear any
   cached lobby/login state your backend holds.
 - :ref:`supports_embedded_server() <class_BackendPeer_method_supports_embedded_server>`: return ``true`` if this backend can be
-  the target of the localhost host-on-demand probe. Most transports return
-  ``true``. Managed-lobby backends (Steam) return ``false``.
-- :ref:`supports_local_probe() <class_BackendPeer_method_supports_local_probe>`: return ``true`` if the backend can answer a
-  short :ref:`join() <class_MultiplayerTree_method_join>` probe without falsely succeeding when no server is
-  listening. ENet and WebSocket both qualify. Transports that defer
-  acceptance to an external lobby manager do not.
-- :godot:`_get_configuration_warnings() <Node#class_node_private_method__get_configuration_warnings>`: editor-time validation. Strings
-  returned here are surfaced as configuration warnings on the tree node so
-  misconfigured fields are caught before play.
+  the target of
+  :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`'s
+  host on demand fallback. Most transports return ``true``. Managed-lobby
+  backends (Steam) return ``false``.
+- :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`:
+  the default returns
+  :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>` -
+  probing is opt-in. Cheap direct
+  :godot:`SceneMultiplayer <SceneMultiplayer>` transports (ENet, WebSocket)
+  override it to delegate to
+  :ref:`AuthProbeClient.query() <class_AuthProbeClient_method_query>`, which
+  rides the ``NPRB`` auth handshake on the same port (see
+  :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
+  discover through their own mechanisms and stay unsupported.

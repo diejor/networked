@@ -1,7 +1,7 @@
 ## Unit tests for [NetwInterest]. The facade is 3 methods deep; the
 ## real API lives on [NetwInterestLayer].
 class_name TestNetwInterest
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 var mt: MultiplayerTree

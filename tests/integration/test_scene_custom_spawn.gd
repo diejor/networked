@@ -1,28 +1,37 @@
 ## Integration tests for [method MultiplayerSceneManager.spawn].
 class_name TestLobbyCustomSpawn
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
-const TEST_LEVEL_2_SCENE := preload("res://tests/helpers/TestLevel2.tscn")
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var client_mgr: MultiplayerSceneManager
+var level_builder: LevelBuilder
+var level_2_builder: LevelBuilder
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
-	server_mgr = harness._get_scene_manager(harness.get_server())
+	level_builder = LevelBuilder.new("TestLevel") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_builder.pack()
+
+	level_2_builder = LevelBuilder.new("TestLevel2") \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_2_builder.pack()
+
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
+	server_mgr = harness.server_scene_manager()
 	var client := await harness.add_client()
-	client_mgr = harness._get_scene_manager(client)
+	client_mgr = harness.scene_manager_for(client)
 
 
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
+	await super.after_test()
 
 
 func _set_spawn_fn(fn: Callable) -> void:
@@ -34,10 +43,10 @@ func test_level_spawn_function_called_on_spawn() -> void:
 	var called := [false]
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		called[0] = true
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 
 	assert_that(called[0]).is_true()
 
@@ -46,7 +55,7 @@ func test_level_spawn_function_receives_correct_data() -> void:
 	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
 		received[0] = data
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
 
 	server_mgr.spawn({"round": 7})
@@ -57,75 +66,75 @@ func test_level_spawn_function_receives_correct_data() -> void:
 func test_level_not_in_tree_when_spawn_function_called() -> void:
 	var in_tree_during_call := [true]
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		var level := TEST_LEVEL_SCENE.instantiate()
+		var level := level_builder.packed.instantiate()
 		in_tree_during_call[0] = level.is_inside_tree()
 		return level
 	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 
 	assert_that(in_tree_during_call[0]).is_false()
 
 
 func test_custom_spawn_scene_enters_active_scenes() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_two_custom_spawns_register_independently() -> void:
 	_set_spawn_fn(func(data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate() if data == "level1" \
-			else TEST_LEVEL_2_SCENE.instantiate()
+		return level_builder.packed.instantiate() if data == "level1" \
+			else level_2_builder.packed.instantiate()
 	)
 
 	server_mgr.spawn("level1")
 	server_mgr.spawn("level2")
 
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
-	assert_that(server_mgr.active_scenes.has(&"TestLevel2")).is_true()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
+	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
 func test_activate_scene_uses_scene_spawn_data() -> void:
 	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
 		received[0] = data
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
-	server_mgr.scene_spawn_data[&"TestLevel"] = {"round": 3}
+	server_mgr.scene_spawn_data[level_builder.scene_name] = {"round": 3}
 
-	server_mgr.activate_scene(&"TestLevel")
+	server_mgr.activate_scene(level_builder.scene_name)
 
 	assert_that(received[0]).is_equal({"round": 3})
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 	var received = [null]
 	_set_spawn_fn(func(data: Variant) -> Node:
 		received[0] = data
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
 
-	server_mgr.activate_scene(&"TestLevel")
+	server_mgr.activate_scene(level_builder.scene_name)
 
-	assert_that(received[0]).is_equal(&"TestLevel")
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_true()
+	assert_that(received[0]).is_equal(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_activate_scene_wakes_level_after_custom_spawn() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
-	server_mgr.scene_spawn_data[&"TestLevel"] = &"TestLevel"
+	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
 
-	server_mgr.activate_scene(&"TestLevel")
+	server_mgr.activate_scene(level_builder.scene_name)
 
-	var scene := server_mgr.active_scenes.get(&"TestLevel") as MultiplayerScene
+	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
@@ -133,50 +142,57 @@ func test_activate_scene_does_not_respawn_when_already_active() -> void:
 	var call_count := [0]
 	_set_spawn_fn(func(_data: Variant) -> Node:
 		call_count[0] += 1
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
-	server_mgr.scene_spawn_data[&"TestLevel"] = &"TestLevel"
+	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
 
-	server_mgr.activate_scene(&"TestLevel")
-	server_mgr.activate_scene(&"TestLevel")
+	server_mgr.activate_scene(level_builder.scene_name)
+	server_mgr.activate_scene(level_builder.scene_name)
 
 	assert_that(call_count[0]).is_equal(1)
 
 
 func test_freeze_empty_action_applied_after_custom_spawn() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 	await get_tree().process_frame
 
-	var scene := server_mgr.active_scenes.get(&"TestLevel") as MultiplayerScene
+	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
 
 func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
-	server_mgr._set(&"scene_config/TestLevel/empty_action",
-		MultiplayerSceneManager.EmptyAction.DESTROY)
+	server_mgr.set_scene_lifecycle_policy(
+		level_builder.scene_name,
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		MultiplayerSceneManager.EmptyAction.DESTROY
+	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 	await get_tree().process_frame
 
-	assert_that(server_mgr.active_scenes.has(&"TestLevel")).is_false()
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
 
 
-func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn() -> void:
+func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn(
+) -> void:
 	_set_spawn_fn(func(_data: Variant) -> Node:
-		return TEST_LEVEL_SCENE.instantiate()
+		return level_builder.packed.instantiate()
 	)
-	server_mgr._set(&"scene_config/TestLevel/empty_action",
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE)
+	server_mgr.set_scene_lifecycle_policy(
+		level_builder.scene_name,
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE
+	)
 
-	server_mgr.spawn(TEST_LEVEL_SCENE.resource_path)
+	server_mgr.spawn(level_builder.resource_path)
 	await get_tree().process_frame
 
-	var scene := server_mgr.active_scenes.get(&"TestLevel") as MultiplayerScene
+	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)

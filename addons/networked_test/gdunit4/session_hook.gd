@@ -2,8 +2,9 @@
 ##
 ## Logging and debugger scopes are closed after each test case so failures and
 ## early returns cannot leak state into the next test. Also baselines the
-## SceneTree root child count and the engine's [code]OBJECT_RESOURCE_COUNT[/code]
-## performance monitor to surface isolation leaks.
+## SceneTree root child count and the engine's
+## [code]OBJECT_RESOURCE_COUNT[/code] performance monitor to surface isolation
+## leaks.
 class_name NetwTestSessionHook
 extends GdUnitTestSessionHook
 
@@ -11,6 +12,10 @@ static var _active_hook: NetwTestSessionHook
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
+var _pre_test_resource_count: int = 0
+var _top_resource_growths: Array = []
+const _TOP_RESOURCE_GROWTH_LIMIT := 5
+var _session: GdUnitTestSession
 var _session_log_scope: NetwLogScope
 var _test_log_scope: NetwLogScope
 var _test_debug_scope: NetwDbgScope
@@ -40,6 +45,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 		"Check markers (Engine meta or cmdline args)."
 	)
 	_active_hook = self
+	_session = session
 	NetwLog.set_test_hook_controls_overrides(true)
 
 	var log_level := "none"
@@ -56,37 +62,45 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_session_log_scope = NetwLog.scoped(log_level)
 	OS.set_environment("NETW_TEST_LOG", log_level)
 	session.test_event.connect(_on_test_event)
+	_baseline_resource_count = int(
+		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+	)
 
 	return GdUnitResult.success()
 
 
 func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
+	_report_resource_delta()
+	_reset_global_test_state()
 	_close_test_debug_scope()
 	_close_test_log_scope()
 	_close_session_log_scope()
 	NetwLog.set_test_hook_controls_overrides(false)
 	if _active_hook == self:
 		_active_hook = null
+	_session = null
 	return GdUnitResult.success()
 
 
 func _on_test_event(event: GdUnitEvent) -> void:
 	if event.type() == GdUnitEvent.TESTSUITE_BEFORE:
 		_baseline_child_count = Engine.get_main_loop().root.get_child_count()
-		_baseline_resource_count = int(
-			Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
-		)
 
 	elif event.type() == GdUnitEvent.TESTCASE_BEFORE:
 		_close_test_debug_scope()
 		_close_test_log_scope()
 		_reset_debugger()
 		NetwLog.start_test_case_buffering()
+		_pre_test_resource_count = int(
+			Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+		)
 		if _test_log_overrides.has(event.test_name()):
 			_open_test_log_scope(_test_log_overrides[event.test_name()])
 
 	elif event.type() == GdUnitEvent.TESTCASE_AFTER:
 		_assert_clean_state(event)
+		_reset_global_test_state()
+		_track_resource_delta(event)
 		_close_test_debug_scope()
 		_close_test_log_scope()
 		NetwLog.stop_test_case_buffering()
@@ -98,6 +112,12 @@ func _reset_debugger() -> void:
 		reporter.reset_state()
 	else:
 		Netw.dbg.reset()
+
+	_reset_global_test_state()
+
+
+func _reset_global_test_state() -> void:
+	NetwPathNamespace.reset()
 
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()
@@ -126,23 +146,6 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 			", ".join(leaks)
 		])
 
-	# Resource leaks are reported as warnings rather than hard-failed: the
-	# global ResourceLoader cache retains loaded .tscn fixtures across tests,
-	# which would otherwise produce false positives. A persistent upward drift
-	# across many tests still surfaces in the log for review.
-	var current_resource_count := int(
-		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
-	)
-	var resource_delta := current_resource_count - _baseline_resource_count
-	if resource_delta > 0:
-		push_warning(
-			"TEST RESOURCE DELTA [%s]: +%d resources since suite start (now %d)." % [
-				event.test_name(),
-				resource_delta,
-				current_resource_count,
-			]
-		)
-
 	if not NetTrace._active.is_empty():
 		push_error("TEST ISOLATION LEAK [%s]: Leaked %d NetTrace spans." % [
 			event.test_name(),
@@ -157,6 +160,50 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 		)
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
+
+
+func _track_resource_delta(event: GdUnitEvent) -> void:
+	var current_count := int(
+		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+	)
+	var growth := current_count - _pre_test_resource_count
+	if growth <= 0:
+		return
+	_top_resource_growths.append({
+		"label": _resolve_test_label(event),
+		"growth": growth,
+		"after": current_count,
+	})
+	_top_resource_growths.sort_custom(
+		func(a, b): return a["growth"] > b["growth"]
+	)
+	if _top_resource_growths.size() > _TOP_RESOURCE_GROWTH_LIMIT:
+		_top_resource_growths.resize(_TOP_RESOURCE_GROWTH_LIMIT)
+
+
+func _resolve_test_label(event: GdUnitEvent) -> String:
+	if _session:
+		var tc := _session.find_test_by_id(event.guid())
+		if tc:
+			return "%s::%s" % [tc.suite_name, tc.test_name]
+	return "<unknown>"
+
+
+func _report_resource_delta() -> void:
+	if _top_resource_growths.is_empty():
+		return
+	var lines: Array[String] = []
+	for entry in _top_resource_growths:
+		lines.append("  +%d (now %d) %s" % [
+			entry["growth"], entry["after"], entry["label"],
+		])
+	push_warning(
+		"TEST RESOURCE GROWTH (top %d offenders, baseline %d):\n%s" % [
+			_top_resource_growths.size(),
+			_baseline_resource_count,
+			"\n".join(lines),
+		]
+	)
 
 
 func _parse_test_log_override(raw: String) -> void:

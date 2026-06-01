@@ -1,6 +1,6 @@
 ## Unit tests for [NetwLogScope] and [method NetwLog.scoped].
 class_name TestNetwLogScope
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 const MODULE := "core.test_scope"
 

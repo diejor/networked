@@ -1,6 +1,6 @@
 ## Tests for [InputComponent] and [MoveInputComponent].
 class_name TestInputComponent
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 const ACTIONS := [
 	&"move_left",

@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked/connect/ui/status_dot.gd" id="1_dot"]
+
+[node name="StatusDot" type="Panel"]
+custom_minimum_size = Vector2(8, 8)
+script = ExtResource("1_dot")

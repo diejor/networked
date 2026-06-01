@@ -1,0 +1,96 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked/connect/ui/popups/host_popup.gd" id="1_host"]
+
+[node name="HostPopup" type="PopupPanel"]
+size = Vector2i(380, 240)
+script = ExtResource("1_host")
+
+[node name="Margin" type="MarginContainer" parent="."]
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 376.0
+offset_bottom = 236.0
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+text = "Host server"
+
+[node name="BackendRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+
+[node name="BackendLabel" type="Label" parent="Margin/VBox/BackendRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "Backend"
+
+[node name="BackendPicker" type="OptionButton" parent="Margin/VBox/BackendRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NameRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Margin/VBox/NameRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "Server name"
+
+[node name="NameEdit" type="LineEdit" parent="Margin/VBox/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UsernameRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="Margin/VBox/UsernameRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "Username"
+
+[node name="UsernameEdit" type="LineEdit" parent="Margin/VBox/UsernameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SpawnerRow" type="HBoxContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SpawnerLabel" type="Label" parent="Margin/VBox/SpawnerRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "Spawn at"
+
+[node name="SpawnerPicker" type="OptionButton" parent="Margin/VBox/SpawnerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Spacer" type="Control" parent="Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+alignment = 2
+
+[node name="CancelButton" type="Button" parent="Margin/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="ConfirmButton" type="Button" parent="Margin/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Host"

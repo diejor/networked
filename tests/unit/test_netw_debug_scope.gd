@@ -1,6 +1,6 @@
 ## Unit tests for [NetwDbgScope] and [NetwDbgNoop] facade.
 class_name TestNetwDebugScope
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 func test_enable_debugger_enables_trace_sink() -> void:

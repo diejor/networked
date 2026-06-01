@@ -135,7 +135,7 @@ func _compute_entity(
 			result.hide_transitions.append(transition)
 
 
-## Adopts [param result.new_state] as the current cache. Call after
+## Adopts the new state from [param result] as the current cache. Call after
 ## engine-side effects and signals have been applied.
 func commit(result: Result) -> void:
 	_state = result.new_state

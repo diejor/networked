@@ -2,7 +2,7 @@
 ##
 ## Create instances of this resource as [code].tres[/code] files and assign one as the
 ## active profile in [b]Project Settings > networked/logging/active_profile[/b].
-## The [code]global_level[/code] field uses [code]int[/code] rather than [enum NetwLog.Level]
+## The [member global_level] field uses [code]int[/code] rather than [enum NetwLog.Level]
 ## to avoid a circular dependency during resource parsing (INHERIT=-1 … NONE=5).
 @tool
 extends Resource

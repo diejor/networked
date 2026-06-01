@@ -12,33 +12,34 @@ extends NetwTestSuite
 class StubProxy extends ProxySynchronizer:
 	var _store: Dictionary[StringName, Variant] = {}
 
-	func _read_property(name: StringName, _path: NodePath) -> Variant:
-		return _store.get(name)
+	func _read_property(_name: StringName, _path: NodePath) -> Variant:
+		return _store.get(_name)
 
 	func _write_property(
-		name: StringName,
+		_name: StringName,
 		_path: NodePath,
 		value: Variant
 	) -> void:
-		_store[name] = value
+		_store[_name] = value
 
 
 class StubTickAware extends TickAwareSynchronizer:
 	var _store: Dictionary[StringName, Variant] = {}
 
-	func _read_property(name: StringName, _path: NodePath) -> Variant:
-		return _store.get(name)
+	func _read_property(_name: StringName, _path: NodePath) -> Variant:
+		return _store.get(_name)
 
 	func _write_property(
-		name: StringName,
+		_name: StringName,
 		_path: NodePath,
 		value: Variant
 	) -> void:
-		_store[name] = value
+		_store[_name] = value
 
 
-# region: registration -------------------------------------------------------
+#region Registration
 
+@warning_ignore("unused_parameter")
 func test_register_property(
 	mode: int,
 	spawn: bool,
@@ -95,8 +96,11 @@ func test_register_node_property_uses_proxy_relative_path() -> void:
 	)
 
 
-# region: read/write dispatch ------------------------------------------------
+#endregion
 
+#region Read/write dispatch
+
+@warning_ignore("unused_parameter")
 func test_set_get_dispatch(
 	prop: StringName,
 	registered: bool,
@@ -120,6 +124,7 @@ func test_set_get_dispatch(
 
 # Fuzz any registered property through _set -> _store -> _get and assert
 # the variant round-trips byte-for-byte.
+@warning_ignore("unused_parameter")
 func test_property_roundtrip_fuzz(
 	fuzzer := Fuzzers.rangei(-1_000_000, 1_000_000),
 	fuzzer_iterations := 20,
@@ -128,13 +133,15 @@ func test_property_roundtrip_fuzz(
 	proxy.register_property(&"v", NodePath(":v"))
 
 	var raw: int = fuzzer.next_value()
-	var value := Vector2(float(raw % 1000), float(raw / 1000))
+	var value := Vector2(float(raw % 1000), floor(float(raw) / 1000.0))
 
 	assert_that(proxy._set(&"v", value)).is_true()
 	assert_that(proxy._get(&"v")).is_equal(value)
 
 
-# region: inspector / finalize -----------------------------------------------
+#endregion
+
+#region Inspector and finalize
 
 func test_get_property_list_exposes_registered_names() -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
@@ -162,7 +169,9 @@ func test_finalize_applies_config_to_replication_config() -> void:
 	).is_true()
 
 
-# region: tick-aware ---------------------------------------------------------
+#endregion
+
+#region Tick-aware synchronizer
 
 func test_finalize_with_tick_inserts_tick_first_always_no_spawn() -> void:
 	var sync: StubTickAware = auto_free(StubTickAware.new())
@@ -195,3 +204,5 @@ func test_tick_set_dispatch_isolates_tick_from_store() -> void:
 
 	sync._set(&"pos", Vector3.ONE)
 	assert_that(sync._store.get(&"pos")).is_equal(Vector3.ONE)
+
+#endregion

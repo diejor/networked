@@ -49,11 +49,47 @@ enum LobbyComparison {
 }
 
 
+## Emitted when a lobby has been created on Steam.
+signal lobby_created(lobby_id: int, result: int)
+
+## Emitted when a lobby join attempt completes.
+signal lobby_joined(
+	lobby_id: int, permissions: int, locked: bool, response: int
+)
+
+## Emitted when a lobby list browse query completes.
+signal lobby_match_list(lobbies: Array)
+
+## Emitted when another user invites us to join a lobby.
+signal join_requested(lobby_id: int, friend_id: int)
+
+## Emitted when a lobby's metadata is updated.
+signal lobby_data_update(success: int, lobby_id: int, member_id: int)
+
+
 var _steam: Variant
+
 
 func _init() -> void:
 	if Engine.has_singleton("Steam"):
 		_steam = Engine.get_singleton("Steam")
+		_steam.connect("lobby_created", func(a, b): lobby_created.emit(a, b))
+		_steam.connect(
+			"lobby_joined",
+			func(a, b, c, d): lobby_joined.emit(a, b, c, d)
+		)
+		_steam.connect(
+			"lobby_match_list",
+			func(a): lobby_match_list.emit(a)
+		)
+		_steam.connect(
+			"join_requested",
+			func(a, b): join_requested.emit(a, b)
+		)
+		_steam.connect(
+			"lobby_data_update",
+			func(a, b, c): lobby_data_update.emit(a, b, c)
+		)
 
 func is_available() -> bool:
 	return _steam != null
@@ -109,6 +145,10 @@ func allow_p2p_packet_relay(allow: bool) -> void:
 
 func request_lobby_list() -> void:
 	_steam.requestLobbyList()
+
+
+func request_lobby_data(lobby_id: int) -> bool:
+	return _steam.requestLobbyData(lobby_id)
 
 func add_request_lobby_list_string_filter(
 	key: String, value: String, comp: int = LobbyComparison.EQUAL

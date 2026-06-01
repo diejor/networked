@@ -2,7 +2,7 @@
 ## API exercised standalone (no [InterestService]) so the data model
 ## is testable in isolation.
 class_name TestNetwInterestLayer
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 var layer: NetwInterestLayer

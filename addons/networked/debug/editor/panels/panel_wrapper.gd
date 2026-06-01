@@ -113,7 +113,7 @@ func _notification(what: int) -> void:
 			_update_status_ui()
 
 
-## Called by [method NetworkedDebuggerUI._add_wrapper_to_grid] once after the
+## Called by [code]_add_wrapper_to_grid[/code] once after the
 ## panel enters the scene tree. Sets remote and online context in a single call
 ## so panels receive both before any data arrives.
 func init_peer_context(is_remote: bool, is_online: bool) -> void:

@@ -53,7 +53,15 @@ Regenerate the class reference after changing public scripts or doc comments:
 
 .. code-block:: console
 
-    python docs/tools/make_rst.py docs/api -o docs/classes
+    cd docs
+    make api
+
+On Windows, use:
+
+.. code-block:: powershell
+
+    cd docs
+    .\make.bat api
 
 The vendored tool and patch workflow are documented in
 ``docs/tools/vendor/UPSTREAM.md`` and ``docs/tools/patches/README.md``. Edit

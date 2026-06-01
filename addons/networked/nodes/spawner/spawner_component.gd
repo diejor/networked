@@ -321,8 +321,7 @@ func _apply_template_state() -> void:
 ## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
 ## spawn flag set, sync/watch off).
 ##
-## Intended for use from
-## [signal NetwEntity.collecting_spawn_properties] handlers. Idempotent --
+## Intended for use during spawn-property contributions. Idempotent --
 ## adding the same path twice is a no-op.
 func add_spawn_property(prop: NodePath) -> void:
 	if not replication_config:

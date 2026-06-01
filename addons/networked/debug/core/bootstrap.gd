@@ -1,4 +1,4 @@
-## Stable [code]NetworkedDebugger[/code] autoload bootstrap.
+## Stable [code skip-lint]NetworkedDebugger[/code] autoload bootstrap.
 ##
 ## The bootstrap is cheap to load in every build. It creates the heavy reporter
 ## only when debug policy allows reporter activation.

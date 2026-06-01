@@ -3,53 +3,65 @@
 ## Verifies that dropping a Level as a direct child of [MultiplayerTree]
 ## automatically routes joins and spawns players via a managed scene.
 class_name TestLobbylessJoin
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
-
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var client: MultiplayerTree
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
+var spawner_path: String
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(null, TEST_LEVEL_SCENE)
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_spawner()
+	player_builder.pack()
+
+	var template_instance: Node = player_builder.packed.instantiate()
+	level_builder = LevelBuilder.new() \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed]) \
+		.with_child(template_instance)
+	level_builder.pack()
+	template_instance.free()
+
+	spawner_path = "%s/SpawnerComponent" % player_builder.player_name
+
+	harness = make_harness()
+	await harness.setup(null, level_builder.packed)
 	client = await harness.add_client()
 
 
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
+	await super.after_test()
 
 
 func test_default_scene_created_on_server() -> void:
-	var server := harness.get_server()
-	var scene := server.get_node_or_null("SceneManager/TestLevelScene")
+	var server := harness.server()
+	var scene_node_name := "%sScene" % level_builder.scene_name
+	var scene := server.get_node_or_null("SceneManager/" + scene_node_name)
 	assert_that(scene).is_not_null()
 
 
 func test_level_inside_scene_on_server() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
+	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
-		"SceneManager/TestLevelScene/TestLevel"
+		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
 	assert_that(level).is_not_null()
 
 
 func test_player_spawns_in_level_after_join() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
-
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
-	join_payload.spawner_component_path = spawner_component_path
+	var join_payload := harness.make_join_payload(
+		username,
+		level_builder.resource_path,
+		spawner_path
+	)
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -57,30 +69,26 @@ func test_player_spawns_in_level_after_join() -> void:
 	)
 
 	var player_name := NetwEntity.format_name(username, peer_id)
+	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
-		"SceneManager/TestLevelScene/TestLevel"
+		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
 
-	await wait_until(
-		func(): return level != null \
-			and level.get_node_or_null(player_name) != null
-	)
-
-	assert_that(level.get_node_or_null(player_name)).is_not_null()
+	@warning_ignore("redundant_await")
+	await assert_func(level, "get_node_or_null", [player_name]) \
+		.wait_until(1000) \
+		.is_not_null()
 
 
 func test_spawned_player_has_correct_username() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = "res://tests/helpers/TestLevel.tscn"
-	spawner_component_path.node_path = "TestPlayerFull/SpawnerComponent"
-
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
-	join_payload.spawner_component_path = spawner_component_path
+	var join_payload := harness.make_join_payload(
+		username,
+		level_builder.resource_path,
+		spawner_path
+	)
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -88,13 +96,14 @@ func test_spawned_player_has_correct_username() -> void:
 	)
 
 	var player_name := NetwEntity.format_name(username, peer_id)
+	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
-		"SceneManager/TestLevelScene/TestLevel"
+		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
-	await wait_until(
-		func(): return level != null \
-			and level.get_node_or_null(player_name) != null
-	)
+	@warning_ignore("redundant_await")
+	await assert_func(level, "get_node_or_null", [player_name]) \
+		.wait_until(1000) \
+		.is_not_null()
 
 	var player := level.get_node(player_name)
 	var client_comp := SpawnerComponent.unwrap(player)
@@ -103,9 +112,10 @@ func test_spawned_player_has_correct_username() -> void:
 
 
 func test_scene_context_accessible_from_level_node() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
+	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
-		"SceneManager/TestLevelScene/TestLevel"
+		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name]
 	)
 	assert_that(level).is_not_null()
 

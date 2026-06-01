@@ -3,12 +3,16 @@ extends RefCounted
 ## Internal coordinator for [MultiplayerTree] authentication hooks.
 ##
 ## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthProvider] and stores
-## accepted identities or rejection reasons in [SessionRoster].
+## accepted identities or rejection reasons in [SessionRoster]. Validates
+## [code]NHEL[/code] client hellos; [code]NPRB[/code] server-browser probes
+## that ride the same auth phase are dispatched to [AuthProbeResponder] so
+## this class stays about authentication.
 
 var _api: SceneMultiplayer
 var _auth_provider: NetwAuthProvider
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
+var _probe_responder := AuthProbeResponder.new()
 
 
 func _init(roster = null) -> void:
@@ -24,9 +28,10 @@ func set_roster(roster: SessionRoster) -> void:
 func bind_api(api: SceneMultiplayer) -> void:
 	if _api == api:
 		return
-	
+
 	_unbind_api()
 	_api = api
+	_probe_responder.bind_api(api)
 	_connect_auth_signals()
 
 
@@ -40,6 +45,19 @@ func set_client_join_payload(payload: JoinPayload) -> void:
 	_client_join_payload = payload
 
 
+## Stores the owning tree so probe replies can build a [ServerInfo] from
+## live session state. Delegates to [AuthProbeResponder].
+func set_tree(tree: MultiplayerTree) -> void:
+	_probe_responder.set_tree(tree)
+
+
+## Sets the [ServerInfoSource] used to build probe replies. When
+## [code]null[/code], a [DefaultServerInfoSource] is created on first use.
+## Delegates to [AuthProbeResponder].
+func set_server_info_source(source: ServerInfoSource) -> void:
+	_probe_responder.set_server_info_source(source)
+
+
 ## Runs provider preparation before transport opens.
 func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	if not _auth_provider:
@@ -48,7 +66,7 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	Netw.dbg.info("Auth: running prepare for '%s'", [
 		join_payload.username
 	])
-	var prepare_err := await _auth_provider._prepare(join_payload)
+	var prepare_err := await _auth_provider.prepare(join_payload)
 	if prepare_err != OK:
 		Netw.dbg.error(
 			"Auth prepare failed: %s",
@@ -62,20 +80,24 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	return OK
 
 
-## Installs or clears Godot auth hooks before transport opens.
-func prepare(use_auth: bool) -> void:
+## Installs the Networked auth dispatcher on the tree's SceneMultiplayer.
+##
+## The callback is installed unconditionally so the dispatcher can
+## multiplex hello packets and probe requests. Whether a
+## [NetwAuthProvider] is configured only affects how HELLO bodies are
+## validated.
+func prepare() -> void:
 	if not _api:
 		return
-	
-	if use_auth:
-		_api.auth_callback = _on_auth_received
-	else:
-		_api.auth_callback = Callable()
+	_api.auth_callback = _on_auth_received
 
 
-## Clears client-side auth callback state after connecting.
+## Clears the client-side auth callback after the connection handshake
+## completes. Probe replies are handled exclusively by the transient
+## [code]SceneMultiplayer[/code] owned by a probe session, so the in-game
+## tree's callback is no longer needed once we are online.
 func on_connected_to_server() -> void:
-	if _auth_provider and _api:
+	if _api:
 		_api.auth_callback = Callable()
 
 
@@ -84,7 +106,7 @@ func synthesize_host_identity() -> void:
 	if not _auth_provider:
 		return
 	Netw.dbg.info("Auth: synthesizing host identity for peer 1")
-	var host_identity := _auth_provider._get_host_identity()
+	var host_identity := _auth_provider.get_host_identity()
 	if host_identity:
 		Netw.dbg.info(
 			"Auth: host identity '%s' (service=%s) stored for peer 1",
@@ -129,12 +151,14 @@ func clear() -> void:
 	bind_api(null)
 	_auth_provider = null
 	_client_join_payload = null
+	_probe_responder.clear()
 
 
 func _unbind_api() -> void:
 	if not _api:
 		return
-	
+
+	_probe_responder.bind_api(null)
 	_api.auth_callback = Callable()
 	if _api.peer_authenticating.is_connected(_on_peer_authenticating):
 		_api.peer_authenticating.disconnect(_on_peer_authenticating)
@@ -163,28 +187,33 @@ func _connect_auth_signals() -> void:
 func _on_peer_authenticating(peer_id: int) -> void:
 	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
 		return
-	if not _auth_provider or not _client_join_payload:
-		return
-	
-	Netw.dbg.debug("Auth: sending credentials for peer %d", [peer_id])
-	var creds := _auth_provider._get_credentials(_client_join_payload)
-	if creds.is_empty():
-		Netw.dbg.error(
-			"Auth: provider returned empty credentials for peer %d",
-			[peer_id]
-		)
-		_api.disconnect_peer(peer_id)
-		return
-	
-	var send_err := _api.send_auth(peer_id, creds)
+
+	var provider_payload := PackedByteArray()
+	if _auth_provider and _client_join_payload:
+		provider_payload = _auth_provider.get_credentials(_client_join_payload)
+		if provider_payload.is_empty():
+			Netw.dbg.error(
+				"Auth: provider returned empty credentials for peer %d",
+				[peer_id]
+			)
+			_api.disconnect_peer(peer_id)
+			return
+
+	var hello := AuthProtocol.encode_client_hello(provider_payload)
+	Netw.dbg.debug(
+		"Auth: sending NHEL (%d provider bytes) for peer %d",
+		[provider_payload.size(), peer_id]
+	)
+
+	var send_err := _api.send_auth(peer_id, hello)
 	if send_err != OK:
 		Netw.dbg.error(
-			"Auth: failed to send credentials to peer %d: %s",
+			"Auth: failed to send NHEL to peer %d: %s",
 			[peer_id, error_string(send_err)]
 		)
 		_api.disconnect_peer(peer_id)
 		return
-	
+
 	var complete_err := _api.complete_auth(peer_id)
 	if complete_err != OK:
 		Netw.dbg.error(
@@ -195,18 +224,48 @@ func _on_peer_authenticating(peer_id: int) -> void:
 
 
 func _on_peer_authentication_failed(peer_id: int) -> void:
-	Netw.dbg.warn("Auth failed for peer %d", [peer_id])
+	if _probe_responder.note_auth_failed(peer_id):
+		return
+	Netw.dbg.warn("Auth failed for peer %d", [peer_id],
+		func(m): push_warning(m))
 
 
 func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
+	match AuthProtocol.classify(data):
+		AuthProtocol.Kind.HELLO:
+			_handle_hello(peer_id, data)
+		AuthProtocol.Kind.PROBE:
+			_probe_responder.handle(peer_id)
+		_:
+			Netw.dbg.warn(
+				"Auth: peer %d sent unknown auth payload (%d bytes); "
+				+ "fail-closed disconnect.",
+				[peer_id, data.size()]
+			)
+			_api.disconnect_peer(peer_id)
+
+
+func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
+	var decoded := AuthProtocol.decode_client_hello(data)
+	if not decoded.ok:
+		Netw.dbg.warn(
+			"Auth: peer %d NHEL decode failed (version mismatch?); "
+			+ "fail-closed disconnect.", [peer_id]
+		)
+		_api.disconnect_peer(peer_id)
+		return
+
+	var provider_payload: PackedByteArray = decoded.provider_payload
+
 	if not _auth_provider:
-		Netw.dbg.debug("Auth: no provider, completing auth for peer %d", [
-			peer_id
-		])
+		Netw.dbg.debug(
+			"Auth: no provider, completing auth for peer %d", [peer_id]
+		)
 		_api.complete_auth(peer_id)
 		return
+
 	Netw.dbg.info("Auth: validating credentials for peer %d", [peer_id])
-	var identity := _auth_provider._authenticate(peer_id, data)
+	var identity := _auth_provider.authenticate(peer_id, provider_payload)
 	if identity:
 		Netw.dbg.info(
 			"Auth: peer %d accepted as '%s' (service=%s)",

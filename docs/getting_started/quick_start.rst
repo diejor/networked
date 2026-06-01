@@ -44,8 +44,11 @@ server, a hot-seat lobby on a single machine. The three nodes you
 will meet in this quick start are the moving parts of every session.
 
 - :ref:`MultiplayerTree <class_MultiplayerTree>` is the entry point. You add
-  it to your scene, give it a transport (a :ref:`BackendPeer <class_BackendPeer>`),
-  and call :ref:`host() <class_MultiplayerTree_method_host>` or :ref:`join() <class_MultiplayerTree_method_join>` on it. It owns its own
+  it to your scene, give it a transport (a
+  :ref:`BackendPeer <class_BackendPeer>`), and call its session entry methods:
+  :ref:`join or host <class_MultiplayerTree_method_join_or_host>`,
+  :ref:`join <class_MultiplayerTree_method_join>`, or
+  :ref:`host player <class_MultiplayerTree_method_host_player>`. It owns its own
   :godot:`SceneMultiplayer <SceneMultiplayer>` and installs it onto the scene
   tree, so every descendant gets the correct :godot:`multiplayer <Node#class_node_property_multiplayer>` property
   automatically.
@@ -130,8 +133,9 @@ Joining the session
 
 You now have a scene that can host, but nothing tells it to. The simplest
 way to drive the connection is from a script attached to the ``Main`` root.
-A :ref:`JoinPayload <class_JoinPayload>` describes who is connecting, where
-they want to spawn, and (optionally) where the server lives:
+A :ref:`JoinPayload <class_JoinPayload>` describes who is connecting and
+where they want to spawn. Transport identity (backend, address) is passed
+separately to the entry method:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -148,25 +152,30 @@ they want to spawn, and (optionally) where the server lives:
 
         var join := JoinPayload.new()
         join.username = "alice"
-        join.url = ""  # empty == localhost
-        join.spawner_component_path = spawner_path
+        join.spawn = SpawnerComponentPolicy.from_scene_node_path(spawner_path).to_dict()
 
-        client.connect_player(join)
+        var target := JoinTarget.new()
+        target.backend = client.backend
+        target.address = "localhost"
 
-The :ref:`url <class_JoinPayload_property_url>` field follows a simple rule: an empty string or anything
-containing ``"localhost"`` or ``"127.0.0.1"`` is treated as a request to host
-locally. The tree probes the configured backend for a running server first;
-if nothing is listening, it spins one up next to the client (or, when
-:ref:`use_listen_server <class_MultiplayerTree_property_use_listen_server>` is enabled on the tree, hosts directly on the same
-node). For LAN or internet servers, set :ref:`url <class_JoinPayload_property_url>` to an IP address or hostname
-and the tree will create a client peer that connects to it.
+        await client.join_or_host(target, join)
+
+:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
+queries the address for a live local server first; if one answers, it joins
+as a client, otherwise it falls back to hosting. For LAN or internet
+servers, build a :ref:`JoinTarget <class_JoinTarget>` for the server and
+call :ref:`join() <class_MultiplayerTree_method_join>` instead.
 
 .. tip::
 
-    You can skip the script entirely while prototyping. Set the inspector
-    field :button:`Init Join Payload` on the :ref:`MultiplayerTree <class_MultiplayerTree>`
-    to a :ref:`JoinPayload <class_JoinPayload>` resource and the tree will
-    call :ref:`connect_player() <class_MultiplayerTree_method_connect_player>` for you on :godot:`_ready <Node#class_node_private_method__ready>`.
+    Dropping a world scene (one containing a ``SpawnerComponent``) directly
+    as a child of the :ref:`MultiplayerTree <class_MultiplayerTree>` auto-creates
+    a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` and assigns
+    the tree a :ref:`SpawnerComponentPolicy <class_SpawnerComponentPolicy>`, so
+    joining players spawn automatically without any spawn-handling code. A tree
+    without a dropped world scene leaves ``spawn_policy`` unset, so you control
+    spawning from
+    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` instead.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project
@@ -224,4 +233,3 @@ with :ref:`SaveComponent <class_SaveComponent>`, and the
 If you want to see a complete, larger project, the ``examples/bomber`` scene
 in the repository runs the same APIs across a lobby, multiple connected
 players, and a per-peer authoritative bomb spawner.
-

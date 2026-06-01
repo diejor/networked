@@ -4,7 +4,7 @@
 ## The test controls exactly which ticks fire and when process frames run,
 ## making assertions on [member Node2D.position] deterministic.
 class_name TestTickInterpolator
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 const P0 := Vector2(0.0, 0.0)
@@ -79,6 +79,7 @@ func after_test() -> void:
 			api.remove_meta(&"_network_clock")
 		if api.has_meta(&"_multiplayer_tree"):
 			api.remove_meta(&"_multiplayer_tree")
+	await super.after_test()
 
 
 ## Advances the clock by one tick, which fires [signal NetworkClock.after_tick]

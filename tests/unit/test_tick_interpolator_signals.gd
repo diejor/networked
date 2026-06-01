@@ -1,6 +1,6 @@
 ## Unit tests for [TickInterpolator] signal-based injection.
 class_name TestTickInterpolatorSignals
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 const P0 := Vector2(0.0, 0.0)
@@ -70,6 +70,7 @@ func after_test() -> void:
 	if api:
 		api.remove_meta(&"_network_clock")
 		api.remove_meta(&"_multiplayer_tree")
+	await super.after_test()
 
 
 func _tick() -> void:

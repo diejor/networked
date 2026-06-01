@@ -4,9 +4,9 @@
 ## ([method TPComponent.request_teleport], [method TPComponent._reparent_to_scene])
 ## requires real peers and belongs in integration tests.
 class_name TestTPComponent
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL := "res://tests/helpers/TestLevel.tscn"
+const TEST_LEVEL := "res://addons/networked_test/fixtures/TestLevel.tscn"
 
 
 func test_resolve_scene_name_returns_root_name() -> void:

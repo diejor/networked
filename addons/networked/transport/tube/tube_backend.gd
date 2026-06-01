@@ -1,44 +1,52 @@
-## [BackendPeer] implementation that delegates transport to a duck-typed
-## TubeClient node.
+## [BackendPeer] implementation backed by a [code]TubeClient[/code] node.
 ##
-## Assign a [code]NodePath[/code] to a TubeClient node in the scene. Call
-## [method MultiplayerTree.host] or [method MultiplayerTree.join] as normal -
-## the TubeClient owns its own [MultiplayerAPI], so this backend asks the tree
-## to adopt it via [method MultiplayerTree._adopt_api].
-## [br][br]
-## [b]Service Registration:[/b]
-## During [method setup], this backend registers the [code]TubeClient[/code]
-## node as a session-wide service.
+## Add exactly one [code]TubeClient[/code] descendant under the
+## [MultiplayerTree]. Call [method MultiplayerTree.host] or
+## [method MultiplayerTree.join] as normal. The TubeClient owns its own
+## [SceneMultiplayer], which [method setup] adopts into
+## [member MultiplayerTree.api].
 ## [codeblock]
-## # Retrieve the TubeClient from a component
+## # Retrieve the TubeClient from a component.
 ## var tube = ctx.services.get_service(TubeClient)
 ## if tube:
-##     print("Session ID: ", tube.session_id)
+##     print(tube.session_id)
 ## [/codeblock]
 @tool
 class_name TubeBackend
 extends BackendPeer
 
-## Scene-relative path to the TubeClient node that manages the Tube transport.
-@export_node_path("Node") var tube_client_path: NodePath
-
 var tube: TubeWrapper
 
-## Resolves the TubeClient node at [param tree] and wires it into the backend.
+## Resolves the [code]TubeClient[/code] and adopts its [SceneMultiplayer].
 ##
-## Returns [code]ERR_UNCONFIGURED[/code] if [member tube_client_path] is empty,
-## or [code]ERR_INVALID_DATA[/code] if the node is not a valid TubeClient.
+## Returns [code]ERR_UNCONFIGURED[/code] if no [code]TubeClient[/code] exists,
+## or [code]ERR_INVALID_DATA[/code] if the match is ambiguous or invalid.
 func setup(tree: MultiplayerTree) -> Error:
 	Netw.dbg.trace("TubeBackend: setup called.")
-	if tube_client_path.is_empty():
-		Netw.dbg.error("TubeBackend: TubeClient path is empty.", func(m): push_error(m))
+	var matches := tree.find_children("*", "TubeClient", true, false)
+	if matches.is_empty():
+		Netw.dbg.error(
+			"TubeBackend: no TubeClient descendant found.",
+			func(m): push_error(m)
+		)
 		return ERR_UNCONFIGURED
 
-	var node = tree.get_node_or_null(tube_client_path)
+	if matches.size() > 1:
+		Netw.dbg.error(
+			"TubeBackend: expected one TubeClient descendant, found %d.",
+			[matches.size()],
+			func(m): push_error(m)
+		)
+		return ERR_INVALID_DATA
+
+	var node := matches[0] as Node
 	tube = TubeWrapper.new(node)
 
 	if not tube.is_valid():
-		Netw.dbg.error("TubeBackend: Assigned node is not a valid TubeClient.", func(m): push_error(m))
+		Netw.dbg.error(
+			"TubeBackend: found node is not a valid TubeClient.",
+			func(m): push_error(m)
+		)
 		tube = null
 		return ERR_INVALID_DATA
 
@@ -53,9 +61,10 @@ func setup(tree: MultiplayerTree) -> Error:
 	return OK
 
 
-## Creates a new Tube session and copies the session ID to the clipboard.
-## Returns [code]null[/code] because the Tube transport owns its own peer; the
-## tree continues to drive its api directly.
+## Creates a Tube session and copies its session id to the clipboard.
+##
+## Returns [code]null[/code] because [method setup] already adopted the
+## transport api into [member MultiplayerTree.api].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("TubeBackend: create_host_peer called.")
 	assert(tube != null, "Backend needs to `setup()` first.")
@@ -73,13 +82,17 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 
 	return null
 
-## Joins the Tube session identified by [param server_address]. Returns
-## [code]null[/code]; the TubeClient already configured its peer onto the
-## adopted api.
+## Joins the Tube session identified by [param server_address].
+##
+## Returns [code]null[/code] because [code]TubeClient[/code] configures the
+## peer on the adopted api.
 func create_join_peer(
 	_tree: MultiplayerTree, server_address: String, _username: String = ""
 ) -> MultiplayerPeer:
-	Netw.dbg.trace("TubeBackend: create_join_peer called at %s", [server_address])
+	Netw.dbg.trace(
+		"TubeBackend: create_join_peer called at %s",
+		[server_address]
+	)
 	assert(tube != null, "Backend needs to `setup()` first.")
 
 	tube.join_session(server_address)
@@ -87,12 +100,14 @@ func create_join_peer(
 
 	return null
 
+## Leaves the active Tube session and unregisters its service.
 func peer_reset_state() -> void:
 	if tube != null:
 		if tube.state != TubeWrapper.State.IDLE:
 			tube.leave_session()
 		NetwServices.unregister(tube._node)
 
+## Returns the active Tube session id, or the parent default.
 func get_join_address() -> String:
 
 	if tube != null and not tube.session_id.is_empty():
@@ -100,6 +115,16 @@ func get_join_address() -> String:
 
 	return super.get_join_address()
 
+## Keeps [method BackendPeer.query_server_info] unsupported for Tube ids.
+##
+## Tube session ids do not support a lightweight [AuthProbeClient] connection.
+func query_server_info(
+	_address: String, _timeout: float = 2.0,
+) -> ServerInfoResult:
+	return ServerInfoResult.unsupported()
+
+
+## Returns a [code]"Session ID"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
 	return AddressHint.make(
 		"Session ID",
@@ -110,29 +135,19 @@ func get_address_hint() -> AddressHint:
 		false
 	)
 
-func _get_backend_warnings(tree: MultiplayerTree) -> PackedStringArray:
-	var warnings := PackedStringArray()
-
-	if tube_client_path.is_empty():
-		warnings.append("TubeClient path is empty. Please assign a TubeClient node.")
-		return warnings
-
-	var node = tree.get_node_or_null(tube_client_path)
-	if node == null:
-		return warnings
-
-	var wrapper = TubeWrapper.new(node)
-	if not wrapper.is_valid():
-		warnings.append("Node assigned is not a valid TubeClient.")
-
-	if not tree.is_ancestor_of(node):
-		warnings.append("`%s` node is not a child of `%s`." % [node.name, tree.name])
-
-	return warnings
+## Returns the display name for this backend.
+func get_display_name() -> String:
+	return "Tube"
 
 
 class TubeWrapper:
-	enum State { IDLE, CREATING_SESSION, SESSION_CREATED, JOINING_SESSION, SESSION_JOINED }
+	enum State {
+		IDLE,
+		CREATING_SESSION,
+		SESSION_CREATED,
+		JOINING_SESSION,
+		SESSION_JOINED,
+	}
 
 	var _node: Variant
 
@@ -153,7 +168,9 @@ class TubeWrapper:
 		get: return _node.multiplayer_api as SceneMultiplayer
 
 	func is_valid() -> bool:
-		return _node != null and _node.has_method("create_session") and "multiplayer_root_node" in _node
+		return _node != null \
+			and _node.has_method("create_session") \
+			and "multiplayer_root_node" in _node
 
 	func create_session() -> void:
 		_node.create_session()

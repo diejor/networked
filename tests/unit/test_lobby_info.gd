@@ -1,6 +1,6 @@
 ## Unit tests for [LobbyInfo].
 class_name TestLobbyInfo
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 func test_make_populates_required_fields() -> void:

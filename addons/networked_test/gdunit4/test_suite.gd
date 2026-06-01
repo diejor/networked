@@ -1,7 +1,7 @@
-## Base class for GdUnit4 tests that use the [code]networked[/code] addon.
+## GdUnit4 base class for tests that use the Networked addon.
 ##
-## Provides timeout-safe await helpers, a harness factory, log scope control,
-## and a small entity builder for unit tests.
+## Provides timeout-safe await helpers, a [NetwTestHarness] factory, log
+## controls, and a small entity builder for addon-internal unit tests.
 class_name NetwTestSuite
 extends GdUnitTestSuite
 
@@ -11,23 +11,8 @@ const _GdUnitAwaiter := preload(
 	"res://addons/networked_test/gdunit4/gdunit_awaiter.gd"
 )
 
+var _netw_managed_harness: NetwTestHarness
 
-## Awaits a signal and fails the test if it times out.
-## [codeblock]
-## await timeout_await(my_signal, 1.0)
-## [/codeblock]
-func timeout_await(
-	target_signal: Signal,
-	timeout: float = DEFAULT_TIMEOUT
-) -> void:
-	var timer := get_tree().create_timer(timeout)
-	if await Async.timeout(target_signal, timer):
-		fail(
-			"Timed out waiting for signal '%s' after %.1f seconds." % [
-				target_signal.get_name(),
-				timeout,
-			]
-		)
 
 
 ## Awaits a condition to become true within [param timeout] seconds.
@@ -64,8 +49,12 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 		await tree.process_frame
 
 
-## Builds, parents, and auto-frees a [NetwTestHarness]. Always call
-## [code]await harness.setup(...)[/code] before driving it.
+## Builds, parents, and auto-tears down a [NetwTestHarness].
+##
+## The returned harness has the GdUnit4 awaiter installed. Always call
+## [code]await harness.setup(...)[/code] before driving multiplayer flows.
+## A test case may create one managed harness; [method after_test] tears it
+## down automatically.
 ##
 ## [codeblock]
 ## var harness := make_harness()
@@ -73,6 +62,19 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 ## var client := await harness.add_client()
 ## [/codeblock]
 func make_harness() -> NetwTestHarness:
+	assert(
+		_netw_managed_harness == null,
+		"make_harness: harness already created."
+	)
+	_netw_managed_harness = make_unmanaged_harness()
+	return _netw_managed_harness
+
+
+## Builds, parents, and auto-frees an unmanaged [NetwTestHarness].
+##
+## Use this only for additional harnesses inside a test case. The caller must
+## explicitly call [code]await harness.teardown()[/code].
+func make_unmanaged_harness() -> NetwTestHarness:
 	var harness := NetwTestHarness.new()
 	harness.awaiter = _GdUnitAwaiter.get_awaiter()
 	add_child(harness)
@@ -126,4 +128,7 @@ func enable_debugger() -> void:
 
 
 func after_test() -> void:
+	if is_instance_valid(_netw_managed_harness):
+		await _netw_managed_harness.teardown()
+	_netw_managed_harness = null
 	clean_temp_dir()

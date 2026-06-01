@@ -2,7 +2,7 @@
 ## write-through from the bound layer to the gate's spawn-synced
 ## properties, and the spawner-filter Callable.
 class_name TestInterestGate
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 var mt: MultiplayerTree

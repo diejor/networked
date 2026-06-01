@@ -1,6 +1,6 @@
 ## Verifies the [NetwBackend] abstract contract via a minimal stub.
 class_name TestNetwBackend
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 class MemoryBackend extends NetwBackend:

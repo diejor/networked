@@ -2,7 +2,7 @@
 ##
 ## Covers schema registration, transaction API, and readers.
 class_name TestNetwDatabase
-extends NetworkedTestSuite
+extends NetwTestSuite
 
 
 class SpyBackend extends NetwBackend:

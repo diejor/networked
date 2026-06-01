@@ -1,24 +1,20 @@
-## Serializable data bag describing a player attempting to connect to a session.
+## Serializable in-game join data describing a player entering a session.
 ##
-## Pass a populated instance to [method MultiplayerTree.connect_player] to
-## authenticate and spawn a player, or serialize it for transmission via
-## [method serialize].
+## Pass a populated instance to [method MultiplayerTree.join],
+## [method MultiplayerTree.host_player], or
+## [method MultiplayerTree.join_or_host]. Transport identity is supplied
+## separately by a [JoinTarget] and is not part of this payload.
 class_name JoinPayload
 extends Serde
 
 ## The player's display name, used as the spawned node name prefix.
 @export var username: StringName
 
-## Path to the [SpawnerComponent] node the player should enter.
-##
-## [b]Note:[/b] The target [SpawnerComponent] must reside in a scene that
-## tracks the owner scene correctly.
-@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
-var spawner_component_path: SceneNodePath
-
-## Server URL to connect to. Leave empty or use [code]"localhost"[/code] for a
-## local session.
-@export var url: String
+## Opaque spawn intent, produced by a [SpawnPolicy]'s
+## [method SpawnPolicy.to_dict]. The server's configured
+## [member MultiplayerTree.spawn_policy] interprets it. Empty when
+## the client expresses no spawn intent.
+@export var spawn: Dictionary = {}
 
 ## Assigned by the server after receiving the connection request.
 ##
@@ -32,10 +28,8 @@ var is_debug: bool = false
 
 ## Validates structural fields and produces a [ResolvedJoin].
 ##
-## Returns [code]null[/code] if [member username] is empty.
-## [member spawner_component_path] is optional -- when set, its fields
-## are unpacked into [ResolvedJoin]; when absent, [member ResolvedJoin.scene_name]
-## and [member ResolvedJoin.spawner_path] remain empty.
+## Returns [code]null[/code] if [member username] is empty. [member spawn] is
+## copied through verbatim; an empty dictionary means no spawn intent.
 func resolve() -> ResolvedJoin:
 	if username.is_empty():
 		return null
@@ -43,9 +37,7 @@ func resolve() -> ResolvedJoin:
 	rj.peer_id = peer_id
 	rj.username = username
 	rj.is_debug = is_debug
-	if spawner_component_path and spawner_component_path.is_valid():
-		rj.scene_name = StringName(spawner_component_path.get_scene_name())
-		rj.spawner_path = spawner_component_path.node_path
+	rj.spawn = spawn.duplicate(true)
 	return rj
 
 
@@ -54,10 +46,7 @@ func resolve() -> ResolvedJoin:
 func serialize() -> PackedByteArray:
 	var dict: Dictionary = {
 		username = username,
-		spawner_component_path = (
-			spawner_component_path.as_uid() if spawner_component_path else ""
-		),
-		url = url,
+		spawn = spawn,
 		peer_id = peer_id,
 		is_debug = is_debug,
 	}
@@ -71,7 +60,6 @@ func deserialize(bytes: PackedByteArray) -> void:
 	assert(data)
 
 	username = data.username
-	spawner_component_path = SceneNodePath.new(data.spawner_component_path)
-	url = data.url
+	spawn = data.get("spawn", {})
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)

@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bhif5a1uatdsl"]
 
 [ext_resource type="PackedScene" path="res://addons/networked_test/fixtures/TestPlayerFull.tscn" id="1_player"]
 

@@ -1,29 +1,31 @@
 ## Integration tests for [MultiplayerSceneManager] join flow.
 class_name TestLobbyJoin
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
-	server_mgr = harness._get_scene_manager(harness.get_server())
-	# Scenes must be registered before add_client() because host() runs
-	# synchronously inside host() during _on_configured().
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
+	server_mgr = harness.server_scene_manager()
+	
+	level_builder = LevelBuilder.new() \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_builder.pack()
+
+	harness.register_spawnable_scene(level_builder.packed)
 	await harness.add_client()
 
 
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
+	await super.after_test()
 
 
 func test_server_spawns_scene_after_host() -> void:
@@ -33,7 +35,7 @@ func test_server_spawns_scene_after_host() -> void:
 
 func test_active_scene_key_is_level_name() -> void:
 	var key := String(server_mgr.active_scenes.keys()[0])
-	assert_that(key).is_equal("TestLevel")
+	assert_that(key).is_equal(level_builder.scene_name)
 
 
 func test_spawned_scene_is_scene_instance() -> void:
@@ -43,15 +45,12 @@ func test_spawned_scene_is_scene_instance() -> void:
 
 
 func test_two_clients_both_connect_to_server_with_scene() -> void:
-	harness.queue_free()
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
-	harness._get_scene_manager(harness.get_server()).add_spawnable_scene(
-		TEST_LEVEL_SCENE.resource_path)
+	await harness.teardown()
+	harness = make_unmanaged_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
+	harness.register_spawnable_scene(level_builder.packed)
 	await harness.add_client()
 	await harness.add_client()
 
-	for client in harness.get_all_clients():
+	for client in harness.clients():
 		assert_that(client.is_online()).is_true()

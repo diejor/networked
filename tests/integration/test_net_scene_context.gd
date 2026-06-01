@@ -1,12 +1,11 @@
 ## Integration tests for [NetwContext] and [NetwSceneContext].
 class_name TestNetwContext
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE    := preload("res://tests/helpers/TestLevel.tscn")
-const TEST_PLAYER_SCENE   := preload(
-	"res://tests/helpers/TestPlayerMinimal.tscn")
+var player_builder: PlayerBuilder
+var level_builder: LevelBuilder
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 
@@ -21,29 +20,35 @@ var player1: Node
 
 
 func before_test() -> void:
-	harness = auto_free(NetworkTestHarness.new())
-	add_child(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
+	player_builder = PlayerBuilder.new().with_root(Node2D)
+	player_builder.pack()
 
-	harness._get_scene_manager(harness.get_server()) \
-		.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	level_builder = LevelBuilder.new() \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner("..", [player_builder.packed])
+	level_builder.pack()
+
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
+
+	harness.register_spawnable_scene(level_builder.packed)
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
 
-	player0 = harness.spawn_player(client0, TEST_PLAYER_SCENE)
-	player1 = harness.spawn_player(client1, TEST_PLAYER_SCENE)
+	player0 = harness.spawn_player(client0, player_builder.packed)
+	player1 = harness.spawn_player(client1, player_builder.packed)
 
 	# Block until both players appear on each client so RPC paths are warm.
-	await harness.wait_for_client_player_spawn(client0, &"TestLevel")
-	await harness.wait_for_client_player_spawn(client1, &"TestLevel")
+	await harness.wait_for_player(client0, level_builder.scene_name)
+	await harness.wait_for_player(client1, level_builder.scene_name)
 
-	server_ctx = harness.get_server_scene().get_context()
+	server_ctx = harness.scene_on_server().get_context()
 
-	var c0_scene := await harness.wait_for_client_scene_spawn(
-		client0, &"TestLevel")
-	var c1_scene := await harness.wait_for_client_scene_spawn(
-		client1, &"TestLevel")
+	var c0_scene := await harness.wait_for_scene(
+		client0, level_builder.scene_name)
+	var c1_scene := await harness.wait_for_scene(
+		client1, level_builder.scene_name)
 	client0_ctx = c0_scene.get_context()
 	client1_ctx = c1_scene.get_context()
 
@@ -54,7 +59,7 @@ func after_test() -> void:
 
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
+	await super.after_test()
 
 
 func test_get_players_returns_all_spawned() -> void:
@@ -85,13 +90,11 @@ func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
 
 
 func test_wait_for_players_suspends_until_player_enters() -> void:
-	var h: NetworkTestHarness = auto_free(NetworkTestHarness.new())
-	add_child(h)
-	await h.setup(NetworkedTestSuite.create_scene_manager)
-	h._get_scene_manager(h.get_server()).add_spawnable_scene(
-		TEST_LEVEL_SCENE.resource_path)
+	var h := make_unmanaged_harness()
+	await h.setup(NetwTestSuite.create_scene_manager)
+	h.register_spawnable_scene(level_builder.packed)
 	var c: MultiplayerTree = await h.add_client()
-	var ctx: NetwContext = h.get_server_scene().get_context()
+	var ctx: NetwContext = h.scene_on_server().get_context()
 
 	var results := { "resolved": false }
 	(func():
@@ -101,44 +104,47 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	await get_tree().process_frame
 	assert_that(results.resolved).is_false()
 
-	h.spawn_player(c, TEST_PLAYER_SCENE)
+	h.spawn_player(c, player_builder.packed)
 	await wait_until(func(): return results.resolved)
 	assert_that(results.resolved).is_true()
+	await h.teardown()
 
 
 func test_suspend_signal_reaches_client_context() -> void:
-	var results := { "received_reason": "" }
-	client0_ctx.scene.suspended.connect(func(r): results.received_reason = r)
+	monitor_signals(client0_ctx.scene, false)
 
 	server_ctx.scene.suspend("loading")
 
-	await wait_until(func(): return not results.received_reason.is_empty())
-	assert_that(results.received_reason).is_equal("loading")
+	@warning_ignore("redundant_await")
+	await assert_signal(client0_ctx.scene) \
+		.wait_until(1000) \
+		.is_emitted("suspended", ["loading"])
 
 
 func test_request_suspend_notifies_server() -> void:
-	var results := { "requester_id": -1, "received_reason": "" }
-	server_ctx.scene.suspend_requested.connect(func(pid, r):
-		results.requester_id = pid
-		results.received_reason = r)
+	monitor_signals(server_ctx.scene, false)
 
 	client0_ctx.scene.request_suspend("brb")
 
-	await wait_until(func(): return results.requester_id != -1)
-	assert_that(results.requester_id).is_equal(
-		client0.multiplayer_peer.get_unique_id())
-	assert_that(results.received_reason).is_equal("brb")
+	@warning_ignore("redundant_await")
+	await assert_signal(server_ctx.scene) \
+		.wait_until(1000) \
+		.is_emitted(
+			"suspend_requested",
+			[client0.multiplayer_peer.get_unique_id(), "brb"]
+		)
 
 
 func test_resume_signal_reaches_client_context() -> void:
 	server_ctx.scene.suspend("")
-	var results := { "resume_received": false }
-	client1_ctx.scene.resumed.connect(func(): results.resume_received = true)
+	monitor_signals(client1_ctx.scene, false)
 
 	server_ctx.scene.resume()
 
-	await wait_until(func(): return results.resume_received)
-	assert_that(results.resume_received).is_true()
+	@warning_ignore("redundant_await")
+	await assert_signal(client1_ctx.scene) \
+		.wait_until(1000) \
+		.is_emitted("resumed")
 
 
 func test_pause_sets_tree_paused_on_server_synchronously() -> void:
@@ -167,34 +173,32 @@ func test_unpause_clears_tree_paused_and_emits_signal() -> void:
 
 
 func test_kick_disconnects_the_peer() -> void:
-	var server := harness.get_server()
+	var server := harness.server()
 	var peer0_id := client0.multiplayer_peer.get_unique_id()
-
-	var results := { "disconnected_id": -1 }
-	server.peer_disconnected.connect(
-		func(id): results.disconnected_id = id, CONNECT_ONE_SHOT)
+	monitor_signals(server, false)
 
 	server_ctx.tree.kick(peer0_id)
 
-	await wait_until(func(): return results.disconnected_id != -1)
-	assert_that(results.disconnected_id).is_equal(peer0_id)
+	@warning_ignore("redundant_await")
+	await assert_signal(server) \
+		.wait_until(1000) \
+		.is_emitted("peer_disconnected", [peer0_id])
 
 
 func test_request_kick_notifies_server() -> void:
 	var peer1_id := client1.multiplayer_peer.get_unique_id()
-
-	var results := { "received_requester": -1, "received_target": -1 }
-	server_ctx.tree.kick_requested.connect(func(requester, target, _r):
-		results.received_requester = requester
-		results.received_target    = target)
+	monitor_signals(server_ctx.tree, false)
 
 	# client0 asks the server to kick client1.
 	client0_ctx.tree.request_kick(peer1_id, "griefing")
 
-	await wait_until(func(): return results.received_requester != -1)
-	assert_that(results.received_requester).is_equal(
-		client0.multiplayer_peer.get_unique_id())
-	assert_that(results.received_target).is_equal(peer1_id)
+	@warning_ignore("redundant_await")
+	await assert_signal(server_ctx.tree) \
+		.wait_until(1000) \
+		.is_emitted(
+			"kick_requested",
+			[client0.multiplayer_peer.get_unique_id(), peer1_id, "griefing"]
+		)
 
 
 func test_cancel_countdown_fires_immediately_without_waiting() -> void:
@@ -212,14 +216,15 @@ func test_cancel_countdown_fires_immediately_without_waiting() -> void:
 
 
 func test_countdown_started_signal_reaches_client() -> void:
-	var results := { "client_seconds": -1 }
-	client0_ctx.scene.countdown_started.connect(
-		func(s): results.client_seconds = s)
+	monitor_signals(client0_ctx.scene, false)
 
 	server_ctx.scene.start_countdown(10)
-	await wait_until(func(): return results.client_seconds != -1)
 
-	assert_that(results.client_seconds).is_equal(10)
+	@warning_ignore("redundant_await")
+	await assert_signal(client0_ctx.scene) \
+		.wait_until(1000) \
+		.is_emitted("countdown_started", [10])
+
 	server_ctx.scene.cancel_countdown()
 
 
@@ -252,33 +257,32 @@ func test_readiness_gate_pre_populated_with_current_players() -> void:
 func test_set_ready_propagates_to_server_gate_via_rpc() -> void:
 	var server_gate := server_ctx.scene.create_readiness_gate()
 	var c0_gate     := client0_ctx.scene.create_readiness_gate()
-
-	var results := { "changed_peer": -1, "changed_state": false }
-	server_gate.player_ready_changed.connect(func(pid, r):
-		results.changed_peer  = pid
-		results.changed_state = r)
+	monitor_signals(server_gate, false)
 
 	c0_gate.set_ready(true)
 
-	await wait_until(func(): return results.changed_peer != -1)
-	assert_that(results.changed_peer).is_equal(
-		client0.multiplayer_peer.get_unique_id())
-	assert_that(results.changed_state).is_true()
+	@warning_ignore("redundant_await")
+	await assert_signal(server_gate) \
+		.wait_until(1000) \
+		.is_emitted(
+			"player_ready_changed",
+			[client0.multiplayer_peer.get_unique_id(), true]
+		)
 
 
 func test_all_ready_fires_when_every_player_is_ready() -> void:
 	var server_gate := server_ctx.scene.create_readiness_gate()
 	var c0_gate     := client0_ctx.scene.create_readiness_gate()
 	var c1_gate     := client1_ctx.scene.create_readiness_gate()
-
-	var results := { "all_ready_fired": false }
-	server_gate.all_ready.connect(func(): results.all_ready_fired = true)
+	monitor_signals(server_gate, false)
 
 	c0_gate.set_ready(true)
 	c1_gate.set_ready(true)
 
-	await wait_until(func(): return results.all_ready_fired)
-	assert_that(results.all_ready_fired).is_true()
+	@warning_ignore("redundant_await")
+	await assert_signal(server_gate) \
+		.wait_until(1000) \
+		.is_emitted("all_ready")
 
 
 func test_player_leave_removes_entry_from_gate() -> void:
@@ -287,7 +291,7 @@ func test_player_leave_removes_entry_from_gate() -> void:
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_true()
 
-	harness.get_server_scene().untrack_node(player0)
+	harness.scene_on_server().untrack_node(player0)
 	await get_tree().process_frame
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_false()

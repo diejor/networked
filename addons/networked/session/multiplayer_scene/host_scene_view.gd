@@ -6,8 +6,9 @@
 ##
 ## [br][br]
 ## [b]You normally don't add this node yourself.[/b] [MultiplayerTree] adds
-## one automatically when [code]use_listen_server[/code] is enabled and no
-## existing [HostSceneView] descendant is found. Drop one into your scene
+## one automatically when [member MultiplayerTree.desired_role] is
+## [constant MultiplayerTree.Role.LISTEN_SERVER] and no existing
+## [HostSceneView] descendant is found. Drop one into your scene
 ## only when you need to customize [member stretch_override], reparent it
 ## under a specific [Control], or otherwise deviate from the defaults.
 ##
@@ -18,7 +19,7 @@
 ##
 ## [br][br]
 ## Defaults to filling its parent rect with
-## [constant Control.LayoutPresetMode.PRESET_FULL_RECT]. When
+## [constant Control.PRESET_FULL_RECT]. When
 ## parented under a plain [Node], the view re-syncs to the root window on
 ## resize. Stretch behavior mirrors Godot's project-level
 ## [code]display/window/stretch/*[/code] settings via [StretchLayout], assign

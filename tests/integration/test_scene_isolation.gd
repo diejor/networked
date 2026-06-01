@@ -1,24 +1,27 @@
 ## Integration tests for [MultiplayerScene] peer isolation.
 class_name TestLobbyIsolation
-extends NetworkedTestSuite
+extends NetwTestSuite
 
-const TEST_LEVEL_SCENE := preload("res://tests/helpers/TestLevel.tscn")
 
-var harness: NetworkTestHarness
+var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var scene: MultiplayerScene
 var client0: MultiplayerTree
 var client1: MultiplayerTree
+var level_builder: LevelBuilder
 
 
 func before_test() -> void:
-	harness = NetworkTestHarness.new()
-	add_child(harness)
-	auto_free(harness)
-	await harness.setup(NetworkedTestSuite.create_scene_manager)
+	harness = make_harness()
+	await harness.setup(NetwTestSuite.create_scene_manager)
 
-	server_mgr = harness._get_scene_manager(harness.get_server())
-	server_mgr.add_spawnable_scene(TEST_LEVEL_SCENE.resource_path)
+	level_builder = LevelBuilder.new() \
+		.with_root(Node2D) \
+		.with_multiplayer_spawner()
+	level_builder.pack()
+
+	harness.register_spawnable_scene(level_builder.packed)
+	server_mgr = harness.server_scene_manager()
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
@@ -30,7 +33,7 @@ func before_test() -> void:
 func after_test() -> void:
 	if is_instance_valid(harness):
 		await harness.teardown()
-	await drain_frames(get_tree(), 3)
+	await super.after_test()
 
 
 func test_connected_peers_empty_initially() -> void:
@@ -82,8 +85,7 @@ func test_disconnect_peer_removes_visibility() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	scene.connect_peer(client_id)
 	scene.disconnect_peer(client_id)
-	await wait_until(
-		func(): return not scene.scene_visibility_filter(
-			client_id))
-	assert_that(scene.scene_visibility_filter(client_id)) \
-			.is_false()
+	@warning_ignore("redundant_await")
+	await assert_func(scene, "scene_visibility_filter", [client_id]) \
+		.wait_until(1000) \
+		.is_false()
