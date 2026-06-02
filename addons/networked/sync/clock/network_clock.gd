@@ -98,15 +98,19 @@ enum SyncMode {
 	STRETCH,
 }
 
-@export var sync_mode: SyncMode = SyncMode.SNAP
+@export var sync_mode: SyncMode = SyncMode.STRETCH
 
 
 ## The maximum allowed divergence before a hard Snap is forced.
 @export_custom(0, "suffix:ticks") var panic_snap_threshold: int = 20
 
 
-## Multiplier for drift correction speed in [b]Stretch[/b] mode.
+## Fraction of the remaining divergence the Stretch clock closes each frame.
 @export_range(0.01, 0.5) var stretch_nudge_factor: float = 0.05
+
+
+## How often the client pings the server to refresh RTT and recalibrate.
+@export_custom(0, "suffix:s") var ping_interval: float = 0.1
 
 
 @export_group("Network Buffering")
@@ -116,6 +120,10 @@ enum SyncMode {
 
 ## Scales jitter impact on the [member recommended_display_offset].
 @export var jitter_multiplier: float = 2.0
+
+
+## Number of recent RTT samples averaged for jitter and the recommendation.
+@export_custom(0, "suffix:samples") var jitter_window: int = 16
 
 
 ## The threshold below which the connection is considered stable.
@@ -247,10 +255,10 @@ static func for_node(node: Node) -> NetworkClock:
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
-const PING_INTERVAL: float = 1.0
 const _DRIFT_LOG_INTERVAL := 60.0
 
 var _tick_accumulator: float = 0.0
+var _target_tick_estimate: float = 0.0
 var _last_physics_time_usec: int = 0
 var _tick_factor_override: float = -1.0
 var _ping_timer: float = 0.0
@@ -320,6 +328,13 @@ func _physics_process(delta: float) -> void:
 	before_tick_loop.emit()
 
 	_tick_accumulator += delta
+
+	# Drift the estimate forward with the server, then close the residual gap a
+	# fraction at a time so the playhead never teleports on a pong.
+	if is_synchronized and sync_mode == SyncMode.STRETCH:
+		_target_tick_estimate += delta * tickrate
+		_nudge_toward_estimate()
+
 	var ticks_this_frame := 0
 	while _tick_accumulator >= ticktime and \
 			ticks_this_frame < max_ticks_per_frame:
@@ -334,7 +349,7 @@ func _physics_process(delta: float) -> void:
 
 	if not multiplayer.is_server() and is_synchronized:
 		_ping_timer += delta
-		if _ping_timer >= PING_INTERVAL:
+		if _ping_timer >= ping_interval:
 			_ping_timer = 0.0
 			_ping.rpc_id(1, Time.get_ticks_usec())
 		
@@ -416,7 +431,7 @@ func _pong(client_usec: int, server_tick_at_pong: int) -> void:
 	var sample := (Time.get_ticks_usec() - client_usec) / 1_000_000.0
 	var old_stable := _stats.is_stable
 
-	_stats.record_sample(sample, jitter_stability_threshold)
+	_stats.record_sample(sample, jitter_stability_threshold, jitter_window)
 
 	if _stats.is_stable != old_stable:
 		stability_changed.emit(_stats.is_stable)
@@ -447,17 +462,38 @@ func _pong(client_usec: int, server_tick_at_pong: int) -> void:
 
 func _calibrate(target_tick: int) -> void:
 	var diff := target_tick - tick
-	
+
 	if enable_drift_logging: _drift_samples.append(diff)
-	
-	if abs(diff) > panic_snap_threshold or sync_mode == SyncMode.SNAP:
-		tick = target_tick
-	else:
-		_tick_accumulator += diff * ticktime * stretch_nudge_factor
 
 	if not is_synchronized:
+		# First calibration hard-aligns so STRETCH begins already converged.
+		tick = target_tick
+		_tick_accumulator = 0.0
+		_target_tick_estimate = float(target_tick)
 		is_synchronized = true
 		clock_synchronized.emit()
+		return
+
+	if sync_mode == SyncMode.SNAP:
+		tick = target_tick
+	else:
+		# Re-anchor the estimate to the fresh measurement. _physics_process
+		# nudges the live clock toward it every frame.
+		_target_tick_estimate = float(target_tick)
+
+
+func _nudge_toward_estimate() -> void:
+	var current := float(tick) + _tick_accumulator / ticktime
+	var divergence := _target_tick_estimate - current
+
+	# A large gap is a real desync (stall, RTT spike). Snap rather than crawl,
+	# matching the panic path SNAP mode relies on.
+	if absf(divergence) > float(panic_snap_threshold):
+		tick = int(round(_target_tick_estimate))
+		_tick_accumulator = (_target_tick_estimate - float(tick)) * ticktime
+		return
+
+	_tick_accumulator += divergence * ticktime * stretch_nudge_factor
 
 
 func _notify_display_offset() -> void:
@@ -505,8 +541,6 @@ func _run_auto_config() -> void:
 #region ── Inner Classes ───────────────────────────────────────────────────────
 
 class _NetworkStats:
-	const WINDOW_SIZE := 8
-	
 	var rtt: float = 0.0
 	var avg: float = 0.0
 	var jitter: float = 0.0
@@ -514,10 +548,14 @@ class _NetworkStats:
 	
 	var _samples: Array[float] = []
 
-	func record_sample(sample: float, stability_threshold: float) -> void:
+	func record_sample(
+		sample: float,
+		stability_threshold: float,
+		window_size: int
+	) -> void:
 		rtt = sample
 		_samples.append(sample)
-		if _samples.size() > WINDOW_SIZE:
+		while _samples.size() > maxi(1, window_size):
 			_samples.pop_front()
 
 		var sum := 0.0

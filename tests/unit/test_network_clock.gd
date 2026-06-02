@@ -74,37 +74,61 @@ func test_calibrate_snap_always_jumps(
 ) -> void:
 	var clock := _make_clock()
 	clock.sync_mode = NetworkClock.SyncMode.SNAP
+	clock.is_synchronized = true
 	clock.tick = starting_tick
 	clock._calibrate(target_tick)
 	assert_that(clock.tick).is_equal(target_tick)
 
 
-# STRETCH below the panic threshold nudges the accumulator instead of
-# jumping. The tick value stays put and the accumulator goes positive.
-func test_calibrate_stretch_nudges_small_diffs() -> void:
+# Once synchronised, STRETCH calibration only re-anchors the smoothing
+# estimate to the fresh target. The live tick is left for the per-frame nudge
+# to move, so it stays put here.
+func test_calibrate_stretch_reanchors_estimate() -> void:
 	var clock := _make_clock(30)
 	clock.sync_mode = NetworkClock.SyncMode.STRETCH
-	clock.panic_snap_threshold = 100
+	clock.is_synchronized = true
 	clock.tick = 10
 	clock._tick_accumulator = 0.0
 
 	clock._calibrate(12)
 
 	assert_that(clock.tick).is_equal(10)
-	assert_that(clock._tick_accumulator > 0.0).is_true()
+	assert_that(clock._target_tick_estimate).is_equal_approx(12.0, 0.0001)
 
 
-# STRETCH falls back to a hard snap when the diff exceeds the panic
-# threshold.
-func test_calibrate_panic_snaps_above_threshold() -> void:
+# The per-frame nudge advances the accumulator a fraction of the way toward the
+# estimate without touching the live tick (the tick loop carries whole ticks).
+func test_nudge_moves_accumulator_toward_estimate() -> void:
 	var clock := _make_clock(30)
 	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.is_synchronized = true
+	clock.stretch_nudge_factor = 0.5
+	clock.panic_snap_threshold = 100
+	clock.tick = 10
+	clock._tick_accumulator = 0.0
+	clock._target_tick_estimate = 12.0
+
+	clock._nudge_toward_estimate()
+
+	# Divergence is 2 ticks; nudging 0.5 of it adds one ticktime of accumulator.
+	assert_that(clock.tick).is_equal(10)
+	assert_that(clock._tick_accumulator).is_equal_approx(clock.ticktime, 0.0001)
+
+
+# The nudge falls back to a hard snap when divergence exceeds the panic
+# threshold.
+func test_nudge_panic_snaps_above_threshold() -> void:
+	var clock := _make_clock(30)
+	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.is_synchronized = true
 	clock.panic_snap_threshold = 5
 	clock.tick = 10
+	clock._tick_accumulator = 0.0
+	clock._target_tick_estimate = 30.0
 
-	clock._calibrate(20)
+	clock._nudge_toward_estimate()
 
-	assert_that(clock.tick).is_equal(20)
+	assert_that(clock.tick).is_equal(30)
 
 
 # clock_synchronized fires exactly once on the first calibration. Subsequent
