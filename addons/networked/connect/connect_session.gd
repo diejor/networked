@@ -520,12 +520,29 @@ func _apply_host_config(
 
 
 func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
+	if result != null and result.is_ok() and result.info != null \
+			and _local_app_id() != String(result.info.app_id):
+		result = ServerInfoResult.incompatible(result.info)
 	_results[target] = result
 	Netw.dbg.debug(
 		"ConnectSession probe result for %s: %s.",
 		[_target_summary(target), str(result)]
 	)
 	target_updated.emit(target, result)
+
+
+# The bound tree's build tag, or "" when no tree or the gate is off.
+func _local_app_id() -> String:
+	return String(_tree.app_id) if is_instance_valid(_tree) else ""
+
+
+# Flags a discovered server incompatible when its build tag differs from the
+# local one, so the browser can warn before a join the auth handshake would
+# reject. An empty tag on either side means the gate is off, so it stays OK.
+func _classify_discovered(info: ServerInfo) -> ServerInfoResult:
+	if _local_app_id() != String(info.app_id):
+		return ServerInfoResult.incompatible(info)
+	return ServerInfoResult.ok(info, -1)
 
 
 func _on_directory_list_updated(
@@ -550,7 +567,8 @@ func _on_directory_list_updated(
 			info.players = lobby.players
 			info.max_players = lobby.max_players
 			info.metadata = lobby.metadata.duplicate()
-			_results[t] = ServerInfoResult.ok(info, -1)
+			info.app_id = StringName(lobby.metadata.get("app_id", ""))
+			_results[t] = _classify_discovered(info)
 
 	_discovered[id] = fresh
 	Netw.dbg.debug(
@@ -571,14 +589,47 @@ func _on_directory_unavailable(reason: String, id: StringName) -> void:
 	directory_unavailable.emit(id, reason)
 
 
+# Swaps the saved set to [param loaded] while keeping the existing instance for
+# any entry that reloads unchanged, so a redundant reload does not churn the
+# list or orphan a probe result keyed to the old instance.
 func _replace_saved_targets(loaded: Array[JoinTarget]) -> void:
-	for target in _saved_targets.duplicate():
-		_results.erase(target)
-		target_removed.emit(target)
-	_saved_targets.clear()
-	for target in loaded:
-		_saved_targets.append(target)
-		target_added.emit(target)
+	var existing_by_key := {}
+	for target in _saved_targets:
+		existing_by_key[_target_key(target)] = target
+
+	var next: Array[JoinTarget] = []
+	var reused := {}
+	for incoming in loaded:
+		var key := _target_key(incoming)
+		if existing_by_key.has(key):
+			var kept: JoinTarget = existing_by_key[key]
+			next.append(kept)
+			reused[kept] = true
+		else:
+			next.append(incoming)
+			target_added.emit(incoming)
+
+	for target in _saved_targets:
+		if not reused.has(target):
+			_results.erase(target)
+			target_removed.emit(target)
+
+	_saved_targets = next
+
+
+# Stable identity for a saved target, so reloads can match unchanged entries.
+func _target_key(target: JoinTarget) -> String:
+	var backend := target.backend
+	var backend_id := "none"
+	if backend != null:
+		backend_id = backend.get_class()
+		var script := backend.get_script() as Script
+		if script != null:
+			backend_id = script.resource_path
+	var port := ""
+	if backend != null and "port" in backend:
+		port = str(backend.port)
+	return "%s|%s|%s" % [target.address, backend_id, port]
 
 
 func _target_summary(target: JoinTarget) -> String:

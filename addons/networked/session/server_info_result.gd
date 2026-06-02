@@ -25,6 +25,10 @@ enum Status {
 	## The probe itself failed (socket error, invalid address, encoder
 	## mismatch, etc.).
 	ERROR,
+	## The server runs a different game build ([member MultiplayerTree.app_id]),
+	## so joining would be rejected at the auth handshake. Carries [member info]
+	## when discovery provided it.
+	INCOMPATIBLE,
 }
 
 var status: Status = Status.UNSUPPORTED
@@ -75,6 +79,18 @@ static func error(message: String = "") -> ServerInfoResult:
 	return r
 
 
+## Builds an incompatible result, keeping [param info] when discovery already
+## provided player counts so the row can still render them.
+static func incompatible(
+	info: ServerInfo = null, message: String = ""
+) -> ServerInfoResult:
+	var r := ServerInfoResult.new()
+	r.status = Status.INCOMPATIBLE
+	r.info = info
+	r.message = message
+	return r
+
+
 func is_ok() -> bool:
 	return status == Status.OK
 
@@ -95,5 +111,7 @@ func _to_string() -> String:
 			return "ServerInfoResult(busy: %s)" % message
 		Status.ERROR:
 			return "ServerInfoResult(error: %s)" % message
+		Status.INCOMPATIBLE:
+			return "ServerInfoResult(incompatible)"
 		_:
 			return "ServerInfoResult(?)"

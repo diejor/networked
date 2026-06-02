@@ -13,6 +13,7 @@ var _auth_provider: NetwAuthProvider
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
 var _probe_responder := AuthProbeResponder.new()
+var _app_tag: int = 0
 
 
 func _init(roster = null) -> void:
@@ -38,6 +39,12 @@ func bind_api(api: SceneMultiplayer) -> void:
 ## Sets the provider used by the auth handshake.
 func set_auth_provider(provider: NetwAuthProvider) -> void:
 	_auth_provider = provider
+
+
+## Sets the local game-build tag stamped on the hello and required of every
+## joining peer. 0 disables the build gate.
+func set_app_tag(tag: int) -> void:
+	_app_tag = tag
 
 
 ## Stores the join payload used to build client auth credentials.
@@ -142,7 +149,8 @@ func resolve_identity(peer_id: int, join_payload: JoinPayload) -> void:
 		Netw.dbg.warn(
 			"Auth: provider configured but no identity for peer %d; "
 			+ "falling back to client-claimed username '%s'",
-			[peer_id, join_payload.username]
+			[peer_id, join_payload.username],
+			func(m): push_warning(m)
 		)
 
 
@@ -199,7 +207,7 @@ func _on_peer_authenticating(peer_id: int) -> void:
 			_api.disconnect_peer(peer_id)
 			return
 
-	var hello := AuthProtocol.encode_client_hello(provider_payload)
+	var hello := AuthProtocol.encode_client_hello(provider_payload, _app_tag)
 	Netw.dbg.debug(
 		"Auth: sending NHEL (%d provider bytes) for peer %d",
 		[provider_payload.size(), peer_id]
@@ -240,18 +248,28 @@ func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
 			Netw.dbg.warn(
 				"Auth: peer %d sent unknown auth payload (%d bytes); "
 				+ "fail-closed disconnect.",
-				[peer_id, data.size()]
+				[peer_id, data.size()],
+				func(m): push_warning(m)
 			)
 			_api.disconnect_peer(peer_id)
 
 
 func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
-	var decoded := AuthProtocol.decode_client_hello(data)
+	var decoded := AuthProtocol.decode_client_hello(data, _app_tag)
 	if not decoded.ok:
-		Netw.dbg.warn(
-			"Auth: peer %d NHEL decode failed (version mismatch?); "
-			+ "fail-closed disconnect.", [peer_id]
-		)
+		if decoded.get("reason", "") == "app":
+			Netw.dbg.warn(
+				"Auth: peer %d build/app mismatch; fail-closed disconnect.",
+				[peer_id],
+				func(m): push_warning(m)
+			)
+			_roster.set_auth_rejection_reason(peer_id, "Incompatible game build")
+		else:
+			Netw.dbg.warn(
+				"Auth: peer %d NHEL decode failed (%s); fail-closed disconnect.",
+				[peer_id, decoded.get("reason", "framing")],
+				func(m): push_warning(m)
+			)
 		_api.disconnect_peer(peer_id)
 		return
 
@@ -283,6 +301,7 @@ func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
 		)
 		_roster.set_auth_rejection_reason(peer_id, reason)
 		Netw.dbg.warn(
-			"Auth rejected for peer %d: %s", [peer_id, reason]
+			"Auth rejected for peer %d: %s", [peer_id, reason],
+			func(m): push_warning(m)
 		)
 		_api.disconnect_peer(peer_id)

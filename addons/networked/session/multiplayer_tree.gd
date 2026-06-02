@@ -208,7 +208,29 @@ func _warn_if_role_unset() -> void:
 			_auth.set_auth_provider(value)
 			_auth.prepare()
 
+
+
 @export_group("Session")
+## Game-build tag that gates session admission, baked into every build.
+##
+## A joining peer whose tag differs is rejected during the auth handshake before
+## it enters [method MultiplayerAPI.get_peers], so an incompatible build never
+## corrupts the session. Bump it whenever the wire protocol breaks. Leave it
+## empty to disable the gate. This is build identity, not discovery, so it is
+## separate from [member LobbyDirectory.browser_filter_uid] which scopes which
+## lobbies are even visible.
+## [codeblock]
+## "" -> tag 0 -> any same-version peer admitted (gate off)
+## "bomber-v2" -> only peers carrying "bomber-v2" admitted
+## [/codeblock]
+@export var app_id: StringName = "":
+	set(value):
+		app_id = value
+		if _auth:
+			_auth.set_app_tag(_compute_app_tag(value))
+
+@export_tool_button("Generate app id") var _generate_app_id := func() -> void:
+	app_id = _random_app_id()
 
 ## Builds [ServerInfo] for [method BackendPeer.query_server_info].
 ##
@@ -556,10 +578,28 @@ static func _has_spawner_component(node: Node) -> bool:
 	return false
 
 
+# Folds the build tag into the 32-bit value the auth handshake compares. An
+# empty tag means the gate is off, so it must map to 0.
+func _compute_app_tag(value: StringName) -> int:
+	if String(value).is_empty():
+		return 0
+	return String(value).hash() & 0xFFFFFFFF
+
+
+# Builds a fresh random build tag for the editor "Generate app id" button.
+func _random_app_id() -> StringName:
+	const CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
+	var out := ""
+	for i in 15:
+		out += CHARS[randi() % CHARS.length()]
+	return StringName(out)
+
+
 func _init() -> void:
 	_auth = AuthCoordinator.new(_roster)
 	_auth.set_roster(_roster)
 	_auth.set_auth_provider(auth_provider)
+	_auth.set_app_tag(_compute_app_tag(app_id))
 	_auth.set_tree(self)
 	_auth.set_server_info_source(server_info_source)
 	if not Engine.is_editor_hint():
@@ -594,6 +634,13 @@ func _process(dt: float) -> void:
 ## [/codeblock]
 func host(quiet: bool = false) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
+	if backend == null:
+		if not quiet:
+			Netw.dbg.error(
+				"MultiplayerTree.host: no backend configured.", [],
+				func(m): push_error(m)
+			)
+		return ERR_UNCONFIGURED
 	Netw.dbg.trace("MultiplayerTree: Hosting session.")
 	state = State.CONNECTING
 	backend.peer_reset_state()
@@ -993,7 +1040,8 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if auto_host_headless and DisplayServer.get_name() == "headless":
+	if auto_host_headless and backend != null \
+			and DisplayServer.get_name() == "headless":
 		# host() resolves the live role from desired_role.
 		if desired_role == Role.LISTEN_SERVER \
 				or desired_role == Role.DEDICATED_SERVER:

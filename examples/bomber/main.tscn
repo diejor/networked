@@ -25,6 +25,7 @@ unique_name_in_owner = true
 script = ExtResource("2_wto4k")
 backend = SubResource("Resource_ej8d4")
 auth_provider = SubResource("Resource_gbknk")
+app_id = &"7x283tsfmy1xpr4"
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="MultiplayerTree" unique_id=274629760]
 _spawnable_scenes = PackedStringArray("uid://l523ox2awhi6")

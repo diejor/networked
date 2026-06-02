@@ -28,6 +28,8 @@ func bind_result(result: ServerInfoResult) -> void:
 				Color(0.24, 0.81, 0.44) if info
 				else Color(0.95, 0.77, 0.06)
 			)
+		ServerInfoResult.Status.INCOMPATIBLE:
+			_update_status_style(Color(0.6, 0.35, 0.85))
 		_:
 			_update_status_style(Color(0.91, 0.3, 0.24))
 

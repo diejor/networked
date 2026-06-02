@@ -33,13 +33,38 @@ func test_classify_short_packet_is_unknown() -> void:
 
 func test_hello_round_trip_with_payload() -> void:
 	var provider_payload := PackedByteArray([0xDE, 0xAD, 0xBE, 0xEF])
-	var packet := AuthProtocol.encode_client_hello(provider_payload, 0x42)
+	var packet := AuthProtocol.encode_client_hello(provider_payload, 0, 0x42)
 	var decoded := AuthProtocol.decode_client_hello(packet)
 
 	assert_that(decoded.ok).is_true()
 	assert_that(decoded.version).is_equal(AuthProtocol.PROTOCOL_VERSION)
 	assert_that(decoded.flags).is_equal(0x42)
 	assert_that(decoded.provider_payload).is_equal(provider_payload)
+
+
+func test_hello_round_trip_with_matching_app_tag() -> void:
+	var provider_payload := PackedByteArray([0x01, 0x02, 0x03])
+	var packet := AuthProtocol.encode_client_hello(provider_payload, 0xABCDEF12)
+	var decoded := AuthProtocol.decode_client_hello(packet, 0xABCDEF12)
+
+	assert_that(decoded.ok).is_true()
+	assert_that(decoded.provider_payload).is_equal(provider_payload)
+
+
+func test_decode_rejects_app_tag_mismatch() -> void:
+	var packet := AuthProtocol.encode_client_hello(PackedByteArray(), 0x11111111)
+	var decoded := AuthProtocol.decode_client_hello(packet, 0x22222222)
+
+	assert_that(decoded.ok).is_false()
+	assert_that(decoded.reason).is_equal("app")
+
+
+func test_decode_default_zero_tag_round_trip() -> void:
+	# Empty app_id maps to tag 0 on both ends, the gate-off default.
+	var packet := AuthProtocol.encode_client_hello(PackedByteArray())
+	var decoded := AuthProtocol.decode_client_hello(packet)
+
+	assert_that(decoded.ok).is_true()
 
 
 func test_hello_round_trip_with_empty_payload() -> void:
@@ -84,10 +109,12 @@ func test_decode_probe_rejects_hello_magic() -> void:
 
 
 func test_decode_rejects_version_mismatch() -> void:
-	# Hand-craft a packet with a wrong version byte.
+	# Hand-craft a full-length header with a wrong version byte.
 	var packet := PackedByteArray()
 	packet.append_array(AuthProtocol.MAGIC_HELLO)
 	packet.append(0xFF)  # bogus version
-	packet.append(0x00)
+	packet.append_array(PackedByteArray([0x00, 0x00, 0x00, 0x00]))  # app_tag
+	packet.append(0x00)  # flags
 	var decoded := AuthProtocol.decode_client_hello(packet)
 	assert_that(decoded.ok).is_false()
+	assert_that(decoded.reason).is_equal("version")

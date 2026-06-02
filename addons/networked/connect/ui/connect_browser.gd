@@ -542,6 +542,11 @@ func _join_with_preflight(
 	_last_join_payload = payload
 	_last_username = String(payload.username)
 	var result := _connect.get_result(target)
+	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
+		_show_banner(
+			"Incompatible game build; this server runs a different version."
+		)
+		return
 	if result != null and (
 		result.status == ServerInfoResult.Status.TIMEOUT
 		or result.status == ServerInfoResult.Status.UNREACHABLE
@@ -583,6 +588,7 @@ func _status_text(result: ServerInfoResult) -> String:
 		ServerInfoResult.Status.UNREACHABLE: return "UNREACHABLE"
 		ServerInfoResult.Status.TIMEOUT: return "TIMEOUT"
 		ServerInfoResult.Status.UNSUPPORTED: return "UNSUPPORTED"
+		ServerInfoResult.Status.INCOMPATIBLE: return "INCOMPATIBLE"
 		_: return "ERROR"
 
 

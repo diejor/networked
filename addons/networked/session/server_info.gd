@@ -14,6 +14,7 @@ extends Resource
 @export var max_players: int = 0
 @export var game_mode: StringName = &""
 @export var version: String = ""
+@export var app_id: StringName = &""
 @export var is_local_listener: bool = false
 @export var metadata: Dictionary = {}
 
@@ -30,6 +31,7 @@ static func to_payload(info: ServerInfo) -> PackedByteArray:
 		"max_players": info.max_players,
 		"game_mode": info.game_mode,
 		"version": info.version,
+		"app_id": info.app_id,
 		"is_local_listener": info.is_local_listener,
 		"metadata": info.metadata,
 	}
@@ -51,6 +53,7 @@ static func from_payload(bytes: PackedByteArray) -> ServerInfo:
 	info.max_players = int(decoded.get("max_players", 0))
 	info.game_mode = StringName(decoded.get("game_mode", ""))
 	info.version = decoded.get("version", "")
+	info.app_id = StringName(decoded.get("app_id", ""))
 	info.is_local_listener = bool(decoded.get("is_local_listener", false))
 	var meta = decoded.get("metadata", {})
 	info.metadata = meta if typeof(meta) == TYPE_DICTIONARY else {}

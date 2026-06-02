@@ -440,6 +440,7 @@ func _room_card() -> Dictionary:
 		"players": _players,
 		"max": _room_max,
 		"uid": browser_filter_uid,
+		"app_id": _local_app_id(),
 	}
 
 
@@ -448,7 +449,15 @@ func _room_metadata(card: Dictionary) -> Dictionary:
 		"room_hash": String(card.get("hash", "")),
 		"host": String(card.get("name", "")),
 		"browser_filter_uid": String(card.get("uid", "")),
+		"app_id": String(card.get("app_id", "")),
 	}
+
+
+# The hosting tree's build tag, advertised so browsers can flag a lobby they
+# would be rejected from before they try to join.
+func _local_app_id() -> String:
+	var mt := MultiplayerTree.resolve(self)
+	return String(mt.app_id) if mt else ""
 
 
 func _announce_with_card(card: Dictionary) -> Dictionary:

@@ -353,6 +353,7 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 		_wrapper.set_lobby_data(lobby_id, "name", lobby_name)
 	if not browser_filter_uid.is_empty():
 		_wrapper.set_lobby_data(lobby_id, "uid", browser_filter_uid)
+	_wrapper.set_lobby_data(lobby_id, "app_id", _local_app_id())
 	_wrapper.set_lobby_data(lobby_id, "host", _wrapper.get_persona_name())
 	_wrapper.set_lobby_data(lobby_id, "players", "1")
 	_wrapper.set_lobby_data(lobby_id, "max", str(max_clients))
@@ -440,6 +441,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 			{
 				"host": _wrapper.get_lobby_data(id, "host"),
 				"uid": _wrapper.get_lobby_data(id, "uid"),
+				"app_id": _wrapper.get_lobby_data(id, "app_id"),
 			}
 		)
 		out.append(info)
@@ -459,6 +461,13 @@ func _build_peer() -> MultiplayerPeer:
 		return null
 	_wrapper.configure_peer(peer, not disable_nagle, allow_p2p_relay)
 	return peer
+
+
+# The hosting tree's build tag, advertised so browsers can flag a lobby they
+# would be rejected from before they try to join.
+func _local_app_id() -> String:
+	var mt := MultiplayerTree.resolve(self)
+	return String(mt.app_id) if mt else ""
 
 
 func _is_own_lobby(lobby_id: int) -> bool:

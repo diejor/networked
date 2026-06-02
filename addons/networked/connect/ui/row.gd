@@ -135,6 +135,13 @@ func _render_metrics() -> void:
 				if info else "-"
 			)
 			_ping_label.text = "."
+		ServerInfoResult.Status.INCOMPATIBLE:
+			var info := result.info
+			_players_label.text = (
+				"%d/%d" % [info.players, info.max_players]
+				if info else "-"
+			)
+			_ping_label.text = "x"
 		_:
 			_players_label.text = "-"
 			_ping_label.text = "-"
