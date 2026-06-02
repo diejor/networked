@@ -16,9 +16,9 @@ class RecordingSignaler extends TrackerSignaler:
 		return fake
 
 
-func _cand(name: String) -> Dictionary:
+func _cand(_name: String) -> Dictionary:
 	return {
-		"type": "candidate", "candidate": name, "sdpMid": "0", "sdpMLineIndex": 0,
+		"type": "candidate", "candidate": _name, "sdpMid": "0", "sdpMLineIndex": 0,
 	}
 
 

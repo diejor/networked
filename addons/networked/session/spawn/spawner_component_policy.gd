@@ -6,18 +6,15 @@ extends SpawnPolicy
 ## spawns them at the [SpawnerComponent] the client picked.
 ##
 ## [br][br]
-## The target is a [member scene_name] plus a [member spawner_path] into that
-## scene. The client picks them (see [method from_scene_node_path]) and the
-## server reads them back in [method spawn]. See [SpawnPolicy] for the
-## client and server split.
+## The target is a single [member spawn_point] picked in the inspector. The
+## client serializes it through [method to_dict] and the server reads it back in
+## [method spawn]. See [SpawnPolicy] for the client and server split.
 
-## Target scene basename (e.g. [code]&"Level1"[/code]). The client sets this
-## before joining. See [method from_scene_node_path].
-@export var scene_name: StringName
-
-## Path to the [SpawnerComponent] within [member scene_name]. The client sets
-## this before joining. See [method from_scene_node_path].
-@export var spawner_path: NodePath
+## The [SpawnerComponent] a joining player spawns at, picked in the inspector.
+## [method to_dict] splits it into the scene basename and the in scene node path
+## that [method spawn] reads back.
+@export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:SpawnerComponent")
+var spawn_point: SceneNodePath
 
 
 ## Builds a policy from a [SceneNodePath] picker selection, ready to serialize
@@ -29,16 +26,16 @@ extends SpawnPolicy
 ## [/codeblock]
 static func from_scene_node_path(path: SceneNodePath) -> SpawnerComponentPolicy:
 	var policy := SpawnerComponentPolicy.new()
-	if path:
-		policy.scene_name = StringName(path.get_scene_name())
-		policy.spawner_path = path.node_path
+	policy.spawn_point = path
 	return policy
 
 
 func to_dict() -> Dictionary:
+	if spawn_point == null:
+		return {}
 	return {
-		"scene_name": scene_name,
-		"spawner_path": spawner_path,
+		"scene_name": StringName(spawn_point.get_scene_name()),
+		"spawner_path": NodePath(spawn_point.node_path),
 	}
 
 

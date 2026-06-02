@@ -192,6 +192,10 @@ func _setup_session() -> void:
 	_bind_session_signals()
 	_rebuild_from_session()
 	_connect.refresh()
+	# Catch up when the tree entered before this browser bound, e.g. a debug
+	# auto-connect: session_entered already fired, so apply its effect now.
+	if _connect.is_session_active():
+		_on_session_entered()
 
 
 func _bind_session_signals() -> void:

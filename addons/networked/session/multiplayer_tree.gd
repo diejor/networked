@@ -247,6 +247,17 @@ func _warn_if_role_unset() -> void:
 ## entry point.
 @export var spawn_policy: SpawnPolicy
 
+@export_group("Debug")
+## Auto connect config applied on play in debug builds only.
+##
+## When set, the tree builds a [JoinPayload] from it and runs
+## [method host_player] on ready, skipping [ConnectBrowser]. Release builds
+## strip this path because [method OS.has_feature] returns [code]false[/code]
+## for [code]"debug"[/code], so the lag settings on [member backend] also apply
+## for free during testing. Author [member DebugJoinConfig.spawn] as the same
+## class as [member spawn_policy] to keep the join coherent.
+@export var debug_join: DebugJoinConfig
+
 ## Owned [SceneMultiplayer] mounted for this session.
 ##
 ## Backends may replace it through [signal api_swapped]. Consumers that cache
@@ -1046,6 +1057,24 @@ func _ready() -> void:
 		if desired_role == Role.LISTEN_SERVER \
 				or desired_role == Role.DEDICATED_SERVER:
 			await host()
+		return
+
+	if debug_join != null and backend != null \
+			and desired_role != Role.DEDICATED_SERVER \
+			and OS.has_feature("debug"):
+		await _debug_autoconnect()
+
+
+# Restores the old init_payload_debug flow: host straight into the game from
+# the editor, no ConnectBrowser. Debug-only, so release never auto-connects.
+func _debug_autoconnect() -> void:
+	if state != State.OFFLINE:
+		return
+	var payload := debug_join.to_payload()
+	Netw.dbg.info(
+		"MultiplayerTree: debug auto-connect as '%s'.", [payload.username]
+	)
+	await host_player(payload)
 
 
 ## Server RPC that accepts serialized join requests.

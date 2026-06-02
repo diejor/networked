@@ -9,6 +9,7 @@
 ## backend.ice_servers = []
 ## tree.backend = backend
 ## [/codeblock]
+@tool
 class_name PairedWebRTCBackend
 extends WebRTCBackend
 

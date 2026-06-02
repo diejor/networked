@@ -114,6 +114,15 @@ func is_valid() -> bool:
 	return is_instance_valid(_ref.get_ref())
 
 
+## Returns [code]true[/code] while the bound tree is already in a session.
+##
+## Read this after wiring [signal session_entered] to catch up when the tree
+## entered before the binding, e.g. a debug auto-connect.
+func is_session_active() -> bool:
+	var s := _ref.get_ref() as ConnectSession
+	return s.is_session_active() if s else false
+
+
 # -- Host & join ------------------------------------------------------------
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the

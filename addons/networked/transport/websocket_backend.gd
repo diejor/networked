@@ -27,7 +27,7 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	peer.set_outbound_buffer_size(1048576) # 1MB
 	var err := peer.create_server(port)
 	if err != OK:
-		Netw.dbg.warn(
+		Netw.dbg.info(
 			"WebSocket create_server failed: %s",
 			[error_string(err)],
 			func(m): push_warning(m)

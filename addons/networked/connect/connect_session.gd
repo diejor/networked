@@ -143,6 +143,15 @@ func get_tree_bound() -> MultiplayerTree:
 	return _tree if is_instance_valid(_tree) else null
 
 
+## Returns [code]true[/code] while the bound tree is in an active session.
+##
+## A late binder reads this after wiring [signal session_entered] to catch up
+## when the tree entered before the binding, e.g. a debug auto-connect.
+func is_session_active() -> bool:
+	return is_instance_valid(_tree) \
+		and _tree.state == MultiplayerTree.State.ONLINE
+
+
 # -- Directories -------------------------------------------------------------
 
 ## Registers [param directory] under [param id] so its lobbies appear
@@ -400,7 +409,8 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 		)
 		return err
 
-	session_entered.emit()
+	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
 
@@ -451,7 +461,8 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 			)
 		return err
 
-	session_entered.emit()
+	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
 
@@ -503,7 +514,9 @@ func _unbind_tree_signals() -> void:
 
 
 func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
-	if new_state == MultiplayerTree.State.OFFLINE:
+	if new_state == MultiplayerTree.State.ONLINE:
+		session_entered.emit()
+	elif new_state == MultiplayerTree.State.OFFLINE:
 		session_left.emit()
 
 
