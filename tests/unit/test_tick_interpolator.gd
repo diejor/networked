@@ -207,6 +207,69 @@ func test_position_smoothly_interpolates_between_updates() -> void:
 	assert_vector(_player.position).is_equal_approx(midpoint, Vector2(0.1, 0.1))
 
 
+func test_reset_seeds_smoothed_floor_to_min_lag() -> void:
+	# reset() must anchor both the resting floor and the live lag to the
+	# computed minimum, so dilation does not ramp from zero on spawn.
+	_interpolator.enable_smart_dilation = true
+	_interpolator.display_lag = 99.0
+	_interpolator._smoothed_floor = 99.0
+
+	_interpolator.reset()
+
+	var expected := _interpolator._calculate_min_lag()
+	assert_that(_interpolator._smoothed_floor).is_equal_approx(expected, 0.001)
+	assert_that(_interpolator.display_lag).is_equal_approx(expected, 0.001)
+
+
+func test_dilation_eases_display_lag_toward_floor() -> void:
+	# With data available (not starving), display_lag eases back down toward the
+	# resting floor a fraction at a time instead of snapping.
+	_interpolator.enable_smart_dilation = true
+	_network_update(P0)
+	_tick()  # record a snapshot so the buffer is not starving
+
+	var target_floor := _interpolator._calculate_min_lag()
+	_interpolator._smoothed_floor = target_floor
+	_interpolator.display_lag = target_floor + 8.0
+	_interpolator.starvation_ticks = 0
+
+	_interpolator._perform_dilation(_clock.display_tick, 0.016, false)
+
+	assert_that(_interpolator.display_lag < target_floor + 8.0).is_true()
+	assert_that(_interpolator.display_lag > target_floor).is_true()
+
+
+func test_dilation_grows_past_floor_on_sustained_starvation() -> void:
+	# An empty buffer starves every frame; once past the grace window the lag
+	# must climb above the resting floor to rebuild the buffer.
+	_interpolator.enable_smart_dilation = true
+	_interpolator.max_extra_dilation = 10.0
+	_interpolator._smoothed_floor = 2.0
+	_interpolator.display_lag = 2.0
+	_interpolator.starvation_ticks = 0
+
+	for _i in 6:
+		_interpolator._perform_dilation(_clock.display_tick, 0.5, false)
+
+	assert_that(_interpolator.starvation_ticks >= 6).is_true()
+	assert_that(_interpolator.display_lag > 2.0).is_true()
+
+
+func test_slerp_mode_uses_spherical_interpolation() -> void:
+	# SLERP must take the spherical path between quaternions, not a
+	# component-wise lerp (which denormalizes and rotates non-uniformly).
+	var state := TickInterpolator._PropertyState.new()
+	state.mode = TickInterpolator.Mode.SLERP
+
+	var a := Quaternion(Vector3.UP, 0.0)
+	var b := Quaternion(Vector3.UP, PI / 2.0)
+	var mid: Quaternion = state._interpolate(a, b, 0.5)
+
+	assert_that(mid.is_equal_approx(a.slerp(b, 0.5))).is_true()
+	# A true slerp stays unit-length; a raw lerp of these would not.
+	assert_that(absf(mid.length() - 1.0) < 0.0001).is_true()
+
+
 func test_tick_factor_produces_sub_tick_movement() -> void:
 	# tick_factor should produce visible movement within a single tick interval.
 	

@@ -78,9 +78,6 @@ metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
 script = ExtResource("7_03owx")
-sync_mode = 0
-ping_interval = null
-jitter_window = null
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="Client" unique_id=726132212]

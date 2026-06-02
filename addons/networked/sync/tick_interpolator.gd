@@ -11,6 +11,7 @@ enum Mode {
 	NONE = 0, ## No interpolation.
 	LERP = 1, ## Linear interpolation.
 	ANGLE = 2, ## Angular interpolation (shortest path).
+	SLERP = 3, ## Spherical interpolation for [Quaternion] rotations.
 }
 
 
@@ -80,11 +81,12 @@ enum VisualOutputMode {
 @export var enable_smart_dilation: bool = true
 
 
-## Controls the "softness" or "floatiness" of the interpolation.
+## Exponential smoothing time constant in seconds, layered on top of the
+## bracketed interpolation.
 ## [br]- [code]0.0[/code]: Crisp and instant (pure time-based interpolation).
-## [br]- [code]> 0.0[/code]: Adds exponential smoothing, making motion feel
-## heavier/fluid but adding visual lag.
-@export_range(0.0, 0.99) var smoothing: float = 0.0
+## [br]- [code]> 0.0[/code]: Heavier, fluid motion that lags by roughly this
+## many seconds. Frame-rate independent.
+@export_custom(0, "suffix:s") var smoothing_time: float = 0.0
 
 
 ## Maximum distance allowed before the interpolator snaps to the target instead
@@ -96,6 +98,25 @@ enum VisualOutputMode {
 ## The maximum number of extra ticks the interpolator can dilate beyond its
 ## floor. Increasing this value might help when network jitters.
 @export_custom(0, "suffix:ticks") var max_extra_dilation: float = 0.0
+
+
+## Per-frame fraction [member display_lag] eases toward its resting floor.
+## Higher tracks network changes faster, lower is steadier.
+@export_range(0.0, 1.0) var lag_adapt_rate: float = 0.05
+
+
+## Ticks per frame the buffer grows once starvation is sustained past
+## [member starvation_grace_frames].
+@export_range(0.0, 1.0) var starvation_growth: float = 0.95
+
+
+## Per-frame fraction the measured floor is low-passed before
+## [member display_lag] tracks it. Lower rejects more jitter.
+@export_range(0.0, 1.0) var floor_smoothing: float = 0.05
+
+
+## Consecutive starving frames tolerated before the buffer starts growing.
+@export_custom(0, "suffix:frames") var starvation_grace_frames: int = 3
 
 
 ## If greater than [code]0[/code], the interpolator will log its internal state
@@ -149,7 +170,9 @@ func reset() -> void:
 	for state in _states:
 		state.reset()
 		state.apply_reset()
-	display_lag = _calculate_min_lag()
+	var target_lag := _calculate_min_lag()
+	_smoothed_floor = target_lag
+	display_lag = target_lag
 	_was_starving = false
 	starvation_ticks = 0
 
@@ -182,10 +205,6 @@ func disable_for(duration: float) -> SceneTreeTimer:
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
-const _CATCHUP_SPEED := 1.1
-const _DILATION_STRENGTH := 0.95
-const _STARVATION_GRACE_FRAMES := 3
-
 var _clock: NetworkClock
 var _states: Array[_PropertyState] = []
 var _trace_frame: int = 0
@@ -195,6 +214,7 @@ var _has_explicit_sync_interval: bool = false
 
 var _peer_batcher: _Batcher
 var _was_starving: bool = false
+var _smoothed_floor: float = 0.0
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 # Persists the visual_root's design-time local offset so it survives _ready
@@ -292,7 +312,12 @@ func _update_instance(
 
 
 func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
-	var current_floor := _calculate_min_lag()
+	var raw_floor := _calculate_min_lag()
+
+	# Low-pass the measured floor so a jittery recommended_display_offset does
+	# not translate one-to-one into playhead shimmer.
+	_smoothed_floor += (raw_floor - _smoothed_floor) * floor_smoothing
+
 	var effective_dt := int(floor(float(global_dt) - display_lag))
 	var is_starving := false
 	var newest_tick := -1
@@ -302,25 +327,31 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 			is_starving = true
 			newest_tick = state.history.newest_tick()
 			break
-	
+
 	if is_starving:
 		starvation_ticks += 1
 		for state in _states:
 			state.is_sleeping = false
-			
-		if starvation_ticks >= _STARVATION_GRACE_FRAMES:
-			display_lag = minf(
-				display_lag + (frame_ticks * _DILATION_STRENGTH),
-				current_floor + max_extra_dilation
-			)
 	else:
 		starvation_ticks = 0
-		display_lag = maxf(current_floor, display_lag - (frame_ticks * (_CATCHUP_SPEED - 1.0)))
+
+	if starvation_ticks >= starvation_grace_frames:
+		# A sustained gap: grow quickly toward the headroom cap to rebuild the
+		# buffer instead of waiting for the steady ease.
+		display_lag = minf(
+			display_lag + frame_ticks * starvation_growth,
+			_smoothed_floor + max_extra_dilation
+		)
+	else:
+		# Steady state: ease toward the resting floor from either side. This
+		# glides a grown lag back down and lets it rise to a rising floor
+		# without needing a starvation event.
+		display_lag += (_smoothed_floor - display_lag) * lag_adapt_rate
 
 	if trace:
 		_dbg.trace(
-			"[Dilation] eff_dt: %d | newest: %d | starving: %s | ticks: %d | lag: %.2f", 
-			[effective_dt, newest_tick, str(is_starving), starvation_ticks, display_lag]
+			"[Dilation] eff_dt: %d | newest: %d | starving: %s | ticks: %d | floor: %.2f | lag: %.2f",
+			[effective_dt, newest_tick, str(is_starving), starvation_ticks, _smoothed_floor, display_lag]
 		)
 
 	_was_starving = is_starving
@@ -622,7 +653,7 @@ func _get_property_list() -> Array[Dictionary]:
 			"type": TYPE_INT,
 			"usage": PROPERTY_USAGE_EDITOR,
 			"hint": PROPERTY_HINT_ENUM,
-			"hint_string": "None,Lerp,Angle"
+			"hint_string": "None,Lerp,Angle,Slerp"
 		})
 
 	var v_root := get_node_or_null(visual_root) \
@@ -773,7 +804,7 @@ class _Batcher extends RefCounted:
 		var frame_ticks := delta * clock.tickrate
 
 		for inst in instances:
-			var weight := 1.0 - pow(inst.smoothing, delta * 60.0) if inst.smoothing > 0.0 else 1.0
+			var weight := 1.0 - exp(-delta / inst.smoothing_time) if inst.smoothing_time > 0.0 else 1.0
 			inst._update_instance(global_dt, global_factor, frame_ticks, weight)
 
 
@@ -1022,6 +1053,8 @@ class _PropertyState:
 	func _interpolate(a: Variant, b: Variant, t: float) -> Variant:
 		if mode == Mode.ANGLE:
 			return lerp_angle(a, b, t)
+		if mode == Mode.SLERP:
+			return (a as Quaternion).slerp(b, t)
 		return lerp(a, b, t)
 
 
@@ -1031,6 +1064,8 @@ class _PropertyState:
 		match typeof(v1):
 			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
 				return v1.distance_to(v2) > dist
+			TYPE_QUATERNION:
+				return absf(v1.angle_to(v2)) > dist
 			TYPE_FLOAT, TYPE_INT:
 				var diff := abs(angle_difference(v1, v2)) if mode == Mode.ANGLE else abs(v1 - v2)
 				return diff > dist
@@ -1043,6 +1078,8 @@ class _PropertyState:
 		match typeof(v1):
 			TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
 				return v1.is_equal_approx(v2)
+			TYPE_QUATERNION:
+				return absf(v1.angle_to(v2)) < 0.001
 			TYPE_FLOAT, TYPE_INT:
 				var diff := abs(angle_difference(v1, v2)) if mode == Mode.ANGLE else abs(v1 - v2)
 				return diff < 0.001
