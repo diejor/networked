@@ -22,19 +22,46 @@ extends Resource
 
 
 
+const _MSEC_TO_SEC := 0.001
+const _PERCENT_TO_RATIO := 0.01
+const _LEGACY_SECONDS_MAX := 1.0
+
+
 @export_group("Lag Simulation")
 ## Enables [LaggyMultiplayerPeer] wrapping in [method wrap_peer].
+## Lag simulation delays each packet independently.
+## [codeblock]
+## client ping -> one way delay -> server
+## server pong -> one way delay -> client
+##
+## observed RTT ~= ping delay + pong delay + frame and transport cost
+## [/codeblock]
+## Example with [member one_way_delay_min] = [code]10 ms[/code] and
+## [member one_way_delay_max] = [code]100 ms[/code]:
+## [codeblock]
+## artificial RTT floor   ~= 20 ms
+## artificial RTT ceiling ~= 200 ms
+## observed clock RTT     ~= artificial RTT + runtime overhead
+## [/codeblock]
+## Jitter is measured from delivered clock samples. Packet loss, polling, and
+## frame timing can all widen it.
+## Watch the [code]Clock *[/code] performance monitors to compare
+## [member NetworkClock.rtt], [member NetworkClock.rtt_jitter], the pong
+## calibration error from [signal NetworkClock.pong_received], and
+## [member NetworkClock.recommended_display_offset].
 @export var simulate_lag: bool = false
-## Minimum simulated packet delay in seconds.
+## Minimum simulated one way packet delay in milliseconds.
 @export_range(
-	0.0, 1.0, 0.001, "or_greater", "suffix:s"
-) var lag_min_delay: float = 0.1
-## Maximum simulated packet delay in seconds.
+	0.0, 250.0, 1.0, "suffix:ms"
+) var one_way_delay_min: float = 10.0
+## Maximum simulated one way packet delay in milliseconds.
 @export_range(
-	0.0, 1.0, 0.001, "or_greater", "suffix:s"
-) var lag_max_delay: float = 0.1
-## Simulated packet loss ratio.
-@export_range(0.0, 1.0, 0.01) var lag_packet_loss: float = 0.0
+	0.0, 250.0, 1.0, "suffix:ms"
+) var one_way_delay_max: float = 100.0
+## Simulated packet loss percentage.
+@export_range(
+	0.0, 25.0, 0.1, "suffix:%"
+) var lag_packet_loss_percent: float = 0.0
 
 
 ## Wraps [param base_peer] with [LaggyMultiplayerPeer] when enabled.
@@ -53,25 +80,53 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 		)
 		return base_peer
 	
+	var min_delay_ms := maxf(0.0, one_way_delay_min)
+	var max_delay_ms := maxf(min_delay_ms, one_way_delay_max)
+	var packet_loss_percent := clampf(lag_packet_loss_percent, 0.0, 100.0)
+	
 	Netw.dbg.info(
 		"Wrapping peer in LaggyMultiplayerPeer "
 		+ "(delay: %.1f-%.1f ms, packet loss: %d%%)",
 		[
-			lag_min_delay * 1000.0,
-			lag_max_delay * 1000.0,
-			int(lag_packet_loss * 100.0),
+			min_delay_ms,
+			max_delay_ms,
+			int(packet_loss_percent),
 		]
 	)
 	
 	var laggy_instance: Object = ClassDB.instantiate(&"LaggyMultiplayerPeer")
 	var wrapped_peer: MultiplayerPeer = laggy_instance.call(&"create", base_peer)
 	if wrapped_peer:
-		wrapped_peer.set(&"delay_minimum", lag_min_delay)
-		wrapped_peer.set(&"delay_maximum", lag_max_delay)
-		wrapped_peer.set(&"packet_loss", lag_packet_loss)
+		wrapped_peer.set(&"delay_minimum", min_delay_ms * _MSEC_TO_SEC)
+		wrapped_peer.set(&"delay_maximum", max_delay_ms * _MSEC_TO_SEC)
+		wrapped_peer.set(
+			&"packet_loss",
+			packet_loss_percent * _PERCENT_TO_RATIO
+		)
 		return wrapped_peer
 	
 	return base_peer
+
+
+# Migrates saved lag properties to the current inspector units.
+func _set(property: StringName, value: Variant) -> bool:
+	match property:
+		&"lag_min_delay":
+			one_way_delay_min = _coerce_legacy_delay_msec(float(value))
+			return true
+		&"lag_max_delay":
+			one_way_delay_max = _coerce_legacy_delay_msec(float(value))
+			return true
+		&"lag_packet_loss":
+			lag_packet_loss_percent = float(value) * 100.0
+			return true
+	return false
+
+
+func _coerce_legacy_delay_msec(value: float) -> float:
+	if value > 0.0 and value <= _LEGACY_SECONDS_MAX:
+		return value * 1000.0
+	return value
 
 
 ## Prepares this backend for [method create_host_peer] or

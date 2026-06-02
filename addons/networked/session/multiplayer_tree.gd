@@ -216,9 +216,7 @@ func _warn_if_role_unset() -> void:
 ## A joining peer whose tag differs is rejected during the auth handshake before
 ## it enters [method MultiplayerAPI.get_peers], so an incompatible build never
 ## corrupts the session. Bump it whenever the wire protocol breaks. Leave it
-## empty to disable the gate. This is build identity, not discovery, so it is
-## separate from [member LobbyDirectory.browser_filter_uid] which scopes which
-## lobbies are even visible.
+## empty to disable the gate.
 ## [codeblock]
 ## "" -> tag 0 -> any same-version peer admitted (gate off)
 ## "bomber-v2" -> only peers carrying "bomber-v2" admitted
@@ -232,9 +230,20 @@ func _warn_if_role_unset() -> void:
 @export_tool_button("Generate app id") var _generate_app_id := func() -> void:
 	app_id = _random_app_id()
 
-## Builds [ServerInfo] for [method BackendPeer.query_server_info].
+## Builds [ServerInfo] for [method BackendPeer.query_server_info]. When this
+## member is [code]null[/code], [AuthProbeResponder] creates a
+## [DefaultServerInfoSource] while answering a probe.
 ##
-## A [code]null[/code] value uses [DefaultServerInfoSource].
+## [DefaultServerInfoSource] derives live values from this tree.
+## [codeblock]
+##     func build_server_info(tree: MultiplayerTree) -> ServerInfo:
+##         var info := ServerInfo.new()
+##         info.players = tree.get_joined_players().size()
+##         info.app_id = tree.app_id
+##         return info
+## [/codeblock]
+## Read [ServerInfoSource] and [DefaultServerInfoSource] before assigning a
+## custom source.
 @export var server_info_source: ServerInfoSource:
 	set(value):
 		server_info_source = value
@@ -244,7 +253,20 @@ func _warn_if_role_unset() -> void:
 ## Server side [SpawnPolicy] for accepted joins.
 ##
 ## A [code]null[/code] value means [signal player_joined] is the gameplay
-## entry point.
+## entry point. If the tree has no [MultiplayerSceneManager] but does
+## have a child scene with a [SpawnerComponent], [method _enter_tree] creates a
+## [SpawnerComponentPolicy].
+## [codeblock]
+## # Client. Store spawn intent in JoinPayload.spawn.
+## payload.spawn = spawn_policy.to_dict()
+##
+## # Server. MultiplayerTree calls spawn after accepting the join.
+## var scene := await spawn_policy.spawn(rj, Netw.ctx(tree))
+## [/codeblock]
+## [method SpawnPolicy.to_dict] serializes client intent.
+## [method SpawnPolicy.spawn] reads [member ResolvedJoin.spawn] and returns
+## the [MultiplayerScene] that receives the player. Read [SpawnPolicy] and
+## [SpawnerComponentPolicy] before assigning a custom policy.
 @export var spawn_policy: SpawnPolicy
 
 @export_group("Debug")

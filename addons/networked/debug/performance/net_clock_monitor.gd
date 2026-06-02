@@ -55,7 +55,7 @@ func remove_relayed_clock(envelope: NetEnvelope) -> void:
 	
 	_latest_data.erase(category)
 	
-	for key in ["rtt", "rtt_avg", "jitter", "error", "offset", "target"]:
+	for key in ["rtt", "jitter", "error", "recommended_offset"]:
 		var id: StringName = category + "/" + key
 		if Performance.has_custom_monitor(id):
 			Performance.remove_custom_monitor(id)
@@ -103,9 +103,6 @@ func _ensure_monitors_registered(category: String) -> void:
 	_reg(prefix + "rtt", 
 			func(): return store.get("rtt_raw", 0.0), 
 			Performance.MONITOR_TYPE_TIME)
-	_reg(prefix + "rtt_avg", 
-			func(): return store.get("rtt_avg", 0.0), 
-			Performance.MONITOR_TYPE_TIME)
 	_reg(prefix + "jitter", 
 			func(): return store.get("rtt_jitter", 0.0), 
 			Performance.MONITOR_TYPE_TIME)
@@ -114,10 +111,7 @@ func _ensure_monitors_registered(category: String) -> void:
 	_reg(prefix + "error", 
 			func(): return store.get("diff", 0), 
 			Performance.MONITOR_TYPE_QUANTITY)
-	_reg(prefix + "offset", 
-			func(): return store.get("display_offset", 0), 
-			Performance.MONITOR_TYPE_QUANTITY)
-	_reg(prefix + "target", 
+	_reg(prefix + "recommended_offset", 
 			func(): return store.get("recommended_display_offset", 0), 
 			Performance.MONITOR_TYPE_QUANTITY)
 

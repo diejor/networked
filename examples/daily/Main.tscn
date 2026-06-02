@@ -18,9 +18,9 @@
 [sub_resource type="Resource" id="Resource_csjse"]
 script = ExtResource("2_7ue45")
 simulate_lag = true
-lag_min_delay = 0.05
-lag_max_delay = 0.2
-lag_packet_loss = 0.01
+one_way_delay_min = 5.0
+one_way_delay_max = 25.0
+lag_packet_loss_percent = 5.0
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_xoeqs"]
@@ -47,17 +47,18 @@ spawn = SubResource("Resource_k10si")
 [sub_resource type="Resource" id="Resource_k3bnk"]
 script = ExtResource("8_lpgch")
 simulate_lag = true
-lag_min_delay = 0.01
-lag_max_delay = 0.2
-lag_packet_loss = 0.01
+one_way_delay_max = 200.0
+lag_packet_loss_percent = 1.0
 metadata/_custom_type_script = "uid://dqd358q7xpmeq"
 
 [sub_resource type="Resource" id="Resource_xg3i6"]
 script = ExtResource("2_7ue45")
+one_way_delay_min = 100.0
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_7ehqo"]
 script = ExtResource("10_xg3i6")
+one_way_delay_min = 100.0
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [sub_resource type="Resource" id="Resource_2dmkd"]
