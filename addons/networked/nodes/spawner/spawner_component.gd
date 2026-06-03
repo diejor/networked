@@ -412,7 +412,7 @@ func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 
 # Public spawn/despawn API.
 
-## Server-only. Spawns a copy of [member Node.owner]'s scene under
+## Spawns a copy of [member Node.owner]'s scene under
 ## [param parent] (defaults to owner's parent).
 ## [param id] sets [member entity_id] on the copy.
 ##
@@ -423,6 +423,7 @@ func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 ##
 ## For richer pre-tree configuration, use [method instantiate_from]
 ## directly so you can wire the copy before tree entry.
+## [br][br][b]Server Only.[/b]
 func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	assert(
 		not multiplayer or multiplayer.is_server(),
@@ -437,7 +438,8 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	return copy
 
 
-## Server-only. Instantiates a player copy from [param rj].
+## Instantiates a player copy from [param rj].
+## [br][br][b]Server Only.[/b]
 func instantiate_player(rj: ResolvedJoin) -> Node:
 	assert(multiplayer.is_server())
 	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
@@ -446,14 +448,16 @@ func instantiate_player(rj: ResolvedJoin) -> Node:
 	return copy
 
 
-## Server-only. Spawns a player copy into [param scene] from [param rj].
+## Spawns a player copy into [param scene] from [param rj].
+## [br][br][b]Server Only.[/b]
 func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
+	assert(multiplayer.is_server(), "spawn_player is server-only")
 	var copy := instantiate_player(rj)
 	scene.add_player(copy)
 	return copy
 
 
-## Server-only. Frees [member Node.owner] after emitting
+## Frees [member Node.owner] after emitting
 ## [signal despawning] and flushing the [SaveComponent].
 ##
 ## [codeblock]
@@ -465,6 +469,7 @@ func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
 ## opts.flush_save = false
 ## spawner.despawn(opts)
 ## [/codeblock]
+## [br][br][b]Server Only.[/b]
 func despawn(opts: DespawnOpts = null) -> void:
 	assert(multiplayer.is_server(), "despawn is server-only")
 	if opts == null:

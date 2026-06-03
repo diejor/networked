@@ -185,7 +185,8 @@ func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 
 ## Pauses the game on every peer via [code]get_tree().paused = true[/code].
 ##
-## [b]Server-only.[/b] The pause is sent to each connected peer individually.
+## The pause is sent to each connected peer individually.
+## [br][br][b]Server Only.[/b]
 func pause(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -198,7 +199,7 @@ func pause(reason: String = "") -> void:
 
 ## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
 ##
-## [b]Server-only.[/b]
+## [br][br][b]Server Only.[/b]
 func unpause() -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -211,8 +212,9 @@ func unpause() -> void:
 
 ## Disconnects [param peer_id] from the session.
 ##
-## [b]Server-only.[/b] If [param reason] is non-empty, the peer receives
-## [signal kicked] before the connection is closed.
+## If [param reason] is non-empty, the peer receives [signal kicked] before
+## the connection is closed.
+## [br][br][b]Server Only.[/b]
 func kick(peer_id: int, reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -226,7 +228,8 @@ func kick(peer_id: int, reason: String = "") -> void:
 
 ## Asks the server to kick [param peer_id].
 ##
-## [b]Client-only.[/b]
+## The server emits [signal kick_requested] and decides whether to honor it.
+## [br][br][b]Player request.[/b]
 func request_kick(peer_id: int, reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -245,7 +248,8 @@ func disconnect_player() -> void:
 
 ## Asks the server for permission to disconnect.
 ##
-## [b]Client-only.[/b]
+## The server decides whether to honor it.
+## [br][br][b]Player request.[/b]
 func request_disconnect(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -255,12 +259,16 @@ func request_disconnect(reason: String = "") -> void:
 
 ## Notifies all clients that the server is shutting down.
 ##
-## [b]Server-only.[/b] Clients receive [signal server_disconnecting].
+## Clients receive [signal server_disconnecting].
+## [br][br][b]Server Only.[/b]
 func notify_disconnect(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return
-	assert(mt.is_server, "NetwTree.notify_disconnect() must be called on the server.")
+	assert(
+		mt.is_server,
+		"NetwTree.notify_disconnect() must be called on the server."
+	)
 	for peer_id: int in mt.multiplayer_api.get_peers():
 		mt._rpc_receive_notify_disconnect.rpc_id(peer_id, reason)
 	mt._rpc_receive_notify_disconnect.rpc_id(1, reason)

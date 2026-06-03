@@ -34,10 +34,10 @@ extends Resource
 ## [/codeblock]
 
 
-## Server-only. Spawns the player for the accepted join [param rj] and returns
+## Spawns the player for the accepted join [param rj] and returns
 ## the [MultiplayerScene] they entered, or [code]null[/code]. The tree emits
 ## [signal MultiplayerTree.player_scene_ready] with that scene.
-## [br][br]
+##
 ## Read the client's spawn intent from [member ResolvedJoin.spawn] and reach
 ## scene services through [param ctx].
 ## [codeblock]
@@ -48,6 +48,7 @@ extends Resource
 ##     # ...add the player to scene at point...
 ##     return scene
 ## [/codeblock]
+## [br][br][b]Server Only.[/b]
 @abstract
 func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene
 

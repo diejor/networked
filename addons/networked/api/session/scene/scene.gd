@@ -46,7 +46,8 @@ signal suspend_requested(peer_id: int, reason: String)
 # Countdown signals
 # ---------------------------------------------------------------------------
 
-## Emitted on clients when the server starts a countdown (via [method start_countdown]).
+## Emitted on clients when the server starts a countdown via
+## [method start_countdown].
 ## Use this to initialise client-side UI before the first tick arrives.
 signal countdown_started(seconds: int)
 ## Emitted each second on all peers with the remaining second count.
@@ -177,7 +178,8 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 	return null
 
 
-## Suspends until at least [param n] players are present. Safe to [operator await].
+## Suspends until at least [param n] players are present.
+## Safe to [operator await].
 func wait_for_players(n: int) -> void:
 	while get_player_count() < n:
 		await player_entered
@@ -222,9 +224,10 @@ func close() -> void:
 
 ## Broadcasts a soft-suspend notification to scene peers.
 ##
-## [b]Server-only.[/b] Does [b]not[/b] touch [code]get_tree().paused[/code] -
-## each peer receives [signal suspended] and game code decides the response
+## Does [b]not[/b] touch [code]get_tree().paused[/code]. Each peer
+## receives [signal suspended] and game code decides the response
 ## (show a banner, lock input, wait for a cutscene, ...).
+## [br][br][b]Server Only.[/b]
 func suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
@@ -240,8 +243,8 @@ func suspend(reason: String = "") -> void:
 
 ## Asks the server to suspend the scene.
 ##
-## [b]Client-only.[/b] The server emits [signal suspend_requested]; game code
-## decides whether to honour it.
+## The server emits [signal suspend_requested] and decides whether to honor it.
+## [br][br][b]Player request.[/b]
 func request_suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
@@ -251,8 +254,8 @@ func request_suspend(reason: String = "") -> void:
 
 ## Broadcasts a resume notification to scene peers.
 ##
-## [b]Server-only.[/b] Mirrors [method suspend] - does not touch
-## [code]get_tree().paused[/code].
+## Mirrors [method suspend]. Does not touch [code]get_tree().paused[/code].
+## [br][br][b]Server Only.[/b]
 func resume() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
@@ -272,11 +275,12 @@ func resume() -> void:
 
 ## Starts a server-driven countdown of [param seconds] seconds.
 ##
-## [b]Server-only.[/b] Returns a [NetwSceneCountdown] you can [code]await[/code].
-## Clients receive [signal countdown_started] followed by [signal countdown_tick]
-## each second, and finally [signal countdown_finished] (or
-## [signal countdown_cancelled] if [method cancel_countdown] is called first).
-## Any previously running countdown is cancelled automatically.
+## Returns a [NetwSceneCountdown] you can [code]await[/code]. Clients receive
+## [signal countdown_started] followed by [signal countdown_tick] each second,
+## and finally [signal countdown_finished] (or [signal countdown_cancelled] if
+## [method cancel_countdown] is called first). Any previously running
+## countdown is cancelled automatically.
+## [br][br][b]Server Only.[/b]
 func start_countdown(seconds: int) -> NetwSceneCountdown:
 	assert(seconds > 0, "NetwScene.start_countdown(): seconds must be > 0.")
 	var scene := _scene_ref.get_ref() as MultiplayerScene
@@ -307,8 +311,14 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 
 ## Cancels the currently running countdown, if any.
 ##
-## [b]Server-only.[/b] Emits [signal countdown_cancelled] on all peers.
+## Emits [signal countdown_cancelled] on all peers.
+## [br][br][b]Server Only.[/b]
 func cancel_countdown() -> void:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if not is_instance_valid(scene):
+		return
+	assert(scene.multiplayer.is_server(),
+		"NetwScene.cancel_countdown() must be called on the server.")
 	if _active_countdown and _active_countdown.is_running():
 		_active_countdown.cancel()
 	_active_countdown = null

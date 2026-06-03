@@ -164,8 +164,8 @@ func has_viewer(peer_id: int) -> bool:
 	return viewers.has(peer_id)
 
 
-## Enrolls [param entity] in this layer. Idempotent. Server-only;
-## a no-op on clients.
+## Enrolls [param entity] in this layer. Idempotent. Server authoritative.
+## Returns [code]false[/code] on clients.
 ##
 ## [param entity] must be non-null and own a live root node.
 func add_entity(entity: NetwEntity) -> bool:
@@ -185,8 +185,8 @@ func add_entity(entity: NetwEntity) -> bool:
 	return true
 
 
-## Removes [param entity] from this layer. Emits exits first.
-## Server-only; a no-op on clients.
+## Removes [param entity] from this layer. Emits exits first. Server
+## authoritative. Returns [code]false[/code] on clients.
 ##
 ## [param entity] must be non-null; passing an unknown entity is a
 ## no-op for idempotent teardown.
