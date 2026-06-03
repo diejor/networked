@@ -37,10 +37,8 @@ static func get_synchronizers(
 	var filtered_syncs: Array[MultiplayerSynchronizer] = []
 	filtered_syncs.assign(
 		synchronizers.filter(
-			func(
-					sync: MultiplayerSynchronizer,
-			) -> bool:
-				return _sync_targets(sync, target_node)
+			func(sync: MultiplayerSynchronizer) -> bool:
+		return _sync_targets(sync, target_node)
 		),
 	)
 
