@@ -84,13 +84,14 @@ jobs:
           # script parse error, a missing template, an unresolved class) dies
           # before savepack, fails both checks, and correctly fails the job.
           #
-          # No `set -o pipefail`: the step runs under `bash -e`, and pipefail
-          # would let the failing `godot | tee` pipe abort the step before the
-          # check below. Without it the pipe exits via tee (0), and PIPESTATUS[0]
-          # still carries Godot's real exit code.
+          # Kept POSIX-sh clean: this container runs the step under /bin/sh
+          # (dash), not bash, so no `${PIPESTATUS[@]}` or `[[ ]]`. We redirect to
+          # the log instead of piping, and `|| status=$?` both captures Godot's
+          # real exit code and stops `set -e` from aborting on the crash.
+          status=0
           godot --headless --verbose --export-release \
-            "Web" "$EXPORT_DIR/web/index.html" 2>&1 | tee export.log
-          status=${PIPESTATUS[0]}
+            "Web" "$EXPORT_DIR/web/index.html" > export.log 2>&1 || status=$?
+          cat export.log
 
           if [ "$status" -ne 0 ]; then
             if grep -q '\[ DONE \] savepack' export.log \
