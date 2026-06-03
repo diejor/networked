@@ -6,10 +6,8 @@
 extends EditorPlugin
 
 const DEBUG_REPORTER_PATH = "res://addons/networked/debug/core/bootstrap.gd"
-const SCENE_NODE_PATH_PLUGIN_PATH = \
-		"res://addons/networked/addons/scene_node_path/plugin.gd"
-const NETW_LOG_EDITOR_PATH = \
-		"res://addons/networked/debug/editor/log_panel/log_editor.gd"
+const SCENE_NODE_PATH_PLUGIN_PATH = "res://addons/networked/addons/scene_node_path/plugin.gd"
+const NETW_LOG_EDITOR_PATH = "res://addons/networked/debug/editor/log_panel/log_editor.gd"
 const DEBUGGER_PLUGIN_PATH = "res://addons/networked/debug/editor/plugin.gd"
 
 ## Reference to the SceneNodePath editor plugin instance.
