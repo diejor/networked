@@ -306,7 +306,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 	var newest_tick := -1
 
 	for state in _states:
-		if not state.history.has_tick_after(effective_dt):
+		if state.history.is_empty() or not state.history.has_tick_after(effective_dt):
 			is_starving = true
 			newest_tick = state.history.newest_tick()
 			break
