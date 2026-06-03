@@ -70,12 +70,12 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 		return
 	var scene_tree := tree.get_tree()
 	if scene_tree and tree.backend is WebRTCBackend:
-		# Detach the multiplayer peer before resetting the SCTP streams so
-		# api.poll() stops writing the join handshake's trailing reliable RPCs
-		# to channels we are closing. backend.poll() keeps running during the
-		# drain so the stream reset handshake flushes before the peer is freed.
-		if tree.api and tree.api.has_multiplayer_peer():
-			tree.api.multiplayer_peer = null
+		# Let the join handshake's trailing reliable RPCs flush over open
+		# channels before resetting the SCTP streams. Closing first leaves
+		# api.poll() dispatching request_join_player into a closed channel
+		# whenever the host has not finished the handshake yet, which is the
+		# slow-machine ordering CI hits.
+		await NetwTestSuite.drain_frames(scene_tree, 8)
 		(tree.backend as WebRTCBackend).close_channels()
 		await NetwTestSuite.drain_frames(scene_tree)
 	tree.queue_free()
