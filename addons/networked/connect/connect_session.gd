@@ -487,6 +487,36 @@ func abort_join() -> void:
 		join_aborted_flag = true
 		tree.abort_join()
 
+# -- Backend templates ------------------------------------------------------
+
+
+## Returns the [param templates] whose backend can run on this platform.
+##
+## Add and join offer only transports that [method BackendPeer.is_available]
+## here.
+static func available_templates(
+		templates: Array[BackendPeer],
+) -> Array[BackendPeer]:
+	var out: Array[BackendPeer] = []
+	for backend in templates:
+		if backend != null and backend.is_available():
+			out.append(backend)
+	return out
+
+
+## Returns the [param templates] whose backend can also host on this platform.
+##
+## The Host form drops a transport that connects but cannot
+## [method BackendPeer.can_host] here, such as WebSocket on the web.
+static func hostable_templates(
+		templates: Array[BackendPeer],
+) -> Array[BackendPeer]:
+	var out: Array[BackendPeer] = []
+	for backend in available_templates(templates):
+		if backend.can_host():
+			out.append(backend)
+	return out
+
 # -- Internals --------------------------------------------------------------
 
 

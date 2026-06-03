@@ -239,16 +239,6 @@ func _unbind_session_signals() -> void:
 		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
 
 
-# Templates whose backend can run on this platform. Host and join offer only
-# transports that can actually connect from here.
-func _available_templates() -> Array[BackendPeer]:
-	var out: Array[BackendPeer] = []
-	for backend in backend_templates:
-		if backend != null and backend.is_available():
-			out.append(backend)
-	return out
-
-
 func _rebuild_from_session() -> void:
 	for child in _list_box.get_children():
 		child.queue_free()
@@ -418,13 +408,13 @@ func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 
 
 func _on_add_pressed() -> void:
-	_add_popup.set_templates(_available_templates())
+	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
 	_add_popup.open_add()
 
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		_available_templates(),
+		ConnectSession.available_templates(backend_templates),
 		spawner_options,
 		_last_username,
 	)
@@ -439,7 +429,7 @@ func _on_host_pressed() -> void:
 	if _connect == null:
 		return
 	_host_popup.open_host(
-		_available_templates(),
+		ConnectSession.hostable_templates(backend_templates),
 		spawner_options,
 		_last_username,
 	)
@@ -459,7 +449,7 @@ func _open_edit_for_selected() -> void:
 	)
 	if not is_saved:
 		return
-	_add_popup.set_templates(_available_templates())
+	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
 	_add_popup.open_edit(_selected_row.target)
 
 

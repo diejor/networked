@@ -108,6 +108,12 @@ func build_url(server_address: String) -> String:
 	return "wss://" + server_address
 
 
+## Implements [method BackendPeer.can_host]. Browsers cannot open a listening
+## socket, so a web client can join but not host.
+func can_host() -> bool:
+	return not OS.has_feature("web")
+
+
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebSocket"

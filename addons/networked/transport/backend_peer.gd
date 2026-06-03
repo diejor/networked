@@ -210,6 +210,23 @@ func is_available() -> bool:
 	return true
 
 
+## Returns [code]true[/code] when this backend can host a session on the current
+## platform.
+##
+## Hosting is narrower than [method is_available]. A web client joins a
+## [WebSocketBackend] server fine but cannot open a listening socket to host one,
+## so it is available yet cannot host. The browser hides a backend that cannot
+## host here from the Host form. This is distinct from
+## [method supports_embedded_server], which routes
+## [method MultiplayerTree.join_or_host] between probing and direct hosting.
+## [codeblock]
+## func can_host() -> bool:
+##     return not OS.has_feature("web")
+## [/codeblock]
+func can_host() -> bool:
+	return true
+
+
 ## Looks up [ServerInfo] for [param _address] without joining the server.
 ##
 ## The default result is [method ServerInfoResult.unsupported]. Backends with a
