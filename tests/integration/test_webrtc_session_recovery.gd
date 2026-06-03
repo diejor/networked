@@ -1,4 +1,5 @@
-## Proves [WebRTCSession] tolerates out-of-order ICE and recovers a stalled join.
+## Proves [WebRTCSession] tolerates out of order ICE and recovers a stalled
+## join.
 ##
 ## Two raw sessions handshake over loopback ICE through a hand-wired relay the
 ## test perturbs: one case delivers candidates before the answer that anchors
@@ -26,6 +27,17 @@ func _pump_until(
 		on_frame.call(frame)
 		frame += 1
 		await get_tree().process_frame
+
+
+func _pump_frames(
+		host: WebRTCSession,
+		client: WebRTCSession,
+		frames: int = 3,
+) -> void:
+	for i in frames:
+		host.poll(0.016)
+		client.poll(0.016)
+		await NetwTestSuite.drain_frames(get_tree(), 1)
 
 
 func test_candidate_before_description_still_connects() -> void:
@@ -77,6 +89,9 @@ func test_candidate_before_description_still_connects() -> void:
 	await _pump_until(host, client, connected, release)
 
 	assert_bool(connected[0]).is_true()
+	host.close_channels()
+	client.close_channels()
+	await _pump_frames(host, client)
 	host.close()
 	client.close()
 
@@ -126,5 +141,8 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 
 	assert_bool(dropped[0]).is_true()
 	assert_bool(connected[0]).is_true()
+	host.close_channels()
+	client.close_channels()
+	await _pump_frames(host, client)
 	host.close()
 	client.close()

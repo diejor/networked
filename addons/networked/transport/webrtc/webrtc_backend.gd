@@ -1,4 +1,5 @@
-## [BackendPeer] base for WebRTC rooms, signaling held behind a [WebRTCSignaler].
+## [BackendPeer] base for WebRTC rooms, signaling held behind a
+## [WebRTCSignaler].
 ##
 ## This base owns the [WebRTCSession] and wires it to a signaler a subclass
 ## supplies through [method _make_signaler], so the WebRTC peer machinery is
@@ -52,7 +53,8 @@ signal room_created(room_id: String)
 ]
 
 ## Seconds a joining client waits for the native link before re-offering to the
-## host with a fresh rendezvous, forwarded to [member WebRTCSession.connect_retry].
+## host with a fresh rendezvous, forwarded to
+## [member WebRTCSession.connect_retry].
 @export_range(0.5, 30.0, 0.1, "suffix:s") var connect_retry: float = 4.0
 
 ## Offer attempts a joining client makes before it leaves failure to the connect
@@ -123,6 +125,15 @@ func poll(dt: float) -> void:
 		_session.poll(dt)
 	if _signaler:
 		_signaler.poll(dt)
+
+
+## Starts closing active [WebRTCDataChannel]s before peer teardown.
+##
+## Callers that can yield should poll or await a few frames after this method
+## before freeing the tree or calling [method peer_reset_state].
+func close_channels() -> void:
+	if _session:
+		_session.close_channels()
 
 
 func _build_session_and_signaler() -> void:

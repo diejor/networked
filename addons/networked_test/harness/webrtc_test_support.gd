@@ -32,7 +32,11 @@ static func start_host(parent: Node) -> Dictionary:
 		push_error("WebRTCTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
 		return {}
-	return { tree = tree, backend = tree.backend, room = tree.backend.get_join_address() }
+	return {
+		tree = tree,
+		backend = tree.backend,
+		room = tree.backend.get_join_address(),
+	}
 
 
 ## Builds an offline client [MultiplayerTree] wired with a paired WebRTC
@@ -49,7 +53,10 @@ static func make_client_tree(
 
 
 ## Builds a [JoinTarget] pointing [param client] at [param room].
-static func make_join_target(client: MultiplayerTree, room: String) -> JoinTarget:
+static func make_join_target(
+		client: MultiplayerTree,
+		room: String,
+) -> JoinTarget:
 	var target := JoinTarget.new()
 	target.backend = client.backend
 	target.address = room
@@ -62,6 +69,9 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()
+	if scene_tree and tree.backend is WebRTCBackend:
+		(tree.backend as WebRTCBackend).close_channels()
+		await NetwTestSuite.drain_frames(scene_tree)
 	tree.queue_free()
 	if scene_tree:
 		for i in 3:

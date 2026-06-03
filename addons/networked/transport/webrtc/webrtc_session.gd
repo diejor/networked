@@ -143,12 +143,25 @@ func has_peer(multiplayer_id: int) -> bool:
 ## A completed attempt with [code]relay == 0[/code] points at an unreachable
 ## TURN relay rather than a signaling fault.
 func candidate_summary(multiplayer_id: int) -> Dictionary:
-	return (_candidate_stats.get(multiplayer_id, _empty_stats()) as Dictionary).duplicate()
+	var stats := _candidate_stats.get(multiplayer_id, _empty_stats())
+	return (stats as Dictionary).duplicate()
+
+
+## Starts closing active [WebRTCDataChannel]s before [method close].
+##
+## Callers that can yield should poll or await a few frames after this method
+## so the SCTP stream reset handshake can flush before the peer is released.
+func close_channels() -> void:
+	if webrtc_peer == null:
+		return
+	for peer_info in webrtc_peer.get_peers().values():
+		_close_peer_channels(peer_info)
 
 
 ## Closes the peer and clears per-remote address state.
 func close() -> void:
 	if webrtc_peer:
+		close_channels()
 		webrtc_peer.close()
 	webrtc_peer = null
 	_signaler_ids.clear()
@@ -298,6 +311,14 @@ func _flush_pending_candidates(multiplayer_id: int) -> void:
 	queue.clear()
 
 
+func _close_peer_channels(peer_info: Dictionary) -> void:
+	var channels: Array = peer_info.get("channels", [])
+	for item in channels:
+		var channel := item as WebRTCDataChannel
+		if channel and channel.get_ready_state() < WebRTCDataChannel.STATE_CLOSING:
+			channel.close()
+
+
 func _add_candidate(multiplayer_id: int, payload: Dictionary) -> void:
 	_connection(multiplayer_id).add_ice_candidate(
 		payload.get("sdpMid", ""),
@@ -356,8 +377,7 @@ func _on_peer_disconnected(multiplayer_id: int) -> void:
 	native_disconnected.emit(multiplayer_id)
 
 
-# Tallies a gathered candidate by ICE type so a failed attempt can be classed
-# as a TURN/STUN problem (no relay) or a swarm/signaling problem (relay present).
+# Tallies a gathered candidate by ICE type so failed attempts can be classed.
 func _account_candidate(multiplayer_id: int, candidate: String) -> void:
 	var stats: Dictionary = _candidate_stats.get(multiplayer_id, _empty_stats())
 	if " typ relay" in candidate:
