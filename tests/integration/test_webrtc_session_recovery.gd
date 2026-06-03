@@ -28,19 +28,6 @@ func _pump_until(
 		await get_tree().process_frame
 
 
-# Clears the optional native SCTP reset emitted while replacing a stale peer.
-func _clear_optional_sctp_reset_error() -> void:
-	var monitor := GdUnitThreadManager.get_current_context() \
-			.get_execution_context().error_monitor
-	var entries: Array[ErrorLogEntry] = await monitor.scan(true)
-	for entry: ErrorLogEntry in entries.duplicate():
-		if entry._type != ErrorLogEntry.TYPE.SCRIPT_ERROR:
-			continue
-		if "SctpTransport::sendReset" in entry._message \
-				and "errno=2" in entry._message:
-			monitor.erase_log_entry(entry)
-
-
 func test_candidate_before_description_still_connects() -> void:
 	var host := WebRTCSession.new()
 	host.ice_servers = []
@@ -136,7 +123,6 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 	client.create_client(_CLIENT_ID)
 
 	await _pump_until(host, client, connected, func(_f: int) -> void: pass)
-	await _clear_optional_sctp_reset_error()
 
 	assert_bool(dropped[0]).is_true()
 	assert_bool(connected[0]).is_true()
