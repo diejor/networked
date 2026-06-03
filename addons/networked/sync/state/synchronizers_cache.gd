@@ -34,13 +34,10 @@ static func get_synchronizers(
 
 	synchronizers.assign(target_node.find_children("*", "MultiplayerSynchronizer"))
 
-	var filtered_syncs: Array[MultiplayerSynchronizer] = []
-	filtered_syncs.assign(
-		synchronizers.filter(
-			func(sync: MultiplayerSynchronizer) -> bool:
+	var filter := func(sync: MultiplayerSynchronizer) -> bool:
 		return _sync_targets(sync, target_node)
-		),
-	)
+	var filtered_syncs: Array[MultiplayerSynchronizer] = []
+	filtered_syncs.assign(synchronizers.filter(filter))
 
 	var result: Array[MultiplayerSynchronizer] = []
 	result.assign(filtered_syncs)
