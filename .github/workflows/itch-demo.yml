@@ -58,6 +58,13 @@ jobs:
             project.godot
           grep 'run/main_scene="uid://3a3852p4fypv"' project.godot
 
+      - name: Disable editor plugins for export
+        run: |
+          sed -i \
+            's#^enabled=PackedStringArray.*#enabled=PackedStringArray()#' \
+            project.godot
+          grep 'enabled=PackedStringArray()' project.godot
+
       - name: Import resources
         run: godot --headless --import || true
 
