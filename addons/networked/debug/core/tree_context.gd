@@ -27,15 +27,15 @@ var local_player: Node:
 var _mt_ref: WeakRef
 var _reporter_ref: WeakRef
 
-## Visualizer state.
-## [br][br]
-## [b]Key:[/b] [code]viz_name[/code] ([String])
-## [br][br]
-## [b]Value:[/b] [Dictionary] mapping [code]"stable_id"[/code] ([int] PeerID or
-## [String] Path) to [bool].
-## [br][br]
-## A key of [code]""[/code] in the inner dictionary represents the tree-wide
-## default.
+## Visualizer state, represented as a [Dictionary] mapping each visualizer to
+## its states:
+## [codeblock]
+## Dictionary
+##  ┖╴viz_name (String)
+##     ┖╴{ }
+##        ┠╴stable_id (int PeerID or String Path) (bool)
+##        ┖╴"" (bool)                      # tree-wide default
+## [/codeblock]
 var _visualizers: Dictionary = {}
 
 ## Scene -> [CheckpointToken] captured from the [code]scene_spawn[/code] span,

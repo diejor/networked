@@ -426,15 +426,18 @@ class StateInspector:
 	func get_base_scene_state() -> SceneState:
 		return _state.get_base_scene_state() if _state else null
 
-	## Returns an [Array] of [Dictionary] items representing all signal connections originating from this node.
-	## [br][br]
-	## Each dictionary contains the following keys:
-	## [br]- [code]"signal"[/code]: The [StringName] of the signal.
-	## [br]- [code]"method"[/code]: The [StringName] of the connected method.
-	## [br]- [code]"target"[/code]: The [NodePath] to the receiving node.
-	## [br]- [code]"binds"[/code]: An [Array] of bound parameters.
-	## [br]- [code]"unbinds"[/code]: An [code]int[/code] representing the number of unbound parameters.
-	## [br]- [code]"flags"[/code]: An [code]int[/code] representing the connection flags (see [enum Object.ConnectFlags]).
+	## Returns an [Array] of [Dictionary] items representing all signal
+	## connections originating from this node:
+	## [codeblock]
+	## Array[Dictionary]
+	##  ┖╴{ }
+	##     ┠╴signal (StringName)               # The signal name
+	##     ┠╴method (StringName)               # The connected method name
+	##     ┠╴target (NodePath)                 # Path to the receiving node
+	##     ┠╴binds (Array)                     # Bound parameters
+	##     ┠╴unbinds (int)                     # Number of unbound parameters
+	##     ┖╴flags (int)                       # Connection flags (ConnectFlags)
+	## [/codeblock]
 	## [codeblock]
 	## for connection in path.peek().get_connections():
 	##     print("Signal: %s -> Method: %s" % [connection.signal, connection.method])

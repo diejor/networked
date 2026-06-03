@@ -27,9 +27,21 @@ signal session_cleared()
 var plugin: EditorDebuggerPlugin
 var session_id: int
 
-## Peer registry: [code]peer_key[/code] -> [Dictionary]
-## [br][br]
-## [code]peer_key[/code] = [code]"source_path|reporter_id"[/code] - guaranteed unique across processes.
+## Peer registry mapping [code]peer_key[/code] to peer info:
+## [codeblock]
+## Dictionary
+##  ┖╴peer_key (String)                    # format: "source_path|reporter_id"
+##     ┖╴{ }
+##        ┠╴username (String)
+##        ┠╴tree_name (String)
+##        ┠╴display_name (String)
+##        ┠╴is_server (bool)
+##        ┠╴backend_class (String)
+##        ┠╴online (bool)
+##        ┠╴color (Color)
+##        ┠╴peer_id (int)
+##        ┖╴is_remote (bool)
+## [/codeblock]
 var _peers: Dictionary[String, Dictionary] = {}
 
 ## All adapters: [code]adapter_key[/code] -> [PanelDataAdapter] instance.

@@ -32,12 +32,11 @@ static func expected_sync_count(node: Node) -> int:
 ## [br][br]
 ## Returns a [Dictionary]:
 ## [codeblock]
-## {
-##   "ok":           bool,           # true only when all checks pass
-##   "errors":       Array[String],  # human-readable descriptions of failures
-##   "live_count":   int,            # synchronizers found by fresh traversal
-##   "expected_min": int,            # minimum expected count
-## }
+## Dictionary
+##  ┠╴ok (bool)                            # true only when all checks pass
+##  ┠╴errors (Array[String])               # list of failure descriptions
+##  ┠╴live_count (int)                     # live synchronizer count
+##  ┖╴expected_min (int)                   # minimum expected count
 ## [/codeblock]
 static func validate_node(node: Node) -> Dictionary:
 	var errors: Array[String] = []
@@ -85,13 +84,12 @@ static func validate_node(node: Node) -> Dictionary:
 ## [br][br]
 ## Returns a [Dictionary]:
 ## [codeblock]
-## {
-##   "match":        bool,           # true when cached and live sets match
-##   "cached_count": int,
-##   "live_count":   int,
-##   "only_in_cache": Array[String], # names in cache but not in live
-##   "only_in_live":  Array[String], # names in live but not in cache
-## }
+## Dictionary
+##  ┠╴match (bool)                         # true if cached & live sets match
+##  ┠╴cached_count (int)
+##  ┠╴live_count (int)
+##  ┠╴only_in_cache (Array[String])        # names in cache but not in live
+##  ┖╴only_in_live (Array[String])         # names in live but not in cache
 ## [/codeblock]
 static func cache_diff(node: Node) -> Dictionary:
 	var cached_names: Array[String] = []
