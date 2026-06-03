@@ -82,6 +82,26 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	if scene_tree:
 		for i in 3:
 			await scene_tree.process_frame
+	await clear_optional_sctp_reset_error()
+
+
+## Drops the benign native SCTP reset gdUnit would otherwise report as a
+## failure.
+##
+## Tearing down a connected native [WebRTCSession], either when the retry path
+## replaces a stale peer or on close, makes libdatachannel log
+## [code]SctpTransport::sendReset ... errno=2[/code] on Linux. That is a
+## harmless [code]ENOENT[/code] on an already-gone stream, but
+## [code]report/godot/push_error[/code] turns it into a failure. Call this right
+## after WebRTC teardown to erase just that entry from the gdUnit error monitor.
+static func clear_optional_sctp_reset_error() -> void:
+	var monitor := GdUnitThreadManager.get_current_context() \
+			.get_execution_context().error_monitor
+	var entries: Array[ErrorLogEntry] = await monitor.scan(true)
+	for entry: ErrorLogEntry in entries.duplicate():
+		if "SctpTransport::sendReset" in entry._message \
+				and "errno=2" in entry._message:
+			monitor.erase_log_entry(entry)
 
 
 # Offline ice_servers keep the loopback handshake from reaching the network.

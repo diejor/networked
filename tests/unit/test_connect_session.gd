@@ -3,8 +3,10 @@
 ## emission. Network-dependent paths (host / join success) live in
 ## integration tests; here we cover what's reachable without a real
 ## MultiplayerTree or backend.
+@tool
 class_name TestConnectSession
 extends NetwTestSuite
+
 
 class _UnavailableBackend:
 	extends BackendPeer
