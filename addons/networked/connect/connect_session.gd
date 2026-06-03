@@ -537,6 +537,15 @@ func _apply_host_config(
 func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 	if result != null and result.is_ok() and result.info != null \
 			and _local_app_id() != String(result.info.app_id):
+		Netw.dbg.debug(
+			"ConnectSession probe incompatible for %s: local app_id='%s' "
+			+ "remote app_id='%s'.",
+			[
+				_target_summary(target),
+				_local_app_id(),
+				String(result.info.app_id),
+			],
+		)
 		result = ServerInfoResult.incompatible(result.info)
 	_results[target] = result
 	Netw.dbg.debug(
@@ -556,6 +565,11 @@ func _local_app_id() -> String:
 # reject. An empty tag on either side means the gate is off, so it stays OK.
 func _classify_discovered(info: ServerInfo) -> ServerInfoResult:
 	if _local_app_id() != String(info.app_id):
+		Netw.dbg.debug(
+			"ConnectSession discovered incompatible lobby: local app_id='%s' "
+			+ "remote app_id='%s'.",
+			[_local_app_id(), String(info.app_id)],
+		)
 		return ServerInfoResult.incompatible(info)
 	return ServerInfoResult.ok(info, -1)
 

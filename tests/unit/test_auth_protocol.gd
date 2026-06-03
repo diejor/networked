@@ -37,6 +37,7 @@ func test_hello_round_trip_with_payload() -> void:
 
 	assert_that(decoded.ok).is_true()
 	assert_that(decoded.version).is_equal(AuthProtocol.PROTOCOL_VERSION)
+	assert_that(decoded.app_tag).is_equal(0)
 	assert_that(decoded.flags).is_equal(0x42)
 	assert_that(decoded.provider_payload).is_equal(provider_payload)
 
@@ -47,6 +48,7 @@ func test_hello_round_trip_with_matching_app_tag() -> void:
 	var decoded := AuthProtocol.decode_client_hello(packet, 0xABCDEF12)
 
 	assert_that(decoded.ok).is_true()
+	assert_that(decoded.app_tag).is_equal(0xABCDEF12)
 	assert_that(decoded.provider_payload).is_equal(provider_payload)
 
 
@@ -56,6 +58,7 @@ func test_decode_rejects_app_tag_mismatch() -> void:
 
 	assert_that(decoded.ok).is_false()
 	assert_that(decoded.reason).is_equal("app")
+	assert_that(decoded.app_tag).is_equal(0x11111111)
 
 
 func test_decode_default_zero_tag_round_trip() -> void:

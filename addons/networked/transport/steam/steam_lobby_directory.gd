@@ -187,6 +187,10 @@ func list_lobbies() -> void:
 		lobby_list_updated.emit([] as Array[LobbyInfo])
 		return
 	_pending_list = true
+	Netw.dbg.debug(
+		"SteamLobbyDirectory: browsing lobbies with local app_id='%s'.",
+		[_local_app_id()],
+	)
 	if not browser_filter_uid.is_empty():
 		_wrapper.add_request_lobby_list_string_filter(
 			"uid",
@@ -364,6 +368,10 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 	_wrapper.set_lobby_data(lobby_id, "host", _wrapper.get_persona_name())
 	_wrapper.set_lobby_data(lobby_id, "players", "1")
 	_wrapper.set_lobby_data(lobby_id, "max", str(max_clients))
+	Netw.dbg.debug(
+		"SteamLobbyDirectory: advertising lobby %d with app_id='%s'.",
+		[lobby_id, _local_app_id()],
+	)
 
 	var peer := _build_peer()
 	if peer == null:
@@ -453,6 +461,10 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				"uid": _wrapper.get_lobby_data(id, "uid"),
 				"app_id": _wrapper.get_lobby_data(id, "app_id"),
 			},
+		)
+		Netw.dbg.debug(
+			"SteamLobbyDirectory: discovered lobby %d with app_id='%s'.",
+			[id, String(info.metadata.get("app_id", ""))],
 		)
 		out.append(info)
 	lobby_list_updated.emit(out)

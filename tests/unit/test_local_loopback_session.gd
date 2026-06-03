@@ -96,8 +96,10 @@ func test_closed_client_does_not_block_new_client() -> void:
 func test_reset_clears_server_and_all_clients() -> void:
 	session.create_client_peer()
 	session.create_client_peer()
+	session.server_app_id = &"test-app"
 	session.reset()
 	assert_that(session.server_peer).is_null()
+	assert_that(session.server_app_id).is_equal(&"")
 	assert_that(session.client_peers).is_empty()
 
 
@@ -121,6 +123,7 @@ func test_get_client_peer_delegates_to_create() -> void:
 func test_backend_query_reports_live_server() -> void:
 	session.get_server_peer()
 	session.create_client_peer()
+	session.server_app_id = &"test-app"
 	var backend := LocalLoopbackBackend.new()
 	backend.session = session
 
@@ -130,6 +133,7 @@ func test_backend_query_reports_live_server() -> void:
 	assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
 	assert_that(result.info.is_local_listener).is_true()
 	assert_that(result.info.players).is_equal(1)
+	assert_that(result.info.app_id).is_equal(&"test-app")
 
 
 func test_backend_query_without_live_server_is_unsupported() -> void:

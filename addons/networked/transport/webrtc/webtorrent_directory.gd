@@ -196,6 +196,10 @@ func list_lobbies() -> void:
 	_collect_left = browse_window
 	_query_acc = 0.7 # query on the next process tick
 	Netw.dbg.debug("WebTorrentDirectory: browsing board %s.", [_board_hash])
+	Netw.dbg.debug(
+		"WebTorrentDirectory: browsing board %s with local app_id='%s'.",
+		[_board_hash, _local_app_id()],
+	)
 
 
 func leave_lobby() -> void:
@@ -284,9 +288,9 @@ func advertise_room(
 	_advertising = true
 	_advertise_acc = advertise_interval # announce on the next process tick
 	_ensure_tracker()
-	Netw.dbg.info(
-		"WebTorrentDirectory: advertising room %s as '%s'.",
-		[room_hash, _room_name],
+	Netw.dbg.debug(
+		"WebTorrentDirectory: advertising room %s as '%s' with app_id='%s'.",
+		[room_hash, _room_name, _local_app_id()],
 	)
 
 
@@ -409,6 +413,10 @@ func _collect_room(card: Dictionary) -> void:
 	var players := int(card.get("players", 0))
 	var max_players := int(card.get("max", 0))
 	var room_name := String(card.get("name", ""))
+	Netw.dbg.debug(
+		"WebTorrentDirectory: discovered room %s with app_id='%s'.",
+		[room_hash, String(card.get("app_id", ""))],
+	)
 
 	if _collected.has(room_hash):
 		var existing: LobbyInfo = _collected[room_hash]

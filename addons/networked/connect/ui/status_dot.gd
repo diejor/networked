@@ -9,6 +9,7 @@ var _pulse_tween: Tween
 ## pending (probing) if [param result] is [code]null[/code].
 func bind_result(result: ServerInfoResult) -> void:
 	if result == null:
+		tooltip_text = "Checking"
 		_update_status_style(Color(0.6, 0.6, 0.6))
 		_start_pulse_tween()
 		return
@@ -16,19 +17,25 @@ func bind_result(result: ServerInfoResult) -> void:
 	_stop_pulse_tween()
 	match result.status:
 		ServerInfoResult.Status.OK:
+			tooltip_text = "OK"
 			_update_status_style(Color(0.24, 0.81, 0.44))
 		ServerInfoResult.Status.BUSY:
+			tooltip_text = "Busy"
 			_update_status_style(Color(0.95, 0.77, 0.06))
 		ServerInfoResult.Status.UNREACHABLE, ServerInfoResult.Status.TIMEOUT:
+			tooltip_text = "Unreachable"
 			_update_status_style(Color(0.91, 0.3, 0.24))
 		ServerInfoResult.Status.UNSUPPORTED:
+			tooltip_text = "Unsupported"
 			var info := result.info
 			_update_status_style(
 				Color(0.24, 0.81, 0.44) if info else Color(0.95, 0.77, 0.06),
 			)
 		ServerInfoResult.Status.INCOMPATIBLE:
+			tooltip_text = "Incompatible game build"
 			_update_status_style(Color(0.6, 0.35, 0.85))
 		_:
+			tooltip_text = "Error"
 			_update_status_style(Color(0.91, 0.3, 0.24))
 
 

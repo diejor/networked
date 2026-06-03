@@ -8,6 +8,7 @@ static var shared: LocalLoopbackSession = null
 
 var server_peer: LocalMultiplayerPeer
 var client_peers: Array[LocalMultiplayerPeer] = []
+var server_app_id: StringName = &""
 var _held_packets_by_peer: Dictionary = { }
 
 
@@ -122,6 +123,7 @@ func reset() -> void:
 		if client:
 			client.close()
 	server_peer = null
+	server_app_id = &""
 	client_peers.clear()
 	_held_packets_by_peer.clear()
 

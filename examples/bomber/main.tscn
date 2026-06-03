@@ -48,6 +48,7 @@ allow_spacewar_fallback = true
 
 [node name="WebTorrentDirectory" type="Node" parent="MultiplayerTree" unique_id=1506380482]
 script = ExtResource("8_p4o8j")
+browser_filter_uid = "networked-example-bomber"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]

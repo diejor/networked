@@ -20,6 +20,7 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 
 	if not session.has_live_server():
 		session.reset()
+	session.server_app_id = _tree.app_id if _tree else &""
 	Netw.dbg.info("Local loopback server ready.")
 	return session.get_server_peer()
 
@@ -65,6 +66,7 @@ func query_server_info(
 		var info := ServerInfo.new()
 		info.is_local_listener = true
 		info.players = session.server_peer.linked_peers.size()
+		info.app_id = session.server_app_id
 		return ServerInfoResult.ok(info)
 	return ServerInfoResult.unsupported()
 

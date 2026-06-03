@@ -621,6 +621,10 @@ func _compute_app_tag(value: StringName) -> int:
 	return String(value).hash() & 0xFFFFFFFF
 
 
+func _app_tag() -> int:
+	return _compute_app_tag(app_id)
+
+
 # Builds a fresh random build tag for the editor "Generate app id" button.
 func _random_app_id() -> StringName:
 	const CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -634,7 +638,7 @@ func _init() -> void:
 	_auth = AuthCoordinator.new(_roster)
 	_auth.set_roster(_roster)
 	_auth.set_auth_provider(auth_provider)
-	_auth.set_app_tag(_compute_app_tag(app_id))
+	_auth.set_app_tag(_app_tag())
 	_auth.set_tree(self)
 	_auth.set_server_info_source(server_info_source)
 	if not Engine.is_editor_hint():
@@ -1404,6 +1408,10 @@ func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 # Finalizes the session once the peer is live and the role is set.
 func _finalize_session() -> void:
 	Netw.dbg.trace("MultiplayerTree: Finalizing session.")
+	Netw.dbg.debug(
+		"MultiplayerTree: session app_id='%s' app_tag=0x%08x.",
+		[String(app_id), _app_tag()],
+	)
 	Netw.dbg.register_tree(self)
 	configured.emit()
 

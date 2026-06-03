@@ -82,7 +82,7 @@ static func encode_client_hello(
 
 ## Decodes a client-hello packet, rejecting it when its app tag differs from
 ## [param local_app_tag]. Returns
-## [code]{ ok, reason, version, flags, provider_payload }[/code]. When
+## [code]{ ok, reason, version, app_tag, flags, provider_payload }[/code]. When
 ## [code]ok[/code] is [code]false[/code], [code]reason[/code] is one of
 ## [code]"framing"[/code], [code]"version"[/code], or [code]"app"[/code] and the
 ## remaining fields are zero / empty.
@@ -95,23 +95,27 @@ static func decode_client_hello(
 			ok = false,
 			reason = "framing",
 			version = 0,
+			app_tag = 0,
 			flags = 0,
 			provider_payload = PackedByteArray(),
 		}
 	var version := int(data[4])
+	var app_tag := _read_u32(data, 5)
 	if version != PROTOCOL_VERSION:
 		return {
 			ok = false,
 			reason = "version",
 			version = version,
+			app_tag = app_tag,
 			flags = 0,
 			provider_payload = PackedByteArray(),
 		}
-	if _read_u32(data, 5) != (local_app_tag & 0xFFFFFFFF):
+	if app_tag != (local_app_tag & 0xFFFFFFFF):
 		return {
 			ok = false,
 			reason = "app",
 			version = version,
+			app_tag = app_tag,
 			flags = 0,
 			provider_payload = PackedByteArray(),
 		}
@@ -119,6 +123,7 @@ static func decode_client_hello(
 		ok = true,
 		reason = "",
 		version = version,
+		app_tag = app_tag,
 		flags = int(data[9]),
 		provider_payload = data.slice(_HELLO_HEADER_LEN, data.size()),
 	}
