@@ -249,6 +249,13 @@ func _request_teleport(
 		_dbg.warn("_request_teleport received on non-server peer %d", [multiplayer.get_unique_id()])
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
+	# Reject a peer moving an entity it does not own (RPCs can target any node).
+	if sender_id != owner.get_multiplayer_authority():
+		_dbg.warn(
+			"_request_teleport rejected: peer %d is not authority %d for '%s'.",
+			[sender_id, owner.get_multiplayer_authority(), owner.name],
+		)
+		return
 	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], { }, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
 

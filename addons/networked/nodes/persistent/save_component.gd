@@ -272,11 +272,20 @@ func push_to(peer_id: int, ack: bool = false) -> void:
 # RPC called by a client to push its serialized entity state to this peer.
 @rpc("any_peer", "call_local", "reliable")
 func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
+	# Reject a peer pushing state into an entity it does not own (RPCs can
+	# target any node).
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != get_multiplayer_authority():
+		_dbg.warn(
+			"_request_push rejected: peer %d is not authority %d for '%s'.",
+			[sender_id, get_multiplayer_authority(), name],
+			func(m): push_warning(m)
+		)
+		return
 	bound_entity.deserialize(bytes)
 	push_to_scene()
 	_on_state_changed()
 	if ack:
-		var sender_id := multiplayer.get_remote_sender_id()
 		if sender_id == multiplayer.get_unique_id():
 			push_acknowledged.emit()
 		else:
