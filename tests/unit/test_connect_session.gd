@@ -7,7 +7,6 @@
 class_name TestConnectSession
 extends NetwTestSuite
 
-
 class _UnavailableBackend:
 	extends BackendPeer
 
