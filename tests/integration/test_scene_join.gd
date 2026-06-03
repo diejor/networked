@@ -2,7 +2,6 @@
 class_name TestLobbyJoin
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var level_builder: LevelBuilder
@@ -12,10 +11,10 @@ func before_test() -> void:
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
-	
+
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_builder.pack()
 
 	harness.register_spawnable_scene(level_builder.packed)

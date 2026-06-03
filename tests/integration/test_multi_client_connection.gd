@@ -48,8 +48,9 @@ func test_client_peer_ids_are_not_server_id() -> void:
 
 func test_server_emits_peer_connected_for_each_client() -> void:
 	var connected_ids: Array[int] = []
-	harness.server().peer_connected.connect(func(id: int) -> void:
-		connected_ids.append(id)
+	harness.server().peer_connected.connect(
+		func(id: int) -> void:
+			connected_ids.append(id)
 	)
 	await harness.add_client()
 	await harness.add_client()
@@ -72,4 +73,5 @@ func test_three_clients_all_online() -> void:
 		ids.append(client.multiplayer_peer.get_unique_id())
 	# All IDs must be unique
 	assert_that(ids.size()).is_equal(
-		ids.filter(func(id): return ids.count(id) == 1).size())
+		ids.filter(func(id): return ids.count(id) == 1).size(),
+	)

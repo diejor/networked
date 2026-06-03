@@ -4,7 +4,6 @@
 class_name ConnectUiShared
 extends RefCounted
 
-
 ## Human-readable label for a [BackendPeer] template (class name or
 ## resource filename).
 static func format_backend_label(backend: BackendPeer) -> String:

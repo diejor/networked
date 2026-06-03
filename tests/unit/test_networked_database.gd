@@ -4,34 +4,37 @@
 class_name TestNetwDatabase
 extends NetwTestSuite
 
-
 class SpyBackend extends NetwBackend:
 	var init_calls: Array[Dictionary] = []
 	var upsert_calls: Array[Dictionary] = []
 	var find_calls: Array[Dictionary] = []
 	var delete_calls: Array[Dictionary] = []
-	var _store: Dictionary = {}
+	var _store: Dictionary = { }
+
 
 	func initialize(schema: Dictionary) -> Error:
-		init_calls.append({schema = schema})
+		init_calls.append({ schema = schema })
 		return OK
 
+
 	func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
-		upsert_calls.append({table = table, id = id, data = data.duplicate()})
+		upsert_calls.append({ table = table, id = id, data = data.duplicate() })
 		if not _store.has(table):
-			_store[table] = {}
-		var existing: Dictionary = (_store[table].get(id, {}) as Dictionary) \
-			.duplicate()
+			_store[table] = { }
+		var existing: Dictionary = (_store[table].get(id, { }) as Dictionary) \
+				.duplicate()
 		for key in data:
 			existing[key] = data[key]
 		_store[table][id] = existing
 		return OK
 
+
 	func find_by_id(table: StringName, id: StringName) -> Dictionary:
-		find_calls.append({table = table, id = id})
+		find_calls.append({ table = table, id = id })
 		if not _store.has(table):
-			return {}
-		return (_store[table].get(id, {}) as Dictionary).duplicate()
+			return { }
+		return (_store[table].get(id, { }) as Dictionary).duplicate()
+
 
 	func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 		if not _store.has(table):
@@ -48,8 +51,9 @@ class SpyBackend extends NetwBackend:
 				results.append(record.duplicate())
 		return results
 
+
 	func delete(table: StringName, id: StringName) -> Error:
-		delete_calls.append({table = table, id = id})
+		delete_calls.append({ table = table, id = id })
 		if _store.has(table):
 			_store[table].erase(id)
 		return OK
@@ -57,9 +61,9 @@ class SpyBackend extends NetwBackend:
 
 class FailingBackend extends SpyBackend:
 	func upsert(
-		_table: StringName,
-		_id: StringName,
-		_data: Dictionary
+			_table: StringName,
+			_id: StringName,
+			_data: Dictionary,
 	) -> Error:
 		return ERR_CANT_CREATE
 
@@ -92,7 +96,8 @@ func test_register_schema_merges_columns_on_second_call() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	var captured_columns: Array[StringName] = []
 	db.schema_registered.connect(
-		func(_t, cols: Array[StringName]): captured_columns.assign(cols))
+		func(_t, cols: Array[StringName]): captured_columns.assign(cols)
+	)
 	db._register_schema(&"rocks", [&"position"])
 	assert_that(captured_columns.has(&"health")).is_true()
 	assert_that(captured_columns.has(&"position")).is_true()
@@ -103,8 +108,9 @@ func test_transaction_calls_backend_upsert() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 50})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 50 })
 	)
 
 	var backend := db.backend as SpyBackend
@@ -117,10 +123,11 @@ func test_transaction_batches_multiple_upserts() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
-		tx.queue_upsert(&"rocks", &"r2", {&"health": 20})
-		tx.queue_upsert(&"rocks", &"r3", {&"health": 30})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
+			tx.queue_upsert(&"rocks", &"r2", { &"health": 20 })
+			tx.queue_upsert(&"rocks", &"r3", { &"health": 30 })
 	)
 
 	var backend := db.backend as SpyBackend
@@ -132,8 +139,9 @@ func test_transaction_returns_ok_on_success() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var err := db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	var err := db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 	assert_that(err).is_equal(OK)
 
@@ -144,8 +152,9 @@ func test_transaction_propagates_backend_error() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var err := db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	var err := db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 	assert_that(err).is_equal(ERR_CANT_CREATE)
 
@@ -157,8 +166,9 @@ func test_transaction_emits_committed_signal_on_success() -> void:
 
 	var committed := [false]
 	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 	assert_that(committed[0]).is_true()
 
@@ -171,8 +181,9 @@ func test_transaction_does_not_emit_committed_on_failure() -> void:
 
 	var committed := [false]
 	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 	assert_that(committed[0]).is_false()
 
@@ -182,8 +193,9 @@ func test_find_by_id_delegates_to_backend() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 99})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 99 })
 	)
 
 	var record := db._find_by_id(&"rocks", &"r1")
@@ -195,8 +207,9 @@ func test_find_by_id_emits_loaded_signal_with_hit_true() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 
 	var hit_value := [false]
@@ -221,9 +234,10 @@ func test_find_all_delegates_to_backend() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
-		tx.queue_upsert(&"rocks", &"r2", {&"health": 20})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
+			tx.queue_upsert(&"rocks", &"r2", { &"health": 20 })
 	)
 
 	var all := db._find_all(&"rocks")
@@ -235,8 +249,9 @@ func test_delete_delegates_to_backend() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"rocks", &"r1", {&"health": 10})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 
 	db.delete(&"rocks", &"r1")
@@ -270,6 +285,6 @@ func test_schema_mismatch_emits_signal_with_column_lists() -> void:
 			captured_missing.assign(missing)
 	)
 
-	db._diff_record(&"rocks", &"r1", {&"health": 10, &"gold": 5})
+	db._diff_record(&"rocks", &"r1", { &"health": 10, &"gold": 5 })
 	assert_that(captured_unknown.has(&"gold")).is_true()
 	assert_that(captured_missing.is_empty()).is_true()

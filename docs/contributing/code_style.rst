@@ -14,9 +14,22 @@ rewriting nearby code for style alone.
 GDScript
 --------
 
+Layout is handled by `gdscript-formatter
+<https://github.com/GDQuest/GDScript-formatter>`__, which CI checks on every
+pull request. Run it before pushing, or set your editor to format on save:
+
+.. code-block:: console
+
+    gdscript-formatter addons/networked tests
+
+The linter runs with a 100-column limit and disables ``private-access`` and
+``signal-name``, which conflict with Networked's internal-access and
+private-signal conventions. Suppress a one-off finding with a
+``# gdlint-ignore <rule>`` comment rather than disabling a rule globally.
+
 - Use tabs for indentation.
-- Prefer wrapping code at 80 columns. This is not a hard formatter rule, but
-  long expressions should usually be split before review.
+- Keep lines within 100 columns. Aim for 80 where it reads well, but long
+  expressions should be split before review.
 - Prefer typed variables, parameters, return values, and exported fields.
 - Use ``class_name`` for scripts that form part of the public API or are used
   from other files.

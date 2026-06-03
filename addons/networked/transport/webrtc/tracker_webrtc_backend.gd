@@ -18,7 +18,7 @@ extends WebRTCBackend
 ## WebTorrent compatible tracker URLs used for signaling.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
-	"wss://tracker.webtorrent.dev"
+	"wss://tracker.webtorrent.dev",
 ]
 
 ## Seconds the offer and answer wait for ICE to gather before announcing, so

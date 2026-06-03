@@ -4,7 +4,6 @@
 class_name TestInterestGate
 extends NetwTestSuite
 
-
 var mt: MultiplayerTree
 
 
@@ -86,7 +85,8 @@ func test_layer_set_policy_writes_through_to_gate() -> void:
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	_service().flush()
 	assert_that(gate.policy).is_equal(
-			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
+		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS,
+	)
 
 
 func test_gate_picks_up_initial_layer_state_on_bind() -> void:
@@ -96,7 +96,8 @@ func test_gate_picks_up_initial_layer_state_on_bind() -> void:
 	var gate := _make_gate(&"a")
 	assert_that(gate.has_viewer(7)).is_true()
 	assert_that(gate.policy).is_equal(
-			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
+		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS,
+	)
 
 
 func test_verdict_reflects_policy() -> void:

@@ -15,11 +15,11 @@ func to_dict() -> Dictionary:
 	var d := {
 		"tree_name": tree_name,
 		"username": username,
-		"peer_id": peer_id
+		"peer_id": peer_id,
 	}
 	if not rid.is_empty():
 		d["_rid"] = rid
-	
+
 	# Only include optional fields if they are populated (e.g., for
 	# registration).
 	if not backend_class.is_empty() or is_server:

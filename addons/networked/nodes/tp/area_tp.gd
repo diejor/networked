@@ -1,7 +1,6 @@
 @tool
 class_name AreaTP2D
 extends Area2D
-
 ## A 2D trigger area that teleports entities possessing a [TPComponent] to a designated [SceneNodePath].
 ##
 ## Teleportation logic is executed strictly on the client that owns the entering body.
@@ -19,15 +18,15 @@ var target_tp: SceneNodePath:
 	set(value):
 		if target_tp == value:
 			return
-			
+
 		if target_tp and target_tp.changed.is_connected(update_configuration_warnings):
 			target_tp.changed.disconnect(update_configuration_warnings)
-			
+
 		target_tp = value
-		
+
 		if target_tp and not target_tp.changed.is_connected(update_configuration_warnings):
 			target_tp.changed.connect(update_configuration_warnings)
-		
+
 		update_configuration_warnings()
 
 
@@ -38,14 +37,14 @@ func _init() -> void:
 
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings := PackedStringArray()
-	
+
 	if not target_tp:
 		warnings.append("A target_tp SceneNodePath must be assigned.")
 	elif "_editor_property_warnings" in target_tp and not target_tp._editor_property_warnings.is_empty():
 		warnings.append("Target TP Error: " + target_tp._editor_property_warnings)
 	elif not target_tp.is_valid():
 		warnings.append("The assigned target_tp is missing a scene or node path.")
-		
+
 	return warnings
 
 

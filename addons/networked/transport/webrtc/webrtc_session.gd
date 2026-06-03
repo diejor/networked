@@ -34,10 +34,10 @@ signal native_disconnected(multiplayer_id: int)
 ## [param to_signaler_id] is empty until the session has learned the remote's
 ## address, which a discovery-capable signaler treats as room-directed.
 signal signal_out(
-	to_multiplayer_id: int,
-	to_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		to_multiplayer_id: int,
+		to_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 )
 
 ## ICE server definitions passed to each [WebRTCPeerConnection].
@@ -56,19 +56,19 @@ var webrtc_peer: WebRTCMultiplayerPeer = null
 
 var _is_server := false
 # multiplayer_id -> last known opaque signaler address, echoed on outbound.
-var _signaler_ids: Dictionary = {}
+var _signaler_ids: Dictionary = { }
 # multiplayer_id -> bool, true once set_remote_description has landed.
-var _remote_desc_set: Dictionary = {}
+var _remote_desc_set: Dictionary = { }
 # multiplayer_id -> Array[Dictionary] of candidates awaiting the remote desc.
-var _pending_candidates: Dictionary = {}
+var _pending_candidates: Dictionary = { }
 # multiplayer_id -> { host, srflx, relay } counts gathered this attempt.
-var _candidate_stats: Dictionary = {}
+var _candidate_stats: Dictionary = { }
 # multiplayer_id -> bool, mirrors the native link state.
-var _connected_ids: Dictionary = {}
+var _connected_ids: Dictionary = { }
 # multiplayer_id -> msec the current attempt opened at.
-var _attempt_started_ms: Dictionary = {}
+var _attempt_started_ms: Dictionary = { }
 # multiplayer_id -> attempt count (1-based).
-var _attempts: Dictionary = {}
+var _attempts: Dictionary = { }
 
 
 ## Creates the underlying peer in server mode. Mirrors
@@ -113,10 +113,10 @@ func poll(dt: float = 0.0) -> void:
 ## Routes inbound SDP or ICE from [param from_signaler_id] into the connection
 ## for [param from_multiplayer_id], creating it on first contact.
 func deliver(
-	from_multiplayer_id: int,
-	from_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		from_multiplayer_id: int,
+		from_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 ) -> void:
 	if webrtc_peer == null:
 		return
@@ -181,7 +181,7 @@ func _ensure_connection(multiplayer_id: int, signaler_id: String) -> void:
 func _open_connection(multiplayer_id: int) -> void:
 	Netw.dbg.trace(
 		"WebRTCSession: opening WebRTCPeerConnection for id %d (attempt %d).",
-		[multiplayer_id, _attempts.get(multiplayer_id, 1)]
+		[multiplayer_id, _attempts.get(multiplayer_id, 1)],
 	)
 	_remote_desc_set[multiplayer_id] = false
 	_pending_candidates[multiplayer_id] = []
@@ -190,10 +190,10 @@ func _open_connection(multiplayer_id: int) -> void:
 	var connection := WebRTCPeerConnection.new()
 	connection.initialize({ "iceServers": ice_servers })
 	connection.session_description_created.connect(
-		_on_session_description_created.bind(multiplayer_id)
+		_on_session_description_created.bind(multiplayer_id),
 	)
 	connection.ice_candidate_created.connect(
-		_on_ice_candidate_created.bind(multiplayer_id)
+		_on_ice_candidate_created.bind(multiplayer_id),
 	)
 	webrtc_peer.add_peer(connection, multiplayer_id)
 	if not _is_server and multiplayer_id == 1:
@@ -215,7 +215,7 @@ func _rebuild_connection(multiplayer_id: int) -> void:
 func _restart_remote(multiplayer_id: int) -> void:
 	Netw.dbg.trace(
 		"WebRTCSession: restarting connection for id %d on renegotiated offer.",
-		[multiplayer_id]
+		[multiplayer_id],
 	)
 	if webrtc_peer.has_peer(multiplayer_id):
 		webrtc_peer.remove_peer(multiplayer_id)
@@ -251,7 +251,7 @@ func _handle_offer(multiplayer_id: int, payload: Dictionary) -> void:
 	if err != OK:
 		Netw.dbg.debug(
 			"WebRTCSession ignored stale offer for id %d: %s",
-			[multiplayer_id, error_string(err)]
+			[multiplayer_id, error_string(err)],
 		)
 		return
 	_remote_desc_set[multiplayer_id] = true
@@ -262,12 +262,13 @@ func _handle_answer(multiplayer_id: int, payload: Dictionary) -> void:
 	if not webrtc_peer.has_peer(multiplayer_id):
 		return
 	var err := _connection(multiplayer_id).set_remote_description(
-		"answer", payload.get("sdp", "")
+		"answer",
+		payload.get("sdp", ""),
 	)
 	if err != OK:
 		Netw.dbg.debug(
 			"WebRTCSession ignored stale answer for id %d: %s",
-			[multiplayer_id, error_string(err)]
+			[multiplayer_id, error_string(err)],
 		)
 		return
 	_remote_desc_set[multiplayer_id] = true
@@ -290,7 +291,7 @@ func _flush_pending_candidates(multiplayer_id: int) -> void:
 		return
 	Netw.dbg.trace(
 		"WebRTCSession: flushing %d queued candidate(s) for id %d.",
-		[queue.size(), multiplayer_id]
+		[queue.size(), multiplayer_id],
 	)
 	for payload in queue:
 		_add_candidate(multiplayer_id, payload)
@@ -301,12 +302,14 @@ func _add_candidate(multiplayer_id: int, payload: Dictionary) -> void:
 	_connection(multiplayer_id).add_ice_candidate(
 		payload.get("sdpMid", ""),
 		payload.get("sdpMLineIndex", 0),
-		payload.get("candidate", "")
+		payload.get("candidate", ""),
 	)
 
 
 func _on_session_description_created(
-	type: String, sdp: String, multiplayer_id: int
+		type: String,
+		sdp: String,
+		multiplayer_id: int,
 ) -> void:
 	var connection := _connection(multiplayer_id)
 	connection.set_local_description(type, sdp)
@@ -319,7 +322,10 @@ func _on_session_description_created(
 
 
 func _on_ice_candidate_created(
-	media: String, index: int, name: String, multiplayer_id: int
+		media: String,
+		index: int,
+		name: String,
+		multiplayer_id: int,
 ) -> void:
 	_account_candidate(multiplayer_id, name)
 	signal_out.emit(
@@ -340,7 +346,7 @@ func _on_peer_connected(multiplayer_id: int) -> void:
 	var stats: Dictionary = _candidate_stats.get(multiplayer_id, _empty_stats())
 	Netw.dbg.debug(
 		"WebRTCSession: native link up id %d (host=%d srflx=%d relay=%d).",
-		[multiplayer_id, stats.host, stats.srflx, stats.relay]
+		[multiplayer_id, stats.host, stats.srflx, stats.relay],
 	)
 	native_connected.emit(multiplayer_id)
 
@@ -369,13 +375,13 @@ func _log_attempt_summary(multiplayer_id: int, why: String) -> void:
 		Netw.dbg.warn(
 			"WebRTCSession: id %d %s with no relay candidate gathered "
 			+ "(host=%d srflx=%d); TURN may be unreachable.",
-			[multiplayer_id, why, stats.host, stats.srflx]
+			[multiplayer_id, why, stats.host, stats.srflx],
 		)
 	else:
 		Netw.dbg.debug(
 			"WebRTCSession: id %d %s (host=%d srflx=%d relay=%d); "
 			+ "relay reachable, retrying signaling.",
-			[multiplayer_id, why, stats.host, stats.srflx, stats.relay]
+			[multiplayer_id, why, stats.host, stats.srflx, stats.relay],
 		)
 
 

@@ -15,6 +15,7 @@ extends BackendPeer
 ## Maximum number of simultaneous client connections allowed by the server.
 @export var max_clients: int = 32
 
+
 ## Implements [method BackendPeer.create_host_peer] with
 ## [method ENetMultiplayerPeer.create_server].
 func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
@@ -31,14 +32,17 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.info("ENet server ready on port %d", [port])
 	return peer
 
+
 ## Implements [method BackendPeer.create_join_peer] with
 ## [method ENetMultiplayerPeer.create_client].
 func create_join_peer(
-	_tree: MultiplayerTree, server_address: String, _username: String = ""
+		_tree: MultiplayerTree,
+		server_address: String,
+		_username: String = "",
 ) -> MultiplayerPeer:
 	Netw.dbg.trace(
 		"ENetBackend: create_join_peer called at %s",
-		[server_address]
+		[server_address],
 	)
 	var peer := ENetMultiplayerPeer.new()
 	if server_address.is_empty():
@@ -56,7 +60,8 @@ func create_join_peer(
 ##
 ## ENet can probe the same host and port that [method create_join_peer] uses.
 func query_server_info(
-	address: String, timeout: float = 2.0,
+		address: String,
+		timeout: float = 2.0,
 ) -> ServerInfoResult:
 	var probe := AuthProbeClient.new(self)
 	return await probe.query(address, timeout)
@@ -70,8 +75,9 @@ func get_address_hint() -> AddressHint:
 		"Empty or 'localhost' connects to a local host. Use host:port or an "
 		+ "IPv4/IPv6 address for remote.",
 		true,
-		true
+		true,
 	)
+
 
 ## Returns the display name for this backend.
 func get_display_name() -> String:

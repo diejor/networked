@@ -96,7 +96,6 @@ func get_services(base: Script) -> Array[Node]:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	return mt.get_services(base) if mt else []
 
-
 # ---------------------------------------------------------------------------
 # Static registration helpers
 # ---------------------------------------------------------------------------

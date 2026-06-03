@@ -44,9 +44,9 @@ static func from_node(node: Node) -> NetNodeSnapshot:
 			snap.debug_state = _sanitize(raw as Dictionary)
 		else:
 			push_warning(
-				"NetNodeSnapshot: %s._get_net_debug_state() must return " + \
+				"NetNodeSnapshot: %s._get_net_debug_state() must return " +
 				"Dictionary, got %s" % \
-				[node.name, type_string(typeof(raw))]
+						[node.name, type_string(typeof(raw))],
 			)
 
 	return snap
@@ -65,30 +65,30 @@ func to_dict() -> Dictionary:
 
 
 static func _collect_sync_properties(node: Node) -> Dictionary:
-	var props: Dictionary = {}
+	var props: Dictionary = { }
 	for sync: MultiplayerSynchronizer in \
-			SynchronizersCache.get_synchronizers(node):
+	SynchronizersCache.get_synchronizers(node):
 		if not sync.replication_config:
 			continue
-		
+
 		var root_node: Node = (
-			sync.get_node(sync.root_path) if sync.root_path != NodePath(".") \
-			else sync.get_parent()
+				sync.get_node(sync.root_path) if sync.root_path != NodePath(".") \
+				else sync.get_parent()
 		)
 		if not is_instance_valid(root_node):
 			continue
-		
+
 		for prop_path: NodePath in sync.replication_config.get_properties():
 			var s := str(prop_path)
 			var colon := s.rfind(":")
 			if colon < 0:
 				continue
-			
+
 			var node_part := s.substr(0, colon)
 			var prop_name := s.substr(colon + 1)
 			var target: Node = (
-				root_node if node_part.is_empty() or node_part == "." \
-				else root_node.get_node_or_null(node_part)
+					root_node if node_part.is_empty() or node_part == "." \
+					else root_node.get_node_or_null(node_part)
 			)
 			if is_instance_valid(target):
 				var val: Variant = target.get(prop_name)
@@ -96,21 +96,21 @@ static func _collect_sync_properties(node: Node) -> Dictionary:
 					TYPE_OBJECT,
 					TYPE_RID,
 					TYPE_CALLABLE,
-					TYPE_SIGNAL
+					TYPE_SIGNAL,
 				]:
 					props[s] = val
 	return props
 
 
 static func _sanitize(d: Dictionary) -> Dictionary:
-	var out: Dictionary = {}
+	var out: Dictionary = { }
 	for k: Variant in d:
 		var v: Variant = d[k]
 		if typeof(v) in [TYPE_OBJECT, TYPE_RID, TYPE_CALLABLE, TYPE_SIGNAL]:
 			push_warning(
-				"NetNodeSnapshot: _get_net_debug_state() key '%s' has " + \
+				"NetNodeSnapshot: _get_net_debug_state() key '%s' has " +
 				"non-serializable type %s - skipped" % \
-				[str(k), type_string(typeof(v))]
+						[str(k), type_string(typeof(v))],
 			)
 			continue
 		out[k] = v

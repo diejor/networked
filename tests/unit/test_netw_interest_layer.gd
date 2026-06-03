@@ -4,7 +4,6 @@
 class_name TestNetwInterestLayer
 extends NetwTestSuite
 
-
 var layer: NetwInterestLayer
 
 

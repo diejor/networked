@@ -20,40 +20,80 @@ enum ScaleMode { FRACTIONAL, INTEGER }
 
 static func from_project() -> StretchSettings:
 	var s := StretchSettings.new()
-	s.mode = _mode_from_string(str(ProjectSettings.get_setting(
-			"display/window/stretch/mode", "disabled")))
-	s.aspect = _aspect_from_string(str(ProjectSettings.get_setting(
-			"display/window/stretch/aspect", "keep")))
-	s.scale = float(ProjectSettings.get_setting(
-			"display/window/stretch/scale", 1.0))
-	s.scale_mode = _scale_mode_from_string(str(ProjectSettings.get_setting(
-			"display/window/stretch/scale_mode", "fractional")))
+	s.mode = _mode_from_string(
+		str(
+			ProjectSettings.get_setting(
+				"display/window/stretch/mode",
+				"disabled",
+			),
+		),
+	)
+	s.aspect = _aspect_from_string(
+		str(
+			ProjectSettings.get_setting(
+				"display/window/stretch/aspect",
+				"keep",
+			),
+		),
+	)
+	s.scale = float(
+		ProjectSettings.get_setting(
+			"display/window/stretch/scale",
+			1.0,
+		),
+	)
+	s.scale_mode = _scale_mode_from_string(
+		str(
+			ProjectSettings.get_setting(
+				"display/window/stretch/scale_mode",
+				"fractional",
+			),
+		),
+	)
 	s.design_size = Vector2i(
-		int(ProjectSettings.get_setting(
-				"display/window/size/viewport_width", 0)),
-		int(ProjectSettings.get_setting(
-				"display/window/size/viewport_height", 0)),
+		int(
+			ProjectSettings.get_setting(
+				"display/window/size/viewport_width",
+				0,
+			),
+		),
+		int(
+			ProjectSettings.get_setting(
+				"display/window/size/viewport_height",
+				0,
+			),
+		),
 	)
 	return s
 
 
 static func _mode_from_string(v: String) -> Mode:
 	match v:
-		"canvas_items", "2d": return Mode.CANVAS_ITEMS
-		"viewport": return Mode.VIEWPORT
-		_: return Mode.DISABLED
+		"canvas_items", "2d":
+			return Mode.CANVAS_ITEMS
+		"viewport":
+			return Mode.VIEWPORT
+		_:
+			return Mode.DISABLED
 
 
 static func _aspect_from_string(v: String) -> Aspect:
 	match v:
-		"ignore": return Aspect.IGNORE
-		"keep_width": return Aspect.KEEP_WIDTH
-		"keep_height": return Aspect.KEEP_HEIGHT
-		"expand": return Aspect.EXPAND
-		_: return Aspect.KEEP
+		"ignore":
+			return Aspect.IGNORE
+		"keep_width":
+			return Aspect.KEEP_WIDTH
+		"keep_height":
+			return Aspect.KEEP_HEIGHT
+		"expand":
+			return Aspect.EXPAND
+		_:
+			return Aspect.KEEP
 
 
 static func _scale_mode_from_string(v: String) -> ScaleMode:
 	match v:
-		"integer": return ScaleMode.INTEGER
-		_: return ScaleMode.FRACTIONAL
+		"integer":
+			return ScaleMode.INTEGER
+		_:
+			return ScaleMode.FRACTIONAL

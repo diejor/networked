@@ -2,13 +2,10 @@
 class_name AddPopup
 extends PopupPanel
 
-
 signal submitted(target: JoinTarget)
-
 
 var _templates: Array[BackendPeer] = []
 var _editing: JoinTarget = null
-
 
 @onready var _title: Label = %TitleLabel
 @onready var _backend_picker: OptionButton = %BackendPicker
@@ -107,8 +104,8 @@ func _on_confirm() -> void:
 	target.address = _address_edit.text
 	target.backend = template
 	target.display_name = (
-		_name_edit.text if not _name_edit.text.is_empty()
-		else ConnectUiShared.format_address(target)
+			_name_edit.text if not _name_edit.text.is_empty()
+			else ConnectUiShared.format_address(target)
 	)
 	hide()
 	submitted.emit(target)

@@ -2,7 +2,6 @@
 class_name TestLobbyIsolation
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var scene: MultiplayerScene
@@ -16,8 +15,8 @@ func before_test() -> void:
 	await harness.setup(NetwTestSuite.create_scene_manager)
 
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_builder.pack()
 
 	harness.register_spawnable_scene(level_builder.packed)
@@ -62,8 +61,11 @@ func test_second_peer_not_visible_when_first_registered() -> void:
 
 
 func test_server_always_visible_regardless_of_registered_peers() -> void:
-	assert_that(scene.scene_visibility_filter(
-			MultiplayerPeer.TARGET_PEER_SERVER)).is_true()
+	assert_that(
+		scene.scene_visibility_filter(
+			MultiplayerPeer.TARGET_PEER_SERVER,
+		),
+	).is_true()
 
 
 func test_connect_peer_adds_to_connected_peers() -> void:
@@ -77,7 +79,8 @@ func test_disconnect_peer_removes_from_connected_peers() -> void:
 	scene.connect_peer(client_id)
 	scene.disconnect_peer(client_id)
 	await wait_until(
-		func(): return not scene.connected_peers.has(client_id))
+		func(): return not scene.connected_peers.has(client_id)
+	)
 	assert_that(scene.connected_peers.has(client_id)).is_false()
 
 
@@ -87,5 +90,5 @@ func test_disconnect_peer_removes_visibility() -> void:
 	scene.disconnect_peer(client_id)
 	@warning_ignore("redundant_await")
 	await assert_func(scene, "scene_visibility_filter", [client_id]) \
-		.wait_until(1000) \
-		.is_false()
+			.wait_until(1000) \
+			.is_false()

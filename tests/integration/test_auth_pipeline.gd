@@ -17,9 +17,9 @@ func before_test() -> void:
 
 	var template_instance: Node = player_builder.packed.instantiate()
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
 
@@ -48,7 +48,7 @@ func test_prepare_failure_aborts_connect() -> void:
 
 	var err := await client_tree.join_or_host(
 		target,
-		_join_payload("alice")
+		_join_payload("alice"),
 	)
 	assert_that(err).is_not_equal(OK)
 	assert_that(client_tree.is_online()).is_false()
@@ -57,7 +57,7 @@ func test_prepare_failure_aborts_connect() -> void:
 func test_listen_server_host_gets_identity() -> void:
 	var tree := await harness.add_listen_server(
 		_join_payload("host"),
-		DummyAuthProvider.new()
+		DummyAuthProvider.new(),
 	)
 
 	var bucket := tree.get_peer_context(1).get_bucket(NetwIdentityBucket)
@@ -78,7 +78,7 @@ func test_no_auth_provider_trusts_client_username() -> void:
 
 	var err := await client_tree.join_or_host(
 		target,
-		_join_payload("bob")
+		_join_payload("bob"),
 	)
 	assert_that(err).is_equal(OK)
 	await wait_until(func(): return joined_rjs.size() == 1)
@@ -91,7 +91,7 @@ func _join_payload(username: String) -> JoinPayload:
 	return harness.make_join_payload(
 		username,
 		level_builder.resource_path,
-		spawner_path
+		spawner_path,
 	)
 
 

@@ -18,15 +18,15 @@ extends Resource
 @export var max_players: int = 0
 
 ## Free-form provider-specific metadata (host name, map, mode, etc.).
-@export var metadata: Dictionary = {}
+@export var metadata: Dictionary = { }
 
 
 static func make(
-	id: int,
-	lobby_name: String,
-	players: int,
-	max_players: int,
-	metadata: Dictionary = {}
+		id: int,
+		lobby_name: String,
+		players: int,
+		max_players: int,
+		metadata: Dictionary = { },
 ) -> LobbyInfo:
 	var info := LobbyInfo.new()
 	info.id = id

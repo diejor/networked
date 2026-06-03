@@ -16,7 +16,6 @@
 class_name AuthProbeClient
 extends RefCounted
 
-
 var _backend: BackendPeer
 var _address := ""
 var _api: SceneMultiplayer
@@ -51,7 +50,7 @@ func query(address: String, timeout: float = 2.0) -> ServerInfoResult:
 	_peer = await _backend.create_join_peer(null, address, "")
 	if _peer == null:
 		return ServerInfoResult.unreachable(
-			"backend produced no peer for %s" % address
+			"backend produced no peer for %s" % address,
 		)
 
 	_api.multiplayer_peer = _peer
@@ -69,8 +68,9 @@ func query(address: String, timeout: float = 2.0) -> ServerInfoResult:
 	if _result == null:
 		return ServerInfoResult.timeout(
 			"query_server_info(%s) expired after %.2fs" % [
-				_address, timeout,
-			]
+				_address,
+				timeout,
+			],
 		)
 	return _result
 
@@ -107,7 +107,7 @@ func _on_auth_received(_peer_id: int, data: PackedByteArray) -> void:
 			_result = ServerInfoResult.unsupported()
 		_:
 			_result = ServerInfoResult.error(
-				"server reported status %d" % status
+				"server reported status %d" % status,
 			)
 
 
@@ -134,7 +134,7 @@ func _on_connection_failed() -> void:
 func _on_authentication_failed(_peer_id: int) -> void:
 	if _result == null:
 		_result = ServerInfoResult.unreachable(
-			"peer authentication failed"
+			"peer authentication failed",
 		)
 
 
@@ -148,10 +148,10 @@ func _cleanup() -> void:
 	if _api.connection_failed.is_connected(_on_connection_failed):
 		_api.connection_failed.disconnect(_on_connection_failed)
 	if _api.peer_authentication_failed.is_connected(
-		_on_authentication_failed
+		_on_authentication_failed,
 	):
 		_api.peer_authentication_failed.disconnect(
-			_on_authentication_failed
+			_on_authentication_failed,
 		)
 	if _peer:
 		_peer.close()

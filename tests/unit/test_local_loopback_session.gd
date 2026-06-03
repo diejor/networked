@@ -42,22 +42,27 @@ func test_poll_advances_all_clients_to_connected() -> void:
 	var c1 := session.create_client_peer()
 	var c2 := session.create_client_peer()
 	assert_that(c1._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTING)
+		MultiplayerPeer.CONNECTION_CONNECTING,
+	)
 	assert_that(c2._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTING)
+		MultiplayerPeer.CONNECTION_CONNECTING,
+	)
 	session.poll()
 	assert_that(c1._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTED)
+		MultiplayerPeer.CONNECTION_CONNECTED,
+	)
 	assert_that(c2._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTED)
+		MultiplayerPeer.CONNECTION_CONNECTED,
+	)
 
 
 func test_client_close_notifies_server() -> void:
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()
 	var disconnected: Array[int] = []
-	server.peer_disconnected.connect(func(peer_id: int):
-		disconnected.append(peer_id)
+	server.peer_disconnected.connect(
+		func(peer_id: int):
+			disconnected.append(peer_id)
 	)
 	session.poll()
 
@@ -79,10 +84,13 @@ func test_closed_client_does_not_block_new_client() -> void:
 	session.poll()
 
 	assert_that(second_client._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTED)
-	assert_that(session.server_peer.linked_peers.has(
-		second_client._get_unique_id()
-	)).is_true()
+		MultiplayerPeer.CONNECTION_CONNECTED,
+	)
+	assert_that(
+		session.server_peer.linked_peers.has(
+			second_client._get_unique_id(),
+		),
+	).is_true()
 
 
 func test_reset_clears_server_and_all_clients() -> void:
@@ -96,7 +104,7 @@ func test_reset_clears_server_and_all_clients() -> void:
 func test_session_is_independent_of_shared_singleton() -> void:
 	# GDUnit4 compares Resources by content, not identity - use instance ID
 	assert_that(session.get_instance_id()).is_not_equal(
-		LocalLoopbackSession.get_shared_session().get_instance_id()
+		LocalLoopbackSession.get_shared_session().get_instance_id(),
 	)
 	# Clean up pollution for test isolation
 	LocalLoopbackSession.shared = null

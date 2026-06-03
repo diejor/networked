@@ -7,7 +7,6 @@
 class_name TestObserverRelay
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_scene: MultiplayerScene
 var client0: MultiplayerTree
@@ -21,8 +20,8 @@ func before_test() -> void:
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed])
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed])
 	level_builder.pack()
 
 	harness = make_harness()
@@ -49,7 +48,9 @@ func after_test() -> void:
 func _spawn_owner_with_component(report: bool) -> Node:
 	harness.spawn_player(client0, player_builder.packed)
 	var server_player := await harness.wait_for_player(
-			harness.server(), level_builder.scene_name)
+		harness.server(),
+		level_builder.scene_name,
+	)
 	var component := InterestComponent.new()
 	component.report_observers = report
 	server_player.add_child(component)
@@ -72,7 +73,9 @@ func test_relay_fires_on_unbound_layer() -> void:
 	# Resolve the owner-side entity (on client0) to listen for the
 	# relayed signals.
 	var owner_player := await harness.wait_for_player(
-			client0, level_builder.scene_name)
+		client0,
+		level_builder.scene_name,
+	)
 	var owner_entity := NetwEntity.of(owner_player)
 	var client1_layer := client1.interest.layer(&"sight")
 
@@ -81,15 +84,19 @@ func test_relay_fires_on_unbound_layer() -> void:
 	var visible: Array = []
 	var hidden: Array = []
 	owner_entity.observer_entered.connect(
-			func(layer_id: StringName, peer_id: int):
-				entered.append([layer_id, peer_id]))
+		func(layer_id: StringName, peer_id: int):
+			entered.append([layer_id, peer_id])
+	)
 	owner_entity.observer_left.connect(
-			func(layer_id: StringName, peer_id: int):
-				left.append([layer_id, peer_id]))
+		func(layer_id: StringName, peer_id: int):
+			left.append([layer_id, peer_id])
+	)
 	client1_layer.entity_visible.connect(
-			func(e: NetwEntity): visible.append(e))
+		func(e: NetwEntity): visible.append(e)
+	)
 	client1_layer.entity_hidden.connect(
-			func(e: NetwEntity): hidden.append(e))
+		func(e: NetwEntity): hidden.append(e)
+	)
 
 	var client1_peer := client1.multiplayer_peer.get_unique_id()
 	sight.add_viewer(client1_peer)
@@ -120,12 +127,15 @@ func test_relay_silent_when_flag_off() -> void:
 	sight.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(
-			client0, level_builder.scene_name)
+		client0,
+		level_builder.scene_name,
+	)
 	var owner_entity := NetwEntity.of(owner_player)
 
 	var entered: Array = []
 	owner_entity.observer_entered.connect(
-			func(_l: StringName, _p: int): entered.append(true))
+		func(_l: StringName, _p: int): entered.append(true)
+	)
 
 	sight.add_viewer(client1.multiplayer_peer.get_unique_id())
 	await drain_frames(get_tree(), 4)
@@ -145,12 +155,15 @@ func test_relay_skipped_for_gated_layer() -> void:
 	scene_layer.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(
-			client0, level_builder.scene_name)
+		client0,
+		level_builder.scene_name,
+	)
 	var owner_entity := NetwEntity.of(owner_player)
 
 	var entered: Array = []
 	owner_entity.observer_entered.connect(
-			func(_l: StringName, _p: int): entered.append(true))
+		func(_l: StringName, _p: int): entered.append(true)
+	)
 
 	scene_layer.add_viewer(client1.multiplayer_peer.get_unique_id())
 	await drain_frames(get_tree(), 4)

@@ -13,15 +13,15 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner()
+			.with_root(Node2D) \
+			.with_spawner()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
 
@@ -38,7 +38,7 @@ func after_test() -> void:
 
 func test_client_is_online_after_auto_connect_player() -> void:
 	var tree := await harness.add_connect_player(
-		harness.make_join_payload("alice")
+		harness.make_join_payload("alice"),
 	)
 
 	assert_that(tree.is_online()).is_true()
@@ -46,7 +46,7 @@ func test_client_is_online_after_auto_connect_player() -> void:
 
 func test_host_player_starts_server_and_joins() -> void:
 	var tree := await harness.add_host_player(
-		harness.make_join_payload("alice")
+		harness.make_join_payload("alice"),
 	)
 
 	assert_that(tree.is_online()).is_true()
@@ -60,7 +60,7 @@ func test_host_player_starts_server_and_joins() -> void:
 		"*",
 		"InterestService",
 		true,
-		false
+		false,
 	)
 	assert_that(services.size()).is_equal(1)
 	assert_that(server_tree.get_service(InterestService)).is_equal(services[0])
@@ -71,8 +71,8 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 		harness.make_join_payload(
 			"alice",
 			level_builder.resource_path,
-			SPAWNER_PATH
-		)
+			SPAWNER_PATH,
+		),
 	)
 
 	assert_that(tree.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)

@@ -59,11 +59,11 @@ var _offer_announced := false
 var _offer_grace := 0.0
 
 # to_signaler_id -> { sdp, offer_id, candidates, grace, sent } pending answer.
-var _answers: Dictionary = {}
+var _answers: Dictionary = { }
 
-var _peer_map := {}
-var _handled_offers := {}
-var _handled_answers := {}
+var _peer_map := { }
+var _handled_offers := { }
+var _handled_answers := { }
 var _announce_timer := 0.0
 var _signaling_close_delay := -1.0
 
@@ -85,7 +85,7 @@ func open(p_room_id: String, local_multiplayer_id: int) -> Error:
 		_info_hash = p_room_id
 	Netw.dbg.debug(
 		"TrackerSignaler: opening room %s as id %d (peer_id %s...).",
-		[_info_hash, local_multiplayer_id, _local_peer_id.substr(0, 6)]
+		[_info_hash, local_multiplayer_id, _local_peer_id.substr(0, 6)],
 	)
 	return _connect_trackers()
 
@@ -128,10 +128,10 @@ func on_session_connected(multiplayer_id: int) -> void:
 # forwards. SDP arms a grace window; candidates bundle into it or trickle once
 # the bundle is gone.
 func send(
-	_to_multiplayer_id: int,
-	to_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		_to_multiplayer_id: int,
+		to_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 ) -> void:
 	match kind:
 		"offer":
@@ -155,8 +155,8 @@ func send(
 			else:
 				_client_candidate(payload)
 
-
 # -- Client offer -----------------------------------------------------------
+
 
 # Announces the bundled offer once its grace elapses, then re-announces it until
 # the native link is up so a host that joins later still receives it.
@@ -168,7 +168,7 @@ func _drive_client_offer(dt: float) -> void:
 			_announce_timer = 0.0
 			Netw.dbg.trace(
 				"TrackerSignaler: announcing bundled offer (%d candidate(s)).",
-				[_client_candidates.size()]
+				[_client_candidates.size()],
 			)
 			_tracker.broadcast(_build_announce())
 		return
@@ -185,8 +185,8 @@ func _client_candidate(payload: Dictionary) -> void:
 	else:
 		_client_candidates.append(payload)
 
-
 # -- Host answer ------------------------------------------------------------
+
 
 # Sends each pending answer once its grace elapses, bundling the candidates
 # gathered in the meantime, reusing the offer_id the tracker still holds.
@@ -201,7 +201,7 @@ func _drain_answers(dt: float) -> void:
 		answer["sent"] = true
 		Netw.dbg.trace(
 			"TrackerSignaler: sending bundled [ANSWER] to %s... (%d candidate(s)).",
-			[to_peer.substr(0, 6), (answer["candidates"] as Array).size()]
+			[to_peer.substr(0, 6), (answer["candidates"] as Array).size()],
 		)
 		_broadcast(_build_answer(to_peer, answer))
 
@@ -226,8 +226,8 @@ func _ensure_answer(to_peer: String) -> Dictionary:
 		}
 	return _answers[to_peer]
 
-
 # -- Tracker plumbing -------------------------------------------------------
+
 
 # Builds the tracker transport. A test overrides this to record announces.
 func _make_tracker() -> WebTorrentTrackerClient:
@@ -263,14 +263,16 @@ func _build_announce() -> Dictionary:
 	if not _is_server and _offer_announced and not _client_offer_sdp.is_empty():
 		if _client_offer_id.is_empty():
 			_client_offer_id = _generate_hash()
-		offers.append({
-			"offer_id": _client_offer_id,
-			"offer": {
-				"type": "offer",
-				"sdp": _client_offer_sdp,
-				"candidates": _client_candidates.duplicate(),
+		offers.append(
+			{
+				"offer_id": _client_offer_id,
+				"offer": {
+					"type": "offer",
+					"sdp": _client_offer_sdp,
+					"candidates": _client_candidates.duplicate(),
+				},
 			},
-		})
+		)
 	return {
 		"action": "announce",
 		"info_hash": _info_hash,
@@ -324,7 +326,7 @@ func _parse_packet(data: Dictionary) -> void:
 		_server_wt_id = remote_peer_id
 		Netw.dbg.debug(
 			"TrackerSignaler: client found server peer_id %s...",
-			[_server_wt_id.substr(0, 6)]
+			[_server_wt_id.substr(0, 6)],
 		)
 
 	if data.has("offer"):
@@ -336,8 +338,11 @@ func _parse_packet(data: Dictionary) -> void:
 # Routes one inbound offer/answer slot: a candidate marker fans straight out,
 # while real SDP reports once (deduped) then unbundles its carried candidates.
 func _handle_inbound(
-	data: Dictionary, godot_id: int, remote_peer_id: String,
-	slot: String, handled: Dictionary,
+		data: Dictionary,
+		godot_id: int,
+		remote_peer_id: String,
+		slot: String,
+		handled: Dictionary,
 ) -> void:
 	var payload: Variant = data.get(slot)
 	if typeof(payload) != TYPE_DICTIONARY:
@@ -350,7 +355,7 @@ func _handle_inbound(
 	if _has_handled_signal(handled, remote_peer_id, signal_id, payload):
 		Netw.dbg.trace(
 			"TrackerSignaler: ignoring duplicate [%s] from id %d.",
-			[slot.to_upper(), godot_id]
+			[slot.to_upper(), godot_id],
 		)
 		return
 	if slot == "offer":
@@ -364,7 +369,9 @@ func _handle_inbound(
 # Fans each candidate carried inside an offer/answer out as its own signal, so
 # the session applies them as ordinary trickle ICE.
 func _emit_bundled_candidates(
-	godot_id: int, remote_peer_id: String, payload: Dictionary
+		godot_id: int,
+		remote_peer_id: String,
+		payload: Dictionary,
 ) -> void:
 	var candidates: Variant = payload.get("candidates", [])
 	if typeof(candidates) != TYPE_ARRAY:
@@ -401,32 +408,38 @@ func _broadcast(data: Dictionary) -> void:
 	if _tracker:
 		_tracker.broadcast(data)
 
-
 # -- Signal dedup -----------------------------------------------------------
 
+
 func _has_handled_signal(
-	handled: Dictionary, remote_peer_id: String, signal_id: String,
-	payload: Dictionary,
+		handled: Dictionary,
+		remote_peer_id: String,
+		signal_id: String,
+		payload: Dictionary,
 ) -> bool:
 	return handled.has(_signal_key(remote_peer_id, signal_id, payload))
 
 
 func _mark_handled_signal(
-	handled: Dictionary, remote_peer_id: String, signal_id: String,
-	payload: Dictionary,
+		handled: Dictionary,
+		remote_peer_id: String,
+		signal_id: String,
+		payload: Dictionary,
 ) -> void:
 	handled[_signal_key(remote_peer_id, signal_id, payload)] = true
 
 
 func _signal_key(
-	remote_peer_id: String, signal_id: String, payload: Dictionary,
+		remote_peer_id: String,
+		signal_id: String,
+		payload: Dictionary,
 ) -> String:
 	if not signal_id.is_empty():
 		return remote_peer_id + ":" + signal_id
 	return remote_peer_id + ":" + String(payload.get("sdp", "")).sha1_text()
 
-
 # -- Id generation ----------------------------------------------------------
+
 
 func _generate_hash() -> String:
 	var chars := "0123456789abcdef"

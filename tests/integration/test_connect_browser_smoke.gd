@@ -8,7 +8,6 @@
 class_name TestConnectBrowserSmoke
 extends NetwTestSuite
 
-
 const _BROWSER_SCENE := preload(
 	"res://addons/networked/connect/ui/connect_browser.tscn"
 )
@@ -30,7 +29,7 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	assert_that(host).is_not_empty()
 
 	var temp_path := "user://_test_connect_smoke_%d.tres" % (
-		Time.get_ticks_usec()
+			Time.get_ticks_usec()
 	)
 
 	var target := JoinTarget.new()
@@ -81,7 +80,7 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 # injected session resolves and drives the tree's canonical ConnectSession.
 func test_browser_resolves_tree_canonical_session() -> void:
 	var temp_path := "user://_test_connect_browser_%d.tres" % (
-		Time.get_ticks_usec()
+			Time.get_ticks_usec()
 	)
 	ServerList.save(ServerList.new(), temp_path)
 

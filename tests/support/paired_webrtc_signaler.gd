@@ -14,7 +14,7 @@ class_name PairedWebRTCSignaler
 extends WebRTCSignaler
 
 # room_id -> Array[PairedWebRTCSignaler] sharing it.
-static var _rooms: Dictionary = {}
+static var _rooms: Dictionary = { }
 
 var _room := ""
 var _local_id := 0
@@ -52,10 +52,10 @@ func close() -> void:
 
 
 func send(
-	to_multiplayer_id: int,
-	_to_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		to_multiplayer_id: int,
+		_to_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 ) -> void:
 	for other in _rooms.get(_room, []):
 		if other != self and other._local_id == to_multiplayer_id:

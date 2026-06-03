@@ -2,32 +2,31 @@
 class_name TestAuthProtocol
 extends NetwTestSuite
 
-
 func test_classify_hello_magic() -> void:
 	var packet := AuthProtocol.encode_client_hello(PackedByteArray())
 	assert_that(AuthProtocol.classify(packet)).is_equal(
-		AuthProtocol.Kind.HELLO
+		AuthProtocol.Kind.HELLO,
 	)
 
 
 func test_classify_probe_magic() -> void:
 	var packet := AuthProtocol.encode_probe_request()
 	assert_that(AuthProtocol.classify(packet)).is_equal(
-		AuthProtocol.Kind.PROBE
+		AuthProtocol.Kind.PROBE,
 	)
 
 
 func test_classify_unknown_magic() -> void:
 	var packet := PackedByteArray([0x00, 0x01, 0x02, 0x03, 0x04, 0x05])
 	assert_that(AuthProtocol.classify(packet)).is_equal(
-		AuthProtocol.Kind.UNKNOWN
+		AuthProtocol.Kind.UNKNOWN,
 	)
 
 
 func test_classify_short_packet_is_unknown() -> void:
-	var packet := PackedByteArray([0x4E, 0x48])  # truncated "NH"
+	var packet := PackedByteArray([0x4E, 0x48]) # truncated "NH"
 	assert_that(AuthProtocol.classify(packet)).is_equal(
-		AuthProtocol.Kind.UNKNOWN
+		AuthProtocol.Kind.UNKNOWN,
 	)
 
 
@@ -87,7 +86,8 @@ func test_probe_request_round_trip() -> void:
 func test_probe_reply_round_trip() -> void:
 	var payload := PackedByteArray([0xCA, 0xFE])
 	var packet := AuthProtocol.encode_probe_reply(
-		AuthProtocol.ProbeStatus.OK, payload
+		AuthProtocol.ProbeStatus.OK,
+		payload,
 	)
 	var decoded := AuthProtocol.decode_probe_reply(packet)
 
@@ -112,9 +112,9 @@ func test_decode_rejects_version_mismatch() -> void:
 	# Hand-craft a full-length header with a wrong version byte.
 	var packet := PackedByteArray()
 	packet.append_array(AuthProtocol.MAGIC_HELLO)
-	packet.append(0xFF)  # bogus version
-	packet.append_array(PackedByteArray([0x00, 0x00, 0x00, 0x00]))  # app_tag
-	packet.append(0x00)  # flags
+	packet.append(0xFF) # bogus version
+	packet.append_array(PackedByteArray([0x00, 0x00, 0x00, 0x00])) # app_tag
+	packet.append(0x00) # flags
 	var decoded := AuthProtocol.decode_client_hello(packet)
 	assert_that(decoded.ok).is_false()
 	assert_that(decoded.reason).is_equal("version")

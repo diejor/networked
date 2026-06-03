@@ -7,48 +7,50 @@
 class_name TestProxySynchronizer
 extends NetwTestSuite
 
-
 @warning_ignore("missing_tool")
 class StubProxy extends ProxySynchronizer:
-	var _store: Dictionary[StringName, Variant] = {}
+	var _store: Dictionary[StringName, Variant] = { }
+
 
 	func _read_property(_name: StringName, _path: NodePath) -> Variant:
 		return _store.get(_name)
 
+
 	func _write_property(
-		_name: StringName,
-		_path: NodePath,
-		value: Variant
+			_name: StringName,
+			_path: NodePath,
+			value: Variant,
 	) -> void:
 		_store[_name] = value
 
 
 class StubTickAware extends TickAwareSynchronizer:
-	var _store: Dictionary[StringName, Variant] = {}
+	var _store: Dictionary[StringName, Variant] = { }
+
 
 	func _read_property(_name: StringName, _path: NodePath) -> Variant:
 		return _store.get(_name)
 
+
 	func _write_property(
-		_name: StringName,
-		_path: NodePath,
-		value: Variant
+			_name: StringName,
+			_path: NodePath,
+			value: Variant,
 	) -> void:
 		_store[_name] = value
-
 
 #region Registration
 
 @warning_ignore("unused_parameter")
 func test_register_property(
-	mode: int,
-	spawn: bool,
-	test_parameters := [
-		# defaults: ON_CHANGE mode, spawn=false
-		[SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE, false],
-		# explicit: same mode but spawn=true
-		[SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE, true],
-	],
+		mode: int,
+		spawn: bool,
+		test_parameters := [
+			# defaults: ON_CHANGE mode, spawn=false
+			[SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE, false],
+			# explicit: same mode but spawn=true
+			[SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE, true],
+		],
 ) -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
 	var path := NodePath(":health")
@@ -92,9 +94,8 @@ func test_register_node_property_uses_proxy_relative_path() -> void:
 
 	proxy.register_node_property(&"health", source, &"health")
 	assert_that(proxy.get_real_path(&"health")).is_equal(
-		NodePath("../State:health")
+		NodePath("../State:health"),
 	)
-
 
 #endregion
 
@@ -102,13 +103,13 @@ func test_register_node_property_uses_proxy_relative_path() -> void:
 
 @warning_ignore("unused_parameter")
 func test_set_get_dispatch(
-	prop: StringName,
-	registered: bool,
-	expected_set_result: bool,
-	test_parameters := [
-		[&"speed",   true,  true],
-		[&"unknown", false, false],
-	],
+		prop: StringName,
+		registered: bool,
+		expected_set_result: bool,
+		test_parameters := [
+			[&"speed", true, true],
+			[&"unknown", false, false],
+		],
 ) -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
 	if registered:
@@ -126,8 +127,8 @@ func test_set_get_dispatch(
 # the variant round-trips byte-for-byte.
 @warning_ignore("unused_parameter")
 func test_property_roundtrip_fuzz(
-	fuzzer := Fuzzers.rangei(-1_000_000, 1_000_000),
-	fuzzer_iterations := 20,
+		fuzzer := Fuzzers.rangei(-1_000_000, 1_000_000),
+		fuzzer_iterations := 20,
 ) -> void:
 	var proxy: StubProxy = auto_free(StubProxy.new())
 	proxy.register_property(&"v", NodePath(":v"))
@@ -137,7 +138,6 @@ func test_property_roundtrip_fuzz(
 
 	assert_that(proxy._set(&"v", value)).is_true()
 	assert_that(proxy._get(&"v")).is_equal(value)
-
 
 #endregion
 
@@ -165,9 +165,8 @@ func test_finalize_applies_config_to_replication_config() -> void:
 	proxy.finalize()
 	assert_that(proxy.replication_config).is_not_null()
 	assert_that(
-		proxy.replication_config.has_property(NodePath(":score"))
+		proxy.replication_config.has_property(NodePath(":score")),
 	).is_true()
-
 
 #endregion
 
@@ -185,10 +184,10 @@ func test_finalize_with_tick_inserts_tick_first_always_no_spawn() -> void:
 
 	var tick_path := NodePath(":__tick")
 	assert_that(
-		sync.replication_config.property_get_replication_mode(tick_path)
+		sync.replication_config.property_get_replication_mode(tick_path),
 	).is_equal(SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 	assert_that(
-		sync.replication_config.property_get_spawn(tick_path)
+		sync.replication_config.property_get_spawn(tick_path),
 	).is_false()
 
 

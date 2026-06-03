@@ -84,7 +84,7 @@ func test_hydrate_empty_record_uses_scene_defaults() -> void:
 
 	var signal_fired := [false]
 	save_comp.loaded.connect(func(): signal_fired[0] = true)
-	save_comp.hydrate({})
+	save_comp.hydrate({ })
 	assert_that(signal_fired[0]).is_true()
 
 
@@ -100,8 +100,9 @@ func test_hydrate_from_db_registers_schema_before_read() -> void:
 	root.add_child(save_comp)
 	save_comp.owner = root
 
-	assert_error(func() -> void:
-		save_comp.hydrate_from_db()
+	assert_error(
+		func() -> void:
+			save_comp.hydrate_from_db()
 	).is_success()
 
 	assert_that(db.get_registered_columns(&"players")).contains(&"position")
@@ -131,8 +132,9 @@ func test_bind_entity_via_table_repository() -> void:
 	db._register_schema(&"players", [&"score"])
 	await get_tree().process_frame
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext) -> void:
-		tx.queue_upsert(&"players", &"carol", {&"score": 42})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext) -> void:
+			tx.queue_upsert(&"players", &"carol", { &"score": 42 })
 	)
 
 	var entity: Entity = db.table(&"players").fetch(&"carol")
@@ -258,8 +260,9 @@ func test_fetch_reflects_record_existence() -> void:
 
 	assert_that(db.table(&"players").fetch(&"Dave")).is_null()
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext) -> void:
-		tx.queue_upsert(&"players", &"Dave", {&"created": true})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext) -> void:
+			tx.queue_upsert(&"players", &"Dave", { &"created": true })
 	)
 	await get_tree().process_frame
 

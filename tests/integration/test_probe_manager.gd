@@ -7,7 +7,6 @@
 class_name TestProbeManager
 extends NetwTestSuite
 
-
 const _QUERY_COUNT := 10
 const _CONCURRENCY_CAP := 3
 
@@ -15,6 +14,7 @@ const _CONCURRENCY_CAP := 3
 class _CountingSource:
 	extends ServerInfoSource
 	var advertised_players: int = 0
+
 
 	func build_server_info(_tree: MultiplayerTree) -> ServerInfo:
 		var info := ServerInfo.new()

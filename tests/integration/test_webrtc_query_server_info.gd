@@ -7,13 +7,13 @@
 ## tracker sockets.
 extends GdUnitTestSuite
 
-
 func test_query_returns_unsupported_without_signaling() -> void:
 	var backend := TrackerWebRTCBackend.new()
 
 	var start_ms := Time.get_ticks_msec()
 	var result: ServerInfoResult = backend.query_server_info(
-		"deadbeefdeadbeefdead", 2.0
+		"deadbeefdeadbeefdead",
+		2.0,
 	)
 	var elapsed_ms := Time.get_ticks_msec() - start_ms
 

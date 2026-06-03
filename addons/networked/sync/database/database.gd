@@ -50,11 +50,14 @@ signal schema_registered(table: StringName, columns: Array[StringName])
 ## [param unknown] = columns in the record but not in schema (triggers policy).
 ## [param missing] = columns in schema but not in the record (safe — use scene
 ## default).
-signal schema_mismatch(table: StringName, id: StringName, \
-		missing: Array[StringName], unknown: Array[StringName])
+signal schema_mismatch(
+		table: StringName,
+		id: StringName, \
+		missing: Array[StringName],
+		unknown: Array[StringName],
+)
 ## Emitted after a transaction is successfully committed.
 signal transaction_committed(table_count: int, record_count: int)
-
 
 ## Controls what happens when a loaded record has columns not in the current
 ## schema.
@@ -78,14 +81,14 @@ enum SchemaMismatchPolicy {
 @export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.PURGE
 
 # table → Array[StringName] of declared column names
-var _schema: Dictionary[StringName, Array] = {}
+var _schema: Dictionary[StringName, Array] = { }
 var _initialized: bool = false
 
 # table → Script (entity subclass)
-var _table_scripts: Dictionary[StringName, Script] = {}
-
+var _table_scripts: Dictionary[StringName, Script] = { }
 
 # ── Binding ───────────────────────────────────────────────────────────────────
+
 
 ## Binds a [SaveComponent] to this database, registering its schema.
 ## If [param span] is provided, steps are recorded for the initialization
@@ -93,18 +96,21 @@ var _table_scripts: Dictionary[StringName, Script] = {}
 func bind(component: SaveComponent, span: NetSpan = null) -> void:
 	if component.table_name.is_empty():
 		return
-	
+
 	var columns := component.get_virtual_properties()
 	_register_schema(component.table_name, columns)
-	
-	if span:
-		span.step("schema_registered", {
-			table = component.table_name,
-			columns = columns
-		})
 
+	if span:
+		span.step(
+			"schema_registered",
+			{
+				table = component.table_name,
+				columns = columns,
+			},
+		)
 
 # ── Table access ──────────────────────────────────────────────────────────────
+
 
 ## Returns the [NetwDatabase.TableRepository] for [param table_name].
 ##
@@ -133,15 +139,16 @@ func table(table_name: StringName) -> TableRepository:
 func declare_table(
 		table_name: StringName,
 		columns: Array[StringName] = [],
-		entity_script: Script = null) -> void:
+		entity_script: Script = null,
+) -> void:
 	if entity_script:
 		_table_scripts[table_name] = entity_script
-	
+
 	if not columns.is_empty():
 		_register_schema(table_name, columns)
 
-
 # ── Dynamic property proxy ────────────────────────────────────────────────────
+
 
 ## Exposes registered tables as properties for ergonomic access.
 ##
@@ -154,22 +161,25 @@ func _get(property: StringName) -> Variant:
 		return table(property)
 	return null
 
+
 ## Makes registered table names visible to the GDScript autocomplete and
 ## property inspector.
 func _get_property_list() -> Array[Dictionary]:
 	var props: Array[Dictionary] = []
 	for tname: StringName in _schema:
-		props.append({
-			"name": tname,
-			"type": TYPE_OBJECT,
-			"hint": PROPERTY_HINT_RESOURCE_TYPE,
-			"hint_string": "NetwDatabase.TableRepository",
-			"usage": PROPERTY_USAGE_NONE,
-		})
+		props.append(
+			{
+				"name": tname,
+				"type": TYPE_OBJECT,
+				"hint": PROPERTY_HINT_RESOURCE_TYPE,
+				"hint_string": "NetwDatabase.TableRepository",
+				"usage": PROPERTY_USAGE_NONE,
+			},
+		)
 	return props
 
-
 # ── Schema Registration ───────────────────────────────────────────────────────
+
 
 # Declares the columns for [param table].
 #
@@ -181,14 +191,14 @@ func _get_property_list() -> Array[Dictionary]:
 func _register_schema(table: StringName, columns: Array[StringName]) -> void:
 	if not _schema.has(table):
 		_schema[table] = [] as Array[StringName]
-	
+
 	var existing: Array[StringName] = _schema[table]
 	for col in columns:
 		if not existing.has(col):
 			existing.append(col)
-	
+
 	schema_registered.emit(table, existing.duplicate())
-	
+
 	if not _initialized:
 		_initialize_backend()
 
@@ -197,7 +207,7 @@ func _register_schema(table: StringName, columns: Array[StringName]) -> void:
 ## the table has not been registered yet.
 func get_registered_columns(table: StringName) -> Array[StringName]:
 	return (_schema.get(table, [] as Array[StringName]) \
-			as Array[StringName]).duplicate()
+					as Array[StringName]).duplicate()
 
 
 # Initializes the backend and registers all known schemas.
@@ -206,16 +216,23 @@ func _initialize_backend() -> void:
 		return
 	_initialized = true
 	if not backend:
-		Netw.dbg.error("NetwDatabase: no backend assigned. " + \
-				"Calls will be no-ops.", func(m): push_error(m))
+		Netw.dbg.error(
+			"NetwDatabase: no backend assigned. " +
+			"Calls will be no-ops.",
+			func(m): push_error(m)
+		)
 		return
 	var err := backend.initialize(_schema)
 	if err != OK:
-		Netw.dbg.error("NetwDatabase: backend initialization failed. " + \
-				"Error: %s", [error_string(err)], func(m): push_error(m))
-
+		Netw.dbg.error(
+			"NetwDatabase: backend initialization failed. " +
+			"Error: %s",
+			[error_string(err)],
+			func(m): push_error(m)
+		)
 
 # ── Schema diffing ────────────────────────────────────────────────────────────
+
 
 # Compares [param record] against the declared schema for [param table].
 #
@@ -229,20 +246,20 @@ func _diff_record(table: StringName, id: StringName, record: Dictionary) -> Dict
 	var schema_cols: Array[StringName] = _schema.get(table, [] as Array[StringName])
 	var missing: Array[StringName] = []
 	var unknown: Array[StringName] = []
-	
+
 	for col in schema_cols:
 		if not record.has(col):
 			missing.append(col)
-	
+
 	for key: StringName in record:
 		if not schema_cols.has(key):
 			unknown.append(key)
-	
+
 	var ok := missing.is_empty() and unknown.is_empty()
 	if not ok:
 		schema_mismatch.emit(table, id, missing, unknown)
-	
-	return {missing = missing, unknown = unknown, ok = ok}
+
+	return { missing = missing, unknown = unknown, ok = ok }
 
 
 # Applies [member mismatch_policy] to [param record] given a diff result.
@@ -256,42 +273,40 @@ func _apply_mismatch_policy(
 		id: StringName,
 		record: Dictionary,
 		diff: Dictionary,
-		out_error: Array) -> Dictionary:
-	
+		out_error: Array,
+) -> Dictionary:
 	out_error[0] = OK
-	
+
 	if diff.ok:
 		return record
-	
+
 	# Columns present in the schema but absent from the record are new
 	# additions — the scene will supply defaults. No policy action required.
 	if (diff.unknown as Array[StringName]).is_empty():
 		return record
-	
+
 	match mismatch_policy:
 		SchemaMismatchPolicy.PURGE:
 			_delete_internal(table, id)
 			# ERR_FILE_NOT_FOUND signals "clean slate" — callers may fall back to
 			# spawner state just like a first-play scenario.
 			out_error[0] = ERR_FILE_NOT_FOUND
-			return {}
-		
+			return { }
 		SchemaMismatchPolicy.LOAD_PARTIAL:
 			var schema_cols: Array[StringName] = _schema.get(table, [] as Array[StringName])
-			var filtered: Dictionary = {}
+			var filtered: Dictionary = { }
 			for col in schema_cols:
 				if record.has(col):
 					filtered[col] = record[col]
 			return filtered
-		
 		SchemaMismatchPolicy.FAIL:
 			out_error[0] = ERR_UNCONFIGURED
-			return {}
-	
+			return { }
+
 	return record
 
-
 # ── Transaction API ───────────────────────────────────────────────────────────
+
 
 ## Collects upserts inside a [Callable] and commits them all at once.
 ##
@@ -301,24 +316,27 @@ func _apply_mismatch_policy(
 ## Returns [constant OK] on success or the first error returned by the backend.
 func transaction(body: Callable) -> Error:
 	if not backend:
-		Netw.dbg.error("NetwDatabase: transaction called but no backend " + \
-				"is set.", func(m): push_error(m))
+		Netw.dbg.error(
+			"NetwDatabase: transaction called but no backend " +
+			"is set.",
+			func(m): push_error(m)
+		)
 		return ERR_UNCONFIGURED
-	
+
 	var ctx := TransactionContext.new()
 	body.call(ctx)
 	var err := ctx._commit(backend)
-	
+
 	if err == OK:
-		var tables: Dictionary = {}
+		var tables: Dictionary = { }
 		for entry in ctx._queue:
 			tables[entry.table] = true
 		transaction_committed.emit(tables.size(), ctx._queue.size())
-	
+
 	return err
 
-
 # ── Internal readers ──────────────────────────────────────────────────────────
+
 
 # Returns the raw record for [param id] in [param table].
 #
@@ -330,51 +348,58 @@ func transaction(body: Callable) -> Error:
 func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> Dictionary:
 	if not _schema.has(table):
 		Netw.dbg.warn(
-			"NetwDatabase: read on unregistered table '%s'. " + \
-			"Declare the schema before querying.", [table],
+			"NetwDatabase: read on unregistered table '%s'. " +
+			"Declare the schema before querying.",
+			[table],
 			func(m): push_warning(m)
 		)
 		out_error[0] = ERR_UNCONFIGURED
-		return {}
-	
+		return { }
+
 	if not backend:
-		Netw.dbg.error("NetwDatabase: _find_by_id called but no backend " + \
-				"is set.", func(m): push_error(m))
+		Netw.dbg.error(
+			"NetwDatabase: _find_by_id called but no backend " +
+			"is set.",
+			func(m): push_error(m)
+		)
 		out_error[0] = ERR_UNCONFIGURED
-		return {}
-	
+		return { }
+
 	var record := backend.find_by_id(table, id)
 	var hit := not record.is_empty()
 	record_loaded.emit(table, id, hit)
-	
+
 	if not hit:
 		out_error[0] = ERR_FILE_NOT_FOUND
-		return {}
-	
+		return { }
+
 	var diff := _diff_record(table, id, record)
 	if not diff.ok:
 		record = _apply_mismatch_policy(table, id, record, diff, out_error)
-	
+
 	return record
 
 
 # Returns all raw records in [param table] matching [param filter].
 # An empty filter returns every record.
-func _find_all(table: StringName, filter: Dictionary = {}) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary = { }) -> Array[Dictionary]:
 	if not _schema.has(table):
 		Netw.dbg.error(
-			"NetwDatabase: read on unregistered table '%s'. ", [table],
+			"NetwDatabase: read on unregistered table '%s'. ",
+			[table],
 			func(m): push_error(m)
 		)
 		push_warning(
 			"NetwDatabase: read on unregistered table '%s'. " % [table]
-			+ "Declare the schema before querying."
+			+ "Declare the schema before querying.",
 		)
 		return []
-	
+
 	if not backend:
-		Netw.dbg.error("NetwDatabase: _find_all called but no backend is set.",
-				func(m): push_error(m))
+		Netw.dbg.error(
+			"NetwDatabase: _find_all called but no backend is set.",
+			func(m): push_error(m)
+		)
 		return []
 	return backend.find_all(table, filter)
 
@@ -387,13 +412,15 @@ func delete(table: StringName, id: StringName) -> Error:
 # Deletes a record from the backend.
 func _delete_internal(table: StringName, id: StringName) -> Error:
 	if not backend:
-		Netw.dbg.error("NetwDatabase: delete called but no backend is set.",
-				func(m): push_error(m))
+		Netw.dbg.error(
+			"NetwDatabase: delete called but no backend is set.",
+			func(m): push_error(m)
+		)
 		return ERR_UNCONFIGURED
 	return backend.delete(table, id)
 
-
 # ── TransactionContext ────────────────────────────────────────────────────────
+
 
 ## Accumulates write operations inside a [method NetwDatabase.transaction]
 ## closure.
@@ -403,11 +430,13 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 class TransactionContext:
 	## Pending write operations: Array of {table, id, data}.
 	var _queue: Array[Dictionary] = []
-	
+
+
 	## Enqueues an upsert for [param id] in [param table] with [param data].
 	func queue_upsert(table: StringName, id: StringName, data: Dictionary) -> void:
-		_queue.append({table = table, id = id, data = data})
-	
+		_queue.append({ table = table, id = id, data = data })
+
+
 	## Flushes all queued operations to [param backend].
 	## Returns the first error encountered, or [constant OK].
 	func _commit(backend: NetwBackend) -> Error:
@@ -416,6 +445,7 @@ class TransactionContext:
 			if err != OK:
 				return err
 		return OK
+
 
 ## A typed read/write interface for a single database table.
 ##
@@ -448,10 +478,10 @@ class TransactionContext:
 ## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 class TableRepository:
-
 	var _db: NetwDatabase
 	var _table: StringName
 	var _entity_script: Script
+
 
 	func _init(db: NetwDatabase, table: StringName, entity_script: Script = null) -> void:
 		_db = db
@@ -490,8 +520,9 @@ class TableRepository:
 	## var err := db.table(&"players").put(username, save_comp.bound_entity)
 	## [/codeblock]
 	func put(id: StringName, entity: Entity) -> Error:
-		return _db.transaction(func(tx: NetwDatabase.TransactionContext) -> void:
-			tx.queue_upsert(_table, id, entity.to_dict())
+		return _db.transaction(
+			func(tx: NetwDatabase.TransactionContext) -> void:
+				tx.queue_upsert(_table, id, entity.to_dict())
 		)
 
 
@@ -507,7 +538,7 @@ class TableRepository:
 	## [codeblock lang=gdscript]
 	## var active_players := db.table(&"players").fetch_all({&"online": true})
 	## [/codeblock]
-	func fetch_all(filter: Dictionary = {}) -> Array[Entity]:
+	func fetch_all(filter: Dictionary = { }) -> Array[Entity]:
 		var results: Array[Entity] = []
 		for record in _db._find_all(_table, filter):
 			var entity: Entity = _make_entity()

@@ -64,7 +64,6 @@
 class_name NetwConnect
 extends RefCounted
 
-
 ## A saved or directory-discovered target was added to the live list.
 signal target_added(target: JoinTarget)
 ## A target was removed from the live list.
@@ -73,7 +72,8 @@ signal target_removed(target: JoinTarget)
 signal target_updated(target: JoinTarget, result: ServerInfoResult)
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
-	directory_id: StringName, lobbies: Array[LobbyInfo]
+		directory_id: StringName,
+		lobbies: Array[LobbyInfo],
 )
 ## A registered directory reported that its transport is unavailable.
 signal directory_unavailable(directory_id: StringName, reason: String)
@@ -89,7 +89,6 @@ signal host_failed(reason: String)
 signal session_entered()
 ## The bound tree returned to its offline state.
 signal session_left()
-
 
 var _ref: WeakRef
 
@@ -122,8 +121,8 @@ func is_session_active() -> bool:
 	var s := _ref.get_ref() as ConnectSession
 	return s.is_session_active() if s else false
 
-
 # -- Host & join ------------------------------------------------------------
+
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the
 ## transport and the server name; [param payload] is the local player's identity.
@@ -140,8 +139,8 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.join(target, payload) if s else ERR_UNCONFIGURED
 
-
 # -- Probing & refresh ------------------------------------------------------
+
 
 ## Re-probes every target and asks each registered directory to refresh its
 ## lobby list. Results arrive asynchronously via [signal target_updated].
@@ -159,8 +158,8 @@ func probe(target: JoinTarget) -> void:
 	if s:
 		s.probe(target)
 
-
 # -- Target list ------------------------------------------------------------
+
 
 ## Adds a saved [param target] to the live list and emits [signal target_added].
 ## Set [param persist] to also write it to the saved server list.
@@ -206,8 +205,8 @@ func get_result(target: JoinTarget) -> ServerInfoResult:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_result(target) if s else null
 
-
 # -- Directories -------------------------------------------------------------
+
 
 ## Registers [param directory] under [param id]. Its lobbies then appear
 ## as targets on [method refresh].
@@ -235,8 +234,8 @@ func get_directory_ids() -> Array[StringName]:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_directory_ids() if s else []
 
-
 # -- Persistence ------------------------------------------------------------
+
 
 ## Loads the saved targets from disk into the live list, replacing the
 ## current saved targets. Omit [param path] to use the session's configured default.

@@ -25,13 +25,13 @@ func _init() -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	var mt := NetwServices.register(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree"
+		"TPLayer must be a descendant of a MultiplayerTree",
 	)
-	
+
 	if not mt.configured.is_connected(configured.emit):
 		mt.configured.connect(configured.emit)
 
@@ -43,19 +43,21 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	var mt := NetwServices.unregister(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree"
+		"TPLayer must be a descendant of a MultiplayerTree",
 	)
-	
+
 	if mt.configured.is_connected(configured.emit):
 		mt.configured.disconnect(configured.emit)
+
 
 ## Plays the outgoing transition (cover the screen). Awaitable.
 @abstract
 func teleport_out() -> void
+
 
 ## Plays the incoming transition (reveal the screen). Awaitable.
 @abstract

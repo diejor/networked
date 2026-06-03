@@ -2,7 +2,6 @@
 class_name TestServerList
 extends NetwTestSuite
 
-
 func _temp_path() -> String:
 	return "user://_test_server_list_%d.tres" % Time.get_ticks_usec()
 

@@ -8,7 +8,8 @@ static var shared: LocalLoopbackSession = null
 
 var server_peer: LocalMultiplayerPeer
 var client_peers: Array[LocalMultiplayerPeer] = []
-var _held_packets_by_peer: Dictionary = {}
+var _held_packets_by_peer: Dictionary = { }
+
 
 ## Returns the process-wide shared session, creating it on first access.
 static func get_shared_session() -> LocalLoopbackSession:
@@ -16,13 +17,15 @@ static func get_shared_session() -> LocalLoopbackSession:
 		shared = LocalLoopbackSession.new()
 	return shared
 
+
 ## Returns [code]true[/code] if the server peer exists and is connected.
 func has_live_server() -> bool:
 	return (
-		server_peer != null
-		and server_peer.get_connection_status()
+			server_peer != null
+			and server_peer.get_connection_status()
 			!= MultiplayerPeer.CONNECTION_DISCONNECTED
 	)
+
 
 func init_server_side() -> void:
 	if has_live_server():
@@ -38,6 +41,7 @@ func init_server_side() -> void:
 			"Loopback: server create_server failed",
 			func(m): push_warning(m)
 		)
+
 
 ## Creates and links a new client peer to the server.
 ##
@@ -61,14 +65,17 @@ func create_client_peer() -> LocalMultiplayerPeer:
 	Netw.dbg.info("Local loopback handshake complete for client %d." % client_id)
 	return client
 
+
 ## Returns the server peer, initializing it first if necessary.
 func get_server_peer() -> LocalMultiplayerPeer:
 	init_server_side()
 	return server_peer
 
+
 ## Convenience wrapper around [method create_client_peer].
 func get_client_peer() -> LocalMultiplayerPeer:
 	return create_client_peer()
+
 
 ## Polls the server and all active client peers each frame.
 func poll() -> void:
@@ -106,11 +113,14 @@ func release_inbound_packets(peer: LocalMultiplayerPeer) -> void:
 	peer._packet_queue.append_array(held)
 	peer._packet_queue.append_array(existing)
 
+
 ## Closes all peers and resets the session so a new server can be hosted.
 func reset() -> void:
-	if server_peer: server_peer.close()
+	if server_peer:
+		server_peer.close()
 	for client in client_peers:
-		if client: client.close()
+		if client:
+			client.close()
 	server_peer = null
 	client_peers.clear()
 	_held_packets_by_peer.clear()

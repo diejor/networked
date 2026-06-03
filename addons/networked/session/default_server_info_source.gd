@@ -8,7 +8,6 @@
 class_name DefaultServerInfoSource
 extends ServerInfoSource
 
-
 func build_server_info(tree: MultiplayerTree) -> ServerInfo:
 	var info := ServerInfo.new()
 	info.is_local_listener = true

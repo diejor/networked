@@ -14,12 +14,25 @@ extends GdUnitTestSuite
 ## camelCase singleton methods [SteamWrapper] forwards to. Keep in sync with
 ## steam_wrapper.gd. ([code]run_callbacks[/code] is snake_case in GodotSteam.)
 const REQUIRED_METHODS: PackedStringArray = [
-	"steamInitEx", "run_callbacks", "getSteamID", "getPersonaName",
-	"getFriendPersonaName", "createLobby", "joinLobby", "leaveLobby",
-	"getLobbyOwner", "getNumLobbyMembers", "getLobbyMemberLimit",
-	"getLobbyMemberByIndex", "setLobbyData", "getLobbyData",
-	"setLobbyJoinable", "allowP2PPacketRelay", "requestLobbyList",
-	"requestLobbyData", "addRequestLobbyListStringFilter",
+	"steamInitEx",
+	"run_callbacks",
+	"getSteamID",
+	"getPersonaName",
+	"getFriendPersonaName",
+	"createLobby",
+	"joinLobby",
+	"leaveLobby",
+	"getLobbyOwner",
+	"getNumLobbyMembers",
+	"getLobbyMemberLimit",
+	"getLobbyMemberByIndex",
+	"setLobbyData",
+	"getLobbyData",
+	"setLobbyJoinable",
+	"allowP2PPacketRelay",
+	"requestLobbyList",
+	"requestLobbyData",
+	"addRequestLobbyListStringFilter",
 	"addRequestLobbyListDistanceFilter",
 ]
 
@@ -52,34 +65,34 @@ func test_singleton_exposes_required_methods() -> void:
 		return
 	for method_name in REQUIRED_METHODS:
 		assert_bool(_steam.has_method(method_name)) \
-			.override_failure_message(
-				"GodotSteam is missing method '%s' that SteamWrapper calls."
-				% method_name
-			).is_true()
+				.override_failure_message(
+					"GodotSteam is missing method '%s' that SteamWrapper calls."
+					% method_name,
+				).is_true()
 
 
 func test_singleton_exposes_required_signals() -> void:
 	if not _require_steam():
 		return
-	var arity_by_name := {}
+	var arity_by_name := { }
 	for info in _steam.get_signal_list():
 		arity_by_name[info.name] = (info.args as Array).size()
 
 	for signal_name in REQUIRED_SIGNALS:
 		assert_bool(arity_by_name.has(signal_name)) \
-			.override_failure_message(
-				"GodotSteam is missing signal '%s' that SteamWrapper bridges."
-				% signal_name
-			).is_true()
+				.override_failure_message(
+					"GodotSteam is missing signal '%s' that SteamWrapper bridges."
+					% signal_name,
+				).is_true()
 		if not arity_by_name.has(signal_name):
 			continue
 		assert_int(arity_by_name[signal_name]) \
-			.override_failure_message(
-				"GodotSteam signal '%s' arg count changed; SteamWrapper._init "
-				% signal_name
-				+ "connects a handler expecting %d args."
-				% REQUIRED_SIGNALS[signal_name]
-			).is_equal(REQUIRED_SIGNALS[signal_name])
+				.override_failure_message(
+					"GodotSteam signal '%s' arg count changed; SteamWrapper._init "
+					% signal_name
+					+ "connects a handler expecting %d args."
+					% REQUIRED_SIGNALS[signal_name],
+				).is_equal(REQUIRED_SIGNALS[signal_name])
 
 
 func test_lobby_type_enum_matches_godotsteam() -> void:
@@ -98,14 +111,14 @@ func test_lobby_type_enum_matches_godotsteam() -> void:
 	}
 	for const_name in expected:
 		assert_bool(names.has(const_name)) \
-			.override_failure_message(
-				"GodotSteam (%s) has no integer constant '%s'. " % [cls, const_name]
-				+ "SteamWrapper.LobbyType assumes it; reconcile the names with "
-				+ "the installed GodotSteam version."
-			).is_true()
+				.override_failure_message(
+					"GodotSteam (%s) has no integer constant '%s'. " % [cls, const_name]
+					+ "SteamWrapper.LobbyType assumes it; reconcile the names with "
+					+ "the installed GodotSteam version.",
+				).is_true()
 		if not names.has(const_name):
 			continue
 		assert_int(ClassDB.class_get_integer_constant(cls, const_name)) \
-			.override_failure_message(
-				"SteamWrapper.LobbyType drifted from GodotSteam '%s'." % const_name
-			).is_equal(expected[const_name])
+				.override_failure_message(
+					"SteamWrapper.LobbyType drifted from GodotSteam '%s'." % const_name,
+				).is_equal(expected[const_name])

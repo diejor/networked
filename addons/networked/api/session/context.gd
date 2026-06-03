@@ -77,7 +77,8 @@ var _connect: NetwConnect
 ## [member _origin] to the entity root. [code]null[/code] when
 ## [member _origin] is invalid.
 var entity: NetwEntity:
-	get: return NetwEntity.of(_origin) if is_instance_valid(_origin) else null
+	get:
+		return NetwEntity.of(_origin) if is_instance_valid(_origin) else null
 
 
 func _init(
@@ -93,10 +94,10 @@ func _init(
 	scene = scene_ctx
 	_origin = origin
 
-
 # ---------------------------------------------------------------------------
 # Validity
 # ---------------------------------------------------------------------------
+
 
 ## Returns [code]true[/code] if every facade present on this context is
 ## still valid. A context whose facades are individually [code]null[/code]
@@ -116,10 +117,10 @@ func is_valid() -> bool:
 func has_scene() -> bool:
 	return scene != null and scene.is_valid()
 
-
 # ---------------------------------------------------------------------------
 # Static access
 # ---------------------------------------------------------------------------
+
 
 ## Returns a [NetwContext] for [param node].
 ##

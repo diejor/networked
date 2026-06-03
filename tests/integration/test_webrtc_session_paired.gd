@@ -7,7 +7,6 @@
 class_name TestWebRTCSessionPaired
 extends NetwTestSuite
 
-
 func _payload(username: String) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username

@@ -9,7 +9,6 @@
 class_name TestInterestComponent
 extends NetwTestSuite
 
-
 var mt: MultiplayerTree
 
 
@@ -40,11 +39,14 @@ func test_visibility_enter_waits_for_delayed_node() -> void:
 	var layer := _layer(&"sight")
 	var visible: Array[NetwEntity] = []
 	layer.entity_visible.connect(
-			func(_entity: NetwEntity): visible.append(_entity))
+		func(_entity: NetwEntity): visible.append(_entity)
+	)
 
-	_service()._rpc_visibility_events([
-		[NodePath("Delayed"), &"sight", InterestService.Kind.ENTER],
-	])
+	_service()._rpc_visibility_events(
+		[
+			[NodePath("Delayed"), &"sight", InterestService.Kind.ENTER],
+		],
+	)
 	await drain_frames(get_tree(), 2)
 	assert_that(visible.is_empty()).is_true()
 
@@ -55,10 +57,10 @@ func test_visibility_enter_waits_for_delayed_node() -> void:
 	assert_that(visible).contains_exactly([entity])
 	assert_that(_service()._pending_visibility_events.is_empty()).is_true()
 
-
 # ---------------------------------------------------------------------------
 # Spawn-property contribution.
 # ---------------------------------------------------------------------------
+
 
 func test_parented_contributes_layer_ids_property() -> void:
 	var root := _make_entity()
@@ -72,10 +74,10 @@ func test_parented_contributes_layer_ids_property() -> void:
 	var path := NodePath("InterestComponent:layer_ids")
 	assert_that(entity._pending_spawn_props.has(path)).is_true()
 
-
 # ---------------------------------------------------------------------------
 # Registration on tree-enter / tree-exit.
 # ---------------------------------------------------------------------------
+
 
 func test_enter_tree_registers_for_each_layer_id() -> void:
 	var layer_a := _layer(&"a")
@@ -104,10 +106,10 @@ func test_exit_tree_unregisters() -> void:
 	root.get_parent().remove_child(root)
 	assert_that(layer_x.has_entity(entity)).is_false()
 
-
 # ---------------------------------------------------------------------------
 # layer_ids setter diff.
 # ---------------------------------------------------------------------------
+
 
 func test_setter_adds_new_layer() -> void:
 	var layer_a := _layer(&"a")
@@ -153,10 +155,10 @@ func test_setter_full_replace() -> void:
 	assert_that(layer_a.has_entity(entity)).is_false()
 	assert_that(layer_c.has_entity(entity)).is_true()
 
-
 # ---------------------------------------------------------------------------
 # End-to-end: layer + entity + viewer -> interest_enter fires.
 # ---------------------------------------------------------------------------
+
 
 func test_admit_viewer_fires_interest_enter_on_entity() -> void:
 	var layer := _layer(&"arena")
@@ -168,7 +170,8 @@ func test_admit_viewer_fires_interest_enter_on_entity() -> void:
 	var entity := NetwEntity.of(root)
 	var enters: Array[int] = []
 	entity.interest_enter.connect(
-			func(peer: int): enters.append(peer))
+		func(peer: int): enters.append(peer)
+	)
 
 	layer.add_viewer(7)
 

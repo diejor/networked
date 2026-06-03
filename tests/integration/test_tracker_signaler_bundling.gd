@@ -6,10 +6,10 @@
 class_name TestTrackerSignalerBundling
 extends NetwTestSuite
 
-
 # TrackerSignaler that announces into a FakeTrackerClient the test can inspect.
 class RecordingSignaler extends TrackerSignaler:
 	var fake: FakeTrackerClient
+
 
 	func _make_tracker() -> WebTorrentTrackerClient:
 		fake = FakeTrackerClient.new()
@@ -18,7 +18,10 @@ class RecordingSignaler extends TrackerSignaler:
 
 func _cand(_name: String) -> Dictionary:
 	return {
-		"type": "candidate", "candidate": _name, "sdpMid": "0", "sdpMLineIndex": 0,
+		"type": "candidate",
+		"candidate": _name,
+		"sdpMid": "0",
+		"sdpMLineIndex": 0,
 	}
 
 
@@ -28,7 +31,7 @@ func test_client_offer_bundles_candidates_with_stable_id() -> void:
 	sig.send(1, "", "offer", { "type": "offer", "sdp": "OFFER" })
 	sig.send(1, "", "candidate", _cand("c1"))
 	sig.send(1, "", "candidate", _cand("c2"))
-	sig.poll(0.5)  # past the default 0.4s gather grace
+	sig.poll(0.5) # past the default 0.4s gather grace
 
 	var offers := sig.fake.sdp_announces("offer")
 	assert_array(offers).has_size(1)
@@ -41,7 +44,7 @@ func test_client_offer_bundles_candidates_with_stable_id() -> void:
 	for data: Dictionary in sig.fake.announces:
 		for slot: Variant in data.get("offers", []):
 			assert_str(String((slot as Dictionary)["offer"].get("type"))) \
-				.is_equal("offer")
+					.is_equal("offer")
 
 	# Re-announcing to reach a late host keeps the same offer_id.
 	sig.poll(2.5)
@@ -57,10 +60,14 @@ func test_host_answer_bundles_candidates_and_reuses_offer_id() -> void:
 	var client_peer := "00000000000000000002"
 
 	# Inbound client offer registers the offer_id the answer must reuse.
-	sig._parse_packet({
-		"info_hash": room, "peer_id": client_peer,
-		"offer": { "type": "offer", "sdp": "CLIENT_OFFER" }, "offer_id": "OID123",
-	})
+	sig._parse_packet(
+		{
+			"info_hash": room,
+			"peer_id": client_peer,
+			"offer": { "type": "offer", "sdp": "CLIENT_OFFER" },
+			"offer_id": "OID123",
+		},
+	)
 
 	sig.send(0, client_peer, "answer", { "type": "answer", "sdp": "ANSWER" })
 	sig.send(0, client_peer, "candidate", _cand("h1"))
@@ -88,12 +95,16 @@ func test_inbound_bundle_fans_out_to_offer_then_candidates() -> void:
 			got.append(kind)
 	)
 
-	sig._parse_packet({
-		"info_hash": room, "peer_id": "00000000000000000001",
-		"answer": {
-			"type": "answer", "sdp": "S",
-			"candidates": [_cand("c1"), _cand("c2")],
+	sig._parse_packet(
+		{
+			"info_hash": room,
+			"peer_id": "00000000000000000001",
+			"answer": {
+				"type": "answer",
+				"sdp": "S",
+				"candidates": [_cand("c1"), _cand("c2")],
+			},
 		},
-	})
+	)
 
 	assert_array(got).is_equal(["answer", "candidate", "candidate"])

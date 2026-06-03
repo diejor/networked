@@ -8,7 +8,7 @@ class_name DictionarySaveFormatSaver
 extends ResourceFormatSaver
 
 const TEXT_EXT := "tdict"
-const BIN_EXT  := "dict"
+const BIN_EXT := "dict"
 
 
 func _recognize(resource: Resource) -> bool:
@@ -28,8 +28,10 @@ func _recognize_path(resource: Resource, path: String) -> bool:
 
 func _save(resource: Resource, path: String, _flags: int) -> Error:
 	var dict_res := resource as DictionaryEntity
-	assert(dict_res != null,
-		"`DictionarySaver` can only save `DictionaryEntity`.")
+	assert(
+		dict_res != null,
+		"`DictionarySaver` can only save `DictionaryEntity`.",
+	)
 	if dict_res == null:
 		return ERR_UNAVAILABLE
 
@@ -41,15 +43,19 @@ func _save(resource: Resource, path: String, _flags: int) -> Error:
 		BIN_EXT:
 			return _save_as_binary(dict_res, path)
 		_:
-			assert(false,
-				"Unsupported extension for DictionaryEntity: %s" % ext)
+			assert(
+				false,
+				"Unsupported extension for DictionaryEntity: %s" % ext,
+			)
 			return ERR_FILE_UNRECOGNIZED
 
 
 func _save_as_json(dict_res: DictionaryEntity, path: String) -> Error:
 	var file := FileAccess.open(path, FileAccess.WRITE)
-	assert(file != null,
-		"Failed to open file for JSON save at path `%s`." % path)
+	assert(
+		file != null,
+		"Failed to open file for JSON save at path `%s`." % path,
+	)
 	if file == null:
 		return FileAccess.get_open_error()
 

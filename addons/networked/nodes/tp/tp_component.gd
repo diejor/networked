@@ -1,6 +1,5 @@
 class_name TPComponent
 extends NetwComponent
-
 ## Cross-scene teleportation for a player-owned entity.
 ##
 ## [method teleport] returns a [TPComponent.TeleportPromise] that survives node
@@ -15,15 +14,14 @@ extends NetwComponent
 
 signal _teleport_committed
 
-
-
 ## Fallback scene when [member current_scene_path] is empty on tree entry.
 @export_custom(PROPERTY_HINT_RESOURCE_TYPE, "SceneNodePath:MultiplayerSpawner")
 var starting_scene_path: SceneNodePath
 
 ## The scene the player currently resides in. Replicates on change.
 @export var current_scene_path: String = "":
-	get: return ResourceUID.ensure_path(current_scene_path)
+	get:
+		return ResourceUID.ensure_path(current_scene_path)
 	set(value):
 		current_scene_path = value
 
@@ -39,8 +37,8 @@ var current_scene_name: String:
 @export var settle_seconds: float = 0.5
 
 var _tp_mutex := AsyncMutex.new()
-var _tp_span: NetSpan  # Span for the current teleport operation
-var _tp_guard: AreaReparentGuard  # Holds owner's physics state during a TP.
+var _tp_span: NetSpan # Span for the current teleport operation
+var _tp_guard: AreaReparentGuard # Holds owner's physics state during a TP.
 var _settle_until_msec: int = 0
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -49,11 +47,13 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 ## Bridges the old client instance (which stores the promise) to the new instance
 ## (which resolves it) across the delete+respawn cycle caused by server reparenting.
 class Bucket extends RefCounted:
-	var pending: Dictionary[int, TeleportPromise] = {}
+	var pending: Dictionary[int, TeleportPromise] = { }
 	var span: NetSpan # Active span for the local player's teleport
+
 
 func _get_bucket() -> Bucket:
 	return get_bucket(Bucket) as Bucket
+
 
 class TeleportPromise extends RefCounted:
 	## Returned by [method TPComponent.teleport] to observe the completion of a teleport.
@@ -78,11 +78,11 @@ func _init() -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
 		return
-	
+
 	var entity := Netw.ctx(self).entity
 	if not entity or not entity.owner:
 		return
-	
+
 	entity.contribute_spawn_property(self, &"current_scene_path")
 	entity.contribute_save_property(
 		self,
@@ -95,12 +95,13 @@ func _ready() -> void:
 	pass
 
 
-func _step(label: String, data: Dictionary = {}) -> void:
-	if _tp_span: _tp_span.step(label, data)
+func _step(label: String, data: Dictionary = { }) -> void:
+	if _tp_span:
+		_tp_span.step(label, data)
 
 
 func _begin_tp_span(scene_path: String, promise: TeleportPromise) -> void:
-	_tp_span = _dbg.span("tp", {"scene": scene_path})
+	_tp_span = _dbg.span("tp", { "scene": scene_path })
 	promise.span = _tp_span
 	_step("initiate")
 	_dbg.info("Initiating teleport to %s" % [scene_path])
@@ -122,11 +123,11 @@ func _recover_tp_span() -> void:
 
 
 func _fail_span(
-	span: NetSpan,
-	reason: String,
-	msg: String,
-	args: Array = [],
-	data: Dictionary = {},
+		span: NetSpan,
+		reason: String,
+		msg: String,
+		args: Array = [],
+		data: Dictionary = { },
 ) -> void:
 	_dbg.error(msg, args, func(m): push_error(m))
 	if span:
@@ -180,17 +181,16 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 	_step("awaiting_mutex")
 	await _tp_mutex.lock()
 	_step("mutex_acquired")
-	
-	
+
 	var peer_id := multiplayer.get_unique_id()
 	var bucket := _get_bucket()
 	if bucket:
 		bucket.pending[peer_id] = promise
 		bucket.span = _tp_span
-	
+
 	var from_scene := current_scene_name
 	current_scene_path = target_tp.scene_path
-	_step("scene_path_set", {"from": from_scene, "to": current_scene_name})
+	_step("scene_path_set", { "from": from_scene, "to": current_scene_name })
 
 	# Disable processing and mask the body off the PhysicsServer for the
 	# whole teleport. Suppresses phantom Area2D/3D enter/exit signals
@@ -232,44 +232,54 @@ func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
 		from_scene,
 		target_tp.scene_path,
 		target_tp.node_path,
-		_tp_span.checkpoint() if _tp_span else null
+		_tp_span.checkpoint() if _tp_span else null,
 	)
+
 
 # Internal RPC called by the client to request a teleport from the server.
 @rpc("any_peer", "call_local", "reliable")
-func _request_teleport(username: String, 
-	from_scene_name: String, 
-	to_scene_path: String, 
-	tp_path: String, 
-	token: Variant
+func _request_teleport(
+		username: String,
+		from_scene_name: String,
+		to_scene_path: String,
+		tp_path: String,
+		token: Variant,
 ) -> void:
 	if not multiplayer.is_server():
 		_dbg.warn("_request_teleport received on non-server peer %d", [multiplayer.get_unique_id()])
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
-	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], {}, token as CheckpointToken)
+	var span := Netw.dbg.peer_span(self, "tp_server", [sender_id], { }, token as CheckpointToken)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
-	
+
 	var scene_manager := get_scene_manager()
 	if not scene_manager:
 		_fail_span(span, "no_scene_manager", "Cannot teleport, scene manager not found.")
 		return
-	
+
 	var player := owner
 	var from_scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
 	if not from_scene:
 		from_scene = scene_manager.active_scenes.get(from_scene_name)
 	if not from_scene:
-		_fail_span(span, "source_scene_not_found",
-			"Source scene '%s' not found.", [from_scene_name],
-			{"scene": from_scene_name})
+		_fail_span(
+			span,
+			"source_scene_not_found",
+			"Source scene '%s' not found.",
+			[from_scene_name],
+			{ "scene": from_scene_name },
+		)
 		return
-	
+
 	if not is_instance_valid(player) or not from_scene.level.is_ancestor_of(player):
-		_fail_span(span, "player_not_found",
-			"Player '%s' not found in source scene.", [username])
+		_fail_span(
+			span,
+			"player_not_found",
+			"Player '%s' not found in source scene.",
+			[username],
+		)
 		return
-	
+
 	var tp_component: TPComponent = player.get_node("%TPComponent")
 	tp_component.current_scene_path = to_scene_path
 
@@ -303,13 +313,17 @@ func _request_teleport(username: String,
 func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerScene:
 	var scene_manager := get_scene_manager()
 	var to_scene_name := _resolve_scene_name(to_scene_path)
-	span.step("activating_scene", {"scene": to_scene_name})
+	span.step("activating_scene", { "scene": to_scene_name })
 	await scene_manager.activate_scene(StringName(to_scene_name))
 	var to_scene: MultiplayerScene = scene_manager.active_scenes.get(StringName(to_scene_name))
 	if not to_scene:
-		_fail_span(span, "dest_scene_activation_failed",
+		_fail_span(
+			span,
+			"dest_scene_activation_failed",
 			"Destination scene '%s' could not be activated.",
-			[to_scene_name], {"scene": to_scene_name})
+			[to_scene_name],
+			{ "scene": to_scene_name },
+		)
 		return null
 	return to_scene
 
@@ -409,7 +423,7 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 
 	_recover_tp_span()
 	_dbg.info("Teleport committed. Snapping local player to %s" % [str(snap_pos)])
-	_step("committed", {"snap_pos": str(snap_pos)})
+	_step("committed", { "snap_pos": str(snap_pos) })
 	_teleport_committed.emit()
 	owner.set("global_position", snap_pos)
 	_reset_visual_smoothing(owner)
@@ -418,7 +432,8 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	if tp_layer:
 		var phase := _tp_span.phase("transition_in") if _tp_span else null
 		await tp_layer.teleport_in()
-		if phase: phase.done()
+		if phase:
+			phase.done()
 
 	# Open the settle window before restoring physics so the first
 	# body_entered the destination area fires after release lands

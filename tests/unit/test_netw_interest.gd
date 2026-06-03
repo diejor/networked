@@ -3,7 +3,6 @@
 class_name TestNetwInterest
 extends NetwTestSuite
 
-
 var mt: MultiplayerTree
 var interest: NetwInterest
 

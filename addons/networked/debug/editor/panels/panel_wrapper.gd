@@ -45,11 +45,11 @@ var _status_summary: String = ""
 
 
 func _init(
-	p_key: String,
-	p_peer_key: String,
-	p_title: String,
-	p_color: Color,
-	p_panel: Control,
+		p_key: String,
+		p_peer_key: String,
+		p_title: String,
+		p_color: Color,
+		p_panel: Control,
 ) -> void:
 	adapter_key = p_key
 	peer_key = p_peer_key
@@ -58,11 +58,11 @@ func _init(
 	_peer_color = p_color
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	
+
 	_content_vbox = VBoxContainer.new()
 	_content_vbox.add_theme_constant_override("separation", 0)
 	add_child(_content_vbox)
-	
+
 	_title_panel = PanelContainer.new()
 	_title_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_style = StyleBoxFlat.new()
@@ -73,12 +73,12 @@ func _init(
 	_title_panel.gui_input.connect(_on_title_bar_gui_input)
 	_title_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_content_vbox.add_child(_title_panel)
-	
+
 	_title_bar = HBoxContainer.new()
 	_title_bar.add_theme_constant_override("separation", 8)
 	_title_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_title_panel.add_child(_title_bar)
-	
+
 	_status_btn = Button.new()
 	_status_btn.flat = true
 	_status_btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -89,19 +89,19 @@ func _init(
 	_status_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_status_btn.pressed.connect(_on_status_btn_pressed)
 	_title_bar.add_child(_status_btn)
-	
+
 	_title_label = Label.new()
 	_title_label.text = p_title
 	_title_label.add_theme_color_override("font_color", p_color)
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_title_bar.add_child(_title_label)
-	
+
 	_metric_label = Label.new()
 	_metric_label.add_theme_color_override("font_color", p_color)
 	_metric_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_title_bar.add_child(_metric_label)
-	
+
 	panel_control.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_content_vbox.add_child(panel_control)
 
@@ -157,22 +157,27 @@ func update_live_metric(text: String) -> void:
 
 
 var _is_rebuilding_style: bool = false
+
+
 func _rebuild_outer_style() -> void:
 	if not is_inside_tree() or _is_rebuilding_style:
 		return
-	
+
 	_is_rebuilding_style = true
 	var border_alpha := 0.35 if _is_online else 0.12
 	_outer_style = StyleBoxFlat.new()
 	_outer_style.bg_color = get_theme_color("dark_color_1", "Editor")
 	_outer_style.border_color = Color(
-		_peer_color.r, _peer_color.g, _peer_color.b, border_alpha
+		_peer_color.r,
+		_peer_color.g,
+		_peer_color.b,
+		border_alpha,
 	)
 	_outer_style.set_border_width_all(1)
 	_outer_style.set_corner_radius_all(4)
-	_outer_style.content_margin_left   = 4
-	_outer_style.content_margin_right  = 4
-	_outer_style.content_margin_top    = 4
+	_outer_style.content_margin_left = 4
+	_outer_style.content_margin_right = 4
+	_outer_style.content_margin_top = 4
 	_outer_style.content_margin_bottom = 4
 	add_theme_stylebox_override("panel", _outer_style)
 	_is_rebuilding_style = false
@@ -181,24 +186,26 @@ func _rebuild_outer_style() -> void:
 func _update_status_ui() -> void:
 	if not is_inside_tree() or not _status_btn:
 		return
-	
+
 	if _status_level == 0:
 		_status_btn.visible = false
 		return
-	
+
 	_status_btn.visible = true
 	var icon_name := "NodeWarning" if _status_level == 1 else "StatusError"
 	var color_name := "warning_color" if _status_level == 1 else "error_color"
-	
+
 	_status_btn.icon = get_theme_icon(icon_name, "EditorIcons")
 	var icon_color := get_theme_color(color_name, "Editor")
 	_status_btn.add_theme_color_override("icon_normal_color", icon_color)
 	_status_btn.add_theme_color_override("icon_hover_color", icon_color)
 	_status_btn.add_theme_color_override("icon_pressed_color", icon_color)
-	
+
 	var type_str := "Warning" if _status_level == 1 else "Error"
 	_status_btn.tooltip_text = "%s in %s:\n%s" % [
-		type_str, _title_label.text, _status_summary
+		type_str,
+		_title_label.text,
+		_status_summary,
 	]
 
 

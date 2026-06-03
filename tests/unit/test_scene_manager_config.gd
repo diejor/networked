@@ -20,7 +20,6 @@ func after_test() -> void:
 		mgr.free()
 	await super.after_test()
 
-
 #region Public lifecycle policy
 
 # Unconfigured levels read back the documented defaults via both the
@@ -28,16 +27,16 @@ func after_test() -> void:
 func test_default_config_for_unconfigured_level() -> void:
 	var config := mgr._get_config(&"UnknownLevel")
 	assert_that(config["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP
+		MultiplayerSceneManager.LoadMode.ON_STARTUP,
 	)
 	assert_that(config["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE
+		MultiplayerSceneManager.EmptyAction.FREEZE,
 	)
 	assert_that(mgr._get(&"scene_config/NewLevel/load_mode")).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP
+		MultiplayerSceneManager.LoadMode.ON_STARTUP,
 	)
 	assert_that(mgr._get(&"scene_config/NewLevel/empty_action")).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE
+		MultiplayerSceneManager.EmptyAction.FREEZE,
 	)
 
 
@@ -45,19 +44,31 @@ func test_default_config_for_unconfigured_level() -> void:
 # identical results across the enum cross-product.
 @warning_ignore("unused_parameter")
 func test_lifecycle_policy_round_trip(
-	use_public_api: bool,
-	load_mode: int,
-	empty_action: int,
-	test_parameters := [
-		[true,  MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		        MultiplayerSceneManager.EmptyAction.DESTROY],
-		[true,  MultiplayerSceneManager.LoadMode.ON_STARTUP,
-		        MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE],
-		[false, MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		        MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE],
-		[false, MultiplayerSceneManager.LoadMode.ON_STARTUP,
-		        MultiplayerSceneManager.EmptyAction.DESTROY],
-	],
+		use_public_api: bool,
+		load_mode: int,
+		empty_action: int,
+		test_parameters := [
+			[
+				true,
+				MultiplayerSceneManager.LoadMode.ON_DEMAND,
+				MultiplayerSceneManager.EmptyAction.DESTROY,
+			],
+			[
+				true,
+				MultiplayerSceneManager.LoadMode.ON_STARTUP,
+				MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE,
+			],
+			[
+				false,
+				MultiplayerSceneManager.LoadMode.ON_DEMAND,
+				MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE,
+			],
+			[
+				false,
+				MultiplayerSceneManager.LoadMode.ON_STARTUP,
+				MultiplayerSceneManager.EmptyAction.DESTROY,
+			],
+		],
 ) -> void:
 	if use_public_api:
 		mgr.set_scene_lifecycle_policy(&"Level1", load_mode, empty_action)
@@ -70,9 +81,8 @@ func test_lifecycle_policy_round_trip(
 	assert_that(config["empty_action"]).is_equal(empty_action)
 	assert_that(mgr._get(&"scene_config/Level1/load_mode")).is_equal(load_mode)
 	assert_that(mgr._get(&"scene_config/Level1/empty_action")).is_equal(
-		empty_action
+		empty_action,
 	)
-
 
 #endregion
 
@@ -82,12 +92,12 @@ func test_lifecycle_policy_round_trip(
 # else is rejected by `_set` and returns null from `_get`.
 @warning_ignore("unused_parameter")
 func test_property_routing(
-	prop: StringName,
-	expected_set: bool,
-	test_parameters := [
-		[&"scene_config/Level1/load_mode", true],
-		[&"some_other_property",           false],
-	],
+		prop: StringName,
+		expected_set: bool,
+		test_parameters := [
+			[&"scene_config/Level1/load_mode", true],
+			[&"some_other_property", false],
+		],
 ) -> void:
 	assert_that(mgr._set(prop, 0)).is_equal(expected_set)
 	if not expected_set:
@@ -105,16 +115,16 @@ func test_levels_are_independent() -> void:
 	var config2 := mgr._get_config(&"Level2")
 
 	assert_that(config1["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_DEMAND
+		MultiplayerSceneManager.LoadMode.ON_DEMAND,
 	)
 	assert_that(config1["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.DESTROY
+		MultiplayerSceneManager.EmptyAction.DESTROY,
 	)
 	assert_that(config2["load_mode"]).is_equal(
-		MultiplayerSceneManager.LoadMode.ON_STARTUP
+		MultiplayerSceneManager.LoadMode.ON_STARTUP,
 	)
 	assert_that(config2["empty_action"]).is_equal(
-		MultiplayerSceneManager.EmptyAction.FREEZE
+		MultiplayerSceneManager.EmptyAction.FREEZE,
 	)
 
 #endregion

@@ -17,6 +17,7 @@ extends BackendPeer
 
 var tube: TubeWrapper
 
+
 ## Resolves the [code]TubeClient[/code] and adopts its [SceneMultiplayer].
 ##
 ## Returns [code]ERR_UNCONFIGURED[/code] if no [code]TubeClient[/code] exists,
@@ -55,7 +56,7 @@ func setup(tree: MultiplayerTree) -> Error:
 	tree._adopt_api(tube.multiplayer_api, "tube_swap")
 	Netw.dbg.warn(
 		"TubeBackend swaps MultiplayerTree.api during setup. Avoid caching "
-		+ "Node.multiplayer before setup completes."
+		+ "Node.multiplayer before setup completes.",
 	)
 
 	return OK
@@ -76,22 +77,25 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 			or tube.state == TubeWrapper.State.SESSION_CREATED:
 		Netw.dbg.info(
 			"Tube session ready at `%s` (saved to clipboard). ",
-			[tube.session_id]
+			[tube.session_id],
 		)
 		DisplayServer.clipboard_set(tube.session_id)
 
 	return null
+
 
 ## Joins the Tube session identified by [param server_address].
 ##
 ## Returns [code]null[/code] because [code]TubeClient[/code] configures the
 ## peer on the adopted api.
 func create_join_peer(
-	_tree: MultiplayerTree, server_address: String, _username: String = ""
+		_tree: MultiplayerTree,
+		server_address: String,
+		_username: String = "",
 ) -> MultiplayerPeer:
 	Netw.dbg.trace(
 		"TubeBackend: create_join_peer called at %s",
-		[server_address]
+		[server_address],
 	)
 	assert(tube != null, "Backend needs to `setup()` first.")
 
@@ -100,6 +104,7 @@ func create_join_peer(
 
 	return null
 
+
 ## Leaves the active Tube session and unregisters its service.
 func peer_reset_state() -> void:
 	if tube != null:
@@ -107,19 +112,21 @@ func peer_reset_state() -> void:
 			tube.leave_session()
 		NetwServices.unregister(tube._node)
 
+
 ## Returns the active Tube session id, or the parent default.
 func get_join_address() -> String:
-
 	if tube != null and not tube.session_id.is_empty():
 		return tube.session_id
 
 	return super.get_join_address()
 
+
 ## Keeps [method BackendPeer.query_server_info] unsupported for Tube ids.
 ##
 ## Tube session ids do not support a lightweight [AuthProbeClient] connection.
 func query_server_info(
-	_address: String, _timeout: float = 2.0,
+		_address: String,
+		_timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
@@ -132,8 +139,9 @@ func get_address_hint() -> AddressHint:
 		"Tube session identifier copied from a host. Leave empty to create "
 		+ "a new session.",
 		true,
-		false
+		false,
 	)
+
 
 ## Returns the display name for this backend.
 func get_display_name() -> String:
@@ -151,32 +159,43 @@ class TubeWrapper:
 
 	var _node: Variant
 
+
 	func _init(target_node: Node) -> void:
 		_node = target_node
 
+
 	var state: int:
-		get: return _node.state
+		get:
+			return _node.state
 
 	var session_id: String:
-		get: return _node.session_id
+		get:
+			return _node.session_id
 
 	var multiplayer_root_node: Node:
-		get: return _node.multiplayer_root_node
-		set(value): _node.multiplayer_root_node = value
+		get:
+			return _node.multiplayer_root_node
+		set(value):
+			_node.multiplayer_root_node = value
 
 	var multiplayer_api: SceneMultiplayer:
-		get: return _node.multiplayer_api as SceneMultiplayer
+		get:
+			return _node.multiplayer_api as SceneMultiplayer
+
 
 	func is_valid() -> bool:
 		return _node != null \
-			and _node.has_method("create_session") \
-			and "multiplayer_root_node" in _node
+				and _node.has_method("create_session") \
+				and "multiplayer_root_node" in _node
+
 
 	func create_session() -> void:
 		_node.create_session()
 
+
 	func join_session(address: String) -> void:
 		_node.join_session(address)
+
 
 	func leave_session() -> void:
 		_node.leave_session()

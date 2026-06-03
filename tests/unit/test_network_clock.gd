@@ -8,7 +8,6 @@
 class_name TestNetworkClock
 extends NetwTestSuite
 
-
 func _make_clock(tickrate: int = 30) -> NetworkClock:
 	var clock := NetworkClock.new()
 	clock.tickrate = tickrate
@@ -16,8 +15,8 @@ func _make_clock(tickrate: int = 30) -> NetworkClock:
 
 
 func _make_clock_in_tree(
-	tickrate: int = 10,
-	use_physics_interpolation: bool = true,
+		tickrate: int = 10,
+		use_physics_interpolation: bool = true,
 ) -> NetworkClock:
 	var clock := NetworkClock.new()
 	clock.tickrate = tickrate
@@ -26,13 +25,12 @@ func _make_clock_in_tree(
 	auto_free(clock)
 	return clock
 
-
 #region Public properties
 
 @warning_ignore("unused_parameter")
 func test_ticktime_is_reciprocal_of_tickrate(
-	tickrate: int,
-	test_parameters := [[20], [60]],
+		tickrate: int,
+		test_parameters := [[20], [60]],
 ) -> void:
 	var clock := _make_clock(tickrate)
 	assert_that(absf(clock.ticktime - 1.0 / tickrate) < 0.0001).is_true()
@@ -40,20 +38,19 @@ func test_ticktime_is_reciprocal_of_tickrate(
 
 @warning_ignore("unused_parameter")
 func test_display_tick_with_offset(
-	tick: int,
-	offset: int,
-	expected: int,
-	test_parameters := [
-		[10, 0, 10],   # zero offset -> identity
-		[10, 3, 7],    # positive offset lags
-		[2,  5, 0],    # clamped at zero when tick < offset
-	],
+		tick: int,
+		offset: int,
+		expected: int,
+		test_parameters := [
+			[10, 0, 10], # zero offset -> identity
+			[10, 3, 7], # positive offset lags
+			[2, 5, 0], # clamped at zero when tick < offset
+		],
 ) -> void:
 	var clock := _make_clock()
 	clock.display_offset = offset
 	clock.tick = tick
 	assert_that(clock.display_tick).is_equal(expected)
-
 
 #endregion
 
@@ -63,14 +60,14 @@ func test_display_tick_with_offset(
 # the diff.
 @warning_ignore("unused_parameter")
 func test_calibrate_snap_always_jumps(
-	starting_tick: int,
-	target_tick: int,
-	test_parameters := [
-		[0,   50],
-		[100, 200],
-		[100, 80],
-		[10,  11],
-	],
+		starting_tick: int,
+		target_tick: int,
+		test_parameters := [
+			[0, 50],
+			[100, 200],
+			[100, 80],
+			[10, 11],
+		],
 ) -> void:
 	var clock := _make_clock()
 	clock.sync_mode = NetworkClock.SyncMode.SNAP
@@ -147,7 +144,6 @@ func test_calibrate_emits_synchronized_signal_once() -> void:
 	clock._calibrate(3)
 	assert_that(counter.count).is_equal(1)
 
-
 #endregion
 
 #region Clock lookup
@@ -178,19 +174,18 @@ func test_for_node_returns_registered_clock() -> void:
 
 	api.remove_meta(&"_network_clock")
 
-
 #endregion
 
 #region Internal tick loop
 
 @warning_ignore("unused_parameter")
 func test_physics_process_tick_advancement(
-	delta: float,
-	expected_advance: int,
-	test_parameters := [
-		[0.05, 0],   # below ticktime -> no advance
-		[0.10, 1],   # exactly one ticktime -> one advance
-	],
+		delta: float,
+		expected_advance: int,
+		test_parameters := [
+			[0.05, 0], # below ticktime -> no advance
+			[0.10, 1], # exactly one ticktime -> one advance
+		],
 ) -> void:
 	var clock := _make_clock_in_tree(10)
 	var start_tick := clock.tick
@@ -204,12 +199,12 @@ func test_physics_process_tick_advancement(
 # the only path testable without a real physics step.
 @warning_ignore("unused_parameter")
 func test_physics_process_tick_factor_without_interpolation(
-	delta: float,
-	expected_factor: float,
-	test_parameters := [
-		[0.10, 0.0],   # exact tick boundary -> factor is 0
-		[0.15, 0.5],   # half a ticktime extra -> factor is 0.5
-	],
+		delta: float,
+		expected_factor: float,
+		test_parameters := [
+			[0.10, 0.0], # exact tick boundary -> factor is 0
+			[0.15, 0.5], # half a ticktime extra -> factor is 0.5
+		],
 ) -> void:
 	var clock := _make_clock_in_tree(10, false)
 	clock._physics_process(delta)
@@ -219,13 +214,13 @@ func test_physics_process_tick_factor_without_interpolation(
 # on_tick fires once per advanced tick, up to [max_ticks_per_frame].
 @warning_ignore("unused_parameter")
 func test_on_tick_emit_count(
-	delta: float,
-	max_ticks: int,
-	expected_count: int,
-	test_parameters := [
-		[0.35, 100, 3],   # uncapped, 3.5 ticktimes -> 3 ticks
-		[1.0,  2,   2],   # cap clamps a 10-tick delta to 2
-	],
+		delta: float,
+		max_ticks: int,
+		expected_count: int,
+		test_parameters := [
+			[0.35, 100, 3], # uncapped, 3.5 ticktimes -> 3 ticks
+			[1.0, 2, 2], # cap clamps a 10-tick delta to 2
+		],
 ) -> void:
 	var clock := _make_clock_in_tree(10)
 	clock.max_ticks_per_frame = max_ticks

@@ -30,17 +30,22 @@ func after_test() -> void:
 
 func _register_and_wait(table: StringName, columns: Array[StringName]) -> void:
 	db._register_schema(table, columns)
-	await get_tree().process_frame  # let deferred _initialize_backend run
+	await get_tree().process_frame # let deferred _initialize_backend run
 
 
 func test_save_flow_writes_to_backend() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"alice", {
-			&"position": Vector2(10, 20),
-			&"health": 100
-		})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(
+				&"players",
+				&"alice",
+				{
+					&"position": Vector2(10, 20),
+					&"health": 100,
+				},
+			)
 	)
 
 	var record: Dictionary = db._find_by_id(&"players", &"alice")
@@ -51,11 +56,16 @@ func test_save_flow_writes_to_backend() -> void:
 func test_load_flow_reads_from_disk() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"bob", {
-			&"position": Vector2(5, 15),
-			&"health": 80
-		})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(
+				&"players",
+				&"bob",
+				{
+					&"position": Vector2(5, 15),
+					&"health": 80,
+				},
+			)
 	)
 
 	# Simulate restart by nulling out the current database and backend.
@@ -78,19 +88,28 @@ func test_load_flow_reads_from_disk() -> void:
 func test_two_entities_isolated() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"alice", {
-			&"position": Vector2(1, 2),
-			&"health": 100
-		})
-		tx.queue_upsert(&"players", &"bob", {
-			&"position": Vector2(9, 8),
-			&"health": 50
-		})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(
+				&"players",
+				&"alice",
+				{
+					&"position": Vector2(1, 2),
+					&"health": 100,
+				},
+			)
+			tx.queue_upsert(
+				&"players",
+				&"bob",
+				{
+					&"position": Vector2(9, 8),
+					&"health": 50,
+				},
+			)
 	)
 
 	var alice: Dictionary = db._find_by_id(&"players", &"alice")
-	var bob: Dictionary   = db._find_by_id(&"players", &"bob")
+	var bob: Dictionary = db._find_by_id(&"players", &"bob")
 
 	assert_that(alice.get(&"position")).is_equal(Vector2(1, 2))
 	assert_that(bob.get(&"position")).is_equal(Vector2(9, 8))
@@ -100,7 +119,7 @@ func test_ghost_table_warning_on_initialize() -> void:
 	# Pre-create a directory that is NOT declared in the schema.
 	DirAccess.make_dir_recursive_absolute(test_dir.path_join("ghost_table"))
 
-	var err: Error = backend.initialize({&"players": [&"position"]})
+	var err: Error = backend.initialize({ &"players": [&"position"] })
 	assert_that(err).is_equal(OK)
 
 
@@ -117,8 +136,9 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	db_v1._register_schema(&"players", [&"health", &"gold"])
 	await get_tree().process_frame
 
-	db_v1.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"charlie", {&"health": 70, &"gold": 99})
+	db_v1.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"players", &"charlie", { &"health": 70, &"gold": 99 })
 	)
 
 	db_v1 = null
@@ -143,7 +163,10 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 
 	var out2: Array[int] = [OK]
 	var after_purge: Dictionary = db_v2._find_by_id(
-		&"players", &"charlie", out2)
+		&"players",
+		&"charlie",
+		out2,
+	)
 	assert_that(out2[0]).is_equal(ERR_FILE_NOT_FOUND)
 	assert_that(after_purge.is_empty()).is_true()
 
@@ -152,11 +175,15 @@ func test_schema_mismatch_load_partial_preserves_known_columns() -> void:
 	await _register_and_wait(&"items", [&"damage", &"rarity"])
 
 	# Write a record with an extra legacy column 'old_stat'.
-	backend.upsert(&"items", &"sword", {
-		&"damage": 15,
-		&"rarity": 3,
-		&"old_stat": 99
-	})
+	backend.upsert(
+		&"items",
+		&"sword",
+		{
+			&"damage": 15,
+			&"rarity": 3,
+			&"old_stat": 99,
+		},
+	)
 
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL
 
@@ -169,7 +196,7 @@ func test_schema_mismatch_load_partial_preserves_known_columns() -> void:
 func test_schema_mismatch_fail_returns_err_and_keeps_record() -> void:
 	await _register_and_wait(&"items", [&"damage"])
 
-	backend.upsert(&"items", &"axe", {&"damage": 20, &"legacy_power": 5})
+	backend.upsert(&"items", &"axe", { &"damage": 20, &"legacy_power": 5 })
 
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.FAIL
 
@@ -187,15 +214,17 @@ func test_schema_mismatch_fail_returns_err_and_keeps_record() -> void:
 func test_record_loaded_signal_fires_on_find_by_id() -> void:
 	await _register_and_wait(&"players", [&"health"])
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"diana", {&"health": 60})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"players", &"diana", { &"health": 60 })
 	)
 
 	var fired := [false]
 	var hit_value := [false]
-	db.record_loaded.connect(func(_t, _id, hit: bool):
-		fired[0] = true
-		hit_value[0] = hit
+	db.record_loaded.connect(
+		func(_t, _id, hit: bool):
+			fired[0] = true
+			hit_value[0] = hit
 	)
 
 	db._find_by_id(&"players", &"diana")
@@ -218,7 +247,7 @@ func test_record_loaded_hit_false_on_miss() -> void:
 func test_schema_mismatch_signal_fires_during_load() -> void:
 	await _register_and_wait(&"players", [&"health"])
 
-	backend.upsert(&"players", &"eve", {&"health": 40, &"old_col": 1})
+	backend.upsert(&"players", &"eve", { &"health": 40, &"old_col": 1 })
 
 	var mismatch_fired := [false]
 	db.schema_mismatch.connect(func(_t, _id, _m, _u): mismatch_fired[0] = true)
@@ -235,9 +264,10 @@ func test_transaction_committed_signal_fires_after_commit() -> void:
 	var record_count := [0]
 	db.transaction_committed.connect(func(_tc, rc: int): record_count[0] = rc)
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"players", &"frank", {&"health": 30})
-		tx.queue_upsert(&"players", &"grace", {&"health": 25})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"players", &"frank", { &"health": 30 })
+			tx.queue_upsert(&"players", &"grace", { &"health": 25 })
 	)
 
 	assert_that(record_count[0]).is_equal(2)
@@ -246,8 +276,9 @@ func test_transaction_committed_signal_fires_after_commit() -> void:
 func test_unregistered_table_read_does_not_purge_existing_record() -> void:
 	await _register_and_wait(&"items", [&"damage"])
 
-	db.transaction(func(tx: NetwDatabase.TransactionContext):
-		tx.queue_upsert(&"items", &"sword", {&"damage": 15})
+	db.transaction(
+		func(tx: NetwDatabase.TransactionContext):
+			tx.queue_upsert(&"items", &"sword", { &"damage": 15 })
 	)
 
 	var raw: Dictionary = db._find_by_id(&"items", &"sword")

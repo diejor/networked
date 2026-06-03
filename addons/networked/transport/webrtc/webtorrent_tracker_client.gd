@@ -56,12 +56,13 @@ func connect_to(urls: Array[String]) -> Error:
 			_sockets.append(ws)
 		else:
 			Netw.dbg.warn(
-				"WebTorrentTrackerClient: failed to connect %s", [url],
+				"WebTorrentTrackerClient: failed to connect %s",
+				[url],
 				func(m): push_warning(m)
 			)
 	Netw.dbg.debug(
 		"WebTorrentTrackerClient: %d/%d tracker socket(s) opening.",
-		[_sockets.size(), urls.size()]
+		[_sockets.size(), urls.size()],
 	)
 	if _sockets.is_empty():
 		return ERR_CANT_CONNECT
@@ -99,7 +100,7 @@ func poll() -> void:
 				ws.set_meta("opened", true)
 				Netw.dbg.debug(
 					"WebTorrentTrackerClient: tracker open: %s",
-					[ws.get_meta("url", "unknown")]
+					[ws.get_meta("url", "unknown")],
 				)
 				if not _any_open:
 					_any_open = true
@@ -168,7 +169,7 @@ func _decode(packet: PackedByteArray) -> void:
 func _log_tracker_notice(packet_text: String) -> void:
 	Netw.dbg.debug(
 		"WebTorrentTrackerClient: tracker notice %s",
-		[packet_text]
+		[packet_text],
 	)
 
 

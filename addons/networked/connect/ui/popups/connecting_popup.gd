@@ -2,9 +2,7 @@
 class_name ConnectingPopup
 extends PopupPanel
 
-
 signal cancelled
-
 
 @onready var _title: Label = %TitleLabel
 @onready var _cancel_button: Button = %CancelButton
@@ -22,8 +20,8 @@ func open_connecting(target: JoinTarget) -> void:
 		_title.text = "Connecting to %s server..." % backend_name
 	else:
 		_title.text = (
-			"Connecting to %s server at %s..."
-			% [backend_name, display_addr]
+				"Connecting to %s server at %s..."
+				% [backend_name, display_addr]
 		)
 	popup_centered()
 

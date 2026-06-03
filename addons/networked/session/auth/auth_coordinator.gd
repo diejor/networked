@@ -69,21 +69,27 @@ func set_server_info_source(source: ServerInfoSource) -> void:
 func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	if not _auth_provider:
 		return OK
-	
-	Netw.dbg.info("Auth: running prepare for '%s'", [
-		join_payload.username
-	])
+
+	Netw.dbg.info(
+		"Auth: running prepare for '%s'",
+		[
+			join_payload.username,
+		],
+	)
 	var prepare_err := await _auth_provider.prepare(join_payload)
 	if prepare_err != OK:
 		Netw.dbg.error(
 			"Auth prepare failed: %s",
 			[error_string(prepare_err)],
- 			func(m): push_error(m)
+			func(m): push_error(m)
 		)
 		return prepare_err
-	Netw.dbg.info("Auth: prepare succeeded for '%s'", [
-		join_payload.username
-	])
+	Netw.dbg.info(
+		"Auth: prepare succeeded for '%s'",
+		[
+			join_payload.username,
+		],
+	)
 	return OK
 
 
@@ -117,10 +123,10 @@ func synthesize_host_identity() -> void:
 	if host_identity:
 		Netw.dbg.info(
 			"Auth: host identity '%s' (service=%s) stored for peer 1",
-			[host_identity.username, host_identity.service]
+			[host_identity.username, host_identity.service],
 		)
 		_roster.get_peer_context(
-			MultiplayerPeer.TARGET_PEER_SERVER
+			MultiplayerPeer.TARGET_PEER_SERVER,
 		).get_bucket(NetwIdentityBucket).identity = host_identity
 		# Do not call complete_auth(1). The host was never in Godot's
 		# pending auth queue, so complete_auth would corrupt auth state.
@@ -133,16 +139,19 @@ func synthesize_host_identity() -> void:
 func resolve_identity(peer_id: int, join_payload: JoinPayload) -> void:
 	if not _auth_provider or peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return
-	
+
 	var bucket := _roster.get_peer_context(peer_id).get_bucket(
-		NetwIdentityBucket
+		NetwIdentityBucket,
 	)
 	if bucket.identity:
 		Netw.dbg.info(
 			"Auth: overriding username '%s' with bucket identity '%s' "
 			+ "(service=%s)",
-			[join_payload.username, bucket.identity.username,
-			bucket.identity.service]
+			[
+				join_payload.username,
+				bucket.identity.username,
+				bucket.identity.service,
+			],
 		)
 		join_payload.username = bucket.identity.username
 	else:
@@ -171,10 +180,10 @@ func _unbind_api() -> void:
 	if _api.peer_authenticating.is_connected(_on_peer_authenticating):
 		_api.peer_authenticating.disconnect(_on_peer_authenticating)
 	if _api.peer_authentication_failed.is_connected(
-		_on_peer_authentication_failed
+		_on_peer_authentication_failed,
 	):
 		_api.peer_authentication_failed.disconnect(
-			_on_peer_authentication_failed
+			_on_peer_authentication_failed,
 		)
 	_api = null
 
@@ -185,10 +194,10 @@ func _connect_auth_signals() -> void:
 	if not _api.peer_authenticating.is_connected(_on_peer_authenticating):
 		_api.peer_authenticating.connect(_on_peer_authenticating)
 	if not _api.peer_authentication_failed.is_connected(
-		_on_peer_authentication_failed
+		_on_peer_authentication_failed,
 	):
 		_api.peer_authentication_failed.connect(
-			_on_peer_authentication_failed
+			_on_peer_authentication_failed,
 		)
 
 
@@ -202,7 +211,7 @@ func _on_peer_authenticating(peer_id: int) -> void:
 		if provider_payload.is_empty():
 			Netw.dbg.error(
 				"Auth: provider returned empty credentials for peer %d",
-				[peer_id]
+				[peer_id],
 			)
 			_api.disconnect_peer(peer_id)
 			return
@@ -210,14 +219,14 @@ func _on_peer_authenticating(peer_id: int) -> void:
 	var hello := AuthProtocol.encode_client_hello(provider_payload, _app_tag)
 	Netw.dbg.debug(
 		"Auth: sending NHEL (%d provider bytes) for peer %d",
-		[provider_payload.size(), peer_id]
+		[provider_payload.size(), peer_id],
 	)
 
 	var send_err := _api.send_auth(peer_id, hello)
 	if send_err != OK:
 		Netw.dbg.error(
 			"Auth: failed to send NHEL to peer %d: %s",
-			[peer_id, error_string(send_err)]
+			[peer_id, error_string(send_err)],
 		)
 		_api.disconnect_peer(peer_id)
 		return
@@ -226,7 +235,7 @@ func _on_peer_authenticating(peer_id: int) -> void:
 	if complete_err != OK:
 		Netw.dbg.error(
 			"Auth: failed to complete local auth for peer %d: %s",
-			[peer_id, error_string(complete_err)]
+			[peer_id, error_string(complete_err)],
 		)
 		_api.disconnect_peer(peer_id)
 
@@ -234,8 +243,11 @@ func _on_peer_authenticating(peer_id: int) -> void:
 func _on_peer_authentication_failed(peer_id: int) -> void:
 	if _probe_responder.note_auth_failed(peer_id):
 		return
-	Netw.dbg.warn("Auth failed for peer %d", [peer_id],
-		func(m): push_warning(m))
+	Netw.dbg.warn(
+		"Auth failed for peer %d",
+		[peer_id],
+		func(m): push_warning(m)
+	)
 
 
 func _on_auth_received(peer_id: int, data: PackedByteArray) -> void:
@@ -277,7 +289,8 @@ func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
 
 	if not _auth_provider:
 		Netw.dbg.debug(
-			"Auth: no provider, completing auth for peer %d", [peer_id]
+			"Auth: no provider, completing auth for peer %d",
+			[peer_id],
 		)
 		_api.complete_auth(peer_id)
 		return
@@ -287,21 +300,22 @@ func _handle_hello(peer_id: int, data: PackedByteArray) -> void:
 	if identity:
 		Netw.dbg.info(
 			"Auth: peer %d accepted as '%s' (service=%s)",
-			[peer_id, identity.username, identity.service]
+			[peer_id, identity.username, identity.service],
 		)
 		_roster.get_peer_context(peer_id).get_bucket(
-			NetwIdentityBucket
+			NetwIdentityBucket,
 		).identity = identity
 		_api.complete_auth(peer_id)
 	else:
 		var reason := (
-			_auth_provider.rejection_reason
-			if _auth_provider.rejection_reason
-			else "Authentication failed"
+				_auth_provider.rejection_reason
+				if _auth_provider.rejection_reason
+				else "Authentication failed"
 		)
 		_roster.set_auth_rejection_reason(peer_id, reason)
 		Netw.dbg.warn(
-			"Auth rejected for peer %d: %s", [peer_id, reason],
+			"Auth rejected for peer %d: %s",
+			[peer_id, reason],
 			func(m): push_warning(m)
 		)
 		_api.disconnect_peer(peer_id)

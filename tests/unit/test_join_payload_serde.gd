@@ -5,7 +5,6 @@
 class_name TestJoinPayloadSerde
 extends NetwTestSuite
 
-
 func _round_trip(original: JoinPayload) -> JoinPayload:
 	var restored := JoinPayload.new()
 	restored.deserialize(original.serialize())
@@ -14,15 +13,15 @@ func _round_trip(original: JoinPayload) -> JoinPayload:
 
 @warning_ignore("unused_parameter")
 func test_round_trip_preserves_scalars(
-	username: String,
-	peer_id: int,
-	is_debug: bool,
-	test_parameters := [
-		["alice", 7,  false],
-		["bob",   0,  true],
-		["carol", 42, false],
-		["",      -1, true],
-	],
+		username: String,
+		peer_id: int,
+		is_debug: bool,
+		test_parameters := [
+			["alice", 7, false],
+			["bob", 0, true],
+			["carol", 42, false],
+			["", -1, true],
+		],
 ) -> void:
 	var original := JoinPayload.new()
 	original.username = StringName(username)
@@ -54,7 +53,7 @@ func test_empty_spawn_round_trips_to_empty() -> void:
 	original.username = &"alice"
 
 	var restored := _round_trip(original)
-	assert_that(restored.spawn).is_equal({})
+	assert_that(restored.spawn).is_equal({ })
 
 
 func test_spawn_dict_round_trips() -> void:
@@ -63,13 +62,13 @@ func test_spawn_dict_round_trips() -> void:
 	var original := JoinPayload.new()
 	original.username = &"alice"
 	original.spawn = SpawnerComponentPolicy.from_scene_node_path(
-		_spawner_path(&"Level1", "Players/SpawnerComponent")
+		_spawner_path(&"Level1", "Players/SpawnerComponent"),
 	).to_dict()
 
 	var restored := _round_trip(original)
 	assert_that(StringName(restored.spawn.get("scene_name"))).is_equal(&"Level1")
 	assert_that(restored.spawn.get("spawner_path")) \
-		.is_equal(NodePath("Players/SpawnerComponent"))
+			.is_equal(NodePath("Players/SpawnerComponent"))
 
 
 func _spawner_path(scene_name: StringName, node_path: String) -> SceneNodePath:

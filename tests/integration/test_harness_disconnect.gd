@@ -25,7 +25,7 @@ func test_disconnect_client_unregisters_peer() -> void:
 
 	assert_that(client.is_online()).is_false()
 	assert_that(peer_id in harness.server().multiplayer_api.get_peers()) \
-		.is_false()
+			.is_false()
 
 
 func test_reconnect_client_registers_new_peer() -> void:
@@ -38,4 +38,4 @@ func test_reconnect_client_registers_new_peer() -> void:
 	assert_that(client.is_online()).is_true()
 	assert_that(new_peer_id).is_not_equal(old_peer_id)
 	assert_that(new_peer_id in harness.server().multiplayer_api.get_peers()) \
-		.is_true()
+			.is_true()

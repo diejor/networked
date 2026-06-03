@@ -2,7 +2,6 @@
 class_name TestDictionarySave
 extends NetwTestSuite
 
-
 func test_inheritance_and_properties() -> void:
 	var entity := DictionaryEntity.new()
 	assert_that(entity is Entity).is_true()
@@ -28,7 +27,7 @@ func test_dict_conversions_and_iteration() -> void:
 	assert_that(visited.is_empty()).is_true()
 
 	# Populated conversions
-	entity.from_dict({&"x": 10, &"y": 20})
+	entity.from_dict({ &"x": 10, &"y": 20 })
 	assert_that(entity.get_value(&"x")).is_equal(10)
 	assert_that(entity.get_value(&"y")).is_equal(20)
 
@@ -53,13 +52,13 @@ func test_dict_conversions_and_iteration() -> void:
 
 @warning_ignore("unused_parameter")
 func test_serialization_round_trip(
-	key: StringName,
-	value: Variant,
-	test_parameters := [
-		[&"num", 7],
-		[&"str", "hello"],
-		[&"vec", Vector2(3.0, 4.0)],
-	]
+		key: StringName,
+		value: Variant,
+		test_parameters := [
+			[&"num", 7],
+			[&"str", "hello"],
+			[&"vec", Vector2(3.0, 4.0)],
+		],
 ) -> void:
 	var entity := DictionaryEntity.new()
 	entity.set_value(key, value)

@@ -7,7 +7,7 @@ const ACTIONS := [
 	&"move_right",
 	&"move_up",
 	&"move_down",
-	&"sprint"
+	&"sprint",
 ]
 
 var comp: MoveInputComponent
@@ -64,7 +64,11 @@ func test_get_vector2_normalized() -> void:
 	comp.state[&"move_left"] = true
 	comp.state[&"move_up"] = true
 	var v := comp.get_vector2(
-		&"move_left", &"move_right", &"move_up", &"move_down")
+		&"move_left",
+		&"move_right",
+		&"move_up",
+		&"move_down",
+	)
 	assert_that(abs(v.length() - 1.0) < 0.001).is_true()
 	assert_that(v.x < 0.0).is_true()
 	assert_that(v.y < 0.0).is_true()
@@ -72,49 +76,63 @@ func test_get_vector2_normalized() -> void:
 
 func test_get_vector2_zero() -> void:
 	var v := comp.get_vector2(
-		&"move_left", &"move_right", &"move_up", &"move_down")
+		&"move_left",
+		&"move_right",
+		&"move_up",
+		&"move_down",
+	)
 	assert_that(v).is_equal(Vector2.ZERO)
 
 
 func test_get_vector2_cardinal_not_normalized() -> void:
 	comp.state[&"move_right"] = true
 	var v := comp.get_vector2(
-		&"move_left", &"move_right", &"move_up", &"move_down")
+		&"move_left",
+		&"move_right",
+		&"move_up",
+		&"move_down",
+	)
 	assert_that(v).is_equal(Vector2(1.0, 0.0))
 
 
 func test_on_tick_emits_tick_snapshot_with_correct_tick() -> void:
-	var result := {"tick": -1}
+	var result := { "tick": -1 }
 	comp.tick_snapshot.connect(
-		func(t: int, _s: Dictionary) -> void: result.tick = t)
+		func(t: int, _s: Dictionary) -> void: result.tick = t
+	)
 	comp._on_tick(0.0, 7)
 	assert_that(result.tick).is_equal(7)
 
 
 func test_on_tick_emits_state_snapshot_equal_to_current_state() -> void:
 	comp.state[&"move_right"] = true
-	var container := {"data": {}}
+	var container := { "data": { } }
 	comp.tick_snapshot.connect(
-		func(_t: int, s: Dictionary) -> void: container.data = s)
+		func(_t: int, s: Dictionary) -> void: container.data = s
+	)
 	comp._on_tick(0.0, 1)
 	assert_that(
-		(container.data as Dictionary).get(&"move_right", false)).is_true()
+		(container.data as Dictionary).get(&"move_right", false),
+	).is_true()
 
 
 func test_on_tick_snapshot_is_a_copy_not_a_reference() -> void:
-	var container := {"data": {}}
+	var container := { "data": { } }
 	comp.tick_snapshot.connect(
-		func(_t: int, s: Dictionary) -> void: container.data = s)
+		func(_t: int, s: Dictionary) -> void: container.data = s
+	)
 	comp._on_tick(0.0, 1)
 	comp.state[&"move_right"] = true
 	assert_that(
-		(container.data as Dictionary).get(&"move_right", false)).is_false()
+		(container.data as Dictionary).get(&"move_right", false),
+	).is_false()
 
 
 func test_on_tick_emits_snapshot_with_all_tracked_actions() -> void:
-	var container := {"data": {}}
+	var container := { "data": { } }
 	comp.tick_snapshot.connect(
-		func(_t: int, s: Dictionary) -> void: container.data = s)
+		func(_t: int, s: Dictionary) -> void: container.data = s
+	)
 	comp._on_tick(0.0, 0)
 	for action in ACTIONS:
 		assert_that((container.data as Dictionary).has(action)).is_true()

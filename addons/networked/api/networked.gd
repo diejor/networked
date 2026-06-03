@@ -30,7 +30,6 @@
 class_name Netw
 extends Object
 
-
 ## Static entry point for all debug and logging functionality.
 static var dbg: NetwDbg = NetwDbg.new()
 

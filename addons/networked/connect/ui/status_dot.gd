@@ -2,7 +2,6 @@
 class_name StatusDot
 extends Panel
 
-
 var _pulse_tween: Tween
 
 
@@ -25,8 +24,7 @@ func bind_result(result: ServerInfoResult) -> void:
 		ServerInfoResult.Status.UNSUPPORTED:
 			var info := result.info
 			_update_status_style(
-				Color(0.24, 0.81, 0.44) if info
-				else Color(0.95, 0.77, 0.06)
+				Color(0.24, 0.81, 0.44) if info else Color(0.95, 0.77, 0.06),
 			)
 		ServerInfoResult.Status.INCOMPATIBLE:
 			_update_status_style(Color(0.6, 0.35, 0.85))
@@ -47,10 +45,16 @@ func _start_pulse_tween() -> void:
 		return
 	_pulse_tween = create_tween().set_loops()
 	_pulse_tween.tween_property(
-		self, "self_modulate:a", 0.3, 0.6
+		self,
+		"self_modulate:a",
+		0.3,
+		0.6,
 	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_pulse_tween.tween_property(
-		self, "self_modulate:a", 1.0, 0.6
+		self,
+		"self_modulate:a",
+		1.0,
+		0.6,
 	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 

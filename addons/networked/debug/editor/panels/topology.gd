@@ -56,8 +56,8 @@ func _ready() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_build_layout()
 
-
 # --- Panel interface ----------------------------------------------------------
+
 
 func clear() -> void:
 	_last_node_path = ""
@@ -95,29 +95,29 @@ func on_new_entry(entry: Variant) -> void:
 	var d: Dictionary = entry as Dictionary
 	_apply_identity(d)
 	_populate_sync_tree(d)
-	_update_cache_visuals(d.get("cache_info", {}))
+	_update_cache_visuals(d.get("cache_info", { }))
 
 
 func _update_cache_visuals(cache_info: Dictionary) -> void:
 	var hit: bool = cache_info.get("hit", false)
 	var hooked: bool = cache_info.get("hooked", false)
-	
+
 	var status_text := "cached" if hit else "searched"
 	if not hooked:
 		status_text = "not hooked"
-	
+
 	_sync_tree.set_column_title(0, "Synchronizers (%s)" % status_text)
-	
+
 	var status_color: Color = get_theme_color("success_color", "Editor")
 	if not hooked:
 		status_color = get_theme_color("error_color", "Editor")
 	elif not hit:
 		status_color = get_theme_color("warning_color", "Editor")
-		
+
 	_sync_tree.add_theme_color_override("font_title_color", status_color)
 
-
 # --- Identity rows ------------------------------------------------------------
+
 
 func _apply_identity(d: Dictionary) -> void:
 	var node_path: String = d.get("node_path", "")
@@ -138,14 +138,14 @@ func _apply_identity(d: Dictionary) -> void:
 	if _node_btn:
 		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
 
-
 # --- Synchronizer tree --------------------------------------------------------
+
 
 func _populate_sync_tree(d: Dictionary) -> void:
 	_sync_tree.clear()
-	_sync_tree.create_item()  # invisible root
+	_sync_tree.create_item() # invisible root
 
-	var cache_info: Dictionary = d.get("cache_info", {})
+	var cache_info: Dictionary = d.get("cache_info", { })
 	var hit: bool = cache_info.get("hit", false)
 	var hooked: bool = cache_info.get("hooked", false)
 
@@ -167,10 +167,10 @@ func _populate_sync_tree(d: Dictionary) -> void:
 			var prop_item := _sync_tree.create_item(sync_item)
 			var mode_int: int = pd.get("replication_mode", 0)
 			var mode_str: String = _MODE_LABELS.get(mode_int, str(mode_int))
-			
+
 			prop_item.set_text(0, pd.get("path", "?"))
 			prop_item.set_text(1, mode_str)
-			
+
 			var type_name: String = pd.get("target_class", "")
 			if not type_name.is_empty() and has_theme_icon(type_name, "EditorIcons"):
 				prop_item.set_icon(0, get_theme_icon(type_name, "EditorIcons"))
@@ -178,12 +178,12 @@ func _populate_sync_tree(d: Dictionary) -> void:
 				var fallback_type := type_string(pd.get("type", 0))
 				if has_theme_icon(fallback_type, "EditorIcons"):
 					prop_item.set_icon(0, get_theme_icon(fallback_type, "EditorIcons"))
-			
+
 			prop_item.set_selectable(0, false)
 			prop_item.set_selectable(1, false)
 
-
 # --- Layout construction ------------------------------------------------------
+
 
 func _build_layout() -> void:
 	add_theme_constant_override("separation", 6)
@@ -212,35 +212,43 @@ func _build_identity_section() -> void:
 	row1.add_theme_constant_override("separation", 12)
 	vbox.add_child(row1)
 
-	var un_lbl := Label.new(); un_lbl.text = "Username:"
+	var un_lbl := Label.new()
+	un_lbl.text = "Username:"
 	un_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(un_lbl)
-	_username_label = Label.new(); _username_label.text = "-"
+	_username_label = Label.new()
+	_username_label.text = "-"
 	_username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_username_label.add_theme_font_size_override("font_size", 14)
 	row1.add_child(_username_label)
 
-	var pid_lbl := Label.new(); pid_lbl.text = "Peer ID:"
+	var pid_lbl := Label.new()
+	pid_lbl.text = "Peer ID:"
 	pid_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row1.add_child(pid_lbl)
-	_peer_id_label = Label.new(); _peer_id_label.text = "-"
+	_peer_id_label = Label.new()
+	_peer_id_label.text = "-"
 	row1.add_child(_peer_id_label)
 
 	var row2 := HBoxContainer.new()
 	row2.add_theme_constant_override("separation", 12)
 	vbox.add_child(row2)
 
-	var lb_lbl := Label.new(); lb_lbl.text = "Scene:"
+	var lb_lbl := Label.new()
+	lb_lbl.text = "Scene:"
 	lb_lbl.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(lb_lbl)
-	_lobby_label = Label.new(); _lobby_label.text = "-"
+	_lobby_label = Label.new()
+	_lobby_label.text = "-"
 	_lobby_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row2.add_child(_lobby_label)
 
-	var mode_hdr := Label.new(); mode_hdr.text = "Mode:"
+	var mode_hdr := Label.new()
+	mode_hdr.text = "Mode:"
 	mode_hdr.add_theme_color_override("font_color", get_theme_color("font_disabled_color", "Editor"))
 	row2.add_child(mode_hdr)
-	_mode_label = Label.new(); _mode_label.text = "-"
+	_mode_label = Label.new()
+	_mode_label.text = "-"
 	_mode_label.add_theme_color_override("font_color", get_theme_color("warning_color", "Editor"))
 	row2.add_child(_mode_label)
 
@@ -252,9 +260,10 @@ func _build_identity_section() -> void:
 	_node_btn.text = "Inspect Node"
 	_node_btn.tooltip_text = "Select this node in the Remote Scene Tree."
 	_node_btn.disabled = true
-	_node_btn.pressed.connect(func() -> void:
-		if on_node_inspect.is_valid() and not _last_node_path.is_empty():
-			on_node_inspect.call(_last_node_path, _last_peer_id)
+	_node_btn.pressed.connect(
+		func() -> void:
+			if on_node_inspect.is_valid() and not _last_node_path.is_empty():
+				on_node_inspect.call(_last_node_path, _last_peer_id)
 	)
 	row3.add_child(_node_btn)
 
@@ -262,9 +271,10 @@ func _build_identity_section() -> void:
 	_nameplate_btn.text = "Nameplate"
 	_nameplate_btn.tooltip_text = "Toggle the in-world nameplate for this player."
 	_nameplate_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_nameplate_btn.toggled.connect(func(pressed: bool) -> void:
-		if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
-			on_nameplate_toggled.call(_last_node_path, pressed, _last_peer_id)
+	_nameplate_btn.toggled.connect(
+		func(pressed: bool) -> void:
+			if on_nameplate_toggled.is_valid() and not _last_node_path.is_empty():
+				on_nameplate_toggled.call(_last_node_path, pressed, _last_peer_id)
 	)
 	row3.add_child(_nameplate_btn)
 
@@ -286,5 +296,5 @@ func _build_sync_tree() -> void:
 	_sync_tree.add_theme_stylebox_override("selected_focus", StyleBoxEmpty.new())
 	_sync_tree.add_theme_stylebox_override("cursor", StyleBoxEmpty.new())
 	_sync_tree.add_theme_stylebox_override("cursor_unfocused", StyleBoxEmpty.new())
-	_sync_tree.create_item()  # invisible root
+	_sync_tree.create_item() # invisible root
 	add_child(_sync_tree)

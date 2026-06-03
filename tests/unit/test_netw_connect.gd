@@ -3,7 +3,6 @@
 class_name TestNetwConnect
 extends NetwTestSuite
 
-
 func _make_target(address: String = "127.0.0.1") -> JoinTarget:
 	var target := JoinTarget.new()
 	target.address = address

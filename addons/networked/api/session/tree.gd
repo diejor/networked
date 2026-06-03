@@ -45,7 +45,7 @@ func _init(mt: MultiplayerTree) -> void:
 	mt.peer_disconnected.connect(peer_disconnected.emit)
 	mt.connected_to_server.connect(connected_to_server.emit)
 	mt.server_disconnected.connect(server_disconnected.emit)
-	
+
 	mt.player_joined.connect(player_joined.emit)
 	mt.local_player_joined.connect(local_player_joined.emit)
 	mt.player_scene_ready.connect(_on_player_scene_ready)
@@ -123,10 +123,10 @@ func host_player(join_payload: JoinPayload) -> Error:
 ##
 ## See [method MultiplayerTree.join].
 func join(
-	target: JoinTarget,
-	join_payload: JoinPayload,
-	timeout: float = 5.0,
-	quiet: bool = false,
+		target: JoinTarget,
+		join_payload: JoinPayload,
+		timeout: float = 5.0,
+		quiet: bool = false,
 ) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -138,8 +138,8 @@ func join(
 ##
 ## See [method MultiplayerTree.join_or_host].
 func join_or_host(
-	target: JoinTarget,
-	join_payload: JoinPayload,
+		target: JoinTarget,
+		join_payload: JoinPayload,
 ) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
@@ -267,7 +267,7 @@ func notify_disconnect(reason: String = "") -> void:
 		return
 	assert(
 		mt.is_server,
-		"NetwTree.notify_disconnect() must be called on the server."
+		"NetwTree.notify_disconnect() must be called on the server.",
 	)
 	for peer_id: int in mt.multiplayer_api.get_peers():
 		mt._rpc_receive_notify_disconnect.rpc_id(peer_id, reason)
@@ -275,7 +275,8 @@ func notify_disconnect(reason: String = "") -> void:
 
 
 func _on_player_scene_ready(
-	rj: ResolvedJoin, scene: MultiplayerScene
+		rj: ResolvedJoin,
+		scene: MultiplayerScene,
 ) -> void:
 	var netw_scene := NetwScene.new(scene) if is_instance_valid(scene) else null
 	player_scene_ready.emit(rj, netw_scene)

@@ -6,7 +6,6 @@
 class_name TestConnectSession
 extends NetwTestSuite
 
-
 class _MockDirectory:
 	extends LobbyDirectory
 
@@ -15,12 +14,15 @@ class _MockDirectory:
 	var host_called_with: String = ""
 	var join_called_with: int = 0
 
+
 	func list_lobbies() -> void:
 		list_calls += 1
 		lobby_list_updated.emit(canned_lobbies)
 
+
 	func leave_lobby() -> void:
 		pass
+
 
 	func make_join_target(lobby: LobbyInfo) -> JoinTarget:
 		var target := JoinTarget.new()
@@ -29,9 +31,11 @@ class _MockDirectory:
 		target.display_name = lobby.lobby_name
 		return target
 
+
 	func host_lobby(server_name: String) -> MultiplayerPeer:
 		host_called_with = server_name
 		return null
+
 
 	func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 		join_called_with = lobby_id
@@ -131,7 +135,7 @@ func test_register_directory_and_refresh_dispatches_targets() -> void:
 
 	var directory := _MockDirectory.new()
 	add_child(directory)
-	var info := LobbyInfo.make(42, "Mock Lobby", 2, 8, {})
+	var info := LobbyInfo.make(42, "Mock Lobby", 2, 8, { })
 	directory.canned_lobbies = [info]
 
 	var directory_emitted: Array = []

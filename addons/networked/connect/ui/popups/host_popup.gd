@@ -2,13 +2,10 @@
 class_name HostPopup
 extends PopupPanel
 
-
 signal submitted(config: ConnectHostConfig, payload: JoinPayload)
-
 
 var _templates: Array[BackendPeer] = []
 var _spawner_options: Array[SceneNodePath] = []
-
 
 @onready var _backend_picker: OptionButton = %BackendPicker
 @onready var _name_edit: LineEdit = %NameEdit
@@ -26,9 +23,9 @@ func _ready() -> void:
 
 ## Opens the host form with pre-populated backend and username details.
 func open_host(
-	templates: Array[BackendPeer],
-	spawner_options: Array[SceneNodePath],
-	default_username: String,
+		templates: Array[BackendPeer],
+		spawner_options: Array[SceneNodePath],
+		default_username: String,
 ) -> void:
 	_templates = templates
 	_spawner_options = spawner_options.duplicate()
@@ -81,7 +78,7 @@ func _on_confirm() -> void:
 	var config := ConnectHostConfig.new()
 	config.backend = template
 	config.server_name = _name_edit.text
-	
+
 	var payload := JoinPayload.new()
 	var typed := _username_edit.text.strip_edges()
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"

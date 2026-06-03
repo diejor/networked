@@ -16,6 +16,7 @@ const LEVELS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "NONE", "INHERIT"]
 const ROOT_PATH = "res://"
 const IGNORE_DIRS = [".godot", ".git", ".jj"]
 
+
 func _enter_tree() -> void:
 	if not _tree:
 		_build_ui()
@@ -41,6 +42,7 @@ func _enter_tree() -> void:
 
 	_picker.edited_resource = res
 	_on_resource_changed(res)
+
 
 func _build_ui() -> void:
 	var vb := VBoxContainer.new()
@@ -75,14 +77,14 @@ func _build_ui() -> void:
 
 	var search_hb := HBoxContainer.new()
 	vb.add_child(search_hb)
-	
+
 	_search_box = LineEdit.new()
 	_search_box.placeholder_text = "Filter modules..."
 	_search_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_search_box.clear_button_enabled = true
 	_search_box.text_changed.connect(_on_search_changed)
 	search_hb.add_child(_search_box)
-	
+
 	_overrides_only_btn = CheckBox.new()
 	_overrides_only_btn.text = "Overrides Only"
 	_overrides_only_btn.toggled.connect(_on_overrides_only_toggled)
@@ -100,19 +102,20 @@ func _build_ui() -> void:
 
 # --- Profile management ---
 
+
 func _on_resource_changed(res: Resource) -> void:
 	if res is NetwLogSettings:
 		_settings = res
 		if not _settings.resource_path.is_empty():
 			var uid_int := ResourceLoader.get_resource_uid(_settings.resource_path)
 			var profile_ref: String = (
-				ResourceUID.id_to_text(uid_int)
-				if uid_int != ResourceUID.INVALID_ID
-				else _settings.resource_path
+					ResourceUID.id_to_text(uid_int)
+					if uid_int != ResourceUID.INVALID_ID
+					else _settings.resource_path
 			)
 			ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, profile_ref)
 			ProjectSettings.save()
-		
+
 		var addon_root := NetwLog._addon_root
 		NetwLog.initialize(addon_root)
 		_refresh_tree()
@@ -122,17 +125,21 @@ func _on_resource_changed(res: Resource) -> void:
 		ProjectSettings.save()
 		_tree.clear()
 
+
 func _on_search_changed(new_text: String) -> void:
 	_search_filter = new_text
 	_refresh_tree()
+
 
 func _on_overrides_only_toggled(pressed: bool) -> void:
 	_overrides_only = pressed
 	_refresh_tree()
 
+
 func _on_refresh_pressed() -> void:
 	_cache_valid = false
 	_refresh_tree()
+
 
 func _refresh_tree() -> void:
 	if not _settings:
@@ -158,6 +165,7 @@ func _refresh_tree() -> void:
 	for entry: Dictionary in cache:
 		_add_tree_entry(entry, project_root, _search_filter, _overrides_only)
 
+
 func _entry_matches_filter(entry: Dictionary, filter: String, overrides_only: bool) -> bool:
 	if overrides_only:
 		if _settings.module_overrides.has(entry.module_path):
@@ -167,7 +175,7 @@ func _entry_matches_filter(entry: Dictionary, filter: String, overrides_only: bo
 			if _entry_matches_filter(child, "", true):
 				return true
 		return false
-		
+
 	if filter.is_empty():
 		return true
 	if filter.to_lower() in entry.name.to_lower():
@@ -177,21 +185,23 @@ func _entry_matches_filter(entry: Dictionary, filter: String, overrides_only: bo
 			return true
 	return false
 
+
 func _add_tree_entry(entry: Dictionary, parent: TreeItem, filter: String, overrides_only: bool) -> void:
 	if not _entry_matches_filter(entry, filter, overrides_only):
 		return
-		
+
 	var item := _tree.create_item(parent)
 	item.set_text(0, entry.name + ("/" if entry.is_dir else ""))
 	var level: int = _settings.module_overrides.get(entry.module_path, -1)
 	_setup_level_cell(item, level, true)
 	item.set_metadata(0, entry.module_path)
-	
+
 	for child: Dictionary in entry.children:
 		_add_tree_entry(child, item, filter, overrides_only)
-		
+
 	if (not filter.is_empty() or overrides_only) and item.get_child_count() > 0:
 		item.set_collapsed(false)
+
 
 func _setup_level_cell(item: TreeItem, current_level: int, can_inherit: bool) -> void:
 	item.set_cell_mode(1, TreeItem.CELL_MODE_RANGE)
@@ -199,7 +209,7 @@ func _setup_level_cell(item: TreeItem, current_level: int, can_inherit: bool) ->
 	item.set_text(1, ",".join(opts))
 	item.set_range(1, LEVELS.size() - 1 if current_level == -1 else current_level)
 	item.set_editable(1, true)
-	
+
 	if can_inherit and current_level != -1:
 		item.set_custom_color(0, Color(0.8, 0.8, 0.2))
 		item.set_custom_color(1, Color(0.8, 0.8, 0.2))
@@ -208,6 +218,7 @@ func _setup_level_cell(item: TreeItem, current_level: int, can_inherit: bool) ->
 		item.clear_custom_color(1)
 
 # --- Edit handler ---
+
 
 func _on_item_edited() -> void:
 	if not _settings:
@@ -240,11 +251,13 @@ func _on_item_edited() -> void:
 	if not _settings.resource_path.is_empty():
 		ResourceSaver.save(_settings, _settings.resource_path)
 
+
 func _get_module_cache() -> Array:
 	if not _cache_valid:
 		_module_cache = _scan_dir(ROOT_PATH)
 		_cache_valid = true
 	return _module_cache
+
 
 ## Recursively scans a directory and returns a list of entry dicts.
 ## Each entry: {name: String, module_path: String, is_dir: bool, children: Array}
@@ -277,23 +290,28 @@ func _scan_dir(path: String) -> Array:
 		var full_path := path + d + "/"
 		var children := _scan_dir(full_path)
 		if children.is_empty():
-			continue  # skip dirs with no GD files in the subtree
-		result.append({
-			"name": d,
-			"module_path": _to_module_path(full_path),
-			"is_dir": true,
-			"children": children
-		})
+			continue # skip dirs with no GD files in the subtree
+		result.append(
+			{
+				"name": d,
+				"module_path": _to_module_path(full_path),
+				"is_dir": true,
+				"children": children,
+			},
+		)
 
 	for f: String in files:
-		result.append({
-			"name": f,
-			"module_path": _to_module_path(path + f),
-			"is_dir": false,
-			"children": []
-		})
+		result.append(
+			{
+				"name": f,
+				"module_path": _to_module_path(path + f),
+				"is_dir": false,
+				"children": [],
+			},
+		)
 
 	return result
+
 
 func _to_module_path(path: String) -> String:
 	var p := path.replace(ROOT_PATH, "").trim_suffix("/")
@@ -303,6 +321,7 @@ func _to_module_path(path: String) -> String:
 	if not addon_root.is_empty() and p.begins_with(addon_root + "/"):
 		p = p.substr(addon_root.length() + 1)
 	return p.replace("/", ".")
+
 
 ## Removes module_overrides entries whose paths no longer exist in the filesystem.
 ## Called after every cache build so stale keys from renamed/deleted scripts are cleaned up.
@@ -330,9 +349,10 @@ func _prune_stale_overrides(cache: Array) -> void:
 	if not _settings.resource_path.is_empty():
 		ResourceSaver.save(_settings, _settings.resource_path)
 
+
 ## Flattens the cache into a set of all known module paths (dirs and files).
 func _collect_module_paths(entries: Array) -> Dictionary:
-	var result := {}
+	var result := { }
 	for entry: Dictionary in entries:
 		result[entry.module_path] = true
 		if not entry.children.is_empty():

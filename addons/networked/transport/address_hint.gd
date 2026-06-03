@@ -6,7 +6,6 @@
 class_name AddressHint
 extends RefCounted
 
-
 ## Label for the address field.
 var label: String = "Address"
 
@@ -31,11 +30,11 @@ var hides_address_field: bool = false
 
 ## Creates an [AddressHint] from the common UI fields.
 static func make(
-	p_label: String,
-	p_placeholder: String = "",
-	p_help: String = "",
-	p_accepts_empty: bool = false,
-	p_supports_probe: bool = false
+		p_label: String,
+		p_placeholder: String = "",
+		p_help: String = "",
+		p_accepts_empty: bool = false,
+		p_supports_probe: bool = false,
 ) -> AddressHint:
 	var h := AddressHint.new()
 	h.label = p_label

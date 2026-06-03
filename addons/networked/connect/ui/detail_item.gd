@@ -5,7 +5,6 @@
 class_name DetailItem
 extends VBoxContainer
 
-
 @onready var _title_label: Label = %TitleLabel
 @onready var _value_label: Label = %ValueLabel
 

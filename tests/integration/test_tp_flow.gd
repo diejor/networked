@@ -5,7 +5,6 @@
 class_name TestTPFlow
 extends NetwTestSuite
 
-
 ## Node path from level root to the [SpawnerComponent] spawner.
 const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
 
@@ -32,21 +31,21 @@ func before_test() -> void:
 	var level_2_path := NetwPathNamespace.next_path("level", "TestLevel2")
 
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.with_save(db, &"players") \
-		.with_tp(level_path, "PlayerSpawner") \
-		.with_player_sync(
-			SyncConfigBuilder.new().property("..:position", true)
-		)
+			.with_root(Node2D) \
+			.with_spawner() \
+			.with_save(db, &"players") \
+			.with_tp(level_path, "PlayerSpawner") \
+			.with_player_sync(
+				SyncConfigBuilder.new().property("..:position", true),
+			)
 	player_builder.pack(player_path)
 
 	var template_instance: Node = player_builder.packed.instantiate()
 
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance)
 	level_builder.pack(level_path)
 
 	var marker: Marker2D = Marker2D.new()
@@ -54,10 +53,10 @@ func before_test() -> void:
 	marker.position = Vector2(100, 100)
 
 	level_2_builder = LevelBuilder.new("TestLevel2") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance) \
-		.with_child(marker)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance) \
+			.with_child(marker)
 	level_2_builder.pack(level_2_path)
 
 	template_instance.free()
@@ -80,13 +79,16 @@ func after_test() -> void:
 
 ## Joins a player via the real RPC chain and overrides its database.
 func _spawn_tp_player(
-	scene_path: String,
-	client: MultiplayerTree = null,
+		scene_path: String,
+		client: MultiplayerTree = null,
 ) -> Node2D:
 	if client == null:
 		client = client0
 	var player := await harness.join_player(
-		client, scene_path, SPAWNER_PATH) as Node2D
+		client,
+		scene_path,
+		SPAWNER_PATH,
+	) as Node2D
 
 	_set_player_database(player)
 	return player
@@ -114,7 +116,8 @@ func _await_tp(promise: TPComponent.TeleportPromise) -> void:
 		if timeout_timer.time_left <= 0:
 			fail(
 				"Timed out waiting for teleport completion after %.1f seconds."
-					% DEFAULT_TIMEOUT)
+				% DEFAULT_TIMEOUT,
+			)
 			return
 
 
@@ -134,7 +137,9 @@ func test_tp_spawn_places_in_correct_scene() -> void:
 func test_reparent_moves_player_between_scenes() -> void:
 	var server_player := await _spawn_tp_player(level_builder.resource_path)
 	var client_player := await harness.wait_for_player(
-		client0, level_builder.scene_name) as Node2D
+		client0,
+		level_builder.scene_name,
+	) as Node2D
 
 	_set_player_database(client_player)
 
@@ -142,9 +147,11 @@ func test_reparent_moves_player_between_scenes() -> void:
 	var scene2: MultiplayerScene = server_mgr.active_scenes.get(level_2_builder.scene_name)
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await _await_tp(client_tp.teleport(
-		_tp_target(level_2_builder.resource_path, "TPTarget")
-	))
+	await _await_tp(
+		client_tp.teleport(
+			_tp_target(level_2_builder.resource_path, "TPTarget"),
+		),
+	)
 
 	assert_that(server_player.get_parent()).is_equal(scene2.level)
 
@@ -152,15 +159,21 @@ func test_reparent_moves_player_between_scenes() -> void:
 func test_teleported_snaps_to_marker() -> void:
 	await _spawn_tp_player(level_builder.resource_path)
 	var client_player := await harness.wait_for_player(
-		client0, level_builder.scene_name) as Node2D
+		client0,
+		level_builder.scene_name,
+	) as Node2D
 
 	_set_player_database(client_player)
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await _await_tp(client_tp.teleport(
-		_tp_target(level_2_builder.resource_path, "TPTarget")
-	))
+	await _await_tp(
+		client_tp.teleport(
+			_tp_target(level_2_builder.resource_path, "TPTarget"),
+		),
+	)
 
 	var client_player2 := await harness.wait_for_player(
-		client0, level_2_builder.scene_name) as Node2D
+		client0,
+		level_2_builder.scene_name,
+	) as Node2D
 	assert_that(client_player2.global_position).is_equal(Vector2(100, 100))

@@ -15,7 +15,6 @@ const TEST_LEVEL_TSCN := preload(
 )
 
 
-
 func test_scene_assembly_attach() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	var child: Node2D = Node2D.new()
@@ -47,20 +46,20 @@ func test_scene_assembly_pack_with_path() -> void:
 
 func test_sync_config_builder() -> void:
 	var builder := SyncConfigBuilder.new() \
-		.property(
-			"Child:position",
-			true,
-			SyncConfigBuilder.ON_CHANGE,
-			true,
-			false
-		) \
-		.property(
-			"Child:modulate",
-			true,
-			SyncConfigBuilder.ALWAYS,
-			false,
-			true
-		)
+			.property(
+				"Child:position",
+				true,
+				SyncConfigBuilder.ON_CHANGE,
+				true,
+				false,
+			) \
+			.property(
+				"Child:modulate",
+				true,
+				SyncConfigBuilder.ALWAYS,
+				false,
+				true,
+			)
 	var cfg: SceneReplicationConfig = auto_free(builder.build())
 	var path1: NodePath = NodePath("Child:position")
 	assert_that(cfg.has_property(path1)).is_true()
@@ -92,11 +91,11 @@ func test_path_namespace_allocates_and_resets() -> void:
 
 func test_player_builder_shape() -> void:
 	var builder := PlayerBuilder.new("TestPlayer") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.with_player_sync(
-			SyncConfigBuilder.new().property("PlayerSync:position", true)
-		)
+			.with_root(Node2D) \
+			.with_spawner() \
+			.with_player_sync(
+				SyncConfigBuilder.new().property("PlayerSync:position", true),
+			)
 	assert_that(builder.player_name).is_equal(&"TestPlayer")
 	var live: Node2D = auto_free(builder.build()) as Node2D
 	assert_that(live.name).is_equal("TestPlayer")
@@ -115,16 +114,16 @@ func test_player_builder_shape() -> void:
 
 func test_level_builder_shape() -> void:
 	var player_packed := PlayerBuilder.new("MyPlayer") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.pack()
+			.with_root(Node2D) \
+			.with_spawner() \
+			.pack()
 	var marker: Marker2D = auto_free(Marker2D.new())
 	marker.name = "MyMarker"
 	marker.position = Vector2(50, 50)
 	var level_builder := LevelBuilder.new("MyLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_packed]) \
-		.with_child(marker)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_packed]) \
+			.with_child(marker)
 	assert_that(level_builder.scene_name).is_equal(&"MyLevel")
 	var live: Node2D = auto_free(level_builder.build()) as Node2D
 	assert_that(live.name).is_equal("MyLevel")
@@ -146,7 +145,7 @@ func test_player_builder_snapshot_vs_real_tscn() -> void:
 	var _r: PlayerBuilder = builder.with_spawner()
 	var packed: PackedScene = builder.pack()
 	var real_scene: Node2D = auto_free(
-		MINIMAL_PLAYER_TSCN.instantiate()
+		MINIMAL_PLAYER_TSCN.instantiate(),
 	) as Node2D
 	var built_scene: Node2D = auto_free(packed.instantiate()) as Node2D
 	_assert_scenes_match(real_scene, built_scene)
@@ -155,21 +154,21 @@ func test_player_builder_snapshot_vs_real_tscn() -> void:
 func test_player_with_save_snapshot_vs_real_tscn() -> void:
 	var db_resource := preload("res://tests/test_db.tres")
 	var builder := PlayerBuilder.new("TestPlayerWithSave") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.with_save(db_resource, &"players_save") \
-		.with_player_sync(
-			SyncConfigBuilder.new().property(
-				"..:position",
-				true,
-				SyncConfigBuilder.ON_CHANGE,
-				true,
-				false
+			.with_root(Node2D) \
+			.with_spawner() \
+			.with_save(db_resource, &"players_save") \
+			.with_player_sync(
+				SyncConfigBuilder.new().property(
+					"..:position",
+					true,
+					SyncConfigBuilder.ON_CHANGE,
+					true,
+					false,
+				),
 			)
-		)
 	var packed: PackedScene = builder.pack()
 	var real_scene: Node2D = auto_free(
-		TEST_PLAYER_WITH_SAVE_TSCN.instantiate()
+		TEST_PLAYER_WITH_SAVE_TSCN.instantiate(),
 	) as Node2D
 	var built_scene: Node2D = auto_free(packed.instantiate()) as Node2D
 	_assert_scenes_match(real_scene, built_scene)
@@ -178,31 +177,31 @@ func test_player_with_save_snapshot_vs_real_tscn() -> void:
 func test_level_builder_snapshot_vs_real_tscn() -> void:
 	var db_resource := preload("res://tests/test_db.tres")
 	var player_packed := PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.with_save(db_resource, &"player") \
-		.with_tp("uid://bhif5a1uatdsl", "PlayerSpawner") \
-		.with_player_sync(
-			SyncConfigBuilder.new().property(
-				"..:position",
-				true,
-				SyncConfigBuilder.ON_CHANGE,
-				true,
-				false
-			)
-		) \
-		.pack()
+			.with_root(Node2D) \
+			.with_spawner() \
+			.with_save(db_resource, &"player") \
+			.with_tp("uid://bhif5a1uatdsl", "PlayerSpawner") \
+			.with_player_sync(
+				SyncConfigBuilder.new().property(
+					"..:position",
+					true,
+					SyncConfigBuilder.ON_CHANGE,
+					true,
+					false,
+				),
+			) \
+			.pack()
 	var template_instance := player_packed.instantiate()
 
 	var level_builder := LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_packed, MINIMAL_PLAYER_TSCN]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_packed, MINIMAL_PLAYER_TSCN]) \
+			.with_child(template_instance)
 	var packed: PackedScene = level_builder.pack()
 	template_instance.free()
 
 	var real_scene: Node2D = auto_free(
-		TEST_LEVEL_TSCN.instantiate()
+		TEST_LEVEL_TSCN.instantiate(),
 	) as Node2D
 	var built_scene: Node2D = auto_free(packed.instantiate()) as Node2D
 
@@ -227,23 +226,23 @@ func test_builders_autogen_and_reset_naming() -> void:
 	var p_builder1 := PlayerBuilder.new()
 	assert_that(l_builder1.scene_name).is_not_equal("")
 	assert_that(p_builder1.player_name).is_not_equal("")
-	
+
 	# Verify sequence
 	var l_builder2 := LevelBuilder.new()
 	var p_builder2 := PlayerBuilder.new()
 	assert_that(
-		l_builder2.scene_name
+		l_builder2.scene_name,
 	).is_not_equal(l_builder1.scene_name)
 	assert_that(
-		p_builder2.player_name
+		p_builder2.player_name,
 	).is_not_equal(p_builder1.player_name)
-	
+
 	# Test explicit naming overrides autogen
 	var l_builder_explicit := LevelBuilder.new("ExplicitLevel")
 	var p_builder_explicit := PlayerBuilder.new("ExplicitPlayer")
 	assert_that(l_builder_explicit.scene_name).is_equal(&"ExplicitLevel")
 	assert_that(p_builder_explicit.player_name).is_equal(&"ExplicitPlayer")
-	
+
 	# Test that reset resets counter for determinism
 	NetwPathNamespace.reset()
 	var l_builder_reset := LevelBuilder.new()
@@ -285,8 +284,8 @@ func _assert_scenes_match(node1: Node, node2: Node) -> void:
 
 
 func _assert_configs_match(
-	cfg_real: SceneReplicationConfig,
-	cfg_built: SceneReplicationConfig
+		cfg_real: SceneReplicationConfig,
+		cfg_built: SceneReplicationConfig,
 ) -> void:
 	if cfg_real == null or cfg_built == null:
 		assert_that(cfg_real).is_equal(cfg_built)
@@ -297,16 +296,16 @@ func _assert_configs_match(
 	for prop in real_props:
 		assert_that(cfg_built.has_property(prop)).is_true()
 		assert_that(
-			cfg_built.property_get_replication_mode(prop)
+			cfg_built.property_get_replication_mode(prop),
 		).is_equal(cfg_real.property_get_replication_mode(prop))
 		assert_that(
-			cfg_built.property_get_spawn(prop)
+			cfg_built.property_get_spawn(prop),
 		).is_equal(cfg_real.property_get_spawn(prop))
 		assert_that(
-			cfg_built.property_get_watch(prop)
+			cfg_built.property_get_watch(prop),
 		).is_equal(cfg_real.property_get_watch(prop))
 		assert_that(
-			cfg_built.property_get_sync(prop)
+			cfg_built.property_get_sync(prop),
 		).is_equal(cfg_real.property_get_sync(prop))
 
 
@@ -317,4 +316,3 @@ func _assert_identical_shape(node1: Node, node2: Node) -> void:
 	assert_that(node1.get_child_count()).is_equal(node2.get_child_count())
 	for i in range(node1.get_child_count()):
 		_assert_identical_shape(node1.get_child(i), node2.get_child(i))
-

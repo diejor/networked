@@ -11,7 +11,6 @@
 class_name TopologyValidator
 extends RefCounted
 
-
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
@@ -48,17 +47,19 @@ static func validate_node(node: Node) -> Dictionary:
 	if live.size() < expected_min:
 		errors.append(
 			"live=%d < expected>=%d on '%s'" % \
-			[live.size(), expected_min, node.name]
+					[live.size(), expected_min, node.name],
 		)
 
 	var diff := cache_diff(node)
 	if not diff["match"]:
 		errors.append(
-			("cache/live mismatch: cached=%d live=%d | " + \
-			"only_cached=%s only_live=%s") % [
-				diff["cached_count"], diff["live_count"],
-				str(diff["only_in_cache"]), str(diff["only_in_live"]),
-			]
+			("cache/live mismatch: cached=%d live=%d | " +
+					"only_cached=%s only_live=%s") % [
+				diff["cached_count"],
+				diff["live_count"],
+				str(diff["only_in_cache"]),
+				str(diff["only_in_live"]),
+			],
 		)
 
 	var save_comp: SaveComponent = node.get_node_or_null("%SaveComponent")
@@ -76,7 +77,7 @@ static func validate_node(node: Node) -> Dictionary:
 		"ok": errors.is_empty(),
 		"errors": errors,
 		"live_count": live.size(),
-		"expected_min": expected_min
+		"expected_min": expected_min,
 	}
 
 
@@ -126,9 +127,9 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	if not config or config.get_properties().is_empty():
 		errs.append(
 			"SaveComponent on '%s' has 0 replication properties. " % \
-			[save_comp.owner.name if save_comp.owner else "?"] + \
-			"Check the Replication panel in the Editor and ensure " + \
-			"instantiate() has been called."
+					[save_comp.owner.name if save_comp.owner else "?"] +
+			"Check the Replication panel in the Editor and ensure " +
+			"instantiate() has been called.",
 		)
 
 	if config:
@@ -137,7 +138,7 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	if save_comp.database and not save_comp.table_name.is_empty():
 		var tracked: Array[StringName] = save_comp._properties.keys()
 		var registered: Array[StringName] = \
-			save_comp.database.get_registered_columns(save_comp.table_name)
+				save_comp.database.get_registered_columns(save_comp.table_name)
 		if not registered.is_empty():
 			var only_tracked := tracked.filter(
 				func(c: StringName) -> bool: return c not in registered
@@ -147,27 +148,28 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 			)
 			if not only_tracked.is_empty() or not only_registered.is_empty():
 				errs.append(
-					("Schema drift on '%s' table='%s': only_in_sync=%s " + \
-					"only_in_db=%s") % [
+					("Schema drift on '%s' table='%s': only_in_sync=%s " +
+							"only_in_db=%s") % [
 						save_comp.owner.name if save_comp.owner else "?",
 						save_comp.table_name,
-						str(only_tracked), str(only_registered),
-					]
+						str(only_tracked),
+						str(only_registered),
+					],
 				)
 
 	return errs
 
 
 static func _check_spawner_component(
-	spawner: SpawnerComponent
+		spawner: SpawnerComponent,
 ) -> Array[String]:
 	var errs: Array[String] = []
 	if spawner.root_path == NodePath(""):
 		errs.append(
 			"SpawnerComponent.root_path is empty on '%s'. " % \
-			[spawner.owner.name] + \
-			"get_path_to(spawner.owner) was likely called before the " + \
-			"player entered the scene tree."
+					[spawner.owner.name] +
+			"get_path_to(spawner.owner) was likely called before the " +
+			"player entered the scene tree.",
 		)
 	return errs
 
@@ -184,15 +186,15 @@ static func _check_authority(node: Node) -> Array[String]:
 	if actual != expected:
 		errs.append(
 			"Authority mismatch on '%s': expected=%d actual=%d. " % \
-			[node.name, expected, actual] + \
-			"Multiplayer authority was not correctly assigned during spawn."
+					[node.name, expected, actual] +
+			"Multiplayer authority was not correctly assigned during spawn.",
 		)
 	return errs
 
 
 static func _get_expected_authority(
-	node: Node,
-	spawner: SpawnerComponent
+		node: Node,
+		spawner: SpawnerComponent,
 ) -> int:
 	if not spawner:
 		return NetwEntity.parse_peer(node.name)
@@ -206,20 +208,20 @@ static func _get_expected_authority(
 
 
 static func _check_server_authority_synchronizer(
-	node: Node
+		node: Node,
 ) -> Array[String]:
 	var errs: Array[String] = []
 	var has_server_sync := false
 	for sync: MultiplayerSynchronizer in \
-			SynchronizersCache.get_synchronizers(node):
+	SynchronizersCache.get_synchronizers(node):
 		if sync.get_multiplayer_authority() == 1:
 			has_server_sync = true
 			break
 	if not has_server_sync:
 		errs.append(
 			"No server-authoritative MultiplayerSynchronizer on '%s'. " % \
-			[node.name] + \
-			"Scene visibility requires at least one synchronizer " + \
-			"with authority=1 so the server can control replication."
+					[node.name] +
+			"Scene visibility requires at least one synchronizer " +
+			"with authority=1 so the server can control replication.",
 		)
 	return errs

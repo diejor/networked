@@ -19,11 +19,11 @@ var _username: String = ""
 func _exit_tree() -> void:
 	if is_instance_valid(_client):
 		Netw.dbg.trace(
-			"DebugClient: Freed nameplate for %s" % [_client.owner.name]
+			"DebugClient: Freed nameplate for %s" % [_client.owner.name],
 		)
 	elif is_instance_valid(_target):
 		Netw.dbg.trace(
-			"DebugClient: Freed nameplate for %s" % [_target.name]
+			"DebugClient: Freed nameplate for %s" % [_target.name],
 		)
 
 
@@ -70,10 +70,10 @@ func _update_position(target: Node) -> void:
 	elif target is Node3D:
 		var cam := get_viewport().get_camera_3d()
 		if cam and not cam.is_position_behind(
-			target.global_position + OFFSET_3D
+			target.global_position + OFFSET_3D,
 		):
 			global_position = cam.unproject_position(
-				target.global_position + OFFSET_3D
+				target.global_position + OFFSET_3D,
 			)
 		else:
 			visible = false
@@ -86,10 +86,10 @@ func _update_visuals(color: Color) -> void:
 	var auth := node.get_multiplayer_authority() if node else 0
 
 	uid_label.text = (
-		"[center][color=#%s]%d[/color][/center]"
-		% [color_str, auth]
+			"[center][color=#%s]%d[/color][/center]"
+			% [color_str, auth]
 	)
 	username_label.text = (
-		"[center][color=#%s]%s[/color][/center]"
-		% [color_str, safe_name]
+			"[center][color=#%s]%s[/color][/center]"
+			% [color_str, safe_name]
 	)

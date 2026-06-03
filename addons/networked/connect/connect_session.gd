@@ -33,7 +33,6 @@
 class_name ConnectSession
 extends Node
 
-
 ## A saved or directory-discovered target was added to the live list.
 signal target_added(target: JoinTarget)
 
@@ -46,7 +45,8 @@ signal target_updated(target: JoinTarget, result: ServerInfoResult)
 
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
-	directory_id: StringName, lobbies: Array[LobbyInfo]
+		directory_id: StringName,
+		lobbies: Array[LobbyInfo],
 )
 
 ## A registered directory reported that its transport is unavailable.
@@ -71,12 +71,10 @@ signal session_entered()
 ## The bound [MultiplayerTree] returned to its offline state.
 signal session_left()
 
-
 ## Ceiling applied when a backend declares its connect path self-managed
 ## ([method BackendPeer.connect_timeout_hint] returns a negative value), so a
 ## buggy backend can never wedge a join open forever.
 const SELF_MANAGED_TIMEOUT_CEILING := 30.0
-
 
 ## Path used for [ServerList] persistence by
 ## [method load_server_list] / [method save_server_list] when no
@@ -86,21 +84,19 @@ const SELF_MANAGED_TIMEOUT_CEILING := 30.0
 ## True if the active join handshake was explicitly aborted.
 var join_aborted_flag: bool = false
 
-
 ## Optional persistence handle. Null until [method load_server_list]
 ## assigns one (or a caller sets it directly). When set,
 ## [method save_server_list] writes the current saved targets back
 ## through it.
 var server_list: ServerList = null
 
-
 var _tree: MultiplayerTree
 var _probes: ProbeManager
 var _directories: DirectoryRegistry
 var _saved_targets: Array[JoinTarget] = []
-var _discovered: Dictionary = {}  # StringName -> Array[JoinTarget]
+var _discovered: Dictionary = { } # StringName -> Array[JoinTarget]
 var _directories_order: Array[StringName] = []
-var _results: Dictionary = {}            # JoinTarget -> ServerInfoResult
+var _results: Dictionary = { } # JoinTarget -> ServerInfoResult
 var _tree_signals_bound: bool = false
 
 
@@ -120,8 +116,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_unbind_tree_signals()
 
-
 # -- Tree binding ------------------------------------------------------------
+
 
 ## Binds the [MultiplayerTree] used by [method host] and [method join].
 ## The session subscribes to its lifecycle so [signal session_entered]
@@ -132,7 +128,8 @@ func bind_tree(tree: MultiplayerTree) -> void:
 	_unbind_tree_signals()
 	_tree = tree
 	Netw.dbg.debug(
-		"ConnectSession bound to tree '%s'.", [_tree.name]
+		"ConnectSession bound to tree '%s'.",
+		[_tree.name],
 	)
 	_bind_tree_signals()
 	_sync_tree_directories()
@@ -149,10 +146,10 @@ func get_tree_bound() -> MultiplayerTree:
 ## when the tree entered before the binding, e.g. a debug auto-connect.
 func is_session_active() -> bool:
 	return is_instance_valid(_tree) \
-		and _tree.state == MultiplayerTree.State.ONLINE
-
+			and _tree.state == MultiplayerTree.State.ONLINE
 
 # -- Directories -------------------------------------------------------------
+
 
 ## Registers [param directory] under [param id] so its lobbies appear
 ## in [method get_targets].
@@ -172,7 +169,8 @@ func register_directory(id: StringName, directory: LobbyDirectory) -> void:
 	if not directory.provider_unavailable.is_connected(unavailable_cb):
 		directory.provider_unavailable.connect(unavailable_cb)
 	Netw.dbg.debug(
-		"ConnectSession directory registered: %s.", [String(id)]
+		"ConnectSession directory registered: %s.",
+		[String(id)],
 	)
 
 
@@ -201,8 +199,8 @@ func get_directory(id: StringName) -> LobbyDirectory:
 func get_directory_ids() -> Array[StringName]:
 	return _directories_order.duplicate()
 
-
 # -- Target list ------------------------------------------------------------
+
 
 ## Appends [param target] to the live list. When [param persist] is
 ## [code]true[/code] and a [member server_list] is loaded, the
@@ -218,13 +216,13 @@ func add_target(target: JoinTarget, persist: bool = false) -> void:
 	if _saved_targets.has(target):
 		Netw.dbg.trace(
 			"ConnectSession add_target ignored duplicate: %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		return
 	_saved_targets.append(target)
 	Netw.dbg.info(
 		"ConnectSession added saved target %s (persist=%s, size=%d).",
-		[_target_summary(target), str(persist), _saved_targets.size()]
+		[_target_summary(target), str(persist), _saved_targets.size()],
 	)
 	target_added.emit(target)
 	if persist:
@@ -238,14 +236,14 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 	if idx < 0:
 		Netw.dbg.trace(
 			"ConnectSession remove_target ignored missing target: %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		return
 	_saved_targets.remove_at(idx)
 	_results.erase(target)
 	Netw.dbg.info(
 		"ConnectSession removed saved target %s (persist=%s, size=%d).",
-		[_target_summary(target), str(persist), _saved_targets.size()]
+		[_target_summary(target), str(persist), _saved_targets.size()],
 	)
 	target_removed.emit(target)
 	if persist:
@@ -285,8 +283,8 @@ func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 func get_result(target: JoinTarget) -> ServerInfoResult:
 	return _results.get(target, null)
 
-
 # -- Persistence ------------------------------------------------------------
+
 
 ## Loads the persisted [ServerList] at [param path], replacing the
 ## current saved target list. Directory-discovered targets are not
@@ -298,7 +296,7 @@ func load_server_list(path: String = server_list_path) -> void:
 	server_list = loaded
 	Netw.dbg.info(
 		"ConnectSession loaded %d saved target(s) from %s.",
-		[loaded.targets.size(), path]
+		[loaded.targets.size(), path],
 	)
 	_replace_saved_targets(loaded.targets)
 
@@ -316,7 +314,7 @@ func save_server_list(path: String = server_list_path) -> Error:
 	if err == OK:
 		Netw.dbg.info(
 			"ConnectSession saved %d saved target(s) to %s.",
-			[_saved_targets.size(), path]
+			[_saved_targets.size(), path],
 		)
 	else:
 		Netw.dbg.error(
@@ -326,8 +324,8 @@ func save_server_list(path: String = server_list_path) -> Error:
 		)
 	return err
 
-
 # -- Probing & refresh ------------------------------------------------------
+
 
 ## Cancels every in-flight probe, re-probes all saved targets, and
 ## asks every registered directory to refresh its lobby list.
@@ -336,21 +334,22 @@ func refresh() -> void:
 	_sync_tree_directories()
 	Netw.dbg.debug(
 		"ConnectSession refresh: saved=%d directories=%d.",
-		[_saved_targets.size(), _directories_order.size()]
+		[_saved_targets.size(), _directories_order.size()],
 	)
 	if _probes:
 		_probes.cancel_all()
 	for target in _saved_targets:
 		Netw.dbg.trace(
 			"ConnectSession probing saved target %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		_probes.query(target, _on_probe_result.bind(target))
 	for id in _directories_order:
 		var directory := _directories.get_directory(id)
 		if directory:
 			Netw.dbg.trace(
-				"ConnectSession refreshing directory %s.", [String(id)]
+				"ConnectSession refreshing directory %s.",
+				[String(id)],
 			)
 			directory.list_lobbies()
 
@@ -363,12 +362,13 @@ func probe(target: JoinTarget) -> void:
 		Netw.dbg.warn("ConnectSession probe ignored null target.")
 		return
 	Netw.dbg.debug(
-		"ConnectSession probing target %s.", [_target_summary(target)]
+		"ConnectSession probing target %s.",
+		[_target_summary(target)],
 	)
 	_probes.query(target, _on_probe_result.bind(target))
 
-
 # -- Host & join ------------------------------------------------------------
+
 
 ## Hosts a new session. [param config] supplies the transport plus server name.
 ## The [param payload] carries player identity. Returns OK on success, or
@@ -390,7 +390,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 	Netw.dbg.info(
 		"ConnectSession host requested (user=%s).",
-		[String(payload.username)]
+		[String(payload.username)],
 	)
 	host_started.emit()
 
@@ -405,7 +405,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	var err := await tree.host_player(payload)
 	if err != OK:
 		host_failed.emit(
-			"backend host_player failed (%s)" % error_string(err)
+			"backend host_player failed (%s)" % error_string(err),
 		)
 		return err
 
@@ -423,7 +423,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if payload == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: payload is null.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		join_failed.emit(target, "join payload is null")
 		return ERR_INVALID_PARAMETER
@@ -431,16 +431,17 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if tree == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: no bound tree.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		join_failed.emit(
-			target, "no MultiplayerTree bound; call bind_tree first"
+			target,
+			"no MultiplayerTree bound; call bind_tree first",
 		)
 		return ERR_UNCONFIGURED
 
 	Netw.dbg.info(
 		"ConnectSession join requested: %s (user=%s).",
-		[_target_summary(target), String(payload.username)]
+		[_target_summary(target), String(payload.username)],
 	)
 	join_started.emit(target)
 	join_aborted_flag = false
@@ -457,7 +458,8 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 			join_failed.emit(target, "Connection aborted by user")
 		else:
 			join_failed.emit(
-				target, "connect failed (%s)" % error_string(err)
+				target,
+				"connect failed (%s)" % error_string(err),
 			)
 		return err
 
@@ -473,8 +475,8 @@ func abort_join() -> void:
 		join_aborted_flag = true
 		tree.abort_join()
 
-
 # -- Internals --------------------------------------------------------------
+
 
 # Adopts every LobbyDirectory service under the bound tree that is not already
 # registered, keyed by node name. Manual register_directory entries are left
@@ -507,7 +509,7 @@ func _unbind_tree_signals() -> void:
 	if not _tree_signals_bound:
 		return
 	if is_instance_valid(_tree) and _tree.state_changed.is_connected(
-		_on_tree_state_changed
+		_on_tree_state_changed,
 	):
 		_tree.state_changed.disconnect(_on_tree_state_changed)
 	_tree_signals_bound = false
@@ -521,8 +523,8 @@ func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 
 
 func _apply_host_config(
-	backend: BackendPeer,
-	config: ConnectHostConfig,
+		backend: BackendPeer,
+		config: ConnectHostConfig,
 ) -> void:
 	if backend is SteamBackend:
 		var steam := backend as SteamBackend
@@ -539,7 +541,7 @@ func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 	_results[target] = result
 	Netw.dbg.debug(
 		"ConnectSession probe result for %s: %s.",
-		[_target_summary(target), str(result)]
+		[_target_summary(target), str(result)],
 	)
 	target_updated.emit(target, result)
 
@@ -559,7 +561,8 @@ func _classify_discovered(info: ServerInfo) -> ServerInfoResult:
 
 
 func _on_directory_list_updated(
-	lobbies: Array[LobbyInfo], id: StringName
+		lobbies: Array[LobbyInfo],
+		id: StringName,
 ) -> void:
 	var prior: Array[JoinTarget] = []
 	if _discovered.has(id):
@@ -586,7 +589,7 @@ func _on_directory_list_updated(
 	_discovered[id] = fresh
 	Netw.dbg.debug(
 		"ConnectSession directory %s refreshed: %d lobby target(s).",
-		[String(id), fresh.size()]
+		[String(id), fresh.size()],
 	)
 	for target in fresh:
 		target_added.emit(target)
@@ -597,7 +600,7 @@ func _on_directory_list_updated(
 func _on_directory_unavailable(reason: String, id: StringName) -> void:
 	Netw.dbg.warn(
 		"ConnectSession directory %s unavailable: %s.",
-		[String(id), reason]
+		[String(id), reason],
 	)
 	directory_unavailable.emit(id, reason)
 
@@ -606,12 +609,12 @@ func _on_directory_unavailable(reason: String, id: StringName) -> void:
 # any entry that reloads unchanged, so a redundant reload does not churn the
 # list or orphan a probe result keyed to the old instance.
 func _replace_saved_targets(loaded: Array[JoinTarget]) -> void:
-	var existing_by_key := {}
+	var existing_by_key := { }
 	for target in _saved_targets:
 		existing_by_key[_target_key(target)] = target
 
 	var next: Array[JoinTarget] = []
-	var reused := {}
+	var reused := { }
 	for incoming in loaded:
 		var key := _target_key(incoming)
 		if existing_by_key.has(key):

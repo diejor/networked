@@ -16,13 +16,13 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
-		.with_root(Node2D) \
-		.with_spawner()
+			.with_root(Node2D) \
+			.with_spawner()
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed])
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed])
 	level_builder.pack()
 
 	harness = make_harness()
@@ -96,14 +96,28 @@ func test_clients_admit_each_other_replicas() -> void:
 	var name0 := harness.player_name_for(client0)
 	var name1 := harness.player_name_for(client1)
 	var client0_player1 := await harness.wait_for_player(
-			client0, level_builder.scene_name, name1)
+		client0,
+		level_builder.scene_name,
+		name1,
+	)
 	var client1_player0 := await harness.wait_for_player(
-			client1, level_builder.scene_name, name0)
+		client1,
+		level_builder.scene_name,
+		name0,
+	)
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
 	var service0 := client0.get_service(InterestService) as InterestService
 	var service1 := client1.get_service(InterestService) as InterestService
-	assert_that(service0.can_peer_see_entity(
-			peer_id_0, NetwEntity.of(client0_player1))).is_true()
-	assert_that(service1.can_peer_see_entity(
-			peer_id_1, NetwEntity.of(client1_player0))).is_true()
+	assert_that(
+		service0.can_peer_see_entity(
+			peer_id_0,
+			NetwEntity.of(client0_player1),
+		),
+	).is_true()
+	assert_that(
+		service1.can_peer_see_entity(
+			peer_id_1,
+			NetwEntity.of(client1_player0),
+		),
+	).is_true()

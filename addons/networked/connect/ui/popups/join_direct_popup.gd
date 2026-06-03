@@ -2,13 +2,10 @@
 class_name JoinDirectPopup
 extends PopupPanel
 
-
 signal submitted(target: JoinTarget, payload: JoinPayload)
-
 
 var _templates: Array[BackendPeer] = []
 var _spawner_options: Array[SceneNodePath] = []
-
 
 @onready var _backend_picker: OptionButton = %BackendPicker
 @onready var _address_edit: LineEdit = %AddressEdit
@@ -27,9 +24,9 @@ func _ready() -> void:
 
 ## Opens the direct join popup.
 func open_join_direct(
-	templates: Array[BackendPeer],
-	spawner_options: Array[SceneNodePath],
-	default_username: String,
+		templates: Array[BackendPeer],
+		spawner_options: Array[SceneNodePath],
+		default_username: String,
 ) -> void:
 	_templates = templates
 	_spawner_options = spawner_options.duplicate()
@@ -99,7 +96,7 @@ func _on_confirm() -> void:
 	target.address = _address_edit.text
 	target.backend = template
 	target.display_name = ConnectUiShared.format_address(target)
-	
+
 	var payload := JoinPayload.new()
 	var typed := _username_edit.text.strip_edges()
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"

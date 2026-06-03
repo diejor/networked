@@ -7,7 +7,6 @@
 class_name ServerInfoResult
 extends RefCounted
 
-
 ## Categorical outcome of the probe.
 enum Status {
 	## A probe reply was received and decoded successfully.
@@ -82,7 +81,8 @@ static func error(message: String = "") -> ServerInfoResult:
 ## Builds an incompatible result, keeping [param info] when discovery already
 ## provided player counts so the row can still render them.
 static func incompatible(
-	info: ServerInfo = null, message: String = ""
+		info: ServerInfo = null,
+		message: String = "",
 ) -> ServerInfoResult:
 	var r := ServerInfoResult.new()
 	r.status = Status.INCOMPATIBLE
@@ -99,7 +99,8 @@ func _to_string() -> String:
 	match status:
 		Status.OK:
 			return "ServerInfoResult(ok, %d players, %dms)" % [
-				info.players if info else 0, latency_ms,
+				info.players if info else 0,
+				latency_ms,
 			]
 		Status.UNREACHABLE:
 			return "ServerInfoResult(unreachable: %s)" % message

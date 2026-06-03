@@ -40,11 +40,13 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 ## Implements [method BackendPeer.create_join_peer] with
 ## [method WebSocketMultiplayerPeer.create_client].
 func create_join_peer(
-	_tree: MultiplayerTree, server_address: String, _username: String = ""
+		_tree: MultiplayerTree,
+		server_address: String,
+		_username: String = "",
 ) -> MultiplayerPeer:
 	Netw.dbg.trace(
 		"WebSocketBackend: create_join_peer called at %s",
-		[server_address]
+		[server_address],
 	)
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB
@@ -64,7 +66,8 @@ func create_join_peer(
 ## [method build_url] normalizes [param address] before the probe opens a
 ## temporary WebSocket connection.
 func query_server_info(
-	address: String, timeout: float = 2.0,
+		address: String,
+		timeout: float = 2.0,
 ) -> ServerInfoResult:
 	var probe := AuthProbeClient.new(self)
 	return await probe.query(address, timeout)
@@ -77,7 +80,7 @@ func get_address_hint() -> AddressHint:
 		"ws://localhost:%d" % port,
 		"Empty -> wss://%s. Use localhost or ws[s]:// URLs." % public_host,
 		true,
-		true
+		true,
 	)
 	return hint
 
@@ -99,10 +102,11 @@ func build_url(server_address: String) -> String:
 		return "ws://localhost:" + str(port)
 
 	if server_address.begins_with("ws://") or \
-		server_address.begins_with("wss://"):
+			server_address.begins_with("wss://"):
 		return server_address
 
 	return "wss://" + server_address
+
 
 ## Returns the display name for this backend.
 func get_display_name() -> String:

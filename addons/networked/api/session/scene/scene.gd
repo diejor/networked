@@ -73,10 +73,10 @@ func _init(scene: MultiplayerScene) -> void:
 	scene.despawned.connect(_on_despawned)
 	scene.player_ready.connect(_on_player_ready)
 
-
 # ---------------------------------------------------------------------------
 # Validity / identity queries
 # ---------------------------------------------------------------------------
+
 
 ## Returns [code]true[/code] while the underlying [Scene] is still alive.
 func is_valid() -> bool:
@@ -134,10 +134,10 @@ func get_peers() -> Array[int]:
 	result.assign(scene.connected_peers.keys())
 	return result
 
-
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
+
 
 ## Returns all player nodes currently in this scene.
 func get_players() -> Array[Node]:
@@ -184,10 +184,10 @@ func wait_for_players(n: int) -> void:
 	while get_player_count() < n:
 		await player_entered
 
-
 # ---------------------------------------------------------------------------
 # Static access
 # ---------------------------------------------------------------------------
+
 
 ## Returns the [NetwScene] for [param node] by walking its ancestor chain.
 ##
@@ -196,10 +196,10 @@ static func for_node(node: Node) -> NetwScene:
 	var ctx := NetwContext.for_node(node)
 	return ctx.scene if ctx and ctx.has_scene() else null
 
-
 # ---------------------------------------------------------------------------
 # Lifecycle cleanup
 # ---------------------------------------------------------------------------
+
 
 ## Cleans up all internal state and signal connections.
 ## Called automatically when the underlying [MultiplayerScene] exits the tree.
@@ -217,10 +217,10 @@ func close() -> void:
 		_active_countdown = null
 	_scene_ref = null
 
-
 # ---------------------------------------------------------------------------
 # Soft suspend / resume  (signal-only, game code decides)
 # ---------------------------------------------------------------------------
+
 
 ## Broadcasts a soft-suspend notification to scene peers.
 ##
@@ -232,8 +232,10 @@ func suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.suspend() must be called on the server.")
+	assert(
+		scene.multiplayer.is_server(),
+		"NetwScene.suspend() must be called on the server.",
+	)
 	for peer_id: int in scene.connected_peers:
 		if peer_id == scene.multiplayer.get_unique_id():
 			continue
@@ -260,18 +262,20 @@ func resume() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.resume() must be called on the server.")
+	assert(
+		scene.multiplayer.is_server(),
+		"NetwScene.resume() must be called on the server.",
+	)
 	for peer_id: int in scene.connected_peers:
 		if peer_id == scene.multiplayer.get_unique_id():
 			continue
 		scene._rpc_receive_resume.rpc_id(peer_id)
 	resumed.emit()
 
-
 # ---------------------------------------------------------------------------
 # Countdown
 # ---------------------------------------------------------------------------
+
 
 ## Starts a server-driven countdown of [param seconds] seconds.
 ##
@@ -286,8 +290,10 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return null
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.start_countdown() must be called on the server.")
+	assert(
+		scene.multiplayer.is_server(),
+		"NetwScene.start_countdown() must be called on the server.",
+	)
 
 	cancel_countdown()
 
@@ -317,16 +323,18 @@ func cancel_countdown() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return
-	assert(scene.multiplayer.is_server(),
-		"NetwScene.cancel_countdown() must be called on the server.")
+	assert(
+		scene.multiplayer.is_server(),
+		"NetwScene.cancel_countdown() must be called on the server.",
+	)
 	if _active_countdown and _active_countdown.is_running():
 		_active_countdown.cancel()
 	_active_countdown = null
 
-
 # ---------------------------------------------------------------------------
 # Readiness gate
 # ---------------------------------------------------------------------------
+
 
 ## Creates and returns a new [NetwSceneReadiness] gate for this scene.
 ##
@@ -343,10 +351,10 @@ func create_readiness_gate() -> NetwSceneReadiness:
 		gate._add_peer(_get_peer_id(player))
 	return gate
 
-
 # ---------------------------------------------------------------------------
 # Internal signal handlers
 # ---------------------------------------------------------------------------
+
 
 func _on_spawned(player: Node) -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene

@@ -20,7 +20,6 @@
 class_name AuthProtocol
 extends RefCounted
 
-
 ## Current protocol version. Bumped when the framing changes in a way
 ## that older peers cannot decode.
 const PROTOCOL_VERSION := 2
@@ -30,9 +29,8 @@ static var MAGIC_PROBE := PackedByteArray([0x4E, 0x50, 0x52, 0x42]) # "NPRB"
 
 # Hello carries a 4-byte app tag the probe does not need, since probes never
 # join the session they query.
-const _HELLO_HEADER_LEN := 10  # magic(4) + version(1) + app_tag(4) + flags(1)
-const _PROBE_HEADER_LEN := 6   # magic(4) + version(1) + status-or-flags(1)
-
+const _HELLO_HEADER_LEN := 10 # magic(4) + version(1) + app_tag(4) + flags(1)
+const _PROBE_HEADER_LEN := 6 # magic(4) + version(1) + status-or-flags(1)
 
 ## Categorical outcome of [method classify] for a received auth packet.
 enum Kind {
@@ -40,7 +38,6 @@ enum Kind {
 	HELLO,
 	PROBE,
 }
-
 
 ## Status byte values used in probe replies.
 enum ProbeStatus {
@@ -70,9 +67,9 @@ static func classify(data: PackedByteArray) -> Kind:
 ## (0 when no build gate is set). [param flags] is reserved for future use
 ## (default 0).
 static func encode_client_hello(
-	provider_payload: PackedByteArray,
-	app_tag: int = 0,
-	flags: int = 0,
+		provider_payload: PackedByteArray,
+		app_tag: int = 0,
+		flags: int = 0,
 ) -> PackedByteArray:
 	var buf := PackedByteArray()
 	buf.append_array(MAGIC_HELLO)
@@ -90,18 +87,34 @@ static func encode_client_hello(
 ## [code]"framing"[/code], [code]"version"[/code], or [code]"app"[/code] and the
 ## remaining fields are zero / empty.
 static func decode_client_hello(
-	data: PackedByteArray, local_app_tag: int = 0
+		data: PackedByteArray,
+		local_app_tag: int = 0,
 ) -> Dictionary:
 	if not _matches_magic(data, MAGIC_HELLO) or data.size() < _HELLO_HEADER_LEN:
-		return { ok = false, reason = "framing", version = 0, flags = 0,
-			provider_payload = PackedByteArray() }
+		return {
+			ok = false,
+			reason = "framing",
+			version = 0,
+			flags = 0,
+			provider_payload = PackedByteArray(),
+		}
 	var version := int(data[4])
 	if version != PROTOCOL_VERSION:
-		return { ok = false, reason = "version", version = version, flags = 0,
-			provider_payload = PackedByteArray() }
+		return {
+			ok = false,
+			reason = "version",
+			version = version,
+			flags = 0,
+			provider_payload = PackedByteArray(),
+		}
 	if _read_u32(data, 5) != (local_app_tag & 0xFFFFFFFF):
-		return { ok = false, reason = "app", version = version, flags = 0,
-			provider_payload = PackedByteArray() }
+		return {
+			ok = false,
+			reason = "app",
+			version = version,
+			flags = 0,
+			provider_payload = PackedByteArray(),
+		}
 	return {
 		ok = true,
 		reason = "",
@@ -136,8 +149,8 @@ static func decode_probe_request(data: PackedByteArray) -> Dictionary:
 ##
 ## [param status] is one of [enum ProbeStatus].
 static func encode_probe_reply(
-	status: int,
-	payload: PackedByteArray = PackedByteArray(),
+		status: int,
+		payload: PackedByteArray = PackedByteArray(),
 ) -> PackedByteArray:
 	var buf := PackedByteArray()
 	buf.append_array(MAGIC_PROBE)
@@ -151,12 +164,20 @@ static func encode_probe_reply(
 ## [code]{ ok, version, status, payload }[/code].
 static func decode_probe_reply(data: PackedByteArray) -> Dictionary:
 	if not _matches_magic(data, MAGIC_PROBE) or data.size() < _PROBE_HEADER_LEN:
-		return { ok = false, version = 0, status = 0,
-			payload = PackedByteArray() }
+		return {
+			ok = false,
+			version = 0,
+			status = 0,
+			payload = PackedByteArray(),
+		}
 	var version := int(data[4])
 	if version != PROTOCOL_VERSION:
-		return { ok = false, version = version, status = 0,
-			payload = PackedByteArray() }
+		return {
+			ok = false,
+			version = version,
+			status = 0,
+			payload = PackedByteArray(),
+		}
 	return {
 		ok = true,
 		version = version,
@@ -166,7 +187,8 @@ static func decode_probe_reply(data: PackedByteArray) -> Dictionary:
 
 
 static func _matches_magic(
-	data: PackedByteArray, magic: PackedByteArray
+		data: PackedByteArray,
+		magic: PackedByteArray,
 ) -> bool:
 	if data.size() < magic.size():
 		return false
@@ -187,6 +209,6 @@ static func _append_u32(buf: PackedByteArray, value: int) -> void:
 # Reads 4 little-endian bytes at offset into an unsigned 32-bit int.
 static func _read_u32(data: PackedByteArray, offset: int) -> int:
 	return int(data[offset]) \
-		| (int(data[offset + 1]) << 8) \
-		| (int(data[offset + 2]) << 16) \
-		| (int(data[offset + 3]) << 24)
+			| (int(data[offset + 1]) << 8) \
+			| (int(data[offset + 2]) << 16) \
+			| (int(data[offset + 3]) << 24)

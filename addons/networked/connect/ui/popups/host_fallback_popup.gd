@@ -2,12 +2,9 @@
 class_name HostFallbackPopup
 extends PopupPanel
 
-
 signal submitted(target: JoinTarget)
 
-
 var _pending_target: JoinTarget = null
-
 
 @onready var _title: Label = %TitleLabel
 @onready var _confirm_button: Button = %ConfirmButton
@@ -26,13 +23,13 @@ func open_host_fallback(target: JoinTarget) -> void:
 	var display_addr := target.address.strip_edges()
 	if display_addr.is_empty():
 		_title.text = (
-			"Could not connect to the %s server.\n"
-			+ "Would you like to host a server instead?"
+				"Could not connect to the %s server.\n"
+				+ "Would you like to host a server instead?"
 		) % backend_name
 	else:
 		_title.text = (
-			"Could not connect to the %s server at %s.\n"
-			+ "Would you like to host a server instead?"
+				"Could not connect to the %s server at %s.\n"
+				+ "Would you like to host a server instead?"
 		) % [backend_name, display_addr]
 	popup_centered()
 

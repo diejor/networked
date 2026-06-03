@@ -15,7 +15,6 @@ signal tree_ready
 ## Emitted when a local clock pong is captured.
 signal clock_pong_captured(data: Dictionary)
 
-
 const _NAMEPLATE_SCENE = "uid://dui4l6oylk8ju"
 
 ## The local player node for this tree.
@@ -36,15 +35,15 @@ var _reporter_ref: WeakRef
 ##        ┠╴stable_id (int PeerID or String Path) (bool)
 ##        ┖╴"" (bool)                      # tree-wide default
 ## [/codeblock]
-var _visualizers: Dictionary = {}
+var _visualizers: Dictionary = { }
 
 ## Scene -> [CheckpointToken] captured from the [code]scene_spawn[/code] span,
 ## used for causal linking.
-var _scene_tokens: Dictionary = {}
+var _scene_tokens: Dictionary = { }
 
 ## Scene -> [Callable] connected to [signal MultiplayerScene.spawned], for
 ## disconnect-on-cleanup.
-var _hooked_scenes: Dictionary = {}
+var _hooked_scenes: Dictionary = { }
 
 var _scene_wired: bool = false
 
@@ -53,12 +52,12 @@ func _init(mt: MultiplayerTree, reporter: NetworkedDebugReporter) -> void:
 	_mt_ref = weakref(mt)
 	_reporter_ref = weakref(reporter)
 
-
 # Public API.
+
 
 ## Returns [code]true[/code] if the visualizer is enabled for a specific node.
 func is_enabled(viz: String, node: Node = null) -> bool:
-	var states: Dictionary = _visualizers.get(viz, {})
+	var states: Dictionary = _visualizers.get(viz, { })
 	if node:
 		var id := _get_stable_id(node)
 		if states.has(id):
@@ -76,14 +75,14 @@ func apply_command(d: Dictionary) -> void:
 	if viz.is_empty():
 		return
 
-	var states: Dictionary = _visualizers.get(viz, {})
-	
+	var states: Dictionary = _visualizers.get(viz, { })
+
 	var id: Variant
 	if peer_id != 0:
 		id = peer_id
 	else:
 		id = _get_stable_id_from_path(path) if not path.is_empty() else ""
-		
+
 	states[id] = enabled
 	_visualizers[viz] = states
 
@@ -99,12 +98,12 @@ func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return null
-	
+
 	# Priority 1: Explicit target node
 	var target := span.get_target_node() if span else null
 	if is_instance_valid(target):
 		return NetNodeSnapshot.from_node(target)
-	
+
 	# Priority 2: Session fallback (Tree Root)
 	var snap := NetNodeSnapshot.from_node(mt)
 	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
@@ -114,20 +113,20 @@ func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 	var session_state: Dictionary = {
 		"is_server": mt.is_server,
 		"peer_id": \
-			mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
+		mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
 		"connected_peers": \
-			mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
+		mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 		"active_scenes": \
-			sm.active_scenes.keys() if sm else [],
+		sm.active_scenes.keys() if sm else [],
 		"backend": \
-			mt.backend.get_script().get_global_name() if mt.backend else "None",
+		mt.backend.get_script().get_global_name() if mt.backend else "None",
 		"active_scene": get_active_scene_path(),
 	}
-	
+
 	# Merge into debug_state
 	for k in session_state:
 		snap.debug_state[k] = session_state[k]
-		
+
 	return snap
 
 
@@ -135,16 +134,16 @@ func build_crash_snapshot(span: NetSpan) -> NetNodeSnapshot:
 ## context node.
 func get_active_scene_path(context: Node = null) -> String:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	
+
 	if is_instance_valid(context):
 		# Priority: owner scene (e.g. level root for spawned players).
 		if context.owner and not context.owner.scene_file_path.is_empty():
 			return context.owner.scene_file_path
-		
+
 		# Context node might be the scene root itself.
 		if not context.scene_file_path.is_empty():
 			return context.scene_file_path
-		
+
 		# Tree fallback for context node.
 		var tree := context.get_tree()
 		if tree and tree.current_scene:
@@ -155,11 +154,11 @@ func get_active_scene_path(context: Node = null) -> String:
 		var tree := mt.get_tree()
 		if tree and tree.current_scene:
 			return tree.current_scene.scene_file_path
-			
+
 	return "?"
 
-
 # Decoration lifecycle.
+
 
 func _refresh_all() -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
@@ -189,7 +188,7 @@ func _decorate_player(player: Node) -> void:
 				username = player.name.get_slice("|", 0)
 		if not username.is_empty():
 			var nameplate: DebugClient = load(
-				_NAMEPLATE_SCENE
+				_NAMEPLATE_SCENE,
 			).instantiate()
 			nameplate.name = "NetDebugNameplate"
 			nameplate.follow_target(player, username)
@@ -198,8 +197,8 @@ func _decorate_player(player: Node) -> void:
 		existing.name = "Nameplate_Deleting"
 		existing.queue_free()
 
-
 # Helpers.
+
 
 func _get_stable_id(node: Node) -> Variant:
 	if not is_instance_valid(node):
@@ -219,8 +218,8 @@ func _get_stable_id_from_path(path: String) -> Variant:
 func _find_players(mt: MultiplayerTree) -> Array[Node]:
 	return mt.get_all_players()
 
-
 # Signal wiring.
+
 
 func _ready() -> void:
 	var mt: MultiplayerTree = _mt_ref.get_ref()
@@ -262,11 +261,11 @@ func _disconnect_all() -> void:
 			mt.local_player_changed.disconnect(_on_local_player_changed)
 		if mt.configured.is_connected(_on_configured):
 			mt.configured.disconnect(_on_configured)
-		
+
 		var clock: NetworkClock = mt.get_service(NetworkClock)
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
-			
+
 		var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
 		if is_instance_valid(sm):
 			if sm.scene_spawned.is_connected(_on_scene_spawned):
@@ -325,11 +324,11 @@ func _on_configured() -> void:
 		# Sceneless mode: emit topology for all current players.
 		for player in mt.get_all_players():
 			reporter._on_player_spawned_logic(player, mt, null)
-			
+
 	tree_ready.emit.call_deferred()
 
-
 # Scene lifecycle.
+
 
 func _on_scene_spawned(scene: MultiplayerScene) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree

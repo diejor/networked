@@ -42,8 +42,8 @@ var _previous_size_2d_override: Vector2i = Vector2i.ZERO
 var _previous_override_stretch: bool = false
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
-
 # ---- Lifecycle ----
+
 
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
@@ -87,8 +87,8 @@ func _process(_dt: float) -> void:
 	if is_instance_valid(_target):
 		queue_redraw()
 
-
 # ---- Target attachment ----
+
 
 ## Points this view at [param viewport] and forces it to render every frame.
 ##
@@ -139,8 +139,8 @@ func _restore_target_render_state() -> void:
 	_target.size_2d_override = _previous_size_2d_override
 	_target.size_2d_override_stretch = _previous_override_stretch
 
-
 # ---- Layout (stretch pipeline mirror) ----
+
 
 func _on_resized() -> void:
 	_apply_layout()
@@ -169,8 +169,8 @@ func _sync_root_sized_rect() -> void:
 	position = Vector2.ZERO
 	set_deferred("size", rect.size)
 
-
 # ---- Rendering & input ----
+
 
 func _draw() -> void:
 	if not is_instance_valid(_target) or _layout == null:
@@ -191,8 +191,8 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouse and _layout.inner_rect.size.x > 0.0 \
 			and _layout.inner_rect.size.y > 0.0:
 		var logical := Vector2(_target.size_2d_override) \
-				if _target.size_2d_override != Vector2i.ZERO \
-				else Vector2(_target.size)
+		if _target.size_2d_override != Vector2i.ZERO \
+		else Vector2(_target.size)
 		var scale := logical / _layout.inner_rect.size
 		var xform := Transform2D.IDENTITY.scaled(scale) \
 				.translated(-_layout.inner_rect.position * scale)
@@ -209,8 +209,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	_target.push_input(event, true)
 
-
 # ---- Local-player discovery ----
+
 
 func _on_local_player_changed(player: Node) -> void:
 	if is_instance_valid(player):
@@ -239,7 +239,8 @@ func _subscribe_scene_manager() -> void:
 func _watch_scene_for_local_player_arrival(scene: MultiplayerScene) -> void:
 	if not scene.player_spawned.is_connected(_on_scene_player_spawned):
 		scene.player_spawned.connect(
-			_on_scene_player_spawned.bind(scene))
+			_on_scene_player_spawned.bind(scene),
+		)
 	_refresh.call_deferred()
 
 

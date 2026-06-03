@@ -9,7 +9,7 @@ extends Node
 
 ## Set of monitor IDs currently registered to avoid duplicates and ensure
 ## cleanup.
-var _registered_ids: Dictionary[StringName, bool] = {}
+var _registered_ids: Dictionary[StringName, bool] = { }
 
 ## Persistent storage to ensure Callables always have a stable reference to 
 ## the latest data.
@@ -17,7 +17,7 @@ var _registered_ids: Dictionary[StringName, bool] = {}
 ## [b]Key:[/b] Category String (e.g. "Clock Admin")
 ## [br][br]
 ## [b]Value:[/b] Dictionary of latest metrics.
-var _latest_data: Dictionary = {}
+var _latest_data: Dictionary = { }
 
 
 func _exit_tree() -> void:
@@ -52,9 +52,9 @@ func remove_relayed_clock(envelope: NetEnvelope) -> void:
 	var peer_id := envelope.peer_id
 	var data := envelope.payload
 	var category := _get_category(null, peer_id, data)
-	
+
 	_latest_data.erase(category)
-	
+
 	for key in ["rtt", "jitter", "error", "recommended_offset"]:
 		var id: StringName = category + "/" + key
 		if Performance.has_custom_monitor(id):
@@ -98,22 +98,30 @@ func _update_data_and_register(category: String, data: Dictionary) -> void:
 func _ensure_monitors_registered(category: String) -> void:
 	var prefix := category + "/"
 	var store: Dictionary = _latest_data[category]
-	
+
 	# Time-based metrics (expect seconds, format as ms)
-	_reg(prefix + "rtt", 
-			func(): return store.get("rtt_raw", 0.0), 
-			Performance.MONITOR_TYPE_TIME)
-	_reg(prefix + "jitter", 
-			func(): return store.get("rtt_jitter", 0.0), 
-			Performance.MONITOR_TYPE_TIME)
-	
+	_reg(
+		prefix + "rtt",
+		func(): return store.get("rtt_raw", 0.0),
+		Performance.MONITOR_TYPE_TIME,
+	)
+	_reg(
+		prefix + "jitter",
+		func(): return store.get("rtt_jitter", 0.0),
+		Performance.MONITOR_TYPE_TIME,
+	)
+
 	# Quantity-based metrics (ticks)
-	_reg(prefix + "error", 
-			func(): return store.get("diff", 0), 
-			Performance.MONITOR_TYPE_QUANTITY)
-	_reg(prefix + "recommended_offset", 
-			func(): return store.get("recommended_display_offset", 0), 
-			Performance.MONITOR_TYPE_QUANTITY)
+	_reg(
+		prefix + "error",
+		func(): return store.get("diff", 0),
+		Performance.MONITOR_TYPE_QUANTITY,
+	)
+	_reg(
+		prefix + "recommended_offset",
+		func(): return store.get("recommended_display_offset", 0),
+		Performance.MONITOR_TYPE_QUANTITY,
+	)
 
 
 func _reg(id: StringName, callable: Callable, type: int) -> void:

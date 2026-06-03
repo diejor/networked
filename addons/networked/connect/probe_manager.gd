@@ -13,7 +13,6 @@
 class_name ProbeManager
 extends Node
 
-
 ## Maximum number of [ProbeSession]s allowed to run at once.
 @export_range(1, 32, 1) var max_concurrent: int = 6
 
@@ -43,9 +42,9 @@ func _init() -> void:
 ##
 ## [param timeout] overrides [member default_timeout] when > 0.
 func query(
-	target: JoinTarget,
-	on_done: Callable,
-	timeout: float = -1.0,
+		target: JoinTarget,
+		on_done: Callable,
+		timeout: float = -1.0,
 ) -> void:
 	var pending := _PendingQuery.new()
 	pending.target = target

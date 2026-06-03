@@ -2,7 +2,6 @@
 class_name TestNetwPeerContext
 extends NetwTestSuite
 
-
 class BucketA extends RefCounted:
 	var value: int = 0
 

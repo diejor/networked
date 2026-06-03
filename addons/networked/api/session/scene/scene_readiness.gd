@@ -24,7 +24,7 @@ signal all_ready()
 
 var _scene_ref: WeakRef
 ## Peer ID -> ready state. Populated as players enter/leave the scene.
-var _readiness: Dictionary[int, bool] = {}
+var _readiness: Dictionary[int, bool] = { }
 
 
 func _init(scene: MultiplayerScene) -> void:

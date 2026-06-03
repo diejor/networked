@@ -48,7 +48,7 @@ signal room_created(room_id: String)
 		"urls": ["turn:openrelay.metered.ca:80"],
 		"username": "openrelayproject",
 		"credential": "openrelayproject",
-	}
+	},
 ]
 
 ## Seconds a joining client waits for the native link before re-offering to the
@@ -94,7 +94,9 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 
 ## Implements [method BackendPeer.create_join_peer] for a WebRTC room id.
 func create_join_peer(
-	_tree: MultiplayerTree, server_address: String, _username: String = ""
+		_tree: MultiplayerTree,
+		server_address: String,
+		_username: String = "",
 ) -> MultiplayerPeer:
 	Netw.dbg.trace("WebRTCBackend: create_join_peer at %s", [server_address])
 	_is_server = false
@@ -171,7 +173,7 @@ func get_address_hint() -> AddressHint:
 		"Room identifier copied from the host (also auto-copied to clipboard "
 		+ "on host).",
 		false,
-		false
+		false,
 	)
 
 
@@ -180,7 +182,8 @@ func get_address_hint() -> AddressHint:
 ## WebRTC discovery uses signaling. An [AuthProbeClient] probe would need a full
 ## ICE handshake, which is too expensive for browser refresh.
 func query_server_info(
-	_address: String, _timeout: float = 2.0,
+		_address: String,
+		_timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 

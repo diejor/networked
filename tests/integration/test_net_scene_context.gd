@@ -9,7 +9,7 @@ var harness: NetwTestHarness
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 
-var server_ctx:  NetwContext
+var server_ctx: NetwContext
 var client0_ctx: NetwContext
 var client1_ctx: NetwContext
 
@@ -24,8 +24,8 @@ func before_test() -> void:
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed])
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed])
 	level_builder.pack()
 
 	harness = make_harness()
@@ -46,9 +46,13 @@ func before_test() -> void:
 	server_ctx = harness.scene_on_server().get_context()
 
 	var c0_scene := await harness.wait_for_scene(
-		client0, level_builder.scene_name)
+		client0,
+		level_builder.scene_name,
+	)
 	var c1_scene := await harness.wait_for_scene(
-		client1, level_builder.scene_name)
+		client1,
+		level_builder.scene_name,
+	)
 	client0_ctx = c0_scene.get_context()
 	client1_ctx = c1_scene.get_context()
 
@@ -74,9 +78,11 @@ func test_get_player_by_peer_id_returns_correct_player() -> void:
 	var peer1_id := client1.multiplayer_peer.get_unique_id()
 
 	assert_that(server_ctx.scene.get_player_by_peer_id(peer0_id)).is_equal(
-		player0)
+		player0,
+	)
 	assert_that(server_ctx.scene.get_player_by_peer_id(peer1_id)).is_equal(
-		player1)
+		player1,
+	)
 
 
 func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
@@ -84,7 +90,8 @@ func test_wait_for_players_returns_immediately_when_count_already_met() -> void:
 	var results := { "completed": false }
 	(func():
 		await server_ctx.scene.wait_for_players(2)
-		results.completed = true).call()
+		results.completed = true
+	).call()
 
 	assert_that(results.completed).is_true()
 
@@ -99,7 +106,8 @@ func test_wait_for_players_suspends_until_player_enters() -> void:
 	var results := { "resolved": false }
 	(func():
 		await ctx.scene.wait_for_players(1)
-		results.resolved = true).call()
+		results.resolved = true
+	).call()
 
 	await get_tree().process_frame
 	assert_that(results.resolved).is_false()
@@ -117,8 +125,8 @@ func test_suspend_signal_reaches_client_context() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(client0_ctx.scene) \
-		.wait_until(1000) \
-		.is_emitted("suspended", ["loading"])
+			.wait_until(1000) \
+			.is_emitted("suspended", ["loading"])
 
 
 func test_request_suspend_notifies_server() -> void:
@@ -128,11 +136,11 @@ func test_request_suspend_notifies_server() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(server_ctx.scene) \
-		.wait_until(1000) \
-		.is_emitted(
-			"suspend_requested",
-			[client0.multiplayer_peer.get_unique_id(), "brb"]
-		)
+			.wait_until(1000) \
+			.is_emitted(
+				"suspend_requested",
+				[client0.multiplayer_peer.get_unique_id(), "brb"],
+			)
 
 
 func test_resume_signal_reaches_client_context() -> void:
@@ -143,8 +151,8 @@ func test_resume_signal_reaches_client_context() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(client1_ctx.scene) \
-		.wait_until(1000) \
-		.is_emitted("resumed")
+			.wait_until(1000) \
+			.is_emitted("resumed")
 
 
 func test_pause_sets_tree_paused_on_server_synchronously() -> void:
@@ -157,7 +165,7 @@ func test_pause_sets_tree_paused_on_server_synchronously() -> void:
 	assert_that(results.paused_reason).is_equal("waiting")
 	assert_that(get_tree().paused).is_true()
 
-	server_ctx.tree.unpause()  # restore before leaving test
+	server_ctx.tree.unpause() # restore before leaving test
 
 
 func test_unpause_clears_tree_paused_and_emits_signal() -> void:
@@ -181,8 +189,8 @@ func test_kick_disconnects_the_peer() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(server) \
-		.wait_until(1000) \
-		.is_emitted("peer_disconnected", [peer0_id])
+			.wait_until(1000) \
+			.is_emitted("peer_disconnected", [peer0_id])
 
 
 func test_request_kick_notifies_server() -> void:
@@ -194,17 +202,18 @@ func test_request_kick_notifies_server() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(server_ctx.tree) \
-		.wait_until(1000) \
-		.is_emitted(
-			"kick_requested",
-			[client0.multiplayer_peer.get_unique_id(), peer1_id, "griefing"]
-		)
+			.wait_until(1000) \
+			.is_emitted(
+				"kick_requested",
+				[client0.multiplayer_peer.get_unique_id(), peer1_id, "griefing"],
+			)
 
 
 func test_cancel_countdown_fires_immediately_without_waiting() -> void:
 	var results := { "cancelled": false }
 	server_ctx.scene.countdown_cancelled.connect(
-		func(): results.cancelled = true)
+		func(): results.cancelled = true
+	)
 
 	var cd := server_ctx.scene.start_countdown(30)
 	assert_that(cd.is_running()).is_true()
@@ -222,8 +231,8 @@ func test_countdown_started_signal_reaches_client() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(client0_ctx.scene) \
-		.wait_until(1000) \
-		.is_emitted("countdown_started", [10])
+			.wait_until(1000) \
+			.is_emitted("countdown_started", [10])
 
 	server_ctx.scene.cancel_countdown()
 
@@ -256,24 +265,24 @@ func test_readiness_gate_pre_populated_with_current_players() -> void:
 
 func test_set_ready_propagates_to_server_gate_via_rpc() -> void:
 	var server_gate := server_ctx.scene.create_readiness_gate()
-	var c0_gate     := client0_ctx.scene.create_readiness_gate()
+	var c0_gate := client0_ctx.scene.create_readiness_gate()
 	monitor_signals(server_gate, false)
 
 	c0_gate.set_ready(true)
 
 	@warning_ignore("redundant_await")
 	await assert_signal(server_gate) \
-		.wait_until(1000) \
-		.is_emitted(
-			"player_ready_changed",
-			[client0.multiplayer_peer.get_unique_id(), true]
-		)
+			.wait_until(1000) \
+			.is_emitted(
+				"player_ready_changed",
+				[client0.multiplayer_peer.get_unique_id(), true],
+			)
 
 
 func test_all_ready_fires_when_every_player_is_ready() -> void:
 	var server_gate := server_ctx.scene.create_readiness_gate()
-	var c0_gate     := client0_ctx.scene.create_readiness_gate()
-	var c1_gate     := client1_ctx.scene.create_readiness_gate()
+	var c0_gate := client0_ctx.scene.create_readiness_gate()
+	var c1_gate := client1_ctx.scene.create_readiness_gate()
 	monitor_signals(server_gate, false)
 
 	c0_gate.set_ready(true)
@@ -281,13 +290,13 @@ func test_all_ready_fires_when_every_player_is_ready() -> void:
 
 	@warning_ignore("redundant_await")
 	await assert_signal(server_gate) \
-		.wait_until(1000) \
-		.is_emitted("all_ready")
+			.wait_until(1000) \
+			.is_emitted("all_ready")
 
 
 func test_player_leave_removes_entry_from_gate() -> void:
 	var server_gate := server_ctx.scene.create_readiness_gate()
-	var peer0_id    := client0.multiplayer_peer.get_unique_id()
+	var peer0_id := client0.multiplayer_peer.get_unique_id()
 
 	assert_that(server_gate._readiness.has(peer0_id)).is_true()
 

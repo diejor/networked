@@ -17,7 +17,7 @@ func before_test() -> void:
 	await _harness.wait_for_clock_sync()
 
 	var interpolator: TickInterpolator = _env.client_node.get_node(
-		"TickInterpolator"
+		"TickInterpolator",
 	)
 	interpolator.trace_interval = 0
 
@@ -31,15 +31,15 @@ func after_test() -> void:
 
 
 func _wait_for_client_position(
-	target: Vector2,
-	tolerance: Vector2,
-	max_frames: int = 120,
+		target: Vector2,
+		tolerance: Vector2,
+		max_frames: int = 120,
 ) -> void:
 	for _i in max_frames:
 		var pos := _env.get_client_property(&"position") as Vector2
 		if pos.is_equal_approx(target) or (
-			absf(pos.x - target.x) <= tolerance.x
-			and absf(pos.y - target.y) <= tolerance.y
+				absf(pos.x - target.x) <= tolerance.x
+				and absf(pos.y - target.y) <= tolerance.y
 		):
 			return
 		await _harness.sync_ticks(1)
@@ -54,7 +54,7 @@ func test_remote_player_converges_to_server_position() -> void:
 
 	assert_vector(_env.get_client_property(&"position")).is_equal_approx(
 		target,
-		Vector2(5.0, 5.0)
+		Vector2(5.0, 5.0),
 	)
 
 
@@ -73,7 +73,7 @@ func test_teleport_snaps_instead_of_lerping() -> void:
 
 	assert_vector(_env.get_client_property(&"position")).is_equal_approx(
 		JUMP,
-		Vector2(1.0, 1.0)
+		Vector2(1.0, 1.0),
 	)
 
 

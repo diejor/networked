@@ -1,7 +1,6 @@
 @tool
 class_name AreaTP3D
 extends Area3D
-
 ## A 3D trigger area that teleports entities possessing a [TPComponent] to a designated [SceneNodePath].
 ##
 ## Teleportation logic is executed strictly on the client that owns the entering body.

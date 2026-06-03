@@ -6,7 +6,6 @@
 class_name TestSceneInterestGate
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var server_scene: MultiplayerScene
@@ -20,8 +19,8 @@ func before_test() -> void:
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new() \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed])
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed])
 	level_builder.pack()
 
 	harness = make_harness()
@@ -71,5 +70,6 @@ func test_client_layer_entities_populated_after_admission() -> void:
 	assert_that(server_layer.entities.is_empty()).is_false()
 
 	var client_layer := client0.interest.layer(
-			server_scene.scene_layer_id())
+		server_scene.scene_layer_id(),
+	)
 	assert_that(client_layer.entities.is_empty()).is_false()

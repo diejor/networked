@@ -40,12 +40,11 @@
 class_name WebTorrentDirectory
 extends LobbyDirectory
 
-
 ## WebTorrent compatible tracker URLs used for the board, shared with the
 ## [TrackerWebRTCBackend] the directory stamps onto join targets.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
-	"wss://tracker.webtorrent.dev"
+	"wss://tracker.webtorrent.dev",
 ]
 
 ## Tag stamped on every room card and required on received cards, so different
@@ -54,7 +53,7 @@ extends LobbyDirectory
 
 ## Maximum room members advertised by [method host_lobby].
 @export_range(1, 250, 1, "or_greater", "suffix:players") \
-var max_clients: int = 8
+		var max_clients: int = 8
 
 ## Seconds [method list_lobbies] collects room cards before emitting
 ## [signal LobbyDirectory.lobby_list_updated].
@@ -73,7 +72,6 @@ var max_clients: int = 8
 ## [code]numwant[/code]. Higher values converge faster at the cost of bandwidth.
 @export_range(1, 50) var board_fanout: int = 16
 
-
 var _tracker: WebTorrentTrackerClient = null
 var _board_hash := ""
 var _peer_id := ""
@@ -89,8 +87,8 @@ var _advertise_acc := 0.0
 var _collecting := false
 var _collect_left := 0.0
 var _query_acc := 0.0
-var _collected: Dictionary = {}    # room_hash -> LobbyInfo
-var _id_to_hash: Dictionary = {}   # synthetic int id -> room_hash
+var _collected: Dictionary = { } # room_hash -> LobbyInfo
+var _id_to_hash: Dictionary = { } # synthetic int id -> room_hash
 var _next_id := 1
 
 var _reconnect_acc := 0.0
@@ -196,7 +194,7 @@ func list_lobbies() -> void:
 	_next_id = 1
 	_collecting = true
 	_collect_left = browse_window
-	_query_acc = 0.7   # query on the next process tick
+	_query_acc = 0.7 # query on the next process tick
 	Netw.dbg.debug("WebTorrentDirectory: browsing board %s.", [_board_hash])
 
 
@@ -227,7 +225,8 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 	if err != OK:
 		_pending_room_name = ""
 		Netw.dbg.error(
-			"WebTorrentDirectory: host_player failed: %s", [error_string(err)]
+			"WebTorrentDirectory: host_player failed: %s",
+			[error_string(err)],
 		)
 		return null
 	# Advertising is started by the State.ONLINE observer.
@@ -240,7 +239,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 		Netw.dbg.warn(
 			"WebTorrentDirectory: join_lobby_peer unknown id %d. " +
 			"Call list_lobbies first or join through make_join_target.",
-			[lobby_id]
+			[lobby_id],
 		)
 		return null
 	var tree := MultiplayerTree.resolve(self)
@@ -254,7 +253,8 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var err: Error = await tree.join(target, payload)
 	if err != OK:
 		Netw.dbg.error(
-			"WebTorrentDirectory: join failed: %s", [error_string(err)]
+			"WebTorrentDirectory: join failed: %s",
+			[error_string(err)],
 		)
 		return null
 	return tree.api.multiplayer_peer
@@ -266,25 +266,27 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 ## Called automatically when the tree hosts over a [WebRTCBackend]. Call it
 ## directly only when driving the host path outside [method host_lobby].
 func advertise_room(
-	room_hash: String, server_name: String, max_players: int
+		room_hash: String,
+		server_name: String,
+		max_players: int,
 ) -> void:
 	if room_hash.length() != 20:
 		Netw.dbg.warn(
 			"WebTorrentDirectory: refusing to advertise malformed room hash '%s'.",
-			[room_hash]
+			[room_hash],
 		)
 		return
 	_room_hash = room_hash
 	_room_name = server_name if not server_name.is_empty() \
-		else get_local_member_name()
+	else get_local_member_name()
 	_room_max = max_players
 	_players = _count_players()
 	_advertising = true
-	_advertise_acc = advertise_interval   # announce on the next process tick
+	_advertise_acc = advertise_interval # announce on the next process tick
 	_ensure_tracker()
 	Netw.dbg.info(
 		"WebTorrentDirectory: advertising room %s as '%s'.",
-		[room_hash, _room_name]
+		[room_hash, _room_name],
 	)
 
 
@@ -297,8 +299,8 @@ func stop_advertising() -> void:
 	_players = 1
 	Netw.dbg.debug("WebTorrentDirectory: stopped advertising.")
 
-
 # -- Tree observation -------------------------------------------------------
+
 
 func _bind_tree_signals(mt: MultiplayerTree) -> void:
 	if not mt.state_changed.is_connected(_on_tree_state_changed):
@@ -310,7 +312,8 @@ func _bind_tree_signals(mt: MultiplayerTree) -> void:
 
 
 func _on_tree_state_changed(
-	_old: MultiplayerTree.State, new_state: MultiplayerTree.State
+		_old: MultiplayerTree.State,
+		new_state: MultiplayerTree.State,
 ) -> void:
 	if new_state == MultiplayerTree.State.ONLINE:
 		var mt := MultiplayerTree.resolve(self)
@@ -320,7 +323,9 @@ func _on_tree_state_changed(
 			if room_name.is_empty():
 				room_name = backend.server_name
 			advertise_room(
-				backend.get_join_address(), room_name, max_clients
+				backend.get_join_address(),
+				room_name,
+				max_clients,
 			)
 			_pending_room_name = ""
 	elif new_state == MultiplayerTree.State.OFFLINE:
@@ -339,8 +344,8 @@ func _count_players() -> int:
 		return mt.api.get_peers().size() + 1
 	return 1
 
-
 # -- Board gossip -----------------------------------------------------------
+
 
 func _ensure_tracker() -> void:
 	if _tracker != null:
@@ -367,7 +372,7 @@ func _on_message(data: Dictionary) -> void:
 	if typeof(payload) != TYPE_DICTIONARY:
 		return
 	var card_raw: Variant = JSON.parse_string(
-		String((payload as Dictionary).get("sdp", ""))
+		String((payload as Dictionary).get("sdp", "")),
 	)
 	if typeof(card_raw) != TYPE_DICTIONARY:
 		return
@@ -388,7 +393,7 @@ func _answer_card(to_peer: String, offer_id: String) -> void:
 		"info_hash": _board_hash,
 		"peer_id": _peer_id,
 		"to_peer_id": to_peer,
-		"answer": { "type": "answer", "sdp": JSON.stringify(_room_card()) }
+		"answer": { "type": "answer", "sdp": JSON.stringify(_room_card()) },
 	}
 	if not offer_id.is_empty():
 		msg["offer_id"] = offer_id
@@ -417,8 +422,11 @@ func _collect_room(card: Dictionary) -> void:
 	_next_id += 1
 	_id_to_hash[id] = room_hash
 	_collected[room_hash] = LobbyInfo.make(
-		id, room_name, players, max_players,
-		_room_metadata(card)
+		id,
+		room_name,
+		players,
+		max_players,
+		_room_metadata(card),
 	)
 
 
@@ -427,7 +435,8 @@ func _emit_collected() -> void:
 	for room_hash in _collected:
 		out.append(_collected[room_hash])
 	Netw.dbg.debug(
-		"WebTorrentDirectory: browse found %d room(s).", [out.size()]
+		"WebTorrentDirectory: browse found %d room(s).",
+		[out.size()],
 	)
 	lobby_list_updated.emit(out)
 
@@ -466,16 +475,18 @@ func _announce_with_card(card: Dictionary) -> Dictionary:
 	var sdp := JSON.stringify(card)
 	var offers: Array = []
 	for i in board_fanout:
-		offers.append({
-			"offer_id": _generate_hash(),
-			"offer": { "type": "offer", "sdp": sdp }
-		})
+		offers.append(
+			{
+				"offer_id": _generate_hash(),
+				"offer": { "type": "offer", "sdp": sdp },
+			},
+		)
 	return {
 		"action": "announce",
 		"info_hash": _board_hash,
 		"peer_id": _peer_id,
 		"numwant": board_fanout,
-		"offers": offers
+		"offers": offers,
 	}
 
 

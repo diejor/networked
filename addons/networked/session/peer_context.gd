@@ -12,7 +12,7 @@
 class_name NetwPeerContext
 extends RefCounted
 
-var _buckets: Dictionary = {}
+var _buckets: Dictionary = { }
 
 
 ## Returns the bucket for [param bucket_type], creating it on first access.

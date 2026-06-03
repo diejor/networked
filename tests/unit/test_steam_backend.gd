@@ -2,7 +2,6 @@
 class_name TestSteamBackend
 extends NetwTestSuite
 
-
 func test_supports_embedded_server_is_false() -> void:
 	var backend := SteamBackend.new()
 	assert_bool(backend.supports_embedded_server()).is_false()

@@ -6,7 +6,6 @@
 class_name NetwHandle
 extends RefCounted
 
-
 var _context_ref: WeakRef
 
 
@@ -51,9 +50,9 @@ func error(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 
 ## Opens a new general-purpose [NetSpan].
 func span(
-	label: String,
-	meta: Dictionary = {},
-	follows_from: CheckpointToken = null
+		label: String,
+		meta: Dictionary = { },
+		follows_from: CheckpointToken = null,
 ) -> NetSpan:
 	var c := _context_ref.get_ref()
 	if c:
@@ -63,10 +62,10 @@ func span(
 
 ## Opens a new peer-aware [NetPeerSpan].
 func peer_span(
-	label: String,
-	peers: Array = [],
-	meta: Dictionary = {},
-	token: CheckpointToken = null
+		label: String,
+		peers: Array = [],
+		meta: Dictionary = { },
+		token: CheckpointToken = null,
 ) -> NetPeerSpan:
 	var c := _context_ref.get_ref()
 	if c:

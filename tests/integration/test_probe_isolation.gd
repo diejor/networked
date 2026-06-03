@@ -6,7 +6,6 @@
 class_name TestProbeIsolation
 extends NetwTestSuite
 
-
 var _connected_peers: Array[int] = []
 
 
@@ -25,7 +24,8 @@ func test_probes_do_not_register_peers() -> void:
 	var client_backend := EnetTestSupport.make_client_backend(host.port)
 	for i in 5:
 		var result: ServerInfoResult = await client_backend.query_server_info(
-			"127.0.0.1", 1.0
+			"127.0.0.1",
+			1.0,
 		)
 		assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
 		assert_array(host_api.get_peers()).is_empty()
@@ -70,8 +70,10 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	var busy_count := 0
 	for r in results:
 		match r.status:
-			ServerInfoResult.Status.OK: ok_count += 1
-			ServerInfoResult.Status.BUSY: busy_count += 1
+			ServerInfoResult.Status.OK:
+				ok_count += 1
+			ServerInfoResult.Status.BUSY:
+				busy_count += 1
 	# Beyond the rate window, the rest are answered BUSY.
 	assert_int(ok_count).is_greater(0)
 	assert_int(busy_count).is_greater(0)
@@ -80,7 +82,7 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	# Pending peers drain once clients close + auth_timeout reaps stragglers.
 	await wait_until(
 		func() -> bool: return host_api.get_authenticating_peers().is_empty(),
-		(host_api.auth_timeout + 1.0)
+		(host_api.auth_timeout + 1.0),
 	)
 	assert_array(host_api.get_authenticating_peers()).is_empty()
 	assert_array(host_api.get_peers()).is_empty()

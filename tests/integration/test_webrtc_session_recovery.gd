@@ -11,8 +11,13 @@ const _CLIENT_ID := 1234567
 
 
 # Pumps both sessions each frame until connected[0] flips or the budget elapses.
-func _pump_until(host: WebRTCSession, client: WebRTCSession, \
-		connected: Array, on_frame: Callable, budget: float = 20.0) -> void:
+func _pump_until(
+		host: WebRTCSession,
+		client: WebRTCSession, \
+		connected: Array,
+		on_frame: Callable,
+		budget: float = 20.0,
+) -> void:
 	var deadline := get_tree().create_timer(budget)
 	var frame := 0
 	while not connected[0] and deadline.time_left > 0.0:
@@ -33,7 +38,9 @@ func test_candidate_before_description_still_connects() -> void:
 
 	var connected := [false]
 	client.native_connected.connect(
-		func(id: int) -> void: if id == 1: connected[0] = true
+		func(id: int) -> void:
+			if id == 1:
+				connected[0] = true
 	)
 	client.signal_out.connect(
 		func(_to: int, _sig: String, kind: String, payload: Dictionary) -> void:
@@ -87,7 +94,9 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 
 	var connected := [false]
 	client.native_connected.connect(
-		func(id: int) -> void: if id == 1: connected[0] = true
+		func(id: int) -> void:
+			if id == 1:
+				connected[0] = true
 	)
 
 	# Swallow attempt one entirely (its offer, then its candidates) so the host

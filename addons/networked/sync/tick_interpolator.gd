@@ -3,7 +3,6 @@
 class_name TickInterpolator
 extends NetwComponent
 
-
 #region ── Enums ───────────────────────────────────────────────────────────────
 
 ## Defines the interpolation algorithm for a property.
@@ -13,7 +12,6 @@ enum Mode {
 	ANGLE = 2, ## Angular interpolation (shortest path).
 	SLERP = 3, ## Spherical interpolation for [Quaternion] rotations.
 }
-
 
 ## Defines how interpolated values are written to [member visual_root].
 enum VisualOutputMode {
@@ -25,17 +23,15 @@ enum VisualOutputMode {
 
 #endregion
 
-
 #region ── Configuration ───────────────────────────────────────────────────────
 
 ## Dictionary mapping property names to their [enum TickInterpolator.Mode].
-@export var property_modes: Dictionary[StringName, Mode] = {}:
+@export var property_modes: Dictionary[StringName, Mode] = { }:
 	set(v):
 		property_modes = v
 		_refresh_property_states()
 		update_configuration_warnings()
 		notify_property_list_changed()
-
 
 ## If set, smooth output will be written to this child node instead of the
 ## parent node.
@@ -48,7 +44,6 @@ enum VisualOutputMode {
 		update_configuration_warnings()
 		notify_property_list_changed()
 
-
 ## Maps source property names to target property names on the
 ## [member visual_root].
 ## [br]Use when the interpolated property on the owner has a different name
@@ -56,13 +51,12 @@ enum VisualOutputMode {
 ## [br]Example: [code]{ "synced_position": "position" }[/code] writes
 ## smoothed values to the visual root's [code]position[/code] instead of
 ## [code]synced_position[/code].
-@export var visual_root_property_map: Dictionary[StringName, StringName] = {}:
+@export var visual_root_property_map: Dictionary[StringName, StringName] = { }:
 	set(v):
 		visual_root_property_map = v
 		_refresh_property_states()
 		update_configuration_warnings()
 		notify_property_list_changed()
-
 
 ## Controls how values are written when [member visual_root] is set.
 ## [br][br]
@@ -75,11 +69,9 @@ enum VisualOutputMode {
 		_refresh_property_states()
 		update_configuration_warnings()
 
-
 ## If [code]true[/code], the interpolator will locally slow down its playhead
 ## when snapshots are missing to prevent visual jitter.
 @export var enable_smart_dilation: bool = true
-
 
 ## Exponential smoothing time constant in seconds, layered on top of the
 ## bracketed interpolation.
@@ -88,43 +80,35 @@ enum VisualOutputMode {
 ## many seconds. Frame-rate independent.
 @export_custom(0, "suffix:s") var smoothing_time: float = 0.0
 
-
 ## Maximum distance allowed before the interpolator snaps to the target instead
 ## of lerping.
 ## Useful for teleports. Set to [code]0.0[/code] to disable.
 @export_custom(0, "suffix:px") var max_lerp_distance: float = 0.0
 
-
 ## The maximum number of extra ticks the interpolator can dilate beyond its
 ## floor. Increasing this value might help when network jitters.
 @export_custom(0, "suffix:ticks") var max_extra_dilation: float = 0.0
-
 
 ## Per-frame fraction [member display_lag] eases toward its resting floor.
 ## Higher tracks network changes faster, lower is steadier.
 @export_range(0.0, 1.0) var lag_adapt_rate: float = 0.05
 
-
 ## Ticks per frame the buffer grows once starvation is sustained past
 ## [member starvation_grace_frames].
 @export_range(0.0, 1.0) var starvation_growth: float = 0.95
-
 
 ## Per-frame fraction the measured floor is low-passed before
 ## [member display_lag] tracks it. Lower rejects more jitter.
 @export_range(0.0, 1.0) var floor_smoothing: float = 0.05
 
-
 ## Consecutive starving frames tolerated before the buffer starts growing.
 @export_custom(0, "suffix:frames") var starvation_grace_frames: int = 3
 
-
 ## If greater than [code]0[/code], the interpolator will log its internal state
 ## every N frames.
-@export_custom(0, "suffix:frames")  var trace_interval: int = 0
+@export_custom(0, "suffix:frames") var trace_interval: int = 0
 
 #endregion
-
 
 #region ── Public Metrics ──────────────────────────────────────────────────────
 
@@ -135,7 +119,6 @@ var display_lag: float = 0.0
 var starvation_ticks: int = 0
 
 #endregion
-
 
 #region ── Public API ──────────────────────────────────────────────────────────
 
@@ -165,8 +148,9 @@ func snap_property(property: StringName, value: Variant) -> void:
 ## Call this after manual teleports or significant state changes 
 ## to prevent the interpolator from "sliding" the node across the map.
 func reset() -> void:
-	if not _clock: _clock = get_network_clock()
-	
+	if not _clock:
+		_clock = get_network_clock()
+
 	for state in _states:
 		state.reset()
 		state.apply_reset()
@@ -193,15 +177,15 @@ func disable_for(duration: float) -> SceneTreeTimer:
 	reset()
 	var self_ref := weakref(self)
 	var timer := get_tree().create_timer(duration)
-	timer.timeout.connect(func():
-		var inst = self_ref.get_ref()
-		if inst and is_instance_valid(inst) and inst.owner and not inst.owner.is_multiplayer_authority():
-			inst.process_mode = PROCESS_MODE_INHERIT
+	timer.timeout.connect(
+		func():
+			var inst = self_ref.get_ref()
+			if inst and is_instance_valid(inst) and inst.owner and not inst.owner.is_multiplayer_authority():
+				inst.process_mode = PROCESS_MODE_INHERIT
 	)
 	return timer
 
 #endregion
-
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
@@ -222,26 +206,26 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 # this, _refresh_property_states/reset would re-capture the visual_root's
 # current local position, which already contains the last frame's smoothing
 # correction, baking that correction into the new baseline.
-var _cached_initial_offsets: Dictionary[StringName, Variant] = {}
-var _cached_initial_global_offsets: Dictionary[StringName, Variant] = {}
+var _cached_initial_offsets: Dictionary[StringName, Variant] = { }
+var _cached_initial_global_offsets: Dictionary[StringName, Variant] = { }
 
 #endregion
-
 
 #region ── Lifecycle ───────────────────────────────────────────────────────────
 
 func _ready() -> void:
-	if Engine.is_editor_hint(): return
-	
+	if Engine.is_editor_hint():
+		return
+
 	if not owner:
 		owner = get_parent()
 		if owner:
 			_dbg.warn(
-				"TickInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " + \
-				"Assign the owner explicitly for better stability.", 
-				[owner.name]
+				"TickInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " +
+				"Assign the owner explicitly for better stability.",
+				[owner.name],
 			)
-	
+
 	process_priority = 100
 	_clock = get_network_clock()
 
@@ -255,7 +239,7 @@ func _ready() -> void:
 	_peer_batcher = get_bucket(_Batcher) as _Batcher
 	if _peer_batcher:
 		_peer_batcher.register(self, _clock)
-	
+
 	_refresh_property_states()
 	reset()
 
@@ -278,21 +262,20 @@ func _process(delta: float) -> void:
 
 #endregion
 
-
 #region ── Internal Logic ──────────────────────────────────────────────────────
 
 func _update_instance(
-	global_dt: int, 
-	global_factor: float, 
-	frame_ticks: float, 
-	smooth_weight: float
+		global_dt: int,
+		global_factor: float,
+		frame_ticks: float,
+		smooth_weight: float,
 ) -> void:
 	if not owner or owner.is_multiplayer_authority():
 		return
-	
+
 	for state in _states:
 		state.update_snapshot()
-	
+
 	var should_trace := false
 	if trace_interval > 0:
 		_trace_frame = (_trace_frame + 1) % trace_interval
@@ -340,7 +323,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 		# buffer instead of waiting for the steady ease.
 		display_lag = minf(
 			display_lag + frame_ticks * starvation_growth,
-			_smoothed_floor + max_extra_dilation
+			_smoothed_floor + max_extra_dilation,
 		)
 	else:
 		# Steady state: ease toward the resting floor from either side. This
@@ -351,7 +334,7 @@ func _perform_dilation(global_dt: int, frame_ticks: float, trace: bool) -> void:
 	if trace:
 		_dbg.trace(
 			"[Dilation] eff_dt: %d | newest: %d | starving: %s | ticks: %d | floor: %.2f | lag: %.2f",
-			[effective_dt, newest_tick, str(is_starving), starvation_ticks, _smoothed_floor, display_lag]
+			[effective_dt, newest_tick, str(is_starving), starvation_ticks, _smoothed_floor, display_lag],
 		)
 
 	_was_starving = is_starving
@@ -361,27 +344,27 @@ func _refresh_property_states() -> void:
 	_states.clear()
 	if not owner:
 		return
-	
+
 	var v_root := get_node_or_null(visual_root) if not visual_root.is_empty() else null
-	
+
 	for prop in property_modes:
 		if property_modes[prop] == Mode.NONE:
 			continue
-		
+
 		var state := _PropertyState.new()
 		state.interpolator = self
 		state.name = prop
 		state.mode = property_modes[prop]
-		
+
 		var path := NodePath(str(prop)) if ":" in str(prop) else NodePath(":" + str(prop))
 		var res := owner.get_node_and_resource(path)
 		if not res[0]:
 			continue
-			
+
 		state.source_obj = res[0]
 		state.source_prop = res[2].get_subname(0) if res[2].get_subname_count() > 0 \
-			else StringName(str(res[2]).trim_prefix(":"))
-		
+		else StringName(str(res[2]).trim_prefix(":"))
+
 		if v_root:
 			state.target_obj = v_root
 			state.target_prop = visual_root_property_map.get(prop, state.source_prop)
@@ -403,7 +386,7 @@ func _refresh_property_states() -> void:
 			state.target_prop = state.source_prop
 			state.is_relative = false
 			state.output_mode = VisualOutputMode.PROPERTY_VALUE
-			
+
 		var initial_val = state.source_obj.get(state.source_prop)
 		state.last_written = initial_val
 		state.pending_snapshot = initial_val
@@ -413,28 +396,28 @@ func _refresh_property_states() -> void:
 				state.initial_global_offset = _cached_initial_global_offsets[prop]
 			else:
 				state.initial_global_offset = _calculate_initial_global_offset(
-					v_root
+					v_root,
 				)
 				_cached_initial_global_offsets[prop] = \
-						state.initial_global_offset
+				state.initial_global_offset
 		state._has_recorded = false
 		state.is_sleeping = false
 		_states.append(state)
-	
+
 	_cache_sync_intervals()
 
 
 func _resolve_visual_output_mode(
-	state: _PropertyState,
-	v_root: Node
+		state: _PropertyState,
+		v_root: Node,
 ) -> VisualOutputMode:
 	if visual_output_mode != VisualOutputMode.AUTO:
 		return visual_output_mode
 	if (
-		state.is_relative
-		and state.target_prop == &"position"
-		and _is_owner_position_source(state)
-		and _can_compensate_owner_transform(v_root)
+			state.is_relative
+			and state.target_prop == &"position"
+			and _is_owner_position_source(state)
+			and _can_compensate_owner_transform(v_root)
 	):
 		return VisualOutputMode.OWNER_TRANSFORM_COMPENSATED
 	if state.is_relative:
@@ -452,13 +435,13 @@ func _is_owner_position_source(state: _PropertyState) -> bool:
 
 func _can_compensate_owner_transform(v_root: Node) -> bool:
 	return (
-		owner is Node2D
-		and v_root is Node2D
-		and v_root.get_parent() is Node2D
+			owner is Node2D
+			and v_root is Node2D
+			and v_root.get_parent() is Node2D
 	) or (
-		owner is Node3D
-		and v_root is Node3D
-		and v_root.get_parent() is Node3D
+			owner is Node3D
+			and v_root is Node3D
+			and v_root.get_parent() is Node3D
 	)
 
 
@@ -491,7 +474,7 @@ func _source_to_global_3d(source_prop: StringName, value: Vector3) -> Vector3:
 func _calculate_min_lag() -> float:
 	if not _clock:
 		return 0.0
-		
+
 	var needed := float(_expected_interval_ticks + 1)
 	var network_padding := float(maxi(0, _clock.recommended_display_offset - _clock.display_offset))
 	return maxf(0.0, needed - float(_clock.display_offset) + network_padding)
@@ -499,11 +482,11 @@ func _calculate_min_lag() -> float:
 
 func _cache_sync_intervals() -> void:
 	var max_interval := 0.0
-	
+
 	# Reset signal tracking
 	for state in _states:
 		state.uses_signal = false
-		
+
 	var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
 	var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
 
@@ -518,7 +501,7 @@ func _cache_sync_intervals() -> void:
 	for state in _states:
 		if state.name in synced_props:
 			state.uses_signal = true
-				
+
 	_has_explicit_sync_interval = max_interval > 0.0
 	if _clock:
 		_expected_interval_ticks = maxi(1, ceili(max_interval * _clock.tickrate))
@@ -529,15 +512,15 @@ func _on_synced() -> void:
 	for state in _states:
 		if not state.uses_signal:
 			continue
-			
+
 		var value = state.source_obj.get(state.source_prop)
-		
+
 		# If using signals, we trust the signal timing over polling.
 		# Always record it into history to ensure the jitter buffer stays
 		# aligned with the network stream.
 		if trace_interval > 0:
 			_dbg.trace("Record (Signal) %s: tick=%d val=%s", [state.name, tick, value])
-		
+
 		state.history.record(tick, value)
 		state.last_recorded = value
 		state.pending_snapshot = value
@@ -545,7 +528,6 @@ func _on_synced() -> void:
 		state.is_sleeping = false
 
 #endregion
-
 
 #region ── Inspector & Validation ───────────────────────────────────────────────
 
@@ -557,28 +539,27 @@ func _get_configuration_warnings() -> PackedStringArray:
 	for state in _states:
 		if not state.uses_signal:
 			warnings.append(
-				"No client MultiplayerSynchronizer found for property '%s'. " % state.name + \
-				"TickInterpolator will use frame polling, which causes " + \
-				"one-frame snapshot delays. Add a MultiplayerSynchronizer " + \
-				"replicating this property."
+				"No client MultiplayerSynchronizer found for property '%s'. " % state.name +
+				"TickInterpolator will use frame polling, which causes " +
+				"one-frame snapshot delays. Add a MultiplayerSynchronizer " +
+				"replicating this property.",
 			)
 
 	if owner is CharacterBody2D or owner is RigidBody2D or \
-		(ClassDB.class_exists("CharacterBody3D") and owner.is_class("CharacterBody3D")) or \
-		(ClassDB.class_exists("RigidBody3D") and owner.is_class("RigidBody3D")):
-		
+			(ClassDB.class_exists("CharacterBody3D") and owner.is_class("CharacterBody3D")) or \
+			(ClassDB.class_exists("RigidBody3D") and owner.is_class("RigidBody3D")):
 		var has_pos := false
 		for state in _states:
 			if state.name in [&"position", &"global_position"]:
 				has_pos = true
 				break
-		
+
 		if has_pos and visual_root.is_empty():
 			warnings.append(
-				"Parent is a physics body. Setting 'visual_root' to a child " + \
-				"node separates physics state from visual smoothing. The " + \
-				"physics body will receive snapped network positions; the " + \
-				"visual child will be smooth."
+				"Parent is a physics body. Setting 'visual_root' to a child " +
+				"node separates physics state from visual smoothing. The " +
+				"physics body will receive snapped network positions; the " +
+				"visual child will be smooth.",
 			)
 
 	if not visual_root.is_empty():
@@ -587,34 +568,35 @@ func _get_configuration_warnings() -> PackedStringArray:
 			for state in _states:
 				if _uses_risky_source_delta(state):
 					warnings.append(
-						"[code]visual_output_mode[/code] is " + \
-						"[code]SOURCE_DELTA[/code] for '%s'. " % state.name + \
-						"If the owner also moves locally, the visual child " + \
-						"can fight the owner transform. Use " + \
-						"[code]AUTO[/code] or " + \
-						"[code]OWNER_TRANSFORM_COMPENSATED[/code] for " + \
-						"server-authoritative character visuals."
+						"[code]visual_output_mode[/code] is " +
+						"[code]SOURCE_DELTA[/code] for '%s'. " % state.name +
+						"If the owner also moves locally, the visual child " +
+						"can fight the owner transform. Use " +
+						"[code]AUTO[/code] or " +
+						"[code]OWNER_TRANSFORM_COMPENSATED[/code] for " +
+						"server-authoritative character visuals.",
 					)
 				if (
-					state.output_mode == \
-							VisualOutputMode.OWNER_TRANSFORM_COMPENSATED
-					and state.initial_global_offset == null
+						state.output_mode == \
+								VisualOutputMode.OWNER_TRANSFORM_COMPENSATED
+						and state.initial_global_offset == null
 				):
 					warnings.append(
-						"Property '%s' requested owner-transform " % state.name + \
-						"compensation, but the source and visual target are " + \
-						"not compatible. TickInterpolator will fall back to " + \
-						"[code]SOURCE_DELTA[/code]."
+						"Property '%s' requested owner-transform " % state.name +
+						"compensation, but the source and visual target are " +
+						"not compatible. TickInterpolator will fall back to " +
+						"[code]SOURCE_DELTA[/code].",
 					)
 				var target_name := visual_root_property_map.get(
-					state.name, state.name
+					state.name,
+					state.name,
 				)
 				var target_val = v_root.get(target_name)
 				if typeof(target_val) == TYPE_NIL:
 					warnings.append(
-						"Property '%s' is interpolated but the visual " % str(state.name) + \
-						"root '%s' has no matching property '%s'. " % [v_root.name, target_name] + \
-						"Set a mapping in the 'Visual Root Mappings' section."
+						"Property '%s' is interpolated but the visual " % str(state.name) +
+						"root '%s' has no matching property '%s'. " % [v_root.name, target_name] +
+						"Set a mapping in the 'Visual Root Mappings' section.",
 					)
 
 	return warnings
@@ -622,64 +604,70 @@ func _get_configuration_warnings() -> PackedStringArray:
 
 func _uses_risky_source_delta(state: _PropertyState) -> bool:
 	return (
-		state.output_mode == VisualOutputMode.SOURCE_DELTA
-		and state.target_prop == &"position"
-		and _is_owner_position_source(state)
-		and (
-			owner is CharacterBody2D
-			or owner is RigidBody2D
-			or (
-				ClassDB.class_exists("CharacterBody3D")
-				and owner.is_class("CharacterBody3D")
+			state.output_mode == VisualOutputMode.SOURCE_DELTA
+			and state.target_prop == &"position"
+			and _is_owner_position_source(state)
+			and (
+					owner is CharacterBody2D
+					or owner is RigidBody2D
+					or (
+							ClassDB.class_exists("CharacterBody3D")
+							and owner.is_class("CharacterBody3D")
+					)
+					or (
+							ClassDB.class_exists("RigidBody3D")
+							and owner.is_class("RigidBody3D")
+					)
 			)
-			or (
-				ClassDB.class_exists("RigidBody3D")
-				and owner.is_class("RigidBody3D")
-			)
-		)
 	)
 
 
 func _get_property_list() -> Array[Dictionary]:
 	var props: Array[Dictionary] = []
-	if not Engine.is_editor_hint() or not owner: 
+	if not Engine.is_editor_hint() or not owner:
 		return props
 
-	props.append({"name": "Interpolated Properties", "type": TYPE_NIL, "usage": PROPERTY_USAGE_GROUP, "hint_string": "interpolation/"})
+	props.append({ "name": "Interpolated Properties", "type": TYPE_NIL, "usage": PROPERTY_USAGE_GROUP, "hint_string": "interpolation/" })
 
 	for prop_path_str in _get_tracked_properties(owner):
-		props.append({
-			"name": "interpolation/" + prop_path_str,
-			"type": TYPE_INT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_ENUM,
-			"hint_string": "None,Lerp,Angle,Slerp"
-		})
+		props.append(
+			{
+				"name": "interpolation/" + prop_path_str,
+				"type": TYPE_INT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_ENUM,
+				"hint_string": "None,Lerp,Angle,Slerp",
+			},
+		)
 
 	var v_root := get_node_or_null(visual_root) \
-		if not visual_root.is_empty() else null
+	if not visual_root.is_empty() else null
 	if v_root:
-		props.append({"name": "Visual Root Mappings", "type": TYPE_NIL, "usage": PROPERTY_USAGE_GROUP, "hint_string": "mapping/"})
+		props.append({ "name": "Visual Root Mappings", "type": TYPE_NIL, "usage": PROPERTY_USAGE_GROUP, "hint_string": "mapping/" })
 
 		for prop_path_str in _get_tracked_properties(owner):
 			if (
-				not property_modes.has(prop_path_str)
-				or property_modes[prop_path_str] == Mode.NONE
+					not property_modes.has(prop_path_str)
+					or property_modes[prop_path_str] == Mode.NONE
 			):
 				continue
 			var source_type := _get_property_type(prop_path_str)
 			var compatible := _get_compatible_target_properties(
-				v_root, source_type, prop_path_str
+				v_root,
+				source_type,
+				prop_path_str,
 			)
 			if compatible.is_empty():
 				continue
-			props.append({
-				"name": "mapping/" + prop_path_str,
-				"type": TYPE_STRING,
-				"usage": PROPERTY_USAGE_EDITOR,
-				"hint": PROPERTY_HINT_ENUM,
-				"hint_string": ",".join(compatible)
-			})
+			props.append(
+				{
+					"name": "mapping/" + prop_path_str,
+					"type": TYPE_STRING,
+					"usage": PROPERTY_USAGE_EDITOR,
+					"hint": PROPERTY_HINT_ENUM,
+					"hint_string": ",".join(compatible),
+				},
+			)
 
 	return props
 
@@ -696,8 +684,10 @@ func _get(property: StringName) -> Variant:
 func _set(property: StringName, value: Variant) -> bool:
 	if property.begins_with("interpolation/"):
 		var prop_name := StringName(property.trim_prefix("interpolation/"))
-		if value == Mode.NONE: property_modes.erase(prop_name)
-		else: property_modes[prop_name] = value as Mode
+		if value == Mode.NONE:
+			property_modes.erase(prop_name)
+		else:
+			property_modes[prop_name] = value as Mode
 		_refresh_property_states()
 		update_configuration_warnings()
 		notify_property_list_changed()
@@ -722,9 +712,9 @@ func _validate_property(property: Dictionary) -> void:
 
 
 func _get_tracked_properties(target: Node) -> Array[StringName]:
-	if not target: 
+	if not target:
 		return []
-	
+
 	var result: Array[StringName] = []
 	var props := SynchronizersCache.get_all_synchronized_properties(target)
 	for clean_name in props:
@@ -746,20 +736,21 @@ func _get_property_type(prop_name: StringName) -> int:
 
 
 func _get_compatible_target_properties(
-	v_root: Node, source_type: int, source_name: StringName
+		v_root: Node,
+		source_type: int,
+		source_name: StringName,
 ) -> Array[StringName]:
 	var result: Array[StringName] = [source_name]
 	for prop_dict in v_root.get_property_list():
 		if (
-			prop_dict["type"] == source_type
-			and (prop_dict["usage"] & PROPERTY_USAGE_EDITOR)
-			and StringName(prop_dict["name"]) != source_name
+				prop_dict["type"] == source_type
+				and (prop_dict["usage"] & PROPERTY_USAGE_EDITOR)
+				and StringName(prop_dict["name"]) != source_name
 		):
 			result.append(StringName(prop_dict["name"]))
 	return result
 
 #endregion
-
 
 #region ── Inner Classes ───────────────────────────────────────────────────────
 
@@ -768,16 +759,19 @@ class _Batcher extends RefCounted:
 	var clock: NetworkClock
 	var _last_update_frame: int = -1
 
+
 	func register(inst: TickInterpolator, c: NetworkClock) -> void:
 		instances.append(inst)
 		if not clock:
 			clock = c
 			clock.after_tick.connect(_on_clock_tick)
 
+
 	func unregister(inst: TickInterpolator) -> void:
 		instances.erase(inst)
 		if instances.is_empty():
 			shutdown()
+
 
 	func shutdown() -> void:
 		if clock and clock.after_tick.is_connected(_on_clock_tick):
@@ -785,20 +779,22 @@ class _Batcher extends RefCounted:
 		clock = null
 		instances.clear()
 
+
 	func _on_clock_tick(_delta: float, tick: int) -> void:
 		for inst in instances:
 			for state in inst._states:
 				state.record_tick(tick)
+
 
 	func update_all(delta: float) -> void:
 		var frame := Engine.get_frames_drawn()
 		if delta > 0.0 and frame == _last_update_frame:
 			return
 		_last_update_frame = frame
-		
+
 		if not clock:
 			return
-		
+
 		var global_dt := clock.display_tick
 		var global_factor := clock.tick_factor
 		var frame_ticks := delta * clock.tickrate
@@ -813,29 +809,31 @@ class _PropertyState:
 	var name: StringName
 	var mode: Mode
 	var history := HistoryBuffer.new(16)
-	
+
 	var source_obj: Object
 	var source_prop: StringName
 	var target_obj: Object
 	var target_prop: StringName
-	
+
 	var uses_signal: bool = false
 	var is_relative: bool = false
 	var output_mode: VisualOutputMode = VisualOutputMode.PROPERTY_VALUE
 	var initial_offset: Variant
 	var initial_global_offset: Variant
-	
+
 	var last_written: Variant
 	var pending_snapshot: Variant
 	var last_recorded: Variant
-	
+
 	var cached_prev_tick: int = -1
 	var is_sleeping: bool = false
 	var _has_recorded: bool = false
 	var _search_results := PackedInt32Array([-1, -1])
 
+
 	func reset() -> void:
-		if not source_obj: return
+		if not source_obj:
+			return
 		var current = source_obj.get(source_prop)
 		history.clear()
 		last_written = current
@@ -844,10 +842,11 @@ class _PropertyState:
 		_has_recorded = false
 		cached_prev_tick = -1
 		is_sleeping = false
-		
+
 		if is_relative and target_obj and interpolator \
 				and name in interpolator._cached_initial_offsets:
 			initial_offset = interpolator._cached_initial_offsets[name]
+
 
 	func apply_reset() -> void:
 		if not target_obj or not source_obj:
@@ -863,10 +862,12 @@ class _PropertyState:
 				target_obj.set(target_prop, current)
 		last_written = current
 
+
 	func _apply_reset_source_delta() -> void:
 		if initial_offset == null:
 			return
 		target_obj.set(target_prop, initial_offset)
+
 
 	func _apply_reset_owner_transform(current: Variant) -> bool:
 		if target_obj is Node2D and interpolator.owner is Node2D:
@@ -874,6 +875,7 @@ class _PropertyState:
 		if target_obj is Node3D and interpolator.owner is Node3D:
 			return _apply_owner_transform_compensated_3d(current)
 		return false
+
 
 	func update_snapshot() -> void:
 		var current_val = source_obj.get(source_prop)
@@ -883,13 +885,14 @@ class _PropertyState:
 			pending_snapshot = current_val
 			is_sleeping = false
 
+
 	func record_tick(tick: int) -> void:
 		if _has_recorded and pending_snapshot == last_recorded:
 			return
-			
+
 		if interpolator.trace_interval > 0:
 			interpolator._dbg.trace("Record %s: tick=%d val=%s", [name, tick, pending_snapshot])
-			
+
 		history.record(tick, pending_snapshot)
 		if not _has_recorded:
 			last_written = pending_snapshot
@@ -897,20 +900,21 @@ class _PropertyState:
 		_has_recorded = true
 		is_sleeping = false
 
+
 	func apply(
-		dt: int,
-		factor: float,
-		snap_dist: float,
-		trace: bool,
-		lag: float,
-		weight: float
+			dt: int,
+			factor: float,
+			snap_dist: float,
+			trace: bool,
+			lag: float,
+			weight: float,
 	) -> void:
 		if is_sleeping:
 			return
-		
+
 		var result := _resolve_value(dt, factor, snap_dist)
 		var snapped := snap_dist > 0.0 and _snap(last_written, result, snap_dist)
-		
+
 		# Apply additional smoothing if weight < 1.0
 		if weight < 1.0 and not snapped:
 			result = _interpolate(last_written, result, weight)
@@ -918,7 +922,7 @@ class _PropertyState:
 		if trace:
 			interpolator._dbg.trace(
 				"Interp %s: dt=%d lag=%.2f val=%s",
-				[name, dt, lag, result]
+				[name, dt, lag, result],
 			)
 
 		match output_mode:
@@ -929,7 +933,7 @@ class _PropertyState:
 				_apply_source_delta(result)
 			_:
 				target_obj.set(target_prop, result)
-			
+
 		last_written = result
 
 
@@ -937,9 +941,9 @@ class _PropertyState:
 		var current_raw = source_obj.get(source_prop)
 		var type = typeof(result)
 		if (
-			type in [TYPE_VECTOR2, TYPE_VECTOR3, TYPE_FLOAT, TYPE_INT]
-			and not initial_offset == null
-			and typeof(initial_offset) == type
+				type in [TYPE_VECTOR2, TYPE_VECTOR3, TYPE_FLOAT, TYPE_INT]
+				and not initial_offset == null
+				and typeof(initial_offset) == type
 		):
 			target_obj.set(target_prop, initial_offset + (result - current_raw))
 		else:
@@ -967,7 +971,7 @@ class _PropertyState:
 			return false
 		var desired_global := interpolator._source_to_global_2d(
 			source_prop,
-			result
+			result,
 		)
 		visual.global_position = desired_global + initial_global_offset
 		return true
@@ -982,7 +986,7 @@ class _PropertyState:
 			return false
 		var desired_global := interpolator._source_to_global_3d(
 			source_prop,
-			result
+			result,
 		)
 		visual.global_position = desired_global + initial_global_offset
 		return true
@@ -992,7 +996,7 @@ class _PropertyState:
 		history.find_bracketing_ticks(dt, cached_prev_tick, _search_results)
 		var prev_tick := _search_results[0]
 		var next_tick := _search_results[1]
-		
+
 		cached_prev_tick = prev_tick
 
 		if prev_tick == -1:
@@ -1000,7 +1004,7 @@ class _PropertyState:
 
 		if next_tick == -1:
 			var result = history.get_at(prev_tick)
-			
+
 			if pending_snapshot == last_recorded:
 				# Only sleep if we've reached the target visually AND it's the 
 				# absolute newest snapshot we have.
@@ -1008,43 +1012,43 @@ class _PropertyState:
 				if not history.has_tick_after(prev_tick) and at_rest:
 					is_sleeping = true
 			return result
-		
+
 		var p_val = history.get_at(prev_tick)
 		var n_val = history.get_at(next_tick)
 
 		if snap_dist > 0.0 and _snap(p_val, n_val, snap_dist):
 			return n_val
-		
+
 		return _lerp_bracketed(p_val, n_val, prev_tick, next_tick, dt, factor)
 
 
 	func _lerp_bracketed(
-		p_val: Variant, 
-		n_val: Variant, 
-		p_tick: int, 
-		n_tick: int, 
-		dt: int, 
-		factor: float
+			p_val: Variant,
+			n_val: Variant,
+			p_tick: int,
+			n_tick: int,
+			dt: int,
+			factor: float,
 	) -> Variant:
 		var gap := n_tick - p_tick
 		var threshold := interpolator._expected_interval_ticks * 2
-		
+
 		# Stationary period protection: if the gap is huge, stay at P0 
 		# until we are close to P1.
 		if gap > threshold:
 			var start_lerp_tick := n_tick - interpolator._expected_interval_ticks
 			if dt < start_lerp_tick:
 				return p_val
-			
+
 			# Lerp over exactly one expected interval
 			var t := clampf(
 				(float(dt - start_lerp_tick) + factor) / \
-				float(interpolator._expected_interval_ticks),
+						float(interpolator._expected_interval_ticks),
 				0.0,
-				1.0
+				1.0,
 			)
 			return _interpolate(p_val, n_val, t)
-		
+
 		# Standard interpolation
 		var t := clampf((float(dt - p_tick) + factor) / float(gap), 0.0, 1.0)
 		return _interpolate(p_val, n_val, t)

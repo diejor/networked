@@ -5,21 +5,21 @@ extends RefCounted
 ## Stores service nodes by script type while [MultiplayerTree] remains the
 ## public API surface and owner of node-tree searches.
 
-var _services: Dictionary[Script, Node] = {}
+var _services: Dictionary[Script, Node] = { }
 
 
 ## Registers [param service] for [param type].
 func register_service(service: Node, type: Script = null) -> void:
 	if not type:
 		type = service.get_script()
-	
+
 	if type in _services:
 		Netw.dbg.warn(
 			"Service %s already registered - overwriting.",
 			[type.get_global_name()],
 			func(m): push_warning(m)
 		)
-	
+
 	_services[type] = service
 	Netw.dbg.debug("Service %s registered.", [type.get_global_name()])
 
@@ -28,7 +28,7 @@ func register_service(service: Node, type: Script = null) -> void:
 func unregister_service(service: Node, type: Script = null) -> void:
 	if not type:
 		type = service.get_script()
-	
+
 	if _services.get(type) == service:
 		_services.erase(type)
 		Netw.dbg.debug("Service %s unregistered.", [type.get_global_name()])

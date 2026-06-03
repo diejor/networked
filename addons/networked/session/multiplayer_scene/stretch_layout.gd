@@ -10,7 +10,6 @@
 class_name StretchLayout
 extends RefCounted
 
-
 class Result extends RefCounted:
 	## What to assign to [member SubViewport.size].
 	var target_size: Vector2i = Vector2i.ZERO
@@ -28,8 +27,10 @@ static func compute(s: StretchSettings, control_size: Vector2) -> Result:
 	var r := Result.new()
 
 	if control_size.x <= 0.0 or control_size.y <= 0.0:
-		r.target_size = Vector2i(maxi(1, int(control_size.x)),
-				maxi(1, int(control_size.y)))
+		r.target_size = Vector2i(
+			maxi(1, int(control_size.x)),
+			maxi(1, int(control_size.y)),
+		)
 		r.inner_rect = Rect2(Vector2.ZERO, control_size)
 		return r
 
@@ -48,7 +49,7 @@ static func compute(s: StretchSettings, control_size: Vector2) -> Result:
 	# design (expand/keep_width/keep_height grow the logical viewport).
 	match s.aspect:
 		StretchSettings.Aspect.IGNORE:
-			pass  # stretch to fill, design unchanged
+			pass # stretch to fill, design unchanged
 		StretchSettings.Aspect.KEEP:
 			inner_rect = _aspect_fit(effective_design, control_size)
 		StretchSettings.Aspect.KEEP_WIDTH:

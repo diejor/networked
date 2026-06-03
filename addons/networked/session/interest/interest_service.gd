@@ -28,18 +28,17 @@
 class_name InterestService
 extends Node
 
-
-var _layers: Dictionary[StringName, NetwInterestLayer] = {}
-var _gates: Dictionary[StringName, InterestGate] = {}
-var _entity_layers: Dictionary[NetwEntity, Dictionary] = {}
-var _entity_filters: Dictionary[NetwEntity, Callable] = {}
-var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = {}
+var _layers: Dictionary[StringName, NetwInterestLayer] = { }
+var _gates: Dictionary[StringName, InterestGate] = { }
+var _entity_layers: Dictionary[NetwEntity, Dictionary] = { }
+var _entity_filters: Dictionary[NetwEntity, Callable] = { }
+var _entity_exit_handlers: Dictionary[NetwEntity, Callable] = { }
 # Per-entity, per-peer count of layers currently admitting the peer.
 # Visibility filter reads this in O(1); maintained by the layer
 # interest_enter / interest_exit signal handlers.
-var _admit_count: Dictionary[NetwEntity, Dictionary] = {}
-var _dirty_entities: Dictionary[NetwEntity, bool] = {}
-var _dirty_gate_layers: Dictionary[StringName, bool] = {}
+var _admit_count: Dictionary[NetwEntity, Dictionary] = { }
+var _dirty_entities: Dictionary[NetwEntity, bool] = { }
+var _dirty_gate_layers: Dictionary[StringName, bool] = { }
 var _refresh_scheduled: bool = false
 
 ## Transition kind for relayed visibility / observer events.
@@ -52,12 +51,18 @@ class _VisRelay:
 	var path: NodePath
 	var layer_id: StringName
 	var kind: int
+
+
 	func _init(p: NodePath, l: StringName, k: int) -> void:
 		path = p
 		layer_id = l
 		kind = k
+
+
 	func to_wire() -> Array:
 		return [path, layer_id, kind]
+
+
 	static func from_wire(raw: Variant) -> _VisRelay:
 		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 3:
 			return null
@@ -71,22 +76,32 @@ class _ObsRelay:
 	var layer_id: StringName
 	var observer_peer: int
 	var kind: int
+
+
 	func _init(
-			p: NodePath, l: StringName, o: int, k: int) -> void:
+			p: NodePath,
+			l: StringName,
+			o: int,
+			k: int,
+	) -> void:
 		path = p
 		layer_id = l
 		observer_peer = o
 		kind = k
+
+
 	func to_wire() -> Array:
 		return [path, layer_id, observer_peer, kind]
+
+
 	static func from_wire(raw: Variant) -> _ObsRelay:
 		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() != 4:
 			return null
 		return _ObsRelay.new(raw[0], raw[1], raw[2], raw[3])
 
 
-var _observer_relay: Dictionary[int, Array] = {}
-var _visibility_relay: Dictionary[int, Array] = {}
+var _observer_relay: Dictionary[int, Array] = { }
+var _visibility_relay: Dictionary[int, Array] = { }
 var _pending_visibility_events: Array[_VisRelay] = []
 var _pending_attempts: Array[int] = []
 var _pending_visibility_flush_scheduled: bool = false
@@ -147,7 +162,7 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 		return false
 	if not _is_server():
 		return _current_layer_verdict(peer_id, entity)
-	var per_peer: Dictionary = _admit_count.get(entity, {})
+	var per_peer: Dictionary = _admit_count.get(entity, { })
 	if per_peer.get(peer_id, 0) > 0:
 		return true
 	if not _dirty_entities.has(entity):
@@ -164,7 +179,10 @@ func _on_layer_policy_changed(layer: NetwInterestLayer) -> void:
 
 
 func _on_layer_viewer_changed(
-		layer: NetwInterestLayer, peer_id: int, added: bool) -> void:
+		layer: NetwInterestLayer,
+		peer_id: int,
+		added: bool,
+) -> void:
 	if _gates.has(layer.layer_id):
 		_mark_gate_dirty(layer.layer_id)
 	_mark_layer_dirty(layer)
@@ -173,7 +191,10 @@ func _on_layer_viewer_changed(
 
 
 func _on_layer_entity_changed(
-		layer: NetwInterestLayer, entity: NetwEntity, added: bool) -> void:
+		layer: NetwInterestLayer,
+		entity: NetwEntity,
+		added: bool,
+) -> void:
 	if added:
 		_track_entity_layer(entity, layer.layer_id)
 		_install_entity_filter(entity)
@@ -189,15 +210,20 @@ func _on_layer_entity_changed(
 ## [param gate] must be valid and configured with a non-empty
 ## [member InterestGate.layer_id].
 func register_gate(gate: InterestGate) -> void:
-	assert(is_instance_valid(gate),
-			"InterestService.register_gate: gate is freed")
-	assert(not gate.layer_id.is_empty(),
-			"InterestService.register_gate: gate.layer_id is empty")
+	assert(
+		is_instance_valid(gate),
+		"InterestService.register_gate: gate is freed",
+	)
+	assert(
+		not gate.layer_id.is_empty(),
+		"InterestService.register_gate: gate.layer_id is empty",
+	)
 	var existing: InterestGate = _gates.get(gate.layer_id)
 	if is_instance_valid(existing) and existing != gate:
 		push_error(
-				"InterestService: gate already registered for layer '%s'"
-				% [String(gate.layer_id)])
+			"InterestService: gate already registered for layer '%s'"
+			% [String(gate.layer_id)],
+		)
 		return
 	_gates[gate.layer_id] = gate
 	var layer := get_layer(gate.layer_id)
@@ -219,12 +245,12 @@ func gate_for(layer_id: StringName) -> InterestGate:
 
 
 func _track_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
-	var layers: Dictionary = _entity_layers.get_or_add(entity, {})
+	var layers: Dictionary = _entity_layers.get_or_add(entity, { })
 	layers[layer_id] = true
 
 
 func _untrack_entity_layer(entity: NetwEntity, layer_id: StringName) -> void:
-	var layers: Dictionary = _entity_layers.get(entity, {})
+	var layers: Dictionary = _entity_layers.get(entity, { })
 	layers.erase(layer_id)
 	if layers.is_empty():
 		_entity_layers.erase(entity)
@@ -263,7 +289,7 @@ func _uninstall_entity_filter(entity: NetwEntity) -> void:
 
 
 func _on_entity_tree_exiting(entity: NetwEntity) -> void:
-	var layer_ids: Dictionary = _entity_layers.get(entity, {}).duplicate()
+	var layer_ids: Dictionary = _entity_layers.get(entity, { }).duplicate()
 	for layer_id: StringName in layer_ids:
 		var layer := get_layer(layer_id)
 		if not layer:
@@ -274,8 +300,10 @@ func _on_entity_tree_exiting(entity: NetwEntity) -> void:
 			layer._client_untrack_entity(entity)
 	_uninstall_entity_filter(entity)
 	_dirty_entities.erase(entity)
-	assert(not _admit_count.has(entity),
-			"InterestService: admit_count leaked entries after layer removal")
+	assert(
+		not _admit_count.has(entity),
+		"InterestService: admit_count leaked entries after layer removal",
+	)
 	_admit_count.erase(entity)
 
 
@@ -285,8 +313,10 @@ func _mark_layer_dirty(layer: NetwInterestLayer) -> void:
 
 
 func _mark_entity_dirty(entity: NetwEntity) -> void:
-	assert(entity != null,
-			"InterestService: _mark_entity_dirty called with null entity")
+	assert(
+		entity != null,
+		"InterestService: _mark_entity_dirty called with null entity",
+	)
 	_dirty_entities[entity] = true
 	_schedule_visibility_flush()
 
@@ -345,7 +375,7 @@ func _flush_visibility() -> void:
 # [code]_dirty_gate_layers[/code]; callers that need to defer revokes
 # must re-queue them via [method _requeue_gate_revokes].
 func _gather_gate_transitions() -> Dictionary:
-	var out: Dictionary = {}
+	var out: Dictionary = { }
 	var mt := _tree()
 	if not is_instance_valid(mt) or mt.multiplayer_peer == null \
 			or not mt.multiplayer_api.is_server():
@@ -365,7 +395,7 @@ func _gather_gate_transitions() -> Dictionary:
 				admits.append(peer_id)
 			else:
 				revokes.append(peer_id)
-		out[layer_id] = {"gate": gate, "admits": admits, "revokes": revokes}
+		out[layer_id] = { "gate": gate, "admits": admits, "revokes": revokes }
 	_dirty_gate_layers.clear()
 	return out
 
@@ -402,13 +432,13 @@ func _requeue_gate_revokes(transitions: Dictionary) -> void:
 func _drive_dirty_entity_layers() -> void:
 	if not _is_server():
 		return
-	var layer_ids: Dictionary[StringName, bool] = {}
+	var layer_ids: Dictionary[StringName, bool] = { }
 	for entity: NetwEntity in _dirty_entities:
 		if not is_instance_valid(entity.owner):
 			continue
 		if not entity.owner.is_inside_tree():
 			continue
-		var layers: Dictionary = _entity_layers.get(entity, {})
+		var layers: Dictionary = _entity_layers.get(entity, { })
 		for layer_id: StringName in layers:
 			layer_ids[layer_id] = true
 	for layer_id: StringName in layer_ids:
@@ -417,10 +447,12 @@ func _drive_dirty_entity_layers() -> void:
 
 func _flush_entity_visibility() -> void:
 	# tree_exiting eviction guarantees entries refer to live owners.
-	var still_dirty: Dictionary[NetwEntity, bool] = {}
+	var still_dirty: Dictionary[NetwEntity, bool] = { }
 	for entity: NetwEntity in _dirty_entities.keys():
-		assert(is_instance_valid(entity.owner),
-				"InterestService: dirty entity outlived its owner")
+		assert(
+			is_instance_valid(entity.owner),
+			"InterestService: dirty entity outlived its owner",
+		)
 		if not entity.owner.is_inside_tree():
 			still_dirty[entity] = true
 			continue
@@ -437,7 +469,7 @@ func _drive_layer(layer: NetwInterestLayer) -> void:
 
 
 func _current_layer_verdict(peer_id: int, entity: NetwEntity) -> bool:
-	var layer_ids: Dictionary = _entity_layers.get(entity, {})
+	var layer_ids: Dictionary = _entity_layers.get(entity, { })
 	for layer_id: StringName in layer_ids:
 		var layer := get_layer(layer_id)
 		if layer and layer.has_entity(entity) and layer.verdict_for(peer_id):
@@ -446,7 +478,7 @@ func _current_layer_verdict(peer_id: int, entity: NetwEntity) -> bool:
 
 
 func _live_peers(layer: NetwInterestLayer) -> Array[int]:
-	var seen: Dictionary[int, bool] = {}
+	var seen: Dictionary[int, bool] = { }
 	var mt := _tree()
 	if is_instance_valid(mt) and mt.multiplayer_peer != null:
 		if mt.is_server:
@@ -477,21 +509,27 @@ func _is_server() -> bool:
 
 
 func _on_layer_interest_enter(
-		entity: NetwEntity, peer_id: int,
-		layer: NetwInterestLayer) -> void:
-	var per_peer: Dictionary = _admit_count.get_or_add(entity, {})
+		entity: NetwEntity,
+		peer_id: int,
+		layer: NetwInterestLayer,
+) -> void:
+	var per_peer: Dictionary = _admit_count.get_or_add(entity, { })
 	per_peer[peer_id] = int(per_peer.get(peer_id, 0)) + 1
 	_queue_visibility_event(layer, entity, peer_id, Kind.ENTER)
 	_queue_observer_event(layer, entity, peer_id, Kind.ENTER)
 
 
 func _on_layer_interest_exit(
-		entity: NetwEntity, peer_id: int,
-		layer: NetwInterestLayer) -> void:
-	var per_peer: Dictionary = _admit_count.get(entity, {})
+		entity: NetwEntity,
+		peer_id: int,
+		layer: NetwInterestLayer,
+) -> void:
+	var per_peer: Dictionary = _admit_count.get(entity, { })
 	var next := int(per_peer.get(peer_id, 0)) - 1
-	assert(next >= 0,
-			"InterestService: admit_count underflow for entity/peer")
+	assert(
+		next >= 0,
+		"InterestService: admit_count underflow for entity/peer",
+	)
 	if next <= 0:
 		per_peer.erase(peer_id)
 		if per_peer.is_empty():
@@ -503,16 +541,21 @@ func _on_layer_interest_exit(
 
 
 func _queue_visibility_event(
-		layer: NetwInterestLayer, entity: NetwEntity,
-		observer_peer: int, kind: int) -> void:
+		layer: NetwInterestLayer,
+		entity: NetwEntity,
+		observer_peer: int,
+		kind: int,
+) -> void:
 	if not _is_server():
 		return
 	# Bound layers deliver client transitions through their gate's local
 	# entity tracking. Only unbound layers use this RPC relay.
 	if layer.bound_gate() != null:
 		return
-	assert(entity != null and is_instance_valid(entity.owner),
-			"InterestService: transition emitted for freed entity")
+	assert(
+		entity != null and is_instance_valid(entity.owner),
+		"InterestService: transition emitted for freed entity",
+	)
 	if observer_peer == 0 or observer_peer == MultiplayerPeer.TARGET_PEER_SERVER:
 		return
 	if not entity.owner.is_inside_tree():
@@ -521,8 +564,13 @@ func _queue_visibility_event(
 	if not _can_send_rpc_to_peer(mt, observer_peer):
 		return
 	var bucket: Array = _visibility_relay.get_or_add(observer_peer, [])
-	bucket.append(_VisRelay.new(
-			mt.get_path_to(entity.owner), layer.layer_id, kind))
+	bucket.append(
+		_VisRelay.new(
+			mt.get_path_to(entity.owner),
+			layer.layer_id,
+			kind,
+		),
+	)
 	_schedule_visibility_flush()
 
 
@@ -547,12 +595,17 @@ func _flush_visibility_relay() -> void:
 
 
 func _queue_observer_event(
-		layer: NetwInterestLayer, entity: NetwEntity,
-		observer_peer: int, kind: int) -> void:
+		layer: NetwInterestLayer,
+		entity: NetwEntity,
+		observer_peer: int,
+		kind: int,
+) -> void:
 	if not _is_server():
 		return
-	assert(entity != null and is_instance_valid(entity.owner),
-			"InterestService: transition emitted for freed entity")
+	assert(
+		entity != null and is_instance_valid(entity.owner),
+		"InterestService: transition emitted for freed entity",
+	)
 	if entity.peer_id == 0 or observer_peer == entity.peer_id:
 		return
 	if layer.bound_gate() != null:
@@ -567,9 +620,14 @@ func _queue_observer_event(
 		return
 	var owner_peer := entity.peer_id
 	var bucket: Array = _observer_relay.get_or_add(owner_peer, [])
-	bucket.append(_ObsRelay.new(
+	bucket.append(
+		_ObsRelay.new(
 			mt.get_path_to(entity.owner),
-			layer.layer_id, observer_peer, kind))
+			layer.layer_id,
+			observer_peer,
+			kind,
+		),
+	)
 	_schedule_visibility_flush()
 
 
@@ -683,9 +741,10 @@ func _flush_pending_visibility_events() -> void:
 			_pending_attempts.append(attempts + 1)
 			continue
 		Netw.dbg.warn(
-				"InterestService: ENTER for missing node '%s'",
-				[String(event.path)],
-				func(m): push_warning(m))
+			"InterestService: ENTER for missing node '%s'",
+			[String(event.path)],
+			func(m): push_warning(m)
+		)
 	if not _pending_visibility_events.is_empty():
 		_schedule_pending_visibility_flush()
 
@@ -697,5 +756,6 @@ func _schedule_pending_visibility_flush() -> void:
 		return
 	_pending_visibility_flush_scheduled = true
 	get_tree().process_frame.connect(
-			_flush_pending_visibility_events,
-			CONNECT_ONE_SHOT)
+		_flush_pending_visibility_events,
+		CONNECT_ONE_SHOT,
+	)

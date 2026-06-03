@@ -21,19 +21,19 @@ func before_test() -> void:
 	db.backend = backend
 
 	player_builder = PlayerBuilder.new("TestPlayerWithSave") \
-		.with_root(Node2D) \
-		.with_spawner() \
-		.with_save(db, &"players_save") \
-		.with_player_sync(
-			SyncConfigBuilder.new().property("..:position", true)
-		)
+			.with_root(Node2D) \
+			.with_spawner() \
+			.with_save(db, &"players_save") \
+			.with_player_sync(
+				SyncConfigBuilder.new().property("..:position", true),
+			)
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
 	level_builder = LevelBuilder.new("TestLevelSave") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
 
@@ -53,7 +53,10 @@ func after_test() -> void:
 
 func _spawn_save_player() -> Node2D:
 	var player := await harness.join_player(
-		client0, level_builder.resource_path, SPAWNER_PATH) as Node2D
+		client0,
+		level_builder.resource_path,
+		SPAWNER_PATH,
+	) as Node2D
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.database = db
@@ -92,7 +95,8 @@ func test_pull_from_scene_captures_live_position() -> void:
 	save_comp.pull_from_scene()
 
 	assert_that(save_comp.bound_entity.get_value(&"position")).is_equal(
-		Vector2(50, 75))
+		Vector2(50, 75),
+	)
 
 
 func test_push_to_scene_restores_position() -> void:

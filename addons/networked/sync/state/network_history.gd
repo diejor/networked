@@ -9,8 +9,8 @@ extends RefCounted
 var history_limit: int
 
 # node -> {StringName -> HistoryBuffer}
-var _state_buffers: Dictionary = {}
-var _input_buffers: Dictionary = {}
+var _state_buffers: Dictionary = { }
+var _input_buffers: Dictionary = { }
 
 
 func _init(limit: int) -> void:
@@ -64,11 +64,11 @@ func trim_before(tick: int) -> void:
 
 func _get_or_create(store: Dictionary, node: Node, prop: StringName) -> HistoryBuffer:
 	if not store.has(node):
-		store[node] = {}
+		store[node] = { }
 	if not store[node].has(prop):
 		store[node][prop] = HistoryBuffer.new(history_limit)
 	return store[node][prop]
 
 
 func _get_buffer(store: Dictionary, node: Node, prop: StringName) -> HistoryBuffer:
-	return store.get(node, {}).get(prop, null)
+	return store.get(node, { }).get(prop, null)

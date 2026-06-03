@@ -8,7 +8,6 @@
 class_name ServerInfo
 extends Resource
 
-
 @export var motd: String = ""
 @export var players: int = 0
 @export var max_players: int = 0
@@ -16,7 +15,7 @@ extends Resource
 @export var version: String = ""
 @export var app_id: StringName = &""
 @export var is_local_listener: bool = false
-@export var metadata: Dictionary = {}
+@export var metadata: Dictionary = { }
 
 
 ## Serializes [param info] to a wire-format byte array.
@@ -55,6 +54,6 @@ static func from_payload(bytes: PackedByteArray) -> ServerInfo:
 	info.version = decoded.get("version", "")
 	info.app_id = StringName(decoded.get("app_id", ""))
 	info.is_local_listener = bool(decoded.get("is_local_listener", false))
-	var meta = decoded.get("metadata", {})
-	info.metadata = meta if typeof(meta) == TYPE_DICTIONARY else {}
+	var meta = decoded.get("metadata", { })
+	info.metadata = meta if typeof(meta) == TYPE_DICTIONARY else { }
 	return info

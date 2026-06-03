@@ -2,7 +2,6 @@
 class_name TestLobbyInfo
 extends NetwTestSuite
 
-
 func test_make_populates_required_fields() -> void:
 	var info := LobbyInfo.make(123, "Room", 2, 8)
 	assert_that(info.id).is_equal(123)
@@ -14,7 +13,11 @@ func test_make_populates_required_fields() -> void:
 
 func test_make_carries_metadata() -> void:
 	var info := LobbyInfo.make(
-		7, "X", 1, 4, {"host": "alice", "mode": "deathmatch"}
+		7,
+		"X",
+		1,
+		4,
+		{ "host": "alice", "mode": "deathmatch" },
 	)
 	assert_that(info.metadata["host"]).is_equal("alice")
 	assert_that(info.metadata["mode"]).is_equal("deathmatch")

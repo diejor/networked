@@ -1,7 +1,6 @@
 @tool
 class_name SpawnerComponentPolicy
 extends SpawnPolicy
-
 ## The default [SpawnPolicy]. Routes a joining player into a managed scene and
 ## spawns them at the [SpawnerComponent] the client picked.
 ##
@@ -32,7 +31,7 @@ static func from_scene_node_path(path: SceneNodePath) -> SpawnerComponentPolicy:
 
 func to_dict() -> Dictionary:
 	if spawn_point == null:
-		return {}
+		return { }
 	return {
 		"scene_name": StringName(spawn_point.get_scene_name()),
 		"spawner_path": NodePath(spawn_point.node_path),
@@ -58,6 +57,8 @@ func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 
 func _spawner_in(scene: MultiplayerScene, path: NodePath) -> SpawnerComponent:
 	var node := scene.level.get_node(path)
-	assert(node is SpawnerComponent,
-		"spawn payload's spawner_path didn't point at a SpawnerComponent")
+	assert(
+		node is SpawnerComponent,
+		"spawn payload's spawner_path didn't point at a SpawnerComponent",
+	)
 	return node

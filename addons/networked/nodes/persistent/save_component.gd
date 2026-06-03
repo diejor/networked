@@ -27,7 +27,6 @@ signal client_synchronized
 ## Emitted when a [method push_to] acknowledgment arrives from the remote peer.
 signal push_acknowledged
 
-
 var _save_span: NetSpan
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 var _initialized: bool = false
@@ -38,7 +37,6 @@ var _state_changed: bool = false
 class Bucket extends RefCounted:
 	var registered: Array[SaveComponent] = []
 	var shutting_down: bool = false
-
 
 ## The entity whose data is tracked and persisted.
 var bound_entity: Entity = DictionaryEntity.new()
@@ -69,6 +67,7 @@ func _init() -> void:
 	visibility_update_mode = MultiplayerSynchronizer.VISIBILITY_PROCESS_NONE
 	public_visibility = false
 
+
 func _notification(what: int) -> void:
 	if Engine.is_editor_hint():
 		return
@@ -95,7 +94,7 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	if multiplayer.is_server():
 		get_tree().set_auto_accept_quit(false)
 	_register()
@@ -108,8 +107,8 @@ func _exit_tree() -> void:
 	if not Engine.is_editor_hint():
 		_unregister()
 
-
 # ProxySynchronizer overrides.
+
 
 # Receives a replicated value from the network and stores it in bound_entity.
 func _write_property(name: StringName, _path: NodePath, value: Variant) -> void:
@@ -123,41 +122,43 @@ func _get_property_list() -> Array[Dictionary]:
 	var properties: Array[Dictionary] = []
 	for entity_key: StringName in _properties:
 		var value: Variant = bound_entity.get_value(entity_key, null)
-		properties.append({"name": entity_key, "type": typeof(value)})
+		properties.append({ "name": entity_key, "type": typeof(value) })
 	return properties
 
-
 # Internal sync setup.
+
 
 # Builds the SceneReplicationConfig by virtualizing properties picked in the Editor.
 func _setup_sync() -> void:
 	if _initialized:
 		return
 	_initialized = true
-	
+
 	assert(bound_entity, "SaveComponent: bound_entity must not be null.")
 	assert(
 		bound_entity.resource_local_to_scene,
 		"SaveComponent: bound_entity '%s' is not local to scene." % bound_entity,
 	)
-	
+
 	if database:
 		var path := database.resource_path
-		assert(not path.contains("::"),
-			"SaveComponent: 'database' must be a saved .tres file, not an embedded resource.")
-	
+		assert(
+			not path.contains("::"),
+			"SaveComponent: 'database' must be a saved .tres file, not an embedded resource.",
+		)
+
 	finalize()
-	
+
 	for entity_key: StringName in _properties:
 		var scene_path: NodePath = _properties[entity_key]
 		if scene_path.is_empty():
 			continue
-		
+
 		if owner and not bound_entity.has_value(entity_key):
 			var value = _read_property(entity_key, scene_path)
 			if value != null:
 				bound_entity.set_value(entity_key, value)
-	
+
 	notify_property_list_changed()
 
 
@@ -169,13 +170,13 @@ func _seed_entity_from_scene() -> void:
 		var scene_path: NodePath = _properties[entity_key]
 		if scene_path.is_empty():
 			continue
-		
+
 		var value = _read_property(entity_key, scene_path)
 		if value != null:
 			bound_entity.set_value(entity_key, value)
 
-
 # Public API.
+
 
 ## Returns [code]true[/code] if the component has unsaved changes.
 func is_dirty() -> bool:
@@ -186,7 +187,7 @@ func is_dirty() -> bool:
 func set_value(key: StringName, value: Variant) -> void:
 	if not has_virtual_property(key):
 		_dbg.warn("Setting value for untracked key: [code]%s[/code]", [key])
-	
+
 	bound_entity.set_value(key, value)
 	_state_changed = true
 	_save_once.call_deferred()
@@ -206,15 +207,14 @@ func add_save_property(
 		virtual_name: StringName,
 		source: Node,
 		property: StringName,
-		mode: SceneReplicationConfig.ReplicationMode =
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = true,
 		watch: bool = true,
 ) -> void:
 	register_node_property(virtual_name, source, property, mode, spawn, watch)
 
-
 # Scene to entity transfer.
+
 
 ## Writes entity values for all tracked properties into the live scene nodes.
 func push_to_scene() -> Error:
@@ -248,8 +248,8 @@ func _write_scene(entity_key: StringName, value: Variant) -> void:
 		return
 	SynchronizersCache.assign_value(root, path, value)
 
-
 # Deferred dirty coalescing.
+
 
 # Emits state_changed once per frame when any property was written.
 func _save_once() -> void:
@@ -257,8 +257,8 @@ func _save_once() -> void:
 		_on_state_changed()
 		_state_changed = false
 
-
 # Network transfer.
+
 
 ## Sends the current entity state to [param peer_id].
 ##
@@ -284,8 +284,8 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 			if tp:
 				tp._rpc_push_ack.rpc_id(sender_id)
 
-
 # Database persistence.
+
 
 # Returns the stable entity identifier used as the database record ID.
 func _get_entity_id() -> StringName:
@@ -316,18 +316,24 @@ func flush() -> Error:
 # Internal flush implementation.
 func _flush() -> Error:
 	if not database or table_name.is_empty():
-		_dbg.warn("Cannot flush; database or table_name is missing.",
-				func(m): push_warning(m))
+		_dbg.warn(
+			"Cannot flush; database or table_name is missing.",
+			func(m): push_warning(m)
+		)
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
-	var db_err := database.transaction(func(tx: NetwDatabase.TransactionContext) -> void:
-		tx.queue_upsert(table_name, entity_id, bound_entity.to_dict())
+	var db_err := database.transaction(
+		func(tx: NetwDatabase.TransactionContext) -> void:
+			tx.queue_upsert(table_name, entity_id, bound_entity.to_dict())
 	)
 	if db_err == OK:
 		_dbg.trace("State flushed (table=%s, id=%s).", [table_name, entity_id])
 	else:
-		_dbg.warn("Database upsert failed. Error: %s", [error_string(db_err)],
-				func(m): push_warning(m))
+		_dbg.warn(
+			"Database upsert failed. Error: %s",
+			[error_string(db_err)],
+			func(m): push_warning(m)
+		)
 	return db_err
 
 
@@ -339,7 +345,7 @@ func hydrate_from_db() -> void:
 	if not _initialized:
 		_instantiate_sync()
 	var entity := database.table(table_name).fetch(_get_entity_id())
-	hydrate(entity.to_dict() if entity else {})
+	hydrate(entity.to_dict() if entity else { })
 
 
 ## Loads [param record] into [member bound_entity] and pushes it to
@@ -348,16 +354,20 @@ func hydrate(record: Dictionary) -> void:
 	if not _initialized:
 		_instantiate_sync()
 	_seed_entity_from_scene()
-	
+
 	if not record.is_empty():
 		bound_entity.from_dict(record)
 		push_to_scene()
-		_dbg.info("State hydrated (table=%s, id=%s).",
-				[table_name, _get_entity_id()])
+		_dbg.info(
+			"State hydrated (table=%s, id=%s).",
+			[table_name, _get_entity_id()],
+		)
 	else:
-		_dbg.debug("No record found (table=%s, id=%s); using scene defaults.",
-				[table_name, _get_entity_id()])
-	
+		_dbg.debug(
+			"No record found (table=%s, id=%s); using scene defaults.",
+			[table_name, _get_entity_id()],
+		)
+
 	loaded.emit()
 
 
@@ -374,8 +384,8 @@ func _serialize_scene() -> PackedByteArray:
 	pull_from_scene()
 	return bound_entity.serialize()
 
-
 # Lifecycle.
+
 
 # Handles a state change event: saves to database and emits network sync signals.
 func _on_state_changed() -> void:
@@ -393,31 +403,34 @@ func _instantiate_sync() -> void:
 	if _initialized:
 		return
 	if _save_span:
-		_save_span.step("instantiate_begin", {
-			in_tree = is_inside_tree(),
-			tracked_count = _properties.size(),
-		})
-	
+		_save_span.step(
+			"instantiate_begin",
+			{
+				in_tree = is_inside_tree(),
+				tracked_count = _properties.size(),
+			},
+		)
+
 	_setup_sync()
 	_seed_entity_from_scene()
 	assert(_initialized)
-	
+
 	if database:
 		database.bind(self, _save_span)
-	
+
 	instantiated.emit()
 
 
 # Returns editor warnings when the configuration is incomplete.
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings: PackedStringArray = []
-	
+
 	if root_path != NodePath("."):
 		warnings.append(
 			"SaveComponent requires [code]root_path[/code] to be set to "
-			+ "[code].[/code] (self) for proper sync resolution."
+			+ "[code].[/code] (self) for proper sync resolution.",
 		)
-	
+
 	if not database:
 		warnings.append("'database' must be assigned for persistence.")
 	else:
@@ -425,17 +438,17 @@ func _get_configuration_warnings() -> PackedStringArray:
 		if path.is_empty() or path.contains("::"):
 			warnings.append(
 				"'database' is an embedded resource. Save it as a .tres file "
-				+ "to avoid resource-path conflicts and data loss."
+				+ "to avoid resource-path conflicts and data loss.",
 			)
-		
+
 		if table_name.is_empty():
 			warnings.append("'table_name' must be set when 'database' is assigned.")
 		elif database.has_method("has_table") and not database.has_table(table_name):
 			warnings.append(
-				"Table [code]%s[/code] is not yet registered. " % [table_name] + \
-				"Declare it on the database resource or bind a [SaveComponent]."
+				"Table [code]%s[/code] is not yet registered. " % [table_name] +
+				"Declare it on the database resource or bind a [SaveComponent].",
 			)
-	
+
 	var config := replication_config
 	if not config or config.get_properties().is_empty():
 		warnings.append("No properties are tracked. Pick properties in the Replication panel.")
@@ -447,13 +460,13 @@ func _get_configuration_warnings() -> PackedStringArray:
 				warnings.append(
 					"Property [code]%s[/code] not found on SaveComponent. " % [str(prop)]
 					+ "Paths are resolved relative to SaveComponent; use [code]..:position[/code] "
-					+ "to reference the owner node."
+					+ "to reference the owner node.",
 				)
-	
+
 	return warnings
 
-
 # Static helpers.
+
 
 # Internal entry point: saves all components registered in [param ctx].
 static func _save_all_in(ctx: NetwPeerContext) -> void:
@@ -471,8 +484,8 @@ static func _save_all_in(ctx: NetwPeerContext) -> void:
 		else:
 			component.push_to(MultiplayerPeer.TARGET_PEER_SERVER)
 
-
 # Session / bucket access.
+
 
 ## Returns the [NetwPeerContext] for the local peer.
 func get_peer_context() -> NetwPeerContext:

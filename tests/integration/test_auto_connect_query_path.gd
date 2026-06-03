@@ -7,7 +7,6 @@
 class_name TestAutoConnectQueryPath
 extends NetwTestSuite
 
-
 func _make_payload(username: String) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
@@ -23,7 +22,8 @@ func test_no_listener_falls_through_to_host() -> void:
 	target.address = "127.0.0.1"
 
 	var err: Error = await tree.join_or_host(
-		target, _make_payload("alice")
+		target,
+		_make_payload("alice"),
 	)
 
 	assert_int(err).is_equal(OK)
@@ -43,7 +43,8 @@ func test_live_listener_joins_as_client() -> void:
 	target.address = "127.0.0.1"
 
 	var err: Error = await client.join_or_host(
-		target, _make_payload("bob")
+		target,
+		_make_payload("bob"),
 	)
 
 	assert_int(err).is_equal(OK)

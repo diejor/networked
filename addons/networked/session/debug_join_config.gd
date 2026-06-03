@@ -1,7 +1,6 @@
 @tool
 class_name DebugJoinConfig
 extends Resource
-
 ## Editor authored stand in for a [JoinPayload] that auto connects a
 ## [MultiplayerTree] in debug builds.
 ##
@@ -39,6 +38,6 @@ extends Resource
 func to_payload() -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
-	payload.spawn = spawn.to_dict() if spawn else {}
+	payload.spawn = spawn.to_dict() if spawn else { }
 	payload.is_debug = true
 	return payload

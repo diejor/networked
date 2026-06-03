@@ -16,7 +16,6 @@
 class_name ConnectBrowser
 extends Control
 
-
 const _ROW_SCENE := preload(
 	"res://addons/networked/connect/ui/row.tscn"
 )
@@ -49,7 +48,6 @@ const _ROW_MENU_JOIN := Menu.ID_JOIN
 const _ROW_MENU_EDIT := Menu.ID_EDIT
 const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 
-
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
 ## drives, accessed through a [NetwConnect] facade.
 ##
@@ -76,7 +74,6 @@ var spawner_options: Array[SceneNodePath] = []
 ## Path used to load and persist saved targets shown by this browser.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
 
-
 var _add_popup: AddPopup
 var _host_popup: HostPopup
 var _join_popup: JoinPopup
@@ -86,7 +83,7 @@ var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
 
 var _tree: MultiplayerTree
-var _rows: Dictionary = {}  # JoinTarget -> ConnectBrowserRow
+var _rows: Dictionary = { } # JoinTarget -> ConnectBrowserRow
 var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
@@ -216,7 +213,7 @@ func _bind_session_signals() -> void:
 	if not _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.connect(_on_join_failed)
 	if not _connect.directory_unavailable.is_connected(
-		_on_directory_unavailable
+		_on_directory_unavailable,
 	):
 		_connect.directory_unavailable.connect(_on_directory_unavailable)
 
@@ -268,7 +265,7 @@ func _add_row(target: JoinTarget) -> void:
 
 
 func _on_target_added(target: JoinTarget) -> void:
-	if _rows.has(target): 
+	if _rows.has(target):
 		return
 	_add_row(target)
 	_update_counter()
@@ -344,25 +341,25 @@ func _update_details() -> void:
 
 	# Populate Flow Details
 	_details_container.add_child(
-		_create_detail_item("Address", ConnectUiShared.format_address(t))
+		_create_detail_item("Address", ConnectUiShared.format_address(t)),
 	)
 	_details_container.add_child(
-		_create_detail_item("Status", _status_text(r))
+		_create_detail_item("Status", _status_text(r)),
 	)
 	_details_container.add_child(
 		_create_detail_item(
 			"Latency",
-			"%d ms" % r.latency_ms if r and r.is_ok() else "-"
-		)
+			"%d ms" % r.latency_ms if r and r.is_ok() else "-",
+		),
 	)
 	_details_container.add_child(
-		_create_detail_item("Players", _players_text(r))
+		_create_detail_item("Players", _players_text(r)),
 	)
 
 
 func _create_detail_item(
-	title: String,
-	value: String,
+		title: String,
+		value: String,
 ) -> DetailItem:
 	var item := _DETAIL_ITEM_SCENE.instantiate() as DetailItem
 	item.name = title.to_camel_case() + "Detail"
@@ -371,15 +368,15 @@ func _create_detail_item(
 
 
 func _on_row_context_requested(
-	_target: JoinTarget,
-	row: ConnectBrowserRow,
-	screen_position: Vector2,
+		_target: JoinTarget,
+		row: ConnectBrowserRow,
+		screen_position: Vector2,
 ) -> void:
 	if row == null or row.target == null:
 		return
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
-	
+
 	var is_saved := _connect.get_saved_targets().has(row.target)
 	_row_menu.show_for_target(is_saved, screen_position)
 
@@ -409,7 +406,9 @@ func _on_add_pressed() -> void:
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		backend_templates, spawner_options, _last_username
+		backend_templates,
+		spawner_options,
+		_last_username,
 	)
 
 
@@ -422,7 +421,9 @@ func _on_host_pressed() -> void:
 	if _connect == null:
 		return
 	_host_popup.open_host(
-		backend_templates, spawner_options, _last_username
+		backend_templates,
+		spawner_options,
+		_last_username,
 	)
 
 
@@ -436,7 +437,7 @@ func _open_edit_for_selected() -> void:
 	if _selected_row == null:
 		return
 	var is_saved := _connect.get_saved_targets().has(
-		_selected_row.target
+		_selected_row.target,
 	)
 	if not is_saved:
 		return
@@ -460,7 +461,8 @@ func _on_target_submitted(target: JoinTarget) -> void:
 
 
 func _on_host_submitted(
-	config: ConnectHostConfig, payload: JoinPayload
+		config: ConnectHostConfig,
+		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
 	_last_username = String(payload.username)
@@ -477,8 +479,8 @@ func _on_join_submitted(payload: JoinPayload) -> void:
 
 
 func _on_join_direct_submitted(
-	target: JoinTarget,
-	payload: JoinPayload,
+		target: JoinTarget,
+		payload: JoinPayload,
 ) -> void:
 	_join_with_preflight(target, payload)
 
@@ -520,8 +522,8 @@ func _hide_connecting_overlay() -> void:
 
 
 func _prompt_host_fallback(
-	target: JoinTarget,
-	_payload: JoinPayload,
+		target: JoinTarget,
+		_payload: JoinPayload,
 ) -> void:
 	if not target.backend.supports_embedded_server():
 		return
@@ -534,13 +536,15 @@ func _on_popup_cancelled() -> void:
 
 func _on_host_fallback_submitted(target: JoinTarget) -> void:
 	_host_popup.open_host(
-		[target.backend], spawner_options, _last_username
+		[target.backend],
+		spawner_options,
+		_last_username,
 	)
 
 
 func _join_with_preflight(
-	target: JoinTarget,
-	payload: JoinPayload,
+		target: JoinTarget,
+		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
 	_last_join_payload = payload
@@ -548,12 +552,12 @@ func _join_with_preflight(
 	var result := _connect.get_result(target)
 	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
 		_show_banner(
-			"Incompatible game build; this server runs a different version."
+			"Incompatible game build; this server runs a different version.",
 		)
 		return
 	if result != null and (
-		result.status == ServerInfoResult.Status.TIMEOUT
-		or result.status == ServerInfoResult.Status.UNREACHABLE
+			result.status == ServerInfoResult.Status.TIMEOUT
+			or result.status == ServerInfoResult.Status.UNREACHABLE
 	):
 		_prompt_host_fallback(target, payload)
 		return
@@ -564,8 +568,8 @@ func _join_with_preflight(
 
 
 func _on_directory_unavailable(
-	_directory_id: StringName,
-	reason: String,
+		_directory_id: StringName,
+		reason: String,
 ) -> void:
 	_show_banner(reason)
 
@@ -587,13 +591,20 @@ func _status_text(result: ServerInfoResult) -> String:
 	if result == null:
 		return "..."
 	match result.status:
-		ServerInfoResult.Status.OK: return "OK"
-		ServerInfoResult.Status.BUSY: return "BUSY"
-		ServerInfoResult.Status.UNREACHABLE: return "UNREACHABLE"
-		ServerInfoResult.Status.TIMEOUT: return "TIMEOUT"
-		ServerInfoResult.Status.UNSUPPORTED: return "UNSUPPORTED"
-		ServerInfoResult.Status.INCOMPATIBLE: return "INCOMPATIBLE"
-		_: return "ERROR"
+		ServerInfoResult.Status.OK:
+			return "OK"
+		ServerInfoResult.Status.BUSY:
+			return "BUSY"
+		ServerInfoResult.Status.UNREACHABLE:
+			return "UNREACHABLE"
+		ServerInfoResult.Status.TIMEOUT:
+			return "TIMEOUT"
+		ServerInfoResult.Status.UNSUPPORTED:
+			return "UNSUPPORTED"
+		ServerInfoResult.Status.INCOMPATIBLE:
+			return "INCOMPATIBLE"
+		_:
+			return "ERROR"
 
 
 func _players_text(result: ServerInfoResult) -> String:

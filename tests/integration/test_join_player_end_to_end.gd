@@ -16,15 +16,15 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
-		.with_root(Node2D) \
-		.with_spawner()
+			.with_root(Node2D) \
+			.with_spawner()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner("..", [player_builder.packed]) \
-		.with_child(template_instance)
+			.with_root(Node2D) \
+			.with_multiplayer_spawner("..", [player_builder.packed]) \
+			.with_child(template_instance)
 	level_builder.pack()
 	template_instance.free()
 
@@ -41,7 +41,9 @@ func after_test() -> void:
 
 func test_join_player_spawns_into_named_scene() -> void:
 	var player := await harness.join_player(
-		alice, level_builder.resource_path, _SPAWNER_NODE_PATH
+		alice,
+		level_builder.resource_path,
+		_SPAWNER_NODE_PATH,
 	)
 	assert_that(player).is_not_null()
 
@@ -52,7 +54,9 @@ func test_join_player_spawns_into_named_scene() -> void:
 
 func test_join_player_assigns_authority_to_client_peer() -> void:
 	var player := await harness.join_player(
-		alice, level_builder.resource_path, _SPAWNER_NODE_PATH
+		alice,
+		level_builder.resource_path,
+		_SPAWNER_NODE_PATH,
 	)
 	var expected_id := alice.multiplayer_peer.get_unique_id()
 	assert_that(player.get_multiplayer_authority()).is_equal(expected_id)

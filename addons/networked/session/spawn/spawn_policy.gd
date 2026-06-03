@@ -2,7 +2,6 @@
 @abstract
 class_name SpawnPolicy
 extends Resource
-
 ## Server-side strategy for spawning a player once their join is accepted.
 ##
 ## Assign it to [member MultiplayerTree.spawn_policy]. A [code]null[/code]
@@ -32,7 +31,6 @@ extends Resource
 ##     # ...add the player to scene at point...
 ##     return scene
 ## [/codeblock]
-
 
 ## Spawns the player for the accepted join [param rj] and returns
 ## the [MultiplayerScene] they entered, or [code]null[/code]. The tree emits

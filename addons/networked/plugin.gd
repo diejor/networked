@@ -54,7 +54,8 @@ func _exit_tree() -> void:
 
 func _get_plugin_icon() -> Texture2D:
 	return get_editor_interface().get_base_control().get_theme_icon(
-		"Log", "EditorIcons"
+		"Log",
+		"EditorIcons",
 	)
 
 
@@ -62,10 +63,12 @@ func _register_settings() -> void:
 	var setting_name := "networked/debug/auto_tile_instances"
 	if not ProjectSettings.has_setting(setting_name):
 		ProjectSettings.set_setting(setting_name, true)
-	
+
 	ProjectSettings.set_initial_value(setting_name, true)
-	ProjectSettings.add_property_info({
-		"name": setting_name,
-		"type": TYPE_BOOL,
-		"hint": PROPERTY_HINT_NONE,
-	})
+	ProjectSettings.add_property_info(
+		{
+			"name": setting_name,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+		},
+	)

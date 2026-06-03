@@ -14,7 +14,7 @@ extends Serde
 ## [method SpawnPolicy.to_dict]. The server's configured
 ## [member MultiplayerTree.spawn_policy] interprets it. Empty when
 ## the client expresses no spawn intent.
-@export var spawn: Dictionary = {}
+@export var spawn: Dictionary = { }
 
 ## Assigned by the server after receiving the connection request.
 ##
@@ -60,6 +60,6 @@ func deserialize(bytes: PackedByteArray) -> void:
 	assert(data)
 
 	username = data.username
-	spawn = data.get("spawn", {})
+	spawn = data.get("spawn", { })
 	peer_id = data.peer_id
 	is_debug = data.get("is_debug", false)

@@ -21,12 +21,13 @@
 class_name InterestDriver
 extends RefCounted
 
-
 ## One per-(entity, peer) visibility change emitted by [method compute].
 class Transition:
 	extends RefCounted
 	var entity: NetwEntity
 	var peer: int
+
+
 	func _init(e: NetwEntity = null, p: int = 0) -> void:
 		entity = e
 		peer = p
@@ -43,29 +44,29 @@ class Result:
 	## Per-(entity, peer) show transitions, shallow-first.
 	var show_transitions: Array[Transition] = []
 	## Full new visibility state: [code]{entity: {peer: bool}}[/code].
-	var new_state: Dictionary = {}
+	var new_state: Dictionary = { }
 
 
-var _state: Dictionary = {}
+var _state: Dictionary = { }
 
 
 ## Returns the cached verdict for [param entity] under [param peer_id]
 ## without recomputing.
 func cached_verdict(entity: NetwEntity, peer_id: int) -> bool:
-	var per_entity: Dictionary = _state.get(entity, {})
+	var per_entity: Dictionary = _state.get(entity, { })
 	return per_entity.get(peer_id, false)
 
 
 ## Returns every peer currently cached as visible for [param entity].
 ## Used to emit exit transitions before the entity leaves its layer.
 func cached_view_for(entity: NetwEntity) -> Dictionary:
-	return _state.get(entity, {}).duplicate()
+	return _state.get(entity, { }).duplicate()
 
 
 ## Drops the cache entry for [param entity]. Returns the previous
 ## per-peer dict.
 func forget(entity: NetwEntity) -> Dictionary:
-	var prev: Dictionary = _state.get(entity, {})
+	var prev: Dictionary = _state.get(entity, { })
 	_state.erase(entity)
 	return prev
 
@@ -73,7 +74,7 @@ func forget(entity: NetwEntity) -> Dictionary:
 ## Returns the peer ids the driver has ever cached a verdict for.
 ## Used to drive hide transitions for peers removed from the viewer set.
 func cached_peers() -> Array[int]:
-	var seen: Dictionary[int, bool] = {}
+	var seen: Dictionary[int, bool] = { }
 	for entity in _state:
 		var per_entity: Dictionary = _state[entity]
 		for p: int in per_entity:
@@ -91,11 +92,12 @@ func compute(
 		entities: Dictionary,
 		peers: Array[int],
 		kind: NetwInterestLayer.Policy,
-		viewers: Dictionary) -> Result:
+		viewers: Dictionary,
+) -> Result:
 	var result := Result.new()
 	# Policy verdict depends only on (kind, viewers, peer), not on the
 	# entity. Compute it once per peer and reuse across the layer.
-	var verdict_by_peer: Dictionary = {}
+	var verdict_by_peer: Dictionary = { }
 	for peer: int in peers:
 		verdict_by_peer[peer] = InterestPolicy.verdict(kind, viewers, peer)
 	for entity: NetwEntity in entities:
@@ -111,7 +113,8 @@ func compute(
 func _compute_entity(
 		entity: NetwEntity,
 		verdict_by_peer: Dictionary,
-		result: Result) -> void:
+		result: Result,
+) -> void:
 	# Off-tree owners and syncs cannot be ordered by [method
 	# Node.get_path] (which the comparators call), and an off-tree
 	# sync cannot be the target of [method
@@ -119,8 +122,8 @@ func _compute_entity(
 	# the binding-apply phase only sees nodes the engine can act on.
 	if not entity.owner.is_inside_tree():
 		return
-	var prev: Dictionary = _state.get(entity, {})
-	var per_entity: Dictionary = {}
+	var prev: Dictionary = _state.get(entity, { })
+	var per_entity: Dictionary = { }
 	result.new_state[entity] = per_entity
 	for peer: int in verdict_by_peer:
 		var now: bool = verdict_by_peer[peer]
@@ -146,9 +149,9 @@ func commit(result: Result) -> void:
 func dump() -> Dictionary:
 	return _state.duplicate(true)
 
-
 # Sort comparators. Depth is measured via Node path name count so a
 # scripted scene tree and a runtime-built tree compare consistently.
+
 
 func _transition_deeper_first(a: Transition, b: Transition) -> bool:
 	return a.entity.owner.get_path().get_name_count() \

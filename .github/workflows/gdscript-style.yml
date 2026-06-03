@@ -1,0 +1,58 @@
+name: GDScript Style
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "addons/networked/**/*.gd"
+      - "tests/**/*.gd"
+      - ".github/workflows/gdscript-style.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "addons/networked/**/*.gd"
+      - "tests/**/*.gd"
+      - ".github/workflows/gdscript-style.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: gdscript-style-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pin the formatter so local editors and CI agree. Bump deliberately.
+  GDFORMAT_VERSION: "0.20.1"
+
+jobs:
+  style:
+    name: "Format check + lint"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gdscript-formatter
+        run: |
+          base="https://github.com/GDQuest/GDScript-formatter/releases/download"
+          asset="gdscript-formatter-${GDFORMAT_VERSION}-linux-x86_64"
+          curl -sSL "${base}/${GDFORMAT_VERSION}/${asset}.zip" -o gdf.zip
+          unzip -o gdf.zip -d gdf
+          install -Dm755 "gdf/${asset}" "$HOME/.local/bin/gdscript-formatter"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Blocking. Run `gdscript-formatter addons/networked tests` locally to fix.
+      - name: Check formatting
+        run: gdscript-formatter --check addons/networked tests
+
+      # Advisory. private-access and signal-name conflict with Networked's
+      # internal-access and private-signal conventions.
+      - name: Lint
+        continue-on-error: true
+        run: |
+          gdscript-formatter lint --pretty \
+            --max-line-length 100 \
+            --disable private-access,signal-name \
+            addons/networked tests

@@ -2,7 +2,6 @@
 class_name TestLobbyCustomSpawn
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var client_mgr: MultiplayerSceneManager
@@ -12,13 +11,13 @@ var level_2_builder: LevelBuilder
 
 func before_test() -> void:
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_builder.pack()
 
 	level_2_builder = LevelBuilder.new("TestLevel2") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_2_builder.pack()
 
 	harness = make_harness()
@@ -41,9 +40,10 @@ func _set_spawn_fn(fn: Callable) -> void:
 
 func test_level_spawn_function_called_on_spawn() -> void:
 	var called := [false]
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		called[0] = true
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			called[0] = true
+			return level_builder.packed.instantiate()
 	)
 
 	server_mgr.spawn(level_builder.resource_path)
@@ -53,22 +53,24 @@ func test_level_spawn_function_called_on_spawn() -> void:
 
 func test_level_spawn_function_receives_correct_data() -> void:
 	var received = [null]
-	_set_spawn_fn(func(data: Variant) -> Node:
-		received[0] = data
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(data: Variant) -> Node:
+			received[0] = data
+			return level_builder.packed.instantiate()
 	)
 
-	server_mgr.spawn({"round": 7})
+	server_mgr.spawn({ "round": 7 })
 
-	assert_that(received[0]).is_equal({"round": 7})
+	assert_that(received[0]).is_equal({ "round": 7 })
 
 
 func test_level_not_in_tree_when_spawn_function_called() -> void:
 	var in_tree_during_call := [true]
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		var level := level_builder.packed.instantiate()
-		in_tree_during_call[0] = level.is_inside_tree()
-		return level
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			var level := level_builder.packed.instantiate()
+			in_tree_during_call[0] = level.is_inside_tree()
+			return level
 	)
 
 	server_mgr.spawn(level_builder.resource_path)
@@ -77,8 +79,9 @@ func test_level_not_in_tree_when_spawn_function_called() -> void:
 
 
 func test_custom_spawn_scene_enters_active_scenes() -> void:
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			return level_builder.packed.instantiate()
 	)
 
 	server_mgr.spawn(level_builder.resource_path)
@@ -87,8 +90,9 @@ func test_custom_spawn_scene_enters_active_scenes() -> void:
 
 
 func test_two_custom_spawns_register_independently() -> void:
-	_set_spawn_fn(func(data: Variant) -> Node:
-		return level_builder.packed.instantiate() if data == "level1" \
+	_set_spawn_fn(
+		func(data: Variant) -> Node:
+			return level_builder.packed.instantiate() if data == "level1" \
 			else level_2_builder.packed.instantiate()
 	)
 
@@ -101,23 +105,25 @@ func test_two_custom_spawns_register_independently() -> void:
 
 func test_activate_scene_uses_scene_spawn_data() -> void:
 	var received = [null]
-	_set_spawn_fn(func(data: Variant) -> Node:
-		received[0] = data
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(data: Variant) -> Node:
+			received[0] = data
+			return level_builder.packed.instantiate()
 	)
-	server_mgr.scene_spawn_data[level_builder.scene_name] = {"round": 3}
+	server_mgr.scene_spawn_data[level_builder.scene_name] = { "round": 3 }
 
 	server_mgr.activate_scene(level_builder.scene_name)
 
-	assert_that(received[0]).is_equal({"round": 3})
+	assert_that(received[0]).is_equal({ "round": 3 })
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 	var received = [null]
-	_set_spawn_fn(func(data: Variant) -> Node:
-		received[0] = data
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(data: Variant) -> Node:
+			received[0] = data
+			return level_builder.packed.instantiate()
 	)
 
 	server_mgr.activate_scene(level_builder.scene_name)
@@ -127,8 +133,9 @@ func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 
 
 func test_activate_scene_wakes_level_after_custom_spawn() -> void:
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			return level_builder.packed.instantiate()
 	)
 	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
 
@@ -140,9 +147,10 @@ func test_activate_scene_wakes_level_after_custom_spawn() -> void:
 
 func test_activate_scene_does_not_respawn_when_already_active() -> void:
 	var call_count := [0]
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		call_count[0] += 1
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			call_count[0] += 1
+			return level_builder.packed.instantiate()
 	)
 	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
 
@@ -153,8 +161,9 @@ func test_activate_scene_does_not_respawn_when_already_active() -> void:
 
 
 func test_freeze_empty_action_applied_after_custom_spawn() -> void:
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			return level_builder.packed.instantiate()
 	)
 
 	server_mgr.spawn(level_builder.resource_path)
@@ -165,13 +174,14 @@ func test_freeze_empty_action_applied_after_custom_spawn() -> void:
 
 
 func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			return level_builder.packed.instantiate()
 	)
 	server_mgr.set_scene_lifecycle_policy(
 		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		MultiplayerSceneManager.EmptyAction.DESTROY
+		MultiplayerSceneManager.EmptyAction.DESTROY,
 	)
 
 	server_mgr.spawn(level_builder.resource_path)
@@ -182,13 +192,14 @@ func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
 
 func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn(
 ) -> void:
-	_set_spawn_fn(func(_data: Variant) -> Node:
-		return level_builder.packed.instantiate()
+	_set_spawn_fn(
+		func(_data: Variant) -> Node:
+			return level_builder.packed.instantiate()
 	)
 	server_mgr.set_scene_lifecycle_policy(
 		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE,
 	)
 
 	server_mgr.spawn(level_builder.resource_path)

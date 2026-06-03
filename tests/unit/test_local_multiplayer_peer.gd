@@ -37,13 +37,15 @@ func test_server_queues_peer_connected_on_force_connect() -> void:
 
 func test_client_starts_as_connecting() -> void:
 	assert_that(client._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTING)
+		MultiplayerPeer.CONNECTION_CONNECTING,
+	)
 
 
 func test_client_becomes_connected_after_poll() -> void:
 	client.poll()
 	assert_that(client._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_CONNECTED)
+		MultiplayerPeer.CONNECTION_CONNECTED,
+	)
 
 
 func test_packet_routed_from_client_to_server() -> void:
@@ -73,15 +75,16 @@ func test_broadcast_from_server_reaches_all_clients() -> void:
 
 
 func test_close_emits_peer_disconnected_on_server() -> void:
-	client.poll()  # finalize connection first
+	client.poll() # finalize connection first
 
 	var disconnected_ids: Array[int] = []
 	server.peer_disconnected.connect(
-		func(id: int) -> void: disconnected_ids.append(id))
+		func(id: int) -> void: disconnected_ids.append(id)
+	)
 
-	client.close()  # notifies server synchronously via _remote_closed
-	client.poll()   # finalizes client close state
-	server.poll()   # drains queue -> emits peer_disconnected(42)
+	client.close() # notifies server synchronously via _remote_closed
+	client.poll() # finalizes client close state
+	server.poll() # drains queue -> emits peer_disconnected(42)
 
 	assert_that(disconnected_ids).contains([42])
 
@@ -94,4 +97,5 @@ func test_server_disconnect_peer_unlinks_client() -> void:
 	assert_that(server.linked_peers.has(42)).is_false()
 	assert_that(client.linked_peers.has(1)).is_false()
 	assert_that(client._get_connection_status()).is_equal(
-		MultiplayerPeer.CONNECTION_DISCONNECTED)
+		MultiplayerPeer.CONNECTION_DISCONNECTED,
+	)

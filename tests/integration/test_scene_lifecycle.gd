@@ -2,7 +2,6 @@
 class_name TestLobbyLifecycle
 extends NetwTestSuite
 
-
 var harness: NetwTestHarness
 var server_mgr: MultiplayerSceneManager
 var level_builder: LevelBuilder
@@ -11,15 +10,15 @@ var level_2_builder: LevelBuilder
 
 func before_test() -> void:
 	level_builder = LevelBuilder.new("TestLevel") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_builder.pack()
-	
+
 	level_2_builder = LevelBuilder.new("TestLevel2") \
-		.with_root(Node2D) \
-		.with_multiplayer_spawner()
+			.with_root(Node2D) \
+			.with_multiplayer_spawner()
 	level_2_builder.pack()
-	
+
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
@@ -45,7 +44,7 @@ func test_on_demand_scene_skipped_at_startup() -> void:
 	h2.set_scene_policy(
 		level_2_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		MultiplayerSceneManager.EmptyAction.FREEZE
+		MultiplayerSceneManager.EmptyAction.FREEZE,
 	)
 	h2.register_spawnable_scene(level_builder.packed)
 	h2.register_spawnable_scene(level_2_builder.packed)
@@ -182,7 +181,7 @@ func test_destroy_empty_action_removes_scene_on_despawn() -> void:
 	server_mgr.set_scene_lifecycle_policy(
 		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_STARTUP,
-		MultiplayerSceneManager.EmptyAction.DESTROY
+		MultiplayerSceneManager.EmptyAction.DESTROY,
 	)
 	@warning_ignore("redundant_await")
 	await server_mgr.activate_scene(level_builder.scene_name)
@@ -192,8 +191,9 @@ func test_destroy_empty_action_removes_scene_on_despawn() -> void:
 	var player := _join_player()
 	player.queue_free()
 	await wait_until(
-		func(): return not server_mgr.active_scenes.has(level_builder.scene_name) \
-			and not is_instance_valid(scene_ref.get_ref())
+		func():
+			return not server_mgr.active_scenes.has(level_builder.scene_name) \
+					and not is_instance_valid(scene_ref.get_ref())
 	)
 
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
@@ -204,7 +204,7 @@ func test_keep_active_empty_action_leaves_level_processing() -> void:
 	server_mgr.set_scene_lifecycle_policy(
 		level_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_STARTUP,
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE
+		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE,
 	)
 	@warning_ignore("redundant_await")
 	await server_mgr.activate_scene(level_builder.scene_name)
@@ -239,9 +239,9 @@ func _join_player() -> Node:
 
 
 func _add_scene_player(
-	scene: MultiplayerScene,
-	peer_id: int,
-	username: StringName,
+		scene: MultiplayerScene,
+		peer_id: int,
+		username: StringName,
 ) -> Node:
 	var player := Node2D.new()
 	NetwEntity.bundle(player, peer_id, username)

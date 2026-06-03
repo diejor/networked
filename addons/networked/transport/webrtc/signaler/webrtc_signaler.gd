@@ -20,10 +20,10 @@ extends RefCounted
 ## Emitted with inbound SDP or ICE. [param kind] is [code]"offer"[/code],
 ## [code]"answer"[/code], or [code]"candidate"[/code].
 signal received(
-	from_multiplayer_id: int,
-	from_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		from_multiplayer_id: int,
+		from_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 )
 ## Emitted when at least one signaling route becomes usable.
 signal ready
@@ -54,10 +54,10 @@ func close() -> void
 ## discovery-capable signaler treats as room-directed.
 @abstract
 func send(
-	to_multiplayer_id: int,
-	to_signaler_id: String,
-	kind: String,
-	payload: Dictionary,
+		to_multiplayer_id: int,
+		to_signaler_id: String,
+		kind: String,
+		payload: Dictionary,
 ) -> void
 
 

@@ -56,7 +56,8 @@ class _PropertyContribution extends RefCounted:
 	var mode: SceneReplicationConfig.ReplicationMode
 	var spawn: bool
 	var watch: bool
-	
+
+
 	func _init(
 			p_source: Node,
 			p_virtual_name: StringName,
@@ -72,16 +73,18 @@ class _PropertyContribution extends RefCounted:
 		spawn = p_spawn
 		watch = p_watch
 
+
 	func matches(
 			p_virtual_name: StringName,
 			p_source: Node,
 			p_property: StringName,
 	) -> bool:
 		return (
-			virtual_name == p_virtual_name
-			and source == p_source
-			and property == p_property
+				virtual_name == p_virtual_name
+				and source == p_source
+				and property == p_property
 		)
+
 
 	func register_with(proxy: ProxySynchronizer) -> void:
 		proxy.register_node_property(
@@ -90,9 +93,8 @@ class _PropertyContribution extends RefCounted:
 			property,
 			mode,
 			spawn,
-			watch
+			watch,
 		)
-
 
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
@@ -142,7 +144,8 @@ var peer_id := 0
 
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
-	get: return Ownership.PEER if peer_id != 0 else Ownership.SERVER
+	get:
+		return Ownership.PEER if peer_id != 0 else Ownership.SERVER
 
 ## [code]true[/code] when this entity represents a joined player rather than a
 ## server-owned entity. The canonical player test across the addon. Equivalent
@@ -155,7 +158,8 @@ var ownership: Ownership:
 ##     eliminate_player(entity.peer_id)
 ## [/codeblock]
 var is_player: bool:
-	get: return peer_id != 0
+	get:
+		return peer_id != 0
 
 ## Returns [member SpawnerComponent.is_template] for this entity's
 ## registered spawner.
@@ -277,11 +281,13 @@ static func _find_root(node: Node) -> Node:
 			return n
 	if n != node:
 		Netw.dbg.trace(
-				("NetwEntity.of: walked from '%s' up to topmost "
-				+ "ancestor '%s' with no META and no Node.owner; "
-				+ "attaching entity to '%s'. Set Node.owner or "
-				+ "pre-attach META on the intended root to "
-				+ "disambiguate."), [node.name, n.name, n.name])
+			("NetwEntity.of: walked from '%s' up to topmost "
+					+ "ancestor '%s' with no META and no Node.owner; "
+					+ "attaching entity to '%s'. Set Node.owner or "
+					+ "pre-attach META on the intended root to "
+					+ "disambiguate."),
+			[node.name, n.name, n.name],
+		)
 	return n
 
 
@@ -376,8 +382,7 @@ func contribute_save_property(
 		source: Node,
 		virtual_name: StringName,
 		property: StringName,
-		mode: SceneReplicationConfig.ReplicationMode =
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -391,20 +396,22 @@ func contribute_save_property(
 			property,
 			mode,
 			spawn,
-			watch
+			watch,
 		)
 		contribution.register_with(save)
 		return
 	if _has_pending_save_property(virtual_name, source, property):
 		return
-	_pending_save_props.append(_PropertyContribution.new(
-		source,
-		virtual_name,
-		property,
-		mode,
-		spawn,
-		watch
-	))
+	_pending_save_props.append(
+		_PropertyContribution.new(
+			source,
+			virtual_name,
+			property,
+			mode,
+			spawn,
+			watch,
+		),
+	)
 
 
 func _has_pending_save_property(
@@ -417,10 +424,10 @@ func _has_pending_save_property(
 			return true
 	return false
 
-
 # ---------------------------------------------------------------------------
 # Synchronizer wiring
 # ---------------------------------------------------------------------------
+
 
 ## Returns synchronizers targeting this entity root.
 func synchronizers() -> Array[MultiplayerSynchronizer]:

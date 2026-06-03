@@ -64,7 +64,6 @@ signal despawned
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
-
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
 @export var entity_id: StringName = &"":
@@ -82,8 +81,6 @@ var peer_id := 0:
 		_sync_entity_identity()
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
-
-
 
 ## [code]true[/code] when [member entity_id] is empty or authority
 ## is unresolved. Templates are editor-placed factory scenes;
@@ -111,7 +108,8 @@ static func unwrap(node: Node) -> SpawnerComponent:
 ## parent.add_child(npc)
 ## [/codeblock]
 static func instantiate_from(
-	template: Node, configure: Callable = Callable()
+		template: Node,
+		configure: Callable = Callable(),
 ) -> Node:
 	var copy: Node = load(template.scene_file_path).instantiate()
 	collect_from(template, copy)
@@ -137,8 +135,8 @@ static func collect_from(template: Node, copy: Node) -> void:
 		if value != null:
 			SynchronizersCache.assign_value(copy, prop, value)
 
-
 # Lifecycle.
+
 
 func _init() -> void:
 	name = "SpawnerComponent"
@@ -150,7 +148,7 @@ func _notification(what: int) -> void:
 		return
 	if Engine.is_editor_hint():
 		return
-	
+
 	var entity := Netw.ctx(self).entity
 	if not entity or not entity.owner:
 		return
@@ -178,10 +176,10 @@ func _ready() -> void:
 		_apply_template_state()
 		return
 	if (
-		peer_id != 0
-		and not multiplayer.peer_disconnected.is_connected(
-			_on_peer_disconnected
-		)
+			peer_id != 0
+			and not multiplayer.peer_disconnected.is_connected(
+				_on_peer_disconnected,
+			)
 	):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
@@ -246,8 +244,8 @@ func _apply_authority() -> void:
 				if entity_id.is_empty():
 					return
 				var msg := (
-					"Cannot apply client authority to '%s': peer_id is 0."
-					% owner.name
+						"Cannot apply client authority to '%s': peer_id is 0."
+						% owner.name
 				)
 				_dbg.error("%s", [msg], func(m): push_error(m))
 				assert(false, msg)
@@ -255,11 +253,11 @@ func _apply_authority() -> void:
 			else:
 				_dbg.debug(
 					"Setting authority for %s to %d",
-					[owner.name, peer_id]
+					[owner.name, peer_id],
 				)
 				owner.set_multiplayer_authority(peer_id)
 				set_multiplayer_authority(
-					MultiplayerPeer.TARGET_PEER_SERVER
+					MultiplayerPeer.TARGET_PEER_SERVER,
 				)
 
 
@@ -309,13 +307,13 @@ func _apply_template_state() -> void:
 	owner.process_mode = Node.PROCESS_MODE_DISABLED
 	owner.visible = false
 	#if multiplayer and not multiplayer.is_server():
-		#_dbg.trace("Freeing template node `%s` on client.", [owner.name])
-		#owner.queue_free()
+	#_dbg.trace("Freeing template node `%s` on client.", [owner.name])
+	#owner.queue_free()
 	SynchronizersCache.sync_only_server(owner)
 	pass
 
-
 # Spawn config.
+
 
 ## Adds [param prop] to [member replication_config] as a spawn-only entry
 ## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
@@ -331,7 +329,8 @@ func add_spawn_property(prop: NodePath) -> void:
 
 # Adds [param prop] to [param cfg] as spawn-only.
 func _add_spawn_property_into(
-	cfg: SceneReplicationConfig, prop: NodePath
+		cfg: SceneReplicationConfig,
+		prop: NodePath,
 ) -> void:
 	if cfg.has_property(prop):
 		_coerce_to_spawn_only(cfg, prop)
@@ -342,10 +341,12 @@ func _add_spawn_property_into(
 
 # Forces [param prop] to spawn-only flags.
 func _coerce_to_spawn_only(
-	cfg: SceneReplicationConfig, prop: NodePath
+		cfg: SceneReplicationConfig,
+		prop: NodePath,
 ) -> void:
 	cfg.property_set_replication_mode(
-		prop, SceneReplicationConfig.REPLICATION_MODE_NEVER
+		prop,
+		SceneReplicationConfig.REPLICATION_MODE_NEVER,
 	)
 	cfg.property_set_spawn(prop, true)
 	cfg.property_set_sync(prop, false)
@@ -370,7 +371,8 @@ func _register_with_scene() -> void:
 	if not scene:
 		_dbg.debug(
 			"No enclosing MultiplayerScene for '%s'; skipping "
-			+ "scene track.", [owner.name]
+			+ "scene track.",
+			[owner.name],
 		)
 		return
 	if peer_id != 0:
@@ -403,14 +405,14 @@ func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 		return
 	_dbg.info(
 		"Peer %d disconnected. Despawning represented entity %s.",
-		[disconnected_peer_id, owner.name]
+		[disconnected_peer_id, owner.name],
 	)
 	var opts := DespawnOpts.new()
 	opts.reason = &"peer_disconnected"
 	despawn(opts)
 
-
 # Public spawn/despawn API.
+
 
 ## Spawns a copy of [member Node.owner]'s scene under
 ## [param parent] (defaults to owner's parent).
@@ -427,11 +429,13 @@ func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	assert(
 		not multiplayer or multiplayer.is_server(),
-		"spawn_under is server-only"
+		"spawn_under is server-only",
 	)
-	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
-		if not id.is_empty():
-			NetwEntity.bundle(c.owner, 0, id)
+	var copy := instantiate_from(
+		owner,
+		func(c: SpawnerComponent) -> void:
+			if not id.is_empty():
+				NetwEntity.bundle(c.owner, 0, id)
 	)
 	var p := parent if parent else owner.get_parent()
 	p.add_child(copy)
@@ -442,8 +446,10 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 ## [br][br][b]Server Only.[/b]
 func instantiate_player(rj: ResolvedJoin) -> Node:
 	assert(multiplayer.is_server())
-	var copy := instantiate_from(owner, func(c: SpawnerComponent) -> void:
-		NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
+	var copy := instantiate_from(
+		owner,
+		func(c: SpawnerComponent) -> void:
+			NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
 	)
 	return copy
 
@@ -480,11 +486,11 @@ func despawn(opts: DespawnOpts = null) -> void:
 		if save:
 			save.flush()
 	if (
-		owner.get_multiplayer_authority()
-		!= MultiplayerPeer.TARGET_PEER_SERVER
+			owner.get_multiplayer_authority()
+			!= MultiplayerPeer.TARGET_PEER_SERVER
 	):
 		owner.set_multiplayer_authority(
-			MultiplayerPeer.TARGET_PEER_SERVER
+			MultiplayerPeer.TARGET_PEER_SERVER,
 		)
 	if opts.defer_free:
 		owner.queue_free.call_deferred()

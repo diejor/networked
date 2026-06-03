@@ -9,16 +9,17 @@
 class_name DummyAuthProvider
 extends NetwAuthProvider
 
-
 func prepare(payload: JoinPayload) -> Error:
 	return OK
 
 
 func get_credentials(payload: JoinPayload) -> PackedByteArray:
-	return var_to_bytes({
-		"service": "dummy",
-		"username": payload.username,
-	})
+	return var_to_bytes(
+		{
+			"service": "dummy",
+			"username": payload.username,
+		},
+	)
 
 
 func authenticate(peer_id: int, data: PackedByteArray) -> NetwIdentity:

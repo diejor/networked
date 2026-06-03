@@ -7,9 +7,7 @@
 class_name ServerList
 extends Resource
 
-
 const DEFAULT_PATH := "user://servers.tres"
-
 
 ## The saved targets, in display order.
 @export var targets: Array[JoinTarget] = []
@@ -37,7 +35,7 @@ static func save(list: ServerList, path: String = DEFAULT_PATH) -> Error:
 		if err != OK:
 			Netw.dbg.error(
 				"ServerList: failed to create parent directory %s: %s.",
-				[base_dir, error_string(err)]
+				[base_dir, error_string(err)],
 			)
 			return err
 	return ResourceSaver.save(list, path)

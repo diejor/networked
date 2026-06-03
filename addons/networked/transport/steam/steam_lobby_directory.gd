@@ -9,20 +9,18 @@
 class_name SteamLobbyDirectory
 extends LobbyDirectory
 
-
 const STEAM_APP_ID_SETTING := "steam/initialization/app_id"
 const SPACEWAR_APP_ID := 480
 
 static var _instance: WeakRef = weakref(null)
 
-
 ## Maximum number of simultaneous lobby members.
 @export_range(1, 250, 1, "or_greater", "suffix:players") \
-var max_clients: int = 8
+		var max_clients: int = 8
 
 ## Default visibility used by [method host_lobby].
 @export var default_lobby_type: SteamWrapper.LobbyType = \
-	SteamWrapper.LobbyType.PUBLIC
+		SteamWrapper.LobbyType.PUBLIC
 
 ## Tag stored under the [code]uid[/code] lobby key. Browser filters on this so
 ## different games don't pollute each other's lobby lists.
@@ -44,7 +42,6 @@ var max_clients: int = 8
 ## through one account reliably.
 @export var reject_own_lobbies: bool = true
 
-
 var _wrapper: SteamWrapper
 var _lobby_id: int = 0
 var _peer: MultiplayerPeer
@@ -65,7 +62,7 @@ func _enter_tree() -> void:
 	if existing and existing != self:
 		push_error(
 			"SteamLobbyDirectory: only one instance is allowed. " +
-			"Queueing duplicate for deletion."
+			"Queueing duplicate for deletion.",
 		)
 		queue_free()
 		return
@@ -75,10 +72,10 @@ func _enter_tree() -> void:
 	if not _wrapper.is_available():
 		_init_ok = false
 		Netw.dbg.warn(
-			"SteamLobbyDirectory: GodotSteam singleton not found."
+			"SteamLobbyDirectory: GodotSteam singleton not found.",
 		)
 		provider_unavailable.emit.call_deferred(
-			"GodotSteam singleton not found"
+			"GodotSteam singleton not found",
 		)
 		return
 
@@ -89,23 +86,29 @@ func _enter_tree() -> void:
 			var reason := _steam_app_id_required_message()
 			assert(false, "SteamLobbyDirectory: %s" % reason)
 			_init_ok = false
-			Netw.dbg.error("SteamLobbyDirectory: %s", [reason],
-				func(m): push_error(m))
+			Netw.dbg.error(
+				"SteamLobbyDirectory: %s",
+				[reason],
+				func(m): push_error(m)
+			)
 			provider_unavailable.emit.call_deferred(reason)
 			return
 
 	var init_res: Dictionary = _wrapper.steam_init_ex()
 	var status: int = init_res.get(
 		"status",
-		SteamWrapper.InitResult.FAILED_GENERIC
+		SteamWrapper.InitResult.FAILED_GENERIC,
 	)
 	_init_ok = status == SteamWrapper.InitResult.OK
 	if not _init_ok:
 		var reason := "Steam init failed (status %d)" % status
 		if status == SteamWrapper.InitResult.NO_STEAM_CLIENT:
 			reason += ": no Steam client running"
-		Netw.dbg.error("SteamLobbyDirectory: %s", [reason],
-			func(m): push_error(m))
+		Netw.dbg.error(
+			"SteamLobbyDirectory: %s",
+			[reason],
+			func(m): push_error(m)
+		)
 		provider_unavailable.emit.call_deferred(reason)
 		return
 
@@ -141,7 +144,6 @@ func _exit_tree() -> void:
 
 	NetwServices.unregister(self)
 	NetwServices.unregister(self, LobbyDirectory)
-
 
 
 func _process(_dt: float) -> void:
@@ -187,10 +189,12 @@ func list_lobbies() -> void:
 	_pending_list = true
 	if not browser_filter_uid.is_empty():
 		_wrapper.add_request_lobby_list_string_filter(
-			"uid", browser_filter_uid, SteamWrapper.LobbyComparison.EQUAL
+			"uid",
+			browser_filter_uid,
+			SteamWrapper.LobbyComparison.EQUAL,
 		)
 	_wrapper.add_request_lobby_list_distance_filter(
-		SteamWrapper.LobbyDistance.WORLDWIDE
+		SteamWrapper.LobbyDistance.WORLDWIDE,
 	)
 	_wrapper.request_lobby_list()
 
@@ -220,7 +224,7 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 	if _lobby_id != 0:
 		Netw.dbg.warn(
 			"SteamLobbyDirectory: host_lobby called while in lobby %d",
-			[_lobby_id]
+			[_lobby_id],
 		)
 		return null
 	_pending_create_name = server_name
@@ -240,20 +244,20 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	if lobby_id <= 0:
 		Netw.dbg.warn(
 			"SteamLobbyDirectory: join_lobby_peer invalid ID %d",
-			[lobby_id]
+			[lobby_id],
 		)
 		return null
 	if reject_own_lobbies and _is_own_lobby(lobby_id):
 		Netw.dbg.warn(
 			"SteamLobbyDirectory: refusing to join own lobby %d.",
-			[lobby_id]
+			[lobby_id],
 		)
 		return null
 	if _pending_join_lobby_id != 0:
 		Netw.dbg.debug(
 			"SteamLobbyDirectory: ignoring join_lobby_peer(%d); " +
 			"join_lobby_peer(%d) is still pending.",
-			[lobby_id, _pending_join_lobby_id]
+			[lobby_id, _pending_join_lobby_id],
 		)
 		return null
 	if _lobby_id != 0:
@@ -294,7 +298,7 @@ func _guard_ready(op: String) -> bool:
 	if not _init_ok:
 		Netw.dbg.warn(
 			"SteamLobbyDirectory: %s called while Steam is unavailable.",
-			[op]
+			[op],
 		)
 		return false
 	return true
@@ -313,25 +317,28 @@ func _has_steam_app_id() -> bool:
 func _apply_spacewar_fallback() -> void:
 	ProjectSettings.set_setting(STEAM_APP_ID_SETTING, SPACEWAR_APP_ID)
 	var reason := _steam_app_id_fallback_message()
-	Netw.dbg.warn("SteamLobbyDirectory: %s", [reason],
-		func(m): push_warning(m))
+	Netw.dbg.warn(
+		"SteamLobbyDirectory: %s",
+		[reason],
+		func(m): push_warning(m)
+	)
 
 
 # Returns the actionable Steam app id setup hint.
 func _steam_app_id_required_message() -> String:
 	return (
-		"Project setting `%s` must not be empty or 0. Set it to " +
-		"your Steam app id, or use 480 for Spacewar while testing " +
-		"before you have one."
+			"Project setting `%s` must not be empty or 0. Set it to " +
+			"your Steam app id, or use 480 for Spacewar while testing " +
+			"before you have one."
 	) % STEAM_APP_ID_SETTING
 
 
 # Returns the opt-in Spacewar fallback warning.
 func _steam_app_id_fallback_message() -> String:
 	return (
-		"Project setting `%s` is empty or 0. Using 480 (Spacewar) " +
-		"because `allow_spacewar_fallback` is enabled. Set this " +
-		"project setting to your Steam app id before publishing."
+			"Project setting `%s` is empty or 0. Using 480 (Spacewar) " +
+			"because `allow_spacewar_fallback` is enabled. Set this " +
+			"project setting to your Steam app id before publishing."
 	) % STEAM_APP_ID_SETTING
 
 
@@ -366,7 +373,7 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 	if err != OK:
 		Netw.dbg.error(
 			"SteamLobbyDirectory: host_with_lobby failed: %s",
-			[error_string(err)]
+			[error_string(err)],
 		)
 		_lobby_created_internal.emit(null)
 		return
@@ -377,7 +384,10 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 
 
 func _on_lobby_joined(
-	lobby_id: int, _permissions: int, _locked: bool, response: int
+		lobby_id: int,
+		_permissions: int,
+		_locked: bool,
+		response: int,
 ) -> void:
 	if response != 1:
 		var reason := SteamWrapper.chat_room_enter_response_to_string(response)
@@ -403,7 +413,7 @@ func _on_lobby_joined(
 	if err != OK:
 		Netw.dbg.error(
 			"SteamLobbyDirectory: connect_to_lobby failed: %s",
-			[error_string(err)]
+			[error_string(err)],
 		)
 		_pending_join_lobby_id = 0
 		_lobby_id = 0
@@ -442,7 +452,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				"host": _wrapper.get_lobby_data(id, "host"),
 				"uid": _wrapper.get_lobby_data(id, "uid"),
 				"app_id": _wrapper.get_lobby_data(id, "app_id"),
-			}
+			},
 		)
 		out.append(info)
 	lobby_list_updated.emit(out)
@@ -456,7 +466,7 @@ func _build_peer() -> MultiplayerPeer:
 	var peer := _wrapper.create_peer()
 	if peer == null:
 		Netw.dbg.error(
-			"SteamLobbyDirectory: SteamMultiplayerPeer class not available."
+			"SteamLobbyDirectory: SteamMultiplayerPeer class not available.",
 		)
 		return null
 	_wrapper.configure_peer(peer, not disable_nagle, allow_p2p_relay)

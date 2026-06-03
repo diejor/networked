@@ -2,12 +2,9 @@
 class_name JoinPopup
 extends PopupPanel
 
-
 signal submitted(payload: JoinPayload)
 
-
 var _spawner_options: Array[SceneNodePath] = []
-
 
 @onready var _username_edit: LineEdit = %UsernameEdit
 @onready var _spawner_row: HBoxContainer = %SpawnerRow
@@ -23,8 +20,8 @@ func _ready() -> void:
 
 ## Opens the join popup.
 func open_join(
-	spawner_options: Array[SceneNodePath],
-	default_username: String,
+		spawner_options: Array[SceneNodePath],
+		default_username: String,
 ) -> void:
 	_spawner_options = spawner_options.duplicate()
 	_username_edit.text = default_username

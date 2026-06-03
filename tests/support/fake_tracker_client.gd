@@ -55,7 +55,7 @@ func sdp_announces(slot: String) -> Array[Dictionary]:
 			var offers: Array = data.get("offers", [])
 			for entry: Variant in offers:
 				if typeof(entry) == TYPE_DICTIONARY \
-						and (entry as Dictionary).get("offer", {}).get("type") == "offer":
+						and (entry as Dictionary).get("offer", { }).get("type") == "offer":
 					out.append(data)
 					break
 		elif data.has("answer") \

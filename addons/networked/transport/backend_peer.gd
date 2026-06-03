@@ -20,12 +20,9 @@
 class_name BackendPeer
 extends Resource
 
-
-
 const _MSEC_TO_SEC := 0.001
 const _PERCENT_TO_RATIO := 0.01
 const _LEGACY_SECONDS_MAX := 1.0
-
 
 @export_group("Lag Simulation")
 ## Enables [LaggyMultiplayerPeer] wrapping in [method wrap_peer].
@@ -52,16 +49,28 @@ const _LEGACY_SECONDS_MAX := 1.0
 @export var simulate_lag: bool = false
 ## Minimum simulated one way packet delay in milliseconds.
 @export_range(
-	0.0, 250.0, 1.0, "suffix:ms"
-) var one_way_delay_min: float = 10.0
+	0.0,
+	250.0,
+	1.0,
+	"suffix:ms",
+)
+var one_way_delay_min: float = 10.0
 ## Maximum simulated one way packet delay in milliseconds.
 @export_range(
-	0.0, 250.0, 1.0, "suffix:ms"
-) var one_way_delay_max: float = 100.0
+	0.0,
+	250.0,
+	1.0,
+	"suffix:ms",
+)
+var one_way_delay_max: float = 100.0
 ## Simulated packet loss percentage.
 @export_range(
-	0.0, 25.0, 0.1, "suffix:%"
-) var lag_packet_loss_percent: float = 0.0
+	0.0,
+	25.0,
+	0.1,
+	"suffix:%",
+)
+var lag_packet_loss_percent: float = 0.0
 
 
 ## Wraps [param base_peer] with [LaggyMultiplayerPeer] when enabled.
@@ -72,18 +81,18 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 		return null
 	if not simulate_lag:
 		return base_peer
-	
+
 	if not ClassDB.class_exists(&"LaggyMultiplayerPeer"):
 		Netw.dbg.warn(
 			"Lag simulation is enabled but LaggyMultiplayerPeer is missing.",
 			func(m): push_warning(m)
 		)
 		return base_peer
-	
+
 	var min_delay_ms := maxf(0.0, one_way_delay_min)
 	var max_delay_ms := maxf(min_delay_ms, one_way_delay_max)
 	var packet_loss_percent := clampf(lag_packet_loss_percent, 0.0, 100.0)
-	
+
 	Netw.dbg.info(
 		"Wrapping peer in LaggyMultiplayerPeer "
 		+ "(delay: %.1f-%.1f ms, packet loss: %d%%)",
@@ -91,9 +100,9 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 			min_delay_ms,
 			max_delay_ms,
 			int(packet_loss_percent),
-		]
+		],
 	)
-	
+
 	var laggy_instance: Object = ClassDB.instantiate(&"LaggyMultiplayerPeer")
 	var wrapped_peer: MultiplayerPeer = laggy_instance.call(&"create", base_peer)
 	if wrapped_peer:
@@ -101,10 +110,10 @@ func wrap_peer(base_peer: MultiplayerPeer) -> MultiplayerPeer:
 		wrapped_peer.set(&"delay_maximum", max_delay_ms * _MSEC_TO_SEC)
 		wrapped_peer.set(
 			&"packet_loss",
-			packet_loss_percent * _PERCENT_TO_RATIO
+			packet_loss_percent * _PERCENT_TO_RATIO,
 		)
 		return wrapped_peer
-	
+
 	return base_peer
 
 
@@ -150,8 +159,11 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer
 ## May [code]await[/code]. Return [code]null[/code] to signal failure.
 @abstract
 func create_join_peer(
-	_tree: MultiplayerTree, _address: String, _username: String = ""
+		_tree: MultiplayerTree,
+		_address: String,
+		_username: String = "",
 ) -> MultiplayerPeer
+
 
 ## Polls backend state outside [member MultiplayerTree.api].
 ##
@@ -193,7 +205,8 @@ func supports_embedded_server() -> bool:
 ## return ServerInfoResult.unsupported()
 ## [/codeblock]
 func query_server_info(
-	_address: String, _timeout: float = 2.0,
+		_address: String,
+		_timeout: float = 2.0,
 ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
