@@ -72,8 +72,37 @@ jobs:
         run: |
           mkdir -v -p build/web
           EXPORT_DIR="$(readlink -f build)"
+
+          # Godot 4.6 segfaults during editor teardown on this headless export
+          # (signal 11 / CRASH_BAD_INDEX in cowdata.h, right after
+          # "[ DONE ] savepack"). It is an engine-side teardown bug in
+          # GDExtensionManager / SceneTree cleanup, not our code
+          # (godotengine/godot#99284, #81030). The artifacts are fully written
+          # before the crash, so we tolerate a non-zero exit ONLY when the export
+          # provably completed: the "[ DONE ] savepack" marker is present AND the
+          # output files exist and are non-empty. Anything that fails earlier (a
+          # script parse error, a missing template, an unresolved class) dies
+          # before savepack, fails both checks, and correctly fails the job.
+          #
+          # No `set -o pipefail`: the step runs under `bash -e`, and pipefail
+          # would let the failing `godot | tee` pipe abort the step before the
+          # check below. Without it the pipe exits via tee (0), and PIPESTATUS[0]
+          # still carries Godot's real exit code.
           godot --headless --verbose --export-release \
-            "Web" "$EXPORT_DIR/web/index.html"
+            "Web" "$EXPORT_DIR/web/index.html" 2>&1 | tee export.log
+          status=${PIPESTATUS[0]}
+
+          if [ "$status" -ne 0 ]; then
+            if grep -q '\[ DONE \] savepack' export.log \
+                && [ -s build/web/index.wasm ] && [ -s build/web/index.pck ]; then
+              echo "::warning::Godot exited $status (known teardown crash," \
+                   "godot#99284/#81030) but the Web export completed; proceeding."
+            else
+              echo "::error::Web export failed before completion (exit $status)."
+              exit "$status"
+            fi
+          fi
+          ls -l build/web
 
       - name: Publish to itch.io
         uses: yeslayla/butler-publish-itchio-action@master
