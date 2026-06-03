@@ -4,6 +4,9 @@
 /reports
 *.tmp
 
+# Export outputs (CI exports the itch.io web demo here; see itch-demo.yml)
+/build/
+
 addons/gdUnit4/GdUnitRunner.cfg
 
 tmp

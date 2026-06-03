@@ -2,6 +2,7 @@
 
 [![Documentation Status](https://readthedocs.org/projects/networked/badge/?version=latest)](https://networked.readthedocs.io/en/latest/?badge=latest)
 [![CI](https://github.com/diejor/networked/actions/workflows/ci.yml/badge.svg)](https://github.com/diejor/networked/actions/workflows/ci.yml)
+[![Play the demo](https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white)](https://diejor.itch.io/bomber)
 
 **A proof-of-concept multiplayer framework for Godot 4.**
 
@@ -13,6 +14,16 @@ dropping sync.
 
 This is not a battle-tested AAA solution. It is one developer's experiment, 
 shared in the hope that it helps someone else get started with multiplayer.
+
+## Try It in Your Browser
+
+The [`examples/bomber`](examples/bomber) game runs live at 
+**[diejor.itch.io/bomber](https://diejor.itch.io/bomber)**. It is a modified
+version of Godot's [`multiplayer_bomber`][godot-bomber] demo, rebuilt with the
+`networked` addon and a WebRTC WebTorrent lobby system. You can host and play
+with other people completely P2P, with no game server to run.
+
+[godot-bomber]: https://github.com/godotengine/godot-demo-projects/tree/3.5-9e68af3/networking/multiplayer_bomber
 
 ## What It Does
 
