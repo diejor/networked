@@ -16,12 +16,14 @@ func _recognize(resource: Resource) -> bool:
 
 
 func _get_recognized_extensions(resource: Resource) -> PackedStringArray:
-	assert(resource is DictionaryEntity)
+	if resource != null and not resource is DictionaryEntity:
+		return PackedStringArray()
 	return PackedStringArray([TEXT_EXT, BIN_EXT])
 
 
 func _recognize_path(resource: Resource, path: String) -> bool:
-	assert(resource is DictionaryEntity)
+	if resource != null and not resource is DictionaryEntity:
+		return false
 	var ext := path.get_extension().to_lower()
 	return ext == TEXT_EXT or ext == BIN_EXT
 
