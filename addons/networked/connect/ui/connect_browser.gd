@@ -239,6 +239,16 @@ func _unbind_session_signals() -> void:
 		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
 
 
+# Templates whose backend can run on this platform. Host and join offer only
+# transports that can actually connect from here.
+func _available_templates() -> Array[BackendPeer]:
+	var out: Array[BackendPeer] = []
+	for backend in backend_templates:
+		if backend != null and backend.is_available():
+			out.append(backend)
+	return out
+
+
 func _rebuild_from_session() -> void:
 	for child in _list_box.get_children():
 		child.queue_free()
@@ -323,12 +333,14 @@ func _update_details() -> void:
 	var t := _selected_row.target
 	var r := _selected_row.result
 	var is_saved := _connect.get_saved_targets().has(t)
+	var unavailable := t.backend != null and not t.backend.is_available()
 
 	# Update the Header elements
 	_details_header.visible = true
 	_details_footer.visible = true
 	_details_edit_button.disabled = not is_saved
 	_details_remove_button.disabled = not is_saved
+	_details_join_button.disabled = unavailable
 	_details_name_label.text = _selected_row._display_name()
 
 	var backend_label := "unknown"
@@ -337,14 +349,20 @@ func _update_details() -> void:
 	_details_badge_label.text = backend_label
 
 	# Update Details Status Dot
-	_details_status_dot.bind_result(r)
+	if unavailable:
+		_details_status_dot.bind_unavailable()
+	else:
+		_details_status_dot.bind_result(r)
 
 	# Populate Flow Details
 	_details_container.add_child(
 		_create_detail_item("Address", ConnectUiShared.format_address(t)),
 	)
 	_details_container.add_child(
-		_create_detail_item("Status", _status_text(r)),
+		_create_detail_item(
+			"Status",
+			"Unavailable" if unavailable else _status_text(r),
+		),
 	)
 	_details_container.add_child(
 		_create_detail_item(
@@ -400,13 +418,13 @@ func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 
 
 func _on_add_pressed() -> void:
-	_add_popup.set_templates(backend_templates)
+	_add_popup.set_templates(_available_templates())
 	_add_popup.open_add()
 
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		backend_templates,
+		_available_templates(),
 		spawner_options,
 		_last_username,
 	)
@@ -421,7 +439,7 @@ func _on_host_pressed() -> void:
 	if _connect == null:
 		return
 	_host_popup.open_host(
-		backend_templates,
+		_available_templates(),
 		spawner_options,
 		_last_username,
 	)
@@ -441,7 +459,7 @@ func _open_edit_for_selected() -> void:
 	)
 	if not is_saved:
 		return
-	_add_popup.set_templates(backend_templates)
+	_add_popup.set_templates(_available_templates())
 	_add_popup.open_edit(_selected_row.target)
 
 
@@ -549,6 +567,9 @@ func _join_with_preflight(
 	_hide_banner()
 	_last_join_payload = payload
 	_last_username = String(payload.username)
+	if target.backend != null and not target.backend.is_available():
+		_show_banner("This transport is not available on this platform.")
+		return
 	var result := _connect.get_result(target)
 	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
 		_show_banner(

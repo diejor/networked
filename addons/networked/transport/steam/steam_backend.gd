@@ -64,6 +64,11 @@ func supports_embedded_server() -> bool:
 	return false
 
 
+## Implements [method BackendPeer.is_available]. Steam has no web export.
+func is_available() -> bool:
+	return not OS.has_feature("web")
+
+
 ## Keeps [method BackendPeer.query_server_info] unsupported for saved targets.
 ##
 ## Steam lobby browser rows carry [ServerInfo] from

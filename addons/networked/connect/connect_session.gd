@@ -339,6 +339,12 @@ func refresh() -> void:
 	if _probes:
 		_probes.cancel_all()
 	for target in _saved_targets:
+		if not _is_target_available(target):
+			Netw.dbg.trace(
+				"ConnectSession skipping unavailable target %s.",
+				[_target_summary(target)],
+			)
+			continue
 		Netw.dbg.trace(
 			"ConnectSession probing saved target %s.",
 			[_target_summary(target)],
@@ -360,6 +366,12 @@ func probe(target: JoinTarget) -> void:
 	_ensure_internals()
 	if target == null:
 		Netw.dbg.warn("ConnectSession probe ignored null target.")
+		return
+	if not _is_target_available(target):
+		Netw.dbg.debug(
+			"ConnectSession probe skipped, unavailable target %s.",
+			[_target_summary(target)],
+		)
 		return
 	Netw.dbg.debug(
 		"ConnectSession probing target %s.",
@@ -553,6 +565,11 @@ func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 		[_target_summary(target), str(result)],
 	)
 	target_updated.emit(target, result)
+
+
+# A target a probe should poke: it has a backend that can run on this platform.
+func _is_target_available(target: JoinTarget) -> bool:
+	return target.backend == null or target.backend.is_available()
 
 
 # The bound tree's build tag, or "" when no tree or the gate is off.

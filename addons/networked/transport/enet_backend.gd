@@ -79,6 +79,11 @@ func get_address_hint() -> AddressHint:
 	)
 
 
+## Implements [method BackendPeer.is_available]. ENet has no web export.
+func is_available() -> bool:
+	return not OS.has_feature("web")
+
+
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "ENet"

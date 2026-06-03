@@ -192,6 +192,24 @@ func supports_embedded_server() -> bool:
 	return true
 
 
+## Returns [code]true[/code] when this backend can run on the current platform
+## and build.
+##
+## Availability is a separate axis from [method query_server_info]. A backend
+## that returns [method ServerInfoResult.unsupported] connects fine. It just
+## reports status through a directory instead of a probe. A backend that returns
+## [code]false[/code] here cannot connect at all, so the browser hides it from
+## host and join flows. Self-contained transports answer with a platform feature
+## check. Directory mediated transports leave availability to the directory
+## through [signal LobbyDirectory.provider_unavailable].
+## [codeblock]
+## func is_available() -> bool:
+##     return not OS.has_feature("web")
+## [/codeblock]
+func is_available() -> bool:
+	return true
+
+
 ## Looks up [ServerInfo] for [param _address] without joining the server.
 ##
 ## The default result is [method ServerInfoResult.unsupported]. Backends with a

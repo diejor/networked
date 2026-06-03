@@ -94,7 +94,16 @@ func _refresh() -> void:
 		backend_label = ConnectUiShared.format_backend_label(target.backend)
 	_badge_label.text = backend_label
 
+	if target.backend != null and not target.backend.is_available():
+		_render_unavailable()
+		return
 	_render_metrics()
+
+
+func _render_unavailable() -> void:
+	_players_label.text = "-"
+	_ping_label.text = "-"
+	_status_dot.bind_unavailable()
 
 
 func _render_metrics() -> void:

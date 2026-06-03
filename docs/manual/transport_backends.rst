@@ -199,3 +199,8 @@ ones you need:
   rides the ``NPRB`` auth handshake on the same port (see
   :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
   discover through their own mechanisms and stay unsupported.
+- :ref:`is_available() <class_BackendPeer_method_is_available>`: the default
+  returns ``true``. Override it when the transport cannot run on every platform
+  so the browser hides it where it would fail. ENet and Steam have no web
+  export and return ``not OS.has_feature("web")`` (see
+  :doc:`pre_game_connection`). This is the platform gate, distinct from probing.

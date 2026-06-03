@@ -6,6 +6,26 @@
 class_name TestConnectSession
 extends NetwTestSuite
 
+class _UnavailableBackend:
+	extends BackendPeer
+
+
+	func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+		return null
+
+
+	func create_join_peer(
+			_tree: MultiplayerTree,
+			_address: String,
+			_username: String = "",
+	) -> MultiplayerPeer:
+		return null
+
+
+	func is_available() -> bool:
+		return false
+
+
 class _MockDirectory:
 	extends LobbyDirectory
 
@@ -155,6 +175,28 @@ func test_register_directory_and_refresh_dispatches_targets() -> void:
 	assert_int(session.get_discovered_targets(&"mock").size()).is_equal(1)
 
 	directory.queue_free()
+	session.queue_free()
+
+
+# A saved target whose backend cannot run here is never probed, so no
+# target_updated lands for it.
+func test_refresh_skips_unavailable_target() -> void:
+	var session := ConnectSession.new()
+	add_child(session)
+	var target := JoinTarget.new()
+	target.backend = _UnavailableBackend.new()
+	target.address = "1.2.3.4"
+	target.display_name = "Web-only-host"
+	session.add_target(target)
+
+	var updates: Array = []
+	session.target_updated.connect(func(t, _r): updates.append(t))
+
+	session.refresh()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_int(updates.size()).is_equal(0)
 	session.queue_free()
 
 

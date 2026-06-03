@@ -7,6 +7,12 @@ func test_supports_embedded_server_is_false() -> void:
 	assert_bool(backend.supports_embedded_server()).is_false()
 
 
+# Steam has no web export, so availability follows the platform web feature.
+func test_is_available_excludes_web() -> void:
+	var backend := SteamBackend.new()
+	assert_bool(backend.is_available()).is_equal(not OS.has_feature("web"))
+
+
 func test_copy_from_preserves_server_name() -> void:
 	var source := SteamBackend.new()
 	source.server_name = "Lobby A"

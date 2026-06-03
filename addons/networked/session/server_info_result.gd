@@ -4,6 +4,11 @@
 ## [ServerInfo] (on [constant Status.OK]) or a categorical failure reason.
 ## Use the static helpers — [method ok], [method unreachable], [method timeout],
 ## [method unsupported], [method busy], [method error] — to build instances.
+##
+## This describes whether a server is reachable, never whether the transport can
+## run on this platform. That platform gate is [method BackendPeer.is_available].
+## [constant Status.UNSUPPORTED] means the backend skips probing, not that it is
+## unusable here.
 class_name ServerInfoResult
 extends RefCounted
 

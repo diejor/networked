@@ -39,6 +39,16 @@ func bind_result(result: ServerInfoResult) -> void:
 			_update_status_style(Color(0.91, 0.3, 0.24))
 
 
+## Marks this dot as a transport that cannot run on the current platform.
+##
+## Availability is distinct from a probe result, so this never routes through
+## [method bind_result] or [ServerInfoResult].
+func bind_unavailable() -> void:
+	_stop_pulse_tween()
+	tooltip_text = "Not available on this platform"
+	_update_status_style(Color(0.45, 0.45, 0.5))
+
+
 func _update_status_style(color: Color) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
