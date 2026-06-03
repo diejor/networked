@@ -31,7 +31,7 @@ func _pump_until(
 # Clears the optional native SCTP reset emitted while replacing a stale peer.
 func _clear_optional_sctp_reset_error() -> void:
 	var monitor := GdUnitThreadManager.get_current_context() \
-		.get_execution_context().error_monitor
+			.get_execution_context().error_monitor
 	var entries: Array[ErrorLogEntry] = await monitor.scan(true)
 	for entry: ErrorLogEntry in entries.duplicate():
 		if entry._type != ErrorLogEntry.TYPE.SCRIPT_ERROR:
