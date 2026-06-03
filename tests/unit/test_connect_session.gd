@@ -9,7 +9,6 @@ extends NetwTestSuite
 class _UnavailableBackend:
 	extends BackendPeer
 
-
 	func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 		return null
 
