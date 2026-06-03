@@ -46,15 +46,27 @@ jobs:
           mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
              ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
 
+      - name: Install Godot runtime libraries
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libfontconfig1
+
       - name: Swap main scene to Bomber
         run: |
-          sed -i 's#run/main_scene="uid://bi445hl7e416b"#run/main_scene="uid://3a3852p4fypv"#' project.godot
-          grep run/main_scene project.godot
+          sed -i \
+            's#^run/main_scene=.*#run/main_scene="uid://3a3852p4fypv"#' \
+            project.godot
+          grep 'run/main_scene="uid://3a3852p4fypv"' project.godot
+
+      - name: Import resources
+        run: godot --headless --import || true
 
       - name: Export Web (Bomber)
         run: |
           mkdir -v -p build/web
-          godot --headless --verbose --export-release "Web" "$(readlink -f build)/web/index.html"
+          EXPORT_DIR="$(readlink -f build)"
+          godot --headless --verbose --export-release \
+            "Web" "$EXPORT_DIR/web/index.html"
 
       - name: Publish to itch.io
         uses: yeslayla/butler-publish-itchio-action@master
