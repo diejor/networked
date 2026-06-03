@@ -78,11 +78,17 @@ jobs:
           # "[ DONE ] savepack"). It is an engine-side teardown bug in
           # GDExtensionManager / SceneTree cleanup, not our code
           # (godotengine/godot#99284, #81030). The artifacts are fully written
-          # before the crash, so we tolerate a non-zero exit ONLY when the export
-          # provably completed: the "[ DONE ] savepack" marker is present AND the
-          # output files exist and are non-empty. Anything that fails earlier (a
-          # script parse error, a missing template, an unresolved class) dies
-          # before savepack, fails both checks, and correctly fails the job.
+          # before the crash, so a non-zero exit is tolerable IFF the export
+          # actually produced its outputs.
+          #
+          # We gate on the artifacts ON DISK, not on a log marker. Godot's Web
+          # exporter writes the html/js/wasm first and the data pack (index.pck)
+          # LAST in the savepack stage, so a non-empty index.pck is itself proof
+          # the export ran to completion. A log grep is unreliable here: on the
+          # crash, Godot's block-buffered stdout (where "[ DONE ] savepack" is
+          # printed) can be dropped before it reaches the redirected log, so the
+          # marker may be absent even on a successful export. The checkout is
+          # ephemeral, so there are no stale artifacts to give a false pass.
           #
           # Kept POSIX-sh clean: this container runs the step under /bin/sh
           # (dash), not bash, so no `${PIPESTATUS[@]}` or `[[ ]]`. We redirect to
@@ -92,18 +98,19 @@ jobs:
           godot --headless --verbose --export-release \
             "Web" "$EXPORT_DIR/web/index.html" > export.log 2>&1 || status=$?
           cat export.log
+          echo "godot exited with status $status; contents of build/web:"
+          ls -l build/web || true
 
-          if [ "$status" -ne 0 ]; then
-            if grep -q '\[ DONE \] savepack' export.log \
-                && [ -s build/web/index.wasm ] && [ -s build/web/index.pck ]; then
+          if [ -s build/web/index.wasm ] && [ -s build/web/index.pck ]; then
+            if [ "$status" -ne 0 ]; then
               echo "::warning::Godot exited $status (known teardown crash," \
                    "godot#99284/#81030) but the Web export completed; proceeding."
-            else
-              echo "::error::Web export failed before completion (exit $status)."
-              exit "$status"
             fi
+          else
+            echo "::error::Web export did not produce its artifacts (godot exit $status)."
+            if [ "$status" -eq 0 ]; then status=1; fi
+            exit "$status"
           fi
-          ls -l build/web
 
       - name: Publish to itch.io
         uses: yeslayla/butler-publish-itchio-action@master
