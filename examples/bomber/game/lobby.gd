@@ -44,6 +44,8 @@ func _ready() -> void:
 	gamestate.game_error.connect(_on_game_error)
 	gamestate.match_started.connect(_on_match_started)
 
+	_status.visible = false
+
 	_set_state(State.PRE_LOBBY)
 
 

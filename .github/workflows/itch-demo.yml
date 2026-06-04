@@ -21,7 +21,7 @@ env:
 
 jobs:
   deploy:
-    name: "Export Web & push to itch.io"
+    name: "Export Web and push to itch.io"
     # Skip unless the triggering CI run passed. workflow_dispatch has no
     # workflow_run payload, so allow that path explicitly.
     if: >

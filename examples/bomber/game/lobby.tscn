@@ -25,34 +25,6 @@ metadata/_custom_type_script = "uid://covt80wkpucga"
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]
 script = ExtResource("1_mrsco")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1221866380]
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -189.5
-offset_top = 48.0
-offset_right = 189.5
-offset_bottom = 176.0
-grow_horizontal = 2
-theme_override_constants/separation = 128
-
-[node name="StatusLabel" type="Label" parent="." unique_id=1887354777]
-unique_name_in_owner = true
-visible = false
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -300.0
-offset_top = -56.0
-offset_right = 300.0
-offset_bottom = -24.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_colors/font_color = Color(0.82, 0.29, 0.29, 1)
-horizontal_alignment = 1
-
 [node name="ConnectBrowser" parent="." unique_id=341697971 instance=ExtResource("10_browser")]
 unique_name_in_owner = true
 backend_templates = Array[ExtResource("12_backend")]([SubResource("Resource_ws"), SubResource("Resource_steam"), SubResource("Resource_mss8j")])
@@ -64,6 +36,25 @@ expand_mode = 2
 
 [node name="TitleLabel" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="1" unique_id=1146132509]
 text = "Bomber Example"
+
+[node name="StatusLabel" type="Label" parent="." unique_id=1887354777]
+unique_name_in_owner = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -315.0
+offset_top = -90.0
+offset_right = 285.0
+offset_bottom = -2.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 0
+theme_override_colors/font_color = Color(0.82, 0.29, 0.29, 1)
+theme_override_font_sizes/font_size = 64
+text = "Status Label"
+horizontal_alignment = 1
 
 [node name="InLobby" parent="." unique_id=788442195 instance=ExtResource("11_in")]
 unique_name_in_owner = true

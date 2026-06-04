@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   unit-test:
-    name: "Run Unit & Integration Tests"
+    name: "GdUnit4 Tests"
     runs-on: 'ubuntu-22.04'
     timeout-minutes: 15
     permissions:

@@ -2,64 +2,53 @@
 
 [ext_resource type="Script" uid="uid://c0q53yk8f0euy" path="res://addons/networked/connect/ui/row.gd" id="1_row"]
 [ext_resource type="PackedScene" path="res://addons/networked/connect/ui/status_dot.tscn" id="2_dot"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/connect/ui/connect_theme.tres" id="3_theme"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vqyqq"]
-content_margin_left = 4.0
-content_margin_right = 4.0
-bg_color = Color(0.1, 0.1, 0.1, 0.6)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_row_panel"]
 
-[node name="ServerRow" type="HBoxContainer" unique_id=656625546]
+[node name="ServerRow" type="PanelContainer" unique_id=681066525]
 offset_right = 366.0
 offset_bottom = 72.0
-theme_override_constants/separation = 0
+theme = ExtResource("3_theme")
+theme_override_styles/panel = SubResource("StyleBoxEmpty_row_panel")
 script = ExtResource("1_row")
 
-[node name="ConnectButton" type="Button" parent="." unique_id=582941231]
+[node name="ConnectButton" type="Button" parent="." unique_id=1769603675]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-size_flags_horizontal = 3
 toggle_mode = true
-alignment = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="ConnectButton" unique_id=1065343964]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 16
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=586897439]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
-[node name="HBox" type="HBoxContainer" parent="ConnectButton/MarginContainer" unique_id=293017403]
+[node name="HBox" type="HBoxContainer" parent="MarginContainer" unique_id=709587497]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 32
 
-[node name="StatusDot" type="Panel" parent="ConnectButton/MarginContainer/HBox" instance=ExtResource("2_dot") unique_id=1221118950]
+[node name="StatusDot" parent="MarginContainer/HBox" unique_id=1777021276 instance=ExtResource("2_dot")]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
 size_flags_vertical = 4
 
-[node name="ServerContainer" type="VBoxContainer" parent="ConnectButton/MarginContainer/HBox" unique_id=180472953]
+[node name="ServerContainer" type="VBoxContainer" parent="MarginContainer/HBox" unique_id=560726943]
 layout_mode = 2
+mouse_filter = 2
 alignment = 1
 
-[node name="ServerContainer" type="HBoxContainer" parent="ConnectButton/MarginContainer/HBox/ServerContainer" unique_id=784539959]
+[node name="ServerContainer" type="HBoxContainer" parent="MarginContainer/HBox/ServerContainer" unique_id=1542932577]
 layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 4
+mouse_filter = 2
 theme_override_constants/separation = 8
 alignment = 1
 
-[node name="NameLabel" type="Label" parent="ConnectButton/MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=2070602966]
+[node name="NameLabel" type="Label" parent="MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=34935682]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 2
@@ -68,13 +57,14 @@ text = "name"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="BadgePanel" type="PanelContainer" parent="ConnectButton/MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=1307692292]
+[node name="BadgePanel" type="PanelContainer" parent="MarginContainer/HBox/ServerContainer/ServerContainer" unique_id=1390300438]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
-theme_override_styles/panel = SubResource("StyleBoxFlat_vqyqq")
+mouse_filter = 2
+theme_type_variation = &"BadgePanelContainer"
 
-[node name="BadgeLabel" type="Label" parent="ConnectButton/MarginContainer/HBox/ServerContainer/ServerContainer/BadgePanel" unique_id=1649311538]
+[node name="BadgeLabel" type="Label" parent="MarginContainer/HBox/ServerContainer/ServerContainer/BadgePanel" unique_id=1400222125]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
@@ -82,20 +72,20 @@ text = "ENet"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AddressLabel" type="Label" parent="ConnectButton/MarginContainer/HBox/ServerContainer" unique_id=1859735875]
+[node name="AddressLabel" type="Label" parent="MarginContainer/HBox/ServerContainer" unique_id=1240319999]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5019608, 0.5019608, 0.5019608, 1)
-theme_override_font_sizes/font_size = 12
+theme_type_variation = &"SmallLabel"
 text = "localhost"
 vertical_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="ConnectButton/MarginContainer/HBox" unique_id=1710463405]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HBox" unique_id=769585261]
 layout_mode = 2
 size_flags_horizontal = 10
 size_flags_vertical = 4
+mouse_filter = 2
 
-[node name="PlayersLabel" type="Label" parent="ConnectButton/MarginContainer/HBox/HBoxContainer" unique_id=704997783]
+[node name="PlayersLabel" type="Label" parent="MarginContainer/HBox/HBoxContainer" unique_id=701090156]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
@@ -103,7 +93,7 @@ size_flags_horizontal = 4
 text = "-"
 horizontal_alignment = 2
 
-[node name="PingLabel" type="Label" parent="ConnectButton/MarginContainer/HBox/HBoxContainer" unique_id=1581852392]
+[node name="PingLabel" type="Label" parent="MarginContainer/HBox/HBoxContainer" unique_id=67459324]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 0)
 layout_mode = 2

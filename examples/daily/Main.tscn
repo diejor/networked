@@ -85,15 +85,6 @@ metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
 
 [node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -240.0
-offset_top = -180.0
-offset_right = 240.0
-offset_bottom = 180.0
 tree = NodePath("../../Client")
 backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])

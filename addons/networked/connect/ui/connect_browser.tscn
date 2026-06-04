@@ -1,23 +1,8 @@
 [gd_scene format=3 uid="uid://bb2nsfunxlw3a"]
 
 [ext_resource type="Script" uid="uid://lxct0rna7ylq" path="res://addons/networked/connect/ui/connect_browser.gd" id="1_browser"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/connect/ui/connect_theme.tres" id="1_myxft"]
 [ext_resource type="PackedScene" path="res://addons/networked/connect/ui/status_dot.tscn" id="2_dot"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_l1lh1"]
-content_margin_left = 16.0
-content_margin_top = 8.0
-content_margin_right = 16.0
-content_margin_bottom = 8.0
-bg_color = Color(0.1, 0.1, 0.1, 0.6)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_badge"]
-content_margin_left = 6.0
-content_margin_right = 6.0
-bg_color = Color(0.1, 0.1, 0.1, 0.6)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
 
 [node name="ConnectBrowser" type="Control" unique_id=802878944]
 custom_minimum_size = Vector2(480, 360)
@@ -28,6 +13,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("1_myxft")
 script = ExtResource("1_browser")
 
 [node name="VBox" type="VBoxContainer" parent="." unique_id=169609699]
@@ -36,11 +22,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("1_myxft")
 theme_override_constants/separation = 0
 
 [node name="PanelContainer" type="PanelContainer" parent="VBox" unique_id=683509889]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_l1lh1")
+theme = ExtResource("1_myxft")
+theme_type_variation = &"HeaderPanelContainer"
 
 [node name="HeaderBar" type="HBoxContainer" parent="VBox/PanelContainer" unique_id=522198391]
 layout_mode = 2
@@ -78,39 +66,47 @@ text = "Host"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme = ExtResource("1_myxft")
 
 [node name="BannerLabel" type="Label" parent="VBox/Banner" unique_id=2008530031]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_myxft")
 text = "Provider unavailable"
 
 [node name="Scroll" type="ScrollContainer" parent="VBox" unique_id=35822499]
 layout_mode = 2
 size_flags_vertical = 3
+theme = ExtResource("1_myxft")
 
 [node name="ListBox" type="VBoxContainer" parent="VBox/Scroll" unique_id=714220561]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_myxft")
 theme_override_constants/separation = 0
 
 [node name="EmptyState" type="VBoxContainer" parent="VBox" unique_id=1425719339]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme = ExtResource("1_myxft")
 alignment = 1
 
 [node name="EmptyLabel" type="Label" parent="VBox/EmptyState" unique_id=686991303]
 layout_mode = 2
+theme = ExtResource("1_myxft")
 text = "No servers yet"
 horizontal_alignment = 1
 
 [node name="Details" type="PanelContainer" parent="VBox" unique_id=509227761]
 layout_mode = 2
+theme = ExtResource("1_myxft")
 
 [node name="DetailsMargin" type="MarginContainer" parent="VBox/Details" unique_id=975352670]
 layout_mode = 2
+theme = ExtResource("1_myxft")
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 12
@@ -118,37 +114,44 @@ theme_override_constants/margin_bottom = 8
 
 [node name="DetailsVBox" type="VBoxContainer" parent="VBox/Details/DetailsMargin" unique_id=693931012]
 layout_mode = 2
+theme = ExtResource("1_myxft")
 theme_override_constants/separation = 12
 
 [node name="DetailsHeader" type="HBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=1615911055]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 10
+theme = ExtResource("1_myxft")
+theme_override_constants/separation = 32
 
-[node name="DetailsStatusDot" type="Panel" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" instance=ExtResource("2_dot") unique_id=676529510]
+[node name="DetailsStatusDot" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=676529510 instance=ExtResource("2_dot")]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
 size_flags_vertical = 4
+theme = ExtResource("1_myxft")
 
 [node name="DetailsNameLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=1611512007]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
-theme_override_font_sizes/font_size = 14
+theme = ExtResource("1_myxft")
+theme_type_variation = &"SubHeaderLabel"
 text = "Server Name"
 
 [node name="Spacer" type="Control" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=381467030]
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_myxft")
 
 [node name="DetailsBadgePanel" type="PanelContainer" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=828395981]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_badge")
+theme = ExtResource("1_myxft")
+theme_type_variation = &"BadgePanelContainer"
 
 [node name="DetailsBadgeLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader/DetailsBadgePanel" unique_id=1673794795]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
+theme = ExtResource("1_myxft")
 text = "ENet"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -156,29 +159,35 @@ vertical_alignment = 1
 [node name="DetailsContainer" type="HFlowContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=62218234]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_myxft")
 theme_override_constants/h_separation = 24
 theme_override_constants/v_separation = 12
 
 [node name="DetailsFooter" type="HBoxContainer" parent="VBox/Details/DetailsMargin/DetailsVBox" unique_id=89234901]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_myxft")
 theme_override_constants/separation = 8
 
 [node name="DetailsEditButton" type="Button" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234902]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_myxft")
 text = "Edit"
 
 [node name="DetailsRemoveButton" type="Button" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234903]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_myxft")
 text = "Remove"
 
 [node name="FooterSpacer" type="Control" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234904]
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_myxft")
 
 [node name="DetailsJoinButton" type="Button" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFooter" unique_id=89234905]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_myxft")
 text = "Join"

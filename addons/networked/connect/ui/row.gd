@@ -1,7 +1,7 @@
 ## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
 ## latest [ServerInfoResult].
 class_name ConnectBrowserRow
-extends Control
+extends PanelContainer
 
 signal selected(target: JoinTarget)
 signal context_requested(
