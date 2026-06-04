@@ -6,7 +6,6 @@
 [node name="HostFallbackPopup" type="PopupPanel" unique_id=1340161644]
 oversampling_override = 1.0
 size = Vector2i(500, 200)
-visible = true
 theme = ExtResource("2_theme")
 script = ExtResource("1_fallback")
 
@@ -26,6 +25,7 @@ theme_override_constants/separation = 8
 
 [node name="TitleLabel" type="Label" parent="Margin/VBox" unique_id=1491651010]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(450, 0)
 layout_mode = 2
 text = "Could not connect to the server. Would you like to host a server instead?"
 autowrap_mode = 2

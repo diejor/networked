@@ -27,7 +27,7 @@ file_logging/enable_file_logging=true
 
 [display]
 
-window/subwindows/embed_subwindows=false
+window/subwindows/embed_subwindows=true
 window/stretch/mode="viewport"
 
 [editor_plugins]
