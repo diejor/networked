@@ -1,8 +1,12 @@
 # networked
 
-[![Documentation Status](https://readthedocs.org/projects/networked/badge/?version=latest)](https://networked.readthedocs.io/en/latest/?badge=latest)
-[![CI](https://github.com/diejor/networked/actions/workflows/ci.yml/badge.svg)](https://github.com/diejor/networked/actions/workflows/ci.yml)
-[![Play the demo](https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white)](https://diejor.itch.io/bomber)
+<p align="center">
+  <a href="https://discord.gg/7bXbVy9Zfu" target="_blank" style="text-decoration:none"><img alt="Discord" src="https://img.shields.io/discord/1511991287203758140?logo=discord&labelColor=CFC9C8&color=646FA9"></a>
+  <a href="https://godotengine.org/download/" target="_blank" style="text-decoration:none"><img alt="Godot v4.2+" src="https://img.shields.io/badge/Godot-v4.2+-%23478cbf?labelColor=CFC9C8&color=49A9B4" /></a>
+  <a href="https://networked.readthedocs.io/en/latest/?badge=latest" target="_blank" style="text-decoration:none"><img alt="Documentation" src="https://img.shields.io/badge/documentation-online-green?labelColor=CFC9C8&color=6BCD69"></a>
+  <a href="https://github.com/diejor/networked/actions/workflows/ci.yml" target="_blank" style="text-decoration:none"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/diejor/networked/ci.yml?labelColor=CFC9C8&color=DBDCB8"></a>
+  <a href="https://diejor.itch.io/bomber" target="_blank" style="text-decoration:none"><img alt="Play the demo" src="https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white&labelColor=CFC9C8&color=CBA18C"></a>
+</p>
 
 **A proof-of-concept multiplayer framework for Godot 4.**
 
