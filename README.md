@@ -5,49 +5,25 @@
 [![play](https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white)](https://diejor.itch.io/bomber)
 [![chat](https://img.shields.io/badge/chat-discord-646FA9?logo=discord&logoColor=white&labelColor=CFC9C8&color=646FA9)](https://discord.gg/7bXbVy9Zfu)
 
-**A proof-of-concept multiplayer framework for Godot 4.**
+## Quick Reference
 
-I built this because Godot's built-in multiplayer APIs, while powerful, felt 
-overwhelming to wire together correctly. `networked` is my attempt to wrap 
-`SceneMultiplayer` into something friendlier, especially for people who just 
-want players to spawn, move smoothly, and teleport between levels without 
-dropping sync.
+- **Bomber Demo:** [`examples/bomber`](examples/bomber)
+- **Documentation:** [Quick Start Guide](https://networked.readthedocs.io/en/latest/getting_started/quick_start.html)
+- **Play Online:** [diejor.itch.io/bomber](https://diejor.itch.io/bomber)
 
-This is not a battle-tested AAA solution. It is one developer's experiment, 
-shared in the hope that it helps someone else get started with multiplayer.
+## Addon Overview
 
-## Try It in Your Browser
+`networked` wraps Godot's [High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html) with a single node ([MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html)) that owns all mmultiplayer lifecycle. 
 
-The [`examples/bomber`](examples/bomber) game runs live at 
-**[diejor.itch.io/bomber](https://diejor.itch.io/bomber)**. It is a modified
-version of Godot's [`multiplayer_bomber`][godot-bomber] demo, rebuilt with the
-`networked` addon and a WebRTC WebTorrent lobby system. You can host and play
-with other people completely P2P, with no game server to run.
+### Notable Features
 
-[godot-bomber]: https://github.com/godotengine/godot-demo-projects/tree/3.5-9e68af3/networking/multiplayer_bomber
+- **`TickInterpolator`:** Smooths network snapshots with smart dilation to minimize jitter.
+- **`MultiplayerSceneManager`:** Built on top of an in-house [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
+- **`TPComponent`:** Connects scenes and handles teleport transitions between levels without dropping synchronization.
+- **`SaveComponent`:** Real-time state persistence and writes for player data.
 
-## What It Does
+## Supported Architectures & Integrations
 
-`networked` provides an opinionated layer on top of Godot's 
-[High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html)
-
-- **Scene-aware spawning:** `MultiplayerSceneManager` + `SpawnerComponent` 
-handle player spawn and despawn.
-
-- **Smooth interpolation:** `TickInterpolator` smooths network snapshots with 
-smart dilation to reduce jitter.
-
-- **Teleport transitions:** `TPComponent` lets players move between levels 
-without breaking replication.
-
-- **State persistence:** `NetwDatabase` + `SaveComponent` save and load player 
-data.
-
-- **Flexible transport:** `BackendPeer` resources for ENet, WebSocket, WebRTC, 
-and local loopback. Optional duck-typed support for the `tube` addon if you need 
-WebRTC matchmaking.
-
-## Requirements
-
-- Godot 4.2+
-- GDScript (C# support is not available yet)
+- **Flexible Architectures:** Supports listen-server, dedicated server, and P2P setups, all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
+- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and native Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)).
+- **Robust Integration Testing:** Full end-to-end integration tests are supported using the custom in-process [`LocalMultiplayerPeer`](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), using the [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
