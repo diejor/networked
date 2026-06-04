@@ -14,7 +14,7 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 func test_probes_do_not_register_peers() -> void:
-	var host := await EnetTestSupport.start_host(self)
+	var host := await EnetTestSupport.start_host(self, null, 0.2)
 	assert_that(host).is_not_empty()
 
 	var host_tree: MultiplayerTree = host.tree
@@ -49,7 +49,7 @@ func _run_probe(backend: ENetBackend, results: Array, state: Dictionary) -> void
 
 
 func test_concurrent_probes_drain_and_some_return_busy() -> void:
-	var host := await EnetTestSupport.start_host(self)
+	var host := await EnetTestSupport.start_host(self, null, 0.2)
 	assert_that(host).is_not_empty()
 
 	var host_tree: MultiplayerTree = host.tree

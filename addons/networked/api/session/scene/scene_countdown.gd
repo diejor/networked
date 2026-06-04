@@ -28,12 +28,18 @@ signal cancelled()
 
 var _scene_ref: WeakRef
 var _seconds_left: int
+var _tick_interval: float
 var _running: bool = false
 
 
-func _init(scene: MultiplayerScene, seconds: int) -> void:
+func _init(
+		scene: MultiplayerScene,
+		seconds: int,
+		tick_interval: float = 1.0,
+) -> void:
 	_scene_ref = weakref(scene)
 	_seconds_left = seconds
+	_tick_interval = tick_interval
 
 
 ## Returns [code]true[/code] if the countdown is actively ticking.
@@ -66,7 +72,10 @@ func _schedule_tick() -> void:
 	if not is_instance_valid(scene) or not scene.is_inside_tree():
 		_running = false
 		return
-	scene.get_tree().create_timer(1.0).timeout.connect(_on_tick, CONNECT_ONE_SHOT)
+	scene.get_tree().create_timer(_tick_interval).timeout.connect(
+		_on_tick,
+		CONNECT_ONE_SHOT,
+	)
 
 
 func _on_tick() -> void:

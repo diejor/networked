@@ -36,7 +36,7 @@ func test_query_unreachable_port_does_not_return_ok() -> void:
 	var client_backend := EnetTestSupport.make_client_backend(dead_port)
 	var result: ServerInfoResult = await client_backend.query_server_info(
 		"127.0.0.1",
-		0.5,
+		0.2,
 	)
 
 	assert_that(result).is_not_null()

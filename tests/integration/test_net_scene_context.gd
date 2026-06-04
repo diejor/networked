@@ -235,9 +235,9 @@ func test_countdown_tick_and_finished_fire_in_order() -> void:
 	server_ctx.scene.countdown_tick.connect(func(s): events.append("tick:%d" % s))
 	server_ctx.scene.countdown_finished.connect(func(): events.append("finished"))
 
-	server_ctx.scene.start_countdown(1)
+	server_ctx.scene.start_countdown(1, 0.03)
 
-	await wait_until(func(): return "finished" in events, 3.0)
+	await wait_until(func(): return "finished" in events, 1.0)
 
 	# start_countdown(1): one tick at 0 seconds, then finished.
 	assert_that(events.size()).is_equal(2)

@@ -283,10 +283,18 @@ func resume() -> void:
 ## [signal countdown_started] followed by [signal countdown_tick] each second,
 ## and finally [signal countdown_finished] (or [signal countdown_cancelled] if
 ## [method cancel_countdown] is called first). Any previously running
-## countdown is cancelled automatically.
+## countdown is cancelled automatically. [param tick_interval] defaults to
+## one second.
 ## [br][br][b]Server Only.[/b]
-func start_countdown(seconds: int) -> NetwSceneCountdown:
+func start_countdown(
+		seconds: int,
+		tick_interval: float = 1.0,
+) -> NetwSceneCountdown:
 	assert(seconds > 0, "NetwScene.start_countdown(): seconds must be > 0.")
+	assert(
+		tick_interval > 0.0,
+		"NetwScene.start_countdown(): tick_interval must be > 0.",
+	)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return null
@@ -297,7 +305,7 @@ func start_countdown(seconds: int) -> NetwSceneCountdown:
 
 	cancel_countdown()
 
-	var cd := NetwSceneCountdown.new(scene, seconds)
+	var cd := NetwSceneCountdown.new(scene, seconds, tick_interval)
 	_active_countdown = cd
 
 	cd.tick.connect(_on_countdown_tick)

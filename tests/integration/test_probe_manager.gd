@@ -37,7 +37,7 @@ func _make_target(port: int) -> JoinTarget:
 func test_concurrent_queries_respect_cap_and_complete_ok() -> void:
 	var source := _CountingSource.new()
 	source.advertised_players = 7
-	var host := await EnetTestSupport.start_host(self, source)
+	var host := await EnetTestSupport.start_host(self, source, 0.2)
 	assert_that(host).is_not_empty()
 
 	var manager := ProbeManager.new()
@@ -70,7 +70,7 @@ func test_concurrent_queries_respect_cap_and_complete_ok() -> void:
 
 
 func test_cancel_all_suppresses_callbacks() -> void:
-	var host := await EnetTestSupport.start_host(self)
+	var host := await EnetTestSupport.start_host(self, null, 0.2)
 	assert_that(host).is_not_empty()
 
 	var manager := ProbeManager.new()
