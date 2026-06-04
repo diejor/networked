@@ -14,6 +14,7 @@ config/name="networked"
 config/tags=PackedStringArray("addon", "multiplayer", "networked")
 run/main_scene="uid://bi445hl7e416b"
 config/features=PackedStringArray("4.6", "GL Compatibility")
+boot_splash/show_image=false
 config/icon="res://icon.svg"
 
 [autoload]

@@ -2,7 +2,7 @@
 ##
 ## This script is the bridge: it owns the state swap and coordinates with
 ## [ConnectBrowser] to enter the session.
-extends Control
+extends CanvasLayer
 
 
 enum State { PRE_LOBBY, IN_LOBBY }

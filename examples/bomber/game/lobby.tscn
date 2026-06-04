@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://ca6gwo0u2m4y2"]
 
 [ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
+[ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="2_mss8j"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="6_8u2o1"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="10_browser"]
 [ext_resource type="PackedScene" path="res://examples/bomber/game/in_lobby.tscn" id="11_in"]
@@ -19,33 +20,29 @@ metadata/_custom_type_script = "uid://b8xpp6r4y1ku2"
 
 [sub_resource type="Resource" id="Resource_mss8j"]
 script = ExtResource("6_8u2o1")
-connect_retry = null
-max_connect_attempts = null
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
-[node name="Lobby" type="Control" unique_id=125506540]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_horizontal = 2
-size_flags_vertical = 2
+[node name="Lobby" type="CanvasLayer" unique_id=1793047684]
 script = ExtResource("1_mrsco")
 
-[node name="TitleLabel" type="Label" parent="." unique_id=1724387341]
-unique_name_in_owner = true
-layout_mode = 1
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1221866380]
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -200.0
-offset_top = 24.0
-offset_right = 200.0
-offset_bottom = 64.0
+offset_left = -189.5
+offset_top = 48.0
+offset_right = 189.5
+offset_bottom = 176.0
 grow_horizontal = 2
-grow_vertical = 0
+theme_override_constants/separation = 128
+
+[node name="TextureRect" type="TextureRect" parent="HBoxContainer" unique_id=422029099]
+layout_mode = 2
+texture = ExtResource("2_mss8j")
+
+[node name="TitleLabel" type="Label" parent="HBoxContainer" unique_id=1724387341]
+unique_name_in_owner = true
+layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Bomber"
 horizontal_alignment = 1
@@ -53,7 +50,6 @@ horizontal_alignment = 1
 [node name="StatusLabel" type="Label" parent="." unique_id=1887354777]
 unique_name_in_owner = true
 visible = false
-layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
@@ -70,21 +66,19 @@ horizontal_alignment = 1
 
 [node name="ConnectBrowser" parent="." unique_id=341697971 instance=ExtResource("10_browser")]
 unique_name_in_owner = true
-layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -240.0
-offset_top = -180.0
+offset_top = -109.0
 offset_right = 240.0
-offset_bottom = 180.0
+offset_bottom = 251.0
 backend_templates = Array[ExtResource("12_backend")]([SubResource("Resource_ws"), SubResource("Resource_steam"), SubResource("Resource_mss8j")])
 
 [node name="InLobby" parent="." unique_id=788442195 instance=ExtResource("11_in")]
 unique_name_in_owner = true
 visible = false
-layout_mode = 1
 
 [node name="ErrorDialog" type="AcceptDialog" parent="." unique_id=142008537]
