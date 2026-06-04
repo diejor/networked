@@ -19,14 +19,11 @@ func _make_entity(entity_name: String = "ent") -> NetwEntity:
 	return NetwEntity.of(root)
 
 
-func test_add_viewer_changes_verdict() -> void:
+func test_viewer_mutations_change_verdict() -> void:
 	assert_that(layer.verdict_for(7)).is_false()
 	layer.add_viewer(7)
 	assert_that(layer.verdict_for(7)).is_true()
 
-
-func test_remove_viewer_changes_verdict() -> void:
-	layer.add_viewer(7)
 	layer.remove_viewer(7)
 	assert_that(layer.verdict_for(7)).is_false()
 
@@ -38,10 +35,12 @@ func test_hide_from_insiders_inverts_verdict() -> void:
 	assert_that(layer.verdict_for(7)).is_false()
 
 
-func test_entity_add_and_drive_emits_enter() -> void:
+func test_entity_drive_emits_enter_and_exit() -> void:
 	var entity := _make_entity()
 	var enters: Array = []
+	var exits: Array = []
 	layer.interest_enter.connect(func(e, p): enters.append([e, p]))
+	layer.interest_exit.connect(func(e, p): exits.append([e, p]))
 
 	layer.add_entity(entity)
 	layer.add_viewer(7)
@@ -49,15 +48,6 @@ func test_entity_add_and_drive_emits_enter() -> void:
 
 	assert_that(enters).contains_exactly([[entity, 7]])
 
-
-func test_remove_entity_emits_exit_for_visible_peer() -> void:
-	var entity := _make_entity()
-	var exits: Array = []
-	layer.interest_exit.connect(func(e, p): exits.append([e, p]))
-
-	layer.add_entity(entity)
-	layer.add_viewer(7)
-	layer.drive_now([7])
 	layer.remove_entity(entity)
 
 	assert_that(exits).contains_exactly([[entity, 7]])

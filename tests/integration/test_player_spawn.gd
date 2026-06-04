@@ -41,39 +41,21 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_spawned_player_is_in_scene() -> void:
+func test_spawned_player_joins_scene_with_identity() -> void:
 	var player := harness.spawn_player(client0, player_builder.packed)
 	await harness.wait_for_player(client0, level_builder.scene_name)
 	var scene := harness.scene_on_server()
 	assert_that(player.get_parent()).is_equal(scene.level)
 
-
-func test_spawned_player_has_correct_authority() -> void:
-	var player := harness.spawn_player(client0, player_builder.packed)
-	await harness.wait_for_player(client0, level_builder.scene_name)
 	var expected_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(player.get_multiplayer_authority()).is_equal(expected_id)
 
-
-func test_spawned_player_has_username() -> void:
-	var player := harness.spawn_player(client0, player_builder.packed)
-	await harness.wait_for_player(client0, level_builder.scene_name)
 	var client_comp := SpawnerComponent.unwrap(player)
 	assert_that(client_comp.entity_id).is_equal("test_player_0")
 
-
-func test_spawned_player_name_format() -> void:
-	var player := harness.spawn_player(client0, player_builder.packed)
-	await harness.wait_for_player(client0, level_builder.scene_name)
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(player.name).is_equal("test_player_0|%d" % peer_id)
 
-
-func test_connect_peer_called_on_spawn() -> void:
-	var _player := harness.spawn_player(client0, player_builder.packed)
-	await harness.wait_for_player(client0, level_builder.scene_name)
-	var scene := harness.scene_on_server()
-	var peer_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(scene.connected_peers.has(peer_id)).is_true()
 
 

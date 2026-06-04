@@ -69,25 +69,16 @@ func _spawn_save_player() -> Node2D:
 	return player
 
 
-func test_setup_initializes_synchronizer() -> void:
+func test_setup_initializes_sync_and_tracks_position() -> void:
 	var player := await _spawn_save_player()
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
+
 	assert_that(save_comp._initialized).is_true()
-
-
-func test_setup_tracks_position_property() -> void:
-	var player := await _spawn_save_player()
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	assert_that(save_comp.has_virtual_property(&"position")).is_true()
-
-
-func test_setup_populates_entity_with_initial_values() -> void:
-	var player := await _spawn_save_player()
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	assert_that(save_comp.bound_entity.has_value(&"position")).is_true()
 
 
-func test_pull_from_scene_captures_live_position() -> void:
+func test_pull_and_push_round_trip_scene_position() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(50, 75)
 
@@ -98,31 +89,18 @@ func test_pull_from_scene_captures_live_position() -> void:
 		Vector2(50, 75),
 	)
 
-
-func test_push_to_scene_restores_position() -> void:
-	var player := await _spawn_save_player()
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-
 	save_comp.bound_entity.set_value(&"position", Vector2(99, 99))
 	save_comp.push_to_scene()
-
 	assert_that(player.position).is_equal(Vector2(99, 99))
 
-
-func test_pull_then_push_round_trips() -> void:
-	var player := await _spawn_save_player()
 	player.position = Vector2(33, 44)
-
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.pull_from_scene()
-
 	player.position = Vector2.ZERO
 	save_comp.push_to_scene()
-
 	assert_that(player.position).is_equal(Vector2(33, 44))
 
 
-func test_flush_state_to_database() -> void:
+func test_database_and_serialized_round_trips_restore_position() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(10, 20)
 
@@ -135,29 +113,12 @@ func test_flush_state_to_database() -> void:
 	var raw: Dictionary = backend.find_by_id(&"players", entity_id)
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
-
-func test_hydrate_restores_from_database() -> void:
-	var player := await _spawn_save_player()
-	player.position = Vector2(10, 20)
-
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.pull_from_scene()
-	save_comp._flush()
-
 	player.position = Vector2.ZERO
 	save_comp.bound_entity.set_value(&"position", Vector2.ZERO)
-
-	var entity_id := save_comp._get_entity_id()
-	var raw: Dictionary = backend.find_by_id(&"players", entity_id)
 	save_comp.hydrate(raw)
 	assert_that(player.position).is_equal(Vector2(10, 20))
 
-
-func test_serialize_deserialize_round_trip() -> void:
-	var player := await _spawn_save_player()
 	player.position = Vector2(55, 66)
-
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	var bytes := save_comp._serialize_scene()
 	assert_that(bytes.size() > 0).is_true()
 

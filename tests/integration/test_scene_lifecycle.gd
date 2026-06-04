@@ -33,9 +33,15 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_on_startup_scenes_spawned_after_host() -> void:
+func test_startup_scenes_are_active_and_idempotent() -> void:
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
+
+	server_mgr.spawn_scene(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.size()).is_equal(2)
+
+	server_mgr.freeze_scene(level_builder.scene_name)
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
 func test_on_demand_scene_skipped_at_startup() -> void:
@@ -56,7 +62,7 @@ func test_on_demand_scene_skipped_at_startup() -> void:
 	await h2.teardown()
 
 
-func test_preload_scene_populates_cache() -> void:
+func test_preload_caches_without_instantiating_and_spawn_consumes() -> void:
 	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
@@ -64,28 +70,18 @@ func test_preload_scene_populates_cache() -> void:
 	server_mgr.preload_scene(level_2_builder.scene_name)
 
 	assert_that(path).is_not_empty()
-	assert_that(server_mgr.is_scene_preloaded(level_2_builder.scene_name)).is_true()
+	assert_that(
+		server_mgr.is_scene_preloaded(level_2_builder.scene_name),
+	).is_true()
+	assert_that(
+		server_mgr.active_scenes.has(level_2_builder.scene_name),
+	).is_false()
 
-
-func test_preload_scene_does_not_instantiate() -> void:
-	server_mgr.destroy_scene(level_2_builder.scene_name)
-	await get_tree().process_frame
-
-	server_mgr.preload_scene(level_2_builder.scene_name)
-
-	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_false()
-
-
-func test_spawn_after_preload_consumes_cache() -> void:
-	server_mgr.destroy_scene(level_2_builder.scene_name)
-	await get_tree().process_frame
-
-	var path := level_2_builder.resource_path
-	server_mgr.preload_scene(level_2_builder.scene_name)
 	server_mgr.spawn_scene(level_2_builder.scene_name)
 
-	assert_that(path).is_not_empty()
-	assert_that(server_mgr.is_scene_preloaded(level_2_builder.scene_name)).is_false()
+	assert_that(
+		server_mgr.is_scene_preloaded(level_2_builder.scene_name),
+	).is_false()
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
@@ -97,12 +93,7 @@ func test_spawn_scene_adds_to_active_scenes() -> void:
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
-func test_spawn_scene_is_idempotent() -> void:
-	server_mgr.spawn_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.size()).is_equal(2)
-
-
-func test_activate_scene_spawns_missing_scene() -> void:
+func test_activate_spawns_missing_scene_and_updates_processing() -> void:
 	server_mgr.destroy_scene(level_2_builder.scene_name)
 	await get_tree().process_frame
 
@@ -110,8 +101,6 @@ func test_activate_scene_spawns_missing_scene() -> void:
 	await server_mgr.activate_scene(level_2_builder.scene_name)
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
-
-func test_activate_scene_sets_level_process_mode_to_inherit() -> void:
 	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	scene.level.process_mode = Node.PROCESS_MODE_DISABLED
 
@@ -119,45 +108,22 @@ func test_activate_scene_sets_level_process_mode_to_inherit() -> void:
 	await server_mgr.activate_scene(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-
-func test_freeze_scene_sets_level_process_mode_disabled() -> void:
-	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(level_builder.scene_name)
 	server_mgr.freeze_scene(level_builder.scene_name)
-
-	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
-
-func test_activate_after_freeze_restores_processing() -> void:
-	server_mgr.freeze_scene(level_builder.scene_name)
 	@warning_ignore("redundant_await")
 	await server_mgr.activate_scene(level_builder.scene_name)
 
-	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
-func test_freeze_scene_keeps_entry_in_active_scenes() -> void:
-	server_mgr.freeze_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
-
-
-func test_destroy_scene_removes_from_active_scenes() -> void:
-	server_mgr.destroy_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
-
-
-func test_destroy_scene_frees_the_scene_node() -> void:
+func test_destroy_frees_and_spawn_recreates_scene() -> void:
 	var scene := server_mgr.active_scenes[level_builder.scene_name]
 	server_mgr.destroy_scene(level_builder.scene_name)
 	await get_tree().process_frame
+
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
 	assert_that(is_instance_valid(scene)).is_false()
-
-
-func test_destroy_then_spawn_recreates_scene() -> void:
-	server_mgr.destroy_scene(level_builder.scene_name)
-	await get_tree().process_frame
 
 	server_mgr.spawn_scene(level_builder.scene_name)
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
@@ -234,7 +200,9 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 
 
 func _join_player() -> Node:
-	var scene := server_mgr.active_scenes[level_builder.scene_name] as MultiplayerScene
+	var scene := (
+			server_mgr.active_scenes[level_builder.scene_name] as MultiplayerScene
+	)
 	return _add_scene_player(scene, 1001, &"test_player")
 
 

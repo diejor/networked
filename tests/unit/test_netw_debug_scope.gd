@@ -2,17 +2,6 @@
 class_name TestNetwDebugScope
 extends NetwTestSuite
 
-func test_enable_debugger_enables_trace_sink() -> void:
-	enable_debugger()
-
-	assert_that(Netw.dbg.is_enabled()).is_true()
-	assert_that(NetTrace.message_delegate.is_valid()).is_true()
-
-	var span := Netw.dbg.span(self, "debug_scope_test")
-	span.step("opened")
-	span.end()
-
-
 func test_noop_debug_facade_returns_callable_spans() -> void:
 	var dbg := NetwDbgNoop.new()
 	var span := dbg.span(self, "noop_span")

@@ -121,20 +121,17 @@ func _await_tp(promise: TPComponent.TeleportPromise) -> void:
 			return
 
 
-func test_two_scenes_spawned() -> void:
-	var server_mgr := harness.server_scene_manager()
-	assert_that(server_mgr.active_scenes.size()).is_equal(2)
-
-
-func test_tp_spawn_places_in_correct_scene() -> void:
+func test_tp_spawn_places_player_in_start_scene() -> void:
 	var player := await _spawn_tp_player(level_builder.resource_path)
 
 	var server_mgr := harness.server_scene_manager()
+	assert_that(server_mgr.active_scenes.size()).is_equal(2)
+
 	var scene: MultiplayerScene = server_mgr.active_scenes.get(level_builder.scene_name)
 	assert_that(player.get_parent()).is_equal(scene.level)
 
 
-func test_reparent_moves_player_between_scenes() -> void:
+func test_teleport_reparents_on_server_and_snaps_client_to_marker() -> void:
 	var server_player := await _spawn_tp_player(level_builder.resource_path)
 	var client_player := await harness.wait_for_player(
 		client0,
@@ -154,23 +151,6 @@ func test_reparent_moves_player_between_scenes() -> void:
 	)
 
 	assert_that(server_player.get_parent()).is_equal(scene2.level)
-
-
-func test_teleported_snaps_to_marker() -> void:
-	await _spawn_tp_player(level_builder.resource_path)
-	var client_player := await harness.wait_for_player(
-		client0,
-		level_builder.scene_name,
-	) as Node2D
-
-	_set_player_database(client_player)
-
-	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await _await_tp(
-		client_tp.teleport(
-			_tp_target(level_2_builder.resource_path, "TPTarget"),
-		),
-	)
 
 	var client_player2 := await harness.wait_for_player(
 		client0,

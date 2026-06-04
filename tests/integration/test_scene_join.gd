@@ -31,13 +31,9 @@ func test_server_spawns_scene_after_host() -> void:
 	# spawn_scenes() already ran synchronously inside host()
 	assert_that(server_mgr.active_scenes.size()).is_equal(1)
 
-
-func test_active_scene_key_is_level_name() -> void:
 	var key := String(server_mgr.active_scenes.keys()[0])
 	assert_that(key).is_equal(level_builder.scene_name)
 
-
-func test_spawned_scene_is_scene_instance() -> void:
 	var spawned_scene: MultiplayerScene = server_mgr.active_scenes.values()[0]
 	assert_that(spawned_scene).is_not_null()
 	assert_that(spawned_scene is MultiplayerScene).is_true()

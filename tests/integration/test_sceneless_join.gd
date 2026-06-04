@@ -37,20 +37,20 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_default_scene_created_on_server() -> void:
+func test_default_scene_wraps_level_and_context() -> void:
 	var server := harness.server()
 	var scene_node_name := "%sScene" % level_builder.scene_name
 	var scene := server.get_node_or_null("SceneManager/" + scene_node_name)
 	assert_that(scene).is_not_null()
 
-
-func test_level_inside_scene_on_server() -> void:
-	var server := harness.server()
-	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],
 	)
 	assert_that(level).is_not_null()
+
+	var ctx := Netw.ctx(level)
+	assert_that(ctx).is_not_null()
+	assert_that(ctx.is_valid()).is_true()
 
 
 func test_player_spawns_in_level_after_join() -> void:
@@ -79,46 +79,7 @@ func test_player_spawns_in_level_after_join() -> void:
 			.wait_until(1000) \
 			.is_not_null()
 
-
-func test_spawned_player_has_correct_username() -> void:
-	var server := harness.server()
-	var username: String = client.get_meta(&"_harness_username")
-	var peer_id := client.multiplayer_peer.get_unique_id()
-	var join_payload := harness.make_join_payload(
-		username,
-		level_builder.resource_path,
-		spawner_path,
-	)
-
-	client.request_join_player.rpc_id(
-		MultiplayerPeer.TARGET_PEER_SERVER,
-		join_payload.serialize(),
-	)
-
-	var player_name := NetwEntity.format_name(username, peer_id)
-	var scene_node_name := "%sScene" % level_builder.scene_name
-	var level := server.get_node_or_null(
-		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],
-	)
-	@warning_ignore("redundant_await")
-	await assert_func(level, "get_node_or_null", [player_name]) \
-			.wait_until(1000) \
-			.is_not_null()
-
 	var player := level.get_node(player_name)
 	var client_comp := SpawnerComponent.unwrap(player)
 	assert_that(client_comp).is_not_null()
 	assert_that(str(client_comp.entity_id)).is_equal(username)
-
-
-func test_scene_context_accessible_from_level_node() -> void:
-	var server := harness.server()
-	var scene_node_name := "%sScene" % level_builder.scene_name
-	var level := server.get_node_or_null(
-		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],
-	)
-	assert_that(level).is_not_null()
-
-	var ctx := Netw.ctx(level)
-	assert_that(ctx).is_not_null()
-	assert_that(ctx.is_valid()).is_true()

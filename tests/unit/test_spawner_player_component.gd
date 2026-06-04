@@ -16,27 +16,19 @@ func test_parse_peer_with_large_peer_id() -> void:
 	).is_equal(2147483647)
 
 
-func test_parse_peer_without_separator_returns_zero() -> void:
+func test_parse_peer_invalid_names_return_empty_identity() -> void:
 	assert_that(
 		NetwEntity.parse_peer("no_separator"),
 	).is_equal(0)
 
-
-func test_parse_peer_with_empty_string_returns_zero() -> void:
 	assert_that(NetwEntity.parse_peer("")).is_equal(0)
 
-
-func test_parse_peer_with_only_separator_returns_zero() -> void:
 	assert_that(NetwEntity.parse_peer("|")).is_equal(0)
 	assert_that(NetwEntity.parse_entity("|")).is_equal(&"")
 
-
-func test_parse_peer_with_multiple_separators_returns_zero() -> void:
 	assert_that(NetwEntity.parse_peer("a|b|c")).is_equal(0)
 	assert_that(NetwEntity.parse_entity("a|b|c")).is_equal(&"")
 
-
-func test_parse_peer_with_non_numeric_peer_returns_zero() -> void:
 	assert_that(
 		NetwEntity.parse_peer("user|abc"),
 	).is_equal(0)
@@ -61,20 +53,16 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	assert_that(spawner.peer_id).is_equal(42)
 
 
-func test_netw_entity_is_template_is_false_without_spawner() -> void:
+func test_netw_entity_template_flag_reflects_spawner() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	var entity := NetwEntity.of(root)
 
 	assert_that(entity.is_template).is_false()
 
-
-func test_netw_entity_is_template_forwards_from_spawner() -> void:
-	var root: Node2D = auto_free(Node2D.new())
 	var spawner := SpawnerComponent.new()
 	root.add_child(spawner)
 	spawner.owner = root
 
-	var entity := NetwEntity.of(root)
 	entity.set_spawner(spawner)
 
 	assert_that(entity.is_template).is_true()
@@ -146,7 +134,7 @@ func _make_player_root(peer_id: int) -> Array:
 	return [root, spawner]
 
 
-func test_client_mode_sets_authority_from_name() -> void:
+func test_authority_mode_updates_from_name_when_client_owned() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var spawner: SpawnerComponent = parts[1]
@@ -157,7 +145,7 @@ func test_client_mode_sets_authority_from_name() -> void:
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
 
 
-func test_server_mode_does_not_change_authority() -> void:
+func test_authority_mode_leaves_server_and_invalid_names_unchanged() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var spawner: SpawnerComponent = parts[1]
@@ -169,24 +157,22 @@ func test_server_mode_does_not_change_authority() -> void:
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
 
+	var no_peer_root: Node2D = auto_free(Node2D.new())
+	no_peer_root.name = "NoSeparator"
 
-func test_client_mode_with_no_peer_in_name_leaves_authority_unchanged() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	root.name = "NoSeparator"
+	var no_peer_spawner := SpawnerComponent.new()
+	no_peer_spawner.name = "SpawnerComponent"
+	no_peer_root.add_child(no_peer_spawner)
+	no_peer_spawner.owner = no_peer_root
+	no_peer_spawner.root_path = no_peer_spawner.get_path_to(no_peer_root)
 
-	var spawner := SpawnerComponent.new()
-	spawner.name = "SpawnerComponent"
-	root.add_child(spawner)
-	spawner.owner = root
-	spawner.root_path = spawner.get_path_to(root)
+	no_peer_spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
+	no_peer_spawner._on_owner_tree_entered()
 
-	spawner.authority_mode = SpawnerComponent.AuthorityMode.CLIENT
-	spawner._on_owner_tree_entered()
-
-	assert_that(root.get_multiplayer_authority()).is_equal(1)
+	assert_that(no_peer_root.get_multiplayer_authority()).is_equal(1)
 
 
-func test_unwrap_returns_spawner_component() -> void:
+func test_unwrap_returns_spawner_or_null() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	var spawner := SpawnerComponent.new()
 	spawner.name = "SpawnerComponent"
@@ -195,7 +181,5 @@ func test_unwrap_returns_spawner_component() -> void:
 
 	assert_that(SpawnerComponent.unwrap(root)).is_equal(spawner)
 
-
-func test_unwrap_returns_null_when_absent() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	assert_that(SpawnerComponent.unwrap(root)).is_null()
+	var empty_root: Node2D = auto_free(Node2D.new())
+	assert_that(SpawnerComponent.unwrap(empty_root)).is_null()

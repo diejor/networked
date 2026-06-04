@@ -38,54 +38,24 @@ func _set_spawn_fn(fn: Callable) -> void:
 	client_mgr.level_spawn_function = fn
 
 
-func test_level_spawn_function_called_on_spawn() -> void:
+func test_spawn_function_receives_data_before_scene_enters_tree() -> void:
 	var called := [false]
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			called[0] = true
-			return level_builder.packed.instantiate()
-	)
-
-	server_mgr.spawn(level_builder.resource_path)
-
-	assert_that(called[0]).is_true()
-
-
-func test_level_spawn_function_receives_correct_data() -> void:
 	var received = [null]
-	_set_spawn_fn(
-		func(data: Variant) -> Node:
-			received[0] = data
-			return level_builder.packed.instantiate()
-	)
-
-	server_mgr.spawn({ "round": 7 })
-
-	assert_that(received[0]).is_equal({ "round": 7 })
-
-
-func test_level_not_in_tree_when_spawn_function_called() -> void:
 	var in_tree_during_call := [true]
 	_set_spawn_fn(
-		func(_data: Variant) -> Node:
+		func(data: Variant) -> Node:
+			called[0] = true
+			received[0] = data
 			var level := level_builder.packed.instantiate()
 			in_tree_during_call[0] = level.is_inside_tree()
 			return level
 	)
 
-	server_mgr.spawn(level_builder.resource_path)
+	server_mgr.spawn({ "round": 7 })
 
+	assert_that(called[0]).is_true()
+	assert_that(received[0]).is_equal({ "round": 7 })
 	assert_that(in_tree_during_call[0]).is_false()
-
-
-func test_custom_spawn_scene_enters_active_scenes() -> void:
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			return level_builder.packed.instantiate()
-	)
-
-	server_mgr.spawn(level_builder.resource_path)
-
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
@@ -103,19 +73,25 @@ func test_two_custom_spawns_register_independently() -> void:
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
 
 
-func test_activate_scene_uses_scene_spawn_data() -> void:
+func test_activate_scene_uses_spawn_data_wakes_level_and_is_idempotent() -> void:
 	var received = [null]
+	var call_count := [0]
 	_set_spawn_fn(
 		func(data: Variant) -> Node:
+			call_count[0] += 1
 			received[0] = data
 			return level_builder.packed.instantiate()
 	)
 	server_mgr.scene_spawn_data[level_builder.scene_name] = { "round": 3 }
 
 	server_mgr.activate_scene(level_builder.scene_name)
+	server_mgr.activate_scene(level_builder.scene_name)
 
+	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
 	assert_that(received[0]).is_equal({ "round": 3 })
+	assert_that(call_count[0]).is_equal(1)
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
+	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
 func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
@@ -130,34 +106,6 @@ func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 
 	assert_that(received[0]).is_equal(level_builder.scene_name)
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
-
-
-func test_activate_scene_wakes_level_after_custom_spawn() -> void:
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			return level_builder.packed.instantiate()
-	)
-	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
-
-	server_mgr.activate_scene(level_builder.scene_name)
-
-	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
-	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
-
-
-func test_activate_scene_does_not_respawn_when_already_active() -> void:
-	var call_count := [0]
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			call_count[0] += 1
-			return level_builder.packed.instantiate()
-	)
-	server_mgr.scene_spawn_data[level_builder.scene_name] = level_builder.scene_name
-
-	server_mgr.activate_scene(level_builder.scene_name)
-	server_mgr.activate_scene(level_builder.scene_name)
-
-	assert_that(call_count[0]).is_equal(1)
 
 
 func test_freeze_empty_action_applied_after_custom_spawn() -> void:

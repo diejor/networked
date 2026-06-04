@@ -1,48 +1,14 @@
 ## Tests for [NetwDatabase] schema-drift detection and mismatch policies.
 ##
-## Uses the in-memory [MemoryBackend] stub (defined in [TestNetwBackend])
-## so no disk I/O or scene tree is required.
+## Uses the in-memory [TestMemoryBackend] stub so no disk I/O or scene tree is
+## required.
 class_name TestSchemaDrift
 extends NetwTestSuite
-
-## Minimal in-memory backend for schema drift tests.
-class DriftMemoryBackend extends NetwBackend:
-	var _store: Dictionary = { }
-	var delete_calls: Array[Dictionary] = []
-
-
-	func initialize(_schema: Dictionary) -> Error:
-		return OK
-
-
-	func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
-		if not _store.has(table):
-			_store[table] = { }
-		_store[table][id] = data.duplicate()
-		return OK
-
-
-	func find_by_id(table: StringName, id: StringName) -> Dictionary:
-		if not _store.has(table):
-			return { }
-		return (_store[table].get(id, { }) as Dictionary).duplicate()
-
-
-	func find_all(_table: StringName, _filter: Dictionary) -> Array[Dictionary]:
-		return []
-
-
-	func delete(table: StringName, id: StringName) -> Error:
-		delete_calls.append({ table = table, id = id })
-		if _store.has(table):
-			_store[table].erase(id)
-		return OK
-
 
 func _make_db(policy: NetwDatabase.SchemaMismatchPolicy) -> NetwDatabase:
 	var db: NetwDatabase = auto_free(NetwDatabase.new())
 	db.mismatch_policy = policy
-	var backend: DriftMemoryBackend = auto_free(DriftMemoryBackend.new())
+	var backend: TestMemoryBackend = auto_free(TestMemoryBackend.new())
 	db.backend = backend
 	db._register_schema(&"rocks", [&"health", &"position"])
 	return db
@@ -88,7 +54,7 @@ func test_diff_record_emits_schema_mismatch_signal() -> void:
 
 func test_purge_policy_deletes_db_record() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.PURGE)
-	var backend := db.backend as DriftMemoryBackend
+	var backend := db.backend as TestMemoryBackend
 	backend.upsert(&"rocks", &"r1", { &"gold": 5 })
 
 	var record := { &"gold": 5 } # 'gold' is unknown in schema
@@ -127,7 +93,7 @@ func test_load_partial_strips_unknown_columns() -> void:
 
 func test_load_partial_does_not_delete_record() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL)
-	var backend := db.backend as DriftMemoryBackend
+	var backend := db.backend as TestMemoryBackend
 	backend.upsert(&"rocks", &"r1", { &"health": 50, &"gold": 5 })
 
 	var record := { &"health": 50, &"gold": 5 }
@@ -149,7 +115,7 @@ func test_fail_policy_returns_err_unconfigured() -> void:
 
 func test_fail_policy_does_not_delete_record() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.FAIL)
-	var backend := db.backend as DriftMemoryBackend
+	var backend := db.backend as TestMemoryBackend
 
 	var record := { &"gold": 5 }
 	var diff := db._diff_record(&"rocks", &"r1", record)
@@ -161,13 +127,13 @@ func test_fail_policy_does_not_delete_record() -> void:
 
 func test_missing_only_does_not_trigger_delete_in_purge_policy() -> void:
 	var db := _make_db(NetwDatabase.SchemaMismatchPolicy.PURGE)
-	var backend := db.backend as DriftMemoryBackend
+	var backend := db.backend as TestMemoryBackend
 	# Record is missing 'position' but has no unknown columns.
 	var record := { &"health": 10 }
 	var diff := db._diff_record(&"rocks", &"r1", record)
 	var out := [OK]
 	db._apply_mismatch_policy(&"rocks", &"r1", record, diff, out)
 
-	# Missing columns are safe - no delete should be triggered.
+	# Missing columns are safe. No delete should be triggered.
 	assert_that(backend.delete_calls.is_empty()).is_true()
 	assert_that(out[0]).is_equal(OK)

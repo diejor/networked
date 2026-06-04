@@ -7,7 +7,7 @@ var harness: NetwTestHarness
 
 func before_test() -> void:
 	harness = make_harness()
-	# No lobby manager — this suite only tests the connection layer.
+	# No lobby manager. This suite only tests the connection layer.
 	# Tests add clients themselves so signal handlers can be connected first.
 	await harness.setup(null)
 
@@ -18,32 +18,17 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_server_is_online_after_connect() -> void:
-	await harness.add_client()
-	await harness.add_client()
-	assert_that(harness.server().is_online()).is_true()
-
-
-func test_all_clients_online_after_connect() -> void:
-	await harness.add_client()
-	await harness.add_client()
-	for client in harness.clients():
-		assert_that(client.is_online()).is_true()
-
-
-func test_clients_have_distinct_peer_ids() -> void:
+func test_two_clients_connect_online_with_distinct_peer_ids() -> void:
 	var client0 := await harness.add_client()
 	var client1 := await harness.add_client()
 	var id0 := client0.multiplayer_peer.get_unique_id()
 	var id1 := client1.multiplayer_peer.get_unique_id()
-	assert_that(id0).is_not_equal(id1)
 
-
-func test_client_peer_ids_are_not_server_id() -> void:
-	await harness.add_client()
-	await harness.add_client()
+	assert_that(harness.server().is_online()).is_true()
 	for client in harness.clients():
+		assert_that(client.is_online()).is_true()
 		assert_that(client.multiplayer_peer.get_unique_id()).is_not_equal(1)
+	assert_that(id0).is_not_equal(id1)
 
 
 func test_server_emits_peer_connected_for_each_client() -> void:
@@ -58,9 +43,6 @@ func test_server_emits_peer_connected_for_each_client() -> void:
 
 
 func test_three_clients_all_online() -> void:
-	await harness.teardown()
-	harness = make_unmanaged_harness()
-	await harness.setup(null)
 	await harness.add_client()
 	await harness.add_client()
 	await harness.add_client()

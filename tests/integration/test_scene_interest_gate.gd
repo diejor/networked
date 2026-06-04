@@ -41,28 +41,22 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_scene_layer_id_matches_level_name() -> void:
+func test_scene_layer_defaults_to_deny_until_admission() -> void:
+	var peer_id := client0.multiplayer_peer.get_unique_id()
+
 	assert_that(String(server_scene.scene_layer_id())) \
 			.is_equal("scene:%s" % level_builder.scene_name)
-
-
-func test_default_deny_unadmitted_peer() -> void:
-	# Before any add_viewer, no admitted peers on the gate.
-	var peer_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(server_scene.connected_peers.has(peer_id)).is_false()
 	assert_that(server_scene.scene_visibility_filter(peer_id)).is_false()
 
 
-func test_admission_makes_peer_visible() -> void:
+func test_admission_makes_peer_visible_and_populates_client_layer() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
+
 	server_scene.connect_peer(peer_id)
 	assert_that(server_scene.connected_peers.has(peer_id)).is_true()
 	assert_that(server_scene.scene_visibility_filter(peer_id)).is_true()
 
-
-func test_client_layer_entities_populated_after_admission() -> void:
-	# MultiplayerScene enrolls players through gate.track_entity, which
-	# feeds the bound layer's client tracking path.
 	harness.spawn_player(client0, player_builder.packed)
 	await harness.wait_for_player(client0, level_builder.scene_name)
 

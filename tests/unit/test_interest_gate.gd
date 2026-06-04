@@ -60,33 +60,22 @@ func _service() -> InterestService:
 	return mt.get_service(InterestService) as InterestService
 
 
-func test_layer_add_viewer_writes_through_to_gate() -> void:
+func test_layer_writes_through_to_gate_snapshot() -> void:
 	var gate := _make_gate(&"a")
 	var layer := mt.interest.layer(&"a")
 	layer.add_viewer(7)
 	layer.add_viewer(11)
+	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	_service().flush()
 	assert_that(gate.has_viewer(7)).is_true()
 	assert_that(gate.has_viewer(11)).is_true()
-
-
-func test_layer_remove_viewer_writes_through_to_gate() -> void:
-	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
-	layer.add_viewer(7)
-	layer.remove_viewer(7)
-	_service().flush()
-	assert_that(gate.has_viewer(7)).is_false()
-
-
-func test_layer_set_policy_writes_through_to_gate() -> void:
-	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
-	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
-	_service().flush()
 	assert_that(gate.policy).is_equal(
 		NetwInterestLayer.Policy.HIDE_FROM_INSIDERS,
 	)
+
+	layer.remove_viewer(7)
+	_service().flush()
+	assert_that(gate.has_viewer(7)).is_false()
 
 
 func test_gate_picks_up_initial_layer_state_on_bind() -> void:
