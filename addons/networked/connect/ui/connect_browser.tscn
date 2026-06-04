@@ -121,11 +121,10 @@ theme_override_constants/separation = 12
 unique_name_in_owner = true
 layout_mode = 2
 theme = ExtResource("1_myxft")
-theme_override_constants/separation = 32
+theme_override_constants/separation = 16
 
 [node name="DetailsStatusDot" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsHeader" unique_id=676529510 instance=ExtResource("2_dot")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
 size_flags_vertical = 4
 theme = ExtResource("1_myxft")

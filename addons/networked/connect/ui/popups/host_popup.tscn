@@ -4,15 +4,15 @@
 [ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/connect/ui/connect_theme.tres" id="2_theme"]
 
 [node name="HostPopup" type="PopupPanel"]
-size = Vector2i(560, 480)
+size = Vector2i(500, 360)
 theme = ExtResource("2_theme")
 script = ExtResource("1_host")
 
 [node name="Margin" type="MarginContainer" parent="."]
 offset_left = 4.0
 offset_top = 4.0
-offset_right = 556.0
-offset_bottom = 476.0
+offset_right = 496.0
+offset_bottom = 356.0
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
