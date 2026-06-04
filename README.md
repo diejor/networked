@@ -7,13 +7,12 @@
 
 ## Quick Reference
 
-- **Bomber Demo:** [`examples/bomber`](examples/bomber)
+- **Bomber Demo:** [`examples/bomber`](examples/bomber), **Play Online:** at [diejor.itch.io/bomber](https://diejor.itch.io/bomber)
 - **Documentation:** [Quick Start Guide](https://networked.readthedocs.io/en/latest/getting_started/quick_start.html)
-- **Play Online:** [diejor.itch.io/bomber](https://diejor.itch.io/bomber)
 
 ## Addon Overview
 
-`networked` wraps Godot's [High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html) with a single node ([MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html)) that owns all mmultiplayer lifecycle. 
+`networked` wraps Godot's [High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html) with a single Node `[MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html)` that owns the multiplayer lifecycle, end to end.
 
 ### Notable Features
 
