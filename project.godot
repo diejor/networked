@@ -19,7 +19,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-NetworkedDebugger="*res://addons/networked/debug/core/bootstrap.gd"
+NetworkedDebugger="*uid://cqxvql5nj11ji"
 
 [debug]
 
@@ -28,6 +28,7 @@ file_logging/enable_file_logging=true
 [display]
 
 window/subwindows/embed_subwindows=false
+window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
@@ -98,4 +99,4 @@ renderer/rendering_method.mobile="gl_compatibility"
 initialization/initialize_on_startup=false
 initialization/embed_callbacks=false
 multiplayer_peer/max_channels=4
-initialization/app_id=0
+initialization/app_id=480
