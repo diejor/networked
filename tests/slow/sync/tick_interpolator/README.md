@@ -24,6 +24,6 @@ archived_tick_interpolator_edge_cases.gd.disabled
 The unit suites remain active:
 
 ```text
-res://tests/unit/test_tick_interpolator.gd
-res://tests/unit/test_tick_interpolator_signals.gd
+res://tests/unit/sync/test_tick_interpolator.gd
+res://tests/unit/sync/test_tick_interpolator_signals.gd
 ```

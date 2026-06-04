@@ -9,7 +9,7 @@ var _env: TickSimulationEnvironment
 
 func before_test() -> void:
 	_runner = scene_runner(
-		"res://tests/deprecated/tick_interpolator/tick_test_stage.tscn",
+		"res://tests/slow/sync/tick_interpolator/tick_test_stage.tscn",
 	)
 	_harness = auto_free(TickNetworkTestHarness.new())
 
