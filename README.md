@@ -1,9 +1,9 @@
 # networked
 
-[![documentation](https://readthedocs.org/projects/networked/badge/?version=latest)](https://networked.readthedocs.io/en/latest/?badge=latest)
-[![build](https://github.com/diejor/networked/actions/workflows/ci.yml/badge.svg)](https://github.com/diejor/networked/actions/workflows/ci.yml)
+[![documentation](https://img.shields.io/badge/documentation-online-green?logo=readthedocs&logoColor=white&labelColor=CFC9C8&color=6BCD69)](https://networked.readthedocs.io/en/latest/?badge=latest)
+[![build](https://img.shields.io/github/actions/workflow/status/diejor/networked/ci.yml?label=build&logo=github&logoColor=white&labelColor=CFC9C8&color=DBDCB8)](https://github.com/diejor/networked/actions/workflows/ci.yml)
 [![play](https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white)](https://diejor.itch.io/bomber)
-[![chat](https://img.shields.io/badge/Discord-join-646FA9?logo=discord&logoColor=white&labelColor=CFC9C8&color=646FA9)](https://discord.gg/7bXbVy9Zfu)
+[![chat](https://img.shields.io/badge/chat-discord-646FA9?logo=discord&logoColor=white&labelColor=CFC9C8&color=646FA9)](https://discord.gg/7bXbVy9Zfu)
 
 **A proof-of-concept multiplayer framework for Godot 4.**
 
