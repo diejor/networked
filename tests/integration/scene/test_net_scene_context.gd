@@ -60,9 +60,6 @@ func before_test() -> void:
 func after_test() -> void:
 	# Safety: ensure the tree is not left paused.
 	get_tree().paused = false
-
-	if is_instance_valid(harness):
-		await harness.teardown()
 	await super.after_test()
 
 

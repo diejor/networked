@@ -35,12 +35,6 @@ func before_test() -> void:
 	server_scene = server_mgr.active_scenes.values()[0]
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_scene_layer_defaults_to_deny_until_admission() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 

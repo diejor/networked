@@ -30,12 +30,6 @@ func before_test() -> void:
 	harness.register_spawnable_scene(level_builder.packed)
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_client_is_online_after_auto_connect_player() -> void:
 	var tree := await harness.add_connect_player(
 		harness.make_sceneless_payload("alice"),

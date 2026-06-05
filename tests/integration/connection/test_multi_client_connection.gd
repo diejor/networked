@@ -12,12 +12,6 @@ func before_test() -> void:
 	await harness.setup(null)
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_two_clients_connect_online_with_distinct_peer_ids() -> void:
 	var client0 := await harness.add_client()
 	var client1 := await harness.add_client()

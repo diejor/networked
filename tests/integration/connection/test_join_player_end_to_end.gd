@@ -34,11 +34,6 @@ func before_test() -> void:
 	alice = await harness.add_client()
 
 
-func after_test() -> void:
-	await harness.teardown()
-	await super.after_test()
-
-
 func test_join_player_spawns_with_authority_and_replicates_to_client() -> void:
 	var player := await harness.join_player(
 		alice,

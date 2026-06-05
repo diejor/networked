@@ -27,12 +27,6 @@ func before_test() -> void:
 	client_mgr = harness.scene_manager_for(client)
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func _set_spawn_fn(fn: Callable) -> void:
 	server_mgr.level_spawn_function = fn
 	client_mgr.level_spawn_function = fn

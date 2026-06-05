@@ -34,12 +34,6 @@ func before_test() -> void:
 	harness.register_spawnable_scene(level_builder.packed)
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func _listen_payload(username: String) -> JoinPayload:
 	return harness.make_spawn_payload(
 		username,

@@ -34,12 +34,6 @@ func before_test() -> void:
 	server_scene = harness.scene_on_server(level_builder.scene_name)
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 # Server-side helper: spawn client0's player and inject an
 # InterestComponent with [param report] on the server-side copy.
 # The flag is server-only; clients don't need their own copy.

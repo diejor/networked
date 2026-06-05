@@ -35,12 +35,6 @@ func before_test() -> void:
 	client1 = await harness.add_client()
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_spawned_player_joins_scene_with_identity() -> void:
 	var player := harness.spawn_player(client0, player_builder.packed)
 	await harness.wait_for_player(client0, level_builder.scene_name)

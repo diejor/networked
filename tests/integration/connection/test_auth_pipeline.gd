@@ -32,12 +32,6 @@ func before_test() -> void:
 	client_tree = await harness.create_connect_player_tree("AuthClient")
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_prepare_failure_aborts_connect() -> void:
 	var auth := _FailingPrepareAuth.new()
 	client_tree.auth_provider = auth

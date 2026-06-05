@@ -29,12 +29,6 @@ func before_test() -> void:
 	scene = server_mgr.active_scenes.values()[0]
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_initial_visibility_and_connected_peers() -> void:
 	var client_id := client0.multiplayer_peer.get_unique_id()
 	var second_id := client1.multiplayer_peer.get_unique_id()

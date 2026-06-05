@@ -27,12 +27,6 @@ func before_test() -> void:
 	await harness.add_client()
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_startup_scenes_are_active_and_idempotent() -> void:
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()

@@ -71,12 +71,6 @@ func before_test() -> void:
 	client0 = await harness.add_client()
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 ## Joins a player via the real RPC chain and overrides its database.
 func _spawn_tp_player(
 		scene_path: String,

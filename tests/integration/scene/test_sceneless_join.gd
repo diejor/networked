@@ -31,12 +31,6 @@ func before_test() -> void:
 	client = await harness.add_client()
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_default_scene_wraps_level_and_context() -> void:
 	var server := harness.server()
 	var scene_node_name := "%sScene" % level_builder.scene_name

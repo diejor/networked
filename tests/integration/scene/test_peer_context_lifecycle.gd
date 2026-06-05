@@ -45,12 +45,6 @@ func before_test() -> void:
 	client0 = await harness.add_client()
 
 
-func after_test() -> void:
-	if is_instance_valid(harness):
-		await harness.teardown()
-	await super.after_test()
-
-
 func test_context_erased_on_peer_disconnect() -> void:
 	var server := harness.server()
 	var client_peer_id := client0.multiplayer_peer.get_unique_id()
