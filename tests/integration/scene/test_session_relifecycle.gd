@@ -41,7 +41,7 @@ func after_test() -> void:
 
 
 func _listen_payload(username: String) -> JoinPayload:
-	return harness.make_join_payload(
+	return harness.make_spawn_payload(
 		username,
 		level_builder.resource_path,
 		SPAWNER_PATH,
@@ -96,7 +96,7 @@ func _join_shared_backend_without_spawn(
 	target.backend = backend
 	target.address = backend.get_join_address()
 
-	return await tree.join(target, harness.make_join_payload(username))
+	return await tree.join(target, harness.make_sceneless_payload(username))
 
 
 func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:

@@ -179,7 +179,7 @@ func add_client() -> MultiplayerTree:
 	if _clock_enabled:
 		_add_clock_node(client)
 
-	var payload := make_join_payload(username)
+	var payload := make_sceneless_payload(username)
 	var target := JoinTarget.new()
 	target.backend = client.backend
 	target.address = "localhost"
@@ -302,7 +302,7 @@ func reconnect_client(client: MultiplayerTree) -> void:
 	await _ensure_server_hosted()
 
 	var username: String = client.get_meta(&"_harness_username")
-	var payload := make_join_payload(username)
+	var payload := make_sceneless_payload(username)
 	var target := JoinTarget.new()
 	target.backend = client.backend
 	target.address = "localhost"
@@ -390,25 +390,39 @@ func join_player(
 	return scene.level.get_node_or_null(player_path)
 
 
+## Builds a [JoinPayload] that accepts a player without spawning a node.
+func make_sceneless_payload(username: String) -> JoinPayload:
+	var join_payload := JoinPayload.new()
+	join_payload.username = username
+	return join_payload
+
+
+## Builds a [JoinPayload] that spawns [param username] at
+## [param spawner_node_path].
+func make_spawn_payload(
+		username: String,
+		level_scene_path: String,
+		spawner_node_path: String,
+) -> JoinPayload:
+	var join_payload := make_sceneless_payload(username)
+	var spawner_component_path := SceneNodePath.new()
+	spawner_component_path.scene_path = level_scene_path
+	spawner_component_path.node_path = spawner_node_path
+	join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
+		spawner_component_path,
+	).to_dict()
+	return join_payload
+
+
 ## Builds a [JoinPayload] for harness driven session entry.
-##
-## Leave [param level_scene_path] and [param spawner_node_path] empty for
-## sceneless joins that should not spawn a player.
 func make_join_payload(
 		username: String,
 		level_scene_path: String = "",
 		spawner_node_path: String = "",
 ) -> JoinPayload:
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
 	if not level_scene_path.is_empty() and not spawner_node_path.is_empty():
-		var spawner_component_path := SceneNodePath.new()
-		spawner_component_path.scene_path = level_scene_path
-		spawner_component_path.node_path = spawner_node_path
-		join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
-			spawner_component_path,
-		).to_dict()
-	return join_payload
+		return make_spawn_payload(username, level_scene_path, spawner_node_path)
+	return make_sceneless_payload(username)
 
 
 ## Creates a standalone listen server and connects its local player.

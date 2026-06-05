@@ -1438,7 +1438,8 @@ func _transition(next: State) -> void:
 	assert(
 		next in _LEGAL_EDGES[state],
 		"Illegal session transition %s -> %s." % [
-			State.keys()[state], State.keys()[next],
+			State.keys()[state],
+			State.keys()[next],
 		],
 	)
 	var prev := state

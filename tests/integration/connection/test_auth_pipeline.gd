@@ -88,7 +88,7 @@ func test_no_auth_provider_trusts_client_username() -> void:
 
 
 func _join_payload(username: String) -> JoinPayload:
-	return harness.make_join_payload(
+	return harness.make_spawn_payload(
 		username,
 		level_builder.resource_path,
 		spawner_path,

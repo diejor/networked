@@ -57,7 +57,7 @@ func test_player_spawns_in_level_after_join() -> void:
 	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	var join_payload := harness.make_join_payload(
+	var join_payload := harness.make_spawn_payload(
 		username,
 		level_builder.resource_path,
 		spawner_path,
