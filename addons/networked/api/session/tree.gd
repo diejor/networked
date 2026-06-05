@@ -35,6 +35,12 @@ signal kicked(reason: String)
 signal tree_paused(reason: String)
 ## Emitted on every peer when the game is unpaused via [method unpause].
 signal tree_unpaused()
+## Emitted when the session reaches [constant MultiplayerTree.State.ONLINE] and
+## services are ready. Pairs with [signal session_ended].
+signal session_entered()
+## Emitted when the session leaves [constant MultiplayerTree.State.ONLINE] and
+## tears down. Pairs with [signal session_entered].
+signal session_ended()
 
 var _tree_ref: WeakRef
 
@@ -54,6 +60,8 @@ func _init(mt: MultiplayerTree) -> void:
 	mt.kicked.connect(kicked.emit)
 	mt.tree_paused.connect(tree_paused.emit)
 	mt.tree_unpaused.connect(tree_unpaused.emit)
+	mt.session_entered.connect(session_entered.emit)
+	mt.session_ended.connect(session_ended.emit)
 
 
 ## Returns [code]true[/code] while the underlying [MultiplayerTree] is still

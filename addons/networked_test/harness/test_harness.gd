@@ -707,9 +707,6 @@ func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
 	if not server_sm:
 		return
 	var paths: Array[String] = []
-	for path: String in server_sm.scene_paths:
-		if not paths.has(path):
-			paths.append(path)
 	for path: String in server_sm.get_configured_paths():
 		if not paths.has(path):
 			paths.append(path)

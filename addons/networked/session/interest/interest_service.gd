@@ -112,19 +112,51 @@ func _enter_tree() -> void:
 	var mt := _tree()
 	if is_instance_valid(mt):
 		mt.peer_disconnected.connect(_on_peer_disconnected)
+		mt.session_ended.connect(_on_session_ended)
 
 
 func _exit_tree() -> void:
 	var mt := _tree()
-	if is_instance_valid(mt) \
-			and mt.peer_disconnected.is_connected(_on_peer_disconnected):
-		mt.peer_disconnected.disconnect(_on_peer_disconnected)
+	if is_instance_valid(mt):
+		if mt.peer_disconnected.is_connected(_on_peer_disconnected):
+			mt.peer_disconnected.disconnect(_on_peer_disconnected)
+		if mt.session_ended.is_connected(_on_session_ended):
+			mt.session_ended.disconnect(_on_session_ended)
 	NetwServices.unregister(self, InterestService)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	_visibility_relay.erase(peer_id)
 	_observer_relay.erase(peer_id)
+
+
+# Defers the reset so it runs after any scene despawn driven by the same
+# session_ended emission has drained entity state through the normal
+# tree_exiting path. Clearing the layers and admit counters mid-despawn would
+# desync them and trip the underflow assert. Deferring makes the reset
+# independent of the order [SceneManager] and this service handle the signal.
+func _on_session_ended() -> void:
+	_clear_session_state.call_deferred()
+
+
+# Drops every per-session entry so a same-layer second session starts from clean
+# viewer and policy state. Bound gates self-unregister through their own
+# _exit_tree when their scenes despawn, so this only clears the residue.
+func _clear_session_state() -> void:
+	_layers.clear()
+	_gates.clear()
+	_entity_layers.clear()
+	_entity_filters.clear()
+	_entity_exit_handlers.clear()
+	_admit_count.clear()
+	_dirty_entities.clear()
+	_dirty_gate_layers.clear()
+	_observer_relay.clear()
+	_visibility_relay.clear()
+	_pending_visibility_events.clear()
+	_pending_attempts.clear()
+	_refresh_scheduled = false
+	_pending_visibility_flush_scheduled = false
 
 
 ## Returns the layer for [param layer_id], creating it when missing.

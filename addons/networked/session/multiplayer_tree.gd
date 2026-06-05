@@ -22,7 +22,22 @@ extends Node
 ## [/codeblock]
 
 ## Emitted when [member api], [member role], and session services are ready.
-signal configured()
+##
+## Fires on entering [constant State.ONLINE], so it pairs with
+## [signal session_ended] and the two strictly alternate. A connect attempt that
+## fails before [constant State.ONLINE] emits neither, so a subscriber that wires
+## session state here can rely on exactly one matching [signal session_ended].
+signal session_entered()
+
+## Emitted when the tree leaves [constant State.ONLINE] and tears down the
+## session.
+##
+## Fires on exiting [constant State.ONLINE] through either
+## [method disconnect_player] or the server-crash path, never on a failed
+## connect. Session-scoped subscribers that wired up on [signal session_entered]
+## release their connections and replication state here so nothing accumulates
+## across repeated sessions on the same tree.
+signal session_ended()
 
 ## Emitted when a new peer connects to the server.
 signal peer_connected(peer_id: int)
@@ -97,7 +112,21 @@ enum Role {
 
 const ADOPT_CONNECT_TIMEOUT := 15.0
 
+# Every legal [enum State] edge keyed by source state. [method _transition]
+# hard-asserts against this so every entry and exit path converges on the same
+# transitions instead of one per caller. The server-crash route reuses
+# ONLINE -> DISCONNECTING -> OFFLINE rather than a direct ONLINE -> OFFLINE edge.
+const _LEGAL_EDGES := {
+	State.OFFLINE: [State.CONNECTING],
+	State.CONNECTING: [State.ONLINE, State.OFFLINE],
+	State.ONLINE: [State.DISCONNECTING],
+	State.DISCONNECTING: [State.OFFLINE],
+}
+
 ## The current connection state of this tree.
+##
+## This var only stores the value and emits [signal state_changed]. Drive it
+## through [method _transition] so setup and teardown hooks run on each edge.
 var state: State = State.OFFLINE:
 	set(new_state):
 		if state == new_state:
@@ -136,7 +165,7 @@ func _warn_if_role_unset() -> void:
 	if role == Role.NONE:
 		Netw.dbg.warn(
 			"Accessed role-dependent property before role is set. "
-			+ "Connect to 'configured' before reading is_host/is_local_client.",
+			+ "Connect to 'session_entered' before reading is_host/is_local_client.",
 		)
 
 ## Default and active [BackendPeer] transport for this tree.
@@ -682,13 +711,13 @@ func host(quiet: bool = false) -> Error:
 			)
 		return ERR_UNCONFIGURED
 	Netw.dbg.trace("MultiplayerTree: Hosting session.")
-	state = State.CONNECTING
+	_transition(State.CONNECTING)
 	backend.peer_reset_state()
 	var prior_api := api
 
 	var setup_err: Error = await backend.setup(self)
 	if setup_err != OK:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		if not quiet:
 			Netw.dbg.error(
 				"Setup failed: %s",
@@ -706,7 +735,7 @@ func host(quiet: bool = false) -> Error:
 	# api themselves and return null, while non-adopting backends returning null
 	# are real failures.
 	if peer == null and not api_was_adopted:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		if not quiet:
 			Netw.dbg.error(
 				"Failed to host: backend produced no peer.",
@@ -719,8 +748,7 @@ func host(quiet: bool = false) -> Error:
 
 	role = Role.LISTEN_SERVER if desired_role == Role.LISTEN_SERVER \
 	else Role.DEDICATED_SERVER
-	state = State.ONLINE
-	_finalize_session()
+	_transition(State.ONLINE)
 	_auth.synthesize_host_identity()
 	return OK
 
@@ -791,13 +819,13 @@ func _open_join_transport(
 		"MultiplayerTree: Joining at %s with username %s.",
 		[server_address, username],
 	)
-	state = State.CONNECTING
+	_transition(State.CONNECTING)
 	backend.peer_reset_state()
 	var prior_api := api
 
 	var setup_err: Error = await backend.setup(self)
 	if setup_err != OK:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		if not quiet:
 			Netw.dbg.error(
 				"Setup failed: %s",
@@ -813,13 +841,13 @@ func _open_join_transport(
 		username,
 	)
 	if _join_aborted:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		return ERR_CANT_CONNECT
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
 	if peer == null and not api_was_adopted:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		if not quiet:
 			Netw.dbg.error(
 				"Failed to join: backend produced no peer.",
@@ -832,7 +860,7 @@ func _open_join_transport(
 
 	var timer := get_tree().create_timer(timeout)
 	if await Async.timeout(connected_to_server, timer) or _join_aborted:
-		state = State.OFFLINE
+		_transition(State.OFFLINE)
 		if not quiet and not _join_aborted:
 			Netw.dbg.error(
 				"Connection timed out. Server probably is not up.",
@@ -841,8 +869,7 @@ func _open_join_transport(
 		return ERR_CANT_CONNECT
 
 	role = Role.CLIENT
-	state = State.ONLINE
-	_finalize_session()
+	_transition(State.ONLINE)
 	return OK
 
 
@@ -925,13 +952,14 @@ func abort_join() -> void:
 	if api and api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
 		api.multiplayer_peer = OfflineMultiplayerPeer.new()
-	state = State.OFFLINE
+	_transition(State.OFFLINE)
 
 
 ## Flushes local save state and closes [member multiplayer_peer].
 ##
 ## [member state] returns to [constant State.OFFLINE] before this method
-## completes.
+## completes. [signal session_ended] fires on the way out so session-scoped
+## subscribers tear down.
 func disconnect_player() -> void:
 	if state == State.OFFLINE:
 		return
@@ -939,11 +967,14 @@ func disconnect_player() -> void:
 	Netw.dbg.trace("MultiplayerTree: disconnect_player called.")
 	Netw.dbg.info("Disconnecting player.")
 
-	state = State.DISCONNECTING
-
+	# Save before the transition so [method _teardown_session] does not despawn
+	# the player scenes out from under the save pass.
 	var peer_id := api.get_unique_id() if api else 0
 	if peer_id != 0:
 		SaveComponent._save_all_in(get_peer_context(peer_id))
+
+	_transition(State.DISCONNECTING)
+
 	if api and api.has_multiplayer_peer():
 		api.multiplayer_peer.close()
 
@@ -951,14 +982,7 @@ func disconnect_player() -> void:
 	if api:
 		await Async.timeout(api.server_disconnected, timer)
 
-	state = State.OFFLINE
-	role = Role.NONE
-
-	var parent := get_parent()
-	if parent:
-		var server := parent.get_node_or_null("Server") as MultiplayerTree
-		if server and server != self:
-			server.queue_free.call_deferred()
+	_transition(State.OFFLINE)
 
 
 ## Hosts a session and submits the local [param join_payload].
@@ -1405,6 +1429,39 @@ func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 	api_swapped.emit(old_api, api, reason)
 
 
+# Validates the edge against [constant _LEGAL_EDGES] and runs the exit hook for
+# the old state then the enter hook for the new one. The only caller allowed to
+# move [member state] so setup and teardown stay paired.
+func _transition(next: State) -> void:
+	if state == next:
+		return
+	assert(
+		next in _LEGAL_EDGES[state],
+		"Illegal session transition %s -> %s." % [
+			State.keys()[state], State.keys()[next],
+		],
+	)
+	var prev := state
+	_on_exit_state(prev)
+	state = next
+	_on_enter_state(next)
+
+
+# Runs the setup half on entering a state. ONLINE finalizes the live session.
+func _on_enter_state(next: State) -> void:
+	match next:
+		State.ONLINE:
+			_finalize_session()
+
+
+# Runs the teardown half on leaving a state. Leaving ONLINE tears the session
+# down so it never fires on a failed connect (CONNECTING -> OFFLINE).
+func _on_exit_state(prev: State) -> void:
+	match prev:
+		State.ONLINE:
+			_teardown_session()
+
+
 # Finalizes the session once the peer is live and the role is set.
 func _finalize_session() -> void:
 	Netw.dbg.trace("MultiplayerTree: Finalizing session.")
@@ -1413,11 +1470,26 @@ func _finalize_session() -> void:
 		[String(app_id), _app_tag()],
 	)
 	Netw.dbg.register_tree(self)
-	configured.emit()
+	session_entered.emit()
 
 	var sm := get_service(MultiplayerSceneManager)
 	if sm and not sm.startup_scenes_spawned.is_connected(host_ready.emit):
 		sm.startup_scenes_spawned.connect(host_ready.emit)
+
+
+# Mirror of [method _finalize_session]. Releases the session so session-scoped
+# subscribers unwind and a same-tree re-host starts clean. The embedded Server
+# sibling spun up by _host_player_logic is freed here too.
+func _teardown_session() -> void:
+	session_ended.emit()
+	_roster.clear()
+	role = Role.NONE
+
+	var parent := get_parent()
+	if parent:
+		var server := parent.get_node_or_null("Server") as MultiplayerTree
+		if server and server != self:
+			server.queue_free.call_deferred()
 
 
 func _bind_api_signals(target: SceneMultiplayer) -> void:
@@ -1493,3 +1565,9 @@ func _on_connected_to_server() -> void:
 func _on_server_disconnected() -> void:
 	Netw.dbg.info("Disconnected from server.")
 	server_disconnected.emit()
+
+	# A server crash routes through the same teardown as a graceful leave. The
+	# ONLINE guard makes a crash arriving mid-disconnect_player a no-op.
+	if state == State.ONLINE:
+		_transition(State.DISCONNECTING)
+		_transition(State.OFFLINE)

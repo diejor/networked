@@ -242,11 +242,11 @@ func _enter_tree() -> void:
 	if not is_instance_valid(mt):
 		return
 
-	if not mt.configured.is_connected(_on_tree_configured):
-		mt.configured.connect(_on_tree_configured)
+	if not mt.session_entered.is_connected(_on_tree_configured):
+		mt.session_entered.connect(_on_tree_configured)
 
-	if not mt.configured.is_connected(configured.emit):
-		mt.configured.connect(configured.emit)
+	if not mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.connect(configured.emit)
 
 	if mt.is_online():
 		_on_tree_configured.call_deferred()
@@ -264,11 +264,11 @@ func _exit_tree() -> void:
 	if not is_instance_valid(mt):
 		return
 
-	if mt.configured.is_connected(_on_tree_configured):
-		mt.configured.disconnect(_on_tree_configured)
+	if mt.session_entered.is_connected(_on_tree_configured):
+		mt.session_entered.disconnect(_on_tree_configured)
 
-	if mt.configured.is_connected(configured.emit):
-		mt.configured.disconnect(configured.emit)
+	if mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.disconnect(configured.emit)
 
 
 func _physics_process(delta: float) -> void:

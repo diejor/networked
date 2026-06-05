@@ -111,6 +111,7 @@ var scene_paths: Array[String]:
 var _scene_configs: Dictionary = { }
 var _scene_cache: Dictionary[String, PackedScene] = { }
 var _scene_paths: Dictionary[StringName, String] = { }
+var _debug_viewports: Node
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -227,8 +228,10 @@ func _enter_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree",
 	)
 
-	if not mt.configured.is_connected(configured.emit):
-		mt.configured.connect(configured.emit)
+	if not mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.connect(configured.emit)
+	if not mt.session_ended.is_connected(_on_session_ended):
+		mt.session_ended.connect(_on_session_ended)
 
 
 func _exit_tree() -> void:
@@ -241,8 +244,10 @@ func _exit_tree() -> void:
 		"SceneManager must be a descendant of a MultiplayerTree",
 	)
 
-	if mt.configured.is_connected(configured.emit):
-		mt.configured.disconnect(configured.emit)
+	if mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.disconnect(configured.emit)
+	if mt.session_ended.is_connected(_on_session_ended):
+		mt.session_ended.disconnect(_on_session_ended)
 
 	active_scenes.clear()
 
@@ -491,13 +496,42 @@ func _on_configured() -> void:
 	)
 
 	if multiplayer.is_server():
-		var debug_viewports: Node = VIEWPORTS_DEBUG.instantiate()
-		child_entered_tree.connect(debug_viewports.get("_on_node_entered"))
-		child_exiting_tree.connect(debug_viewports.get("_on_node_exited"))
-		add_child(debug_viewports)
+		_debug_viewports = VIEWPORTS_DEBUG.instantiate()
+		child_entered_tree.connect(_debug_viewports.get("_on_node_entered"))
+		child_exiting_tree.connect(_debug_viewports.get("_on_node_exited"))
+		add_child(_debug_viewports)
 
 		spawn_scenes.call_deferred()
 		_emit_startup_scenes_spawned.call_deferred()
+
+
+# Mirror of [method _on_configured]. Despawns every active scene so a re-host
+# rebuilds from empty, restores the spawnable list the [member scene_paths]
+# getter consumed, and frees the debug viewports node. Freeing each scene runs
+# its [InterestGate]'s _exit_tree, which unregisters from [InterestService] and
+# clears the "layer already has a bound gate" error on the second session.
+func _on_session_ended() -> void:
+	for scene: MultiplayerScene in active_scenes.values().duplicate():
+		if not is_instance_valid(scene):
+			continue
+		if scene.get_parent():
+			scene.get_parent().remove_child(scene)
+		scene.free()
+	active_scenes.clear()
+
+	# The scene_paths getter consumes the spawnable list via
+	# clear_spawnable_scenes, so re-add it and drop the array cache. The next
+	# session re-consumes the same index-based protocol from a clean slate. The
+	# default-world path registers through _scene_paths instead and is left
+	# untouched so a same-tree re-host keeps its world.
+	for path: String in scene_paths:
+		if not _has_spawnable_scene_path(path):
+			add_spawnable_scene(path)
+	scene_paths.clear()
+
+	if is_instance_valid(_debug_viewports):
+		_debug_viewports.free()
+	_debug_viewports = null
 
 
 func _emit_startup_scenes_spawned() -> void:
@@ -539,6 +573,10 @@ func _configure_default(scene_path: String) -> void:
 func get_configured_paths() -> Array[String]:
 	var paths: Array[String] = []
 	paths.assign(_scene_paths.values())
+	for i in get_spawnable_scene_count():
+		var path := get_spawnable_scene(i)
+		if not paths.has(path):
+			paths.append(path)
 	return paths
 
 

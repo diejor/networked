@@ -55,7 +55,8 @@ func _enter_tree() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(false)
 	resized.connect(_on_resized)
-	_mt.configured.connect(_subscribe_scene_manager)
+	_mt.session_entered.connect(_subscribe_scene_manager)
+	_mt.session_ended.connect(_unsubscribe_scene_manager)
 	_mt.local_player_changed.connect(_on_local_player_changed)
 
 
@@ -228,12 +229,33 @@ func _subscribe_scene_manager() -> void:
 		return
 	var sm := _mt.get_service(MultiplayerSceneManager)
 	if sm:
-		sm.scene_despawned.connect(func(_s): _refresh.call_deferred())
+		sm.scene_despawned.connect(_on_scene_despawned)
 		sm.scene_spawned.connect(_watch_scene_for_local_player_arrival)
 		sm.scene_activated.connect(_on_scene_activated)
 		sm.startup_scenes_spawned.connect(_on_startup_scenes_spawned)
 		for scene: MultiplayerScene in sm.active_scenes.values():
 			_watch_scene_for_local_player_arrival(scene)
+
+
+# Mirror of [method _subscribe_scene_manager]. Drops the SceneManager
+# subscriptions on [signal MultiplayerTree.session_ended] so a same-tree re-host
+# rewires from a clean view instead of re-connecting the same signals.
+func _unsubscribe_scene_manager() -> void:
+	var sm := _mt.get_service(MultiplayerSceneManager) if _mt else null
+	if sm:
+		if sm.scene_despawned.is_connected(_on_scene_despawned):
+			sm.scene_despawned.disconnect(_on_scene_despawned)
+		if sm.scene_spawned.is_connected(_watch_scene_for_local_player_arrival):
+			sm.scene_spawned.disconnect(_watch_scene_for_local_player_arrival)
+		if sm.scene_activated.is_connected(_on_scene_activated):
+			sm.scene_activated.disconnect(_on_scene_activated)
+		if sm.startup_scenes_spawned.is_connected(_on_startup_scenes_spawned):
+			sm.startup_scenes_spawned.disconnect(_on_startup_scenes_spawned)
+	clear_target()
+
+
+func _on_scene_despawned(_scene: MultiplayerScene) -> void:
+	_refresh.call_deferred()
 
 
 func _watch_scene_for_local_player_arrival(scene: MultiplayerScene) -> void:

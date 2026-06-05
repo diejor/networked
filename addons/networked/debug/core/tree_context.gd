@@ -233,8 +233,8 @@ func _ready() -> void:
 	# Identity changes: notify reporter to re-emit session registration.
 	mt.local_player_changed.connect(_on_local_player_changed)
 
-	# Debug signal wiring for scene/clock requires configured state.
-	mt.configured.connect(_on_configured)
+	# Debug signal wiring for scene/clock requires a live session.
+	mt.session_entered.connect(_on_configured)
 	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
 	if sm:
 		_on_configured()
@@ -259,8 +259,8 @@ func _disconnect_all() -> void:
 			mt.peer_disconnected.disconnect(_on_mt_peer_disconnected)
 		if mt.local_player_changed.is_connected(_on_local_player_changed):
 			mt.local_player_changed.disconnect(_on_local_player_changed)
-		if mt.configured.is_connected(_on_configured):
-			mt.configured.disconnect(_on_configured)
+		if mt.session_entered.is_connected(_on_configured):
+			mt.session_entered.disconnect(_on_configured)
 
 		var clock: NetworkClock = mt.get_service(NetworkClock)
 		if clock and clock.pong_received.is_connected(_on_clock_pong):

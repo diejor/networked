@@ -7,7 +7,8 @@
 class_name TPLayerAPI
 extends CanvasLayer
 
-## Forwarded from [MultiplayerTree.configured]; used to free this node on the server.
+## Forwarded from [signal MultiplayerTree.session_entered]. Frees this node on
+## the server.
 signal configured
 
 ## Progress bar driven by the transition animation.
@@ -32,8 +33,8 @@ func _enter_tree() -> void:
 		"TPLayer must be a descendant of a MultiplayerTree",
 	)
 
-	if not mt.configured.is_connected(configured.emit):
-		mt.configured.connect(configured.emit)
+	if not mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.connect(configured.emit)
 
 
 func _ready() -> void:
@@ -50,8 +51,8 @@ func _exit_tree() -> void:
 		"TPLayer must be a descendant of a MultiplayerTree",
 	)
 
-	if mt.configured.is_connected(configured.emit):
-		mt.configured.disconnect(configured.emit)
+	if mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.disconnect(configured.emit)
 
 
 ## Plays the outgoing transition (cover the screen). Awaitable.
