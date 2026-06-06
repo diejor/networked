@@ -16,6 +16,7 @@ var _session: LocalLoopbackSession
 var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
 var _host: NetwSceneRunner
+var _display_viewport: ParticipantViewport
 var _saved_time_scale := 1.0
 var _saved_physics_ticks := 60
 var _torn_down := false
@@ -113,11 +114,37 @@ func sync_ticks(n: int) -> void:
 	await stepper.sync_ticks(n)
 
 
+## Advances ordinary frames without asserting network tick progress.
+##
+## Use this for temporary visual pauses after [method show_views].
+func watch_frames(n: int) -> void:
+	assert(n >= 0, "NetwGameHarness.watch_frames: n must be non-negative.")
+	for i in n:
+		await get_tree().process_frame
+
+
 ## Sets global simulation speed for this harness session.
 func set_time_factor(factor: float) -> void:
 	assert(factor > 0.0, "NetwGameHarness.set_time_factor: factor > 0.")
 	Engine.time_scale = factor
 	Engine.set_physics_ticks_per_second(int(_saved_physics_ticks * factor))
+
+
+## Displays every participant slot in one window.
+##
+## Tests remain headless unless this method is called.
+func show_views() -> ParticipantViewport:
+	if is_instance_valid(_display_viewport):
+		_show_display_window()
+		return _display_viewport
+
+	_display_viewport = ParticipantViewport.new()
+	_display_viewport.name = &"ParticipantViewport"
+	add_child(_display_viewport)
+	for runner in _runners:
+		_display_viewport.add_slot(runner.slot)
+	_show_display_window()
+	return _display_viewport
 
 
 ## Frees all participant slots and resets global harness state.
@@ -128,6 +155,10 @@ func teardown() -> void:
 
 	Engine.time_scale = _saved_time_scale
 	Engine.set_physics_ticks_per_second(_saved_physics_ticks)
+
+	if is_instance_valid(_display_viewport):
+		_display_viewport.queue_free()
+		_display_viewport = null
 
 	for runner in _runners.duplicate():
 		if is_instance_valid(runner.slot):
@@ -175,6 +206,7 @@ func _create_runner(
 func _adopt_tree(tree: MultiplayerTree, role: MultiplayerTree.Role) -> void:
 	tree.desired_role = role
 	tree.auto_host_headless = false
+	tree.debug_join = null
 	var backend := LocalLoopbackBackend.new()
 	backend.session = _session
 	tree.backend = backend
@@ -183,6 +215,14 @@ func _adopt_tree(tree: MultiplayerTree, role: MultiplayerTree.Role) -> void:
 func _finish_online_runner(runner: NetwSceneRunner) -> void:
 	runner.peer_id = runner.tree.multiplayer_peer.get_unique_id()
 	runner.slot.peer_id = runner.peer_id
+	if is_instance_valid(_display_viewport):
+		_display_viewport.add_slot(runner.slot)
+		_show_display_window()
+
+
+func _show_display_window() -> void:
+	if _host:
+		_host.move_window_to_foreground()
 
 
 func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:

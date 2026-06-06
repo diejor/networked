@@ -5,7 +5,7 @@
 ## and stretch flag, and the on-screen rect ([member Result.inner_rect]) where
 ## its texture should be drawn. Mirrors Godot's root stretch pipeline.
 ##
-## Knows nothing about networking, multiplayer, or SubViewports — operates on
+## Knows nothing about networking, multiplayer, or SubViewports. Operates on
 ## values only, so it's trivially unit-testable in isolation.
 class_name StretchLayout
 extends RefCounted

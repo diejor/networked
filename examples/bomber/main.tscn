@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://3a3852p4fypv"]
 
-[ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="2_p4o8j"]
+[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_3fkt7"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
 [ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="3_p4o8j"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
@@ -10,9 +10,9 @@
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/transport/steam/steam_lobby_directory.gd" id="9_p4o8j"]
 
-[sub_resource type="Resource" id="Resource_ej8d4"]
-script = ExtResource("2_p4o8j")
-metadata/_custom_type_script = "uid://covt80wkpucga"
+[sub_resource type="Resource" id="Resource_ytyuk"]
+script = ExtResource("2_3fkt7")
+metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_gbknk"]
 script = ExtResource("3_p4o8j")
@@ -23,7 +23,7 @@ metadata/_custom_type_script = "uid://dp77sylvhe357"
 [node name="MultiplayerTree" type="Node" parent="." unique_id=842142872]
 unique_name_in_owner = true
 script = ExtResource("2_wto4k")
-backend = SubResource("Resource_ej8d4")
+backend = SubResource("Resource_ytyuk")
 auth_provider = SubResource("Resource_gbknk")
 app_id = &"7x283tsfmy1xpr4"
 

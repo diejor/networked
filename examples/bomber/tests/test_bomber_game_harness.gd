@@ -12,6 +12,7 @@ func before_test() -> void:
 
 
 func test_host_input_reaches_local_player_after_begin_game() -> void:
+	game.show_views()
 	var alice := await game.add_host("alice", false)
 
 	var gamestate := alice.tree.get_service(BomberGamestate) as BomberGamestate
@@ -25,6 +26,7 @@ func test_host_input_reaches_local_player_after_begin_game() -> void:
 	var input := player.get_node("Inputs")
 	var start := player.position.x
 
+	await game.sync_ticks(16)
 	alice.simulate_action_press("move_right")
 	await game.sync_ticks(8)
 
