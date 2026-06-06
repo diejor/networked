@@ -8,6 +8,9 @@ extends GdUnitSceneRunnerImpl
 ## Adopted [MultiplayerTree] inside [member scene].
 var tree: MultiplayerTree
 
+## Frame anchored waiter used by [method await_player] and [method await_scene].
+var waiter: NetwWaiter
+
 ## Viewport slot wrapping this runner's scene.
 var slot: ParticipantSlot
 
@@ -92,22 +95,13 @@ func await_player(
 		player_username: StringName,
 		timeout: float = 1.0,
 ) -> Node:
-	var found := find_player(player_username)
-	if found:
-		return found
-
-	var deadline := Time.get_ticks_msec() + int(timeout * 1000.0)
-	while Time.get_ticks_msec() < deadline:
-		await _scene_tree().process_frame
-		found = find_player(player_username)
-		if found:
-			return found
-
-	push_error(
-		"Timed out waiting for player '%s' in '%s'." %
-		[player_username, username],
+	await _active_waiter().until(
+		func() -> bool:
+			return find_player(player_username) != null,
+		"player '%s' in '%s'" % [player_username, username],
+		timeout,
 	)
-	return null
+	return find_player(player_username)
 
 
 ## Awaits an active [MultiplayerScene] named [param scene_name].
@@ -115,26 +109,17 @@ func await_scene(
 		scene_name: StringName,
 		timeout: float = 1.0,
 ) -> MultiplayerScene:
-	var found := _find_active_scene(scene_name)
-	if found:
-		return found
-
-	var deadline := Time.get_ticks_msec() + int(timeout * 1000.0)
-	while Time.get_ticks_msec() < deadline:
-		await _scene_tree().process_frame
-		found = _find_active_scene(scene_name)
-		if found:
-			return found
-
-	push_error(
-		"Timed out waiting for scene '%s' in '%s'." %
-		[scene_name, username],
+	await _active_waiter().until(
+		func() -> bool:
+			return _find_active_scene(scene_name) != null,
+		"scene '%s' in '%s'" % [scene_name, username],
+		timeout,
 	)
-	return null
+	return _find_active_scene(scene_name)
 
 
 func set_time_factor(_time_factor: float = 1.0) -> GdUnitSceneRunner:
-	assert(false, "use NetwGameHarness.set_time_factor")
+	GdAssertReports.report_error("use NetwGameHarness.set_time_factor", -1)
 	return self
 
 
@@ -142,7 +127,7 @@ func simulate_frames(
 		_frames: int,
 		_delta_milli: int = -1,
 ) -> GdUnitSceneRunner:
-	assert(false, "use NetwGameHarness.sync_ticks")
+	GdAssertReports.report_error("use NetwGameHarness.sync_ticks", -1)
 	return self
 
 
@@ -177,6 +162,16 @@ func _find_active_scene(scene_name: StringName) -> MultiplayerScene:
 	if not sm:
 		return null
 	return sm.active_scenes.get(scene_name) as MultiplayerScene
+
+
+func _active_waiter() -> NetwWaiter:
+	if waiter == null:
+		waiter = NetwWaiter.new(_scene_tree(), _default_reporter)
+	return waiter
+
+
+func _default_reporter(label: String, timeout: float) -> void:
+	push_error("Timed out waiting for '%s' after %.2fs." % [label, timeout])
 
 
 func _player_matches_username(

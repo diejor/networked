@@ -23,7 +23,9 @@ func _ready() -> void:
 	position = synced_position
 	var peer_id := _get_player_peer_id()
 	if peer_id != 0:
+		inputs.set_multiplayer_authority(peer_id)
 		$"Inputs/InputsSync".set_multiplayer_authority(peer_id)
+	_update_inputs_process_mode(peer_id)
 
 
 func _physics_process(delta: float) -> void:
@@ -101,3 +103,12 @@ func _get_player_peer_id() -> int:
 	if player_spawner:
 		return player_spawner.peer_id
 	return NetwEntity.parse_peer(name)
+
+
+func _update_inputs_process_mode(peer_id: int) -> void:
+	if multiplayer.multiplayer_peer == null:
+		inputs.process_mode = Node.PROCESS_MODE_INHERIT
+		return
+	inputs.process_mode = Node.PROCESS_MODE_INHERIT \
+			if multiplayer.get_unique_id() == peer_id \
+			else Node.PROCESS_MODE_DISABLED

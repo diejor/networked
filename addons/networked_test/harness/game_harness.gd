@@ -9,17 +9,16 @@ extends Node
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
 
-var awaiter: Callable = _default_awaiter
+var reporter: Callable = _default_reporter
 
 var _main_scene: PackedScene
 var _session: LocalLoopbackSession
+var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
 var _host: NetwSceneRunner
 var _saved_time_scale := 1.0
 var _saved_physics_ticks := 60
 var _torn_down := false
-
-signal _wait_satisfied()
 
 
 func _init(scene: PackedScene = null) -> void:
@@ -32,11 +31,20 @@ func setup() -> void:
 	_session = LocalLoopbackSession.new()
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
+	_waiter = NetwWaiter.new(get_tree(), reporter)
 	await get_tree().process_frame
 
 
 ## Adds a listen server host participant.
-func add_host(username: String = "host") -> NetwSceneRunner:
+##
+## [param spawn] may be a [SceneNodePath], [JoinPayload], [Dictionary], or
+## [code]null[/code]. When [param spawn] is a [JoinPayload], only
+## [member JoinPayload.spawn] is used. [param username] stays authoritative.
+func add_host(
+		username: String = "host",
+		wait_for_player: bool = true,
+		spawn: Variant = null,
+) -> NetwSceneRunner:
 	assert(_host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
@@ -45,17 +53,26 @@ func add_host(username: String = "host") -> NetwSceneRunner:
 	_host = runner
 
 	var err: Error = await runner.tree.host_player(
-		_make_join_payload(runner.scene(), username),
+		_make_join_payload(username, spawn),
 	)
 	assert(err == OK, "host_player() failed: %s" % error_string(err))
 
 	_finish_online_runner(runner)
-	await _wait_for_local_player(runner)
+	if wait_for_player:
+		await _wait_for_local_player(runner)
 	return runner
 
 
 ## Adds a client participant connected to [method add_host].
-func add_client(username: String) -> NetwSceneRunner:
+##
+## [param spawn] may be a [SceneNodePath], [JoinPayload], [Dictionary], or
+## [code]null[/code]. When [param spawn] is a [JoinPayload], only
+## [member JoinPayload.spawn] is used. [param username] stays authoritative.
+func add_client(
+		username: String,
+		wait_for_player: bool = true,
+		spawn: Variant = null,
+) -> NetwSceneRunner:
 	assert(_host != null, "NetwGameHarness.add_client: add host first.")
 	var runner := _create_runner(username, MultiplayerTree.Role.CLIENT)
 
@@ -64,12 +81,13 @@ func add_client(username: String) -> NetwSceneRunner:
 	target.address = "localhost"
 	var err: Error = await runner.tree.join(
 		target,
-		_make_join_payload(runner.scene(), username),
+		_make_join_payload(username, spawn),
 	)
 	assert(err == OK, "join() failed: %s" % error_string(err))
 
 	_finish_online_runner(runner)
-	await _wait_for_local_player(runner)
+	if wait_for_player:
+		await _wait_for_local_player(runner)
 	return runner
 
 
@@ -124,7 +142,8 @@ func teardown() -> void:
 	if _session:
 		_session.reset()
 	_session = null
-	awaiter = Callable()
+	_waiter = null
+	reporter = Callable()
 
 	if is_inside_tree():
 		get_parent().remove_child(self)
@@ -148,6 +167,7 @@ func _create_runner(
 	runner.slot.tree = tree
 	runner.slot.username = StringName(username)
 	runner.username = StringName(username)
+	runner.waiter = NetwWaiter.new(get_tree(), reporter)
 	_runners.append(runner)
 	return runner
 
@@ -165,24 +185,31 @@ func _finish_online_runner(runner: NetwSceneRunner) -> void:
 	runner.slot.peer_id = runner.peer_id
 
 
-func _make_join_payload(scene: Node, username: String) -> JoinPayload:
+func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
-
-	var spawner := _find_default_spawner(scene)
-	if spawner:
-		payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
-			spawner,
-		).to_dict()
+	payload.spawn = _resolve_spawn_dict(spawn, username)
 	return payload
 
 
-func _find_default_spawner(scene: Node) -> SceneNodePath:
-	for node in _collect_nodes(scene):
-		var value: Variant = node.get("spawner_options")
-		if value is Array and not value.is_empty():
-			return value[0] as SceneNodePath
-	return null
+func _resolve_spawn_dict(spawn: Variant, username: String) -> Dictionary:
+	if spawn == null:
+		return { }
+	if spawn is JoinPayload:
+		return spawn.spawn
+	if spawn is Dictionary:
+		return spawn
+	if spawn is SceneNodePath:
+		return SpawnerComponentPolicy.from_scene_node_path(spawn).to_dict()
+
+	assert(
+		false,
+		(
+			"NetwGameHarness: spawn for '%s' must be SceneNodePath, "
+			+ "JoinPayload, Dictionary, or null."
+		) % username,
+	)
+	return { }
 
 
 func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:
@@ -221,24 +248,8 @@ func _wait_until(
 		label: String,
 		timeout: float = DEFAULT_TIMEOUT,
 ) -> bool:
-	if cond.call():
-		return false
-	_poll_until(cond)
-	var timed_out: bool = await awaiter.call(_wait_satisfied, timeout, label)
-	return timed_out
+	return await _waiter.until(cond, label, timeout)
 
 
-func _poll_until(cond: Callable) -> void:
-	while is_inside_tree():
-		await get_tree().process_frame
-		if cond.call():
-			_wait_satisfied.emit()
-			return
-
-
-func _default_awaiter(sig: Signal, timeout: float, label: String) -> bool:
-	var timer := get_tree().create_timer(timeout)
-	var timed_out: bool = await Async.timeout(sig, timer)
-	if timed_out:
-		push_error("Timed out waiting for '%s' after %.2fs." % [label, timeout])
-	return timed_out
+func _default_reporter(label: String, timeout: float) -> void:
+	push_error("Timed out waiting for '%s' after %.2fs." % [label, timeout])

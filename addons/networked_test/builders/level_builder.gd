@@ -1,6 +1,4 @@
 ## Fluent builder for programmatically composing game level scenes.
-##
-## Hard-wrapped to 80 columns.
 class_name LevelBuilder
 extends RefCounted
 

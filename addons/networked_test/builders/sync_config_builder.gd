@@ -1,6 +1,4 @@
 ## Fluent builder for constructing [SceneReplicationConfig] programmatically.
-##
-## Hard-wrapped to 80 columns.
 class_name SyncConfigBuilder
 extends RefCounted
 

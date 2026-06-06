@@ -17,6 +17,15 @@ signal match_started()
 
 @onready var ctx: NetwContext = Netw.ctx(self)
 
+var world: MultiplayerScene:
+	get:
+		if not ctx or not ctx.services:
+			return null
+		var sm := ctx.services.get_scene_manager()
+		if not sm:
+			return null
+		return sm.active_scenes.get(&"World") as MultiplayerScene
+
 
 func _enter_tree() -> void:
 	NetwServices.register(self)
@@ -36,7 +45,7 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	if has_node(^"/root/World"):
+	if is_instance_valid(world):
 		if multiplayer.is_server():
 			game_error.emit("Player " + players[id] + " disconnected")
 			end_game()
@@ -107,8 +116,8 @@ func _rpc_match_started() -> void:
 
 
 func end_game() -> void:
-	if has_node(^"/root/World"):
-		get_node(^"/root/World").queue_free()
+	if is_instance_valid(world):
+		world.queue_free()
 
 	game_ended.emit()
 	players.clear()

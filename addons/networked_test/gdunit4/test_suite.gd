@@ -73,7 +73,7 @@ func make_unmanaged_harness() -> NetwTestHarness:
 
 ## Builds, parents, and auto-tears down a [NetwGameHarness].
 ##
-## The returned harness has the GdUnit4 awaiter installed. Always call
+## The returned harness has the GdUnit4 reporter installed. Always call
 ## [code]await game.setup()[/code] before adding peers.
 func make_game_harness(scene: PackedScene) -> NetwGameHarness:
 	assert(
@@ -90,7 +90,7 @@ func make_game_harness(scene: PackedScene) -> NetwGameHarness:
 ## must explicitly call [code]await harness.teardown()[/code].
 func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
 	var harness := NetwGameHarness.new(scene)
-	harness.awaiter = _GdUnitAwaiter.get_awaiter()
+	harness.reporter = _GdUnitAwaiter.get_reporter()
 	add_child(harness)
 	auto_free(harness)
 	return harness

@@ -3,8 +3,6 @@
 ## Tracks all generated resources to clean them up from Godot's memory-only
 ## [ResourceCache] between test suites or test cases, ensuring no memory leak
 ## growth or collision across runs.
-## [br][br]
-## Hard-wrapped to 80 columns.
 class_name NetwPathNamespace
 extends Object
 

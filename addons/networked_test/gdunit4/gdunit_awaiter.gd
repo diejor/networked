@@ -17,6 +17,12 @@ static func get_awaiter() -> Callable:
 	return await_signal
 
 
+## Returns a timeout reporter as a [Callable] matching
+## [code]func(String, float) -> void[/code].
+static func get_reporter() -> Callable:
+	return report_timeout
+
+
 ## Awaits [param sig] with [param timeout] seconds. On timeout, reports
 ## via [code]GdAssertReports.report_error[/code] and returns
 ## [code]true[/code]. [param label] is included in the failure message.
@@ -31,3 +37,11 @@ static func await_signal(sig: Signal, timeout: float, label: String) -> bool:
 			-1,
 		)
 	return timed_out
+
+
+## Reports a timeout for [param label] after [param timeout] seconds.
+static func report_timeout(label: String, timeout: float) -> void:
+	GdAssertReports.report_error(
+		"Timed out waiting for '%s' after %.2fs." % [label, timeout],
+		-1,
+	)

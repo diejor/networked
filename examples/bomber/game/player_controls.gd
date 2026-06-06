@@ -1,4 +1,4 @@
-extends Node
+extends InputComponent
 
 @export var motion := Vector2():
 	set(value):
@@ -7,17 +7,35 @@ extends Node
 
 @export var bombing: bool = false
 
+@export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+var move_left: StringName = "move_left"
+@export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+var move_right: StringName = "move_right"
+@export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+var move_up: StringName = "move_up"
+@export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+var move_down: StringName = "move_down"
+@export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
+var set_bomb: StringName = "set_bomb"
 
+
+## Returns the action names tracked by this bomber control component.
+func get_inputs() -> Array:
+	return [
+		move_left,
+		move_right,
+		move_up,
+		move_down,
+		set_bomb,
+	]
+
+
+## Updates [member motion] and [member bombing] from tracked input state.
 func update() -> void:
-	var m := Vector2()
-	if Input.is_action_pressed(&"move_left"):
-		m += Vector2(-1, 0)
-	if Input.is_action_pressed(&"move_right"):
-		m += Vector2(1, 0)
-	if Input.is_action_pressed(&"move_up"):
-		m += Vector2(0, -1)
-	if Input.is_action_pressed(&"move_down"):
-		m += Vector2(0, 1)
-
-	motion = m
-	bombing = Input.is_action_pressed(&"set_bomb")
+	motion = get_vector2(
+		move_left,
+		move_right,
+		move_up,
+		move_down,
+	)
+	bombing = is_down(set_bomb)

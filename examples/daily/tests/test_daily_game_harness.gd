@@ -5,6 +5,9 @@ const MAIN := preload("res://examples/daily/Main.tscn")
 const LEVEL_1 := preload("res://examples/daily/Level1.tscn")
 const LEVEL_2 := preload("res://examples/daily/Level2.tscn")
 const PLAYER := preload("res://examples/daily/Player.tscn")
+const LEVEL_1_SPAWN := (
+	"uid://bqi7mvxdnvgch::Player/%SpawnerComponent"
+)
 
 var game: NetwGameHarness
 
@@ -15,7 +18,7 @@ func before_test() -> void:
 
 
 func test_host_input_reaches_local_player_after_add_host() -> void:
-	var alice := await game.add_host("alice")
+	var alice := await game.add_host("alice", true, _level_1_spawn())
 
 	var player := alice.local_player as Node2D
 	assert_that(player).is_not_null()
@@ -34,8 +37,8 @@ func test_host_input_reaches_local_player_after_add_host() -> void:
 
 
 func test_client_input_reaches_local_player() -> void:
-	await game.add_host("alice")
-	var bob := await game.add_client("bob")
+	await game.add_host("alice", true, _level_1_spawn())
+	var bob := await game.add_client("bob", true, _level_1_spawn())
 
 	var player := bob.local_player as Node2D
 	assert_that(player).is_not_null()
@@ -57,11 +60,10 @@ func test_client_input_reaches_local_player() -> void:
 
 
 func test_host_input_replicates_to_client() -> void:
-	var alice := await game.add_host("alice")
-	var bob := await game.add_client("bob")
+	var alice := await game.add_host("alice", true, _level_1_spawn())
+	var bob := await game.add_client("bob", true, _level_1_spawn())
 
 	var alice_on_bob: Node2D = await bob.await_player(&"alice", 2.0)
-	assert_that(alice_on_bob).is_not_null()
 	var start := alice_on_bob.position.x
 
 	alice.simulate_action_press("move_right")
@@ -75,3 +77,7 @@ func test_host_input_replicates_to_client() -> void:
 
 func _input_for(player: Node) -> MoveInputComponent:
 	return player.get_node("%InputComponent") as MoveInputComponent
+
+
+func _level_1_spawn() -> SceneNodePath:
+	return SceneNodePath.new(LEVEL_1_SPAWN)

@@ -1,6 +1,4 @@
 ## Utility for safely composing and packing dynamic node trees in memory.
-##
-## Hard-wrapped to 80 columns.
 class_name SceneAssembly
 extends Object
 

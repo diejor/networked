@@ -27,6 +27,13 @@ func increase_score(for_who: int) -> void:
 	pl.label.set_text(pl.name + "\n" + str(pl.score))
 
 
+## Returns the score for [param for_who], or [code]0[/code] if absent.
+func get_score(for_who: int) -> int:
+	if not player_labels.has(for_who):
+		return 0
+	return int(player_labels[for_who].score)
+
+
 func add_player(id: int, new_player_name: String) -> void:
 	if id in player_labels:
 		return
