@@ -4,7 +4,6 @@
 class_name SceneAssembly
 extends Object
 
-
 ## Attaches a [param child] node to a [param parent] and sets its owner.
 ##
 ## Recursively sets the owner of the child node tree to [param child_owner]
@@ -36,9 +35,9 @@ static func pack_with_path(root: Node, path: String) -> PackedScene:
 	instantiated.free()
 	assert(
 		live_count == packed_count,
-		"SceneAssembly: Child count mismatch. " + \
+		"SceneAssembly: Child count mismatch. " +
 		"Expected %d, got %d. Did you forget to set owner?" % \
-		[live_count, packed_count]
+				[live_count, packed_count],
 	)
 	packed.take_over_path(path)
 	return packed
@@ -53,7 +52,6 @@ static func _strip_netw_entity_meta_recursive(node: Node) -> void:
 		node.remove_meta(&"netw_entity")
 	for child in node.get_children():
 		_strip_netw_entity_meta_recursive(child)
-
 
 
 # Recursively sets the owner of the [param node] tree to [param new_owner].

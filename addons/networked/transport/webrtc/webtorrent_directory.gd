@@ -102,6 +102,8 @@ const BOARD_RECONNECT_COOLDOWN := 5.0
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	if Netw.is_test_env():
+		return
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
 	NetwServices.register(self)

@@ -12,6 +12,7 @@ const _GdUnitAwaiter := preload(
 )
 
 var _netw_managed_harness: NetwTestHarness
+var _netw_managed_game_harness: NetwGameHarness
 
 
 ## Factory that creates a default [MultiplayerSceneManager] for tests.
@@ -52,7 +53,7 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 func make_harness() -> NetwTestHarness:
 	assert(
 		_netw_managed_harness == null,
-		"make_harness: harness already created."
+		"make_harness: harness already created.",
 	)
 	_netw_managed_harness = make_unmanaged_harness()
 	return _netw_managed_harness
@@ -64,6 +65,31 @@ func make_harness() -> NetwTestHarness:
 ## explicitly call [code]await harness.teardown()[/code].
 func make_unmanaged_harness() -> NetwTestHarness:
 	var harness := NetwTestHarness.new()
+	harness.awaiter = _GdUnitAwaiter.get_awaiter()
+	add_child(harness)
+	auto_free(harness)
+	return harness
+
+
+## Builds, parents, and auto-tears down a [NetwGameHarness].
+##
+## The returned harness has the GdUnit4 awaiter installed. Always call
+## [code]await game.setup()[/code] before adding peers.
+func make_game_harness(scene: PackedScene) -> NetwGameHarness:
+	assert(
+		_netw_managed_game_harness == null,
+		"make_game_harness: harness already created.",
+	)
+	_netw_managed_game_harness = make_unmanaged_game_harness(scene)
+	return _netw_managed_game_harness
+
+
+## Builds, parents, and auto-frees an unmanaged [NetwGameHarness].
+##
+## Use this only for additional game harnesses inside a test case. The caller
+## must explicitly call [code]await harness.teardown()[/code].
+func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
+	var harness := NetwGameHarness.new(scene)
 	harness.awaiter = _GdUnitAwaiter.get_awaiter()
 	add_child(harness)
 	auto_free(harness)
@@ -119,4 +145,7 @@ func after_test() -> void:
 	if is_instance_valid(_netw_managed_harness):
 		await _netw_managed_harness.teardown()
 	_netw_managed_harness = null
+	if is_instance_valid(_netw_managed_game_harness):
+		await _netw_managed_game_harness.teardown()
+	_netw_managed_game_harness = null
 	clean_temp_dir()

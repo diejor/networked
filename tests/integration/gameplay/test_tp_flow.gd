@@ -103,9 +103,6 @@ func _tp_target(scene_path: String, node_path: String) -> SceneNodePath:
 	return target
 
 
-
-
-
 func test_tp_spawn_places_player_in_start_scene() -> void:
 	var player := await _spawn_tp_player(level_builder.resource_path)
 

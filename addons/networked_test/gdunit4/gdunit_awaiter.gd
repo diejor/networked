@@ -12,7 +12,6 @@
 ## [code]push_error[/code]-backed implementation instead.
 extends RefCounted
 
-
 ## Returns the awaiter as a [Callable] matching the contract.
 static func get_awaiter() -> Callable:
 	return await_signal

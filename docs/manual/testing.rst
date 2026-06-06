@@ -69,6 +69,47 @@ If a test needs its own cleanup, call the base hook last:
 Use ``make_unmanaged_harness()`` only when one test case intentionally needs
 an extra harness. Unmanaged harnesses must be torn down explicitly.
 
+Testing real game scenes
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``make_game_harness(main_scene)`` when the test should adopt a real
+game ``main.tscn`` instead of building trees from fixtures. The harness
+mounts each participant in a ``ParticipantSlot``, promotes one instance to a
+listen server, connects client instances through local loopback, and owns
+``sync_ticks()`` for the shared clock.
+
+Per participant input must enter through ``_unhandled_input``. Prefer
+``InputComponent`` for player controls. Polling the global ``Input`` singleton
+cannot be scoped to one slot, so it is unsupported for slot routed game tests.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    class_name TestDailyTwoPlayers
+    extends NetwTestSuite
+
+    const MAIN := preload("res://examples/daily/Main.tscn")
+
+    var game: NetwGameHarness
+
+    func before_test() -> void:
+        game = make_game_harness(MAIN)
+        await game.setup()
+
+    func test_bob_sees_alice_move() -> void:
+        var alice := await game.add_host("alice")
+        var bob := await game.add_client("bob")
+
+        var alice_on_bob: Node2D = await bob.await_player(&"alice")
+        var start := alice_on_bob.position.x
+
+        alice.simulate_action_press("move_right")
+        await game.sync_ticks(16)
+        alice.simulate_action_release("move_right")
+        await game.sync_ticks(16)
+
+        assert_that(alice_on_bob.position.x).is_greater(start)
+
 Transport-specific tests
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

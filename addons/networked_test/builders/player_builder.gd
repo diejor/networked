@@ -4,7 +4,6 @@
 class_name PlayerBuilder
 extends RefCounted
 
-
 ## The unique name identifier for this player builder.
 var player_name: StringName
 ## The resource path assigned to the packed scene.
@@ -37,6 +36,7 @@ func _init(p_player_name: String = "") -> void:
 static func reset_counter() -> void:
 	_uid_counter = 0
 
+
 ## Configures the custom root node class or script type.
 func with_root(type: Variant) -> PlayerBuilder:
 	var dummy = type.new()
@@ -61,8 +61,8 @@ func with_save(database: Resource, table: StringName) -> PlayerBuilder:
 
 ## Configures the [TPComponent] on the player entity.
 func with_tp(
-	level_scene_path: String,
-	spawner_node_path: String
+		level_scene_path: String,
+		spawner_node_path: String,
 ) -> PlayerBuilder:
 	_tp_level_scene_path = level_scene_path
 	_tp_spawner_node_path = spawner_node_path
@@ -71,7 +71,7 @@ func with_tp(
 
 ## Configures the [MultiplayerSynchronizer] (PlayerSync) with a sync config.
 func with_player_sync(
-	config_builder: SyncConfigBuilder
+		config_builder: SyncConfigBuilder,
 ) -> PlayerBuilder:
 	_player_sync_config_builder = config_builder
 	return self
@@ -81,20 +81,20 @@ func with_player_sync(
 func build() -> Node:
 	var root: Node = _root_type.new()
 	root.name = _name
-	
+
 	if _has_spawner:
 		var spawner := SpawnerComponent.new()
 		spawner.set("authority_mode", SpawnerComponent.AuthorityMode.CLIENT)
 		spawner.set_meta("_custom_type_script", "uid://bspawnrcomp001")
 		var _a1: Node = SceneAssembly.attach(root, spawner, root)
-		
+
 	if _save_database != null:
 		var save_comp := SaveComponent.new()
 		save_comp.set("database", _save_database)
 		save_comp.set("table_name", _save_table)
 		save_comp.replication_config = SceneReplicationConfig.new()
 		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
-		
+
 	if not _tp_level_scene_path.is_empty():
 		var tp_comp := TPComponent.new()
 		var snp: SceneNodePath = SceneNodePath.new()
@@ -102,7 +102,7 @@ func build() -> Node:
 		snp.node_path = _tp_spawner_node_path
 		tp_comp.set("starting_scene_path", snp)
 		var _a3: Node = SceneAssembly.attach(root, tp_comp, root)
-		
+
 	var player_sync: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
 	player_sync.name = "PlayerSync"
 	var sync_cfg: SceneReplicationConfig
@@ -112,7 +112,7 @@ func build() -> Node:
 		sync_cfg = SceneReplicationConfig.new()
 	player_sync.replication_config = sync_cfg
 	var _a4: Node = SceneAssembly.attach(root, player_sync, root)
-	
+
 	return root
 
 
@@ -120,7 +120,7 @@ func build() -> Node:
 func pack(custom_path: String = "") -> PackedScene:
 	var root: Node = build()
 	var path: String = custom_path if not custom_path.is_empty() else \
-			NetwPathNamespace.next_path("player", _name)
+	NetwPathNamespace.next_path("player", _name)
 	var p: PackedScene = SceneAssembly.pack_with_path(root, path)
 	NetwPathNamespace.register_resource(p)
 	root.free()

@@ -4,7 +4,6 @@
 ## [ConnectBrowser] to enter the session.
 extends CanvasLayer
 
-
 enum State { PRE_LOBBY, IN_LOBBY }
 
 @warning_ignore("unused_private_class_variable")
@@ -60,13 +59,13 @@ func _on_browser_session_entered() -> void:
 		if multiplayer_tree.role == MultiplayerTree.Role.LISTEN_SERVER:
 			if multiplayer_tree.backend is SteamBackend:
 				_pending_title = "Lobby %s (you)" % \
-					multiplayer_tree.backend.get_join_address()
+						multiplayer_tree.backend.get_join_address()
 			else:
 				_pending_title = "Direct Host (you)"
 		else:
 			if multiplayer_tree.backend is SteamBackend:
 				_pending_title = "Lobby %s" % \
-					multiplayer_tree.backend.get_join_address()
+						multiplayer_tree.backend.get_join_address()
 			else:
 				_pending_title = "Direct Client"
 

@@ -2,6 +2,7 @@ extends MultiplayerSpawner
 
 const BOMB = preload("uid://3uxvvsya0q1t")
 
+
 func _init() -> void:
 	spawn_function = _spawn_bomb
 

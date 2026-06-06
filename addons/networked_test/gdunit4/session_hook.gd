@@ -19,7 +19,7 @@ var _session: GdUnitTestSession
 var _session_log_scope: NetwLogScope
 var _test_log_scope: NetwLogScope
 var _test_debug_scope: NetwDbgScope
-var _test_log_overrides: Dictionary = {}
+var _test_log_overrides: Dictionary = { }
 
 
 func _init() -> void:
@@ -41,8 +41,8 @@ static func enable_current_test_debugger() -> void:
 func startup(session: GdUnitTestSession) -> GdUnitResult:
 	assert(
 		Netw.is_test_env(),
-		"NetwTestHook: GdUnit4 environment not detected! " + \
-		"Check markers (Engine meta or cmdline args)."
+		"NetwTestHook: GdUnit4 environment not detected! " +
+		"Check markers (Engine meta or cmdline args).",
 	)
 	_active_hook = self
 	_session = session
@@ -63,7 +63,7 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	OS.set_environment("NETW_TEST_LOG", log_level)
 	session.test_event.connect(_on_test_event)
 	_baseline_resource_count = int(
-		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)
 
 	return GdUnitResult.success()
@@ -92,7 +92,7 @@ func _on_test_event(event: GdUnitEvent) -> void:
 		_reset_debugger()
 		NetwLog.start_test_case_buffering()
 		_pre_test_resource_count = int(
-			Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+			Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 		)
 		if _test_log_overrides.has(event.test_name()):
 			_open_test_log_scope(_test_log_overrides[event.test_name()])
@@ -140,23 +140,27 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 			var child := root.get_child(i)
 			leaks.append("%s:<%s>" % [child.name, child.get_class()])
 
-		push_error("TEST ISOLATION LEAK [%s]: Leaked %d root children: %s" % [
-			event.test_name(),
-			current_count - _baseline_child_count,
-			", ".join(leaks)
-		])
+		push_error(
+			"TEST ISOLATION LEAK [%s]: Leaked %d root children: %s" % [
+				event.test_name(),
+				current_count - _baseline_child_count,
+				", ".join(leaks),
+			],
+		)
 
 	if not NetTrace._active.is_empty():
-		push_error("TEST ISOLATION LEAK [%s]: Leaked %d NetTrace spans." % [
-			event.test_name(),
-			NetTrace._active.size()
-		])
+		push_error(
+			"TEST ISOLATION LEAK [%s]: Leaked %d NetTrace spans." % [
+				event.test_name(),
+				NetTrace._active.size(),
+			],
+		)
 		NetTrace.reset()
 
 	if LocalLoopbackSession.shared != null:
 		push_error(
-			"TEST ISOLATION LEAK [%s]: LocalLoopbackSession.shared was " + \
-			"not cleared." % [event.test_name()]
+			"TEST ISOLATION LEAK [%s]: LocalLoopbackSession.shared was " +
+			"not cleared." % [event.test_name()],
 		)
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
@@ -164,16 +168,18 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 
 func _track_resource_delta(event: GdUnitEvent) -> void:
 	var current_count := int(
-		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)
+		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)
 	var growth := current_count - _pre_test_resource_count
 	if growth <= 0:
 		return
-	_top_resource_growths.append({
-		"label": _resolve_test_label(event),
-		"growth": growth,
-		"after": current_count,
-	})
+	_top_resource_growths.append(
+		{
+			"label": _resolve_test_label(event),
+			"growth": growth,
+			"after": current_count,
+		},
+	)
 	_top_resource_growths.sort_custom(
 		func(a, b): return a["growth"] > b["growth"]
 	)
@@ -194,15 +200,19 @@ func _report_resource_delta() -> void:
 		return
 	var lines: Array[String] = []
 	for entry in _top_resource_growths:
-		lines.append("  +%d (now %d) %s" % [
-			entry["growth"], entry["after"], entry["label"],
-		])
+		lines.append(
+			"  +%d (now %d) %s" % [
+				entry["growth"],
+				entry["after"],
+				entry["label"],
+			],
+		)
 	push_warning(
 		"TEST RESOURCE GROWTH (top %d offenders, baseline %d):\n%s" % [
 			_top_resource_growths.size(),
 			_baseline_resource_count,
 			"\n".join(lines),
-		]
+		],
 	)
 
 

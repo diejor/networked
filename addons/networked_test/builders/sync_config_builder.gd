@@ -18,19 +18,21 @@ var _properties: Array[Dictionary] = []
 ##
 ## Returns the [SyncConfigBuilder] instance to support fluent chaining.
 func property(
-	path: String,
-	spawn: bool = true,
-	mode: int = ON_CHANGE,
-	watch: bool = false,
-	sync_flag: bool = false
+		path: String,
+		spawn: bool = true,
+		mode: int = ON_CHANGE,
+		watch: bool = false,
+		sync_flag: bool = false,
 ) -> SyncConfigBuilder:
-	_properties.append({
-		"path": NodePath(path),
-		"spawn": spawn,
-		"mode": mode,
-		"watch": watch,
-		"sync": sync_flag
-	})
+	_properties.append(
+		{
+			"path": NodePath(path),
+			"spawn": spawn,
+			"mode": mode,
+			"watch": watch,
+			"sync": sync_flag,
+		},
+	)
 	return self
 
 

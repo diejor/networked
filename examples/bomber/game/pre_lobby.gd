@@ -3,9 +3,7 @@
 ## Bound to [LobbyDirectory].
 extends Control
 
-
 signal status_message(text: String)
-
 
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _max_spin: SpinBox = %MaxSpin
@@ -79,7 +77,7 @@ func _on_list_updated(lobbies: Array[LobbyInfo]) -> void:
 	_list.clear()
 	for info in lobbies:
 		var display := info.lobby_name if not info.lobby_name.is_empty() \
-			else "(unnamed)"
+		else "(unnamed)"
 		var label := "%s  -  %d/%d" % [display, info.players, info.max_players]
 		var host := info.metadata.get("host", "") as String
 		if not host.is_empty():

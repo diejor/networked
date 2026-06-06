@@ -338,6 +338,7 @@ func register_player(player: Node) -> void:
 	_players_by_peer[peer_id] = weakref(player)
 	connect_peer(peer_id)
 	track_node(player)
+	_assign_local_player_if_needed(player, peer_id)
 	_flush_gate_now()
 	var bound := _on_player_exiting.bind(player)
 	if not player.tree_exiting.is_connected(bound):
@@ -383,6 +384,28 @@ func _find_peer_for_player(player: Node) -> int:
 		if _players_by_peer[peer_id].get_ref() == player:
 			return peer_id
 	return 0
+
+
+func _assign_local_player_if_needed(player: Node, peer_id: int) -> void:
+	var mt := MultiplayerTree.resolve(self)
+	if not mt or not mt.multiplayer_api:
+		return
+	if peer_id != mt.multiplayer_api.get_unique_id():
+		return
+	if player.is_node_ready():
+		mt.local_player = player
+		return
+	if not player.ready.is_connected(_assign_ready_local_player.bind(player)):
+		player.ready.connect(
+			_assign_ready_local_player.bind(player),
+			CONNECT_ONE_SHOT,
+		)
+
+
+func _assign_ready_local_player(player: Node) -> void:
+	var mt := MultiplayerTree.resolve(self)
+	if mt and is_instance_valid(player):
+		mt.local_player = player
 
 
 func _flush_interest_now() -> void:

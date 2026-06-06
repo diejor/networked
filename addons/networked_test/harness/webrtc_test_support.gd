@@ -14,7 +14,6 @@
 class_name WebRTCTestSupport
 extends RefCounted
 
-
 ## Builds and hosts a [MultiplayerTree] backed by [PairedWebRTCBackend].
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
@@ -31,7 +30,7 @@ static func start_host(parent: Node) -> Dictionary:
 	if err != OK:
 		push_error("WebRTCTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
-		return {}
+		return { }
 	return {
 		tree = tree,
 		backend = tree.backend,
@@ -42,7 +41,8 @@ static func start_host(parent: Node) -> Dictionary:
 ## Builds an offline client [MultiplayerTree] wired with a paired WebRTC
 ## backend. The tree is added under [param parent] but has not connected.
 static func make_client_tree(
-	parent: Node, name_suffix: String = ""
+		parent: Node,
+		name_suffix: String = "",
 ) -> MultiplayerTree:
 	var tree := MultiplayerTree.new()
 	tree.name = "WebRTCClient%s" % name_suffix

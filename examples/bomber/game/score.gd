@@ -1,8 +1,9 @@
 extends HBoxContainer
 
-var player_labels := {}
+var player_labels := { }
 
 const MONTSERRAT = preload("uid://bqb7l2e05u3j0")
+
 
 func _process(_delta: float) -> void:
 	var rocks_left := $"../Rocks".get_child_count()
@@ -29,7 +30,7 @@ func increase_score(for_who: int) -> void:
 func add_player(id: int, new_player_name: String) -> void:
 	if id in player_labels:
 		return
-	
+
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text = new_player_name + "\n" + "0"
@@ -41,7 +42,7 @@ func add_player(id: int, new_player_name: String) -> void:
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
 	label.add_theme_font_override(
 		&"font",
-		MONTSERRAT
+		MONTSERRAT,
 	)
 	label.add_theme_color_override(&"font_outline_color", Color.BLACK)
 	label.add_theme_constant_override(&"outline_size", 9)
@@ -57,11 +58,11 @@ func add_player(id: int, new_player_name: String) -> void:
 
 func _ready() -> void:
 	$"../Winner".hide()
-	
+
 	var ctx := Netw.ctx(self)
 	if not ctx or not ctx.tree:
 		return
-	
+
 	for rj: ResolvedJoin in ctx.tree.get_joined_players():
 		add_player(rj.peer_id, str(rj.username))
 

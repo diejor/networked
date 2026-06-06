@@ -1,13 +1,12 @@
 class_name BomberGamestate
 extends Node
-
 ## Manages the bomber game state as a session service.
 
 const DEFAULT_PORT = 10567
 const MAX_PEERS = 12
 
 var player_name: String = "The Warrior"
-var players := {}
+var players := { }
 
 signal player_list_changed()
 signal connection_failed()
@@ -18,12 +17,14 @@ signal match_started()
 
 @onready var ctx: NetwContext = Netw.ctx(self)
 
+
 func _enter_tree() -> void:
 	NetwServices.register(self)
 
 
 func _exit_tree() -> void:
 	NetwServices.unregister(self)
+
 
 func _ready() -> void:
 	setup_connections()
@@ -45,6 +46,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_ok() -> void:
 	connection_succeeded.emit()
+
 
 func _on_server_disconnected() -> void:
 	game_error.emit("Server disconnected")
@@ -70,7 +72,7 @@ func host_game(_player_name: String) -> void:
 	player_name = _player_name
 	var jp := JoinPayload.new()
 	jp.username = _player_name
-	
+
 	ctx.tree.host_player(jp)
 
 
@@ -107,7 +109,7 @@ func _rpc_match_started() -> void:
 func end_game() -> void:
 	if has_node(^"/root/World"):
 		get_node(^"/root/World").queue_free()
-	
+
 	game_ended.emit()
 	players.clear()
 

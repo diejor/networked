@@ -5,7 +5,7 @@
 class_name TickNetworkTestHarness
 extends Node
 
-const TICKRATE       := 30
+const TICKRATE := 30
 const DISPLAY_OFFSET := 3
 const DELTA_INTERVAL := 0.05
 
@@ -49,7 +49,7 @@ func _make_replication_config(prop_path: NodePath) -> SceneReplicationConfig:
 	cfg.add_property(prop_path)
 	cfg.property_set_replication_mode(
 		prop_path,
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 	)
 	cfg.property_set_spawn(prop_path, false)
 	cfg.property_set_watch(prop_path, true)
@@ -57,9 +57,9 @@ func _make_replication_config(prop_path: NodePath) -> SceneReplicationConfig:
 
 
 func _build_server_node(
-	node_name: StringName,
-	prop_path: NodePath,
-	extra_child: Node = null
+		node_name: StringName,
+		prop_path: NodePath,
+		extra_child: Node = null,
 ) -> Node2D:
 	var player := Node2D.new()
 	player.name = node_name
@@ -85,10 +85,10 @@ func _build_server_node(
 
 
 func _build_client_node(
-	node_name: StringName,
-	prop_path: NodePath,
-	interp_props: Dictionary,
-	extra_child: Node = null
+		node_name: StringName,
+		prop_path: NodePath,
+		interp_props: Dictionary,
+		extra_child: Node = null,
 ) -> Node2D:
 	var player := Node2D.new()
 	player.name = node_name
@@ -114,7 +114,7 @@ func _build_client_node(
 	interp.name = "TickInterpolator"
 	interp.trace_interval = 1
 	# Keeps the exported typed dictionary assignment valid.
-	var modes: Dictionary[StringName, TickInterpolator.Mode] = {}
+	var modes: Dictionary[StringName, TickInterpolator.Mode] = { }
 	for key in interp_props:
 		modes[key] = interp_props[key]
 	interp.property_modes = modes
@@ -131,11 +131,11 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	env.server_node = _build_server_node(node_name, NodePath(".:position"))
 	get_server().add_child(env.server_node)
 
-	var interp_props = {&"position": TickInterpolator.Mode.LERP}
+	var interp_props = { &"position": TickInterpolator.Mode.LERP }
 	env.client_node = _build_client_node(
 		node_name,
 		NodePath(".:position"),
-		interp_props
+		interp_props,
 	)
 	get_client().add_child(env.client_node)
 
@@ -147,7 +147,7 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 
 ## Creates synchronized server/client [Sprite2D] pairs for modulate tests.
 func create_environment_with_sprite(
-	node_name: StringName
+		node_name: StringName,
 ) -> TickSimulationEnvironment:
 	var env := TickSimulationEnvironment.new()
 
@@ -156,18 +156,18 @@ func create_environment_with_sprite(
 	env.server_node = _build_server_node(
 		node_name,
 		NodePath("Sprite2D:modulate"),
-		s_sprite
+		s_sprite,
 	)
 	get_server().add_child(env.server_node)
 
 	var c_sprite := Sprite2D.new()
 	c_sprite.name = "Sprite2D"
-	var interp_props = {&"Sprite2D:modulate": TickInterpolator.Mode.LERP}
+	var interp_props = { &"Sprite2D:modulate": TickInterpolator.Mode.LERP }
 	env.client_node = _build_client_node(
 		node_name,
 		NodePath("Sprite2D:modulate"),
 		interp_props,
-		c_sprite
+		c_sprite,
 	)
 	get_client().add_child(env.client_node)
 
@@ -198,10 +198,10 @@ func sync_ticks_real(n: int) -> void:
 	# Calculates approximate frames needed: ticks * physics_fps / tickrate.
 	var physics_fps: int = ProjectSettings.get_setting(
 		"physics/common/physics_ticks_per_second",
-		60
+		60,
 	)
 	var estimated_frames := ceili(
-		float(n) * float(physics_fps) / float(TICKRATE)
+		float(n) * float(physics_fps) / float(TICKRATE),
 	)
 
 	# Simulates the bulk of frames in one call.
@@ -230,7 +230,7 @@ func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
 
 	assert(
 		client_clock.is_synchronized,
-		"Timed out waiting for NetworkClock synchronization"
+		"Timed out waiting for NetworkClock synchronization",
 	)
 
 
@@ -238,7 +238,7 @@ func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
 func yield_to_sync(extra_frames: int = 0) -> void:
 	# Covers the display offset plus the replication interval.
 	var needed_ticks := DISPLAY_OFFSET + ceili(DELTA_INTERVAL * TICKRATE) + \
-		4 + extra_frames
+			4 + extra_frames
 	await sync_ticks_real(needed_ticks)
 
 

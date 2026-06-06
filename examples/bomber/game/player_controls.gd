@@ -7,6 +7,7 @@ extends Node
 
 @export var bombing: bool = false
 
+
 func update() -> void:
 	var m := Vector2()
 	if Input.is_action_pressed(&"move_left"):

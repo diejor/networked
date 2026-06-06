@@ -57,6 +57,8 @@ signal _lobby_joined_internal(peer: MultiplayerPeer)
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	if Netw.is_test_env():
+		return
 
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:

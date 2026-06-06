@@ -17,6 +17,7 @@ var current_anim: String = ""
 @onready var player_spawner := SpawnerComponent.unwrap(self)
 @onready var label: Label = %label
 
+
 func _ready() -> void:
 	stunned = false
 	position = synced_position
@@ -28,8 +29,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	var peer_id := _get_player_peer_id()
 	if (
-		multiplayer.multiplayer_peer == null
-		or multiplayer.get_unique_id() == peer_id
+			multiplayer.multiplayer_peer == null
+			or multiplayer.get_unique_id() == peer_id
 	):
 		# The represented client updates controls and replicates them.
 		inputs.update()
@@ -40,9 +41,9 @@ func _physics_process(delta: float) -> void:
 		# And increase the bomb cooldown spawning one if the client wants to.
 		last_bomb_time += delta
 		if (
-			not stunned
-			and inputs.bombing
-			and last_bomb_time >= BOMB_RATE
+				not stunned
+				and inputs.bombing
+				and last_bomb_time >= BOMB_RATE
 		):
 			last_bomb_time = 0.0
 			$"../../BombSpawner".spawn([position, peer_id])

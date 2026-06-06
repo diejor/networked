@@ -45,5 +45,6 @@ jobs:
           version: 'installed'
           paths: |
             res://tests/
+            res://examples/
           timeout: 10
           report-name: test_report.xml
