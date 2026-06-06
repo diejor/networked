@@ -93,8 +93,12 @@ func test_relay_fires_on_unbound_layer() -> void:
 	)
 
 	var client1_peer := client1.multiplayer_peer.get_unique_id()
+	monitor_signals(owner_entity, false)
 	sight.add_viewer(client1_peer)
-	await drain_frames(get_tree(), 4)
+	@warning_ignore("redundant_await")
+	await assert_signal(owner_entity) \
+			.wait_until(1000) \
+			.is_emitted("observer_entered", [any(), any()])
 
 	assert_that(entered.size()).is_equal(1)
 	assert_that(String(entered[0][0])).is_equal("sight")
@@ -103,7 +107,10 @@ func test_relay_fires_on_unbound_layer() -> void:
 	assert_that(left.is_empty()).is_true()
 
 	sight.remove_viewer(client1_peer)
-	await drain_frames(get_tree(), 4)
+	@warning_ignore("redundant_await")
+	await assert_signal(owner_entity) \
+			.wait_until(1000) \
+			.is_emitted("observer_left", [any(), any()])
 
 	assert_that(left.size()).is_equal(1)
 	assert_that(String(left[0][0])).is_equal("sight")
@@ -131,10 +138,12 @@ func test_relay_silent_when_flag_off() -> void:
 		func(_l: StringName, _p: int): entered.append(true)
 	)
 
+	monitor_signals(owner_entity, false)
 	sight.add_viewer(client1.multiplayer_peer.get_unique_id())
-	await drain_frames(get_tree(), 4)
-
-	assert_that(entered.is_empty()).is_true()
+	@warning_ignore("redundant_await")
+	await assert_signal(owner_entity) \
+			.wait_until(300) \
+			.is_not_emitted("observer_entered", [any(), any()])
 
 
 func test_relay_skipped_for_gated_layer() -> void:
@@ -159,7 +168,9 @@ func test_relay_skipped_for_gated_layer() -> void:
 		func(_l: StringName, _p: int): entered.append(true)
 	)
 
+	monitor_signals(owner_entity, false)
 	scene_layer.add_viewer(client1.multiplayer_peer.get_unique_id())
-	await drain_frames(get_tree(), 4)
-
-	assert_that(entered.is_empty()).is_true()
+	@warning_ignore("redundant_await")
+	await assert_signal(owner_entity) \
+			.wait_until(300) \
+			.is_not_emitted("observer_entered", [any(), any()])

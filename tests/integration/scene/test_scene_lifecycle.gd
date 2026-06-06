@@ -130,11 +130,10 @@ func test_freeze_empty_action_disables_level_on_despawn() -> void:
 
 	var player := _join_player()
 	player.queue_free()
-	await wait_until(
-		func(): return scene.level.process_mode == Node.PROCESS_MODE_DISABLED
-	)
-
-	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
+	@warning_ignore("redundant_await")
+	await assert_func(scene.level, "get_process_mode") \
+			.wait_until(1000) \
+			.is_equal(Node.PROCESS_MODE_DISABLED)
 
 
 func test_destroy_empty_action_removes_scene_on_despawn() -> void:
@@ -150,14 +149,12 @@ func test_destroy_empty_action_removes_scene_on_despawn() -> void:
 	var scene_ref: WeakRef = weakref(scene)
 	var player := _join_player()
 	player.queue_free()
-	await wait_until(
-		func():
-			return not server_mgr.active_scenes.has(level_builder.scene_name) \
-					and not is_instance_valid(scene_ref.get_ref())
-	)
+	@warning_ignore("redundant_await")
+	await assert_func(scene_ref, "get_ref") \
+			.wait_until(1000) \
+			.is_null()
 
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
-	assert_that(is_instance_valid(scene_ref.get_ref())).is_false()
 
 
 func test_keep_active_empty_action_leaves_level_processing() -> void:
@@ -172,7 +169,10 @@ func test_keep_active_empty_action_leaves_level_processing() -> void:
 
 	var player := _join_player()
 	player.queue_free()
-	await wait_until(func(): return scene.connected_peers.is_empty())
+	@warning_ignore("redundant_await")
+	await assert_func(scene, "scene_visibility_filter", [1001]) \
+			.wait_until(1000) \
+			.is_false()
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
@@ -186,7 +186,10 @@ func test_nonempty_scene_not_frozen_by_empty_action() -> void:
 	var second_player := _add_scene_player(scene, 1002, &"second")
 
 	first_player.queue_free()
-	await wait_until(func(): return not scene.connected_peers.has(1001))
+	@warning_ignore("redundant_await")
+	await assert_func(scene, "scene_visibility_filter", [1001]) \
+			.wait_until(1000) \
+			.is_false()
 
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 

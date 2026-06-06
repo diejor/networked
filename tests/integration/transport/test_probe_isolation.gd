@@ -13,6 +13,11 @@ func _on_peer_connected(peer_id: int) -> void:
 	_connected_peers.append(peer_id)
 
 
+# Wraps Dictionary access for assert_func polling.
+func _pending_count(state: Dictionary) -> int:
+	return state.get("pending", 0)
+
+
 func test_probes_do_not_register_peers() -> void:
 	var host := await EnetTestSupport.start_host(self, null, 0.2)
 	assert_that(host).is_not_empty()
@@ -20,6 +25,7 @@ func test_probes_do_not_register_peers() -> void:
 	var host_tree: MultiplayerTree = host.tree
 	var host_api := host_tree.api
 	host_api.peer_connected.connect(_on_peer_connected)
+	monitor_signals(host_api, false)
 
 	var client_backend := EnetTestSupport.make_client_backend(host.port)
 	for i in 5:
@@ -30,8 +36,10 @@ func test_probes_do_not_register_peers() -> void:
 		assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
 		assert_array(host_api.get_peers()).is_empty()
 
-	# Drain a few frames in case a delayed peer_connected fires post-probe.
-	await drain_frames(get_tree(), 5)
+	@warning_ignore("redundant_await")
+	await assert_signal(host_api) \
+			.wait_until(300) \
+			.is_not_emitted("peer_connected", [any()])
 
 	assert_array(_connected_peers).is_empty()
 	assert_array(host_api.get_peers()).is_empty()
@@ -64,7 +72,10 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 		_run_probe(client_backend, results, state)
 		await get_tree().process_frame
 
-	await wait_until(func() -> bool: return state.pending == 0, 8.0)
+	@warning_ignore("redundant_await")
+	await assert_func(self, "_pending_count", [state]) \
+			.wait_until(8000) \
+			.is_equal(0)
 
 	var ok_count := 0
 	var busy_count := 0
@@ -80,10 +91,10 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	assert_int(ok_count + busy_count).is_equal(probe_count)
 
 	# Pending peers drain once clients close + auth_timeout reaps stragglers.
-	await wait_until(
-		func() -> bool: return host_api.get_authenticating_peers().is_empty(),
-		(host_api.auth_timeout + 1.0),
-	)
+	@warning_ignore("redundant_await")
+	await assert_func(host_api, "get_authenticating_peers") \
+			.wait_until(int((host_api.auth_timeout + 1.0) * 1000)) \
+			.is_equal(PackedInt32Array())
 	assert_array(host_api.get_authenticating_peers()).is_empty()
 	assert_array(host_api.get_peers()).is_empty()
 

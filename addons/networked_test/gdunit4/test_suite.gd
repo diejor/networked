@@ -14,18 +14,6 @@ const _GdUnitAwaiter := preload(
 var _netw_managed_harness: NetwTestHarness
 
 
-
-## Awaits a condition to become true within [param timeout] seconds.
-func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
-	var timeout_timer := get_tree().create_timer(timeout)
-	while not condition.call():
-		await get_tree().process_frame
-		if timeout_timer.time_left <= 0:
-			fail(
-				"Timed out waiting for condition after %.1f seconds." % timeout)
-			return
-
-
 ## Factory that creates a default [MultiplayerSceneManager] for tests.
 ## [br][br]
 ## Returns a fresh instance with no pre-configured exported properties.

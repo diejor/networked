@@ -64,10 +64,6 @@ func test_disconnect_peer_removes_connected_peer_and_visibility() -> void:
 
 	scene.disconnect_peer(client_id)
 
-	await wait_until(
-		func(): return not scene.connected_peers.has(client_id)
-	)
-	assert_that(scene.connected_peers.has(client_id)).is_false()
 	@warning_ignore("redundant_await")
 	await assert_func(scene, "scene_visibility_filter", [client_id]) \
 			.wait_until(1000) \

@@ -66,6 +66,7 @@ func test_no_auth_provider_trusts_client_username() -> void:
 
 	var joined_rjs: Array[ResolvedJoin] = []
 	server.player_joined.connect(func(rj): joined_rjs.append(rj))
+	monitor_signals(server, false)
 	var target := JoinTarget.new()
 	target.backend = client_tree.backend
 	target.address = client_tree.backend.get_join_address()
@@ -75,7 +76,10 @@ func test_no_auth_provider_trusts_client_username() -> void:
 		_join_payload("bob"),
 	)
 	assert_that(err).is_equal(OK)
-	await wait_until(func(): return joined_rjs.size() == 1)
+	@warning_ignore("redundant_await")
+	await assert_signal(server) \
+			.wait_until(1000) \
+			.is_emitted("player_joined", [any()])
 
 	assert_that(joined_rjs).has_size(1)
 	assert_that(joined_rjs[0].username).is_equal(StringName("bob"))

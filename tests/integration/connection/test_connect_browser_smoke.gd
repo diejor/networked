@@ -58,12 +58,10 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	assert_int(loaded.size()).is_equal(1)
 	var loaded_target: JoinTarget = loaded[0]
 
-	await wait_until(
-		func() -> bool:
-			var r := session.get_result(loaded_target)
-			return r != null and r.is_ok(),
-		3.0,
-	)
+	@warning_ignore("redundant_await")
+	await assert_func(session, "get_result", [loaded_target]) \
+			.wait_until(3000) \
+			.is_not_null()
 
 	var result := session.get_result(loaded_target)
 	assert_that(result).is_not_null()

@@ -103,16 +103,7 @@ func _tp_target(scene_path: String, node_path: String) -> SceneNodePath:
 	return target
 
 
-func _await_tp(promise: TPComponent.TeleportPromise) -> void:
-	var timeout_timer := get_tree().create_timer(DEFAULT_TIMEOUT)
-	while not promise.is_completed:
-		await get_tree().process_frame
-		if timeout_timer.time_left <= 0:
-			fail(
-				"Timed out waiting for teleport completion after %.1f seconds."
-				% DEFAULT_TIMEOUT,
-			)
-			return
+
 
 
 func test_tp_spawn_places_player_in_start_scene() -> void:
@@ -138,11 +129,11 @@ func test_teleport_reparents_on_server_and_snaps_client_to_marker() -> void:
 	var scene2: MultiplayerScene = server_mgr.active_scenes.get(level_2_builder.scene_name)
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
-	await _await_tp(
-		client_tp.teleport(
-			_tp_target(level_2_builder.resource_path, "TPTarget"),
-		),
+	var promise := client_tp.teleport(
+		_tp_target(level_2_builder.resource_path, "TPTarget"),
 	)
+	@warning_ignore("redundant_await")
+	await assert_signal(promise).wait_until(1000).is_emitted("completed")
 
 	assert_that(server_player.get_parent()).is_equal(scene2.level)
 
