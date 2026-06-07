@@ -189,7 +189,7 @@ contains:
   continuous state (position, animation frame, weapon held).
 - Optionally, a :ref:`SaveComponent <class_SaveComponent>` so the player's
   data persists across reconnects, and a
-  :ref:`TickInterpolator <class_TickInterpolator>` on remote copies to
+  :ref:`MultiplayerInterpolator <class_MultiplayerInterpolator>` on remote copies to
   smooth out the snapshotted position between server ticks.
 
 The ``examples/daily/Player.tscn`` and

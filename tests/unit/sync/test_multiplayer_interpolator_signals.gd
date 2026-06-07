@@ -1,5 +1,5 @@
-## Unit tests for [TickInterpolator] signal-based injection.
-class_name TestTickInterpolatorSignals
+## Unit tests for [MultiplayerInterpolator] signal-based injection.
+class_name TestMultiplayerInterpolatorSignals
 extends NetwTestSuite
 
 const P0 := Vector2(0.0, 0.0)
@@ -9,7 +9,7 @@ var _player: Node2D
 var _visual: Node2D
 var _clock: NetworkClock
 var _tree: MultiplayerTree
-var _interpolator: TickInterpolator
+var _interpolator: MultiplayerInterpolator
 var _sync: MultiplayerSynchronizer
 
 
@@ -47,8 +47,8 @@ func before_test() -> void:
 	_sync.set_multiplayer_authority(999)
 	_player.add_child(_sync)
 
-	_interpolator = TickInterpolator.new()
-	_interpolator.property_modes = { &"position": TickInterpolator.Mode.LERP }
+	_interpolator = MultiplayerInterpolator.new()
+	_interpolator.property_modes = { &"position": MultiplayerInterpolator.Mode.LERP }
 	_interpolator.enable_smart_dilation = false
 	_interpolator.trace_interval = 1
 	_player.add_child(_interpolator)

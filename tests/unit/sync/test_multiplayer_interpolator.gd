@@ -1,9 +1,9 @@
-## Unit tests for [TickInterpolator].
+## Unit tests for [MultiplayerInterpolator].
 ##
 ## All timing is driven manually - no real physics loop or network stack needed.
 ## The test controls exactly which ticks fire and when process frames run,
 ## making assertions on [member Node2D.position] deterministic.
-class_name TestTickInterpolator
+class_name TestMultiplayerInterpolator
 extends NetwTestSuite
 
 const P0 := Vector2(0.0, 0.0)
@@ -12,7 +12,7 @@ const P1 := Vector2(100.0, 0.0)
 var _player: Node2D
 var _clock: NetworkClock
 var _tree: MultiplayerTree
-var _interpolator: TickInterpolator
+var _interpolator: MultiplayerInterpolator
 var _sync: MultiplayerSynchronizer
 
 
@@ -56,13 +56,11 @@ func before_test() -> void:
 	_player.add_child(_sync)
 
 	# Interpolator
-	_interpolator = TickInterpolator.new()
-	_interpolator.property_modes = { &"position": TickInterpolator.Mode.LERP }
+	_interpolator = MultiplayerInterpolator.new()
+	_interpolator.property_modes = { &"position": MultiplayerInterpolator.Mode.LERP }
 	_interpolator.enable_smart_dilation = false
 	_interpolator.trace_interval = 1
 	_player.add_child(_interpolator)
-	_interpolator.set_process(false) # manually driven
-
 	# Set owners BEFORE entering tree for discovery
 	_sync.owner = _player
 	_interpolator.owner = _player
@@ -83,7 +81,7 @@ func after_test() -> void:
 
 
 ## Advances the clock by one tick, which fires [signal NetworkClock.after_tick]
-## and therefore [method TickInterpolator._record_tick].
+## and therefore [method MultiplayerInterpolator._record_tick].
 func _tick() -> void:
 	_clock._physics_process(_clock.ticktime)
 
@@ -262,8 +260,8 @@ func test_dilation_grows_past_floor_on_sustained_starvation() -> void:
 func test_slerp_mode_uses_spherical_interpolation() -> void:
 	# SLERP must take the spherical path between quaternions, not a
 	# component-wise lerp (which denormalizes and rotates non-uniformly).
-	var state := TickInterpolator._PropertyState.new()
-	state.mode = TickInterpolator.Mode.SLERP
+	var state := MultiplayerInterpolator._PropertyState.new()
+	state.mode = MultiplayerInterpolator.Mode.SLERP
 
 	var a := Quaternion(Vector3.UP, 0.0)
 	var b := Quaternion(Vector3.UP, PI / 2.0)

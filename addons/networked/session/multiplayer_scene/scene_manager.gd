@@ -1,3 +1,4 @@
+@icon("res://addons/networked/assets/MultiplayerSceneManager.svg")
 @tool
 class_name MultiplayerSceneManager
 extends MultiplayerSpawner

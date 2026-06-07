@@ -1,5 +1,5 @@
-## Integration tests for [TickInterpolator] with real in-process networking.
-class_name TestTickInterpolatorNetwork
+## Integration tests for [MultiplayerInterpolator] with real in-process networking.
+class_name TestMultiplayerInterpolatorNetwork
 extends NetwTestSuite
 
 var _runner: GdUnitSceneRunner
@@ -9,7 +9,7 @@ var _env: TickSimulationEnvironment
 
 func before_test() -> void:
 	_runner = scene_runner(
-		"res://tests/slow/sync/tick_interpolator/tick_test_stage.tscn",
+		"res://tests/slow/sync/multiplayer_interpolator/tick_test_stage.tscn",
 	)
 	_harness = auto_free(TickNetworkTestHarness.new())
 
@@ -18,8 +18,8 @@ func before_test() -> void:
 	_env = await _harness.create_environment(&"InterpTestPlayer")
 	await _harness.wait_for_clock_sync()
 
-	var interpolator: TickInterpolator = _env.client_node.get_node(
-		"TickInterpolator",
+	var interpolator: MultiplayerInterpolator = _env.client_node.get_node(
+		"MultiplayerInterpolator",
 	)
 	interpolator.trace_interval = 0
 
@@ -61,7 +61,7 @@ func test_remote_player_converges_to_server_position() -> void:
 
 
 func test_teleport_snaps_instead_of_lerping() -> void:
-	var interpolator: TickInterpolator = _env.interpolator
+	var interpolator: MultiplayerInterpolator = _env.interpolator
 	interpolator.max_lerp_distance = 100.0
 
 	const START := Vector2(0.0, 0.0)

@@ -5,7 +5,7 @@
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
 [ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="5_p4qid"]
-[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/tick_interpolator.gd" id="6_3dwf2"]
+[ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="6_3dwf2"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_5huhx"]
 outline_size = 8
@@ -220,7 +220,7 @@ replication_config = SubResource("SceneReplicationConfig_w53uu")
 replication_config = SubResource("SceneReplicationConfig_pu4sp")
 script = ExtResource("5_p4qid")
 
-[node name="TickInterpolator" type="Node" parent="." unique_id=1650089841]
+[node name="MultiplayerInterpolator" type="Node" parent="." unique_id=1650089841]
 script = ExtResource("6_3dwf2")
 property_modes = Dictionary[StringName, int]({
 &"synced_position": 1

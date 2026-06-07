@@ -4,7 +4,7 @@ extends RefCounted
 
 var server_node: Node
 var client_node: Node
-var interpolator: TickInterpolator
+var interpolator: MultiplayerInterpolator
 
 
 ## Sets [param path] on [member server_node].
@@ -29,11 +29,11 @@ func get_buffer_newest_tick(prop: StringName) -> int:
 	return buf.newest_tick() if buf else -1
 
 
-## Returns the current [TickInterpolator] display lag.
+## Returns the current [MultiplayerInterpolator] display lag.
 func get_display_lag() -> float:
 	return interpolator.display_lag
 
 
-## Returns the current [TickInterpolator] starvation tick count.
+## Returns the current [MultiplayerInterpolator] starvation tick count.
 func get_starvation_ticks() -> int:
 	return interpolator.starvation_ticks

@@ -146,7 +146,7 @@ func connect_tree(
 
 
 ## Takes [param tree] offline. Marks it
-## [constant MultiplayerTree.State.DISCONNECTING], flushes held inbound
+## [constant MultiplayerTree.DISCONNECTING], flushes held inbound
 ## packets, and closes the peer. Returns the closed peer id so callers can
 ## await server unregistration. Inverse of [method connect_tree].
 func disconnect_tree(tree: MultiplayerTree) -> int:

@@ -1,7 +1,7 @@
-## Integration tests for [TickInterpolator] edge cases.
+## Integration tests for [MultiplayerInterpolator] edge cases.
 ##
 ## Covers authority handover, snapping, teleportation, and feedback loops.
-class_name TestTickInterpolatorEdgeCases
+class_name TestMultiplayerInterpolatorEdgeCases
 extends NetwTestSuite
 
 var _runner: GdUnitSceneRunner
@@ -11,7 +11,7 @@ var _env: TickSimulationEnvironment
 
 func before_test() -> void:
 	_runner = scene_runner(
-		"res://tests/slow/sync/tick_interpolator/tick_test_stage.tscn",
+		"res://tests/slow/sync/multiplayer_interpolator/tick_test_stage.tscn",
 	)
 	_harness = auto_free(TickNetworkTestHarness.new())
 
@@ -22,8 +22,8 @@ func before_test() -> void:
 	# Ensure the clock is synchronized before we start any movement tests
 	await _harness.wait_for_clock_sync()
 
-	var interpolator: TickInterpolator = _env.client_node.get_node(
-		"TickInterpolator",
+	var interpolator: MultiplayerInterpolator = _env.client_node.get_node(
+		"MultiplayerInterpolator",
 	)
 	interpolator.trace_interval = 0
 
@@ -66,8 +66,8 @@ func test_first_frame_snapping() -> void:
 	_env.client_node.position = Vector2.ZERO
 	const FIRST_POS := Vector2(200.0, 100.0)
 
-	var interpolator: TickInterpolator = _env.client_node.get_node(
-		"TickInterpolator",
+	var interpolator: MultiplayerInterpolator = _env.client_node.get_node(
+		"MultiplayerInterpolator",
 	)
 
 	interpolator.snap_property(&"position", FIRST_POS)
@@ -83,8 +83,8 @@ func test_teleport_prevents_first_frame_lerp() -> void:
 	_env.client_node.position = Vector2.ZERO
 	const FIRST_POS := Vector2(200.0, 100.0)
 
-	var interpolator: TickInterpolator = _env.client_node.get_node(
-		"TickInterpolator",
+	var interpolator: MultiplayerInterpolator = _env.client_node.get_node(
+		"MultiplayerInterpolator",
 	)
 
 	_env.client_node.position = FIRST_POS

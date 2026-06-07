@@ -1,6 +1,6 @@
 ## Smoothly interpolates a node's properties between network snapshots.
 @tool
-class_name TickInterpolator
+class_name MultiplayerInterpolator
 extends NetwComponent
 
 #region ── Enums ───────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ enum VisualOutputMode {
 
 #region ── Configuration ───────────────────────────────────────────────────────
 
-## Dictionary mapping property names to their [enum TickInterpolator.Mode].
+## Dictionary mapping property names to their [enum MultiplayerInterpolator.Mode].
 @export var property_modes: Dictionary[StringName, Mode] = { }:
 	set(v):
 		property_modes = v
@@ -221,7 +221,7 @@ func _ready() -> void:
 		owner = get_parent()
 		if owner:
 			_dbg.warn(
-				"TickInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " +
+				"MultiplayerInterpolator: 'owner' property is not set. Falling back to parent node '%s'. " +
 				"Assign the owner explicitly for better stability.",
 				[owner.name],
 			)
@@ -229,8 +229,8 @@ func _ready() -> void:
 	process_priority = 100
 	_clock = get_network_clock()
 
-	assert(owner, "TickInterpolator: owner is missing.")
-	assert(_clock, "TickInterpolator: Requires a NetworkClock on the multiplayer API.")
+	assert(owner, "MultiplayerInterpolator: owner is missing.")
+	assert(_clock, "MultiplayerInterpolator: Requires a NetworkClock on the multiplayer API.")
 
 	if owner.is_multiplayer_authority():
 		process_mode = PROCESS_MODE_DISABLED
@@ -540,7 +540,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 		if not state.uses_signal:
 			warnings.append(
 				"No client MultiplayerSynchronizer found for property '%s'. " % state.name +
-				"TickInterpolator will use frame polling, which causes " +
+				"MultiplayerInterpolator will use frame polling, which causes " +
 				"one-frame snapshot delays. Add a MultiplayerSynchronizer " +
 				"replicating this property.",
 			)
@@ -584,7 +584,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 					warnings.append(
 						"Property '%s' requested owner-transform " % state.name +
 						"compensation, but the source and visual target are " +
-						"not compatible. TickInterpolator will fall back to " +
+						"not compatible. MultiplayerInterpolator will fall back to " +
 						"[code]SOURCE_DELTA[/code].",
 					)
 				var target_name := visual_root_property_map.get(
@@ -755,19 +755,19 @@ func _get_compatible_target_properties(
 #region ── Inner Classes ───────────────────────────────────────────────────────
 
 class _Batcher extends RefCounted:
-	var instances: Array[TickInterpolator] = []
+	var instances: Array[MultiplayerInterpolator] = []
 	var clock: NetworkClock
 	var _last_update_frame: int = -1
 
 
-	func register(inst: TickInterpolator, c: NetworkClock) -> void:
+	func register(inst: MultiplayerInterpolator, c: NetworkClock) -> void:
 		instances.append(inst)
 		if not clock:
 			clock = c
 			clock.after_tick.connect(_on_clock_tick)
 
 
-	func unregister(inst: TickInterpolator) -> void:
+	func unregister(inst: MultiplayerInterpolator) -> void:
 		instances.erase(inst)
 		if instances.is_empty():
 			shutdown()
@@ -805,7 +805,7 @@ class _Batcher extends RefCounted:
 
 
 class _PropertyState:
-	var interpolator: TickInterpolator
+	var interpolator: MultiplayerInterpolator
 	var name: StringName
 	var mode: Mode
 	var history := HistoryBuffer.new(16)

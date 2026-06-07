@@ -30,7 +30,7 @@
 ## Add as a child of [MultiplayerTree] and register with
 ## [method ConnectSession.register_directory]. The directory advertises whatever
 ## room the tree is hosting whenever it reaches
-## [constant MultiplayerTree.State.ONLINE] as a host over a [WebRTCBackend], so
+## [constant MultiplayerTree.ONLINE] as a host over a [WebRTCBackend], so
 ## the [ConnectSession] host path
 ## ([code]tree.backend = TrackerWebRTCBackend.new()[/code]) and
 ## [method host_lobby] both light up the board automatically. Browsers join

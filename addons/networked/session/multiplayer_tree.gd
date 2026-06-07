@@ -1,4 +1,4 @@
-@icon("res://addons/networked/assets/multiplayer_tree.svg")
+@icon("res://addons/networked/assets/MultiplayerTree.svg")
 @tool
 class_name MultiplayerTree
 extends Node

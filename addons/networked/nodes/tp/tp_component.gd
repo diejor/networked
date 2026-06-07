@@ -349,7 +349,7 @@ func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: Mult
 			event.connect(bound)
 		if event == player.tree_exiting:
 			# request_ready does NOT cascade to children, so child components
-			# whose _exit_tree unregistered them (e.g. TickInterpolator) would
+			# whose _exit_tree unregistered them (e.g. MultiplayerInterpolator) would
 			# never re-init. Reset the ready flag for the whole subtree.
 			_request_ready_recursive(player)
 			to_scene.complete_player_transfer(player)
@@ -473,8 +473,8 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 func _reset_visual_smoothing(root: Node) -> void:
 	if not root:
 		return
-	if root is TickInterpolator:
-		(root as TickInterpolator).reset()
+	if root is MultiplayerInterpolator:
+		(root as MultiplayerInterpolator).reset()
 	elif root is Camera2D:
 		(root as Camera2D).reset_smoothing()
 	elif root is Camera3D:

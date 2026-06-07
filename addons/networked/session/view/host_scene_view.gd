@@ -7,7 +7,7 @@
 ## [br][br]
 ## [b]You normally don't add this node yourself.[/b] [MultiplayerTree] adds
 ## one automatically when [member MultiplayerTree.desired_role] is
-## [constant MultiplayerTree.Role.LISTEN_SERVER] and no existing
+## [constant MultiplayerTree.LISTEN_SERVER] and no existing
 ## [HostSceneView] descendant is found. Drop one into your scene
 ## only when you need to customize [member stretch_override], reparent it
 ## under a specific [Control], or otherwise deviate from the defaults.

@@ -160,7 +160,7 @@ var tick_factor: float:
 		# If the render frame happens just before the next physics frame and 
 		# timing is slightly off, the factor might be 1.01.
 		# Clamping causes the playhead to stall, creating small jagged jumps.
-		# TickInterpolator already handles factor > 1.0 by floor()ing it into dt.
+		# MultiplayerInterpolator already handles factor > 1.0 by floor()ing it into dt.
 		return (_tick_accumulator + time_in_frame) / ticktime
 
 ## The tick index used for visual display: [code]tick - display_offset[/code].

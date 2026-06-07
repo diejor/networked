@@ -16,7 +16,7 @@
 
 ### Notable Features
 
-- **`TickInterpolator`:** Smooths network snapshots with smart dilation to minimize jitter.
+- **`MultiplayerInterpolator`:** Smooths network snapshots with smart dilation to minimize jitter.
 - **`MultiplayerSceneManager`:** Built on top of an in-house [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
 - **`TPComponent`:** Connects scenes and handles teleport transitions between levels without dropping synchronization.
 - **`SaveComponent`:** Real-time state persistence and writes for player data.

@@ -110,11 +110,11 @@ func _build_client_node(
 	player.add_child(sync)
 	sync.owner = player
 
-	var interp := TickInterpolator.new()
-	interp.name = "TickInterpolator"
+	var interp := MultiplayerInterpolator.new()
+	interp.name = "MultiplayerInterpolator"
 	interp.trace_interval = 1
 	# Keeps the exported typed dictionary assignment valid.
-	var modes: Dictionary[StringName, TickInterpolator.Mode] = { }
+	var modes: Dictionary[StringName, MultiplayerInterpolator.Mode] = { }
 	for key in interp_props:
 		modes[key] = interp_props[key]
 	interp.property_modes = modes
@@ -131,7 +131,7 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	env.server_node = _build_server_node(node_name, NodePath(".:position"))
 	get_server().add_child(env.server_node)
 
-	var interp_props = { &"position": TickInterpolator.Mode.LERP }
+	var interp_props = { &"position": MultiplayerInterpolator.Mode.LERP }
 	env.client_node = _build_client_node(
 		node_name,
 		NodePath(".:position"),
@@ -139,7 +139,7 @@ func create_environment(node_name: StringName) -> TickSimulationEnvironment:
 	)
 	get_client().add_child(env.client_node)
 
-	env.interpolator = env.client_node.get_node("TickInterpolator")
+	env.interpolator = env.client_node.get_node("MultiplayerInterpolator")
 
 	await get_tree().process_frame
 	return env
@@ -162,7 +162,7 @@ func create_environment_with_sprite(
 
 	var c_sprite := Sprite2D.new()
 	c_sprite.name = "Sprite2D"
-	var interp_props = { &"Sprite2D:modulate": TickInterpolator.Mode.LERP }
+	var interp_props = { &"Sprite2D:modulate": MultiplayerInterpolator.Mode.LERP }
 	env.client_node = _build_client_node(
 		node_name,
 		NodePath("Sprite2D:modulate"),
@@ -171,7 +171,7 @@ func create_environment_with_sprite(
 	)
 	get_client().add_child(env.client_node)
 
-	env.interpolator = env.client_node.get_node("TickInterpolator")
+	env.interpolator = env.client_node.get_node("MultiplayerInterpolator")
 
 	await get_tree().process_frame
 	return env
