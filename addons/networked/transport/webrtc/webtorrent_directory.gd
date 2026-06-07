@@ -21,7 +21,7 @@
 ## reach per announce = board_fanout peers (one offer pairs one swarm peer)
 ## list_lobbies collects cards for browse_window then emits clear-then-fill
 ## [/codeblock]
-## [br][br]
+##
 ## Browser-hosted rooms depend on the host tab polling trackers and sending ICE
 ## signalling. Browser throttling can pause that work when the tab is not
 ## focused, so fully peer-to-peer web rooms may disappear from discovery or

@@ -14,6 +14,9 @@ extends Control
 ## into [method set_target]. [HostSceneView] enables this for standalone use.
 var forward_unhandled_input := false
 
+# Meta key marking which view currently borrows a target's render state.
+const _OWNER_META := &"_participant_view_owner"
+
 var _target: SubViewport = null
 var _settings: StretchSettings = null
 var _layout: StretchLayout.Result = null
@@ -65,6 +68,7 @@ func set_target(viewport: SubViewport) -> void:
 	if _target == viewport:
 		return
 	if is_instance_valid(_target):
+		_release_target_ownership()
 		_restore_target_render_state()
 		if _target.tree_exiting.is_connected(_on_target_freed):
 			_target.tree_exiting.disconnect(_on_target_freed)
@@ -72,6 +76,7 @@ func set_target(viewport: SubViewport) -> void:
 	_target = viewport
 
 	if is_instance_valid(_target):
+		_claim_target_ownership()
 		_previous_update_mode = _target.render_target_update_mode
 		_previous_clear_mode = _target.render_target_clear_mode
 		_previous_size_2d_override = _target.size_2d_override
@@ -101,10 +106,33 @@ func forward_input(event: InputEvent) -> void:
 
 func _on_target_freed() -> void:
 	if is_instance_valid(_target):
+		_release_target_ownership()
 		_restore_target_render_state()
 	_target = null
 	set_process(false)
 	queue_redraw()
+
+
+# Claims exclusive render ownership of the current target. Two views borrowing
+# the same SubViewport would corrupt each other's saved render state, so this
+# asserts the single-owner invariant before flipping the target's render mode.
+func _claim_target_ownership() -> void:
+	if _target.has_meta(_OWNER_META):
+		var owner := instance_from_id(_target.get_meta(_OWNER_META))
+		assert(
+			not is_instance_valid(owner) or owner == self,
+			(
+				"ParticipantView: '%s' is already displayed by another view. "
+				+ "A SubViewport can be owned by only one ParticipantView."
+			) % _target.name,
+		)
+	_target.set_meta(_OWNER_META, get_instance_id())
+
+
+func _release_target_ownership() -> void:
+	if _target.has_meta(_OWNER_META) \
+			and _target.get_meta(_OWNER_META) == get_instance_id():
+		_target.remove_meta(_OWNER_META)
 
 
 func _restore_target_render_state() -> void:
