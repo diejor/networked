@@ -12,7 +12,7 @@ const DEFAULT_TICKRATE := 30
 var reporter: Callable = _default_reporter
 
 var _main_scene: PackedScene
-var _session: LocalLoopbackSession
+var _loopback: NetwHarnessSession
 var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
 var _host: NetwSceneRunner
@@ -29,7 +29,7 @@ func _init(scene: PackedScene = null) -> void:
 ## Creates the shared [LocalLoopbackSession].
 func setup() -> void:
 	assert(_main_scene != null, "NetwGameHarness.setup: scene is required.")
-	_session = LocalLoopbackSession.new()
+	_loopback = NetwHarnessSession.new()
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
 	_waiter = NetwWaiter.new(get_tree(), reporter)
@@ -53,7 +53,9 @@ func add_host(
 	)
 	_host = runner
 
-	var err: Error = await runner.tree.host_player(
+	var err: Error = await _loopback.connect_tree(
+		runner.tree,
+		NetwHarnessSession.Entry.HOST_PLAYER,
 		_make_join_payload(username, spawn),
 	)
 	assert(err == OK, "host_player() failed: %s" % error_string(err))
@@ -77,11 +79,9 @@ func add_client(
 	assert(_host != null, "NetwGameHarness.add_client: add host first.")
 	var runner := _create_runner(username, MultiplayerTree.Role.CLIENT)
 
-	var target := JoinTarget.new()
-	target.backend = runner.tree.backend
-	target.address = "localhost"
-	var err: Error = await runner.tree.join(
-		target,
+	var err: Error = await _loopback.connect_tree(
+		runner.tree,
+		NetwHarnessSession.Entry.JOIN,
 		_make_join_payload(username, spawn),
 	)
 	assert(err == OK, "join() failed: %s" % error_string(err))
@@ -147,6 +147,31 @@ func show_views() -> ParticipantViewport:
 	return _display_viewport
 
 
+## Sets inbound link conditions on [param runner]'s loopback peer.
+##
+## [param from_runner] keys the conditions to one sender. A client runner only
+## ever receives from the server, so per-sender keying is meaningful mainly when
+## [param runner] is the host.
+func set_link_conditions(
+		runner: NetwSceneRunner,
+		conditions: NetwLinkConditions,
+		from_runner: NetwSceneRunner = null,
+) -> void:
+	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	var sender_id := from_runner.peer_id if from_runner else 0
+	_loopback.set_link_conditions(peer, conditions, sender_id)
+
+
+## Clears inbound link conditions on [param runner]'s loopback peer.
+func clear_link_conditions(
+		runner: NetwSceneRunner,
+		from_runner: NetwSceneRunner = null,
+) -> void:
+	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	var sender_id := from_runner.peer_id if from_runner else 0
+	_loopback.clear_link_conditions(peer, sender_id)
+
+
 ## Frees all participant slots and resets global harness state.
 func teardown() -> void:
 	if _torn_down:
@@ -170,9 +195,9 @@ func teardown() -> void:
 	_runners.clear()
 	_host = null
 
-	if _session:
-		_session.reset()
-	_session = null
+	if _loopback:
+		_loopback.reset()
+	_loopback = null
 	_waiter = null
 	reporter = Callable()
 
@@ -204,12 +229,7 @@ func _create_runner(
 
 
 func _adopt_tree(tree: MultiplayerTree, role: MultiplayerTree.Role) -> void:
-	tree.desired_role = role
-	tree.auto_host_headless = false
-	tree.debug_join = null
-	var backend := LocalLoopbackBackend.new()
-	backend.session = _session
-	tree.backend = backend
+	_loopback.adopt_tree(tree, role)
 
 
 func _finish_online_runner(runner: NetwSceneRunner) -> void:
@@ -226,30 +246,11 @@ func _show_display_window() -> void:
 
 
 func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:
-	var payload := JoinPayload.new()
-	payload.username = username
-	payload.spawn = _resolve_spawn_dict(spawn, username)
-	return payload
+	return _loopback.build_join_payload(username, spawn)
 
 
 func _resolve_spawn_dict(spawn: Variant, username: String) -> Dictionary:
-	if spawn == null:
-		return { }
-	if spawn is JoinPayload:
-		return spawn.spawn
-	if spawn is Dictionary:
-		return spawn
-	if spawn is SceneNodePath:
-		return SpawnerComponentPolicy.from_scene_node_path(spawn).to_dict()
-
-	assert(
-		false,
-		(
-			"NetwGameHarness: spawn for '%s' must be SceneNodePath, "
-			+ "JoinPayload, Dictionary, or null."
-		) % username,
-	)
-	return { }
+	return _loopback.resolve_spawn_dict(spawn, username)
 
 
 func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:

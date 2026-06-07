@@ -40,7 +40,7 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 
 ## Builds, parents, and auto-tears down a [NetwTestHarness].
 ##
-## The returned harness has the GdUnit4 awaiter installed. Always call
+## The returned harness has the GdUnit4 reporter installed. Always call
 ## [code]await harness.setup(...)[/code] before driving multiplayer flows.
 ## A test case may create one managed harness; [method after_test] tears it
 ## down automatically.
@@ -65,7 +65,7 @@ func make_harness() -> NetwTestHarness:
 ## explicitly call [code]await harness.teardown()[/code].
 func make_unmanaged_harness() -> NetwTestHarness:
 	var harness := NetwTestHarness.new()
-	harness.awaiter = _GdUnitAwaiter.get_awaiter()
+	harness.reporter = _GdUnitAwaiter.get_reporter()
 	add_child(harness)
 	auto_free(harness)
 	return harness

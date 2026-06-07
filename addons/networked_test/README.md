@@ -20,9 +20,12 @@ become available as soon as the directory is present in your project.
 
 ## Framework
 
-The harness core is framework-agnostic. `gdunit4/` adapts it to GdUnit4 via
-a `Callable` awaiter. Other frameworks (or no framework at all) can assign
-their own timeout reporter to `NetwTestHarness.awaiter`.
+`NetwTestHarness` is framework-agnostic. `gdunit4/` adapts it to GdUnit4 via
+a `Callable` timeout reporter. Other frameworks, or no framework at all, can
+assign their own reporter to `NetwTestHarness.reporter`.
+
+`NetwGameHarness` uses the same reporter injection for waits, but its
+`NetwSceneRunner` is GdUnit4-backed for slot-scoped input simulation.
 
 ## Manual
 

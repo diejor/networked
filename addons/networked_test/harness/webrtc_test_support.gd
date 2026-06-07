@@ -1,5 +1,8 @@
 ## Static helpers for WebRTC session integration tests.
 ##
+## The helper embodies the [NetwHarnessSession.BackendAdapter] shape. It is
+## kept static until a second WebRTC harness consumer needs an adapter instance.
+## [br][br]
 ## [NetwTestHarness] is built around [LocalLoopbackBackend] and does not
 ## generalize to a real [WebRTCSession]. This helper mirrors [EnetTestSupport]
 ## for the complementary case. It hosts and joins real [MultiplayerTree]s over

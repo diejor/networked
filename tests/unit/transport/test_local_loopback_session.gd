@@ -144,3 +144,217 @@ func test_backend_query_without_live_server_is_unsupported() -> void:
 	var result: ServerInfoResult = await backend.query_server_info("")
 
 	assert_int(result.status).is_equal(ServerInfoResult.Status.UNSUPPORTED)
+
+
+func test_link_delay_releases_on_due_poll() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(10)
+	conditions.delay_polls = 2
+	session.set_link_conditions(server, conditions)
+
+	var payload := PackedByteArray([1, 2, 3])
+	client._set_target_peer(1)
+	client._put_packet_script(payload)
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(1)
+	assert_that(server._get_packet_script()).is_equal(payload)
+
+
+func test_reliable_loss_blocked_by_default() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(10)
+	conditions.loss_probability = 1.0
+	session.set_link_conditions(server, conditions)
+
+	var payload := PackedByteArray([4, 5, 6])
+	client._set_target_peer(1)
+	client._put_packet_script(payload)
+	session.poll()
+
+	assert_that(server._get_available_packet_count()).is_equal(1)
+	assert_that(server._get_packet_script()).is_equal(payload)
+
+
+func test_unreliable_loss_is_deterministic() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(10)
+	conditions.loss_probability = 1.0
+	session.set_link_conditions(server, conditions)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	client._put_packet_script(PackedByteArray([7, 8, 9]))
+	session.poll()
+
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+
+func test_reliable_stays_ordered_under_jitter() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(123)
+	conditions.jitter_polls = 6
+	conditions.reorder_probability = 1.0
+	session.set_link_conditions(server, conditions)
+
+	client._set_target_peer(1)
+	for value in range(12):
+		client._put_packet_script(PackedByteArray([value]))
+		session.poll()
+
+	_poll_session(12)
+
+	assert_that(_drain_packet_values(server)).is_equal(range(12))
+
+
+func test_unreliable_reorder_is_deterministic() -> void:
+	var first_order := _run_unreliable_reorder(120)
+	var second_order := _run_unreliable_reorder(120)
+	var different_seed_order := _run_unreliable_reorder(121)
+
+	assert_that(second_order).is_equal(first_order)
+	assert_that(different_seed_order).is_not_equal(first_order)
+
+
+func test_clear_link_conditions_flushes_predictably() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(5)
+	conditions.delay_polls = 10
+	conditions.jitter_polls = 4
+	conditions.reorder_probability = 1.0
+	session.set_link_conditions(server, conditions)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	for value in range(8):
+		client._put_packet_script(PackedByteArray([value]))
+
+	session.poll()
+	session.clear_link_conditions(server)
+
+	assert_that(_drain_packet_values(server)).is_equal(
+		[0, 2, 7, 1, 5, 6, 3, 4],
+	)
+
+
+func test_sender_condition_delays_only_that_sender() -> void:
+	var server := session.get_server_peer()
+	var delayed_client := session.create_client_peer()
+	var immediate_client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(10)
+	conditions.delay_polls = 2
+	session.set_link_conditions(
+		server,
+		conditions,
+		delayed_client._get_unique_id(),
+	)
+
+	delayed_client._set_target_peer(1)
+	immediate_client._set_target_peer(1)
+	delayed_client._put_packet_script(PackedByteArray([1]))
+	immediate_client._put_packet_script(PackedByteArray([2]))
+
+	session.poll()
+	assert_that(_drain_packet_values(server)).is_equal([2])
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(_drain_packet_values(server)).is_equal([1])
+
+
+func test_wildcard_condition_still_delays_every_sender() -> void:
+	var server := session.get_server_peer()
+	var first_client := session.create_client_peer()
+	var second_client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(10)
+	conditions.delay_polls = 1
+	session.set_link_conditions(server, conditions)
+
+	first_client._set_target_peer(1)
+	second_client._set_target_peer(1)
+	first_client._put_packet_script(PackedByteArray([1]))
+	second_client._put_packet_script(PackedByteArray([2]))
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(_drain_packet_values(server)).is_equal([1, 2])
+
+
+func test_manual_hold_release_still_preserves_order() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	session.hold_inbound_packets(server)
+	client._set_target_peer(1)
+	client._put_packet_script(PackedByteArray([1]))
+	session.poll()
+	client._put_packet_script(PackedByteArray([2]))
+
+	session.release_inbound_packets(server)
+
+	assert_that(server._get_available_packet_count()).is_equal(2)
+	assert_that(server._get_packet_script()).is_equal(PackedByteArray([1]))
+	assert_that(server._get_packet_script()).is_equal(PackedByteArray([2]))
+
+
+func _run_unreliable_reorder(seed: int) -> Array:
+	session = auto_free(LocalLoopbackSession.new())
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var conditions := NetwLinkConditions.new(seed)
+	conditions.jitter_polls = 4
+	conditions.reorder_probability = 1.0
+	session.set_link_conditions(server, conditions)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	for value in range(8):
+		client._put_packet_script(PackedByteArray([value]))
+		session.poll()
+
+	_poll_session(10)
+	return _drain_packet_values(server)
+
+
+func _poll_session(count: int) -> void:
+	for _i in range(count):
+		session.poll()
+
+
+func _drain_packet_values(peer: LocalMultiplayerPeer) -> Array:
+	var values := []
+	while peer._get_available_packet_count() > 0:
+		values.append(peer._get_packet_script()[0])
+	return values

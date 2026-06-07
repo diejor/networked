@@ -1,5 +1,8 @@
 ## Static helpers for ENet-based integration tests.
 ##
+## The helper embodies the [NetwHarnessSession.BackendAdapter] shape. It is
+## kept static until a second ENet harness consumer needs an adapter instance.
+## [br][br]
 ## [NetwTestHarness] is built around [LocalLoopbackBackend]: it gives cheap
 ## multi-tree-in-process gameplay tests, deterministic packet flow, and
 ## packet hold/release for race-condition tests. Those features rely on the
@@ -33,7 +36,8 @@ static func start_host(
 		source: ServerInfoSource = null,
 		auth_timeout: float = -1.0,
 ) -> Dictionary:
-	for candidate in range(_PORT_RANGE_START, _PORT_RANGE_START + _PORT_RANGE_SIZE):
+	var port_range_end := _PORT_RANGE_START + _PORT_RANGE_SIZE
+	for candidate in range(_PORT_RANGE_START, port_range_end):
 		var tree := MultiplayerTree.new()
 		tree.name = "EnetHost_%d" % candidate
 		tree.auto_host_headless = false

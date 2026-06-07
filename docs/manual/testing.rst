@@ -226,5 +226,7 @@ through a single timeout reporter, so calls such as
 fail the test cleanly when the expected event does not arrive.
 
 Outside GdUnit4, assign your own reporter to
-:ref:`awaiter <class_NetwTestHarness_property_awaiter>`. The harness core
-is framework agnostic, the GdUnit4 binding is just one adapter.
+:ref:`reporter <class_NetwTestHarness_property_reporter>`. The
+``NetwTestHarness`` core is framework agnostic, the GdUnit4 binding is just
+one adapter. ``NetwGameHarness`` also injects timeout reporting, but its
+``NetwSceneRunner`` is GdUnit4-backed for slot-scoped input simulation.
