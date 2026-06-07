@@ -1,10 +1,10 @@
-## Tracks and exposes [NetworkClock] metrics as Godot [Performance] monitors.
+## Tracks and exposes [MultiplayerClock] metrics as Godot [Performance] monitors.
 ##
 ## This is managed by the [NetworkedDebugReporter] to ensure that monitoring
 ## overhead remains isolated from core networking logic. It handles both
 ## local clocks (via signals) and remote clocks (via debug-only relayed pongs).
 @tool
-class_name NetClockMonitor
+class_name MultiplayerClockMonitor
 extends Node
 
 ## Set of monitor IDs currently registered to avoid duplicates and ensure
@@ -78,7 +78,7 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 		else:
 			username = data.get("tree_name", "Unknown")
 
-	return "Clock %s" % username
+	return "MultiplayerClock %s" % username
 
 
 func _update_data_and_register(category: String, data: Dictionary) -> void:

@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="3_p4o8j"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
-[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_wto4k"]
+[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_wto4k"]
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_p4o8j"]
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/transport/steam/steam_lobby_directory.gd" id="9_p4o8j"]
@@ -38,7 +38,7 @@ scene_config/world/empty_action = 1
 unique_name_in_owner = true
 script = ExtResource("5_gbknk")
 
-[node name="NetworkClock" type="Node" parent="MultiplayerTree" unique_id=1936851771]
+[node name="MultiplayerClock" type="Node" parent="MultiplayerTree" unique_id=1936851771]
 script = ExtResource("7_wto4k")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 

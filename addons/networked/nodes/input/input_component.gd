@@ -23,8 +23,9 @@ signal action_changed(action: StringName, pressed: bool)
 ## is the multiplayer authority). Carries the tick number and a snapshot of the current state.
 signal tick_snapshot(tick: int, state: Dictionary)
 
-## When [code]true[/code], connects to [NetworkClock.on_tick] and emits [signal tick_snapshot]
-## each tick. Requires a [NetworkClock] registered on this node's multiplayer API.
+## When [code]true[/code], connects to [MultiplayerClock.on_tick] and emits
+## [signal tick_snapshot] each tick. Requires a [MultiplayerClock] registered
+## on this node's multiplayer API.
 @export var tick_mode: bool = false
 
 ## Current pressed state for each tracked action, keyed by action name.
@@ -48,11 +49,11 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 	if tick_mode:
-		var clock := NetworkClock.for_node(self)
+		var clock := MultiplayerClock.for_node(self)
 		if clock:
 			clock.on_tick.connect(_on_tick)
 		else:
-			_dbg.warn("tick_mode=true but no NetworkClock found on this node's multiplayer API.", func(m): push_warning(m))
+			_dbg.warn("tick_mode=true but no MultiplayerClock found on this node's multiplayer API.", func(m): push_warning(m))
 
 
 ## Builds the initial [member state] dictionary from [method get_inputs].

@@ -42,10 +42,10 @@ const _LEGACY_SECONDS_MAX := 1.0
 ## [/codeblock]
 ## Jitter is measured from delivered clock samples. Packet loss, polling, and
 ## frame timing can all widen it.
-## Watch the [code]Clock *[/code] performance monitors to compare
-## [member NetworkClock.rtt], [member NetworkClock.rtt_jitter], the pong
-## calibration error from [signal NetworkClock.pong_received], and
-## [member NetworkClock.recommended_display_offset].
+## Watch the [code]MultiplayerClock *[/code] performance monitors to compare
+## [member MultiplayerClock.rtt], [member MultiplayerClock.rtt_jitter], the pong
+## calibration error from [signal MultiplayerClock.pong_received], and
+## [member MultiplayerClock.recommended_display_offset].
 @export var simulate_lag: bool = false
 ## Minimum simulated one way packet delay in milliseconds.
 @export_range(

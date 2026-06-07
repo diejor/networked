@@ -57,7 +57,7 @@ var _last_manifest_sec_msec: Dictionary = { }
 var _last_manifest_min_msec: Dictionary = { }
 
 var _is_sending_manifest: bool = false
-var _clock_monitor: NetClockMonitor = null
+var _clock_monitor: MultiplayerClockMonitor = null
 var _pending_zombie_checks: Array[SceneTreeTimer] = []
 var _trace_sink: Callable
 var _window_pin: NetWindowPin
@@ -171,8 +171,8 @@ func _enter_tree() -> void:
 	_telemetry = NetTelemetryBuffer.new(cap)
 	_validators = [TopologyNetValidator.new()]
 
-	_clock_monitor = NetClockMonitor.new()
-	_clock_monitor.name = "NetClockMonitor"
+	_clock_monitor = MultiplayerClockMonitor.new()
+	_clock_monitor.name = "MultiplayerClockMonitor"
 	add_child(_clock_monitor)
 
 	_watchdog = ErrorWatchdog.new()
@@ -224,7 +224,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 		func(d: Dictionary) -> void:
 			if _clock_monitor:
 				_clock_monitor.update_local_clock(mt, d)
-			var sample := NetClockSample.from_dict(d, mt.get_tree_name())
+			var sample := MultiplayerClockSample.from_dict(d, mt.get_tree_name())
 			_queue("networked:clock_sample", sample.to_dict(), mt)
 	)
 	mt.add_child(ctx)

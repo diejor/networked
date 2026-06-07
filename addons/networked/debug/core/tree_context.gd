@@ -262,7 +262,7 @@ func _disconnect_all() -> void:
 		if mt.session_entered.is_connected(_on_configured):
 			mt.session_entered.disconnect(_on_configured)
 
-		var clock: NetworkClock = mt.get_service(NetworkClock)
+		var clock: MultiplayerClock = mt.get_service(MultiplayerClock)
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
 
@@ -300,7 +300,7 @@ func _on_configured() -> void:
 	NetwServices.register(self, NetDebugTreeContext)
 	_scene_wired = true
 
-	var clock: NetworkClock = mt.get_service(NetworkClock)
+	var clock: MultiplayerClock = mt.get_service(MultiplayerClock)
 	if clock:
 		clock.pong_received.connect(_on_clock_pong)
 

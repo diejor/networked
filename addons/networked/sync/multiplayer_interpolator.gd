@@ -149,7 +149,7 @@ func snap_property(property: StringName, value: Variant) -> void:
 ## to prevent the interpolator from "sliding" the node across the map.
 func reset() -> void:
 	if not _clock:
-		_clock = get_network_clock()
+		_clock = get_multiplayer_clock()
 
 	for state in _states:
 		state.reset()
@@ -189,7 +189,7 @@ func disable_for(duration: float) -> SceneTreeTimer:
 
 #region ── Internal State ──────────────────────────────────────────────────────
 
-var _clock: NetworkClock
+var _clock: MultiplayerClock
 var _states: Array[_PropertyState] = []
 var _trace_frame: int = 0
 
@@ -227,10 +227,10 @@ func _ready() -> void:
 			)
 
 	process_priority = 100
-	_clock = get_network_clock()
+	_clock = get_multiplayer_clock()
 
 	assert(owner, "MultiplayerInterpolator: owner is missing.")
-	assert(_clock, "MultiplayerInterpolator: Requires a NetworkClock on the multiplayer API.")
+	assert(_clock, "MultiplayerInterpolator: Requires a MultiplayerClock on the multiplayer API.")
 
 	if owner.is_multiplayer_authority():
 		process_mode = PROCESS_MODE_DISABLED
@@ -756,11 +756,11 @@ func _get_compatible_target_properties(
 
 class _Batcher extends RefCounted:
 	var instances: Array[MultiplayerInterpolator] = []
-	var clock: NetworkClock
+	var clock: MultiplayerClock
 	var _last_update_frame: int = -1
 
 
-	func register(inst: MultiplayerInterpolator, c: NetworkClock) -> void:
+	func register(inst: MultiplayerInterpolator, c: MultiplayerClock) -> void:
 		instances.append(inst)
 		if not clock:
 			clock = c

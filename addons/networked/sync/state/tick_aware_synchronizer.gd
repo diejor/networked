@@ -19,8 +19,8 @@ var _pending_tick: int = -1
 
 func _get(property: StringName) -> Variant:
 	if property == &"__tick":
-		var clock := NetworkClock.for_node(self)
-		assert(clock, "TickAwareSynchronizer requires a NetworkClock in the tree.")
+		var clock := MultiplayerClock.for_node(self)
+		assert(clock, "TickAwareSynchronizer requires a MultiplayerClock in the tree.")
 		return clock.tick
 	return super._get(property)
 

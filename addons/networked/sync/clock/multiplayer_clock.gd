@@ -1,6 +1,6 @@
 ## Synchronises simulation time between server and clients with drift and stall protection.
 ##
-## The [NetworkClock] provides a stable, tick-based time source required for deterministic 
+## The [MultiplayerClock] provides a stable, tick-based time source required for deterministic 
 ## simulation and smooth visual interpolation. It handles RTT smoothing, clock drift 
 ## correction, and frame stall detection to prevent "spiral of death" scenarios.
 ## [br][br]
@@ -8,7 +8,7 @@
 ## [codeblock]
 ## # The clock registers itself automatically on the MultiplayerTree.
 ## # Access it from any node via:
-## var clock = NetworkClock.for_node(self)
+## var clock = MultiplayerClock.for_node(self)
 ##
 ## # Connect to the simulation loop:
 ## clock.on_tick.connect(func(delta, tick):
@@ -16,7 +16,7 @@
 ## )
 ## [/codeblock]
 @tool
-class_name NetworkClock
+class_name MultiplayerClock
 extends Node
 
 #region ── Signals ─────────────────────────────────────────────────────────────
@@ -207,11 +207,11 @@ var is_stable: bool:
 		return _stats.is_stable
 
 
-## Locates the [NetworkClock] registered on the node's multiplayer API.
-static func for_node(node: Node) -> NetworkClock:
+## Locates the [MultiplayerClock] registered on the node's multiplayer API.
+static func for_node(node: Node) -> MultiplayerClock:
 	var api := node.multiplayer as SceneMultiplayer
-	if api and api.has_meta(&"_network_clock"):
-		return api.get_meta(&"_network_clock")
+	if api and api.has_meta(&"_multiplayer_clock"):
+		return api.get_meta(&"_multiplayer_clock")
 	return null
 
 #endregion
@@ -238,7 +238,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwServices.register(self, NetworkClock)
+	var mt := NetwServices.register(self, MultiplayerClock)
 	if not is_instance_valid(mt):
 		return
 
@@ -260,7 +260,7 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwServices.unregister(self, NetworkClock)
+	var mt := NetwServices.unregister(self, MultiplayerClock)
 	if not is_instance_valid(mt):
 		return
 
@@ -324,7 +324,7 @@ func _physics_process(delta: float) -> void:
 func _on_tree_configured() -> void:
 	var api := multiplayer as SceneMultiplayer
 	if api:
-		api.set_meta(&"_network_clock", self)
+		api.set_meta(&"_multiplayer_clock", self)
 		if not api.server_disconnected.is_connected(_on_server_disconnect):
 			api.server_disconnected.connect(_on_server_disconnect)
 		if not api.connection_failed.is_connected(_on_server_disconnect):
@@ -367,7 +367,7 @@ func _respond_handshake(server_tickrate: int) -> void:
 		match tickrate_mismatch_action:
 			0:
 				Netw.dbg.warn(
-					"NetworkClock: tickrate mismatch — local=%d server=%d" % \
+					"MultiplayerClock: tickrate mismatch — local=%d server=%d" % \
 							[tickrate, server_tickrate],
 					func(m): push_warning(m)
 				)
@@ -476,7 +476,7 @@ func _log_drift() -> void:
 	for s in _drift_samples:
 		sum += s
 	Netw.dbg.info(
-		"NetworkClock: 60s average drift = %.2f ticks" % \
+		"MultiplayerClock: 60s average drift = %.2f ticks" % \
 				[float(sum) / _drift_samples.size()],
 	)
 	_drift_samples.clear()
@@ -486,7 +486,7 @@ func _log_drift() -> void:
 func _run_auto_config() -> void:
 	if multiplayer.is_server():
 		return
-	Netw.dbg.info("NetworkClock: Starting 5s auto-config test...")
+	Netw.dbg.info("MultiplayerClock: Starting 5s auto-config test...")
 	var max_rec := 0
 	for i in range(50):
 		await get_tree().create_timer(0.1).timeout
@@ -495,7 +495,7 @@ func _run_auto_config() -> void:
 		max_rec = maxi(max_rec, recommended_display_offset)
 	display_offset = max_rec
 	Netw.dbg.info(
-		"NetworkClock: Auto-config complete. display_offset = %d" % \
+		"MultiplayerClock: Auto-config complete. display_offset = %d" % \
 				[max_rec],
 	)
 

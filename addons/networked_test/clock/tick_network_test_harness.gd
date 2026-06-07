@@ -1,6 +1,6 @@
-## Harness for movement tests requiring a synchronized [NetworkClock].
+## Harness for movement tests requiring a synchronized [MultiplayerClock].
 ##
-## Wraps [NetwTestHarness] and adds [NetworkClock] services to all peers.
+## Wraps [NetwTestHarness] and adds [MultiplayerClock] services to all peers.
 ## Provides [method sync_ticks_real] to reliably advance simulation in CI.
 class_name TickNetworkTestHarness
 extends Node
@@ -187,7 +187,7 @@ func sync_ticks(n: int) -> void:
 ## This is more reliable than [method GdUnitSceneRunner.simulate_frames] in CI
 ## because it anchors to the actual simulation clock signals.
 func sync_ticks_real(n: int) -> void:
-	var clock := _inner.server().get_service(NetworkClock) as NetworkClock
+	var clock := _inner.server().get_service(MultiplayerClock) as MultiplayerClock
 	if not clock:
 		@warning_ignore("redundant_await")
 		await _runner.simulate_frames(n)
@@ -217,9 +217,9 @@ func sync_ticks_real(n: int) -> void:
 		timeout -= 1
 
 
-## Awaits until the client [NetworkClock] synchronizes with the server.
+## Awaits until the client [MultiplayerClock] synchronizes with the server.
 func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
-	var client_clock := _client.get_service(NetworkClock) as NetworkClock
+	var client_clock := _client.get_service(MultiplayerClock) as MultiplayerClock
 	var timeout := timeout_ticks
 
 	while not client_clock.is_synchronized and timeout > 0:
@@ -230,7 +230,7 @@ func wait_for_clock_sync(timeout_ticks: int = 100) -> void:
 
 	assert(
 		client_clock.is_synchronized,
-		"Timed out waiting for NetworkClock synchronization",
+		"Timed out waiting for MultiplayerClock synchronization",
 	)
 
 

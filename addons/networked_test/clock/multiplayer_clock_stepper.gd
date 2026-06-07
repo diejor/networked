@@ -1,12 +1,12 @@
-## Debuggable helper for advancing a [NetworkClock] in tests.
+## Debuggable helper for advancing a [MultiplayerClock] in tests.
 ##
 ## The stepper owns frame estimation and timeout diagnostics. Harnesses provide
-## the [SceneTree] and [NetworkClock] they want to drive.
-class_name NetworkClockStepper
+## the [SceneTree] and [MultiplayerClock] they want to drive.
+class_name MultiplayerClockStepper
 extends RefCounted
 
 var tree: SceneTree
-var clock: NetworkClock
+var clock: MultiplayerClock
 var physics_fps := 60
 var fallback_tickrate := 30
 var timeout_frames := 100
@@ -14,7 +14,7 @@ var timeout_frames := 100
 
 func _init(
 		p_tree: SceneTree,
-		p_clock: NetworkClock,
+		p_clock: MultiplayerClock,
 		p_physics_fps: int = 60,
 		p_fallback_tickrate: int = 30,
 ) -> void:

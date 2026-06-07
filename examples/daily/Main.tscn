@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://bo5uh52f6sln5" path="res://addons/networked/session/default_server_info_source.gd" id="3_k3bnk"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://pnt2d2aysp0s" path="res://addons/networked/session/debug_join_config.gd" id="5_y6djk"]
-[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/network_clock.gd" id="7_03owx"]
+[ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_03owx"]
 [ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="7_7ue45"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="8_7ue45"]
@@ -83,7 +83,7 @@ spawn_policy = SubResource("Resource_spwn")
 debug_join = SubResource("Resource_lfwvc")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
-[node name="NetworkClock" type="Node" parent="Client" unique_id=498939000]
+[node name="MultiplayerClock" type="Node" parent="Client" unique_id=498939000]
 script = ExtResource("7_03owx")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 

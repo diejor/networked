@@ -194,15 +194,15 @@ func server_scene_manager() -> MultiplayerSceneManager:
 	return scene_manager_for(_server)
 
 
-## Creates a [NetworkClock] on [method server] and every client.
+## Creates a [MultiplayerClock] on [method server] and every client.
 ##
 ## Clients created after this call receive the same clock before joining.
-## Existing clients are awaited until [signal NetworkClock.clock_synchronized]
+## Existing clients are awaited until [signal MultiplayerClock.clock_synchronized]
 ## fires.
 func add_clock(
 		tickrate: int = 30,
 		display_offset: int = 3,
-) -> NetworkClock:
+) -> MultiplayerClock:
 	_clock_enabled = true
 	_clock_tickrate = tickrate
 	_clock_display_offset = display_offset
@@ -743,16 +743,16 @@ func _make_service_tree(
 	return tree
 
 
-func _ensure_clock(mt: MultiplayerTree) -> NetworkClock:
-	var existing := mt.get_service(NetworkClock) as NetworkClock
+func _ensure_clock(mt: MultiplayerTree) -> MultiplayerClock:
+	var existing := mt.get_service(MultiplayerClock) as MultiplayerClock
 	if existing:
 		return existing
 	return _add_clock_node(mt)
 
 
-func _add_clock_node(mt: MultiplayerTree) -> NetworkClock:
-	var clock := NetworkClock.new()
-	clock.name = "NetworkClock"
+func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
+	var clock := MultiplayerClock.new()
+	clock.name = "MultiplayerClock"
 	clock.tickrate = _clock_tickrate
 	clock.display_offset = _clock_display_offset
 	mt.add_child(clock)

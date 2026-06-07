@@ -1,7 +1,5 @@
-## Service locator facade over [MultiplayerTree].
-##
-## Provides access to backend systems such as [MultiplayerSceneManager]
-## and [NetworkClock] without exposing the concrete [MultiplayerTree] class
+## Facade that provides access to backend systems such as [MultiplayerSceneManager]
+## and [MultiplayerClock] without exposing the concrete [MultiplayerTree] class
 ## to component code.
 ## [br][br]
 ## [b]Custom Services[/b]
@@ -61,12 +59,12 @@ func get_interest_service() -> InterestService:
 	return mt.get_service(InterestService) as InterestService
 
 
-## Returns the [NetworkClock] service, or [code]null[/code].
-func get_clock() -> NetworkClock:
+## Returns the [MultiplayerClock] service, or [code]null[/code].
+func get_clock() -> MultiplayerClock:
 	var mt: MultiplayerTree = _tree_ref.get_ref()
 	if not mt:
 		return null
-	return mt.get_service(NetworkClock)
+	return mt.get_service(MultiplayerClock)
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local

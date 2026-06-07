@@ -6,7 +6,7 @@
 ## [br]- [member NetwContext.tree] -- network operations (pause, kick,
 ##   disconnect). See [NetwTree].
 ## [br]- [member NetwContext.services] -- backend systems such as the
-##   [NetworkClock] and [MultiplayerSceneManager], plus custom services
+##   [MultiplayerClock] and [MultiplayerSceneManager], plus custom services
 ##   you register yourself. See [NetwServices].
 ## [br]- [member NetwContext.connect] -- pre-game connect / server browser
 ##   API (host, join, target list). See [NetwConnect].

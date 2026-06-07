@@ -98,14 +98,14 @@ func sync_ticks(n: int) -> void:
 	if n == 0:
 		return
 
-	var clock := _host.tree.get_service(NetworkClock) as NetworkClock \
+	var clock := _host.tree.get_service(MultiplayerClock) as MultiplayerClock \
 	if _host else null
 	if not clock:
 		for i in n:
 			await get_tree().process_frame
 		return
 
-	var stepper := NetworkClockStepper.new(
+	var stepper := MultiplayerClockStepper.new(
 		get_tree(),
 		clock,
 		_saved_physics_ticks,

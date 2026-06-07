@@ -55,8 +55,8 @@ func get_tp_layer() -> TPLayerAPI:
 	return tp_layer
 
 
-## Returns the [NetworkClock] for this session.
-func get_network_clock() -> NetworkClock:
+## Returns the [MultiplayerClock] for this session.
+func get_multiplayer_clock() -> MultiplayerClock:
 	var ctx := get_context()
 	return ctx.services.get_clock() if ctx else null
 

@@ -1,15 +1,15 @@
-## Unit tests for [NetworkClock].
+## Unit tests for [MultiplayerClock].
 ##
 ## Covers derived properties (public contract), the snap/stretch calibration
-## paths, the [code]clock_synchronized[/code] signal, [method NetworkClock.for_node]
+## paths, the [code]clock_synchronized[/code] signal, [method MultiplayerClock.for_node]
 ## lookup, and the physics-process tick loop in isolation. The calibration
 ## and tick-loop tests are addon-internal coverage that intentionally call
 ## private methods on the unit under test.
-class_name TestNetworkClock
+class_name TestMultiplayerClock
 extends NetwTestSuite
 
-func _make_clock(tickrate: int = 30) -> NetworkClock:
-	var clock := NetworkClock.new()
+func _make_clock(tickrate: int = 30) -> MultiplayerClock:
+	var clock := MultiplayerClock.new()
 	clock.tickrate = tickrate
 	return auto_free(clock)
 
@@ -17,8 +17,8 @@ func _make_clock(tickrate: int = 30) -> NetworkClock:
 func _make_clock_in_tree(
 		tickrate: int = 10,
 		use_physics_interpolation: bool = true,
-) -> NetworkClock:
-	var clock := NetworkClock.new()
+) -> MultiplayerClock:
+	var clock := MultiplayerClock.new()
 	clock.tickrate = tickrate
 	clock.use_physics_interpolation = use_physics_interpolation
 	add_child(clock)
@@ -70,7 +70,7 @@ func test_calibrate_snap_always_jumps(
 		],
 ) -> void:
 	var clock := _make_clock()
-	clock.sync_mode = NetworkClock.SyncMode.SNAP
+	clock.sync_mode = MultiplayerClock.SyncMode.SNAP
 	clock.is_synchronized = true
 	clock.tick = starting_tick
 	clock._calibrate(target_tick)
@@ -82,7 +82,7 @@ func test_calibrate_snap_always_jumps(
 # to move, so it stays put here.
 func test_calibrate_stretch_reanchors_estimate() -> void:
 	var clock := _make_clock(30)
-	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.sync_mode = MultiplayerClock.SyncMode.STRETCH
 	clock.is_synchronized = true
 	clock.tick = 10
 	clock._tick_accumulator = 0.0
@@ -97,7 +97,7 @@ func test_calibrate_stretch_reanchors_estimate() -> void:
 # estimate without touching the live tick (the tick loop carries whole ticks).
 func test_nudge_moves_accumulator_toward_estimate() -> void:
 	var clock := _make_clock(30)
-	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.sync_mode = MultiplayerClock.SyncMode.STRETCH
 	clock.is_synchronized = true
 	clock.stretch_nudge_factor = 0.5
 	clock.panic_snap_threshold = 100
@@ -116,7 +116,7 @@ func test_nudge_moves_accumulator_toward_estimate() -> void:
 # threshold.
 func test_nudge_panic_snaps_above_threshold() -> void:
 	var clock := _make_clock(30)
-	clock.sync_mode = NetworkClock.SyncMode.STRETCH
+	clock.sync_mode = MultiplayerClock.SyncMode.STRETCH
 	clock.is_synchronized = true
 	clock.panic_snap_threshold = 5
 	clock.tick = 10
@@ -152,7 +152,7 @@ func test_for_node_returns_null_when_no_clock_registered() -> void:
 	var node := Node.new()
 	add_child(node)
 	auto_free(node)
-	assert_that(NetworkClock.for_node(node)).is_null()
+	assert_that(MultiplayerClock.for_node(node)).is_null()
 
 
 # for_node walks the node's multiplayer API and reads the registered clock
@@ -168,11 +168,11 @@ func test_for_node_returns_registered_clock() -> void:
 	assert_that(api).is_not_null()
 
 	var clock := _make_clock()
-	api.set_meta(&"_network_clock", clock)
+	api.set_meta(&"_multiplayer_clock", clock)
 
-	assert_that(NetworkClock.for_node(node)).is_same(clock)
+	assert_that(MultiplayerClock.for_node(node)).is_same(clock)
 
-	api.remove_meta(&"_network_clock")
+	api.remove_meta(&"_multiplayer_clock")
 
 #endregion
 

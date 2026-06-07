@@ -1,9 +1,9 @@
-## Typed wrapper for a single network clock pong measurement.
+## Typed wrapper for a single multiplayer clock pong measurement.
 ##
-## Created from the raw [Dictionary] emitted by [signal NetworkClock.pong_received]
+## Created from the raw [Dictionary] emitted by [signal MultiplayerClock.pong_received]
 ## and serialized via [method to_dict] before crossing the [EngineDebugger]
 ## boundary.
-class_name NetClockSample
+class_name MultiplayerClockSample
 extends RefCounted
 
 var tree_name: String
@@ -19,9 +19,9 @@ var is_stable: bool
 var is_synchronized: bool
 
 
-## Creates a [NetClockSample] from a [Dictionary] and tree name.
-static func from_dict(d: Dictionary, p_tree_name: String) -> NetClockSample:
-	var s := NetClockSample.new()
+## Creates a [MultiplayerClockSample] from a [Dictionary] and tree name.
+static func from_dict(d: Dictionary, p_tree_name: String) -> MultiplayerClockSample:
+	var s := MultiplayerClockSample.new()
 	s.tree_name = p_tree_name
 	s.username = d.get("username", "")
 	s.rtt_raw = d.get("rtt_raw", 0.0)
