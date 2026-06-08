@@ -48,6 +48,10 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_session = session
 	NetwLog.set_test_hook_controls_overrides(true)
 
+	# Ensure InputMap is fully loaded from project settings.
+	# This is essential on fresh CI environments without prior editor import.
+	InputMap.load_from_project_settings()
+
 	var log_level := "none"
 
 	if OS.has_environment("NETW_TEST_LOG"):
