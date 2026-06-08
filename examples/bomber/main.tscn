@@ -52,12 +52,3 @@ browser_filter_uid = "networked-example-bomber"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]
-
-[node name="Window" type="Window" parent="." unique_id=669873604]
-gui_embed_subwindows = true
-oversampling_override = 1.0
-position = Vector2i(0, 36)
-transient = true
-transient_to_focused = true
-exclusive = true
-borderless = true

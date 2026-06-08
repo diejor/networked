@@ -29,8 +29,8 @@ func test_eight_players_mixed_goals_no_crash() -> void:
 	# Every player node still exists on every peer.
 	for r in runners:
 		for other in runners:
-			var name := StringName(other.username)
-			assert_bool(r.find_player(name) != null).is_true()
+			var _name := StringName(other.username)
+			assert_bool(r.find_player(_name) != null).is_true()
 
 
 func test_four_scorers_final_scores_consistent() -> void:
