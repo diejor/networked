@@ -15,7 +15,9 @@ var game: NetwGameHarness
 func before_test() -> void:
 	print("=== CI DIAGNOSTICS: START ===")
 	print("res:// path globalized: ", ProjectSettings.globalize_path("res://"))
-	print("InputMap has move_left: ", InputMap.has_action(&"move_left"))
+	print("InputMap has move_left BEFORE load: ", InputMap.has_action(&"move_left"))
+	InputMap.load_from_project_settings()
+	print("InputMap has move_left AFTER load: ", InputMap.has_action(&"move_left"))
 	print("ProjectSettings has input/move_left: ", ProjectSettings.has_setting("input/move_left"))
 	print("input/move_left value: ", ProjectSettings.get_setting("input/move_left"))
 	print("input/move_left type: ", typeof(ProjectSettings.get_setting("input/move_left")))
