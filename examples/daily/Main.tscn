@@ -13,7 +13,7 @@
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="10_xg3i6"]
-[ext_resource type="Script" uid="uid://dwa0bhinxigbm" path="res://addons/networked/session/spawn/spawner_component_policy.gd" id="11_spwn"]
+[ext_resource type="Script" uid="uid://dwa0bhinxigbm" path="res://addons/networked/session/spawn/entity_spawn_policy.gd" id="11_spwn"]
 [ext_resource type="Script" uid="uid://bp177r3yltt54" path="res://addons/networked/transport/local/local_backend.gd" id="13_7ehqo"]
 
 [sub_resource type="Resource" id="Resource_csjse"]
@@ -34,7 +34,7 @@ script = ExtResource("11_spwn")
 [sub_resource type="Resource" id="Resource_k10si"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/Components/SpawnerComponent"
+node_path = "Player/Components/MultiplayerEntity"
 
 [sub_resource type="Resource" id="Resource_3ma5l"]
 script = ExtResource("11_spwn")
@@ -70,7 +70,7 @@ metadata/_custom_type_script = "uid://bp177r3yltt54"
 [sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player/Components/SpawnerComponent"
+node_path = "Player/Components/MultiplayerEntity"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 

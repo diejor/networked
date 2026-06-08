@@ -102,7 +102,7 @@ func get_player_list() -> Array:
 
 
 ## Starts the match by activating [code]World[/code]; admission cascades
-## through each player's [SpawnerComponent] as bomber's spawner fires.
+## through each player's [MultiplayerEntity] as bomber's spawner fires.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
 	var sm := ctx.services.get_scene_manager()

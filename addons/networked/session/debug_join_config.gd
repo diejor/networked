@@ -13,7 +13,7 @@ extends Resource
 ## # On a debug MultiplayerTree, assign a DebugJoinConfig and the tree hosts
 ## # straight into the game on play, skipping ConnectBrowser.
 ## debug_join.username = &"Dev"
-## debug_join.spawn = SpawnerComponentPolicy.new()   # same class as the server
+## debug_join.spawn = EntitySpawnPolicy.new()   # same class as the server
 ##
 ## var payload := debug_join.to_payload()            # is_debug == true
 ## [/codeblock]

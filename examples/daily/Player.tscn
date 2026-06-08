@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://dbb6gk33m6anl" path="res://icon.svg" id="2_kpjcp"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
-[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="5_dgaqa"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="5_dgaqa"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="7_0cf0o"]
 [ext_resource type="Resource" uid="uid://yv4uuygdxogs" path="res://examples/daily/dummy_database.tres" id="8_dgaqa"]
 [ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://addons/networked/nodes/input/move_input_component.gd" id="9_5h0xu"]
@@ -82,12 +82,12 @@ database = ExtResource("8_dgaqa")
 table_name = &"players"
 metadata/_custom_type_script = "uid://c72wanrudisxw"
 
-[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="Components" unique_id=1181938780]
+[node name="MultiplayerEntity" type="MultiplayerSynchronizer" parent="Components" unique_id=1181938780]
 root_path = NodePath("../..")
 replication_config = SubResource("SceneReplicationConfig_5h0xu")
 script = ExtResource("5_dgaqa")
 authority_mode = 1
-metadata/_custom_type_script = "uid://cgyly1efa3m53"
+metadata/_custom_type_script = "uid://bspawnrcomp001"
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1040002509]
 replication_interval = 0.25

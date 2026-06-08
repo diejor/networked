@@ -22,7 +22,7 @@ func before_test() -> void:
 func _make_entity(entity_name: String = "Ent") -> Node:
 	# Entity-root under the [MultiplayerTree] so
 	# [code]Netw.ctx(self).interest[/code] resolves. No
-	# [SpawnerComponent] is attached: it would crash in [code]_ready[/code]
+	# [MultiplayerEntity] is attached: it would crash in [code]_ready[/code]
 	# without a packed-scene template owner.
 	return make_test_entity(mt, entity_name, 0, false)
 
@@ -66,9 +66,9 @@ func test_parented_contributes_layer_ids_property() -> void:
 	var root := _make_entity()
 	var component := InterestComponent.new()
 	root.add_child(component)
-	# With no [SpawnerComponent] yet registered, the contribution lands
+	# With no [MultiplayerEntity] yet registered, the contribution lands
 	# in the entity's pending buffer. [method NetwEntity.set_spawner]
-	# flushes it to [member SpawnerComponent.replication_config] later;
+	# flushes it to [member MultiplayerEntity.replication_config] later;
 	# that flush is covered by other suites.
 	var entity := NetwEntity.of(root)
 	var path := NodePath("InterestComponent:layer_ids")

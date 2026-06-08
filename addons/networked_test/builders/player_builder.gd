@@ -11,7 +11,7 @@ var packed: PackedScene = null
 
 var _name: String
 var _root_type: Variant = Node
-var _has_spawner: bool = false
+var _has_entity: bool = false
 var _save_database: Resource = null
 var _save_table: StringName = &""
 var _tp_level_scene_path: String = ""
@@ -44,9 +44,9 @@ func with_root(type: Variant) -> PlayerBuilder:
 	return self
 
 
-## Enables the [SpawnerComponent] on the player.
-func with_spawner() -> PlayerBuilder:
-	_has_spawner = true
+## Enables the [MultiplayerEntity] on the player.
+func with_multiplayer_entity() -> PlayerBuilder:
+	_has_entity = true
 	return self
 
 
@@ -80,11 +80,11 @@ func build() -> Node:
 	var root: Node = _root_type.new()
 	root.name = _name
 
-	if _has_spawner:
-		var spawner := SpawnerComponent.new()
-		spawner.set("authority_mode", SpawnerComponent.AuthorityMode.CLIENT)
-		spawner.set_meta("_custom_type_script", "uid://bspawnrcomp001")
-		var _a1: Node = SceneAssembly.attach(root, spawner, root)
+	if _has_entity:
+		var entity := MultiplayerEntity.new()
+		entity.set("authority_mode", MultiplayerEntity.AuthorityMode.CLIENT)
+		entity.set_meta("_custom_type_script", "uid://bspawnrcomp001")
+		var _a1: Node = SceneAssembly.attach(root, entity, root)
 
 	if _save_database != null:
 		var save_comp := SaveComponent.new()

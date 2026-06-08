@@ -17,7 +17,7 @@ var level_builder: LevelBuilder
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerMinimal") \
 			.with_root(Node2D) \
-			.with_spawner()
+			.with_multiplayer_entity()
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new("TestLevel") \
@@ -44,7 +44,7 @@ func test_spawned_player_joins_scene_with_identity() -> void:
 	var expected_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(player.get_multiplayer_authority()).is_equal(expected_id)
 
-	var client_comp := SpawnerComponent.unwrap(player)
+	var client_comp := MultiplayerEntity.unwrap(player)
 	assert_that(client_comp.entity_id).is_equal("test_player_0")
 
 	var peer_id := client0.multiplayer_peer.get_unique_id()

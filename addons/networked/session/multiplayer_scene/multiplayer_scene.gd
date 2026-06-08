@@ -6,7 +6,7 @@ extends Node
 ## boundary. Clients receive the subtree only after [method connect_peer] or
 ## [method register_player] admits their peer.
 ## [codeblock]
-## var player := SpawnerComponent.instantiate_player(rj)
+## var player := MultiplayerEntity.instantiate_player(rj)
 ## scene.add_player(player)
 ##
 ## scene.prepare_player_transfer(player)

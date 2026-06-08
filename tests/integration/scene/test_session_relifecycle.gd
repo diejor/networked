@@ -8,7 +8,7 @@
 class_name TestSessionRelifecycle
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
+const SPAWNER_PATH := "TestPlayerFull/MultiplayerEntity"
 
 var harness: NetwTestHarness
 var player_builder: PlayerBuilder
@@ -18,7 +18,7 @@ var level_builder: LevelBuilder
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
 			.with_root(Node2D) \
-			.with_spawner()
+			.with_multiplayer_entity()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()

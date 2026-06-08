@@ -282,8 +282,8 @@ func _warn_if_role_unset() -> void:
 ##
 ## A [code]null[/code] value means [signal player_joined] is the gameplay
 ## entry point. If the tree has no [MultiplayerSceneManager] but does
-## have a child scene with a [SpawnerComponent], [method _enter_tree] creates a
-## [SpawnerComponentPolicy].
+## have a child scene with a [MultiplayerEntity], [method _enter_tree] creates a
+## [EntitySpawnPolicy].
 ## [codeblock]
 ## # Client. Store spawn intent in JoinPayload.spawn.
 ## payload.spawn = spawn_policy.to_dict()
@@ -294,7 +294,7 @@ func _warn_if_role_unset() -> void:
 ## [method SpawnPolicy.to_dict] serializes client intent.
 ## [method SpawnPolicy.spawn] reads [member ResolvedJoin.spawn] and returns
 ## the [MultiplayerScene] that receives the player. Read [SpawnPolicy] and
-## [SpawnerComponentPolicy] before assigning a custom policy.
+## [EntitySpawnPolicy] before assigning a custom policy.
 @export var spawn_policy: SpawnPolicy
 
 @export_group("Debug")
@@ -547,13 +547,13 @@ func _get_configuration_warnings() -> PackedStringArray:
 		if child is MultiplayerSceneManager:
 			has_scene_manager = true
 			break
-		if _has_spawner_component(child):
+		if _has_multiplayer_entity(child):
 			has_sceneless_world = true
 			break
 
 	if not has_scene_manager and not has_sceneless_world:
 		warnings.append(
-			"No world scene (containing a SpawnerComponent) or " +
+			"No world scene (containing a MultiplayerEntity) or " +
 			"MultiplayerSceneManager found as a child. " +
 			"No replication will happen.",
 		)
@@ -577,7 +577,7 @@ func _enter_tree() -> void:
 			return
 
 	for child in get_children():
-		if _has_spawner_component(child):
+		if _has_multiplayer_entity(child):
 			var scene_path := child.scene_file_path
 			if scene_path.is_empty():
 				push_error(
@@ -593,10 +593,10 @@ func _enter_tree() -> void:
 			var manager := MultiplayerSceneManager.new()
 			manager.name = &"SceneManager"
 			# Zero-config world: auto-spawn joining players at the picked
-			# SpawnerComponent. An explicitly placed tree defaults to no
+			# MultiplayerEntity. An explicitly placed tree defaults to no
 			# policy and leaves spawning to gameplay.
 			if spawn_policy == null:
-				spawn_policy = SpawnerComponentPolicy.new()
+				spawn_policy = EntitySpawnPolicy.new()
 			add_child(manager)
 			manager._configure_default(scene_path)
 			return
@@ -634,11 +634,11 @@ func get_connect_session() -> ConnectSession:
 	return session
 
 
-static func _has_spawner_component(node: Node) -> bool:
-	if node is SpawnerComponent:
+static func _has_multiplayer_entity(node: Node) -> bool:
+	if node is MultiplayerEntity:
 		return true
 	for child in node.get_children():
-		if _has_spawner_component(child):
+		if _has_multiplayer_entity(child):
 			return true
 	return false
 

@@ -1,4 +1,4 @@
-class_name SpawnerComponent
+class_name MultiplayerEntity
 extends MultiplayerSynchronizer
 ## Orchestration point for a networked entity.
 ##
@@ -52,7 +52,7 @@ enum AuthorityMode {
 ## Emitted after [member entity_id] and multiplayer authority
 ## are resolved, but [b]before[/b] sibling [code]_enter_tree[/code].
 ## Mirrors [signal NetwEntity.spawning] for callers that already hold a
-## [SpawnerComponent] reference.
+## [MultiplayerEntity] reference.
 signal spawning
 
 ## Emitted right before [method despawn] runs, with the despawn reason.
@@ -90,19 +90,19 @@ var is_template: bool:
 		return entity_id.is_empty() or not _has_authority_binding()
 
 
-## Returns the [SpawnerComponent] under the unique name
-## [code]%SpawnerComponent[/code], or [code]null[/code].
-static func unwrap(node: Node) -> SpawnerComponent:
-	return node.get_node_or_null("%SpawnerComponent")
+## Returns the [MultiplayerEntity] under the unique name
+## [code]%MultiplayerEntity[/code], or [code]null[/code].
+static func unwrap(node: Node) -> MultiplayerEntity:
+	return node.get_node_or_null("%MultiplayerEntity")
 
 
 ## Returns an unparented copy of [param template]'s scene.
 ## [param configure] fires before the copy enters the tree,
-## receiving the copy's [SpawnerComponent] so you can set
+## receiving the copy's [MultiplayerEntity] so you can set
 ## [member entity_id], [member peer_id], or the owner's node name.
 ##
 ## [codeblock]
-## var npc := SpawnerComponent.instantiate_from(template, func(s):
+## var npc := MultiplayerEntity.instantiate_from(template, func(s):
 ##     s.entity_id = &"goblin_42"
 ## )
 ## parent.add_child(npc)
@@ -114,9 +114,9 @@ static func instantiate_from(
 	var copy: Node = load(template.scene_file_path).instantiate()
 	collect_from(template, copy)
 	if configure.is_valid():
-		var copy_spawner := unwrap(copy)
-		if copy_spawner:
-			configure.call(copy_spawner)
+		var copy_entity := unwrap(copy)
+		if copy_entity:
+			configure.call(copy_entity)
 	return copy
 
 
@@ -124,10 +124,10 @@ static func instantiate_from(
 ## from [param template] to [param copy].
 ## No-op when the template has no config or is out-of-tree.
 static func collect_from(template: Node, copy: Node) -> void:
-	var spawner := unwrap(template)
-	if not spawner or not spawner.replication_config:
+	var entity := unwrap(template)
+	if not entity or not entity.replication_config:
 		return
-	var cfg := spawner.replication_config
+	var cfg := entity.replication_config
 	for prop: NodePath in cfg.get_properties():
 		if not cfg.property_get_spawn(prop):
 			continue
@@ -139,7 +139,7 @@ static func collect_from(template: Node, copy: Node) -> void:
 
 
 func _init() -> void:
-	name = "SpawnerComponent"
+	name = "MultiplayerEntity"
 	unique_name_in_owner = true
 
 
@@ -152,7 +152,7 @@ func _notification(what: int) -> void:
 	var entity := Netw.ctx(self).entity
 	if not entity or not entity.owner:
 		return
-	entity.set_spawner(self)
+	entity.set_multiplayer_entity(self)
 	_ensure_replication_config()
 	_sync_entity_identity()
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
@@ -433,7 +433,7 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	)
 	var copy := instantiate_from(
 		owner,
-		func(c: SpawnerComponent) -> void:
+		func(c: MultiplayerEntity) -> void:
 			if not id.is_empty():
 				NetwEntity.bundle(c.owner, 0, id)
 	)
@@ -448,7 +448,7 @@ func instantiate_player(rj: ResolvedJoin) -> Node:
 	assert(multiplayer.is_server())
 	var copy := instantiate_from(
 		owner,
-		func(c: SpawnerComponent) -> void:
+		func(c: MultiplayerEntity) -> void:
 			NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
 	)
 	return copy

@@ -6,7 +6,7 @@ Scenes and players
 Networked separates the "world" from the "players in it". The
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` decides which
 levels exist on which peer and when, while the
-:ref:`SpawnerComponent <class_SpawnerComponent>` decides which actors enter
+:ref:`MultiplayerEntity <class_MultiplayerEntity>` decides which actors enter
 those levels and on whose authority. This page works through both, with the
 :ref:`MultiplayerScene <class_MultiplayerScene>` container in the middle as
 the glue.
@@ -37,7 +37,7 @@ The manager supports two complementary controls per level:
   expensive to keep alive.
 
 For a single-scene project, you do not need to think about any of this.
-Dropping a scene with a :ref:`SpawnerComponent <class_SpawnerComponent>`
+Dropping a scene with a :ref:`MultiplayerEntity <class_MultiplayerEntity>`
 descendant directly under the tree makes Networked auto-configure a
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` with that scene as its only spawnable, in
 :ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` mode. The first time you need a second level (a lobby plus a
@@ -65,10 +65,10 @@ through the synchronizer and the
 :godot:`MultiplayerSpawner <MultiplayerSpawner>` you already configured
 on the level.
 
-The SpawnerComponent
+The MultiplayerEntity
 --------------------
 
-The :ref:`SpawnerComponent <class_SpawnerComponent>` is the one piece of
+The :ref:`MultiplayerEntity <class_MultiplayerEntity>` is the one piece of
 the addon every gameplay scene touches. It extends
 :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` so it can be
 authored visually in the *Replication* panel, but the runtime treats every
@@ -89,13 +89,13 @@ trouble surviving.
 Authority modes
 ~~~~~~~~~~~~~~~
 
-The component's :ref:`AuthorityMode <class_SpawnerComponent_property_authority_mode>`
+The component's :ref:`AuthorityMode <class_MultiplayerEntity_property_authority_mode>`
 controls who is in charge of the entity's :godot:`owner <Node#class_node_property_owner>` node:
 
-- :ref:`SERVER <class_SpawnerComponent_constant_SERVER>`: the server peer (id 1) is the multiplayer authority. Use
+- :ref:`SERVER <class_MultiplayerEntity_constant_SERVER>`: the server peer (id 1) is the multiplayer authority. Use
   this for NPCs, level props, and anything that should remain
   server-authoritative.
-- :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>`: the represented peer (parsed from the entity's name in the
+- :ref:`CLIENT <class_MultiplayerEntity_constant_CLIENT>`: the represented peer (parsed from the entity's name in the
   form ``entity_id|peer_id``) is the multiplayer authority. This is the
   setting for player avatars where the owning client reads input and the
   server only validates.
@@ -132,7 +132,7 @@ and property the synchronizer should bundle:
 The ordering is important: contributions must happen in
 :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`, because Godot reads the synchronizer's
 replication config between scene instantiation and tree entry. Connecting
-to :ref:`spawning <class_SpawnerComponent_signal_spawning>` and adding
+to :ref:`spawning <class_MultiplayerEntity_signal_spawning>` and adding
 properties from inside it is too late. The spawn packet has already been
 serialized.
 
@@ -149,29 +149,29 @@ Spawning and despawning
 
 Most spawns happen inside the addon: a client connects, the server
 resolves their :ref:`ResolvedJoin <class_ResolvedJoin>`, and
-:ref:`spawn_player() <class_SpawnerComponent_method_spawn_player>` drops a
+:ref:`spawn_player() <class_MultiplayerEntity_method_spawn_player>` drops a
 copy of the template into the target
 :ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else (NPCs, projectiles, loot) there are two helpers:
 
-- :ref:`spawn_under() <class_SpawnerComponent_method_spawn_under>`: the
+- :ref:`spawn_under() <class_MultiplayerEntity_method_spawn_under>`: the
   simple case: clone the template under a parent and give it an entity id.
-- :ref:`instantiate_from() <class_SpawnerComponent_method_instantiate_from>`:
+- :ref:`instantiate_from() <class_MultiplayerEntity_method_instantiate_from>`:
   the configurable case: clone the template, run a callback on the copy
   before it enters the tree, and let the caller add it to the scene.
 
 Both are server-only. The copy goes through the same spawn lifecycle as a
 player would: it picks up the spawn snapshot, runs the
-:ref:`spawning <class_SpawnerComponent_signal_spawning>` signal so sibling
+:ref:`spawning <class_MultiplayerEntity_signal_spawning>` signal so sibling
 components can hydrate, registers with the scene's synchronizer, and
 finally fires :ref:`spawned <class_NetwEntity>`.
 
 Despawning is symmetric:
-:ref:`despawn() <class_SpawnerComponent_method_despawn>` flushes the
+:ref:`despawn() <class_MultiplayerEntity_method_despawn>` flushes the
 :ref:`SaveComponent <class_SaveComponent>` (unless you ask it not to),
 forces authority back to the server so visibility updates settle cleanly,
 and frees the owner. The reason string you pass through
 :ref:`DespawnOpts <class_DespawnOpts>` shows up in logs and in the
-:ref:`despawning <class_SpawnerComponent_signal_despawning>` signal, so
+:ref:`despawning <class_MultiplayerEntity_signal_despawning>` signal, so
 custom systems (achievements, death cams, kill feeds) can pivot on it
 without parsing strings out of the engine.
 
@@ -183,8 +183,8 @@ contains:
 
 - A :godot:`CharacterBody2D <CharacterBody2D>` (or 3D equivalent) with the
   movement script.
-- A :ref:`SpawnerComponent <class_SpawnerComponent>` with :ref:`AuthorityMode <class_SpawnerComponent_property_authority_mode>`
-  set to :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` and the body's position listed as a spawn property.
+- A :ref:`MultiplayerEntity <class_MultiplayerEntity>` with :ref:`AuthorityMode <class_MultiplayerEntity_property_authority_mode>`
+  set to :ref:`CLIENT <class_MultiplayerEntity_constant_CLIENT>` and the body's position listed as a spawn property.
 - A sibling :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` for
   continuous state (position, animation frame, weapon held).
 - Optionally, a :ref:`SaveComponent <class_SaveComponent>` so the player's

@@ -11,7 +11,7 @@ The browser build is playable at
 
 - Player sessions are managed by `MultiplayerTree`.
 - The match scene is spawned through `MultiplayerSceneManager`.
-- Player entities use `SpawnerComponent` based join payloads.
+- Player entities use `MultiplayerEntity` based join payloads.
 - Web builds use WebRTC with WebTorrent tracker based lobby discovery.
 - Desktop builds can also use Steam lobbies when GodotSteam is available.
 

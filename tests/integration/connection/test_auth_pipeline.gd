@@ -12,7 +12,7 @@ var client_tree: MultiplayerTree
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new().with_root(Node2D).with_spawner()
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_multiplayer_entity()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
@@ -23,7 +23,7 @@ func before_test() -> void:
 	level_builder.pack()
 	template_instance.free()
 
-	spawner_path = "%s/SpawnerComponent" % player_builder.player_name
+	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
 
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)

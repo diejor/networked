@@ -175,7 +175,7 @@ func resolve_spawn_dict(spawn: Variant, username: String = "") -> Dictionary:
 	if spawn is Dictionary:
 		return spawn
 	if spawn is SceneNodePath:
-		return SpawnerComponentPolicy.from_scene_node_path(spawn).to_dict()
+		return EntitySpawnPolicy.from_scene_node_path(spawn).to_dict()
 
 	assert(
 		false,

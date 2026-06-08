@@ -1,7 +1,7 @@
 ## Runtime identity record for one networked entity root, player or
 ## server-owned.
 ##
-## [SpawnerComponent] creates and drives the entity lifecycle. Sibling
+## [MultiplayerEntity] creates and drives the entity lifecycle. Sibling
 ## components use [NetwEntity] to share identity ([member entity_id],
 ## [member peer_id]), contribute to the spawn packet
 ## ([method contribute_spawn_property]) and saved state
@@ -102,7 +102,7 @@ signal owner_tree_entered
 ## Emitted before scene registration after identity is resolved.
 signal spawning
 
-## Emitted by [SpawnerComponent] after scene registration completes.
+## Emitted by [MultiplayerEntity] after scene registration completes.
 signal spawned
 
 ## Emitted when this entity becomes visible to [param peer_id].
@@ -138,7 +138,7 @@ var entity_id: StringName = &""
 ##
 ## A non-zero value drives [method MultiplayerScene.register_player],
 ## [member MultiplayerTree.local_player] tracking, and an automatic
-## [method SpawnerComponent.despawn] when its peer disconnects. This is the
+## [method MultiplayerEntity.despawn] when its peer disconnects. This is the
 ## source of the player test. See [member is_player].
 var peer_id := 0
 
@@ -161,14 +161,14 @@ var is_player: bool:
 	get:
 		return peer_id != 0
 
-## Returns [member SpawnerComponent.is_template] for this entity's
+## Returns [member MultiplayerEntity.is_template] for this entity's
 ## registered spawner.
 var is_template: bool:
 	get:
-		var spawner := get_spawner()
-		return spawner.is_template if spawner else false
+		var entity := get_multiplayer_entity()
+		return entity.is_template if entity else false
 
-var _spawner_ref: WeakRef
+var _multiplayer_entity_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
@@ -230,7 +230,7 @@ func relative_path(source: Node, target: Node) -> NodePath:
 
 ## Returns [param property] on [param source] relative to [param base].
 ##
-## Defaults to the entity root, matching [SpawnerComponent]'s path space.
+## Defaults to the entity root, matching [MultiplayerEntity]'s path space.
 func property_path(
 		source: Node,
 		property: StringName,
@@ -261,10 +261,10 @@ static func bundle(
 	if entity:
 		entity.entity_id = entity_id
 		entity.peer_id = peer_id
-	var spawner := SpawnerComponent.unwrap(node)
-	if spawner:
-		spawner.entity_id = entity_id
-		spawner.peer_id = peer_id
+	var mp_entity := MultiplayerEntity.unwrap(node)
+	if mp_entity:
+		mp_entity.entity_id = entity_id
+		mp_entity.peer_id = peer_id
 	return node
 
 
@@ -320,19 +320,19 @@ func has_entered_tree() -> bool:
 	return _tree_entered_fired
 
 
-## Registers this entity's [SpawnerComponent].
+## Registers this entity's [MultiplayerEntity].
 ##
 ## Buffered spawn-property contributions are flushed immediately.
-func set_spawner(spawner: SpawnerComponent) -> void:
-	_spawner_ref = weakref(spawner)
+func set_multiplayer_entity(entity: MultiplayerEntity) -> void:
+	_multiplayer_entity_ref = weakref(entity)
 	for path in _pending_spawn_props:
-		spawner.add_spawn_property(path)
+		entity.add_spawn_property(path)
 	_pending_spawn_props.clear()
 
 
-## Returns the registered [SpawnerComponent], or [code]null[/code].
-func get_spawner() -> SpawnerComponent:
-	return _spawner_ref.get_ref() as SpawnerComponent if _spawner_ref else null
+## Returns the registered [MultiplayerEntity], or [code]null[/code].
+func get_multiplayer_entity() -> MultiplayerEntity:
+	return _multiplayer_entity_ref.get_ref() as MultiplayerEntity if _multiplayer_entity_ref else null
 
 
 ## Registers this entity's [SaveComponent].
@@ -367,9 +367,9 @@ func contribute_spawn_property(source: Node, property: StringName) -> void:
 	var path := property_path(source, property)
 	if path.is_empty():
 		return
-	var spawner := get_spawner()
-	if spawner:
-		spawner.add_spawn_property(path)
+	var entity := get_multiplayer_entity()
+	if entity:
+		entity.add_spawn_property(path)
 		return
 	if path not in _pending_spawn_props:
 		_pending_spawn_props.append(path)

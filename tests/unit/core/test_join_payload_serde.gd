@@ -61,14 +61,14 @@ func test_spawn_dict_round_trips() -> void:
 	# serialize/deserialize verbatim, including StringName and NodePath values.
 	var original := JoinPayload.new()
 	original.username = &"alice"
-	original.spawn = SpawnerComponentPolicy.from_scene_node_path(
-		_spawner_path(&"Level1", "Players/SpawnerComponent"),
+	original.spawn = EntitySpawnPolicy.from_scene_node_path(
+		_spawner_path(&"Level1", "Players/MultiplayerEntity"),
 	).to_dict()
 
 	var restored := _round_trip(original)
 	assert_that(StringName(restored.spawn.get("scene_name"))).is_equal(&"Level1")
 	assert_that(restored.spawn.get("spawner_path")) \
-			.is_equal(NodePath("Players/SpawnerComponent"))
+			.is_equal(NodePath("Players/MultiplayerEntity"))
 
 
 func _spawner_path(scene_name: StringName, node_path: String) -> SceneNodePath:

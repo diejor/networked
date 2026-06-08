@@ -80,7 +80,7 @@ func _on_multiplayer_configured() -> void:
 
 
 # Plays the arrival animation when the local peer's player first appears.
-# Replaces SpawnerComponent's direct reach into TPLayerAPI; presentation
+# Replaces MultiplayerEntity's direct reach into TPLayerAPI; presentation
 # stays inside the presentation node.
 func _on_local_player_joined(_rj: ResolvedJoin) -> void:
 	teleport_in()

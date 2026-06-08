@@ -5,8 +5,8 @@
 class_name TestTPFlow
 extends NetwTestSuite
 
-## Node path from level root to the [SpawnerComponent] spawner.
-const SPAWNER_PATH := "TestPlayerFull/SpawnerComponent"
+## Node path from level root to the [MultiplayerEntity] spawner.
+const SPAWNER_PATH := "TestPlayerFull/MultiplayerEntity"
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -32,7 +32,7 @@ func before_test() -> void:
 
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.with_save(db, &"players") \
 			.with_tp(level_path, "PlayerSpawner") \
 			.with_player_sync(

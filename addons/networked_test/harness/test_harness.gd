@@ -11,7 +11,7 @@
 ## var player := await harness.join_player(
 ##     client,
 ##     "uid://...",
-##     "Player/Components/SpawnerComponent"
+##     "Player/Components/MultiplayerEntity"
 ## )
 ## await harness.teardown()
 ## [/codeblock]
@@ -327,7 +327,7 @@ func admit_client_to_scene(
 ## var player := await harness.join_player(
 ##     client,
 ##     LEVEL,
-##     "Player/Components/SpawnerComponent"
+##     "Player/Components/MultiplayerEntity"
 ## )
 ## [/codeblock]
 func join_player(
@@ -337,14 +337,14 @@ func join_player(
 ) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
 
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = level_scene_path
-	spawner_component_path.node_path = spawner_node_path
+	var entity_path := SceneNodePath.new()
+	entity_path.scene_path = level_scene_path
+	entity_path.node_path = spawner_node_path
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
-	join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
-		spawner_component_path,
+	join_payload.spawn = EntitySpawnPolicy.from_scene_node_path(
+		entity_path,
 	).to_dict()
 
 	client.request_join_player.rpc_id(
@@ -352,7 +352,7 @@ func join_player(
 		join_payload.serialize(),
 	)
 
-	var scene_name: StringName = spawner_component_path.get_scene_name()
+	var scene_name: StringName = entity_path.get_scene_name()
 	var scene := scene_on_server(scene_name)
 	var player_name := player_name_for(client)
 	var player_path := NodePath(String(player_name))
@@ -379,10 +379,10 @@ func make_spawn_payload(
 		level_scene_path: String,
 		spawner_node_path: String,
 ) -> JoinPayload:
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = level_scene_path
-	spawner_component_path.node_path = spawner_node_path
-	return _loopback.build_join_payload(username, spawner_component_path)
+	var entity_path := SceneNodePath.new()
+	entity_path.scene_path = level_scene_path
+	entity_path.node_path = spawner_node_path
+	return _loopback.build_join_payload(username, entity_path)
 
 
 ## Builds a [JoinPayload] for harness driven session entry.
@@ -690,7 +690,7 @@ func _instantiate_scene_manager() -> MultiplayerSceneManager:
 # Installs the default spawn policy unless the test supplied one.
 func _ensure_default_spawn_policy(tree: MultiplayerTree) -> void:
 	if tree.spawn_policy == null:
-		tree.spawn_policy = SpawnerComponentPolicy.new()
+		tree.spawn_policy = EntitySpawnPolicy.new()
 
 
 # Mirrors server scene config onto a new client manager.

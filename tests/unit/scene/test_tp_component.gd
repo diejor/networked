@@ -75,7 +75,7 @@ func test_parented_contributes_paths_without_node_owner() -> void:
 	var save := SaveComponent.new()
 	components.add_child(save)
 
-	var spawner := SpawnerComponent.new()
+	var spawner := MultiplayerEntity.new()
 	components.add_child(spawner)
 
 	var spawn_path := NodePath("Components/TPComponent:current_scene_path")

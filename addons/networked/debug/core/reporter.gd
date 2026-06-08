@@ -71,9 +71,9 @@ static func _get_username(node: Node) -> String:
 	var entity := NetwEntity.of(node)
 	if entity and not entity.entity_id.is_empty():
 		return entity.entity_id
-	var client := SpawnerComponent.unwrap(node)
-	if client:
-		return client.entity_id
+	var multiplayer_entity := MultiplayerEntity.unwrap(node)
+	if multiplayer_entity:
+		return multiplayer_entity.entity_id
 	return node.name.get_slice("|", 0)
 
 

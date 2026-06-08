@@ -43,7 +43,7 @@ static func pack_with_path(root: Node, path: String) -> PackedScene:
 
 # Recursively strips netw_entity metadata from the node tree.
 #
-# Why: SpawnerComponent assigns netw_entity in _ready; packing would
+# Why: MultiplayerEntity assigns netw_entity in _ready; packing would
 # serialize active/stale runtime IDs, breaking re-instantiation.
 static func _strip_netw_entity_meta_recursive(node: Node) -> void:
 	if node.has_meta(&"netw_entity"):

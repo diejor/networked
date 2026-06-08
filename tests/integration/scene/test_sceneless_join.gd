@@ -13,7 +13,7 @@ var spawner_path: String
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new().with_root(Node2D).with_spawner()
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_multiplayer_entity()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()
@@ -24,7 +24,7 @@ func before_test() -> void:
 	level_builder.pack()
 	template_instance.free()
 
-	spawner_path = "%s/SpawnerComponent" % player_builder.player_name
+	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
 
 	harness = make_harness()
 	await harness.setup(null, level_builder.packed)
@@ -74,6 +74,6 @@ func test_player_spawns_in_level_after_join() -> void:
 			.is_not_null()
 
 	var player := level.get_node(player_name)
-	var client_comp := SpawnerComponent.unwrap(player)
+	var client_comp := MultiplayerEntity.unwrap(player)
 	assert_that(client_comp).is_not_null()
 	assert_that(str(client_comp.entity_id)).is_equal(username)

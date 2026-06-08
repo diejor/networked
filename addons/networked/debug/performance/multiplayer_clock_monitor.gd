@@ -70,9 +70,9 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 			if entity and not entity.entity_id.is_empty():
 				username = entity.entity_id
 			else:
-				var player := SpawnerComponent.unwrap(mt.local_player)
-				if player:
-					username = player.entity_id
+				var multiplayer_entity := MultiplayerEntity.unwrap(mt.local_player)
+				if multiplayer_entity:
+					username = multiplayer_entity.entity_id
 				else:
 					username = mt.local_player.name.get_slice("|", 0)
 		else:

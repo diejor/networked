@@ -92,14 +92,14 @@ func test_path_namespace_allocates_and_resets() -> void:
 func test_player_builder_shape() -> void:
 	var builder := PlayerBuilder.new("TestPlayer") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.with_player_sync(
 				SyncConfigBuilder.new().property("PlayerSync:position", true),
 			)
 	assert_that(builder.player_name).is_equal(&"TestPlayer")
 	var live: Node2D = auto_free(builder.build()) as Node2D
 	assert_that(live.name).is_equal("TestPlayer")
-	var spawner: Node = live.get_node("SpawnerComponent")
+	var spawner: Node = live.get_node("MultiplayerEntity")
 	assert_that(spawner).is_not_null()
 	assert_that(spawner.owner).is_equal(live)
 	var sync_node: Node = live.get_node("PlayerSync")
@@ -115,7 +115,7 @@ func test_player_builder_shape() -> void:
 func test_level_builder_shape() -> void:
 	var player_packed := PlayerBuilder.new("MyPlayer") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.pack()
 	var marker: Marker2D = auto_free(Marker2D.new())
 	marker.name = "MyMarker"
@@ -142,7 +142,7 @@ func test_level_builder_shape() -> void:
 
 func test_player_builder_snapshot_vs_real_tscn() -> void:
 	var builder: PlayerBuilder = PlayerBuilder.new("TestPlayerMinimal").with_root(Node2D)
-	var _r: PlayerBuilder = builder.with_spawner()
+	var _r: PlayerBuilder = builder.with_multiplayer_entity()
 	var packed: PackedScene = builder.pack()
 	var real_scene: Node2D = auto_free(
 		MINIMAL_PLAYER_TSCN.instantiate(),
@@ -155,7 +155,7 @@ func test_player_with_save_snapshot_vs_real_tscn() -> void:
 	var db_resource := preload("res://tests/test_db.tres")
 	var builder := PlayerBuilder.new("TestPlayerWithSave") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.with_save(db_resource, &"players_save") \
 			.with_player_sync(
 				SyncConfigBuilder.new().property(
@@ -178,7 +178,7 @@ func test_level_builder_snapshot_vs_real_tscn() -> void:
 	var db_resource := preload("res://tests/test_db.tres")
 	var player_packed := PlayerBuilder.new("TestPlayerFull") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.with_save(db_resource, &"player") \
 			.with_tp("uid://bhif5a1uatdsl", "PlayerSpawner") \
 			.with_player_sync(
@@ -269,7 +269,7 @@ func _assert_scenes_match(node1: Node, node2: Node) -> void:
 		var scenes2 := sp2.get("_spawnable_scenes") as PackedStringArray
 		assert_that(scenes2.size()).is_equal(scenes1.size())
 
-	if node1.get_class() == "SpawnerComponent" or node2.get_class() == "SpawnerComponent":
+	if node1.get_class() == "MultiplayerEntity" or node2.get_class() == "MultiplayerEntity":
 		assert_that(node2.get("authority_mode")).is_equal(node1.get("authority_mode"))
 
 	if node1.get_class() == "SaveComponent" or node2.get_class() == "SaveComponent":

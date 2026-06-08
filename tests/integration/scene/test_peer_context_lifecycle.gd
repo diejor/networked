@@ -2,7 +2,7 @@
 class_name TestPeerContextLifecycle
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerWithSave/SpawnerComponent"
+const SPAWNER_PATH := "TestPlayerWithSave/MultiplayerEntity"
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -22,7 +22,7 @@ func before_test() -> void:
 
 	player_builder = PlayerBuilder.new("TestPlayerWithSave") \
 			.with_root(Node2D) \
-			.with_spawner() \
+			.with_multiplayer_entity() \
 			.with_save(db, &"players_save") \
 			.with_player_sync(
 				SyncConfigBuilder.new().property("..:position", true),

@@ -62,7 +62,7 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
 	PROPERTY_HINT_ARRAY_TYPE,
-	"24/17:SceneNodePath:SpawnerComponent",
+	"24/17:SceneNodePath:MultiplayerEntity",
 )
 var spawner_options: Array[SceneNodePath] = []
 

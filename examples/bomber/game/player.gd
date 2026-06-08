@@ -14,7 +14,7 @@ var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
 
 @onready var inputs: Node = $Inputs
-@onready var player_spawner := SpawnerComponent.unwrap(self)
+@onready var player_entity := MultiplayerEntity.unwrap(self)
 @onready var label: Label = %label
 
 
@@ -100,8 +100,8 @@ func exploded(_by_who: int) -> void:
 
 
 func _get_player_peer_id() -> int:
-	if player_spawner:
-		return player_spawner.peer_id
+	if player_entity:
+		return player_entity.peer_id
 	return NetwEntity.parse_peer(name)
 
 

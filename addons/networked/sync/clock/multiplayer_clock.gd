@@ -15,6 +15,7 @@
 ##     _simulate_physics(tick)
 ## )
 ## [/codeblock]
+@icon("res://addons/networked/assets/MultiplayerClock.svg")
 @tool
 class_name MultiplayerClock
 extends Node

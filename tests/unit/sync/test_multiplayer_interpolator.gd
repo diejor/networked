@@ -10,7 +10,7 @@ const P0 := Vector2(0.0, 0.0)
 const P1 := Vector2(100.0, 0.0)
 
 var _player: Node2D
-var _clock: NetworkClock
+var _clock: MultiplayerClock
 var _tree: MultiplayerTree
 var _interpolator: MultiplayerInterpolator
 var _sync: MultiplayerSynchronizer
@@ -23,7 +23,7 @@ func before_test() -> void:
 	auto_free(_tree)
 
 	# Clock - manually driven, not connected to the physics loop.
-	_clock = NetworkClock.new()
+	_clock = MultiplayerClock.new()
 	_clock.tickrate = 30
 	_clock.display_offset = 0 # display_tick = clock.tick; easier reasoning
 	_tree.add_child(_clock)
@@ -33,7 +33,7 @@ func before_test() -> void:
 	var api := _clock.multiplayer as SceneMultiplayer
 	assert(api != null, "test requires SceneMultiplayer")
 	api.set_meta(&"_multiplayer_tree", _tree)
-	api.set_meta(&"_network_clock", _clock)
+	api.set_meta(&"_multiplayer_clock", _clock)
 
 	# Remote player - authority 999 ≠ local peer 1.
 	_player = Node2D.new()
@@ -73,14 +73,14 @@ func before_test() -> void:
 func after_test() -> void:
 	var api := _clock.multiplayer as SceneMultiplayer
 	if api:
-		if api.has_meta(&"_network_clock"):
-			api.remove_meta(&"_network_clock")
+		if api.has_meta(&"_multiplayer_clock"):
+			api.remove_meta(&"_multiplayer_clock")
 		if api.has_meta(&"_multiplayer_tree"):
 			api.remove_meta(&"_multiplayer_tree")
 	await super.after_test()
 
 
-## Advances the clock by one tick, which fires [signal NetworkClock.after_tick]
+## Advances the clock by one tick, which fires [signal MultiplayerClock.after_tick]
 ## and therefore [method MultiplayerInterpolator._record_tick].
 func _tick() -> void:
 	_clock._physics_process(_clock.ticktime)

@@ -6,7 +6,7 @@ extends Resource
 ##
 ## Assign it to [member MultiplayerTree.spawn_policy]. A [code]null[/code]
 ## policy means the session does not auto-spawn, and gameplay drives
-## [signal MultiplayerTree.player_joined] itself. [SpawnerComponentPolicy] is
+## [signal MultiplayerTree.player_joined] itself. [EntitySpawnPolicy] is
 ## the built-in default.
 ##
 ## [br][br]

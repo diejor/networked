@@ -6,7 +6,7 @@
 class_name TestJoinPlayerEndToEnd
 extends NetwTestSuite
 
-const _SPAWNER_NODE_PATH := "TestPlayerFull/SpawnerComponent"
+const _SPAWNER_NODE_PATH := "TestPlayerFull/MultiplayerEntity"
 
 var harness: NetwTestHarness
 var alice: MultiplayerTree
@@ -17,7 +17,7 @@ var level_builder: LevelBuilder
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("TestPlayerFull") \
 			.with_root(Node2D) \
-			.with_spawner()
+			.with_multiplayer_entity()
 	player_builder.pack()
 
 	var template_instance: Node = player_builder.packed.instantiate()

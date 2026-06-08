@@ -7,7 +7,7 @@ const P1 := Vector2(100.0, 0.0)
 
 var _player: Node2D
 var _visual: Node2D
-var _clock: NetworkClock
+var _clock: MultiplayerClock
 var _tree: MultiplayerTree
 var _interpolator: MultiplayerInterpolator
 var _sync: MultiplayerSynchronizer
@@ -18,7 +18,7 @@ func before_test() -> void:
 	add_child(_tree)
 	auto_free(_tree)
 
-	_clock = NetworkClock.new()
+	_clock = MultiplayerClock.new()
 	_clock.tickrate = 30
 	_clock.display_offset = 0
 	_tree.add_child(_clock)
@@ -27,7 +27,7 @@ func before_test() -> void:
 
 	var api := _clock.multiplayer as SceneMultiplayer
 	api.set_meta(&"_multiplayer_tree", _tree)
-	api.set_meta(&"_network_clock", _clock)
+	api.set_meta(&"_multiplayer_clock", _clock)
 
 	_player = Node2D.new()
 	_player.name = "RemotePlayer"
@@ -66,7 +66,7 @@ func before_test() -> void:
 func after_test() -> void:
 	var api := _clock.multiplayer as SceneMultiplayer
 	if api:
-		api.remove_meta(&"_network_clock")
+		api.remove_meta(&"_multiplayer_clock")
 		api.remove_meta(&"_multiplayer_tree")
 	await super.after_test()
 

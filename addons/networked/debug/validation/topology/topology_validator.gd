@@ -4,8 +4,7 @@
 ## node: expected vs actual counts, cache vs live diff, and virtual property
 ## constraint checks.
 ## [br][br]
-## [b]Never import this file from production components.[/b]
-## (SaveComponent, SceneSynchronizer, SpawnerComponent, etc.)
+## (SaveComponent, SceneSynchronizer, MultiplayerEntity, etc.)
 ## [br][br]
 ## Use from: tests, [code]@tool[/code] scripts, debugger panels.
 class_name TopologyValidator
@@ -14,12 +13,12 @@ extends RefCounted
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
 ## Counts standard components present as children:
-## [br]- [SpawnerComponent] -> 1 (extends MultiplayerSynchronizer)
+## [br]- [MultiplayerEntity] -> 1 (extends MultiplayerSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
 static func expected_sync_count(node: Node) -> int:
 	var n := 0
-	if SpawnerComponent.unwrap(node) != null:
+	if MultiplayerEntity.unwrap(node) != null:
 		n += 1
 	return n
 
@@ -66,9 +65,9 @@ static func validate_node(node: Node) -> Dictionary:
 	if save_comp:
 		errors.append_array(_check_save_component(save_comp))
 
-	var client_comp := SpawnerComponent.unwrap(node)
+	var client_comp := MultiplayerEntity.unwrap(node)
 	if client_comp:
-		errors.append_array(_check_spawner_component(client_comp))
+		errors.append_array(_check_multiplayer_entity(client_comp))
 
 	errors.append_array(_check_authority(node))
 	errors.append_array(_check_server_authority_synchronizer(node))
@@ -160,15 +159,15 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	return errs
 
 
-static func _check_spawner_component(
-		spawner: SpawnerComponent,
+static func _check_multiplayer_entity(
+		entity: MultiplayerEntity,
 ) -> Array[String]:
 	var errs: Array[String] = []
-	if spawner.root_path == NodePath(""):
+	if entity.root_path == NodePath(""):
 		errs.append(
-			"SpawnerComponent.root_path is empty on '%s'. " % \
-					[spawner.owner.name] +
-			"get_path_to(spawner.owner) was likely called before the " +
+			"MultiplayerEntity.root_path is empty on '%s'. " % \
+					[entity.owner.name] +
+			"get_path_to(entity.owner) was likely called before the " +
 			"player entered the scene tree.",
 		)
 	return errs
@@ -176,8 +175,8 @@ static func _check_spawner_component(
 
 static func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var spawner := SpawnerComponent.unwrap(node)
-	var expected := _get_expected_authority(node, spawner)
+	var entity := MultiplayerEntity.unwrap(node)
+	var expected := _get_expected_authority(node, entity)
 	if expected == 0:
 		return errs
 
@@ -194,15 +193,15 @@ static func _check_authority(node: Node) -> Array[String]:
 
 static func _get_expected_authority(
 		node: Node,
-		spawner: SpawnerComponent,
+		entity: MultiplayerEntity,
 ) -> int:
-	if not spawner:
+	if not entity:
 		return NetwEntity.parse_peer(node.name)
 
-	match spawner.authority_mode:
-		SpawnerComponent.AuthorityMode.SERVER:
+	match entity.authority_mode:
+		MultiplayerEntity.AuthorityMode.SERVER:
 			return MultiplayerPeer.TARGET_PEER_SERVER
-		SpawnerComponent.AuthorityMode.CLIENT:
+		MultiplayerEntity.AuthorityMode.CLIENT:
 			return NetwEntity.parse_peer(node.name)
 	return 0
 

@@ -72,7 +72,7 @@ func test_build_join_payload_uses_join_payload_spawn() -> void:
 func test_build_join_payload_uses_scene_node_path_spawn() -> void:
 	var path := SceneNodePath.new()
 	path.scene_path = "res://levels/Arena.tscn"
-	path.node_path = "Player/SpawnerComponent"
+	path.node_path = "Player/MultiplayerEntity"
 
 	var payload := session.build_join_payload("alice", path)
 

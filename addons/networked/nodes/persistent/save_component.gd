@@ -311,9 +311,9 @@ func _get_entity_id() -> StringName:
 	if entity and not entity.entity_id.is_empty():
 		return entity.entity_id
 
-	var spawner := SpawnerComponent.unwrap(root)
-	if spawner and not spawner.entity_id.is_empty():
-		return spawner.entity_id
+	var mp_entity := MultiplayerEntity.unwrap(root)
+	if mp_entity and not mp_entity.entity_id.is_empty():
+		return mp_entity.entity_id
 	return StringName(root.name)
 
 

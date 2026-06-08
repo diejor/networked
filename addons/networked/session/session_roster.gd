@@ -82,7 +82,7 @@ func resolve_username_collision(rj: ResolvedJoin, existing_players: Array[Node],
 		if entity and not entity.entity_id.is_empty():
 			existing_names.append(entity.entity_id)
 		else:
-			var client := SpawnerComponent.unwrap(player)
+			var client := MultiplayerEntity.unwrap(player)
 			if client:
 				existing_names.append(client.entity_id)
 			else:
