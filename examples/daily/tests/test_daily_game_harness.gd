@@ -17,6 +17,10 @@ func before_test() -> void:
 	print("res:// path globalized: ", ProjectSettings.globalize_path("res://"))
 	print("InputMap has move_left: ", InputMap.has_action(&"move_left"))
 	print("ProjectSettings has input/move_left: ", ProjectSettings.has_setting("input/move_left"))
+	print("input/move_left value: ", ProjectSettings.get_setting("input/move_left"))
+	print("input/move_left type: ", typeof(ProjectSettings.get_setting("input/move_left")))
+	print("input/set_bomb value: ", ProjectSettings.get_setting("input/set_bomb"))
+	print("input/set_bomb type: ", typeof(ProjectSettings.get_setting("input/set_bomb")))
 	var f := FileAccess.open("res://project.godot", FileAccess.READ)
 	if f:
 		print("project.godot is readable. Size: ", f.get_length())
