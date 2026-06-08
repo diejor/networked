@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://bnrgd1mws2s35" path="res://examples/bomber/game/charwalk.png" id="2"]
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
-[ext_resource type="Script" uid="uid://bspawnrcomp001" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="5_p4qid"]
+[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="5_p4qid"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="6_3dwf2"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_5huhx"]
