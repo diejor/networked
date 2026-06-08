@@ -86,7 +86,7 @@ func set_target(viewport: SubViewport) -> void:
 		_apply_layout()
 		if not _target.tree_exiting.is_connected(_on_target_freed):
 			_target.tree_exiting.connect(_on_target_freed)
-		_dbg.info("%s now displays '%s'.", [name, _target.name])
+			_dbg.info("%s now displays '%s'.", [name, _target.name])
 
 	set_process(is_instance_valid(_target))
 	queue_redraw()

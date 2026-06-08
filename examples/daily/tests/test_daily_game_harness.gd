@@ -13,6 +13,25 @@ var game: NetwGameHarness
 
 
 func before_test() -> void:
+	print("=== CI DIAGNOSTICS: START ===")
+	print("res:// path globalized: ", ProjectSettings.globalize_path("res://"))
+	print("InputMap has move_left: ", InputMap.has_action(&"move_left"))
+	print("ProjectSettings has input/move_left: ", ProjectSettings.has_setting("input/move_left"))
+	var f := FileAccess.open("res://project.godot", FileAccess.READ)
+	if f:
+		print("project.godot is readable. Size: ", f.get_length())
+		var content := f.get_as_text()
+		var input_section_idx := content.find("[input]")
+		if input_section_idx != -1:
+			print("[input] section found in project.godot!")
+			print(content.substr(input_section_idx, 300))
+		else:
+			print("[input] section NOT found in project.godot!")
+		f.close()
+	else:
+		print("project.godot is NOT readable at res://project.godot!")
+	print("All InputMap actions: ", InputMap.get_actions())
+	print("=== CI DIAGNOSTICS: END ===")
 	game = make_game_harness(MAIN)
 	await game.setup()
 
