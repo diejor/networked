@@ -1,9 +1,6 @@
 ## Utility for safely composing and packing dynamic node trees in memory.
-##
-## Hard-wrapped to 80 columns.
 class_name SceneAssembly
 extends Object
-
 
 ## Attaches a [param child] node to a [param parent] and sets its owner.
 ##
@@ -36,9 +33,9 @@ static func pack_with_path(root: Node, path: String) -> PackedScene:
 	instantiated.free()
 	assert(
 		live_count == packed_count,
-		"SceneAssembly: Child count mismatch. " + \
+		"SceneAssembly: Child count mismatch. " +
 		"Expected %d, got %d. Did you forget to set owner?" % \
-		[live_count, packed_count]
+				[live_count, packed_count],
 	)
 	packed.take_over_path(path)
 	return packed
@@ -46,14 +43,13 @@ static func pack_with_path(root: Node, path: String) -> PackedScene:
 
 # Recursively strips netw_entity metadata from the node tree.
 #
-# Why: SpawnerComponent assigns netw_entity in _ready; packing would
+# Why: MultiplayerEntity assigns netw_entity in _ready; packing would
 # serialize active/stale runtime IDs, breaking re-instantiation.
 static func _strip_netw_entity_meta_recursive(node: Node) -> void:
 	if node.has_meta(&"netw_entity"):
 		node.remove_meta(&"netw_entity")
 	for child in node.get_children():
 		_strip_netw_entity_meta_recursive(child)
-
 
 
 # Recursively sets the owner of the [param node] tree to [param new_owner].

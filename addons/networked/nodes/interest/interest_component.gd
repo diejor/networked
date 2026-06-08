@@ -24,7 +24,6 @@
 class_name InterestComponent
 extends Node
 
-
 ## Emitted on the owner client when [param peer_id] starts observing
 ## this entity through [param layer_id].
 signal observer_entered(layer_id: StringName, peer_id: int)
@@ -32,7 +31,6 @@ signal observer_entered(layer_id: StringName, peer_id: int)
 ## Emitted on the owner client when [param peer_id] stops observing
 ## this entity through [param layer_id].
 signal observer_left(layer_id: StringName, peer_id: int)
-
 
 ## Stable extra layer ids this entity belongs to.
 ##
@@ -134,8 +132,10 @@ func _is_server() -> bool:
 
 
 func _register_for(layer_id: StringName) -> void:
-	assert(not layer_id.is_empty(),
-			"InterestComponent: empty layer_id in layer_ids")
+	assert(
+		not layer_id.is_empty(),
+		"InterestComponent: empty layer_id in layer_ids",
+	)
 	var entity := _resolve_entity()
 	if not entity:
 		return
@@ -160,7 +160,9 @@ func _unregister_for(layer_id: StringName) -> void:
 
 
 func _apply_layer_diff(
-		prev: Array[StringName], next: Array[StringName]) -> void:
+		prev: Array[StringName],
+		next: Array[StringName],
+) -> void:
 	for id in prev:
 		if id not in next:
 			_unregister_for(id)

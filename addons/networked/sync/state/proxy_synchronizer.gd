@@ -16,7 +16,7 @@ class_name ProxySynchronizer
 extends MultiplayerSynchronizer
 
 ## Maps virtual property name -> real NodePath (relative to original root).
-var _properties: Dictionary[StringName, NodePath] = {}
+var _properties: Dictionary[StringName, NodePath] = { }
 var _config: SceneReplicationConfig = SceneReplicationConfig.new()
 
 ## The original root_path used for resolving real property paths.
@@ -32,8 +32,7 @@ var _target_root: NodePath = NodePath(".")
 func register_property(
 		virtual_name: StringName,
 		real_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode =
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -54,8 +53,7 @@ func register_node_property(
 		virtual_name: StringName,
 		source: Node,
 		property: StringName,
-		mode: SceneReplicationConfig.ReplicationMode =
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -80,8 +78,7 @@ func path_to_property(source: Node, property: StringName) -> NodePath:
 func track(
 		virtual_name: StringName,
 		real_path: NodePath,
-		mode: SceneReplicationConfig.ReplicationMode =
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
@@ -103,11 +100,11 @@ func finalize() -> void:
 
 	if replication_config and replication_config != _config:
 		_import_from_config(replication_config)
-	
+
 	if root_path != NodePath("."):
 		_target_root = root_path
 		root_path = NodePath(".")
-	
+
 	replication_config = _config
 
 
@@ -164,7 +161,7 @@ func _get_property_list() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for vname: StringName in _properties:
 		var v: Variant = _read_property(vname, _properties[vname])
-		result.append({"name": vname, "type": typeof(v)})
+		result.append({ "name": vname, "type": typeof(v) })
 	return result
 
 
@@ -214,10 +211,11 @@ func _import_from_config(config: SceneReplicationConfig) -> void:
 			vname = _generate_virtual_name(path)
 
 		register_property(
-			vname, path,
+			vname,
+			path,
 			config.property_get_replication_mode(path),
 			config.property_get_spawn(path),
-			config.property_get_watch(path)
+			config.property_get_watch(path),
 		)
 
 

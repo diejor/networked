@@ -17,7 +17,6 @@
 class_name InterestPolicy
 extends RefCounted
 
-
 ## Returns the per-peer visibility verdict.
 ##
 ## [param kind] is one of [enum NetwInterestLayer.Policy].
@@ -27,7 +26,8 @@ extends RefCounted
 static func verdict(
 		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary,
-		peer_id: int) -> bool:
+		peer_id: int,
+) -> bool:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return true
 	if peer_id == 0:
@@ -45,7 +45,8 @@ static func verdict(
 static func explain(
 		kind: NetwInterestLayer.Policy,
 		viewers: Dictionary,
-		peer_id: int) -> String:
+		peer_id: int,
+) -> String:
 	if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
 		return "ADMIT peer=SERVER (always admitted)"
 	if peer_id == 0:

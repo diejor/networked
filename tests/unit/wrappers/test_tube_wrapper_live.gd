@@ -14,7 +14,6 @@
 ## renamed. See [method _client_script].
 extends GdUnitTestSuite
 
-
 ## The TubeClient [GDScript], resolved via the class name at runtime. A class
 ## name is not a constant expression (so it cannot init a const), but as a plain
 ## value it gives the script without instantiating it or hardcoding a path.
@@ -40,22 +39,25 @@ func test_client_exposes_wrapper_methods() -> void:
 	var methods := _method_names()
 	for method_name in ["create_session", "join_session", "leave_session"]:
 		assert_bool(methods.has(method_name)) \
-			.override_failure_message(
-				"TubeClient is missing method '%s' that TubeWrapper calls."
-				% method_name
-			).is_true()
+				.override_failure_message(
+					"TubeClient is missing method '%s' that TubeWrapper calls."
+					% method_name,
+				).is_true()
 
 
 func test_client_exposes_wrapper_properties() -> void:
 	var properties := _property_names()
 	for property_name in [
-		"state", "session_id", "multiplayer_api", "multiplayer_root_node"
+		"state",
+		"session_id",
+		"multiplayer_api",
+		"multiplayer_root_node",
 	]:
 		assert_bool(properties.has(property_name)) \
-			.override_failure_message(
-				"TubeClient is missing property '%s' that TubeWrapper reads/writes."
-				% property_name
-			).is_true()
+				.override_failure_message(
+					"TubeClient is missing property '%s' that TubeWrapper reads/writes."
+					% property_name,
+				).is_true()
 
 
 func test_join_session_takes_one_argument() -> void:
@@ -65,10 +67,10 @@ func test_join_session_takes_one_argument() -> void:
 			arg_count = (info.args as Array).size()
 			break
 	assert_int(arg_count) \
-		.override_failure_message(
-			"TubeClient.join_session arity changed; TubeWrapper calls it with a "
-			+ "single address argument."
-		).is_equal(1)
+			.override_failure_message(
+				"TubeClient.join_session arity changed; TubeWrapper calls it with a "
+				+ "single address argument.",
+			).is_equal(1)
 
 
 func test_state_enum_matches_wrapper() -> void:
@@ -77,12 +79,12 @@ func test_state_enum_matches_wrapper() -> void:
 	# numerically aligned. Referencing the enums loads the classes but does not
 	# instantiate them, so no UPnP thread is started.
 	assert_int(TubeBackend.TubeWrapper.State.IDLE) \
-		.is_equal(TubeClient.State.IDLE)
+			.is_equal(TubeClient.State.IDLE)
 	assert_int(TubeBackend.TubeWrapper.State.CREATING_SESSION) \
-		.is_equal(TubeClient.State.CREATING_SESSION)
+			.is_equal(TubeClient.State.CREATING_SESSION)
 	assert_int(TubeBackend.TubeWrapper.State.SESSION_CREATED) \
-		.is_equal(TubeClient.State.SESSION_CREATED)
+			.is_equal(TubeClient.State.SESSION_CREATED)
 	assert_int(TubeBackend.TubeWrapper.State.JOINING_SESSION) \
-		.is_equal(TubeClient.State.JOINING_SESSION)
+			.is_equal(TubeClient.State.JOINING_SESSION)
 	assert_int(TubeBackend.TubeWrapper.State.SESSION_JOINED) \
-		.is_equal(TubeClient.State.SESSION_JOINED)
+			.is_equal(TubeClient.State.SESSION_JOINED)

@@ -11,7 +11,6 @@
 class_name JoinTarget
 extends Resource
 
-
 ## Display label shown in the server list.
 @export var display_name: String = ""
 
@@ -22,7 +21,7 @@ extends Resource
 @export var address: String = ""
 
 ## Free-form metadata (motd cache, region tag, etc.).
-@export var metadata: Dictionary = {}
+@export var metadata: Dictionary = { }
 
 
 ## Returns a fresh [BackendPeer] derived from [member backend], or
@@ -33,6 +32,4 @@ extends Resource
 func make_backend_instance() -> BackendPeer:
 	if backend == null:
 		return null
-	var inst := backend.duplicate() as BackendPeer
-	inst.copy_from(backend)
-	return inst
+	return backend.clone()

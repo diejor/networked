@@ -22,7 +22,7 @@ may independently be ``null`` depending on where in the tree you called it:
   operations: pause, unpause, kick, request disconnect.
 - :ref:`services <class_NetwContext_property_services>`: a service
   locator for backend systems registered on the tree. The built-in
-  services include the :ref:`NetworkClock <class_NetworkClock>` and the
+  services include the :ref:`MultiplayerClock <class_MultiplayerClock>` and the
   :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`. You can
   add your own with
   :ref:`NetwServices.register() <class_NetwServices_method_register>`.

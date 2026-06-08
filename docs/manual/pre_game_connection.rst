@@ -121,6 +121,44 @@ treats any non-:ref:`OK <class_ServerInfoResult_constant_OK>` result
 (including :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>`) as
 "no listener available" and falls through to hosting.
 
+Platform availability
+---------------------
+
+Discovery answers three independent questions, and it helps to keep them
+apart:
+
+- **Availability** - can this transport run on this platform and build at
+  all? ENet and Steam have no web export; WebSocket and WebRTC do.
+- **Discovery mechanism** - is status learned by poking an address (a probe)
+  or handed over by a directory (a Steam lobby list)?
+- **Reachability** - is *this specific server* up right now?
+
+Only reachability lives on
+:ref:`ServerInfoResult <class_ServerInfoResult>`. Availability is a separate
+axis answered by
+:ref:`is_available() <class_BackendPeer_method_is_available>`, queried directly
+and never routed through a result status. This matters because
+:ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>` already means
+"this backend skips probing" (Steam, Local, Tube, WebRTC) - a backend that is
+unsupported for probing still connects fine. A backend that is *unavailable*
+cannot connect at all, which is a different thing.
+
+Self-contained transports answer availability with a platform feature check:
+
+.. code-block:: gdscript
+
+    func is_available() -> bool:
+        return not OS.has_feature("web")
+
+Directory-mediated transports (Steam) leave the runtime answer to the
+directory, which reports
+:ref:`provider_unavailable <class_LobbyDirectory_signal_provider_unavailable>`
+when its transport is missing.
+:ref:`ConnectBrowser <class_ConnectBrowser>` uses availability to filter the
+host and join flows: unavailable transports are dropped from the Host / Add /
+Join pickers, saved targets that cannot run here are shown as ``Unavailable``
+and never probed, and a join against one is refused before it starts.
+
 The auth protocol
 -----------------
 

@@ -2,12 +2,11 @@
 @abstract
 class_name SpawnPolicy
 extends Resource
-
 ## Server-side strategy for spawning a player once their join is accepted.
 ##
 ## Assign it to [member MultiplayerTree.spawn_policy]. A [code]null[/code]
 ## policy means the session does not auto-spawn, and gameplay drives
-## [signal MultiplayerTree.player_joined] itself. [SpawnerComponentPolicy] is
+## [signal MultiplayerTree.player_joined] itself. [EntitySpawnPolicy] is
 ## the built-in default.
 ##
 ## [br][br]
@@ -33,11 +32,10 @@ extends Resource
 ##     return scene
 ## [/codeblock]
 
-
-## Server-only. Spawns the player for the accepted join [param rj] and returns
+## Spawns the player for the accepted join [param rj] and returns
 ## the [MultiplayerScene] they entered, or [code]null[/code]. The tree emits
 ## [signal MultiplayerTree.player_scene_ready] with that scene.
-## [br][br]
+##
 ## Read the client's spawn intent from [member ResolvedJoin.spawn] and reach
 ## scene services through [param ctx].
 ## [codeblock]
@@ -48,6 +46,7 @@ extends Resource
 ##     # ...add the player to scene at point...
 ##     return scene
 ## [/codeblock]
+## [br][br][b]Server Only.[/b]
 @abstract
 func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene
 

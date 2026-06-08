@@ -6,6 +6,7 @@
 script = ExtResource("1_gsje6")
 global_level = 0
 module_overrides = {
+"debug": 5,
 "nodes.input": 4,
 "nodes.persistent": 4
 }

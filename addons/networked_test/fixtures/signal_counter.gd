@@ -30,15 +30,19 @@ static func watch(sig: Signal) -> SignalCounter:
 # Variadic-style sink. GDScript signals can carry up to a small fixed arity,
 # so we accept the common shapes and let the [Array] carry the payload.
 func _on_emit(
-	a: Variant = null,
-	b: Variant = null,
-	c: Variant = null,
-	d: Variant = null,
+		a: Variant = null,
+		b: Variant = null,
+		c: Variant = null,
+		d: Variant = null,
 ) -> void:
 	var args: Array = []
-	if a != null: args.append(a)
-	if b != null: args.append(b)
-	if c != null: args.append(c)
-	if d != null: args.append(d)
+	if a != null:
+		args.append(a)
+	if b != null:
+		args.append(b)
+	if c != null:
+		args.append(c)
+	if d != null:
+		args.append(d)
 	calls.append(args)
 	count += 1

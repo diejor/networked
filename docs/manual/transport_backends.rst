@@ -62,6 +62,46 @@ in the host on demand flow described in
 :ref:`doc_manual_multiplayer_tree`. The others fall back to "just host a
 lobby and let peers in" semantics.
 
+.. note::
+
+   Browser-hosted WebRTC rooms that rely on tracker signalling are full
+   peer-to-peer hosts. Background tabs can heavily throttle Godot processing,
+   WebSocket polling, and timers, which can make the room disappear or stall
+   joins until the host tab is focused again. Prefer a relay or dedicated host
+   when web-hosted rooms must stay reachable in the background.
+
+WebRTC signaling
+---------------
+
+The WebRTC transport keeps two jobs apart. The
+:ref:`WebRTCSession <class_WebRTCSession>` owns the peer machinery and speaks
+only engine multiplayer ids. The transport-specific addressing lives behind a
+:ref:`WebRTCSignaler <class_WebRTCSignaler>`, which carries SDP and ICE to the
+other peer. :ref:`WebRTCBackend <class_WebRTCBackend>` wires the two together,
+so a subclass picks a transport by returning a signaler.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+     class_name MySignalingBackend
+     extends WebRTCBackend
+
+     func _make_signaler() -> WebRTCSignaler:
+         return MySignaler.new()  # dedicated server, matchmaker, relay
+
+:ref:`TrackerWebRTCBackend <class_TrackerWebRTCBackend>` is the default. Its
+:ref:`TrackerSignaler <class_TrackerSignaler>` rendezvouses peers on a
+WebTorrent tracker swarm with no signaling server, and
+:ref:`WebTorrentDirectory <class_WebTorrentDirectory>` gossips room listings on
+the same trackers.
+
+.. note::
+
+   Tracker discovery is best-effort gossip, not a reliable directory query.
+   When web-hosted rooms must stay reachable behind a backgrounded tab, or
+   discovery must be dependable, run a relay or dedicated host behind a custom
+   signaler instead of leaning on the swarm.
+
 Configuring a backend
 ---------------------
 
@@ -159,3 +199,8 @@ ones you need:
   rides the ``NPRB`` auth handshake on the same port (see
   :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
   discover through their own mechanisms and stay unsupported.
+- :ref:`is_available() <class_BackendPeer_method_is_available>`: the default
+  returns ``true``. Override it when the transport cannot run on every platform
+  so the browser hides it where it would fail. ENet and Steam have no web
+  export and return ``not OS.has_feature("web")`` (see
+  :doc:`pre_game_connection`). This is the platform gate, distinct from probing.

@@ -1,6 +1,4 @@
-## A world-space nameplate for visualizing player network identity and authority.
-##
-## Automatically tracks a [SpawnerComponent] or [Node] and displays its 
+## Automatically tracks a [MultiplayerEntity] or [Node] and displays its 
 ## [member multiplayer.get_unique_id] and username in world-space using unprojection.
 class_name DebugClient
 extends Control
@@ -11,19 +9,19 @@ const OFFSET_3D := Vector3(0, 2.0, 0)
 @onready var uid_label: RichTextLabel = %UIDLabel
 @onready var username_label: RichTextLabel = %UsernameLabel
 
-var _client: SpawnerComponent
+var _entity: MultiplayerEntity
 var _target: Node
 var _username: String = ""
 
 
 func _exit_tree() -> void:
-	if is_instance_valid(_client):
+	if is_instance_valid(_entity):
 		Netw.dbg.trace(
-			"DebugClient: Freed nameplate for %s" % [_client.owner.name]
+			"DebugClient: Freed nameplate for %s" % [_entity.owner.name],
 		)
 	elif is_instance_valid(_target):
 		Netw.dbg.trace(
-			"DebugClient: Freed nameplate for %s" % [_target.name]
+			"DebugClient: Freed nameplate for %s" % [_target.name],
 		)
 
 
@@ -44,21 +42,21 @@ func _process(_delta: float) -> void:
 	_update_position(node)
 
 
-func follow_client(client: SpawnerComponent) -> void:
-	_client = client
+func follow_entity(entity: MultiplayerEntity) -> void:
+	_entity = entity
 	_target = null
-	_username = client.username if client else ""
+	_username = entity.entity_id if entity else &""
 
 
 func follow_target(target: Node, username: String) -> void:
-	_client = null
+	_entity = null
 	_target = target
 	_username = username
 
 
 func _resolve_target() -> Node:
-	if is_instance_valid(_client):
-		return _client.owner
+	if is_instance_valid(_entity):
+		return _entity.owner
 	if is_instance_valid(_target):
 		return _target
 	return null
@@ -70,10 +68,10 @@ func _update_position(target: Node) -> void:
 	elif target is Node3D:
 		var cam := get_viewport().get_camera_3d()
 		if cam and not cam.is_position_behind(
-			target.global_position + OFFSET_3D
+			target.global_position + OFFSET_3D,
 		):
 			global_position = cam.unproject_position(
-				target.global_position + OFFSET_3D
+				target.global_position + OFFSET_3D,
 			)
 		else:
 			visible = false
@@ -86,10 +84,10 @@ func _update_visuals(color: Color) -> void:
 	var auth := node.get_multiplayer_authority() if node else 0
 
 	uid_label.text = (
-		"[center][color=#%s]%d[/color][/center]"
-		% [color_str, auth]
+			"[center][color=#%s]%d[/color][/center]"
+			% [color_str, auth]
 	)
 	username_label.text = (
-		"[center][color=#%s]%s[/color][/center]"
-		% [color_str, safe_name]
+			"[center][color=#%s]%s[/color][/center]"
+			% [color_str, safe_name]
 	)

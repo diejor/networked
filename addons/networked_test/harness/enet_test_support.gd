@@ -1,5 +1,8 @@
 ## Static helpers for ENet-based integration tests.
 ##
+## The helper embodies the [NetwHarnessSession.BackendAdapter] shape. It is
+## kept static until a second ENet harness consumer needs an adapter instance.
+## [br][br]
 ## [NetwTestHarness] is built around [LocalLoopbackBackend]: it gives cheap
 ## multi-tree-in-process gameplay tests, deterministic packet flow, and
 ## packet hold/release for race-condition tests. Those features rely on the
@@ -13,7 +16,6 @@
 class_name EnetTestSupport
 extends RefCounted
 
-
 const _PORT_RANGE_START := 30000
 const _PORT_RANGE_SIZE := 100
 
@@ -23,15 +25,19 @@ const _PORT_RANGE_SIZE := 100
 ##
 ## [param parent] receives the tree as a child. [param source] is optionally
 ## assigned to the tree's [member MultiplayerTree.server_info_source].
+## [param auth_timeout] overrides the host API auth cleanup timeout when
+## greater than [code]0.0[/code].
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
 ## [code]port[/code] (the bound UDP port), and [code]backend[/code] (the
 ## host's [ENetBackend], duplicated by the tree's setter).
 static func start_host(
-	parent: Node,
-	source: ServerInfoSource = null,
+		parent: Node,
+		source: ServerInfoSource = null,
+		auth_timeout: float = -1.0,
 ) -> Dictionary:
-	for candidate in range(_PORT_RANGE_START, _PORT_RANGE_START + _PORT_RANGE_SIZE):
+	var port_range_end := _PORT_RANGE_START + _PORT_RANGE_SIZE
+	for candidate in range(_PORT_RANGE_START, port_range_end):
 		var tree := MultiplayerTree.new()
 		tree.name = "EnetHost_%d" % candidate
 		tree.auto_host_headless = false
@@ -44,6 +50,8 @@ static func start_host(
 
 		var err: Error = await tree.host(true)
 		if err == OK:
+			if auth_timeout > 0.0:
+				tree.api.auth_timeout = auth_timeout
 			return { tree = tree, port = candidate, backend = tree.backend }
 
 		tree.queue_free()
@@ -51,10 +59,11 @@ static func start_host(
 
 	push_error(
 		"EnetTestSupport: could not bind any port in [%d, %d)" % [
-			_PORT_RANGE_START, _PORT_RANGE_START + _PORT_RANGE_SIZE,
-		]
+			_PORT_RANGE_START,
+			_PORT_RANGE_START + _PORT_RANGE_SIZE,
+		],
 	)
-	return {}
+	return { }
 
 
 ## Builds a client-side [ENetBackend] configured to talk to [param port].
@@ -72,9 +81,9 @@ static func make_client_backend(port: int) -> ENetBackend:
 ## targeting [param port]. The tree is added under [param parent] but has not
 ## connected to anything.
 static func make_client_tree(
-	parent: Node,
-	port: int,
-	name_suffix: String = "",
+		parent: Node,
+		port: int,
+		name_suffix: String = "",
 ) -> MultiplayerTree:
 	var tree := MultiplayerTree.new()
 	tree.name = "EnetClient%s" % name_suffix

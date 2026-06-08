@@ -38,7 +38,6 @@
 class_name NetwInterestLayer
 extends RefCounted
 
-
 ## Composition rule for the per-peer verdict.
 enum Policy {
 	## Peers in [member viewers] see [member entities]; outsiders do
@@ -48,7 +47,6 @@ enum Policy {
 	## outsiders do.
 	HIDE_FROM_INSIDERS,
 }
-
 
 ## Emitted on the server when [param entity] becomes visible to
 ## [param peer_id] through this layer.
@@ -84,7 +82,6 @@ signal gate_bound(gate: Object)
 ## Emitted when the bound [InterestGate] detaches.
 signal gate_unbound(gate: Object)
 
-
 ## Stable id used by [NetwInterest] to index this layer.
 var layer_id: StringName
 
@@ -92,9 +89,9 @@ var layer_id: StringName
 var policy: Policy = Policy.HIDE_FROM_OUTSIDERS
 
 ## Peer ids participating in this layer.
-var viewers: Dictionary[int, bool] = {}
+var viewers: Dictionary[int, bool] = { }
 
-var _entities: Dictionary[NetwEntity, bool] = {}
+var _entities: Dictionary[NetwEntity, bool] = { }
 
 ## Entity set for this layer.
 ##
@@ -107,7 +104,6 @@ var entities: Dictionary[NetwEntity, bool]:
 
 ## Per-(entity, peer) transition cache used by [method drive_now].
 var driver: InterestDriver = InterestDriver.new()
-
 
 var _service_ref: WeakRef
 var _bound_gate_ref: WeakRef
@@ -135,8 +131,10 @@ func set_policy(value: Policy) -> bool:
 ##
 ## [param peer_id] must be non-zero.
 func add_viewer(peer_id: int) -> bool:
-	assert(peer_id != 0,
-			"NetwInterestLayer.add_viewer: peer_id must be non-zero")
+	assert(
+		peer_id != 0,
+		"NetwInterestLayer.add_viewer: peer_id must be non-zero",
+	)
 	if viewers.has(peer_id):
 		return false
 	viewers[peer_id] = true
@@ -164,15 +162,19 @@ func has_viewer(peer_id: int) -> bool:
 	return viewers.has(peer_id)
 
 
-## Enrolls [param entity] in this layer. Idempotent. Server-only;
-## a no-op on clients.
+## Enrolls [param entity] in this layer. Idempotent. Server authoritative.
+## Returns [code]false[/code] on clients.
 ##
 ## [param entity] must be non-null and own a live root node.
 func add_entity(entity: NetwEntity) -> bool:
-	assert(entity != null,
-			"NetwInterestLayer.add_entity: entity is null")
-	assert(is_instance_valid(entity.owner),
-			"NetwInterestLayer.add_entity: entity.owner is freed")
+	assert(
+		entity != null,
+		"NetwInterestLayer.add_entity: entity is null",
+	)
+	assert(
+		is_instance_valid(entity.owner),
+		"NetwInterestLayer.add_entity: entity.owner is freed",
+	)
 	var s := _service()
 	if s and not s._is_server():
 		return false
@@ -185,14 +187,16 @@ func add_entity(entity: NetwEntity) -> bool:
 	return true
 
 
-## Removes [param entity] from this layer. Emits exits first.
-## Server-only; a no-op on clients.
+## Removes [param entity] from this layer. Emits exits first. Server
+## authoritative. Returns [code]false[/code] on clients.
 ##
 ## [param entity] must be non-null; passing an unknown entity is a
 ## no-op for idempotent teardown.
 func remove_entity(entity: NetwEntity) -> bool:
-	assert(entity != null,
-			"NetwInterestLayer.remove_entity: entity is null")
+	assert(
+		entity != null,
+		"NetwInterestLayer.remove_entity: entity is null",
+	)
 	var s := _service()
 	if s and not s._is_server():
 		return false
@@ -220,8 +224,10 @@ func has_entity(entity: NetwEntity) -> bool:
 # unbound RPC transition sink, this notifies InterestService so local
 # synchronizer visibility filters are installed.
 func _client_track_entity(entity: NetwEntity) -> void:
-	assert(entity != null,
-			"NetwInterestLayer._client_track_entity: entity is null")
+	assert(
+		entity != null,
+		"NetwInterestLayer._client_track_entity: entity is null",
+	)
 	if _entities.has(entity):
 		return
 	_entities[entity] = true
@@ -234,8 +240,10 @@ func _client_track_entity(entity: NetwEntity) -> void:
 
 # Idempotent client-side counterpart to [method _client_track_entity].
 func _client_untrack_entity(entity: NetwEntity) -> void:
-	assert(entity != null,
-			"NetwInterestLayer._client_untrack_entity: entity is null")
+	assert(
+		entity != null,
+		"NetwInterestLayer._client_untrack_entity: entity is null",
+	)
 	if not _entities.has(entity):
 		return
 	_entities.erase(entity)
@@ -250,8 +258,10 @@ func _client_untrack_entity(entity: NetwEntity) -> void:
 # Idempotent client-side admit. Adds [param entity] to [member entities]
 # and emits [signal entity_visible]. Used by unbound-layer RPC relay.
 func _client_admit(entity: NetwEntity) -> void:
-	assert(entity != null,
-			"NetwInterestLayer._client_admit: entity is null")
+	assert(
+		entity != null,
+		"NetwInterestLayer._client_admit: entity is null",
+	)
 	if _entities.has(entity):
 		return
 	_entities[entity] = true
@@ -261,8 +271,10 @@ func _client_admit(entity: NetwEntity) -> void:
 # Idempotent client-side revoke. Removes [param entity] from
 # [member entities] and emits [signal entity_hidden].
 func _client_revoke(entity: NetwEntity) -> void:
-	assert(entity != null,
-			"NetwInterestLayer._client_revoke: entity is null")
+	assert(
+		entity != null,
+		"NetwInterestLayer._client_revoke: entity is null",
+	)
 	if not _entities.has(entity):
 		return
 	_entities.erase(entity)
@@ -340,8 +352,9 @@ func bind_gate(gate: Object) -> void:
 	var current := _bound_gate_ref.get_ref() if _bound_gate_ref else null
 	if current and current != gate:
 		push_error(
-				"NetwInterestLayer[%s]: another gate is already bound"
-				% [String(layer_id)])
+			"NetwInterestLayer[%s]: another gate is already bound"
+			% [String(layer_id)],
+		)
 		return
 	_bound_gate_ref = weakref(gate)
 	gate_bound.emit(gate)

@@ -9,7 +9,6 @@
 class_name NetEnvelope
 extends RefCounted
 
-
 ## [code]str(mt.get_path())[/code], e.g. [code]"/root/Net/Server"[/code].
 var source_path: String
 
@@ -31,20 +30,20 @@ var frame: int
 
 ## Creates a [NetEnvelope] from a [MultiplayerTree] and message data.
 static func from_mt(
-	mt: MultiplayerTree,
-	p_msg: StringName,
-	data: Dictionary,
-	rid: String
+		mt: MultiplayerTree,
+		p_msg: StringName,
+		data: Dictionary,
+		rid: String,
 ) -> NetEnvelope:
 	var e := NetEnvelope.new()
 	e.source_path = str(mt.get_path()) if mt.is_inside_tree() else str(mt.name)
 	e.reporter_id = rid
-	
+
 	if mt.multiplayer_api and mt.multiplayer_api.has_multiplayer_peer():
 		e.peer_id = mt.multiplayer_api.get_unique_id()
 	else:
 		e.peer_id = 0
-		
+
 	e.msg = p_msg
 	e.payload = data
 	e.frame = Engine.get_process_frames()
@@ -83,6 +82,6 @@ static func from_dict(d: Dictionary) -> NetEnvelope:
 	e.reporter_id = d.get("reporter_id", "")
 	e.peer_id = d.get("peer_id", 0)
 	e.msg = StringName(d.get("msg", ""))
-	e.payload = d.get("payload", {})
+	e.payload = d.get("payload", { })
 	e.frame = d.get("frame", 0)
 	return e

@@ -17,7 +17,7 @@ var username: StringName
 ## Opaque spawn intent, interpreted server-side by
 ## [member MultiplayerTree.spawn_policy]. Empty when no spawn intent
 ## was provided. See [member JoinPayload.spawn].
-var spawn: Dictionary = {}
+var spawn: Dictionary = { }
 
 ## Whether this connection used debug initialization data.
 var is_debug: bool
@@ -42,6 +42,6 @@ static func deserialize(bytes: PackedByteArray) -> ResolvedJoin:
 	var rj := ResolvedJoin.new()
 	rj.peer_id = data.peer_id
 	rj.username = data.username
-	rj.spawn = data.get("spawn", {})
+	rj.spawn = data.get("spawn", { })
 	rj.is_debug = data.get("is_debug", false)
 	return rj

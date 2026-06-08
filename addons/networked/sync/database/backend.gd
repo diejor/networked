@@ -11,7 +11,6 @@
 class_name NetwBackend
 extends Resource
 
-
 ## Called once after all schemas have been registered via
 ## [method NetwDatabase.declare_table] or [method NetwDatabase.bind].
 ## Use this to create directories, open connections, or validate existing

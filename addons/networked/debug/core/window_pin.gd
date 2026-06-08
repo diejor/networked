@@ -8,6 +8,7 @@
 ## Reports changed window geometry back to the editor on focus loss, close, and
 ## shutdown so the editor can re-apply it next time the window is pinned.
 extends Node
+
 class_name NetWindowPin
 
 const SETTING_PIN_ENABLED = "networked/debug/auto_pin_enabled"
@@ -73,7 +74,8 @@ func pin(rect: Variant) -> void:
 		var r: Rect2i = rect
 		if r.size.x > 0 and r.size.y > 0:
 			DisplayServer.window_set_mode(
-				DisplayServer.WINDOW_MODE_WINDOWED, win_id
+				DisplayServer.WINDOW_MODE_WINDOWED,
+				win_id,
 			)
 			DisplayServer.window_set_position(r.position, win_id)
 			DisplayServer.window_set_size(r.size, win_id)

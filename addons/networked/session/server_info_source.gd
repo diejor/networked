@@ -10,7 +10,6 @@
 class_name ServerInfoSource
 extends Resource
 
-
 ## Builds a fresh [ServerInfo] for [param tree]. Called on the host inside
 ## the auth callback; must not mutate session state.
 @abstract

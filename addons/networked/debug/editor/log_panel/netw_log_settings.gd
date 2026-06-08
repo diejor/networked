@@ -6,6 +6,7 @@
 ## to avoid a circular dependency during resource parsing (INHERIT=-1 … NONE=5).
 @tool
 extends Resource
+
 class_name NetwLogSettings
 
 ## Fallback log level applied when no per-module override matches. Uses [enum NetwLog.Level] integer values.

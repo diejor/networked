@@ -19,8 +19,8 @@ var _pending_tick: int = -1
 
 func _get(property: StringName) -> Variant:
 	if property == &"__tick":
-		var clock := NetworkClock.for_node(self)
-		assert(clock, "TickAwareSynchronizer requires a NetworkClock in the tree.")
+		var clock := MultiplayerClock.for_node(self)
+		assert(clock, "TickAwareSynchronizer requires a MultiplayerClock in the tree.")
 		return clock.tick
 	return super._get(property)
 
@@ -39,7 +39,7 @@ func finalize_with_tick() -> void:
 	# Ensure UI properties are imported first
 	if replication_config and replication_config != _config:
 		_import_from_config(replication_config)
-	
+
 	var tick_path := NodePath(":__tick")
 
 	var ordered := SceneReplicationConfig.new()
@@ -51,7 +51,8 @@ func finalize_with_tick() -> void:
 
 	# Copy all registered properties after __tick.
 	for prop: NodePath in _config.get_properties():
-		if prop == tick_path: continue
+		if prop == tick_path:
+			continue
 		ordered.add_property(prop)
 		ordered.property_set_replication_mode(prop, _config.property_get_replication_mode(prop))
 		ordered.property_set_spawn(prop, _config.property_get_spawn(prop))

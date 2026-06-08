@@ -14,22 +14,25 @@ var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
 
 @onready var inputs: Node = $Inputs
-@onready var player_spawner := SpawnerComponent.unwrap(self)
+@onready var player_entity := MultiplayerEntity.unwrap(self)
 @onready var label: Label = %label
+
 
 func _ready() -> void:
 	stunned = false
 	position = synced_position
 	var peer_id := _get_player_peer_id()
 	if peer_id != 0:
+		inputs.set_multiplayer_authority(peer_id)
 		$"Inputs/InputsSync".set_multiplayer_authority(peer_id)
+	_update_inputs_process_mode(peer_id)
 
 
 func _physics_process(delta: float) -> void:
 	var peer_id := _get_player_peer_id()
 	if (
-		multiplayer.multiplayer_peer == null
-		or multiplayer.get_unique_id() == peer_id
+			multiplayer.multiplayer_peer == null
+			or multiplayer.get_unique_id() == peer_id
 	):
 		# The represented client updates controls and replicates them.
 		inputs.update()
@@ -40,9 +43,9 @@ func _physics_process(delta: float) -> void:
 		# And increase the bomb cooldown spawning one if the client wants to.
 		last_bomb_time += delta
 		if (
-			not stunned
-			and inputs.bombing
-			and last_bomb_time >= BOMB_RATE
+				not stunned
+				and inputs.bombing
+				and last_bomb_time >= BOMB_RATE
 		):
 			last_bomb_time = 0.0
 			$"../../BombSpawner".spawn([position, peer_id])
@@ -97,6 +100,15 @@ func exploded(_by_who: int) -> void:
 
 
 func _get_player_peer_id() -> int:
-	if player_spawner:
-		return player_spawner.peer_id
+	if player_entity:
+		return player_entity.peer_id
 	return NetwEntity.parse_peer(name)
+
+
+func _update_inputs_process_mode(peer_id: int) -> void:
+	if multiplayer.multiplayer_peer == null:
+		inputs.process_mode = Node.PROCESS_MODE_INHERIT
+		return
+	inputs.process_mode = Node.PROCESS_MODE_INHERIT \
+			if multiplayer.get_unique_id() == peer_id \
+			else Node.PROCESS_MODE_DISABLED

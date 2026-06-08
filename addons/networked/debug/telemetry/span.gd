@@ -40,12 +40,12 @@ var _target_node: WeakRef
 
 
 func _init(
-	p_id: StringName,
-	p_label: String,
-	p_meta: Dictionary = {},
-	tree: MultiplayerTree = null,
-	p_tree_name: String = "",
-	follows_from: CheckpointToken = null
+		p_id: StringName,
+		p_label: String,
+		p_meta: Dictionary = { },
+		tree: MultiplayerTree = null,
+		p_tree_name: String = "",
+		follows_from: CheckpointToken = null,
 ) -> void:
 	id = p_id
 	label = p_label
@@ -55,22 +55,25 @@ func _init(
 		_mt = weakref(tree)
 		if tree_name.is_empty():
 			tree_name = tree.get_tree_name()
-	
+
 	_start_frame = Engine.get_process_frames()
 	_start_usec = Time.get_ticks_usec()
 	if id.is_empty():
 		return
-	_send("networked:span_open", {
-		"id": str(id),
-		"label": label,
-		"tree_name": tree_name,
-		"frame": _start_frame,
-		"timestamp_usec": _start_usec,
-		"meta": meta,
-		"affected_peers": _get_affected_peers(),
-		"caller": _get_caller(),
-		"follows_from": follows_from.to_dict() if follows_from else {},
-	})
+	_send(
+		"networked:span_open",
+		{
+			"id": str(id),
+			"label": label,
+			"tree_name": tree_name,
+			"frame": _start_frame,
+			"timestamp_usec": _start_usec,
+			"meta": meta,
+			"affected_peers": _get_affected_peers(),
+			"caller": _get_caller(),
+			"follows_from": follows_from.to_dict() if follows_from else { },
+		},
+	)
 
 
 ## Attaches an explicit target node to this span for diagnostic snapshots.
@@ -93,10 +96,10 @@ func get_target_node() -> Node:
 ## [codeblock]
 ## span.step("visibility_set").step("clients_notified")
 ## [/codeblock]
-func step(step_label: String, data: Dictionary = {}) -> NetSpan:
+func step(step_label: String, data: Dictionary = { }) -> NetSpan:
 	if state != State.OPEN or id.is_empty():
 		return self
-	
+
 	var s := {
 		"label": step_label,
 		"data": data,
@@ -105,12 +108,15 @@ func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 		"caller": _get_caller(),
 	}
 	_steps.append(s)
-	_send("networked:span_step", {
-		"id": str(id),
-		"span_label": label,
-		"step": s,
-		"step_index": _steps.size() - 1,
-	})
+	_send(
+		"networked:span_step",
+		{
+			"id": str(id),
+			"span_label": label,
+			"step": s,
+			"step_index": _steps.size() - 1,
+		},
+	)
 	return self
 
 
@@ -121,13 +127,13 @@ func step(step_label: String, data: Dictionary = {}) -> NetSpan:
 ## [br][br]
 ## Sends [code]networked:span_step_warn[/code] and emits [method push_warning].
 func step_warn(
-	step_label: String,
-	message: String = "",
-	data: Dictionary = {}
+		step_label: String,
+		message: String = "",
+		data: Dictionary = { },
 ) -> NetSpan:
 	if state != State.OPEN or id.is_empty():
 		return self
-	
+
 	var s := {
 		"label": step_label,
 		"message": message,
@@ -137,12 +143,15 @@ func step_warn(
 		"caller": _get_caller(),
 	}
 	_steps.append(s)
-	_send("networked:span_step_warn", {
-		"id": str(id),
-		"span_label": label,
-		"step": s,
-		"step_index": _steps.size() - 1,
-	})
+	_send(
+		"networked:span_step_warn",
+		{
+			"id": str(id),
+			"span_label": label,
+			"step": s,
+			"step_index": _steps.size() - 1,
+		},
+	)
 	return self
 
 
@@ -150,16 +159,19 @@ func step_warn(
 func end() -> void:
 	if state != State.OPEN or id.is_empty():
 		return
-	
+
 	state = State.CLOSED
 	NetTrace._pop_span(self)
-	_send("networked:span_close", {
-		"id": str(id),
-		"label": label,
-		"outcome": "ok",
-		"frame": Engine.get_process_frames(),
-		"elapsed_usec": Time.get_ticks_usec() - _start_usec,
-	})
+	_send(
+		"networked:span_close",
+		{
+			"id": str(id),
+			"label": label,
+			"outcome": "ok",
+			"frame": Engine.get_process_frames(),
+			"elapsed_usec": Time.get_ticks_usec() - _start_usec,
+		},
+	)
 
 
 ## Closes the span with a failure outcome and forwards context to the editor.
@@ -168,24 +180,27 @@ func end() -> void:
 ## [code]"simplify_path_race"[/code].
 ## [br][br]
 ## [param data] is arbitrary serialisable context attached to the failure.
-func fail(reason: String, data: Dictionary = {}) -> void:
+func fail(reason: String, data: Dictionary = { }) -> void:
 	if state != State.OPEN or id.is_empty():
 		return
-	
+
 	state = State.FAILED
 	NetTrace._pop_span(self)
-	_send("networked:span_fail", {
-		"id": str(id),
-		"label": label,
-		"reason": reason,
-		"frame": Engine.get_process_frames(),
-		"timestamp_usec": Time.get_ticks_usec(),
-		"elapsed_usec": Time.get_ticks_usec() - _start_usec,
-		"steps": _steps,
-		"affected_peers": _get_affected_peers(),
-		"data": data,
-		"caller": _get_caller(),
-	})
+	_send(
+		"networked:span_fail",
+		{
+			"id": str(id),
+			"label": label,
+			"reason": reason,
+			"frame": Engine.get_process_frames(),
+			"timestamp_usec": Time.get_ticks_usec(),
+			"elapsed_usec": Time.get_ticks_usec() - _start_usec,
+			"steps": _steps,
+			"affected_peers": _get_affected_peers(),
+			"data": data,
+			"caller": _get_caller(),
+		},
+	)
 
 
 ## Opens a new phase scope within this span.
@@ -236,7 +251,7 @@ static func _get_caller() -> Dictionary:
 				or src.contains("addons/networked/api"):
 			continue
 		return frame
-	return {}
+	return { }
 
 
 func _send(msg: String, payload: Dictionary) -> void:
@@ -250,10 +265,12 @@ class NetSpanPhase extends RefCounted:
 	var _span: NetSpan
 	var _name: String
 
+
 	func _init(span: NetSpan, name: String) -> void:
 		_span = span
 		_name = name
 		_span.step(_name + "_begin")
+
 
 	## Records the end of the phase as a step.
 	func done() -> void:

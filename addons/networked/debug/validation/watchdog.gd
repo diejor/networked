@@ -16,10 +16,10 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 func _ready() -> void:
 	if not ProjectSettings.get_setting(
 		"debug/file_logging/enable_file_logging",
-		false
+		false,
 	):
 		_dbg.error(
-			"ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF " + \
+			"ErrorWatchdog: 'debug/file_logging/enable_file_logging' is OFF " +
 			"- enable it in Project Settings -> Debug -> File Logging.",
 			func(m): push_error(m)
 		)
@@ -27,7 +27,7 @@ func _ready() -> void:
 
 	_log_path = ProjectSettings.get_setting(
 		"debug/file_logging/log_path",
-		"user://logs/godot.log"
+		"user://logs/godot.log",
 	)
 	if _log_path.is_empty():
 		_log_path = "user://logs/godot.log"
@@ -42,7 +42,7 @@ func _exit_tree() -> void:
 		_mutex.lock()
 		_quit = true
 		_mutex.unlock()
-	
+
 	if _thread and _thread.is_alive():
 		_thread.wait_to_finish()
 
@@ -60,7 +60,8 @@ func _tail_log() -> void:
 	var file := FileAccess.open(_log_path, FileAccess.READ)
 	if not file:
 		_dbg.error(
-			"ErrorWatchdog: could not open log file: %s", [_log_path]
+			"ErrorWatchdog: could not open log file: %s",
+			[_log_path],
 		)
 		return
 

@@ -35,11 +35,14 @@ var phase: int = STRUCTURAL
 ## [param _trigger] is the operation name (e.g. [code]"player_spawn"[/code]).
 ## [br][br]
 ## [param _ctx] is a raw [Dictionary] whose keys depend on [param _trigger]:
-## [br]
 ## [codeblock]
-## "player_spawn" -> { player: Node, mt: MultiplayerTree }
+## Dictionary
+##  ┖╴"player_spawn"
+##     ┖╴{ }
+##        ┠╴player (Node)
+##        ┖╴mt (MultiplayerTree)
 ## [/codeblock]
-## [br]
+##
 ## Return an empty array to indicate the check passed.
 func execute(_trigger: String, _ctx: Dictionary) -> Array[String]:
 	return []

@@ -26,7 +26,6 @@ extends RefCounted
 ## [b]Contract:[/b] [code](msg: String, payload: Dictionary, mt: MultiplayerTree)[/code]
 static var message_delegate: Callable
 
-
 ## Active span stack. The most recently opened and still-open span is at the
 ## back.
 static var _active: Array = [] # Array[RefCounted]
@@ -40,11 +39,11 @@ static var _active: Array = [] # Array[RefCounted]
 ## Pass [param context] (typically [code]self[/code]) to automatically
 ## route the span to the correct [MultiplayerTree].
 static func begin(
-	span_label: String,
-	context: Object = null,
-	meta: Dictionary = {},
-	tree_name: String = "",
-	follows_from: CheckpointToken = null
+		span_label: String,
+		context: Object = null,
+		meta: Dictionary = { },
+		tree_name: String = "",
+		follows_from: CheckpointToken = null,
 ) -> NetSpan:
 	if not message_delegate.is_valid():
 		return NetSpan.new(&"", span_label)
@@ -60,7 +59,7 @@ static func begin(
 		meta,
 		mt,
 		tree_name,
-		follows_from
+		follows_from,
 	)
 	_active.append(span)
 	return span
@@ -70,12 +69,12 @@ static func begin(
 ## [br][br]
 ## Returns a no-op [NetPeerSpan] when the debugger is not active.
 static func begin_peer(
-	span_label: String,
-	peers: Array = [],
-	context: Object = null,
-	meta: Dictionary = {},
-	tree_name: String = "",
-	follows_from: CheckpointToken = null
+		span_label: String,
+		peers: Array = [],
+		context: Object = null,
+		meta: Dictionary = { },
+		tree_name: String = "",
+		follows_from: CheckpointToken = null,
 ) -> NetPeerSpan:
 	if not message_delegate.is_valid():
 		return NetPeerSpan.new(&"", span_label)
@@ -91,11 +90,11 @@ static func begin_peer(
 		meta,
 		mt,
 		tree_name,
-		follows_from
+		follows_from,
 	)
 	for peer_id: int in peers:
 		span.affects(peer_id)
-	
+
 	_active.append(span)
 	return span
 

@@ -7,7 +7,6 @@
 class_name NetTopologySnapshot
 extends RefCounted
 
-
 ## Per-property metadata within a synchronizer.
 class PropInfo:
 	## Full [NodePath] string, e.g. [code]":position"[/code].
@@ -34,6 +33,7 @@ class PropInfo:
 	## Mirror or virtual source path. Empty if it owns the data.
 	var source_path: String
 
+
 	func to_dict() -> Dictionary:
 		return {
 			"path": path,
@@ -45,6 +45,7 @@ class PropInfo:
 			"watch": watch,
 			"source_path": source_path,
 		}
+
 
 	static func from_dict(d: Dictionary) -> PropInfo:
 		var p := PropInfo.new()
@@ -76,6 +77,7 @@ class SyncInfo:
 	## Array of [NetTopologySnapshot.PropInfo].
 	var properties: Array
 
+
 	func to_dict() -> Dictionary:
 		var props: Array = []
 		for p: PropInfo in properties:
@@ -87,6 +89,7 @@ class SyncInfo:
 			"enabled": enabled,
 			"properties": props,
 		}
+
 
 	static func from_dict(d: Dictionary) -> SyncInfo:
 		var s := SyncInfo.new()
@@ -107,9 +110,8 @@ var lobby_name: String = ""
 var active_scene: String = ""
 var is_server: bool = false
 
-
 ## Cache diagnostic data: [code]{"hit": bool, "hooked": bool}[/code].
-var cache_info: Dictionary = {}
+var cache_info: Dictionary = { }
 
 ## Array of [NetTopologySnapshot.SyncInfo].
 var synchronizers: Array = []
@@ -143,8 +145,7 @@ static func from_dict(d: Dictionary) -> NetTopologySnapshot:
 	snap.lobby_name = d.get("lobby_name", "")
 	snap.active_scene = d.get("active_scene", "")
 	snap.is_server = d.get("is_server", false)
-	snap.cache_info = d.get("cache_info", {})
+	snap.cache_info = d.get("cache_info", { })
 	for sd: Dictionary in d.get("synchronizers", []):
 		snap.synchronizers.append(SyncInfo.from_dict(sd))
 	return snap
-

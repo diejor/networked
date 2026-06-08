@@ -12,11 +12,9 @@
 class_name ProbeSession
 extends RefCounted
 
-
 ## Emitted exactly once per [method run] call, unless [method cancel]
 ## was invoked first.
 signal completed(result: ServerInfoResult)
-
 
 var target: JoinTarget
 var timeout: float
@@ -26,8 +24,8 @@ var _finished: bool = false
 
 
 func _init(
-	p_target: JoinTarget,
-	p_timeout: float = 2.0,
+		p_target: JoinTarget,
+		p_timeout: float = 2.0,
 ) -> void:
 	target = p_target
 	timeout = p_timeout
@@ -49,7 +47,8 @@ func run() -> ServerInfoResult:
 		return bad
 
 	var result: ServerInfoResult = await backend.query_server_info(
-		target.address, timeout
+		target.address,
+		timeout,
 	)
 	_emit(result)
 	return result

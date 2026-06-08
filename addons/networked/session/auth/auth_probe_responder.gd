@@ -30,7 +30,7 @@ var _api: SceneMultiplayer
 var _tree: MultiplayerTree
 var _server_info_source: ServerInfoSource
 var _probe_timestamps_ms: Array[int] = []
-var _probe_peer_ids: Dictionary[int, bool] = {}
+var _probe_peer_ids: Dictionary[int, bool] = { }
 
 
 ## Sets the api used to send probe replies. Pass [code]null[/code] to unbind.
@@ -66,10 +66,11 @@ func handle(peer_id: int) -> void:
 
 	if _is_rate_limited() or _probe_peer_ids.size() > MAX_ACTIVE_PROBES:
 		Netw.dbg.debug(
-			"Auth: peer %d probe deferred (busy)", [peer_id]
+			"Auth: peer %d probe deferred (busy)",
+			[peer_id],
 		)
 		var busy := AuthProtocol.encode_probe_reply(
-			AuthProtocol.ProbeStatus.BUSY
+			AuthProtocol.ProbeStatus.BUSY,
 		)
 		_api.send_auth(peer_id, busy)
 		return
@@ -81,7 +82,8 @@ func handle(peer_id: int) -> void:
 	var info := source.build_server_info(_tree)
 	var payload := ServerInfo.to_payload(info)
 	var reply := AuthProtocol.encode_probe_reply(
-		AuthProtocol.ProbeStatus.OK, payload
+		AuthProtocol.ProbeStatus.OK,
+		payload,
 	)
 	_api.send_auth(peer_id, reply)
 

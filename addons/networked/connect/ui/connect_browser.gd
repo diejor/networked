@@ -5,9 +5,16 @@
 ## players can browse saved servers, watch live status, host a new game, or
 ## join one with no glue code. Under the hood it drives the tree's canonical
 ## [ConnectSession] through a [NetwConnect] for you.
+##
+## [br][br]
+## The browser finds its session in three steps, first wins: an explicit
+## [method bind], then the [member tree] export, then its own ancestry. Drop it
+## under the tree for zero config, or hand a parent owned facade through
+## [method bind] when it lives elsewhere in the scene. Lobby directories are
+## discovered from the tree by [ConnectSession], so there is no per directory
+## wiring here.
 class_name ConnectBrowser
 extends Control
-
 
 const _ROW_SCENE := preload(
 	"res://addons/networked/connect/ui/row.tscn"
@@ -41,9 +48,12 @@ const _ROW_MENU_JOIN := Menu.ID_JOIN
 const _ROW_MENU_EDIT := Menu.ID_EDIT
 const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 
-
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
 ## drives, accessed through a [NetwConnect] facade.
+##
+## Resolution order is [method bind] first, then this export, then the
+## browser's own ancestry. Leave it unset when the browser is a descendant of
+## the tree or when a parent calls [method bind].
 @export var tree: MultiplayerTree
 
 ## Backends offered by the Add Server and Host popups.
@@ -52,7 +62,7 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
 	PROPERTY_HINT_ARRAY_TYPE,
-	"24/17:SceneNodePath:SpawnerComponent",
+	"24/17:SceneNodePath:MultiplayerEntity",
 )
 var spawner_options: Array[SceneNodePath] = []
 
@@ -64,7 +74,6 @@ var spawner_options: Array[SceneNodePath] = []
 ## Path used to load and persist saved targets shown by this browser.
 @export var server_list_path: String = ServerList.DEFAULT_PATH
 
-
 var _add_popup: AddPopup
 var _host_popup: HostPopup
 var _join_popup: JoinPopup
@@ -74,10 +83,15 @@ var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
 
 var _tree: MultiplayerTree
-var _rows: Dictionary = {}  # JoinTarget -> ConnectBrowserRow
+var _rows: Dictionary = { } # JoinTarget -> ConnectBrowserRow
 var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
+
+# Facade supplied by bind(); takes priority over export/ancestry resolution.
+var _bound_connect: NetwConnect
+# Guards _setup_session against running twice (bind() then the deferred path).
+var _session_ready: bool = false
 
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _add_button: Button = %AddButton
@@ -97,11 +111,10 @@ var _last_join_payload: JoinPayload = null
 @onready var _details_remove_button: Button = %DetailsRemoveButton
 @onready var _details_join_button: Button = %DetailsJoinButton
 
-@onready var _connect := Netw.ctx(tree if tree != null else self).connect
+var _connect: NetwConnect
+
 
 func _ready() -> void:
-	_load_server_list()
-
 	_add_popup = _ADD_POPUP_SCENE.instantiate()
 	add_child(_add_popup)
 	_add_popup.submitted.connect(_on_target_submitted)
@@ -139,23 +152,47 @@ func _ready() -> void:
 	_details_remove_button.pressed.connect(_on_details_remove_pressed)
 	_details_join_button.pressed.connect(_on_details_join_pressed)
 
-
-	_bind_session_signals()
-
-	_rebuild_from_session()
 	_clear_selection()
-	if _connect:
-		_connect.refresh()
+
+	# Fallback path: if no parent calls bind() this frame, self-resolve once
+	# parent _ready() has had a chance to assign the tree export.
+	_setup_session.call_deferred()
 
 
 func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
-# Loads the browser-owned saved target list into the resolved facade.
-func _load_server_list() -> void:
-	if _connect != null:
-		_connect.load_server_list(server_list_path)
+## Drives this browser from [param connect], the resolved [NetwConnect] for the
+## target tree. Prefer this over the [member tree] export when the browser does
+## not sit under the [MultiplayerTree]. A parent typically calls
+## [code]browser.bind(Netw.ctx(tree).connect)[/code].
+func bind(connect: NetwConnect) -> void:
+	_bound_connect = connect
+	if is_inside_tree():
+		_setup_session()
+
+
+# Resolves the facade (bind > tree export > ancestry), wires session signals,
+# and pulls the first list. Runs at most once.
+func _setup_session() -> void:
+	if _session_ready:
+		return
+	if _bound_connect != null and _bound_connect.is_valid():
+		_connect = _bound_connect
+	else:
+		_connect = Netw.ctx(tree if tree != null else self).connect
+	if _connect == null:
+		return
+	_session_ready = true
+	_connect.load_server_list(server_list_path)
+	_bind_session_signals()
+	_rebuild_from_session()
+	_connect.refresh()
+	# Catch up when the tree entered before this browser bound, e.g. a debug
+	# auto-connect: session_entered already fired, so apply its effect now.
+	if _connect.is_session_active():
+		_on_session_entered()
 
 
 func _bind_session_signals() -> void:
@@ -176,7 +213,7 @@ func _bind_session_signals() -> void:
 	if not _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.connect(_on_join_failed)
 	if not _connect.directory_unavailable.is_connected(
-		_on_directory_unavailable
+		_on_directory_unavailable,
 	):
 		_connect.directory_unavailable.connect(_on_directory_unavailable)
 
@@ -228,7 +265,7 @@ func _add_row(target: JoinTarget) -> void:
 
 
 func _on_target_added(target: JoinTarget) -> void:
-	if _rows.has(target): 
+	if _rows.has(target):
 		return
 	_add_row(target)
 	_update_counter()
@@ -286,12 +323,14 @@ func _update_details() -> void:
 	var t := _selected_row.target
 	var r := _selected_row.result
 	var is_saved := _connect.get_saved_targets().has(t)
+	var unavailable := t.backend != null and not t.backend.is_available()
 
 	# Update the Header elements
 	_details_header.visible = true
 	_details_footer.visible = true
 	_details_edit_button.disabled = not is_saved
 	_details_remove_button.disabled = not is_saved
+	_details_join_button.disabled = unavailable
 	_details_name_label.text = _selected_row._display_name()
 
 	var backend_label := "unknown"
@@ -300,29 +339,35 @@ func _update_details() -> void:
 	_details_badge_label.text = backend_label
 
 	# Update Details Status Dot
-	_details_status_dot.bind_result(r)
+	if unavailable:
+		_details_status_dot.bind_unavailable()
+	else:
+		_details_status_dot.bind_result(r)
 
 	# Populate Flow Details
 	_details_container.add_child(
-		_create_detail_item("Address", ConnectUiShared.format_address(t))
+		_create_detail_item("Address", ConnectUiShared.format_address(t)),
 	)
 	_details_container.add_child(
-		_create_detail_item("Status", _status_text(r))
+		_create_detail_item(
+			"Status",
+			"Unavailable" if unavailable else _status_text(r),
+		),
 	)
 	_details_container.add_child(
 		_create_detail_item(
 			"Latency",
-			"%d ms" % r.latency_ms if r and r.is_ok() else "-"
-		)
+			"%d ms" % r.latency_ms if r and r.is_ok() else "-",
+		),
 	)
 	_details_container.add_child(
-		_create_detail_item("Players", _players_text(r))
+		_create_detail_item("Players", _players_text(r)),
 	)
 
 
 func _create_detail_item(
-	title: String,
-	value: String,
+		title: String,
+		value: String,
 ) -> DetailItem:
 	var item := _DETAIL_ITEM_SCENE.instantiate() as DetailItem
 	item.name = title.to_camel_case() + "Detail"
@@ -331,15 +376,15 @@ func _create_detail_item(
 
 
 func _on_row_context_requested(
-	_target: JoinTarget,
-	row: ConnectBrowserRow,
-	screen_position: Vector2,
+		_target: JoinTarget,
+		row: ConnectBrowserRow,
+		screen_position: Vector2,
 ) -> void:
 	if row == null or row.target == null:
 		return
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
-	
+
 	var is_saved := _connect.get_saved_targets().has(row.target)
 	_row_menu.show_for_target(is_saved, screen_position)
 
@@ -363,13 +408,15 @@ func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 
 
 func _on_add_pressed() -> void:
-	_add_popup.set_templates(backend_templates)
+	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
 	_add_popup.open_add()
 
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		backend_templates, spawner_options, _last_username
+		ConnectSession.available_templates(backend_templates),
+		spawner_options,
+		_last_username,
 	)
 
 
@@ -382,7 +429,9 @@ func _on_host_pressed() -> void:
 	if _connect == null:
 		return
 	_host_popup.open_host(
-		backend_templates, spawner_options, _last_username
+		ConnectSession.hostable_templates(backend_templates),
+		spawner_options,
+		_last_username,
 	)
 
 
@@ -396,11 +445,11 @@ func _open_edit_for_selected() -> void:
 	if _selected_row == null:
 		return
 	var is_saved := _connect.get_saved_targets().has(
-		_selected_row.target
+		_selected_row.target,
 	)
 	if not is_saved:
 		return
-	_add_popup.set_templates(backend_templates)
+	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
 	_add_popup.open_edit(_selected_row.target)
 
 
@@ -420,7 +469,8 @@ func _on_target_submitted(target: JoinTarget) -> void:
 
 
 func _on_host_submitted(
-	config: ConnectHostConfig, payload: JoinPayload
+		config: ConnectHostConfig,
+		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
 	_last_username = String(payload.username)
@@ -437,8 +487,8 @@ func _on_join_submitted(payload: JoinPayload) -> void:
 
 
 func _on_join_direct_submitted(
-	target: JoinTarget,
-	payload: JoinPayload,
+		target: JoinTarget,
+		payload: JoinPayload,
 ) -> void:
 	_join_with_preflight(target, payload)
 
@@ -480,8 +530,8 @@ func _hide_connecting_overlay() -> void:
 
 
 func _prompt_host_fallback(
-	target: JoinTarget,
-	_payload: JoinPayload,
+		target: JoinTarget,
+		_payload: JoinPayload,
 ) -> void:
 	if not target.backend.supports_embedded_server():
 		return
@@ -494,21 +544,31 @@ func _on_popup_cancelled() -> void:
 
 func _on_host_fallback_submitted(target: JoinTarget) -> void:
 	_host_popup.open_host(
-		[target.backend], spawner_options, _last_username
+		[target.backend],
+		spawner_options,
+		_last_username,
 	)
 
 
 func _join_with_preflight(
-	target: JoinTarget,
-	payload: JoinPayload,
+		target: JoinTarget,
+		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
 	_last_join_payload = payload
 	_last_username = String(payload.username)
+	if target.backend != null and not target.backend.is_available():
+		_show_banner("This transport is not available on this platform.")
+		return
 	var result := _connect.get_result(target)
+	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
+		_show_banner(
+			"Incompatible game build; this server runs a different version.",
+		)
+		return
 	if result != null and (
-		result.status == ServerInfoResult.Status.TIMEOUT
-		or result.status == ServerInfoResult.Status.UNREACHABLE
+			result.status == ServerInfoResult.Status.TIMEOUT
+			or result.status == ServerInfoResult.Status.UNREACHABLE
 	):
 		_prompt_host_fallback(target, payload)
 		return
@@ -519,8 +579,8 @@ func _join_with_preflight(
 
 
 func _on_directory_unavailable(
-	_directory_id: StringName,
-	reason: String,
+		_directory_id: StringName,
+		reason: String,
 ) -> void:
 	_show_banner(reason)
 
@@ -542,12 +602,20 @@ func _status_text(result: ServerInfoResult) -> String:
 	if result == null:
 		return "..."
 	match result.status:
-		ServerInfoResult.Status.OK: return "OK"
-		ServerInfoResult.Status.BUSY: return "BUSY"
-		ServerInfoResult.Status.UNREACHABLE: return "UNREACHABLE"
-		ServerInfoResult.Status.TIMEOUT: return "TIMEOUT"
-		ServerInfoResult.Status.UNSUPPORTED: return "UNSUPPORTED"
-		_: return "ERROR"
+		ServerInfoResult.Status.OK:
+			return "OK"
+		ServerInfoResult.Status.BUSY:
+			return "BUSY"
+		ServerInfoResult.Status.UNREACHABLE:
+			return "UNREACHABLE"
+		ServerInfoResult.Status.TIMEOUT:
+			return "TIMEOUT"
+		ServerInfoResult.Status.UNSUPPORTED:
+			return "UNSUPPORTED"
+		ServerInfoResult.Status.INCOMPATIBLE:
+			return "INCOMPATIBLE"
+		_:
+			return "ERROR"
 
 
 func _players_text(result: ServerInfoResult) -> String:

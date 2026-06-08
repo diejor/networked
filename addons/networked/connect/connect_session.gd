@@ -33,7 +33,6 @@
 class_name ConnectSession
 extends Node
 
-
 ## A saved or directory-discovered target was added to the live list.
 signal target_added(target: JoinTarget)
 
@@ -46,7 +45,8 @@ signal target_updated(target: JoinTarget, result: ServerInfoResult)
 
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
-	directory_id: StringName, lobbies: Array[LobbyInfo]
+		directory_id: StringName,
+		lobbies: Array[LobbyInfo],
 )
 
 ## A registered directory reported that its transport is unavailable.
@@ -71,6 +71,10 @@ signal session_entered()
 ## The bound [MultiplayerTree] returned to its offline state.
 signal session_left()
 
+## Ceiling applied when a backend declares its connect path self-managed
+## ([method BackendPeer.connect_timeout_hint] returns a negative value), so a
+## buggy backend can never wedge a join open forever.
+const SELF_MANAGED_TIMEOUT_CEILING := 30.0
 
 ## Path used for [ServerList] persistence by
 ## [method load_server_list] / [method save_server_list] when no
@@ -80,21 +84,19 @@ signal session_left()
 ## True if the active join handshake was explicitly aborted.
 var join_aborted_flag: bool = false
 
-
 ## Optional persistence handle. Null until [method load_server_list]
 ## assigns one (or a caller sets it directly). When set,
 ## [method save_server_list] writes the current saved targets back
 ## through it.
 var server_list: ServerList = null
 
-
 var _tree: MultiplayerTree
 var _probes: ProbeManager
 var _directories: DirectoryRegistry
 var _saved_targets: Array[JoinTarget] = []
-var _discovered: Dictionary = {}  # StringName -> Array[JoinTarget]
+var _discovered: Dictionary = { } # StringName -> Array[JoinTarget]
 var _directories_order: Array[StringName] = []
-var _results: Dictionary = {}            # JoinTarget -> ServerInfoResult
+var _results: Dictionary = { } # JoinTarget -> ServerInfoResult
 var _tree_signals_bound: bool = false
 
 
@@ -114,8 +116,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	_unbind_tree_signals()
 
-
 # -- Tree binding ------------------------------------------------------------
+
 
 ## Binds the [MultiplayerTree] used by [method host] and [method join].
 ## The session subscribes to its lifecycle so [signal session_entered]
@@ -126,9 +128,11 @@ func bind_tree(tree: MultiplayerTree) -> void:
 	_unbind_tree_signals()
 	_tree = tree
 	Netw.dbg.debug(
-		"ConnectSession bound to tree '%s'.", [_tree.name]
+		"ConnectSession bound to tree '%s'.",
+		[_tree.name],
 	)
 	_bind_tree_signals()
+	_sync_tree_directories()
 
 
 ## Returns the currently bound [MultiplayerTree], or [code]null[/code].
@@ -136,11 +140,23 @@ func get_tree_bound() -> MultiplayerTree:
 	return _tree if is_instance_valid(_tree) else null
 
 
+## Returns [code]true[/code] while the bound tree is in an active session.
+##
+## A late binder reads this after wiring [signal session_entered] to catch up
+## when the tree entered before the binding, e.g. a debug auto-connect.
+func is_session_active() -> bool:
+	return is_instance_valid(_tree) \
+			and _tree.state == MultiplayerTree.State.ONLINE
+
 # -- Directories -------------------------------------------------------------
 
+
 ## Registers [param directory] under [param id] so its lobbies appear
-## in [method get_targets]. Must be called before [method refresh] for
-## the directory's lobbies to be polled.
+## in [method get_targets].
+##
+## A [LobbyDirectory] placed under the bound [MultiplayerTree] is adopted
+## automatically (keyed by its node name) on [method refresh], so call this
+## only for an off-tree directory or to pin a specific [param id].
 func register_directory(id: StringName, directory: LobbyDirectory) -> void:
 	_ensure_internals()
 	_directories.register(id, directory)
@@ -153,7 +169,8 @@ func register_directory(id: StringName, directory: LobbyDirectory) -> void:
 	if not directory.provider_unavailable.is_connected(unavailable_cb):
 		directory.provider_unavailable.connect(unavailable_cb)
 	Netw.dbg.debug(
-		"ConnectSession directory registered: %s.", [String(id)]
+		"ConnectSession directory registered: %s.",
+		[String(id)],
 	)
 
 
@@ -182,8 +199,8 @@ func get_directory(id: StringName) -> LobbyDirectory:
 func get_directory_ids() -> Array[StringName]:
 	return _directories_order.duplicate()
 
-
 # -- Target list ------------------------------------------------------------
+
 
 ## Appends [param target] to the live list. When [param persist] is
 ## [code]true[/code] and a [member server_list] is loaded, the
@@ -199,13 +216,13 @@ func add_target(target: JoinTarget, persist: bool = false) -> void:
 	if _saved_targets.has(target):
 		Netw.dbg.trace(
 			"ConnectSession add_target ignored duplicate: %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		return
 	_saved_targets.append(target)
 	Netw.dbg.info(
 		"ConnectSession added saved target %s (persist=%s, size=%d).",
-		[_target_summary(target), str(persist), _saved_targets.size()]
+		[_target_summary(target), str(persist), _saved_targets.size()],
 	)
 	target_added.emit(target)
 	if persist:
@@ -219,14 +236,14 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 	if idx < 0:
 		Netw.dbg.trace(
 			"ConnectSession remove_target ignored missing target: %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		return
 	_saved_targets.remove_at(idx)
 	_results.erase(target)
 	Netw.dbg.info(
 		"ConnectSession removed saved target %s (persist=%s, size=%d).",
-		[_target_summary(target), str(persist), _saved_targets.size()]
+		[_target_summary(target), str(persist), _saved_targets.size()],
 	)
 	target_removed.emit(target)
 	if persist:
@@ -266,8 +283,8 @@ func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 func get_result(target: JoinTarget) -> ServerInfoResult:
 	return _results.get(target, null)
 
-
 # -- Persistence ------------------------------------------------------------
+
 
 ## Loads the persisted [ServerList] at [param path], replacing the
 ## current saved target list. Directory-discovered targets are not
@@ -279,7 +296,7 @@ func load_server_list(path: String = server_list_path) -> void:
 	server_list = loaded
 	Netw.dbg.info(
 		"ConnectSession loaded %d saved target(s) from %s.",
-		[loaded.targets.size(), path]
+		[loaded.targets.size(), path],
 	)
 	_replace_saved_targets(loaded.targets)
 
@@ -297,7 +314,7 @@ func save_server_list(path: String = server_list_path) -> Error:
 	if err == OK:
 		Netw.dbg.info(
 			"ConnectSession saved %d saved target(s) to %s.",
-			[_saved_targets.size(), path]
+			[_saved_targets.size(), path],
 		)
 	else:
 		Netw.dbg.error(
@@ -307,30 +324,38 @@ func save_server_list(path: String = server_list_path) -> Error:
 		)
 	return err
 
-
 # -- Probing & refresh ------------------------------------------------------
+
 
 ## Cancels every in-flight probe, re-probes all saved targets, and
 ## asks every registered directory to refresh its lobby list.
 func refresh() -> void:
 	_ensure_internals()
+	_sync_tree_directories()
 	Netw.dbg.debug(
 		"ConnectSession refresh: saved=%d directories=%d.",
-		[_saved_targets.size(), _directories_order.size()]
+		[_saved_targets.size(), _directories_order.size()],
 	)
 	if _probes:
 		_probes.cancel_all()
 	for target in _saved_targets:
+		if not _is_target_available(target):
+			Netw.dbg.trace(
+				"ConnectSession skipping unavailable target %s.",
+				[_target_summary(target)],
+			)
+			continue
 		Netw.dbg.trace(
 			"ConnectSession probing saved target %s.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		_probes.query(target, _on_probe_result.bind(target))
 	for id in _directories_order:
 		var directory := _directories.get_directory(id)
 		if directory:
 			Netw.dbg.trace(
-				"ConnectSession refreshing directory %s.", [String(id)]
+				"ConnectSession refreshing directory %s.",
+				[String(id)],
 			)
 			directory.list_lobbies()
 
@@ -342,13 +367,20 @@ func probe(target: JoinTarget) -> void:
 	if target == null:
 		Netw.dbg.warn("ConnectSession probe ignored null target.")
 		return
+	if not _is_target_available(target):
+		Netw.dbg.debug(
+			"ConnectSession probe skipped, unavailable target %s.",
+			[_target_summary(target)],
+		)
+		return
 	Netw.dbg.debug(
-		"ConnectSession probing target %s.", [_target_summary(target)]
+		"ConnectSession probing target %s.",
+		[_target_summary(target)],
 	)
 	_probes.query(target, _on_probe_result.bind(target))
 
-
 # -- Host & join ------------------------------------------------------------
+
 
 ## Hosts a new session. [param config] supplies the transport plus server name.
 ## The [param payload] carries player identity. Returns OK on success, or
@@ -370,7 +402,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 	Netw.dbg.info(
 		"ConnectSession host requested (user=%s).",
-		[String(payload.username)]
+		[String(payload.username)],
 	)
 	host_started.emit()
 
@@ -379,18 +411,18 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 		host_failed.emit("host config has no backend template")
 		return ERR_INVALID_PARAMETER
 
-	if backend is SteamBackend:
-		backend.server_name = config.server_name
+	_apply_host_config(backend, config)
 
 	tree.backend = backend
 	var err := await tree.host_player(payload)
 	if err != OK:
 		host_failed.emit(
-			"backend host_player failed (%s)" % error_string(err)
+			"backend host_player failed (%s)" % error_string(err),
 		)
 		return err
 
-	session_entered.emit()
+	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
 
@@ -403,7 +435,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if payload == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: payload is null.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		join_failed.emit(target, "join payload is null")
 		return ERR_INVALID_PARAMETER
@@ -411,31 +443,40 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if tree == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: no bound tree.",
-			[_target_summary(target)]
+			[_target_summary(target)],
 		)
 		join_failed.emit(
-			target, "no MultiplayerTree bound; call bind_tree first"
+			target,
+			"no MultiplayerTree bound; call bind_tree first",
 		)
 		return ERR_UNCONFIGURED
 
 	Netw.dbg.info(
 		"ConnectSession join requested: %s (user=%s).",
-		[_target_summary(target), String(payload.username)]
+		[_target_summary(target), String(payload.username)],
 	)
 	join_started.emit(target)
 	join_aborted_flag = false
 
-	var err := await tree.join(target, payload)
+	# Failure is reported via join_failed below, so keep the tree quiet to
+	# avoid logging the timeout as a redundant hard error. The backend authors
+	# the budget so a retry-aware transport gets a wider window; a self-managed
+	# backend (hint < 0) falls back to a safety-net ceiling.
+	var hint := target.backend.connect_timeout_hint() if target.backend else 5.0
+	var timeout := hint if hint > 0.0 else SELF_MANAGED_TIMEOUT_CEILING
+	var err := await tree.join(target, payload, timeout, true)
 	if err != OK:
 		if join_aborted_flag:
 			join_failed.emit(target, "Connection aborted by user")
 		else:
 			join_failed.emit(
-				target, "connect failed (%s)" % error_string(err)
+				target,
+				"connect failed (%s)" % error_string(err),
 			)
 		return err
 
-	session_entered.emit()
+	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
 
@@ -446,8 +487,58 @@ func abort_join() -> void:
 		join_aborted_flag = true
 		tree.abort_join()
 
+# -- Backend templates ------------------------------------------------------
+
+
+## Returns the [param templates] whose backend can run on this platform.
+##
+## Add and join offer only transports that [method BackendPeer.is_available]
+## here.
+static func available_templates(
+		templates: Array[BackendPeer],
+) -> Array[BackendPeer]:
+	var out: Array[BackendPeer] = []
+	for backend in templates:
+		if backend != null and backend.is_available():
+			out.append(backend)
+	return out
+
+
+## Returns the [param templates] whose backend can also host on this platform.
+##
+## The Host form drops a transport that connects but cannot
+## [method BackendPeer.can_host] here, such as WebSocket on the web.
+static func hostable_templates(
+		templates: Array[BackendPeer],
+) -> Array[BackendPeer]:
+	var out: Array[BackendPeer] = []
+	for backend in available_templates(templates):
+		if backend.can_host():
+			out.append(backend)
+	return out
 
 # -- Internals --------------------------------------------------------------
+
+
+# Adopts every LobbyDirectory service under the bound tree that is not already
+# registered, keyed by node name. Manual register_directory entries are left
+# alone, so explicit ids and off-tree directories keep working.
+func _sync_tree_directories() -> void:
+	if _tree == null:
+		return
+	for service in _tree.get_services(LobbyDirectory):
+		var directory := service as LobbyDirectory
+		if directory == null or _is_directory_registered(directory):
+			continue
+		register_directory(StringName(directory.name), directory)
+
+
+func _is_directory_registered(directory: LobbyDirectory) -> bool:
+	for id in _directories_order:
+		if _directories.get_directory(id) == directory:
+			return true
+	return false
+
 
 func _bind_tree_signals() -> void:
 	if _tree == null or _tree_signals_bound:
@@ -460,28 +551,79 @@ func _unbind_tree_signals() -> void:
 	if not _tree_signals_bound:
 		return
 	if is_instance_valid(_tree) and _tree.state_changed.is_connected(
-		_on_tree_state_changed
+		_on_tree_state_changed,
 	):
 		_tree.state_changed.disconnect(_on_tree_state_changed)
 	_tree_signals_bound = false
 
 
 func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
-	if new_state == MultiplayerTree.State.OFFLINE:
+	if new_state == MultiplayerTree.State.ONLINE:
+		session_entered.emit()
+	elif new_state == MultiplayerTree.State.OFFLINE:
 		session_left.emit()
 
 
+func _apply_host_config(
+		backend: BackendPeer,
+		config: ConnectHostConfig,
+) -> void:
+	if backend is SteamBackend:
+		var steam := backend as SteamBackend
+		steam.server_name = config.server_name
+	elif backend is WebRTCBackend:
+		var webrtc := backend as WebRTCBackend
+		webrtc.server_name = config.server_name
+
+
 func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
+	if result != null and result.is_ok() and result.info != null \
+			and _local_app_id() != String(result.info.app_id):
+		Netw.dbg.debug(
+			"ConnectSession probe incompatible for %s: local app_id='%s' "
+			+ "remote app_id='%s'.",
+			[
+				_target_summary(target),
+				_local_app_id(),
+				String(result.info.app_id),
+			],
+		)
+		result = ServerInfoResult.incompatible(result.info)
 	_results[target] = result
 	Netw.dbg.debug(
 		"ConnectSession probe result for %s: %s.",
-		[_target_summary(target), str(result)]
+		[_target_summary(target), str(result)],
 	)
 	target_updated.emit(target, result)
 
 
+# A target a probe should poke: it has a backend that can run on this platform.
+func _is_target_available(target: JoinTarget) -> bool:
+	return target.backend == null or target.backend.is_available()
+
+
+# The bound tree's build tag, or "" when no tree or the gate is off.
+func _local_app_id() -> String:
+	return String(_tree.app_id) if is_instance_valid(_tree) else ""
+
+
+# Flags a discovered server incompatible when its build tag differs from the
+# local one, so the browser can warn before a join the auth handshake would
+# reject. An empty tag on either side means the gate is off, so it stays OK.
+func _classify_discovered(info: ServerInfo) -> ServerInfoResult:
+	if _local_app_id() != String(info.app_id):
+		Netw.dbg.debug(
+			"ConnectSession discovered incompatible lobby: local app_id='%s' "
+			+ "remote app_id='%s'.",
+			[_local_app_id(), String(info.app_id)],
+		)
+		return ServerInfoResult.incompatible(info)
+	return ServerInfoResult.ok(info, -1)
+
+
 func _on_directory_list_updated(
-	lobbies: Array[LobbyInfo], id: StringName
+		lobbies: Array[LobbyInfo],
+		id: StringName,
 ) -> void:
 	var prior: Array[JoinTarget] = []
 	if _discovered.has(id):
@@ -501,12 +643,14 @@ func _on_directory_list_updated(
 			var info := ServerInfo.new()
 			info.players = lobby.players
 			info.max_players = lobby.max_players
-			_results[t] = ServerInfoResult.ok(info)
+			info.metadata = lobby.metadata.duplicate()
+			info.app_id = StringName(lobby.metadata.get("app_id", ""))
+			_results[t] = _classify_discovered(info)
 
 	_discovered[id] = fresh
 	Netw.dbg.debug(
 		"ConnectSession directory %s refreshed: %d lobby target(s).",
-		[String(id), fresh.size()]
+		[String(id), fresh.size()],
 	)
 	for target in fresh:
 		target_added.emit(target)
@@ -517,19 +661,52 @@ func _on_directory_list_updated(
 func _on_directory_unavailable(reason: String, id: StringName) -> void:
 	Netw.dbg.warn(
 		"ConnectSession directory %s unavailable: %s.",
-		[String(id), reason]
+		[String(id), reason],
 	)
 	directory_unavailable.emit(id, reason)
 
 
+# Swaps the saved set to [param loaded] while keeping the existing instance for
+# any entry that reloads unchanged, so a redundant reload does not churn the
+# list or orphan a probe result keyed to the old instance.
 func _replace_saved_targets(loaded: Array[JoinTarget]) -> void:
-	for target in _saved_targets.duplicate():
-		_results.erase(target)
-		target_removed.emit(target)
-	_saved_targets.clear()
-	for target in loaded:
-		_saved_targets.append(target)
-		target_added.emit(target)
+	var existing_by_key := { }
+	for target in _saved_targets:
+		existing_by_key[_target_key(target)] = target
+
+	var next: Array[JoinTarget] = []
+	var reused := { }
+	for incoming in loaded:
+		var key := _target_key(incoming)
+		if existing_by_key.has(key):
+			var kept: JoinTarget = existing_by_key[key]
+			next.append(kept)
+			reused[kept] = true
+		else:
+			next.append(incoming)
+			target_added.emit(incoming)
+
+	for target in _saved_targets:
+		if not reused.has(target):
+			_results.erase(target)
+			target_removed.emit(target)
+
+	_saved_targets = next
+
+
+# Stable identity for a saved target, so reloads can match unchanged entries.
+func _target_key(target: JoinTarget) -> String:
+	var backend := target.backend
+	var backend_id := "none"
+	if backend != null:
+		backend_id = backend.get_class()
+		var script := backend.get_script() as Script
+		if script != null:
+			backend_id = script.resource_path
+	var port := ""
+	if backend != null and "port" in backend:
+		port = str(backend.port)
+	return "%s|%s|%s" % [target.address, backend_id, port]
 
 
 func _target_summary(target: JoinTarget) -> String:

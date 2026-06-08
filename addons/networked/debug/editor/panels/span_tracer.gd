@@ -28,25 +28,25 @@ var _filter_text: String = ""
 var _is_remote: bool = false
 var _full_buffer: Array = []
 # Set of span_ids that match the current filter (including matches in steps).
-var _matching_spans: Dictionary = {}
+var _matching_spans: Dictionary = { }
 # span_id -> aggregated lower-case searchable text for fuzzy matching.
-var _span_text_cache: Dictionary = {}
+var _span_text_cache: Dictionary = { }
 
 # span_id -> TreeItem (span lifecycle rows)
-var _span_items: Dictionary[String, TreeItem] = {}
+var _span_items: Dictionary[String, TreeItem] = { }
 # span_id -> open timestamp_usec (elapsed calculation for steps)
-var _span_start_usec: Dictionary[String, int] = {}
+var _span_start_usec: Dictionary[String, int] = { }
 
 # Active breakpoints received from _breakpoint_set_in_tree callbacks.
 # Key: "source:line". Preserved across clear().
-var _active_breakpoints: Dictionary = {}
+var _active_breakpoints: Dictionary = { }
 
 # "source:line" -> Array[TreeItem]. Rebuilt on each push_*; cleared on clear().
-var _caller_rows: Dictionary = {}
+var _caller_rows: Dictionary = { }
 
 # Column indices
-const COL_BP      := 0  # breakpoint gutter (narrow)
-const COL_NAME    := 1  # Operation / Step
+const COL_BP := 0 # breakpoint gutter (narrow)
+const COL_NAME := 1 # Operation / Step
 const COL_ELAPSED := 2
 
 
@@ -132,7 +132,7 @@ func on_new_entry(entry: Variant) -> void:
 		# If we pop from history, ideally we should rebuild cache, but for 1k items
 		# and ring buffer behavior, stale cache entries for dead IDs are harmless.
 
-	var data: Dictionary = d.get("data", {})
+	var data: Dictionary = d.get("data", { })
 	var span_id: String = data.get("id", "")
 	if not span_id.is_empty():
 		var new_text := _get_entry_searchable_text(d)
@@ -152,13 +152,18 @@ func on_new_entry(entry: Variant) -> void:
 
 
 func _dispatch_span_entry(entry: Dictionary) -> void:
-	var d: Dictionary = entry.get("data", {})
+	var d: Dictionary = entry.get("data", { })
 	match entry.get("type", ""):
-		"open":      push_span_open(d)
-		"step":      push_span_step(d)
-		"step_warn": push_span_step_warn(d)
-		"close":     push_span_close(d)
-		"fail":      push_span_fail(d)
+		"open":
+			push_span_open(d)
+		"step":
+			push_span_step(d)
+		"step_warn":
+			push_span_step_warn(d)
+		"close":
+			push_span_close(d)
+		"fail":
+			push_span_fail(d)
 
 
 func _on_filter_changed(new_text: String) -> void:
@@ -169,9 +174,10 @@ func _on_filter_changed(new_text: String) -> void:
 func _rebuild_span_text_cache() -> void:
 	_span_text_cache.clear()
 	for entry: Dictionary in _full_buffer:
-		var data: Dictionary = entry.get("data", {})
+		var data: Dictionary = entry.get("data", { })
 		var span_id: String = data.get("id", "")
-		if span_id.is_empty(): continue
+		if span_id.is_empty():
+			continue
 		var txt := _get_entry_searchable_text(entry)
 		if not txt.is_empty():
 			_span_text_cache[span_id] = _span_text_cache.get(span_id, "") + " " + txt
@@ -204,18 +210,18 @@ func _check_span_match(span_id: String, filter: String) -> bool:
 
 func _get_entry_searchable_text(entry: Dictionary) -> String:
 	var type: String = entry.get("type", "")
-	var d: Dictionary = entry.get("data", {})
+	var d: Dictionary = entry.get("data", { })
 	var out := ""
 
 	match type:
 		"open", "close":
 			out = d.get("label", "")
 		"step", "step_warn":
-			var s: Dictionary = d.get("step", {})
+			var s: Dictionary = d.get("step", { })
 			out = s.get("label", "") + " " + s.get("message", "")
 		"fail":
 			out = d.get("label", "") + " " + d.get("reason", "")
-	
+
 	return out.to_lower()
 
 
@@ -246,8 +252,8 @@ func _clear_highlights() -> void:
 		item.clear_custom_bg_color(COL_NAME)
 		item = item.get_next()
 
-
 # --- Breakpoint Sync (called from NetworkedDebuggerUI) ------------------------
+
 
 ## Updates gutter state for all rows at [param source]:[param line].
 ## Called whenever the script editor adds or removes a breakpoint.
@@ -268,8 +274,8 @@ func sync_breakpoints_cleared() -> void:
 		for item: TreeItem in _caller_rows[key]:
 			_refresh_bp_cell(item, false)
 
-
 # --- Span Lifecycle (NetTrace) ------------------------------------------------
+
 
 ## Creates a top-level span row with an open-state indicator (yellow (o)).
 func push_span_open(d: Dictionary) -> void:
@@ -287,22 +293,22 @@ func push_span_open(d: Dictionary) -> void:
 	var item := _tree.create_item(_tree.get_root())
 	item.set_text(COL_NAME, "(o) %s" % label)
 	item.set_text(COL_ELAPSED, "f%d" % d.get("frame", 0))
-	item.set_custom_color(COL_NAME, Color(1.0, 0.85, 0.2))  # yellow = open
+	item.set_custom_color(COL_NAME, Color(1.0, 0.85, 0.2)) # yellow = open
 
-	var caller: Dictionary = d.get("caller", {})
-	item.set_metadata(COL_NAME, {"span_id": span_id, "caller": caller})
+	var caller: Dictionary = d.get("caller", { })
+	item.set_metadata(COL_NAME, { "span_id": span_id, "caller": caller })
 	_register_caller_row(item, caller)
 
 	_span_items[span_id] = item
 	_span_start_usec[span_id] = d.get("timestamp_usec", Time.get_ticks_usec())
 
-	var follows: Dictionary = d.get("follows_from", {})
+	var follows: Dictionary = d.get("follows_from", { })
 	if not follows.is_empty():
 		var f_row := _tree.create_item(item)
 		var step_part: String = ("  . %s" % follows["step_label"]) if not follows.get("step_label", "").is_empty() else ""
 		f_row.set_text(COL_NAME, "  <- follows: %s%s" % [follows.get("span_label", "?"), step_part])
 		f_row.set_custom_color(COL_NAME, Color(0.55, 0.55, 0.55))
-		f_row.set_metadata(COL_NAME, {"follows_span_id": follows.get("span_id", "")})
+		f_row.set_metadata(COL_NAME, { "follows_span_id": follows.get("span_id", "") })
 
 	var peers: Array = d.get("affected_peers", [])
 	if not peers.is_empty():
@@ -318,7 +324,7 @@ func push_span_step(d: Dictionary) -> void:
 	var item: TreeItem = _span_items.get(span_id)
 	if not item:
 		return
-	var s: Dictionary = d.get("step", {})
+	var s: Dictionary = d.get("step", { })
 	var step_label: String = s.get("label", "?")
 	var step_usec: int = s.get("usec", 0)
 	var elapsed_ms: float = (step_usec - _span_start_usec.get(span_id, step_usec)) / 1000.0
@@ -326,12 +332,12 @@ func push_span_step(d: Dictionary) -> void:
 	var row := _tree.create_item(item)
 	row.set_text(COL_NAME, "   %s" % step_label)
 	row.set_text(COL_ELAPSED, "+%.1f ms" % elapsed_ms)
-	var step_data: Dictionary = s.get("data", {})
+	var step_data: Dictionary = s.get("data", { })
 	if not step_data.is_empty():
 		row.set_tooltip_text(COL_NAME, str(step_data))
 
-	var caller: Dictionary = s.get("caller", {})
-	row.set_metadata(COL_NAME, {"caller": caller})
+	var caller: Dictionary = s.get("caller", { })
+	row.set_metadata(COL_NAME, { "caller": caller })
 	_register_caller_row(row, caller)
 
 	item.set_collapsed(false)
@@ -343,7 +349,7 @@ func push_span_step_warn(d: Dictionary) -> void:
 	var item: TreeItem = _span_items.get(span_id)
 	if not item:
 		return
-	var s: Dictionary = d.get("step", {})
+	var s: Dictionary = d.get("step", { })
 	var step_label: String = s.get("label", "?")
 	var step_usec: int = s.get("usec", 0)
 	var elapsed_ms: float = (step_usec - _span_start_usec.get(span_id, step_usec)) / 1000.0
@@ -355,14 +361,14 @@ func push_span_step_warn(d: Dictionary) -> void:
 		display += "  [%s]" % message
 	row.set_text(COL_NAME, display)
 	row.set_text(COL_ELAPSED, "+%.1f ms" % elapsed_ms)
-	row.set_custom_color(COL_NAME, Color(1.0, 0.65, 0.1))  # orange = warned step
+	row.set_custom_color(COL_NAME, Color(1.0, 0.65, 0.1)) # orange = warned step
 
-	var step_data: Dictionary = s.get("data", {})
+	var step_data: Dictionary = s.get("data", { })
 	if not step_data.is_empty():
 		row.set_tooltip_text(COL_NAME, str(step_data))
 
-	var caller: Dictionary = s.get("caller", {})
-	row.set_metadata(COL_NAME, {"caller": caller})
+	var caller: Dictionary = s.get("caller", { })
+	row.set_metadata(COL_NAME, { "caller": caller })
 	_register_caller_row(row, caller)
 	item.set_collapsed(false)
 
@@ -374,7 +380,7 @@ func push_span_close(d: Dictionary) -> void:
 	if not item:
 		return
 	item.set_text(COL_NAME, "[V] %s" % d.get("label", item.get_text(COL_NAME).substr(4)))
-	item.set_custom_color(COL_NAME, Color(0.3, 0.85, 0.4))  # green = ok
+	item.set_custom_color(COL_NAME, Color(0.3, 0.85, 0.4)) # green = ok
 	var elapsed_usec: int = d.get("elapsed_usec", 0)
 	if elapsed_usec > 0:
 		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
@@ -389,7 +395,7 @@ func push_span_fail(d: Dictionary) -> void:
 	var label: String = d.get("label", item.get_text(COL_NAME).substr(4))
 	var reason: String = d.get("reason", "?")
 	item.set_text(COL_NAME, "[X] %s  [%s]" % [label, reason])
-	item.set_custom_color(COL_NAME, Color(1.0, 0.35, 0.35))  # red = failed
+	item.set_custom_color(COL_NAME, Color(1.0, 0.35, 0.35)) # red = failed
 	var elapsed_usec: int = d.get("elapsed_usec", 0)
 	if elapsed_usec > 0:
 		item.set_text(COL_ELAPSED, "%.1f ms" % (elapsed_usec / 1000.0))
@@ -397,15 +403,15 @@ func push_span_fail(d: Dictionary) -> void:
 	var r := _tree.create_item(item)
 	r.set_text(COL_NAME, "  [X] %s" % reason)
 	r.set_custom_color(COL_NAME, Color(1.0, 0.45, 0.45))
-	var fail_caller: Dictionary = d.get("caller", {})
-	r.set_metadata(COL_NAME, {"caller": fail_caller})
+	var fail_caller: Dictionary = d.get("caller", { })
+	r.set_metadata(COL_NAME, { "caller": fail_caller })
 	_register_caller_row(r, fail_caller)
 	if fail_caller.is_empty():
 		_set_unselectable(r)
 	item.set_collapsed(false)
 
-
 # --- Internal -----------------------------------------------------------------
+
 
 func _on_copy() -> void:
 	if _span_items.is_empty():
@@ -452,8 +458,11 @@ func _register_caller_row(item: TreeItem, caller: Dictionary) -> void:
 func _refresh_bp_cell(item: TreeItem, active: bool) -> void:
 	if item.get_button_count(COL_BP) == 0:
 		return
-	item.set_button_color(COL_BP, 0,
-		Color(1.0, 1.0, 1.0, 1.0) if active else Color(1.0, 1.0, 1.0, 0.3))
+	item.set_button_color(
+		COL_BP,
+		0,
+		Color(1.0, 1.0, 1.0, 1.0) if active else Color(1.0, 1.0, 1.0, 0.3),
+	)
 
 
 func _on_item_selected() -> void:
@@ -482,7 +491,7 @@ func _on_item_activated() -> void:
 	var meta = item.get_metadata(COL_NAME)
 	if not meta is Dictionary:
 		return
-	var caller: Dictionary = (meta as Dictionary).get("caller", {})
+	var caller: Dictionary = (meta as Dictionary).get("caller", { })
 	var source: String = caller.get("source", "")
 	if source.is_empty():
 		return
@@ -498,7 +507,7 @@ func _on_bp_button_clicked(item: TreeItem, column: int, id: int, _mouse_button_i
 	var meta = item.get_metadata(COL_NAME)
 	if not meta is Dictionary:
 		return
-	var caller: Dictionary = (meta as Dictionary).get("caller", {})
+	var caller: Dictionary = (meta as Dictionary).get("caller", { })
 	var source: String = caller.get("source", "")
 	if source.is_empty() or not toggle_breakpoint.is_valid():
 		return

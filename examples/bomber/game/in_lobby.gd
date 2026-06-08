@@ -6,9 +6,7 @@
 ## is only consulted for resolving display names and leaving the social lobby.
 extends Control
 
-
 signal start_requested()
-
 
 @onready var _title: Label = %LobbyTitleLabel
 @onready var _member_list: ItemList = %MemberList

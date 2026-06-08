@@ -18,7 +18,7 @@ func _init(capacity: int = 16) -> void:
 	_capacity = 1
 	while _capacity < capacity:
 		_capacity <<= 1
-		
+
 	_mask = _capacity - 1
 	_slots.resize(_capacity)
 	_ticks.resize(_capacity)
@@ -34,7 +34,7 @@ func record(tick: int, value: Variant) -> void:
 	else:
 		idx = _head
 		_head = (_head + 1) & _mask
-		
+
 	_slots[idx] = value
 	_ticks[idx] = tick
 
@@ -90,9 +90,11 @@ func oldest_tick() -> int:
 func newest_tick() -> int:
 	return _ticks[(_head + _count - 1) & _mask] if _count > 0 else -1
 
+
 func clear() -> void:
 	_count = 0
 	_head = 0
+
 
 func size() -> int:
 	return _count

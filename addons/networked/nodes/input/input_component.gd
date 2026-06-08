@@ -23,14 +23,16 @@ signal action_changed(action: StringName, pressed: bool)
 ## is the multiplayer authority). Carries the tick number and a snapshot of the current state.
 signal tick_snapshot(tick: int, state: Dictionary)
 
-## When [code]true[/code], connects to [NetworkClock.on_tick] and emits [signal tick_snapshot]
-## each tick. Requires a [NetworkClock] registered on this node's multiplayer API.
+## When [code]true[/code], connects to [MultiplayerClock.on_tick] and emits
+## [signal tick_snapshot] each tick. Requires a [MultiplayerClock] registered
+## on this node's multiplayer API.
 @export var tick_mode: bool = false
 
 ## Current pressed state for each tracked action, keyed by action name.
 @onready var state: Dictionary[StringName, bool] = build_state_dict_from_actions()
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
+
 
 ## Returns the list of action name strings this component should track.
 @abstract func get_inputs() -> Array
@@ -47,23 +49,26 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 	if tick_mode:
-		var clock := NetworkClock.for_node(self)
+		var clock := MultiplayerClock.for_node(self)
 		if clock:
 			clock.on_tick.connect(_on_tick)
 		else:
-			_dbg.warn("tick_mode=true but no NetworkClock found on this node's multiplayer API.", func(m): push_warning(m))
+			_dbg.warn("tick_mode=true but no MultiplayerClock found on this node's multiplayer API.", func(m): push_warning(m))
+
 
 ## Builds the initial [member state] dictionary from [method get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
 	var _state: Dictionary[StringName, bool]
-	
+
 	for action in get_inputs():
 		_state[action] = false
-	
-	assert(not _state.is_empty(),
+
+	assert(
+		not _state.is_empty(),
 		"`state` dictionary is empty when it's expected to have actions. \
 Probably because the action properties are not marked with \
-`action` through the `hint_string` of `@export_custom`.")
+`action` through the `hint_string` of `@export_custom`.",
+	)
 	return _state
 
 
@@ -90,8 +95,11 @@ func _on_tick(_delta: float, t: int) -> void:
 
 ## Returns [code]true[/code] if [param action] is currently held down.
 func is_down(action: StringName) -> bool:
-	assert(InputMap.has_action(action), "Input action `%s` doen't exist in \
-`InputMap`." % action)
+	assert(
+		InputMap.has_action(action),
+		"Input action `%s` doen't exist in \
+`InputMap`." % action,
+	)
 	return state.get(action, false)
 
 

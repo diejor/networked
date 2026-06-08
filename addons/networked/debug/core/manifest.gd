@@ -38,11 +38,11 @@ func validate_contract() -> bool:
 		missing.append("cid")
 	if uid.is_empty():
 		missing.append("uid")
-	
+
 	if not missing.is_empty():
 		push_warning(
 			"NetManifest: Contract violation! Missing fields: %s" % \
-			[str(missing)]
+					[str(missing)],
 		)
 		return false
 	return true
@@ -60,5 +60,5 @@ func to_dict() -> Dictionary:
 		"active_scene": active_scene,
 		"network_state": network_state,
 		"telemetry_slice": telemetry_slice,
-		"node_snapshot": node_snapshot.to_dict() if node_snapshot else {},
+		"node_snapshot": node_snapshot.to_dict() if node_snapshot else { },
 	}

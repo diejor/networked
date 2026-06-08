@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://c5tj2gqmrl0mg"]
 
-[ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/spawner/spawner_component.gd" id="1_2lw5h"]
+[ext_resource type="Script" uid="uid://bspawnrcomp001" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="1_2lw5h"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="2_pdren"]
 [ext_resource type="Resource" uid="uid://bvmv6qjvcl56a" path="res://tests/test_db.tres" id="3_2lw5h"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="3_tp"]
@@ -20,7 +20,7 @@ properties/0/replication_mode = 2
 
 [node name="TestPlayerFull" type="Node2D" unique_id=754678470]
 
-[node name="SpawnerComponent" type="MultiplayerSynchronizer" parent="." unique_id=1760842203]
+[node name="MultiplayerEntity" type="MultiplayerSynchronizer" parent="." unique_id=1760842203]
 unique_name_in_owner = true
 script = ExtResource("1_2lw5h")
 authority_mode = 1
@@ -47,4 +47,4 @@ starting_scene_path = SubResource("Resource_7io2v")
 [node name="PlayerSync" type="MultiplayerSynchronizer" parent="." unique_id=639682812]
 replication_config = SubResource("SceneReplicationConfig_1")
 
-[connection signal="tree_entered" from="." to="SpawnerComponent" method="_on_owner_tree_entered"]
+[connection signal="tree_entered" from="." to="MultiplayerEntity" method="_on_owner_tree_entered"]

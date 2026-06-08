@@ -16,7 +16,6 @@
 class_name NetwInterest
 extends RefCounted
 
-
 var _tree_ref: WeakRef
 
 

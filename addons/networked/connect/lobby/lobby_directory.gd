@@ -6,9 +6,13 @@
 ## matched [BackendPeer] to assign to the multiplayer tree.
 ##
 ## [br][br]
-## Implementations must:
-## [br]- Register via [code]NetwServices.register(self, LobbyDirectory)[/code]
-##   on [code]_enter_tree[/code].
+## A directory dropped under the [MultiplayerTree] is discovered automatically.
+## [method NetwServices.register] under its own concrete script is enough.
+## [ConnectSession] collects every [LobbyDirectory] through
+## [method MultiplayerTree.get_services], so there is no per directory wiring in
+## the browser. Implementations must:
+## [br]- Register via [code]NetwServices.register(self)[/code] on
+##   [code]_enter_tree[/code].
 ## [br]- Implement [method host_lobby] and [method join_lobby_peer] to return
 ##   a live, connected [MultiplayerPeer] (or [code]null[/code] on failure).
 @abstract

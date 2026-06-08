@@ -5,6 +5,6 @@
 [resource]
 script = ExtResource("1_aghgm")
 module_overrides = {
-"addons.networked.core.tick_interpolator": 5
+"addons.networked.core.multiplayer_interpolator": 5
 }
 metadata/_custom_type_script = "uid://df08q81gaomy3"

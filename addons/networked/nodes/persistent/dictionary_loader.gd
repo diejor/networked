@@ -10,7 +10,7 @@ class_name DictionarySaveFormatLoader
 extends ResourceFormatLoader
 
 const TEXT_EXT := "tdict"
-const BIN_EXT  := "dict"
+const BIN_EXT := "dict"
 
 
 func _get_recognized_extensions() -> PackedStringArray:
@@ -19,8 +19,8 @@ func _get_recognized_extensions() -> PackedStringArray:
 
 func _handles_type(type: StringName) -> bool:
 	return (type == &"Resource"
-		or type == &"Entity"
-		or type == &"DictionaryEntity")
+			or type == &"Entity"
+			or type == &"DictionaryEntity")
 
 
 func _get_resource_type(path: String) -> String:
@@ -47,8 +47,10 @@ func _exists(path: String) -> bool:
 
 func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_mode: int) -> Variant:
 	var ext := path.get_extension().to_lower()
-	assert(ext == TEXT_EXT or ext == BIN_EXT,
-		"`dictionary_loader` given unsupported extension: %s." % ext)
+	assert(
+		ext == TEXT_EXT or ext == BIN_EXT,
+		"`dictionary_loader` given unsupported extension: %s." % ext,
+	)
 
 	if not FileAccess.file_exists(path):
 		return ERR_FILE_NOT_FOUND
@@ -66,9 +68,11 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 
 			var json := JSON.new()
 			var err := json.parse(text)
-			assert(err == OK,
+			assert(
+				err == OK,
 				"JSON parse failed for `DictionaryEntity` `\"*.tdict\"`. "
-				+ "Error: %s" % error_string(err))
+				+ "Error: %s" % error_string(err),
+			)
 
 			dict_res.data = JSON.to_native(json.data, false)
 		BIN_EXT:
@@ -77,8 +81,10 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 				return ERR_FILE_CORRUPT
 
 			var decoded: Variant = file.get_var()
-			assert(typeof(decoded) == TYPE_DICTIONARY,
-				"Binary `\"*.dict\"` did not contain a Dictionary for DictionaryEntity.")
+			assert(
+				typeof(decoded) == TYPE_DICTIONARY,
+				"Binary `\"*.dict\"` did not contain a Dictionary for DictionaryEntity.",
+			)
 			if typeof(decoded) != TYPE_DICTIONARY:
 				return ERR_FILE_CORRUPT
 
@@ -86,7 +92,6 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 		_:
 			@warning_ignore("assert_always_false")
 			assert(false, "Unrecognized extension.")
-
 
 	dict_res.take_over_path(path)
 	return dict_res

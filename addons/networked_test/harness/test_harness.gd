@@ -11,7 +11,7 @@
 ## var player := await harness.join_player(
 ##     client,
 ##     "uid://...",
-##     "Player/Components/SpawnerComponent"
+##     "Player/Components/MultiplayerEntity"
 ## )
 ## await harness.teardown()
 ## [/codeblock]
@@ -20,51 +20,25 @@ extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 
-## Awaiter used by [method wait_for] and internal waits.
+## Reports harness wait timeouts.
 ##
-## The callable receives [code](Signal, float, String)[/code]. It returns
-## [code]true[/code] on timeout and [code]false[/code] on success.
-## [method NetwTestSuite.make_harness] installs the GdUnit4 adapter.
-var awaiter: Callable = _default_awaiter
-
-signal _wait_satisfied()
+## GdUnit factories install a reporter that records assertion failures.
+## Plain Godot callers may leave the default [code]push_error[/code]
+## reporter or assign their own.
+var reporter: Callable = _default_reporter
 
 var _session: LocalLoopbackSession
+var _loopback: NetwHarnessSession
 var _server: MultiplayerTree
 var _clients: Array[MultiplayerTree] = []
 var _scene_manager_src: Variant
 var _world_scene: PackedScene
-var _wait_generation: int = 0
+var _waiter: NetwWaiter
 var _extra_sessions: Array[LocalLoopbackSession] = []
 var _clock_enabled: bool = false
 var _clock_tickrate: int = 30
 var _clock_display_offset: int = 3
 var _torn_down := false
-
-
-#region Generic awaits
-
-## Awaits [param target_signal] through [member awaiter].
-##
-## Returns [code]true[/code] on timeout and [code]false[/code] on success.
-func wait_for(
-	target_signal: Signal,
-	timeout: float = DEFAULT_TIMEOUT,
-	label: String = "",
-) -> bool:
-	return await awaiter.call(target_signal, timeout, label)
-
-
-func _default_awaiter(sig: Signal, timeout: float, label: String) -> bool:
-	var timer := get_tree().create_timer(timeout)
-	var timed_out: bool = await Async.timeout(sig, timer)
-	if timed_out:
-		var name := label if not label.is_empty() else String(sig.get_name())
-		push_error("Timed out waiting for '%s' after %.2fs." % [name, timeout])
-	return timed_out
-
-
-#endregion
 
 #region Lifecycle
 
@@ -78,12 +52,14 @@ func _default_awaiter(sig: Signal, timeout: float, label: String) -> bool:
 ## var client := await harness.add_client()
 ## [/codeblock]
 func setup(
-	scene_manager_src: Variant = null,
-	world_scene: PackedScene = null,
+		scene_manager_src: Variant = null,
+		world_scene: PackedScene = null,
 ) -> void:
 	_scene_manager_src = scene_manager_src
 	_world_scene = world_scene
-	_session = LocalLoopbackSession.new()
+	_loopback = NetwHarnessSession.new()
+	_session = _loopback.session()
+	_waiter = NetwWaiter.new(get_tree(), reporter)
 	_setup_server()
 	await get_tree().process_frame
 
@@ -118,9 +94,10 @@ func teardown() -> void:
 	if tree:
 		await NetwTestSuite.drain_frames(tree, 1)
 
-	if _session:
-		_session.reset()
+	if _loopback:
+		_loopback.reset()
 	_session = null
+	_loopback = null
 
 	for extra_session in _extra_sessions:
 		if extra_session:
@@ -128,16 +105,16 @@ func teardown() -> void:
 	_extra_sessions.clear()
 	_scene_manager_src = null
 	_world_scene = null
-	awaiter = Callable()
+	_waiter = null
+	reporter = Callable()
 
 	if is_inside_tree():
 		get_parent().remove_child(self)
 
 	if tree:
-		await NetwTestSuite.drain_frames(tree, 2)
+		await NetwTestSuite.drain_frames(tree, 1)
 
 	queue_free()
-
 
 #endregion
 
@@ -157,36 +134,20 @@ func add_client() -> MultiplayerTree:
 	var index := _clients.size()
 	var username := "test_player_%d" % index
 
-	var client := MultiplayerTree.new()
-	client.name = "HarnessClient%d" % index
-	client.desired_role = MultiplayerTree.Role.CLIENT
+	var client := _make_service_tree(
+		MultiplayerTree.Role.CLIENT,
+		"HarnessClient%d" % index,
+	)
 	client.set_meta(&"_harness_username", username)
 
-	if _world_scene:
-		client.add_child(_world_scene.instantiate())
-
-	add_child(client)
-
-	var backend := LocalLoopbackBackend.new()
-	backend.session = _session
-	client.backend = backend
-
-	if _scene_manager_src:
-		var sm := _instantiate_scene_manager()
-		if sm:
-			_configure_client_scene_manager(sm)
-			client.add_child(sm)
-			_ensure_default_spawn_policy(client)
-
 	_clients.append(client)
-	if _clock_enabled:
-		_add_clock_node(client)
 
-	var payload := make_join_payload(username)
-	var target := JoinTarget.new()
-	target.backend = client.backend
-	target.address = "localhost"
-	var join_err: Error = await client.join(target, payload)
+	var payload := make_sceneless_payload(username)
+	var join_err: Error = await _loopback.connect_tree(
+		client,
+		NetwHarnessSession.Entry.JOIN,
+		payload,
+	)
 	assert(
 		join_err == OK,
 		"Client %d join() failed: %s" % [index, error_string(join_err)],
@@ -233,15 +194,15 @@ func server_scene_manager() -> MultiplayerSceneManager:
 	return scene_manager_for(_server)
 
 
-## Creates a [NetworkClock] on [method server] and every client.
+## Creates a [MultiplayerClock] on [method server] and every client.
 ##
 ## Clients created after this call receive the same clock before joining.
-## Existing clients are awaited until [signal NetworkClock.clock_synchronized]
+## Existing clients are awaited until [signal MultiplayerClock.clock_synchronized]
 ## fires.
 func add_clock(
-	tickrate: int = 30,
-	display_offset: int = 3,
-) -> NetworkClock:
+		tickrate: int = 30,
+		display_offset: int = 3,
+) -> MultiplayerClock:
 	_clock_enabled = true
 	_clock_tickrate = tickrate
 	_clock_display_offset = display_offset
@@ -250,10 +211,9 @@ func add_clock(
 	for client in _clients:
 		var client_clock := _ensure_clock(client)
 		if not client_clock.is_synchronized:
-			await wait_for(
-				client_clock.clock_synchronized,
-				DEFAULT_TIMEOUT,
-				"client clock synchronization"
+			await _wait_until(
+				func() -> bool: return client_clock.is_synchronized,
+				"client clock synchronization",
 			)
 	return server_clock
 
@@ -271,6 +231,25 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
+## Sets inbound link conditions on [param client]'s loopback peer.
+func set_link_conditions(
+		client: MultiplayerTree,
+		conditions: NetwLinkConditions,
+		sender_id: int = 0,
+) -> void:
+	var peer := client.multiplayer_peer as LocalMultiplayerPeer
+	_loopback.set_link_conditions(peer, conditions, sender_id)
+
+
+## Clears inbound link conditions on [param client]'s loopback peer.
+func clear_link_conditions(
+		client: MultiplayerTree,
+		sender_id: int = 0,
+) -> void:
+	var peer := client.multiplayer_peer as LocalMultiplayerPeer
+	_loopback.clear_link_conditions(peer, sender_id)
+
+
 ## Disconnects [param client] without freeing it.
 ##
 ## The client can be passed to [method reconnect_client] afterward.
@@ -279,13 +258,7 @@ func disconnect_client(client: MultiplayerTree) -> void:
 	if not client.multiplayer_peer:
 		return
 
-	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	var peer_id := client.multiplayer_peer.get_unique_id()
-	client.state = MultiplayerTree.State.DISCONNECTING
-	if peer:
-		_session.release_inbound_packets(peer)
-	client.multiplayer_peer.close()
-
+	var peer_id := _loopback.disconnect_tree(client)
 	var server_api := _server.multiplayer_api
 	await _wait_until(
 		func() -> bool: return not peer_id in server_api.get_peers(),
@@ -305,14 +278,15 @@ func reconnect_client(client: MultiplayerTree) -> void:
 	await _ensure_server_hosted()
 
 	var username: String = client.get_meta(&"_harness_username")
-	var payload := make_join_payload(username)
-	var target := JoinTarget.new()
-	target.backend = client.backend
-	target.address = "localhost"
-	var join_err: Error = await client.join(target, payload)
+	var payload := make_sceneless_payload(username)
+	var join_err: Error = await _loopback.connect_tree(
+		client,
+		NetwHarnessSession.Entry.JOIN,
+		payload,
+	)
 	assert(
 		join_err == OK,
-		"Client reconnect failed: %s" % error_string(join_err)
+		"Client reconnect failed: %s" % error_string(join_err),
 	)
 
 	var peer_id := client.multiplayer_peer.get_unique_id()
@@ -321,7 +295,6 @@ func reconnect_client(client: MultiplayerTree) -> void:
 		func() -> bool: return peer_id in server_api.get_peers(),
 		"server to register reconnected peer %d" % peer_id,
 	)
-
 
 #endregion
 
@@ -332,13 +305,13 @@ func reconnect_client(client: MultiplayerTree) -> void:
 ## Calls [method MultiplayerScene.connect_peer] on [method server] and waits
 ## for [param client] to activate the scene.
 func admit_client_to_scene(
-	client: MultiplayerTree,
-	scene_name: StringName,
+		client: MultiplayerTree,
+		scene_name: StringName,
 ) -> MultiplayerScene:
 	var s := scene_on_server(scene_name)
 	assert(
 		s,
-		"admit_client_to_scene: scene '%s' not active on server." % scene_name
+		"admit_client_to_scene: scene '%s' not active on server." % scene_name,
 	)
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	s.connect_peer(peer_id)
@@ -354,32 +327,32 @@ func admit_client_to_scene(
 ## var player := await harness.join_player(
 ##     client,
 ##     LEVEL,
-##     "Player/Components/SpawnerComponent"
+##     "Player/Components/MultiplayerEntity"
 ## )
 ## [/codeblock]
 func join_player(
-	client: MultiplayerTree,
-	level_scene_path: String,
-	spawner_node_path: String,
+		client: MultiplayerTree,
+		level_scene_path: String,
+		spawner_node_path: String,
 ) -> Node:
 	var username: String = client.get_meta(&"_harness_username")
 
-	var spawner_component_path := SceneNodePath.new()
-	spawner_component_path.scene_path = level_scene_path
-	spawner_component_path.node_path = spawner_node_path
+	var entity_path := SceneNodePath.new()
+	entity_path.scene_path = level_scene_path
+	entity_path.node_path = spawner_node_path
 
 	var join_payload := JoinPayload.new()
 	join_payload.username = username
-	join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
-		spawner_component_path
+	join_payload.spawn = EntitySpawnPolicy.from_scene_node_path(
+		entity_path,
 	).to_dict()
 
 	client.request_join_player.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
-		join_payload.serialize()
+		join_payload.serialize(),
 	)
 
-	var scene_name: StringName = spawner_component_path.get_scene_name()
+	var scene_name: StringName = entity_path.get_scene_name()
 	var scene := scene_on_server(scene_name)
 	var player_name := player_name_for(client)
 	var player_path := NodePath(String(player_name))
@@ -394,42 +367,54 @@ func join_player(
 	return scene.level.get_node_or_null(player_path)
 
 
-## Builds a [JoinPayload] for harness driven session entry.
-##
-## Leave [param level_scene_path] and [param spawner_node_path] empty for
-## sceneless joins that should not spawn a player.
-func make_join_payload(
-	username: String,
-	level_scene_path: String = "",
-	spawner_node_path: String = "",
+## Builds a [JoinPayload] that accepts a player without spawning a node.
+func make_sceneless_payload(username: String) -> JoinPayload:
+	return _loopback.build_join_payload(username)
+
+
+## Builds a [JoinPayload] that spawns [param username] at
+## [param spawner_node_path].
+func make_spawn_payload(
+		username: String,
+		level_scene_path: String,
+		spawner_node_path: String,
 ) -> JoinPayload:
-	var join_payload := JoinPayload.new()
-	join_payload.username = username
+	var entity_path := SceneNodePath.new()
+	entity_path.scene_path = level_scene_path
+	entity_path.node_path = spawner_node_path
+	return _loopback.build_join_payload(username, entity_path)
+
+
+## Builds a [JoinPayload] for harness driven session entry.
+func make_join_payload(
+		username: String,
+		level_scene_path: String = "",
+		spawner_node_path: String = "",
+) -> JoinPayload:
 	if not level_scene_path.is_empty() and not spawner_node_path.is_empty():
-		var spawner_component_path := SceneNodePath.new()
-		spawner_component_path.scene_path = level_scene_path
-		spawner_component_path.node_path = spawner_node_path
-		join_payload.spawn = SpawnerComponentPolicy.from_scene_node_path(
-			spawner_component_path
-		).to_dict()
-	return join_payload
+		return make_spawn_payload(username, level_scene_path, spawner_node_path)
+	return make_sceneless_payload(username)
 
 
 ## Creates a standalone listen server and connects its local player.
 func add_listen_server(
-	join_payload: JoinPayload,
-	auth_provider: NetwAuthProvider = null,
+		join_payload: JoinPayload,
+		auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
-	var tree := _create_player_tree("HarnessListenServer")
-	tree.desired_role = MultiplayerTree.Role.LISTEN_SERVER
+	var tree := _make_service_tree(
+		MultiplayerTree.Role.LISTEN_SERVER,
+		"HarnessListenServer",
+		false,
+	)
 	tree.auth_provider = auth_provider
-	var target := JoinTarget.new()
-	target.backend = tree.backend
-	target.address = tree.backend.get_join_address()
-	var err: Error = await tree.join_or_host(target, join_payload)
+	var err: Error = await _loopback.connect_tree(
+		tree,
+		NetwHarnessSession.Entry.JOIN_OR_HOST,
+		join_payload,
+	)
 	assert(
 		err == OK,
-		"listen-server join_or_host() failed: %s" % error_string(err)
+		"listen-server join_or_host() failed: %s" % error_string(err),
 	)
 	return tree
 
@@ -437,31 +422,36 @@ func add_listen_server(
 ## Creates a client tree that joins the harness server through
 ## [method MultiplayerTree.join_or_host].
 func add_connect_player(
-	join_payload: JoinPayload,
-	auth_provider: NetwAuthProvider = null,
+		join_payload: JoinPayload,
+		auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
 	var tree := await create_connect_player_tree(
 		"HarnessConnectPlayer",
-		auth_provider
+		auth_provider,
 	)
-	var target := JoinTarget.new()
-	target.backend = tree.backend
-	target.address = tree.backend.get_join_address()
-	var err: Error = await tree.join_or_host(target, join_payload)
+	var err: Error = await _loopback.connect_tree(
+		tree,
+		NetwHarnessSession.Entry.JOIN_OR_HOST,
+		join_payload,
+	)
 	assert(
 		err == OK,
-		"join_or_host() failed: %s" % error_string(err)
+		"join_or_host() failed: %s" % error_string(err),
 	)
 	return tree
 
 
 ## Creates a client tree wired to the harness server without connecting it.
 func create_connect_player_tree(
-	tree_name: String = "HarnessConnectPlayer",
-	auth_provider: NetwAuthProvider = null,
+		tree_name: String = "HarnessConnectPlayer",
+		auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
 	await _ensure_server_hosted()
-	var tree := _create_player_tree(tree_name, _session)
+	var tree := _make_service_tree(
+		MultiplayerTree.Role.CLIENT,
+		tree_name,
+		true,
+	)
 	tree.auth_provider = auth_provider
 	return tree
 
@@ -469,12 +459,20 @@ func create_connect_player_tree(
 ## Creates a standalone player host through
 ## [method MultiplayerTree.host_player].
 func add_host_player(
-	join_payload: JoinPayload,
-	auth_provider: NetwAuthProvider = null,
+		join_payload: JoinPayload,
+		auth_provider: NetwAuthProvider = null,
 ) -> MultiplayerTree:
-	var tree := _create_player_tree("HarnessHostPlayer")
+	var tree := _make_service_tree(
+		MultiplayerTree.Role.CLIENT,
+		"HarnessHostPlayer",
+		false,
+	)
 	tree.auth_provider = auth_provider
-	var err: Error = await tree.host_player(join_payload)
+	var err: Error = await _loopback.connect_tree(
+		tree,
+		NetwHarnessSession.Entry.HOST_PLAYER,
+		join_payload,
+	)
 	assert(err == OK, "host_player() failed: %s" % error_string(err))
 	return tree
 
@@ -486,12 +484,12 @@ func add_host_player(
 func register_built_scene(packed: PackedScene) -> void:
 	assert(
 		_session != null,
-		"register_built_scene: Harness must be set up."
+		"register_built_scene: Harness must be set up.",
 	)
 	var path := packed.resource_path
 	assert(
 		not path.is_empty(),
-		"register_built_scene: PackedScene must have a valid resource path."
+		"register_built_scene: PackedScene must have a valid resource path.",
 	)
 	var server_sm := server_scene_manager()
 	if server_sm:
@@ -507,9 +505,9 @@ func register_built_scene(packed: PackedScene) -> void:
 ## Accepts [param scene_or_builder] which can be a [PackedScene], a live [Node],
 ## or a builder implementing [method build]. Returns the spawned player node.
 func spawn_player(
-	client: MultiplayerTree,
-	scene_or_builder: Variant,
-	scene_name: StringName = "",
+		client: MultiplayerTree,
+		scene_or_builder: Variant,
+		scene_name: StringName = "",
 ) -> Node:
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var username: String = client.get_meta(&"_harness_username")
@@ -523,7 +521,7 @@ func spawn_player(
 	else:
 		assert(
 			false,
-			"spawn_player: expected PackedScene, Node, or builder."
+			"spawn_player: expected PackedScene, Node, or builder.",
 		)
 		return null
 	NetwEntity.bundle(player, peer_id, StringName(username))
@@ -537,7 +535,6 @@ func player_name_for(client: MultiplayerTree) -> StringName:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	return NetwEntity.format_name(username, peer_id)
-
 
 #endregion
 
@@ -561,7 +558,7 @@ func register_spawnable_scene(scene: Variant) -> void:
 	else:
 		assert(
 			false,
-			"register_spawnable_scene: expected PackedScene or String."
+			"register_spawnable_scene: expected PackedScene or String.",
 		)
 		return
 
@@ -582,14 +579,13 @@ func register_spawnable_scene(scene: Variant) -> void:
 ## )
 ## [/codeblock]
 func set_scene_policy(
-	scene_name: StringName,
-	load_mode: MultiplayerSceneManager.LoadMode,
-	empty_action: MultiplayerSceneManager.EmptyAction,
+		scene_name: StringName,
+		load_mode: MultiplayerSceneManager.LoadMode,
+		empty_action: MultiplayerSceneManager.EmptyAction,
 ) -> void:
 	var sm := server_scene_manager()
 	assert(sm, "set_scene_policy: server has no MultiplayerSceneManager.")
 	sm.set_scene_lifecycle_policy(scene_name, load_mode, empty_action)
-
 
 #endregion
 
@@ -607,8 +603,8 @@ func scene_on_server(scene_name: StringName = "") -> MultiplayerScene:
 
 ## Waits for [param scene_name] to become active on [param client].
 func wait_for_scene(
-	client: MultiplayerTree,
-	scene_name: StringName,
+		client: MultiplayerTree,
+		scene_name: StringName,
 ) -> MultiplayerScene:
 	var sm := scene_manager_for(client)
 	var timed_out := await _wait_until(
@@ -624,9 +620,9 @@ func wait_for_scene(
 ##
 ## When [param player_name] is empty, returns the first tracked player.
 func wait_for_player(
-	client: MultiplayerTree,
-	scene_name: StringName,
-	player_name: StringName = &"",
+		client: MultiplayerTree,
+		scene_name: StringName,
+		player_name: StringName = &"",
 ) -> Node:
 	var scene := await wait_for_scene(client, scene_name)
 	if not scene:
@@ -642,8 +638,8 @@ func wait_for_player(
 		return find_player.call()
 
 	var label := (
-		"player in scene '%s'" % scene_name if player_name.is_empty()
-		else "player '%s' in scene '%s'" % [player_name, scene_name]
+			"player in scene '%s'" % scene_name if player_name.is_empty()
+			else "player '%s' in scene '%s'" % [player_name, scene_name]
 	)
 	var timed_out := await _wait_until(
 		func() -> bool: return find_player.call() != null,
@@ -653,40 +649,30 @@ func wait_for_player(
 		return null
 	return find_player.call()
 
-
 #endregion
 
 #region Internals
 
-# Routes predicate waits through awaiter.
+# Routes predicate waits through the shared waiter.
 func _wait_until(
-	cond: Callable,
-	label: String,
-	timeout: float = DEFAULT_TIMEOUT,
+		cond: Callable,
+		label: String,
+		timeout: float = DEFAULT_TIMEOUT,
 ) -> bool:
-	if cond.call():
-		return false
-	_wait_generation += 1
-	_poll_until(cond, _wait_generation)
-	var timed_out: bool = await awaiter.call(_wait_satisfied, timeout, label)
-	if timed_out:
-		# Invalidates the poll loop so it does not emit late.
-		_wait_generation += 1
-	return timed_out
+	return await _waiter.until(cond, label, timeout)
 
 
-func _poll_until(cond: Callable, generation: int) -> void:
-	while is_inside_tree() and generation == _wait_generation:
-		await get_tree().process_frame
-		if cond.call():
-			_wait_satisfied.emit()
-			return
+func _default_reporter(label: String, timeout: float) -> void:
+	push_error("Timed out waiting for '%s' after %.2fs." % [label, timeout])
 
 
 func _ensure_server_hosted() -> void:
 	if _server.is_online():
 		return
-	var host_err: Error = await _server.host()
+	var host_err: Error = await _loopback.connect_tree(
+		_server,
+		NetwHarnessSession.Entry.HOST,
+	)
 	assert(host_err == OK, "Server host() failed: %s" % error_string(host_err))
 
 
@@ -704,7 +690,7 @@ func _instantiate_scene_manager() -> MultiplayerSceneManager:
 # Installs the default spawn policy unless the test supplied one.
 func _ensure_default_spawn_policy(tree: MultiplayerTree) -> void:
 	if tree.spawn_policy == null:
-		tree.spawn_policy = SpawnerComponentPolicy.new()
+		tree.spawn_policy = EntitySpawnPolicy.new()
 
 
 # Mirrors server scene config onto a new client manager.
@@ -713,9 +699,6 @@ func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
 	if not server_sm:
 		return
 	var paths: Array[String] = []
-	for path: String in server_sm.scene_paths:
-		if not paths.has(path):
-			paths.append(path)
 	for path: String in server_sm.get_configured_paths():
 		if not paths.has(path):
 			paths.append(path)
@@ -723,29 +706,34 @@ func _configure_client_scene_manager(sm: MultiplayerSceneManager) -> void:
 		sm.add_spawnable_scene(path)
 
 
-func _create_player_tree(
-	tree_name: String,
-	session: LocalLoopbackSession = null,
+func _make_service_tree(
+		role: MultiplayerTree.Role,
+		tree_name: String,
+		use_shared_session: bool = true,
 ) -> MultiplayerTree:
 	var tree := MultiplayerTree.new()
 	tree.name = tree_name
-	tree.auto_host_headless = false
+	tree.desired_role = role
 
 	if _world_scene:
 		tree.add_child(_world_scene.instantiate())
 
 	add_child(tree)
 
-	var backend := LocalLoopbackBackend.new()
-	backend.session = session if session else LocalLoopbackSession.new()
-	if not session:
+	if use_shared_session:
+		_loopback.adopt_tree(tree, role)
+	else:
+		tree.auto_host_headless = false
+		var backend := LocalLoopbackBackend.new()
+		backend.session = LocalLoopbackSession.new()
 		_extra_sessions.append(backend.session)
-	tree.backend = backend
+		tree.backend = backend
 
 	if _scene_manager_src:
 		var sm := _instantiate_scene_manager()
 		if sm:
-			_configure_client_scene_manager(sm)
+			if role != MultiplayerTree.Role.DEDICATED_SERVER:
+				_configure_client_scene_manager(sm)
 			tree.add_child(sm)
 			_ensure_default_spawn_policy(tree)
 
@@ -755,16 +743,16 @@ func _create_player_tree(
 	return tree
 
 
-func _ensure_clock(mt: MultiplayerTree) -> NetworkClock:
-	var existing := mt.get_service(NetworkClock) as NetworkClock
+func _ensure_clock(mt: MultiplayerTree) -> MultiplayerClock:
+	var existing := mt.get_service(MultiplayerClock) as MultiplayerClock
 	if existing:
 		return existing
 	return _add_clock_node(mt)
 
 
-func _add_clock_node(mt: MultiplayerTree) -> NetworkClock:
-	var clock := NetworkClock.new()
-	clock.name = "NetworkClock"
+func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
+	var clock := MultiplayerClock.new()
+	clock.name = "MultiplayerClock"
 	clock.tickrate = _clock_tickrate
 	clock.display_offset = _clock_display_offset
 	mt.add_child(clock)
@@ -772,30 +760,15 @@ func _add_clock_node(mt: MultiplayerTree) -> NetworkClock:
 
 
 func _setup_server() -> void:
-	_server = MultiplayerTree.new()
-	_server.name = "HarnessServer"
-	_server.desired_role = MultiplayerTree.Role.DEDICATED_SERVER
-	_server.auto_host_headless = false
-
-	if _world_scene:
-		_server.add_child(_world_scene.instantiate())
-
-	add_child(_server)
-
-	var backend := LocalLoopbackBackend.new()
-	backend.session = _session
-	_server.backend = backend
-
-	if _scene_manager_src:
-		var sm := _instantiate_scene_manager()
-		if sm:
-			_server.add_child(sm)
-			_ensure_default_spawn_policy(_server)
+	_server = _make_service_tree(
+		MultiplayerTree.Role.DEDICATED_SERVER,
+		"HarnessServer",
+	)
 
 
 func _find_scene_player(
-	scene: MultiplayerScene,
-	player_name: StringName,
+		scene: MultiplayerScene,
+		player_name: StringName,
 ) -> Node:
 	if not scene:
 		return null

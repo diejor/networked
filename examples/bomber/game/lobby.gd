@@ -2,13 +2,11 @@
 ##
 ## This script is the bridge: it owns the state swap and coordinates with
 ## [ConnectBrowser] to enter the session.
-extends Control
-
+extends CanvasLayer
 
 enum State { PRE_LOBBY, IN_LOBBY }
 
 @warning_ignore("unused_private_class_variable")
-@onready var _title: Label = %TitleLabel
 @onready var _status: Label = %StatusLabel
 @onready var _browser: ConnectBrowser = %ConnectBrowser
 @onready var _in_lobby: Control = %InLobby
@@ -27,18 +25,12 @@ var _pending_title: String = ""
 func _ready() -> void:
 	_connect = _ctx.connect
 
-	var steam_dir := _ctx.services.get_service(SteamLobbyDirectory)
-	if steam_dir:
-		_directory = steam_dir
-		_connect.register_directory(&"steam", steam_dir)
+	# The directory is auto-discovered by ConnectSession; the lobby only needs
+	# the handle for the in-lobby member list.
+	_directory = _ctx.services.get_service(SteamLobbyDirectory)
 
-	_connect.load_server_list()
-
-	var ws_backend := WebSocketBackend.new()
-	ws_backend.port = 10567
-	var steam_backend := SteamBackend.new()
-	_browser.backend_templates = [ws_backend, steam_backend]
-	_browser.tree = multiplayer_tree
+	# Backends and templates are configured on the ConnectBrowser in lobby.tscn.
+	_browser.bind(_connect)
 	_connect.session_entered.connect(_on_browser_session_entered)
 
 	_in_lobby.setup(_directory, _ctx)
@@ -50,6 +42,8 @@ func _ready() -> void:
 	gamestate.game_ended.connect(_on_game_ended)
 	gamestate.game_error.connect(_on_game_error)
 	gamestate.match_started.connect(_on_match_started)
+
+	_status.visible = false
 
 	_set_state(State.PRE_LOBBY)
 
@@ -65,13 +59,13 @@ func _on_browser_session_entered() -> void:
 		if multiplayer_tree.role == MultiplayerTree.Role.LISTEN_SERVER:
 			if multiplayer_tree.backend is SteamBackend:
 				_pending_title = "Lobby %s (you)" % \
-					multiplayer_tree.backend.get_join_address()
+						multiplayer_tree.backend.get_join_address()
 			else:
 				_pending_title = "Direct Host (you)"
 		else:
 			if multiplayer_tree.backend is SteamBackend:
 				_pending_title = "Lobby %s" % \
-					multiplayer_tree.backend.get_join_address()
+						multiplayer_tree.backend.get_join_address()
 			else:
 				_pending_title = "Direct Client"
 

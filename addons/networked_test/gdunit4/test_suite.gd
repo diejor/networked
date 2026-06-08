@@ -12,18 +12,7 @@ const _GdUnitAwaiter := preload(
 )
 
 var _netw_managed_harness: NetwTestHarness
-
-
-
-## Awaits a condition to become true within [param timeout] seconds.
-func wait_until(condition: Callable, timeout: float = DEFAULT_TIMEOUT) -> void:
-	var timeout_timer := get_tree().create_timer(timeout)
-	while not condition.call():
-		await get_tree().process_frame
-		if timeout_timer.time_left <= 0:
-			fail(
-				"Timed out waiting for condition after %.1f seconds." % timeout)
-			return
+var _netw_managed_game_harness: NetwGameHarness
 
 
 ## Factory that creates a default [MultiplayerSceneManager] for tests.
@@ -51,7 +40,7 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 
 ## Builds, parents, and auto-tears down a [NetwTestHarness].
 ##
-## The returned harness has the GdUnit4 awaiter installed. Always call
+## The returned harness has the GdUnit4 reporter installed. Always call
 ## [code]await harness.setup(...)[/code] before driving multiplayer flows.
 ## A test case may create one managed harness; [method after_test] tears it
 ## down automatically.
@@ -64,7 +53,7 @@ static func drain_frames(tree: SceneTree, count: int = 3) -> void:
 func make_harness() -> NetwTestHarness:
 	assert(
 		_netw_managed_harness == null,
-		"make_harness: harness already created."
+		"make_harness: harness already created.",
 	)
 	_netw_managed_harness = make_unmanaged_harness()
 	return _netw_managed_harness
@@ -76,7 +65,32 @@ func make_harness() -> NetwTestHarness:
 ## explicitly call [code]await harness.teardown()[/code].
 func make_unmanaged_harness() -> NetwTestHarness:
 	var harness := NetwTestHarness.new()
-	harness.awaiter = _GdUnitAwaiter.get_awaiter()
+	harness.reporter = _GdUnitAwaiter.get_reporter()
+	add_child(harness)
+	auto_free(harness)
+	return harness
+
+
+## Builds, parents, and auto-tears down a [NetwGameHarness].
+##
+## The returned harness has the GdUnit4 reporter installed. Always call
+## [code]await game.setup()[/code] before adding peers.
+func make_game_harness(scene: PackedScene) -> NetwGameHarness:
+	assert(
+		_netw_managed_game_harness == null,
+		"make_game_harness: harness already created.",
+	)
+	_netw_managed_game_harness = make_unmanaged_game_harness(scene)
+	return _netw_managed_game_harness
+
+
+## Builds, parents, and auto-frees an unmanaged [NetwGameHarness].
+##
+## Use this only for additional game harnesses inside a test case. The caller
+## must explicitly call [code]await harness.teardown()[/code].
+func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
+	var harness := NetwGameHarness.new(scene)
+	harness.reporter = _GdUnitAwaiter.get_reporter()
 	add_child(harness)
 	auto_free(harness)
 	return harness
@@ -131,4 +145,7 @@ func after_test() -> void:
 	if is_instance_valid(_netw_managed_harness):
 		await _netw_managed_harness.teardown()
 	_netw_managed_harness = null
+	if is_instance_valid(_netw_managed_game_harness):
+		await _netw_managed_game_harness.teardown()
+	_netw_managed_game_harness = null
 	clean_temp_dir()

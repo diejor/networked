@@ -53,15 +53,18 @@ var _editor_property_warnings: String = ""
 
 
 static func _get_orphan_root(node: Node) -> Node:
-	if not node: return null
+	if not node:
+		return null
 	var current := node
 	while current.get_parent() != null:
 		current = current.get_parent()
 	return current
 
+
 func _init(formatted_path: String = "") -> void:
 	if not formatted_path.is_empty():
 		parse(formatted_path)
+
 
 ## Parses a formatted string (e.g., [code]scene_path::node_path[/code]) and assigns the values.
 func parse(formatted_path: String) -> void:
@@ -102,7 +105,8 @@ func is_valid() -> bool:
 ## You are responsible for adding [member Result.root] to the tree and managing its lifecycle.
 func instantiate(edit_state: PackedScene.GenEditState = 0) -> Result:
 	var target_node := _instantiate_and_get(edit_state)
-	if not target_node: return null
+	if not target_node:
+		return null
 
 	return Result.new(_get_orphan_root(target_node), target_node)
 
@@ -111,7 +115,8 @@ func instantiate(edit_state: PackedScene.GenEditState = 0) -> Result:
 ## failure without asserting.
 func instantiate_or_null(edit_state: PackedScene.GenEditState = 0) -> Result:
 	var target_node := _instantiate_and_get_or_null(edit_state)
-	if not target_node: return null
+	if not target_node:
+		return null
 
 	return Result.new(_get_orphan_root(target_node), target_node)
 
@@ -123,6 +128,7 @@ class Result extends RefCounted:
 	var root: Node
 	## The specific node referenced by the [member SceneNodePath.node_path].
 	var node: Node
+
 
 	func _init(p_root: Node, p_node: Node) -> void:
 		root = p_root
@@ -142,7 +148,6 @@ func extract(edit_state: PackedScene.GenEditState = 0) -> Node:
 func extract_or_null(edit_state: PackedScene.GenEditState = 0) -> Node:
 	var target := _instantiate_and_get_or_null(edit_state)
 	return _perform_extraction(target) if target else null
-
 
 
 ## Returns the absolute file path and node path combined (e.g., [code]"res://scene.tscn::Node"[/code]).
@@ -228,7 +233,7 @@ func _instantiate_and_get(edit_state: PackedScene.GenEditState = 0) -> Node:
 	var scene_instance: Node = packed_scene.instantiate(edit_state)
 	var target_path := NodePath(node_path)
 	var target_node: Node
-	
+
 	if target_path == NodePath(".") or node_path == String(scene_instance.name):
 		target_node = scene_instance
 	else:
@@ -257,7 +262,7 @@ func _instantiate_and_get_or_null(edit_state: PackedScene.GenEditState = 0) -> N
 	var scene_instance: Node = packed_scene.instantiate(edit_state)
 	var target_path := NodePath(node_path)
 	var target_node: Node
-	
+
 	if target_path == NodePath(".") or node_path == String(scene_instance.name):
 		target_node = scene_instance
 	else:
@@ -271,15 +276,16 @@ func _instantiate_and_get_or_null(edit_state: PackedScene.GenEditState = 0) -> N
 
 
 func _perform_extraction(target: Node) -> Node:
-	if not target: return null
-	
+	if not target:
+		return null
+
 	var root := _get_orphan_root(target)
-	
+
 	if root != target:
 		target.get_parent().remove_child(target)
 		root.queue_free()
 		_clear_ownership(target)
-		
+
 	return target
 
 
@@ -290,7 +296,7 @@ func _clear_ownership(node: Node) -> void:
 
 
 static func _safe_resolve_path(path: String) -> String:
-	if path.is_empty(): 
+	if path.is_empty():
 		return ""
 	if path.begins_with("uid://"):
 		var id := ResourceUID.text_to_id(path)
@@ -313,9 +319,10 @@ static func _safe_resolve_path(path: String) -> String:
 func peek() -> StateInspector:
 	var root_state := _cache.get_valid_state(scene_path)
 	var result := _cache.resolve_deep_node(root_state, node_path)
-	
+
 	# result[0] is the SceneState where it was finally found, result[1] is the index
 	return StateInspector.new(result[0], result[1])
+
 
 ## A transient data object that provides read-only access to a specific node's [SceneState].
 ##
@@ -333,18 +340,22 @@ class StateInspector:
 	var _state: SceneState
 	var _idx: int
 
+
 	func _init(state: SceneState, idx: int) -> void:
 		_state = state
 		_idx = idx
+
 
 	## Returns [code]true[/code] if the target node was found anywhere within the scene file 
 	## or its nested sub-scenes.
 	func is_valid() -> bool:
 		return _state != null and _idx != -1
 
+
 	## Returns the class type of the target node (e.g., [code]&"Area3D"[/code]).
 	func get_node_type() -> StringName:
 		return _state.get_node_type(_idx) if is_valid() else &""
+
 
 	## Returns a [Dictionary] of all exported or overridden property values on the target node.
 	## [codeblock]
@@ -353,11 +364,12 @@ class StateInspector:
 	##     print("Area3D monitoring: ", props["monitoring"])
 	## [/codeblock]
 	func get_properties() -> Dictionary:
-		var props := {}
+		var props := { }
 		if is_valid():
 			for p in _state.get_node_property_count(_idx):
 				props[_state.get_node_property_name(_idx, p)] = _state.get_node_property_value(_idx, p)
 		return props
+
 
 	## Returns a specific property value from the scene file, or [param default] if not found.
 	## [codeblock]
@@ -370,6 +382,7 @@ class StateInspector:
 					return _state.get_node_property_value(_idx, p)
 		return default
 
+
 	## Returns a [PackedStringArray] of the groups assigned to the node within the scene file.
 	## [codeblock]
 	## if "enemies" in path.peek().get_groups():
@@ -378,23 +391,28 @@ class StateInspector:
 	func get_groups() -> PackedStringArray:
 		return _state.get_node_groups(_idx) if is_valid() else PackedStringArray()
 
+
 	## Returns the [PackedScene] for the node if it is a scene instance, or [code]null[/code] if not.
 	func get_node_instance() -> PackedScene:
 		return _state.get_node_instance(_idx) if is_valid() else null
+
 
 	## Returns [code]true[/code] if the target node is an [InstancePlaceholder].
 	func is_instance_placeholder() -> bool:
 		return _state.is_node_instance_placeholder(_idx) if is_valid() else false
 
+
 	## Returns the path to the represented scene file if the target node is an [InstancePlaceholder].
 	func get_instance_placeholder() -> String:
 		return _state.get_node_instance_placeholder(_idx) if is_valid() else ""
+
 
 	## Returns the path to the owner of the target node, relative to the root node of the scene file.
 	## [br][br]
 	## [b]Note:[/b] For most nodes, this will be [code].[/code] as they are owned by the scene root.
 	func get_owner_path() -> NodePath:
 		return _state.get_node_owner_path(_idx) if is_valid() else NodePath()
+
 
 	## Returns the node's index, which is its position relative to its siblings.
 	## [br][br]
@@ -422,19 +440,24 @@ class StateInspector:
 	func get_node_index() -> int:
 		return _state.get_node_index(_idx) if is_valid() else -1
 
+
 	## Returns the [SceneState] of the scene that this scene inherits from.
 	func get_base_scene_state() -> SceneState:
 		return _state.get_base_scene_state() if _state else null
 
-	## Returns an [Array] of [Dictionary] items representing all signal connections originating from this node.
-	## [br][br]
-	## Each dictionary contains the following keys:
-	## [br]- [code]"signal"[/code]: The [StringName] of the signal.
-	## [br]- [code]"method"[/code]: The [StringName] of the connected method.
-	## [br]- [code]"target"[/code]: The [NodePath] to the receiving node.
-	## [br]- [code]"binds"[/code]: An [Array] of bound parameters.
-	## [br]- [code]"unbinds"[/code]: An [code]int[/code] representing the number of unbound parameters.
-	## [br]- [code]"flags"[/code]: An [code]int[/code] representing the connection flags (see [enum Object.ConnectFlags]).
+
+	## Returns an [Array] of [Dictionary] items representing all signal
+	## connections originating from this node:
+	## [codeblock]
+	## Array[Dictionary]
+	##  ┖╴{ }
+	##     ┠╴signal (StringName)               # The signal name
+	##     ┠╴method (StringName)               # The connected method name
+	##     ┠╴target (NodePath)                 # Path to the receiving node
+	##     ┠╴binds (Array)                     # Bound parameters
+	##     ┠╴unbinds (int)                     # Number of unbound parameters
+	##     ┖╴flags (int)                       # Connection flags (ConnectFlags)
+	## [/codeblock]
 	## [codeblock]
 	## for connection in path.peek().get_connections():
 	##     print("Signal: %s -> Method: %s" % [connection.signal, connection.method])
@@ -443,50 +466,61 @@ class StateInspector:
 		var connections: Array[Dictionary] = []
 		if is_valid():
 			var clean_target := String(_state.get_node_path(_idx)).trim_prefix("./")
-			if _idx == 0 or clean_target.is_empty(): clean_target = "."
-			
+			if _idx == 0 or clean_target.is_empty():
+				clean_target = "."
+
 			for c in _state.get_connection_count():
 				var raw_source := String(_state.get_connection_source(c))
 				var clean_source := raw_source.trim_prefix("./")
-				if clean_source.is_empty(): clean_source = "."
-				
+				if clean_source.is_empty():
+					clean_source = "."
+
 				if clean_source == clean_target:
-					connections.append({
-						"signal": _state.get_connection_signal(c),
-						"method": _state.get_connection_method(c),
-						"target": _state.get_connection_target(c),
-						"binds": _state.get_connection_binds(c),
-						"unbinds": _state.get_connection_unbinds(c),
-						"flags": _state.get_connection_flags(c)
-					})
+					connections.append(
+						{
+							"signal": _state.get_connection_signal(c),
+							"method": _state.get_connection_method(c),
+							"target": _state.get_connection_target(c),
+							"binds": _state.get_connection_binds(c),
+							"unbinds": _state.get_connection_unbinds(c),
+							"flags": _state.get_connection_flags(c),
+						},
+					)
 		return connections
+
 
 ## Internal helper to handle heavy SceneState lookups, timestamp caching, and deep sub-scene recursion.
 class _StateCache:
 	var state: SceneState
 	var modified_time: int = 0
 
+
 	func get_valid_state(raw_path: String) -> SceneState:
-		if raw_path.is_empty(): return null
+		if raw_path.is_empty():
+			return null
 		var real_path := SceneNodePath._safe_resolve_path(raw_path)
-		if real_path.is_empty() or not FileAccess.file_exists(real_path): return null
+		if real_path.is_empty() or not FileAccess.file_exists(real_path):
+			return null
 
 		var current_time := FileAccess.get_modified_time(real_path)
-		if state and modified_time == current_time: return state
+		if state and modified_time == current_time:
+			return state
 
 		var packed := load(real_path) as PackedScene
-		if not packed: return null
+		if not packed:
+			return null
 
 		state = packed.get_state()
 		modified_time = current_time
 		return state
 
+
 	## Recursively searches through SceneStates and Instanced Sub-Scenes to find the target node.
 	## Returns an Array: [SceneState (where the node was found), int (the index)]
 	func resolve_deep_node(root_state: SceneState, target_path: String) -> Array:
-		if not root_state or target_path.is_empty(): 
+		if not root_state or target_path.is_empty():
 			return [null, -1]
-		
+
 		var direct_idx = _find_idx_in_state(root_state, target_path)
 		if direct_idx != -1:
 			return [root_state, direct_idx]
@@ -495,31 +529,34 @@ class _StateCache:
 			var inst: PackedScene = root_state.get_node_instance(i)
 			if inst:
 				var inst_path := String(root_state.get_node_path(i)).trim_prefix("./")
-				if inst_path == ".": continue
-				
+				if inst_path == ".":
+					continue
+
 				# Check if our target path goes THROUGH this instance's path
 				var prefix := inst_path + "/"
 				if target_path.begins_with(prefix):
 					var remainder := target_path.trim_prefix(prefix)
 					var sub_state := inst.get_state()
-					
+
 					var result = resolve_deep_node(sub_state, remainder)
 					if result[1] != -1:
 						return result
-		
+
 		return [null, -1]
+
 
 	func _find_idx_in_state(target_state: SceneState, current_path: String) -> int:
 		var exact_np := NodePath(current_path)
 		var relative_np := NodePath("./" + current_path)
-		
+
 		if current_path == "." or current_path == String(target_state.get_node_name(0)):
 			return 0
-			
+
 		for i in target_state.get_node_count():
 			var state_path := target_state.get_node_path(i)
 			if state_path == exact_np or state_path == relative_np:
 				return i
 		return -1
+
 
 var _cache := _StateCache.new()

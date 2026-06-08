@@ -4,9 +4,13 @@
 ## [ServerInfo] (on [constant Status.OK]) or a categorical failure reason.
 ## Use the static helpers — [method ok], [method unreachable], [method timeout],
 ## [method unsupported], [method busy], [method error] — to build instances.
+##
+## This describes whether a server is reachable, never whether the transport can
+## run on this platform. That platform gate is [method BackendPeer.is_available].
+## [constant Status.UNSUPPORTED] means the backend skips probing, not that it is
+## unusable here.
 class_name ServerInfoResult
 extends RefCounted
-
 
 ## Categorical outcome of the probe.
 enum Status {
@@ -25,6 +29,10 @@ enum Status {
 	## The probe itself failed (socket error, invalid address, encoder
 	## mismatch, etc.).
 	ERROR,
+	## The server runs a different game build ([member MultiplayerTree.app_id]),
+	## so joining would be rejected at the auth handshake. Carries [member info]
+	## when discovery provided it.
+	INCOMPATIBLE,
 }
 
 var status: Status = Status.UNSUPPORTED
@@ -75,6 +83,19 @@ static func error(message: String = "") -> ServerInfoResult:
 	return r
 
 
+## Builds an incompatible result, keeping [param info] when discovery already
+## provided player counts so the row can still render them.
+static func incompatible(
+		info: ServerInfo = null,
+		message: String = "",
+) -> ServerInfoResult:
+	var r := ServerInfoResult.new()
+	r.status = Status.INCOMPATIBLE
+	r.info = info
+	r.message = message
+	return r
+
+
 func is_ok() -> bool:
 	return status == Status.OK
 
@@ -83,7 +104,8 @@ func _to_string() -> String:
 	match status:
 		Status.OK:
 			return "ServerInfoResult(ok, %d players, %dms)" % [
-				info.players if info else 0, latency_ms,
+				info.players if info else 0,
+				latency_ms,
 			]
 		Status.UNREACHABLE:
 			return "ServerInfoResult(unreachable: %s)" % message
@@ -95,5 +117,7 @@ func _to_string() -> String:
 			return "ServerInfoResult(busy: %s)" % message
 		Status.ERROR:
 			return "ServerInfoResult(error: %s)" % message
+		Status.INCOMPATIBLE:
+			return "ServerInfoResult(incompatible)"
 		_:
 			return "ServerInfoResult(?)"

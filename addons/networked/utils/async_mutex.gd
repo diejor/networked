@@ -14,11 +14,13 @@ signal released
 
 var _held := false
 
+
 ## Acquires the lock, suspending the coroutine until it is available.
 func lock() -> void:
 	while _held:
 		await released
 	_held = true
+
 
 ## Releases the lock and wakes one waiting coroutine.
 func unlock() -> void:
@@ -26,6 +28,7 @@ func unlock() -> void:
 		return
 	_held = false
 	released.emit()
+
 
 ## Returns [code]true[/code] if the lock is currently held.
 func is_locked() -> bool:

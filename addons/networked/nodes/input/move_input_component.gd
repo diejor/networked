@@ -21,14 +21,14 @@ var move_down: StringName = "move_down"
 @export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
 var sprint: StringName = "sprint"
 
+
 ## Returns all tracked action names by scanning [code]@export_custom[/code] properties with hint [code]"input"[/code].
 func get_inputs() -> Array:
 	var filter := func(prop: Dictionary) -> bool:
 		return prop.hint_string == &"input"
-	var map := func (prop: Dictionary) -> StringName:
+	var map := func(prop: Dictionary) -> StringName:
 		return prop.name
 	return get_property_list().filter(filter).map(map)
-
 
 ## Normalized movement direction derived from the four directional actions. Updated each physics frame.
 var direction: Vector2 = Vector2.ZERO
@@ -41,6 +41,7 @@ func _physics_process(_delta: float) -> void:
 		move_left,
 		move_right,
 		move_up,
-		move_down)
-	
+		move_down,
+	)
+
 	sprinting = is_down(sprint)

@@ -25,13 +25,13 @@ var _clear_btn: Button
 var _entries: Array = []
 
 # cid -> group TreeItem. Each unique CID gets a collapsible "Validation Cycle" header.
-var _cid_groups: Dictionary[String, TreeItem] = {}
+var _cid_groups: Dictionary[String, TreeItem] = { }
 
 # "cid:trigger" -> top-level row TreeItem. Used for merging related errors.
-var _top_rows: Dictionary[String, TreeItem] = {}
+var _top_rows: Dictionary[String, TreeItem] = { }
 
 # "cid:trigger" -> "Intercepted Error" parent TreeItem.
-var _error_parents: Dictionary[String, TreeItem] = {}
+var _error_parents: Dictionary[String, TreeItem] = { }
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -56,9 +56,10 @@ func _ready() -> void:
 	_break_btn.text = "Break"
 	_break_btn.tooltip_text = "Pause the game the moment a crash manifest arrives for this peer."
 	_break_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_break_btn.toggled.connect(func(enabled: bool) -> void:
-		if on_auto_break_changed.is_valid():
-			on_auto_break_changed.call(enabled)
+	_break_btn.toggled.connect(
+		func(enabled: bool) -> void:
+			if on_auto_break_changed.is_valid():
+				on_auto_break_changed.call(enabled)
 	)
 	toolbar.add_child(_break_btn)
 
@@ -79,7 +80,7 @@ func _ready() -> void:
 	add_child(_tree)
 
 	# Placeholder until first manifest arrives.
-	_tree.create_item()  # invisible root
+	_tree.create_item() # invisible root
 	var placeholder := _tree.create_item(_tree.get_root())
 	placeholder.set_text(0, "No crash manifest received yet.")
 	placeholder.set_custom_color(0, Color(0.5, 0.5, 0.5))
@@ -94,7 +95,7 @@ func clear() -> void:
 	_top_rows.clear()
 	_error_parents.clear()
 	_tree.clear()
-	_tree.create_item()  # re-create invisible root
+	_tree.create_item() # re-create invisible root
 
 	var placeholder := _tree.create_item(_tree.get_root())
 
@@ -107,6 +108,8 @@ func clear() -> void:
 
 
 var _is_remote: bool = false
+
+
 func set_peer_remote(remote: bool) -> void:
 	if _is_remote == remote:
 		return
@@ -198,7 +201,7 @@ func push_entry(entry: Dictionary) -> void:
 		tl_row.set_selectable(2, false)
 
 	# --- Network State --------------------------------------------------------
-	var net: Dictionary = entry.get("network_state", {})
+	var net: Dictionary = entry.get("network_state", { })
 	if not net.is_empty():
 		var ns_row := _tree.create_item(top)
 		var side: String = "Server" if net.get("is_server", false) else "Client"
@@ -227,7 +230,7 @@ func push_entry(entry: Dictionary) -> void:
 			pf_row.set_tooltip_text(0, pf.get("tooltip", ""))
 			var node_path: String = pf.get("path", "")
 			if not node_path.is_empty():
-				pf_row.set_metadata(0, {"node_path": node_path, "source_entry": entry})
+				pf_row.set_metadata(0, { "node_path": node_path, "source_entry": entry })
 			# Color by broadcast vs. actual race
 			if pf.get("broadcast", false):
 				pf_row.set_custom_color(0, Color(0.6, 0.6, 0.6))
@@ -253,7 +256,7 @@ func push_entry(entry: Dictionary) -> void:
 			tl_row.set_selectable(2, false)
 
 	# --- Node Snapshot --------------------------------------------------------
-	var snap: Dictionary = entry.get("node_snapshot", {})
+	var snap: Dictionary = entry.get("node_snapshot", { })
 	if not snap.is_empty():
 		var snap_parent := _tree.create_item(top)
 		snap_parent.set_text(0, "Node Snapshot  %s" % snap.get("node_name", "?"))
@@ -262,14 +265,14 @@ func push_entry(entry: Dictionary) -> void:
 		snap_parent.set_selectable(0, false)
 		snap_parent.set_selectable(1, false)
 		snap_parent.set_selectable(2, false)
-		var sync_props: Dictionary = snap.get("sync_properties", {})
+		var sync_props: Dictionary = snap.get("sync_properties", { })
 		for prop: String in sync_props:
 			var prop_row := _tree.create_item(snap_parent)
 			prop_row.set_text(0, "  %s = %s" % [prop, str(sync_props[prop])])
 			prop_row.set_selectable(0, false)
 			prop_row.set_selectable(1, false)
 			prop_row.set_selectable(2, false)
-		var debug_state: Dictionary = snap.get("debug_state", {})
+		var debug_state: Dictionary = snap.get("debug_state", { })
 		if not debug_state.is_empty():
 			var ds_row := _tree.create_item(snap_parent)
 			ds_row.set_text(0, "  debug_state: %s" % str(debug_state))
@@ -283,7 +286,6 @@ func push_entry(entry: Dictionary) -> void:
 	call_deferred("_scroll_to_bottom")
 
 
-
 func _append_error_lines(key: String, error_text: String) -> void:
 	var top: TreeItem = _top_rows[key]
 	if key not in _error_parents:
@@ -294,7 +296,7 @@ func _append_error_lines(key: String, error_text: String) -> void:
 		err_parent.set_selectable(1, false)
 		err_parent.set_selectable(2, false)
 		_error_parents[key] = err_parent
-	
+
 	var parent: TreeItem = _error_parents[key]
 	for line in error_text.split("\n"):
 		if line.strip_edges().is_empty():
@@ -311,15 +313,15 @@ func _scroll_to_bottom() -> void:
 	var root: TreeItem = _tree.get_root()
 	if not root:
 		return # The tree is empty
-		
+
 	# Traverse the tree to find the last visible item
 	var last_item: TreeItem = root
 	var next_item: TreeItem = last_item.get_next_visible()
-	
+
 	while next_item:
 		last_item = next_item
 		next_item = last_item.get_next_visible()
-		
+
 	# Scroll the tree to make the last item visible
 	_tree.scroll_to_item(last_item)
 
@@ -351,7 +353,7 @@ func _on_item_selected() -> void:
 				"cid": src.get("cid", ""),
 				"frame": src.get("frame", 0),
 				"player_name": src.get("player_name", ""),
-				"tree_name": src.get("network_state", {}).get("tree_name", ""),
+				"tree_name": src.get("network_state", { }).get("tree_name", ""),
 				"node_path": meta.get("node_path", ""),
 			}
 		else:
@@ -360,7 +362,7 @@ func _on_item_selected() -> void:
 				"cid": meta.get("cid", ""),
 				"frame": meta.get("frame", 0),
 				"player_name": meta.get("player_name", ""),
-				"tree_name": meta.get("network_state", {}).get("tree_name", ""),
+				"tree_name": meta.get("network_state", { }).get("tree_name", ""),
 				"node_path": "",
 			}
 		if on_context_selected.is_valid():
@@ -375,33 +377,38 @@ func _on_copy() -> void:
 		lines.append("=== %s  (cid: %s) ===" % [e.get("trigger", "UNKNOWN"), e.get("cid", "?")])
 		lines.append("Timeline: %s" % " <- ".join(e.get("cid_timeline", [])))
 		lines.append("Frame: %d  |  Scene: %s" % [e.get("frame", 0), e.get("active_scene", "?")])
-		
-		var net: Dictionary = e.get("network_state", {})
-		lines.append("Network: tree=%s peer=%d server=%s" % [
-			net.get("tree_name", "?"), net.get("peer_id", 0), str(net.get("is_server", false))])
-		
+
+		var net: Dictionary = e.get("network_state", { })
+		lines.append(
+			"Network: tree=%s peer=%d server=%s" % [
+				net.get("tree_name", "?"),
+				net.get("peer_id", 0),
+				str(net.get("is_server", false)),
+			],
+		)
+
 		if not e.get("error_text", "").is_empty():
 			lines.append("\n[Error Text]\n%s" % e["error_text"])
-		
+
 		var preflight: Array = e.get("preflight", [])
 		if not preflight.is_empty():
 			lines.append("\n[Preflight Snapshot]")
 			for pf: Dictionary in preflight:
 				lines.append("  %s  (auth=%s)" % [pf.get("label", "?"), str(pf.get("auth", "?"))])
-		
-		var snap: Dictionary = e.get("node_snapshot", {})
+
+		var snap: Dictionary = e.get("node_snapshot", { })
 		if not snap.is_empty():
 			lines.append("\n[Node Snapshot: %s]" % snap.get("node_name", "?"))
 			lines.append("  Path: %s" % snap.get("node_path", "?"))
 			lines.append("  Authority: %d" % snap.get("authority", 0))
-			
-			var props: Dictionary = snap.get("sync_properties", {})
+
+			var props: Dictionary = snap.get("sync_properties", { })
 			if not props.is_empty():
 				lines.append("  Properties:")
 				for k in props:
 					lines.append("    %s = %s" % [k, str(props[k])])
-			
-			var ds: Dictionary = snap.get("debug_state", {})
+
+			var ds: Dictionary = snap.get("debug_state", { })
 			if not ds.is_empty():
 				lines.append("  Debug State: %s" % str(ds))
 
@@ -410,7 +417,7 @@ func _on_copy() -> void:
 			lines.append("\n[Telemetry Slice]")
 			for tl in telemetry:
 				lines.append("  %s" % str(tl.get("label", "?")))
-		
+
 		lines.append("\n" + "-".repeat(40) + "\n")
-		
+
 	DisplayServer.clipboard_set("\n".join(lines))

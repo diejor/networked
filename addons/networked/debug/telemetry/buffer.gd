@@ -30,15 +30,15 @@ func thaw() -> void:
 
 ## Record one flush-cycle snapshot. Ignored while frozen.
 func record(
-	frame: int,
-	cid_stack: Array,
-	component_events: Array,
-	peer_events: Array,
-	lobby_snapshots: Dictionary
+		frame: int,
+		cid_stack: Array,
+		component_events: Array,
+		peer_events: Array,
+		lobby_snapshots: Dictionary,
 ) -> void:
 	if _frozen:
 		return
-	
+
 	_entries[_write] = {
 		"frame": frame,
 		"cid_stack": cid_stack.duplicate(),
@@ -57,11 +57,11 @@ func record(
 func snapshot(n: int = -1) -> Array:
 	if _count == 0:
 		return []
-	
+
 	var take := _count if n < 0 else mini(n, _count)
 	var result: Array = []
 	result.resize(take)
-	
+
 	# Oldest entry in the ring:
 	var start: int = (_write - _count + _capacity) % _capacity
 	for i in take:

@@ -27,17 +27,20 @@ extends Serde
 ## Stores [param value] under [param property].
 @abstract func set_value(property: StringName, value: Variant) -> void
 
+
 ## Returns the value stored under [param property], or [param default] if absent.
 @abstract func get_value(property: StringName, default: Variant = null) -> Variant
+
 
 ## Returns [code]true[/code] if [param property] has been stored in this entity.
 @abstract func has_value(property: StringName) -> bool
 
+
 ## Returns all property names currently stored in this entity.
 @abstract func get_property_names() -> Array[StringName]
 
-
 # ── Database interface ────────────────────────────────────────────────────────
+
 
 ## Returns this entity's data as a plain [Dictionary] for database storage.
 ##
@@ -49,7 +52,7 @@ extends Serde
 ##     return {&"hp": get_value(&"health"), &"mp": get_value(&"mana")}
 ## [/codeblock]
 func to_dict() -> Dictionary:
-	var dict: Dictionary = {}
+	var dict: Dictionary = { }
 	for key: StringName in get_property_names():
 		dict[key] = get_value(key)
 	return dict
@@ -68,20 +71,22 @@ func from_dict(data: Dictionary) -> void:
 	for key: StringName in data:
 		set_value(key, data[key])
 
-
 # ── Iterator protocol ─────────────────────────────────────────────────────────
 
 var _iter_keys: Array[StringName] = []
 var _iter_index: int = 0
+
 
 func _iter_init(_arg: Variant) -> bool:
 	_iter_keys = get_property_names()
 	_iter_index = 0
 	return _iter_keys.size() > 0
 
+
 func _iter_next(_arg: Variant) -> bool:
 	_iter_index += 1
 	return _iter_index < _iter_keys.size()
+
 
 func _iter_get(_arg: Variant) -> StringName:
 	return _iter_keys[_iter_index]

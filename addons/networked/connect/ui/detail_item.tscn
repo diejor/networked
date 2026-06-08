@@ -1,19 +1,20 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" uid="uid://b6fqyerlthfox" path="res://addons/networked/connect/ui/detail_item.gd" id="1_detail"]
+[ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/connect/ui/connect_theme.tres" id="2_theme"]
 
 [node name="DetailItem" type="VBoxContainer"]
+theme = ExtResource("2_theme")
 script = ExtResource("1_detail")
 
 [node name="TitleLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
-theme_override_font_sizes/font_size = 11
+theme_type_variation = &"SmallLabel"
 text = "Title"
 
 [node name="ValueLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
+theme_type_variation = &"DetailValueLabel"
 text = "Value"

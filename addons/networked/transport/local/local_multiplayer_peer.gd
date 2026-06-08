@@ -6,7 +6,7 @@ class_name LocalMultiplayerPeer
 extends MultiplayerPeerExtension
 
 ## All currently linked remote peers keyed by their peer ID.
-var linked_peers: Dictionary = {}
+var linked_peers: Dictionary = { }
 
 var _unique_id: int = 0
 var _target_peer: int = 0
@@ -22,7 +22,7 @@ var _peers_to_emit_connected: Array[int] = []
 var _peers_to_emit_disconnected: Array[int] = []
 
 var _packet_queue: Array[Dictionary] = []
-var _current_packet: Dictionary = {}
+var _current_packet: Dictionary = { }
 
 
 ## Initializes this peer as the server (unique ID [code]1[/code]).
@@ -34,6 +34,7 @@ func create_server() -> Error:
 	Netw.dbg.info("LocalMultiplayerPeer initialized as Server (ID: %d)", [_unique_id])
 	return OK
 
+
 ## Initializes this peer as a client with [param client_id].
 func create_client(client_id: int) -> Error:
 	_reset_state()
@@ -42,6 +43,7 @@ func create_client(client_id: int) -> Error:
 	_connection_status = CONNECTION_CONNECTING
 	Netw.dbg.info("LocalMultiplayerPeer initialized as Client (ID: %d)", [_unique_id])
 	return OK
+
 
 ## Links [param peer_reference] as a known remote peer with ID [param peer_id].
 ##
@@ -86,6 +88,7 @@ func _poll() -> void:
 	if _closing:
 		_finalize_close()
 
+
 func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 	if _closed or _closing:
 		return ERR_UNAVAILABLE
@@ -110,6 +113,7 @@ func _put_packet_script(p_buffer: PackedByteArray) -> Error:
 
 	return _send_to_peer(_target_peer, p_buffer)
 
+
 func _send_to_peer(peer_id: int, p_buffer: PackedByteArray) -> Error:
 	if _closed or _closing:
 		return ERR_UNAVAILABLE
@@ -128,17 +132,21 @@ func _send_to_peer(peer_id: int, p_buffer: PackedByteArray) -> Error:
 	target._receive_packet(p_buffer, _unique_id, _transfer_channel, _transfer_mode)
 	return OK
 
+
 func _receive_packet(p_buffer: PackedByteArray, p_sender: int, p_channel: int, p_mode: TransferMode) -> void:
 	if _closed or _closing:
 		return
 
-	_packet_queue.append({
-		"data": p_buffer,
-		"peer": p_sender,
-		"channel": p_channel,
-		"mode": p_mode
-	})
+	_packet_queue.append(
+		{
+			"data": p_buffer,
+			"peer": p_sender,
+			"channel": p_channel,
+			"mode": p_mode,
+		},
+	)
 	Netw.dbg.trace("Received packet from %d (Size: %d). Queue length: %d", [p_sender, p_buffer.size(), _packet_queue.size()])
+
 
 func _get_packet_script() -> PackedByteArray:
 	if _packet_queue.is_empty():
@@ -149,13 +157,14 @@ func _get_packet_script() -> PackedByteArray:
 	Netw.dbg.trace("Popped packet from %d (Size: %d). Queue left: %d", [_current_packet.get("peer", 0), data.size(), _packet_queue.size()])
 	return data
 
+
 func _purge_packets_from(sender_id: int) -> void:
 	for i in range(_packet_queue.size() - 1, -1, -1):
 		if _packet_queue[i].get("peer", 0) == sender_id:
 			_packet_queue.remove_at(i)
 
 	if _current_packet.get("peer", 0) == sender_id:
-		_current_packet = {}
+		_current_packet = { }
 
 
 func _remote_closed(remote_id: int, remote_was_server: bool) -> void:
@@ -188,8 +197,9 @@ func _close() -> void:
 		var other: LocalMultiplayerPeer = linked_peers.get(peer_id)
 		if other:
 			other._remote_closed(my_id, _is_server_peer)
-	
+
 	_finalize_close()
+
 
 func _finalize_close() -> void:
 	_closing = false
@@ -200,7 +210,7 @@ func _finalize_close() -> void:
 
 	linked_peers.clear()
 	_packet_queue.clear()
-	_current_packet = {}
+	_current_packet = { }
 
 	_unique_id = 0
 	_target_peer = 0
@@ -209,6 +219,7 @@ func _finalize_close() -> void:
 	_is_server_peer = false
 
 	Netw.dbg.trace("Peer fully closed.")
+
 
 func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
 	Netw.dbg.trace("Disconnecting peer %d (scheduled).", [p_peer])
@@ -229,51 +240,66 @@ func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
 func _get_available_packet_count() -> int:
 	return _packet_queue.size()
 
+
 func _get_connection_status() -> ConnectionStatus:
 	return _connection_status
+
 
 func _get_max_packet_size() -> int:
 	return 16777215
 
+
 func _get_transfer_channel() -> int:
 	return _transfer_channel
+
 
 func _get_transfer_mode() -> TransferMode:
 	return _transfer_mode
 
+
 func _get_unique_id() -> int:
 	return _unique_id
+
 
 func _is_refusing_new_connections() -> bool:
 	return false
 
+
 func _is_server() -> bool:
 	return _is_server_peer
+
 
 func _is_server_relay_supported() -> bool:
 	return true
 
+
 func _set_refuse_new_connections(_p_enable: bool) -> void:
 	pass
+
 
 func _set_target_peer(p_peer: int) -> void:
 	_target_peer = p_peer
 
+
 func _set_transfer_channel(p_channel: int) -> void:
 	_transfer_channel = p_channel
 
+
 func _set_transfer_mode(p_mode: TransferMode) -> void:
 	_transfer_mode = p_mode
+
 
 func _get_packet_channel() -> int:
 	if not _packet_queue.is_empty():
 		return _packet_queue[0].get("channel", 0)
 	return _current_packet.get("channel", 0)
 
+
 func _get_packet_mode() -> TransferMode:
 	if not _packet_queue.is_empty():
 		return _packet_queue[0].get("mode", TRANSFER_MODE_RELIABLE)
 	return _current_packet.get("mode", TRANSFER_MODE_RELIABLE)
+
 
 func _get_packet_peer() -> int:
 	if not _packet_queue.is_empty():
@@ -284,7 +310,7 @@ func _get_packet_peer() -> int:
 func _reset_state() -> void:
 	linked_peers.clear()
 	_packet_queue.clear()
-	_current_packet = {}
+	_current_packet = { }
 	_peers_to_emit_connected.clear()
 	_peers_to_emit_disconnected.clear()
 

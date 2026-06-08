@@ -36,7 +36,7 @@ static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 	var raw_errors: Array = d.get("errors", [])
 	if error_text.is_empty() and not raw_errors.is_empty():
 		error_text = "\n".join(raw_errors)
-	
+
 	if error_text.is_empty():
 		error_text = "[MISSING ERROR DATA - Check C++ watchdog or validation logic]"
 
@@ -49,12 +49,12 @@ static func format(d: Dictionary, alias_map: Dictionary) -> Dictionary:
 		"timestamp_usec": d.get("timestamp_usec", 0),
 		"player_name": player,
 		"in_tree": d.get("in_tree", false),
-		"network_state": d.get("network_state", {}),
+		"network_state": d.get("network_state", { }),
 		"error_text": error_text,
 		"active_scene": d.get("active_scene", ""),
 		"preflight": _format_preflight(d.get("preflight_snapshot", []), alias_map),
 		"telemetry": _format_telemetry(d.get("telemetry_slice", [])),
-		"node_snapshot": d.get("node_snapshot", {}),
+		"node_snapshot": d.get("node_snapshot", { }),
 	}
 
 
@@ -68,31 +68,41 @@ static func _format_preflight(snapshot: Array, alias_map: Dictionary) -> Array:
 			var auth_val: int = s.get("auth", 0)
 			var auth_color: String = "green" if s.get("is_auth", false) else ("red" if auth_val == 0 else "yellow")
 			var scene_tag: String = (" scene=%s" % s["scene"]) if s.has("scene") else ""
-			out.append({
-				"type": s.get("type", "?"),
-				"path": path_str,
-				"auth": auth_val,
-				"auth_color": auth_color,
-				"scene": scene_tag,
-				"broadcast": broadcast,
-				"label": "%s  %s" % [s.get("type", "?"), path_str],
-				"tooltip": "auth=%d%s%s" % [auth_val, scene_tag,
-					" (engine broadcast)" if broadcast else ""],
-			})
+			out.append(
+				{
+					"type": s.get("type", "?"),
+					"path": path_str,
+					"auth": auth_val,
+					"auth_color": auth_color,
+					"scene": scene_tag,
+					"broadcast": broadcast,
+					"label": "%s  %s" % [s.get("type", "?"), path_str],
+					"tooltip": "auth=%d%s%s" % [
+						auth_val,
+						scene_tag,
+						" (engine broadcast)" if broadcast else "",
+					],
+				},
+			)
 		else:
 			# SaveComponent audit entry
 			var ok: bool = s.get("root_path_resolves", false)
-			out.append({
-				"type": "SaveAudit",
-				"path": s.get("name", "?"),
-				"auth": 0,
-				"auth_color": "green" if ok else "red",
-				"scene": "",
-				"broadcast": false,
-				"label": "%s (Save Audit)" % s.get("name", "?"),
-				"tooltip": "parent=%s  owner=%s  root_path=%s" % [
-					s.get("parent", "?"), s.get("owner", "?"), s.get("root_path", "?")],
-			})
+			out.append(
+				{
+					"type": "SaveAudit",
+					"path": s.get("name", "?"),
+					"auth": 0,
+					"auth_color": "green" if ok else "red",
+					"scene": "",
+					"broadcast": false,
+					"label": "%s (Save Audit)" % s.get("name", "?"),
+					"tooltip": "parent=%s  owner=%s  root_path=%s" % [
+						s.get("parent", "?"),
+						s.get("owner", "?"),
+						s.get("root_path", "?"),
+					],
+				},
+			)
 	return out
 
 
@@ -115,12 +125,16 @@ static func _format_telemetry(slice: Array) -> Array:
 			continue
 
 		var cid_short: String = cid_stack[0].substr(0, 16) if not cid_stack.is_empty() else ""
-		out.append({
-			"label": "f%d  %s" % [frame, "  ".join(events_text)] if not events_text.is_empty()
-				else "f%d  [cid: %s]" % [frame, cid_short],
-			"tooltip": "cid_stack: %s\npeer_events: %s\ncomp_events: %s" % [
-				str(cid_stack), str(peer_events), str(comp_events)],
-		})
+		out.append(
+			{
+				"label": "f%d  %s" % [frame, "  ".join(events_text)] if not events_text.is_empty() else "f%d  [cid: %s]" % [frame, cid_short],
+				"tooltip": "cid_stack: %s\npeer_events: %s\ncomp_events: %s" % [
+					str(cid_stack),
+					str(peer_events),
+					str(comp_events),
+				],
+			},
+		)
 	return out
 
 

@@ -15,8 +15,8 @@ Features
 --------
 
 - Scene-aware player spawning with :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`
-  and :ref:`SpawnerComponent <class_SpawnerComponent>`.
-- Smooth snapshot playback with :ref:`TickInterpolator <class_TickInterpolator>`.
+  and :ref:`MultiplayerEntity <class_MultiplayerEntity>`.
+- Smooth snapshot playback with :ref:`MultiplayerInterpolator <class_MultiplayerInterpolator>`.
 - Level transitions with :ref:`TPComponent <class_TPComponent>`.
 - Player data persistence with :ref:`NetwDatabase <class_NetwDatabase>` and
   :ref:`SaveComponent <class_SaveComponent>`.

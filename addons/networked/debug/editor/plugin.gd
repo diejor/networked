@@ -9,25 +9,25 @@ class_name NetworkedDebuggerPlugin
 extends EditorDebuggerPlugin
 
 # session_id -> DebuggerSession
-var _sessions: Dictionary[int, DebuggerSession] = {}
+var _sessions: Dictionary[int, DebuggerSession] = { }
 # session_id -> NetworkedDebuggerUI (kept separately for breakpoint routing)
-var _uis: Dictionary[int, NetworkedDebuggerUI] = {}
+var _uis: Dictionary[int, NetworkedDebuggerUI] = { }
 # peer_key -> session_id (tracks which session natively owns each peer)
-var _local_peer_map: Dictionary[String, int] = {}
+var _local_peer_map: Dictionary[String, int] = { }
 # peer_key -> stable_id ("source_path|tree_name|role|slot=N"). Independent
 # of session_id and reporter_id so it survives game restarts and debugger
 # session discard/recreate. The slot separates same-role windows.
-var _peer_stable_id: Dictionary[String, String] = {}
+var _peer_stable_id: Dictionary[String, String] = { }
 # stable_id -> bool. Peers whose owning game window should be pinned on top.
 # Persists for the entire editor lifetime; game close does not clear it.
-var _pinned_peers: Dictionary[String, bool] = {}
+var _pinned_peers: Dictionary[String, bool] = { }
 # stable_id -> Rect2i. Last-known window geometry. Persists for editor
 # lifetime.
-var _geometry: Dictionary[String, Rect2i] = {}
+var _geometry: Dictionary[String, Rect2i] = { }
 # session_id -> Array[String]. Last known stable IDs owned by a debugger
 # session. Kept after peer maps are cleared so late close-time geometry can
 # still update the right persisted rects.
-var _session_stable_ids: Dictionary[int, Array] = {}
+var _session_stable_ids: Dictionary[int, Array] = { }
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -61,7 +61,7 @@ func _setup_session(session_id: int) -> void:
 	_sessions[session_id] = session
 
 	session.peer_registered.connect(
-		_on_peer_registered.bind(session_id)
+		_on_peer_registered.bind(session_id),
 	)
 
 	var ui := NetworkedDebuggerUI.new()
@@ -71,49 +71,51 @@ func _setup_session(session_id: int) -> void:
 
 	var godot_session := get_session(session_id)
 	# Reset at START so crash-time data survives for inspection.
-	godot_session.started.connect(func() -> void:
-		# Identify all peers previously owned by this session.
-		var stale_peers: Array[String] = []
-		for pk: String in _local_peer_map:
-			if _local_peer_map[pk] == session_id:
-				stale_peers.append(pk)
-
-		# Notify OTHER sessions to remove these peers immediately.
-		for other_id: int in _sessions:
-			if other_id != session_id:
-				_sessions[other_id].unregister_peers(stale_peers)
-
-		_remember_peer_stable_ids(session_id, stale_peers)
-
-		# Clean per-peer maps. _pinned_peers and _geometry are keyed by
-		# stable_id / session_id and survive across restarts; the new peer
-		# registrations below will rebind and the post-register handler will
-		# call _recompute_pins if a stable_id is still pinned.
-		for pk in stale_peers:
-			_local_peer_map.erase(pk)
-			_peer_stable_id.erase(pk)
-
-		if is_instance_valid(session):
-			session.reset()
-		# Request fresh snapshot so editor shows current state immediately.
-		if godot_session.is_active():
-			godot_session.send_message("networked:request_snapshot", [true])
-	)
-	godot_session.stopped.connect(func() -> void:
-		if is_instance_valid(session):
-			session.mark_all_offline()
-			
-			# Identify all peers owned by the stopped session.
-			var owned_peers: Array[String] = []
+	godot_session.started.connect(
+		func() -> void:
+			# Identify all peers previously owned by this session.
+			var stale_peers: Array[String] = []
 			for pk: String in _local_peer_map:
 				if _local_peer_map[pk] == session_id:
-					owned_peers.append(pk)
-			_remember_peer_stable_ids(session_id, owned_peers)
-			
-			# Notify OTHER sessions that these peers are now offline.
-			for other_id in _sessions:
+					stale_peers.append(pk)
+
+			# Notify OTHER sessions to remove these peers immediately.
+			for other_id: int in _sessions:
 				if other_id != session_id:
-					_sessions[other_id].mark_peers_offline(owned_peers)
+					_sessions[other_id].unregister_peers(stale_peers)
+
+			_remember_peer_stable_ids(session_id, stale_peers)
+
+			# Clean per-peer maps. _pinned_peers and _geometry are keyed by
+			# stable_id / session_id and survive across restarts; the new peer
+			# registrations below will rebind and the post-register handler will
+			# call _recompute_pins if a stable_id is still pinned.
+			for pk in stale_peers:
+				_local_peer_map.erase(pk)
+				_peer_stable_id.erase(pk)
+
+			if is_instance_valid(session):
+				session.reset()
+			# Request fresh snapshot so editor shows current state immediately.
+			if godot_session.is_active():
+				godot_session.send_message("networked:request_snapshot", [true])
+	)
+	godot_session.stopped.connect(
+		func() -> void:
+			if is_instance_valid(session):
+				session.mark_all_offline()
+
+				# Identify all peers owned by the stopped session.
+				var owned_peers: Array[String] = []
+				for pk: String in _local_peer_map:
+					if _local_peer_map[pk] == session_id:
+						owned_peers.append(pk)
+				_remember_peer_stable_ids(session_id, owned_peers)
+
+				# Notify OTHER sessions that these peers are now offline.
+				for other_id in _sessions:
+					if other_id != session_id:
+						_sessions[other_id].mark_peers_offline(owned_peers)
 	)
 	godot_session.add_session_tab(ui)
 
@@ -154,14 +156,14 @@ func _discard_session(session_id: int) -> void:
 
 
 func _on_peer_registered(
-	peer_key: String,
-	_display_name: String,
-	tree_name: String,
-	is_server: bool,
-	_color: Color,
-	is_remote: bool,
-	_peer_id: int,
-	session_id: int
+		peer_key: String,
+		_display_name: String,
+		tree_name: String,
+		is_server: bool,
+		_color: Color,
+		is_remote: bool,
+		_peer_id: int,
+		session_id: int,
 ) -> void:
 	if is_remote:
 		return
@@ -174,17 +176,19 @@ func _on_peer_registered(
 	_remember_session_stable_id(session_id, stable_id)
 	_migrate_unslotted_state(base_id, stable_id)
 	if _pinned_peers.has(stable_id):
-		_dbg.trace("Pin: re-applying for stable_id=%s on session=%d" \
-			% [stable_id, session_id])
+		_dbg.trace(
+			"Pin: re-applying for stable_id=%s on session=%d" \
+					% [stable_id, session_id],
+		)
 		_recompute_pins()
 
 
 ## Builds the base identity used for pin + geometry slot assignment.
 ## Independent of session_id and reporter_id.
 func _base_stable_id_for(
-	peer_key: String,
-	tree_name: String,
-	is_server: bool
+		peer_key: String,
+		tree_name: String,
+		is_server: bool,
 ) -> String:
 	var source_path: String = peer_key.get_slice("|", 0)
 	var role: String = "server" if is_server else "client"
@@ -242,9 +246,9 @@ func is_peer_pinned(peer_key: String) -> bool:
 ## collapse/expand handler. [param source_session_id] identifies the UI that
 ## originated the toggle so it isn't synced back to itself.
 func set_peer_pinned(
-	peer_key: String,
-	expanded: bool,
-	source_session_id: int
+		peer_key: String,
+		expanded: bool,
+		source_session_id: int,
 ) -> void:
 	var sid: String = _peer_stable_id.get(peer_key, "")
 	if sid.is_empty():
@@ -263,7 +267,7 @@ func set_peer_pinned(
 func _recompute_pins(source_session_id: int = -1) -> void:
 	# For each pinned stable_id, find the owning session (if any) and what
 	# geometry to apply. session_id -> Rect2i|null
-	var pin_targets: Dictionary[int, Variant] = {}
+	var pin_targets: Dictionary[int, Variant] = { }
 	for sid_str: String in _pinned_peers:
 		for pk: String in _peer_stable_id:
 			if _peer_stable_id[pk] != sid_str:
@@ -275,11 +279,14 @@ func _recompute_pins(source_session_id: int = -1) -> void:
 			pin_targets[owner] = _geometry.get(sid_str, null)
 
 	for sid: int in pin_targets:
-		_dbg.trace("Pin: sending pin_window to session=%d rect=%s", [
-			sid,
-			str(pin_targets[sid]),
-		])
-		send_to_game(sid, "networked:pin_window", [{"rect": pin_targets[sid]}])
+		_dbg.trace(
+			"Pin: sending pin_window to session=%d rect=%s",
+			[
+				sid,
+				str(pin_targets[sid]),
+			],
+		)
+		send_to_game(sid, "networked:pin_window", [{ "rect": pin_targets[sid] }])
 
 	# Unpin any active session that isn't in the pinned set.
 	for sid: int in _sessions:
@@ -322,9 +329,9 @@ func _on_window_geometry(session_id: int, data: Array) -> void:
 
 
 func _capture_window_geometry(
-	message: String,
-	data: Array,
-	session_id: int
+		message: String,
+		data: Array,
+		session_id: int,
 ) -> bool:
 	if message == "window_geometry" or message == "networked:window_geometry":
 		_on_window_geometry(session_id, data)
@@ -343,8 +350,8 @@ func _capture_window_geometry(
 
 
 func _remember_peer_stable_ids(
-	session_id: int,
-	peer_keys: Array[String]
+		session_id: int,
+		peer_keys: Array[String],
 ) -> void:
 	for pk: String in peer_keys:
 		var stable_id: String = _peer_stable_id.get(pk, "")
@@ -385,24 +392,24 @@ func _stable_ids_for_session(session_id: int) -> Array[String]:
 
 ## Copies history directly from the owner's session memory for a specific panel.
 func sync_history(
-	requester_id: int, 
-	peer_key: String, 
-	panel_name: String
+		requester_id: int,
+		peer_key: String,
+		panel_name: String,
 ) -> void:
 	if not _local_peer_map.has(peer_key):
 		return
-		
+
 	var owner_id: int = _local_peer_map[peer_key]
 	var owner_s: DebuggerSession = _sessions.get(owner_id)
 	var req_s: DebuggerSession = _sessions.get(requester_id)
-	
+
 	if not owner_s or not req_s:
 		return
-		
+
 	var key: String = "%s:%s" % [peer_key, panel_name]
 	var owner_adapter := owner_s.get_adapter(key)
 	var req_adapter := req_s.get_adapter(key)
-	
+
 	if owner_adapter and req_adapter:
 		# Direct memory copy of the processed ring buffer.
 		req_adapter.populate(owner_adapter.ring_buffer)
@@ -412,7 +419,7 @@ func sync_history(
 func route_to_owner(peer_key: String, message: String, data: Array) -> void:
 	if not _local_peer_map.has(peer_key):
 		return
-		
+
 	var owner_id: int = _local_peer_map[peer_key]
 	var godot_session := get_session(owner_id)
 	if godot_session and godot_session.is_active():

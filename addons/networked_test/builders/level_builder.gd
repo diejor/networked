@@ -1,9 +1,6 @@
 ## Fluent builder for programmatically composing game level scenes.
-##
-## Hard-wrapped to 80 columns.
 class_name LevelBuilder
 extends RefCounted
-
 
 ## The unique name identifier for this level scene builder.
 var scene_name: StringName
@@ -35,21 +32,22 @@ func _init(level_name: String = "") -> void:
 static func reset_counter() -> void:
 	_uid_counter = 0
 
+
 ## Configures the level with a [MultiplayerSpawner].
 ##
 ## Accepts [param spawnables] as an array of [PackedScene] objects. Asserts
 ## that all packed scenes have a valid resource path.
 func with_multiplayer_spawner(
-	spawn_path: String = "..",
-	spawnables: Array[PackedScene] = []
+		spawn_path: String = "..",
+		spawnables: Array[PackedScene] = [],
 ) -> LevelBuilder:
 	_has_spawner = true
 	_spawn_path = spawn_path
 	for spawnable in spawnables:
 		assert(
 			not spawnable.resource_path.is_empty(),
-			"LevelBuilder: spawnable PackedScene must have a valid resource path " + \
-			"(take_over_path must have been called)."
+			"LevelBuilder: spawnable PackedScene must have a valid resource path " +
+			"(take_over_path must have been called).",
 		)
 		_spawnable_scene_paths.append(spawnable.resource_path)
 	return self
@@ -74,18 +72,18 @@ func with_child(node: Node) -> LevelBuilder:
 func build() -> Node:
 	var root: Node = _root_type.new()
 	root.name = _name
-	
+
 	if _has_spawner:
 		var spawner: MultiplayerSpawner = MultiplayerSpawner.new()
 		spawner.name = "PlayerSpawner"
 		spawner.spawn_path = NodePath(_spawn_path)
 		spawner.set("_spawnable_scenes", PackedStringArray(_spawnable_scene_paths))
 		var _a1: Node = SceneAssembly.attach(root, spawner, root)
-		
+
 	for child in _custom_children:
 		var child_dup: Node = child.duplicate()
 		var _a2: Node = SceneAssembly.attach(root, child_dup, root)
-		
+
 	return root
 
 
@@ -93,7 +91,7 @@ func build() -> Node:
 func pack(custom_path: String = "") -> PackedScene:
 	var root: Node = build()
 	var path: String = custom_path if not custom_path.is_empty() else \
-			NetwPathNamespace.next_path("level", _name)
+	NetwPathNamespace.next_path("level", _name)
 	var p: PackedScene = SceneAssembly.pack_with_path(root, path)
 	NetwPathNamespace.register_resource(p)
 	root.free()

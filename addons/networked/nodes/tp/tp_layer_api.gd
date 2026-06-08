@@ -7,7 +7,8 @@
 class_name TPLayerAPI
 extends CanvasLayer
 
-## Forwarded from [MultiplayerTree.configured]; used to free this node on the server.
+## Forwarded from [signal MultiplayerTree.session_entered]. Frees this node on
+## the server.
 signal configured
 
 ## Progress bar driven by the transition animation.
@@ -25,15 +26,15 @@ func _init() -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	var mt := NetwServices.register(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree"
+		"TPLayer must be a descendant of a MultiplayerTree",
 	)
-	
-	if not mt.configured.is_connected(configured.emit):
-		mt.configured.connect(configured.emit)
+
+	if not mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.connect(configured.emit)
 
 
 func _ready() -> void:
@@ -43,19 +44,21 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	
+
 	var mt := NetwServices.unregister(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree"
+		"TPLayer must be a descendant of a MultiplayerTree",
 	)
-	
-	if mt.configured.is_connected(configured.emit):
-		mt.configured.disconnect(configured.emit)
+
+	if mt.session_entered.is_connected(configured.emit):
+		mt.session_entered.disconnect(configured.emit)
+
 
 ## Plays the outgoing transition (cover the screen). Awaitable.
 @abstract
 func teleport_out() -> void
+
 
 ## Plays the incoming transition (reveal the screen). Awaitable.
 @abstract
@@ -77,7 +80,7 @@ func _on_multiplayer_configured() -> void:
 
 
 # Plays the arrival animation when the local peer's player first appears.
-# Replaces SpawnerComponent's direct reach into TPLayerAPI; presentation
+# Replaces MultiplayerEntity's direct reach into TPLayerAPI; presentation
 # stays inside the presentation node.
 func _on_local_player_joined(_rj: ResolvedJoin) -> void:
 	teleport_in()

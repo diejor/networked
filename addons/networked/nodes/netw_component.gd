@@ -15,13 +15,13 @@ func get_context() -> NetwContext:
 	var scene := MultiplayerTree.scene_for_node(self)
 	if is_instance_valid(scene):
 		return scene.get_context()
-	
+
 	var mt := MultiplayerTree.for_node(self)
 	if not mt:
 		mt = MultiplayerTree.resolve(self)
 	if not mt:
 		return null
-	
+
 	if _context == null or not _context.is_valid():
 		_context = NetwContext.new(mt)
 	return _context
@@ -55,8 +55,8 @@ func get_tp_layer() -> TPLayerAPI:
 	return tp_layer
 
 
-## Returns the [NetworkClock] for this session.
-func get_network_clock() -> NetworkClock:
+## Returns the [MultiplayerClock] for this session.
+func get_multiplayer_clock() -> MultiplayerClock:
 	var ctx := get_context()
 	return ctx.services.get_clock() if ctx else null
 
@@ -82,7 +82,6 @@ func get_peer_context() -> NetwPeerContext:
 func get_bucket(bucket_type) -> RefCounted:
 	var ctx := get_peer_context()
 	return ctx.get_bucket(bucket_type) if ctx else null
-
 
 # [b]Note on Debugging:[/b]
 # This component does not provide direct logging or span methods. Use [Netw.dbg]

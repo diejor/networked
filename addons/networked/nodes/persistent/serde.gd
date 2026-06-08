@@ -8,5 +8,6 @@ extends Resource
 ## Converts this resource to a [PackedByteArray] suitable for network transmission or disk storage.
 @abstract func serialize() -> PackedByteArray
 
+
 ## Repopulates this resource from [param bytes] produced by [method serialize].
 @abstract func deserialize(bytes: PackedByteArray) -> void

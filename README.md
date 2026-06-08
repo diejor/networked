@@ -1,41 +1,28 @@
 # networked
 
-[![Documentation Status](https://readthedocs.org/projects/networked/badge/?version=latest)](https://networked.readthedocs.io/en/latest/?badge=latest)
-[![CI](https://github.com/diejor/networked/actions/workflows/ci.yml/badge.svg)](https://github.com/diejor/networked/actions/workflows/ci.yml)
+[![documentation](https://img.shields.io/badge/documentation-online-green?logo=readthedocs&logoColor=white&labelColor=CFC9C8&color=6BCD69)](https://networked.readthedocs.io/en/latest/?badge=latest)
+[![build](https://img.shields.io/github/actions/workflow/status/diejor/networked/ci.yml?label=build&logo=github&logoColor=white&labelColor=CFC9C8&color=DBDCB8)](https://github.com/diejor/networked/actions/workflows/ci.yml)
+[![play](https://img.shields.io/badge/play-Bomber%20demo-fa5c5c?logo=itch.io&logoColor=white)](https://diejor.itch.io/bomber)
+[![chat](https://img.shields.io/badge/chat-discord-646FA9?logo=discord&logoColor=white&labelColor=CFC9C8&color=646FA9)](https://discord.gg/7bXbVy9Zfu)
 
-**A proof-of-concept multiplayer framework for Godot 4.**
+## Quick Reference
 
-I built this because Godot's built-in multiplayer APIs, while powerful, felt 
-overwhelming to wire together correctly. `networked` is my attempt to wrap 
-`SceneMultiplayer` into something friendlier, especially for people who just 
-want players to spawn, move smoothly, and teleport between levels without 
-dropping sync.
+- **Bomber Demo:** [`examples/bomber`](examples/bomber)
+- **Documentation:** [Quick Start Guide](https://networked.readthedocs.io/en/latest/getting_started/quick_start.html)
 
-This is not a battle-tested AAA solution. It is one developer's experiment, 
-shared in the hope that it helps someone else get started with multiplayer.
+## Addon Overview
 
-## What It Does
+`networked` wraps Godot's [High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html) into a single Node [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html) that owns the entire lifecycle, from connect to disconnect.
 
-`networked` provides an opinionated layer on top of Godot's 
-[High-level multiplayer](https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html)
+### Notable Features
 
-- **Scene-aware spawning:** `MultiplayerSceneManager` + `SpawnerComponent` 
-handle player spawn and despawn.
+- **`MultiplayerInterpolator`:** Smooths network snapshots with smart dilation to minimize jitter.
+- **`MultiplayerSceneManager`:** Built on top of an in-house [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
+- **`TPComponent`:** Connects scenes and handles teleport transitions between levels without dropping synchronization.
+- **`SaveComponent`:** Real-time state persistence and writes for player data.
 
-- **Smooth interpolation:** `TickInterpolator` smooths network snapshots with 
-smart dilation to reduce jitter.
+## Supported Architectures & Integrations
 
-- **Teleport transitions:** `TPComponent` lets players move between levels 
-without breaking replication.
-
-- **State persistence:** `NetwDatabase` + `SaveComponent` save and load player 
-data.
-
-- **Flexible transport:** `BackendPeer` resources for ENet, WebSocket, WebRTC, 
-and local loopback. Optional duck-typed support for the `tube` addon if you need 
-WebRTC matchmaking.
-
-## Requirements
-
-- Godot 4.2+
-- GDScript (C# support is not available yet)
+- **Flexible Architectures:** Supports listen-server and dedicated server, easily swap between Client-Server and P2P all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
+- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and native Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)).
+- **Robust Integration Testing:** Full end-to-end integration tests are supported using the custom in-process [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).

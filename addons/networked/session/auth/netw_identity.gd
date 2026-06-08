@@ -39,5 +39,5 @@ static func deserialize(bytes: PackedByteArray) -> NetwIdentity:
 	identity.username = data.username
 	identity.external_id = data.external_id
 	identity.service = data.service
-	identity.metadata = data.get("metadata", {})
+	identity.metadata = data.get("metadata", { })
 	return identity

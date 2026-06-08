@@ -25,7 +25,6 @@
 class_name InterestGate
 extends MultiplayerSynchronizer
 
-
 ## Stable identifier of the [NetwInterestLayer] this gate mirrors.
 @export var layer_id: StringName:
 	set(value):
@@ -56,12 +55,11 @@ extends MultiplayerSynchronizer
 		if changed:
 			_on_policy_replicated()
 
-
 var _layer: NetwInterestLayer
 var _applying_local: bool = false
 var _config_built: bool = false
 var _registered: bool = false
-var _client_entities: Dictionary[NetwEntity, bool] = {}
+var _client_entities: Dictionary[NetwEntity, bool] = { }
 
 
 func _init() -> void:
@@ -150,7 +148,8 @@ func verdict_for(peer_id: int) -> bool:
 ## per-peer visibility. Callers should mutate the layer, not this method.
 func apply_snapshot(
 		new_viewers: PackedInt32Array,
-		new_policy: NetwInterestLayer.Policy) -> void:
+		new_policy: NetwInterestLayer.Policy,
+) -> void:
 	apply_snapshot_data(new_viewers, new_policy)
 	_apply_admission_visibility()
 
@@ -160,7 +159,8 @@ func apply_snapshot(
 ## ahead of split admit/revoke visibility passes.
 func apply_snapshot_data(
 		new_viewers: PackedInt32Array,
-		new_policy: NetwInterestLayer.Policy) -> void:
+		new_policy: NetwInterestLayer.Policy,
+) -> void:
 	_applying_local = true
 	policy = new_policy
 	viewers = new_viewers
@@ -197,7 +197,9 @@ func _apply_admission_visibility() -> void:
 
 
 func _on_viewers_replicated(
-		prev: PackedInt32Array, curr: PackedInt32Array) -> void:
+		prev: PackedInt32Array,
+		curr: PackedInt32Array,
+) -> void:
 	if _applying_local or not _layer or _is_server():
 		return
 	var prev_set := _packed_to_dict(prev)
@@ -224,8 +226,11 @@ func _bind() -> void:
 		return
 	# Refuse duplicates so exit cleanup cannot unregister the incumbent.
 	if is_instance_valid(service.gate_for(layer_id)):
-		Netw.dbg.error("InterestGate: layer '%s' already has a bound gate",
-			String(layer_id), func(m): push_error(m))
+		Netw.dbg.error(
+			"InterestGate: layer '%s' already has a bound gate",
+			String(layer_id),
+			func(m): push_error(m)
+		)
 		return
 	_layer = service.layer_for(layer_id)
 	if not _layer:
@@ -267,17 +272,21 @@ static func _add_spawn_property(
 		config: SceneReplicationConfig,
 		target: Node,
 		gate: MultiplayerSynchronizer,
-		property: String) -> void:
+		property: String,
+) -> void:
 	var path := NodePath(
-			str(target.get_path_to(gate)) + ":" + property)
+		str(target.get_path_to(gate)) + ":" + property,
+	)
 	config.add_property(path)
 	config.property_set_spawn(path, true)
 	config.property_set_replication_mode(
-			path, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
+		path,
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+	)
 
 
 func _packed_to_dict(arr: PackedInt32Array) -> Dictionary:
-	var d: Dictionary = {}
+	var d: Dictionary = { }
 	for p: int in arr:
 		d[p] = true
 	return d

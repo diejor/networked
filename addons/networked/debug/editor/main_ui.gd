@@ -26,13 +26,13 @@ var _split: HSplitContainer
 # --- State --------------------------------------------------------------------
 
 ## [Dictionary] mapping [code]peer_key[/code] to bold [TreeItem].
-var _peer_tree_items: Dictionary[String, TreeItem] = {}
+var _peer_tree_items: Dictionary[String, TreeItem] = { }
 
 ## [Dictionary] mapping [code]adapter_key[/code] to [PanelWrapper] node.
-var _panel_wrappers: Dictionary[String, PanelWrapper] = {}
+var _panel_wrappers: Dictionary[String, PanelWrapper] = { }
 
 ## [Dictionary] mapping [code]adapter_key[/code] to [TreeItem] (checkbox row).
-var _checkbox_items: Dictionary[String, TreeItem] = {}
+var _checkbox_items: Dictionary[String, TreeItem] = { }
 
 ## Ordered list of currently active adapter keys (controls grid child order).
 var _active_keys: Array[String] = []
@@ -44,7 +44,7 @@ var _maximized_key: String = ""
 ## [br][br]
 ## Populated by [method _activate_panel]; consumed by [method _rebuild_grid] 
 ## after [method add_child].
-var _pending_populate: Dictionary = {}
+var _pending_populate: Dictionary = { }
 
 ## Status dot icons: pre-rendered tiny circles.
 var _dot_online: ImageTexture
@@ -61,7 +61,7 @@ var _syncing_pin: bool = false
 func _ready() -> void:
 	custom_minimum_size.y = 250
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_dot_online  = _make_dot_texture(Color.GREEN)
+	_dot_online = _make_dot_texture(Color.GREEN)
 	_dot_offline = _make_dot_texture(Color.RED)
 	_dot_unknown = _make_dot_texture(Color(0.5, 0.5, 0.5))
 	_build_layout()
@@ -85,6 +85,8 @@ func _notification(what: int) -> void:
 
 
 var _is_applying_theme: bool = false
+
+
 ## Applies editor-theme-aware styles to the tree panel and scroll area.
 ## Re-runs on NOTIFICATION_THEME_CHANGED so light/dark switches update live.
 func _apply_theme_styles() -> void:
@@ -114,8 +116,8 @@ func _apply_theme_styles() -> void:
 	_scroll.add_theme_stylebox_override("panel", scroll_bg)
 	_is_applying_theme = false
 
-
 # Layout construction
+
 
 func _build_layout() -> void:
 	_split = HSplitContainer.new()
@@ -156,17 +158,17 @@ func _build_layout() -> void:
 
 	_scroll.add_child(_grid)
 
-
 # Session signal handlers
 
+
 func _on_peer_registered(
-	peer_key: String,
-	display_name: String,
-	tree_name: String,
-	is_server: bool,
-	color: Color,
-	is_remote: bool,
-	peer_id: int
+		peer_key: String,
+		display_name: String,
+		tree_name: String,
+		is_server: bool,
+		color: Color,
+		is_remote: bool,
+		peer_id: int,
 ) -> void:
 	if peer_key in _peer_tree_items:
 		_on_peer_unregistered(peer_key)
@@ -175,7 +177,7 @@ func _on_peer_registered(
 		_peer_tree.create_item()
 
 	var peer_item := _peer_tree.create_item(_peer_tree.get_root())
-	peer_item.set_metadata(0, {"is_remote": is_remote, "peer_key": peer_key})
+	peer_item.set_metadata(0, { "is_remote": is_remote, "peer_key": peer_key })
 
 	peer_item.set_custom_color(0, color)
 
@@ -190,8 +192,8 @@ func _on_peer_registered(
 		peer_item.set_tooltip_text(0, "peer=?")
 
 	var font: Font = (
-		peer_item.get_tree().get_theme_font(&"bold", &"Tree")
-		if peer_item.get_tree() else null
+			peer_item.get_tree().get_theme_font(&"bold", &"Tree")
+			if peer_item.get_tree() else null
 	)
 	if font:
 		peer_item.set_custom_font(0, font)
@@ -219,7 +221,7 @@ func _on_peer_identity_changed(peer_key: String, username: String) -> void:
 		return
 
 	var peers: Dictionary = session.get_peers()
-	var info: Dictionary = peers.get(peer_key, {})
+	var info: Dictionary = peers.get(peer_key, { })
 	var tree_name: String = info.get("tree_name", "")
 	var is_server: bool = info.get("is_server", false)
 
@@ -227,10 +229,10 @@ func _on_peer_identity_changed(peer_key: String, username: String) -> void:
 
 
 func _update_peer_display_name(
-	peer_key: String, 
-	tree_name: String, 
-	username: String, 
-	is_server: bool
+		peer_key: String,
+		tree_name: String,
+		username: String,
+		is_server: bool,
 ) -> void:
 	if peer_key not in _peer_tree_items:
 		return
@@ -349,9 +351,7 @@ func _on_adapter_data_changed(key: String) -> void:
 				var icon := get_theme_icon(icon_name, "EditorIcons")
 				var color := get_theme_color(color_name, "Editor")
 				var type_str := "Warning" if level == 1 else "Error"
-				var panel_name: String = PanelDataAdapter.PANEL_DISPLAY_NAMES[
-					adapter.panel_type
-				]
+				var panel_name: String = PanelDataAdapter.PANEL_DISPLAY_NAMES[adapter.panel_type]
 
 				if button_idx == -1:
 					item.add_button(0, icon)
@@ -379,16 +379,12 @@ func _on_adapter_data_changed(key: String) -> void:
 	wrapper.panel_control.on_new_entry(adapter.ring_buffer[-1])
 
 	# Cross-panel sync: crash arrival highlights the peer's Span Tracer.
-	var crash_name := PanelDataAdapter.PANEL_NAMES[
-		PanelDataAdapter.PanelType.CRASH
-	]
+	var crash_name := PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.CRASH]
 	if key.ends_with(":" + crash_name):
 		var last: Dictionary = adapter.ring_buffer[-1] as Dictionary
 		var cid: String = last.get("cid", "")
 		if not cid.is_empty():
-			var span_name := PanelDataAdapter.PANEL_NAMES[
-				PanelDataAdapter.PanelType.SPAN
-			]
+			var span_name := PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.SPAN]
 			var span_key: String = key.replace(crash_name, span_name)
 			if span_key in _panel_wrappers:
 				var panel := _panel_wrappers[span_key].panel_control
@@ -404,29 +400,29 @@ func _on_session_cleared() -> void:
 	_checkbox_items.clear()
 	_peer_tree_items.clear()
 	_peer_tree.clear()
-	_peer_tree.create_item()  # re-create invisible root
+	_peer_tree.create_item() # re-create invisible root
 	_maximized_key = ""
 	_rebuild_grid()
 
 
 ## Creates a single checkbox row under [param peer_item] for [param pt].
 func _add_panel_checkbox(
-	peer_item: TreeItem,
-	peer_key: String,
-	pt: PanelDataAdapter.PanelType
+		peer_item: TreeItem,
+		peer_key: String,
+		pt: PanelDataAdapter.PanelType,
 ) -> void:
 	var child := _peer_tree.create_item(peer_item)
 	child.set_cell_mode(0, TreeItem.CELL_MODE_CHECK)
 	child.set_text(0, PanelDataAdapter.PANEL_DISPLAY_NAMES[pt])
 	child.set_editable(0, true)
 	child.set_checked(0, false)
-	child.set_metadata(0, {"peer_key": peer_key, "panel_type": pt})
+	child.set_metadata(0, { "peer_key": peer_key, "panel_type": pt })
 
 	var key: String = "%s:%s" % [peer_key, PanelDataAdapter.PANEL_NAMES[pt]]
 	_checkbox_items[key] = child
 
-
 # Checkbox toggle
+
 
 func _on_peer_tree_item_edited() -> void:
 	var item: TreeItem = _peer_tree.get_edited()
@@ -463,7 +459,9 @@ func _on_peer_tree_item_collapsed(item: TreeItem) -> void:
 		return
 	var expanded: bool = not item.collapsed
 	(session.plugin as NetworkedDebuggerPlugin).set_peer_pinned(
-		pk, expanded, session.session_id
+		pk,
+		expanded,
+		session.session_id,
 	)
 
 
@@ -481,10 +479,10 @@ func sync_peer_expanded(peer_key: String, expanded: bool) -> void:
 
 
 func _on_peer_tree_button_clicked(
-	item: TreeItem,
-	_column: int,
-	_id: int,
-	_mb_idx: int
+		item: TreeItem,
+		_column: int,
+		_id: int,
+		_mb_idx: int,
 ) -> void:
 	var meta: Variant = item.get_metadata(0)
 	if not meta is Dictionary:
@@ -501,16 +499,16 @@ func _on_peer_tree_button_clicked(
 		if level > 0:
 			var panel_display: String = PanelDataAdapter.PANEL_DISPLAY_NAMES[pt]
 			var peers: Dictionary = session.get_peers()
-			var peer_info: Dictionary = peers.get(pk, {})
+			var peer_info: Dictionary = peers.get(pk, { })
 			var peer_display: String = peer_info.get("display_name", pk)
 			var title_str := "%s - %s" % [peer_display, panel_display]
 			_show_status_detail(title_str, level, summary)
 
 
 func _show_status_detail(
-	panel_name: String,
-	level: int,
-	summary: String
+		panel_name: String,
+		level: int,
+		summary: String,
 ) -> void:
 	var dialog := AcceptDialog.new()
 	var type_str := "Warning" if level == 1 else "Error"
@@ -532,14 +530,16 @@ func _show_status_detail(
 	add_child(dialog)
 	dialog.popup_centered()
 	dialog.visibility_changed.connect(
-		func(): if not dialog.visible: dialog.queue_free()
+		func():
+			if not dialog.visible:
+				dialog.queue_free()
 	)
 
 
 func _activate_panel(
-	key: String,
-	peer_key: String,
-	pt: PanelDataAdapter.PanelType
+		key: String,
+		peer_key: String,
+		pt: PanelDataAdapter.PanelType,
 ) -> void:
 	if key in _panel_wrappers:
 		return
@@ -553,16 +553,16 @@ func _activate_panel(
 
 	_dbg.info("UI: [ActivatePanel] %s" % [key])
 	var peers: Dictionary = session.get_peers()
-	var peer_info: Dictionary = peers.get(peer_key, {})
+	var peer_info: Dictionary = peers.get(peer_key, { })
 	var color: Color = peer_info.get("color", Color.WHITE)
 	var peer_display: String = peer_info.get("display_name", peer_key)
 
 	# If this is a remote peer, sync its history from the local owner session.
 	if peer_info.get("is_remote", false) and session.plugin:
 		session.plugin.sync_history(
-			session.session_id, 
-			peer_key, 
-			PanelDataAdapter.PANEL_NAMES[pt]
+			session.session_id,
+			peer_key,
+			PanelDataAdapter.PANEL_NAMES[pt],
 		)
 
 	var panel: Control = _create_panel_control(pt, peer_key)
@@ -572,8 +572,9 @@ func _activate_panel(
 	var wrapper := PanelWrapper.new(key, peer_key, title_str, color, panel)
 	_dbg.trace(
 		"UI: [CreatedWrapper] %s size_flags=%d" % [
-			key, wrapper.size_flags_vertical
-		]
+			key,
+			wrapper.size_flags_vertical,
+		],
 	)
 	wrapper.on_maximize_requested = _on_maximize_requested
 	wrapper.status_pressed.connect(
@@ -601,8 +602,8 @@ func _deactivate_panel(key: String) -> void:
 	if _maximized_key == key:
 		_maximized_key = ""
 
-
 # Grid layout
+
 
 func _rebuild_grid() -> void:
 	# Remove all grid children without freeing them.
@@ -631,11 +632,11 @@ func _rebuild_grid() -> void:
 ## safe after.
 func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
 	_dbg.trace("UI: [AddChild] %s" % [key])
-	_grid.add_child(wrapper)  # triggers _ready() on wrapper and its children
+	_grid.add_child(wrapper) # triggers _ready() on wrapper and its children
 
 	# Initialise peer context now that _ready() has fired on the panel.
 	if session:
-		var peer_info: Dictionary = session.get_peers().get(wrapper.peer_key, {})
+		var peer_info: Dictionary = session.get_peers().get(wrapper.peer_key, { })
 		wrapper.init_peer_context(
 			peer_info.get("is_remote", false),
 			peer_info.get("online", true),
@@ -655,8 +656,8 @@ func _add_wrapper_to_grid(wrapper: PanelWrapper, key: String) -> void:
 				# Initialise summary tooltips and icons.
 				_on_adapter_data_changed(key)
 
-
 # Maximize / restore
+
 
 func _on_maximize_requested(key: String) -> void:
 	if _maximized_key == key:
@@ -665,12 +666,12 @@ func _on_maximize_requested(key: String) -> void:
 		_maximized_key = key
 	_rebuild_grid()
 
-
 # Panel factory
 
+
 func _create_panel_control(
-	pt: PanelDataAdapter.PanelType,
-	peer_key: String
+		pt: PanelDataAdapter.PanelType,
+		peer_key: String,
 ) -> Control:
 	var control: Control
 	match pt:
@@ -688,14 +689,15 @@ func _create_panel_control(
 				EditorInterface.edit_script(script, ln)
 				(func() -> void:
 					var se := EditorInterface.get_script_editor()
-					if not se: return
+					if not se:
+						return
 					var ed := se.get_current_editor()
-					if not ed: return
+					if not ed:
+						return
 					var ce := ed.get_base_editor() as CodeEdit
 					if ce:
 						ce.set_line_as_breakpoint(ln - 1, new_state)
 				).call_deferred()
-
 		PanelDataAdapter.PanelType.CRASH:
 			control = PanelCrashManifest.new()
 			var crash_panel := control as PanelCrashManifest
@@ -704,9 +706,7 @@ func _create_panel_control(
 				var cid: String = ctx.get("cid", "")
 				if cid.is_empty():
 					return
-				var span_name := PanelDataAdapter.PANEL_NAMES[
-					PanelDataAdapter.PanelType.SPAN
-				]
+				var span_name := PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.SPAN]
 				var span_key: String = "%s:%s" % [peer_key, span_name]
 				if span_key in _panel_wrappers:
 					var panel := _panel_wrappers[span_key].panel_control
@@ -715,7 +715,6 @@ func _create_panel_control(
 			crash_panel.on_auto_break_changed = func(enabled: bool) -> void:
 				if session:
 					session.set_auto_break(enabled)
-
 		PanelDataAdapter.PanelType.TOPOLOGY:
 			control = PanelTopology.new()
 			var topology_panel := control as PanelTopology
@@ -728,7 +727,9 @@ func _create_panel_control(
 			topology_panel.on_refresh_requested = func() -> void:
 				if session and session.plugin:
 					session.plugin.send_to_game(
-						session.session_id, "networked:request_snapshot", []
+						session.session_id,
+						"networked:request_snapshot",
+						[],
 					)
 
 			# Nameplate toggle: handled by the panel itself.
@@ -745,14 +746,12 @@ func _create_panel_control(
 
 	return Control.new()
 
-
 # Breakpoint forwarding
+
 
 ## Called by [NetworkedDebuggerPlugin._breakpoint_set_in_tree].
 func on_breakpoint_changed(source: String, line: int, enabled: bool) -> void:
-	var span_name := PanelDataAdapter.PANEL_NAMES[
-		PanelDataAdapter.PanelType.SPAN
-	]
+	var span_name := PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.SPAN]
 	for key: String in _active_keys:
 		if not key.ends_with(":" + span_name):
 			continue
@@ -765,9 +764,7 @@ func on_breakpoint_changed(source: String, line: int, enabled: bool) -> void:
 
 ## Called by [NetworkedDebuggerPlugin._breakpoints_cleared_in_tree].
 func on_breakpoints_cleared() -> void:
-	var span_name := PanelDataAdapter.PANEL_NAMES[
-		PanelDataAdapter.PanelType.SPAN
-	]
+	var span_name := PanelDataAdapter.PANEL_NAMES[PanelDataAdapter.PanelType.SPAN]
 	for key: String in _active_keys:
 		if not key.ends_with(":" + span_name):
 			continue
@@ -777,8 +774,8 @@ func on_breakpoints_cleared() -> void:
 		if panel:
 			panel.sync_breakpoints_cleared()
 
-
 # Helpers
+
 
 static func _make_dot_texture(color: Color) -> ImageTexture:
 	var img := Image.create(10, 10, false, Image.FORMAT_RGBA8)

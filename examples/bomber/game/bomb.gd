@@ -3,6 +3,7 @@ extends Area2D
 var in_area: Array = []
 var from_player: int
 
+
 # Called from the animation.
 func explode() -> void:
 	if not is_multiplayer_authority():
@@ -15,7 +16,7 @@ func explode() -> void:
 			var world_state: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 			var query := PhysicsRayQueryParameters2D.create(position, p.position)
 			query.hit_from_inside = true
-			var result: Dictionary  = world_state.intersect_ray(query)
+			var result: Dictionary = world_state.intersect_ray(query)
 			if result.collider is not TileMap:
 				# Exploded can only be called by the authority, but will also be called locally.
 				p.exploded.rpc(from_player)

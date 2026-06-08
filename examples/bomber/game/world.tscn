@@ -303,7 +303,8 @@ theme_override_fonts/font = ExtResource("4")
 text = "EXIT GAME"
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1608085034]
-offset = Vector2(512, 300)
+position = Vector2(528, 299)
+zoom = Vector2(1.1, 1.1)
 process_callback = 0
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=165151297]
