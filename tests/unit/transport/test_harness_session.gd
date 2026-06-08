@@ -85,8 +85,8 @@ func test_set_link_conditions_for_sender() -> void:
 	var client := session.session().create_client_peer()
 	session.session().poll()
 
-	var conditions := NetwLinkConditions.new(44)
-	conditions.delay_polls = 3
+	var conditions := LocalLoopbackSession.LinkConditions.new(44)
+	conditions.latency_ms = 50.0
 	session.set_link_conditions(
 		server,
 		conditions,
@@ -97,7 +97,10 @@ func test_set_link_conditions_for_sender() -> void:
 		server,
 		client._get_unique_id(),
 	)
-	assert_that(installed.delay_polls).is_equal(3)
+	assert_that(installed.latency_ms).is_equal(50.0)
+	assert_that(
+		session.get_link_plan(server, client._get_unique_id()).delay_polls,
+	).is_equal(3)
 
 	session.clear_link_conditions(server, client._get_unique_id())
 	assert_that(

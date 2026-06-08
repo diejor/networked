@@ -17,11 +17,11 @@ func test_soak_500_ticks_random_goals() -> void:
 func test_soak_four_players_rough_link_300_ticks() -> void:
 	var runners := await add_players_and_start(4)
 
-	var conditions := NetwLinkConditions.new(1)
-	conditions.loss_probability = 0.3
-	conditions.delay_polls = 3
 	for i in range(1, runners.size()):
-		game.set_link_conditions(runners[i], conditions, runners[0])
+		game.link(runners[i], runners[0]).exact() \
+				.loss_prob(0.3) \
+				.delay_polls(3) \
+				.seed(1)
 
 	var ais := make_ais(runners, BomberAI.Goal.random())
 	await run_until(ais, 300)

@@ -168,29 +168,14 @@ func show_views() -> ParticipantViewport:
 	return _display_viewport
 
 
-## Sets inbound link conditions on [param runner]'s loopback peer.
-##
-## [param from_runner] keys the conditions to one sender. A client runner only
-## ever receives from the server, so per-sender keying is meaningful mainly when
-## [param runner] is the host.
-func set_link_conditions(
-		runner: NetwSceneRunner,
-		conditions: NetwLinkConditions,
-		from_runner: NetwSceneRunner = null,
-) -> void:
-	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
-	var sender_id := from_runner.peer_id if from_runner else 0
-	_loopback.set_link_conditions(peer, conditions, sender_id)
-
-
-## Clears inbound link conditions on [param runner]'s loopback peer.
-func clear_link_conditions(
+## Returns fluent inbound link control for [param runner]'s loopback peer.
+func link(
 		runner: NetwSceneRunner,
 		from_runner: NetwSceneRunner = null,
-) -> void:
+) -> NetwLink:
 	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
 	var sender_id := from_runner.peer_id if from_runner else 0
-	_loopback.clear_link_conditions(peer, sender_id)
+	return NetwLink.new(_loopback.session(), peer, sender_id)
 
 
 ## Frees all participant slots and resets global harness state.

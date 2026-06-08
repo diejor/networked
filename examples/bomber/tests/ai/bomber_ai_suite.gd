@@ -125,9 +125,8 @@ func settle_network(
 	if runners.is_empty():
 		return
 	var host := runners[0]
-	var normal_cond := NetwLinkConditions.new(1)
 	for i in range(1, runners.size()):
-		game.set_link_conditions(runners[i], normal_cond, host)
+		game.link(runners[i], host).clear()
 	var remaining := ticks
 	while remaining > 0:
 		var batch := mini(20, remaining)

@@ -17,7 +17,7 @@ func after_test() -> void:
 	await super.after_test()
 
 
-func test_set_link_conditions_routes_to_correct_peer() -> void:
+func test_link_routes_to_correct_peer() -> void:
 	game = make_game_harness(_GAME_SCENE)
 	await game.setup()
 
@@ -27,26 +27,22 @@ func test_set_link_conditions_routes_to_correct_peer() -> void:
 	var host_peer := host.tree.multiplayer_peer as LocalMultiplayerPeer
 	var client_peer := client.tree.multiplayer_peer as LocalMultiplayerPeer
 
-	var client_cond := NetwLinkConditions.new(1)
-	client_cond.delay_polls = 4
-	game.set_link_conditions(client, client_cond)
-	assert_that(session.get_link_conditions(client_peer)).is_not_null()
-	assert_that(session.get_link_conditions(client_peer).delay_polls).is_equal(4)
+	game.link(client).exact().delay_polls(4).seed(1)
+	assert_that(session.get_link_plan(client_peer)).is_not_null()
+	assert_that(session.get_link_plan(client_peer).delay_polls).is_equal(4)
 
-	var sender_cond := NetwLinkConditions.new(2)
-	sender_cond.delay_polls = 7
-	game.set_link_conditions(host, sender_cond, client)
+	game.link(host, client).exact().delay_polls(7).seed(2)
 	assert_that(
-		session.get_link_conditions(host_peer, client.peer_id),
+		session.get_link_plan(host_peer, client.peer_id),
 	).is_not_null()
 	assert_that(
-		session.get_link_conditions(host_peer, client.peer_id).delay_polls,
+		session.get_link_plan(host_peer, client.peer_id).delay_polls,
 	).is_equal(7)
 	# The sender-keyed condition must not leak into the wildcard slot.
-	assert_that(session.get_link_conditions(host_peer)).is_null()
+	assert_that(session.get_link_plan(host_peer)).is_null()
 
 
-func test_set_link_conditions_delays_inbound_rpc() -> void:
+func test_link_delays_inbound_rpc() -> void:
 	game = make_game_harness(_GAME_SCENE)
 	await game.setup()
 
@@ -59,9 +55,7 @@ func test_set_link_conditions_delays_inbound_rpc() -> void:
 	var baseline_ticks := await _ticks_until_value(client, 10, 8)
 	assert_that(baseline_ticks).is_greater_equal(0)
 
-	var conditions := NetwLinkConditions.new(20)
-	conditions.delay_polls = 6
-	game.set_link_conditions(client, conditions)
+	game.link(client).exact().delay_polls(6).seed(20)
 
 	host_probe.apply_value.rpc(20)
 	var delayed_ticks := await _ticks_until_value(client, 20, 16)

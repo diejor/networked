@@ -151,9 +151,9 @@ func test_link_delay_releases_on_due_poll() -> void:
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(10)
-	conditions.delay_polls = 2
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.delay_polls = 2
+	session.set_link_plan(server, plan)
 
 	var payload := PackedByteArray([1, 2, 3])
 	client._set_target_peer(1)
@@ -170,20 +170,25 @@ func test_link_delay_releases_on_due_poll() -> void:
 	assert_that(server._get_packet_script()).is_equal(payload)
 
 
-func test_reliable_loss_blocked_by_default() -> void:
+func test_reliable_loss_arrives_after_retransmit_delay() -> void:
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(10)
-	conditions.loss_probability = 1.0
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.loss_probability = 1.0
+	plan.retransmit_polls = 2
+	session.set_link_plan(server, plan)
 
 	var payload := PackedByteArray([4, 5, 6])
 	client._set_target_peer(1)
 	client._put_packet_script(payload)
 	session.poll()
 
+	assert_that(server._get_available_packet_count()).is_equal(0)
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+	session.poll()
 	assert_that(server._get_available_packet_count()).is_equal(1)
 	assert_that(server._get_packet_script()).is_equal(payload)
 
@@ -193,9 +198,9 @@ func test_unreliable_loss_is_deterministic() -> void:
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(10)
-	conditions.loss_probability = 1.0
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.loss_probability = 1.0
+	session.set_link_plan(server, plan)
 
 	client._set_target_peer(1)
 	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
@@ -210,10 +215,10 @@ func test_reliable_stays_ordered_under_jitter() -> void:
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(123)
-	conditions.jitter_polls = 6
-	conditions.reorder_probability = 1.0
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(123)
+	plan.jitter_polls = 6
+	plan.reorder_probability = 1.0
+	session.set_link_plan(server, plan)
 
 	client._set_target_peer(1)
 	for value in range(12):
@@ -234,16 +239,80 @@ func test_unreliable_reorder_is_deterministic() -> void:
 	assert_that(different_seed_order).is_not_equal(first_order)
 
 
+func test_unreliable_duplicate_delivers_second_copy() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.duplicate_probability = 1.0
+	session.set_link_plan(server, plan)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	client._put_packet_script(PackedByteArray([7]))
+	session.poll()
+	session.poll()
+
+	assert_that(_drain_packet_values(server)).is_equal([7, 7])
+
+
+func test_unreliable_throttle_releases_burst_after_window() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.throttle_probability = 1.0
+	plan.throttle_polls = 3
+	session.set_link_plan(server, plan)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	for value in range(3):
+		client._put_packet_script(PackedByteArray([value]))
+		session.poll()
+		assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(_drain_packet_values(server)).is_equal([0, 1, 2])
+
+
+func test_rng_streams_are_independent_by_impairment() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var plan := LocalLoopbackSession.LinkPlan.new(120)
+	plan.jitter_polls = 4
+	plan.duplicate_probability = 0.5
+	session.set_link_plan(server, plan)
+
+	client._set_target_peer(1)
+	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
+	client._put_packet_script(PackedByteArray([1]))
+	session.poll()
+
+	var state = session._links_by_peer[server]
+	var sender_id := client._get_unique_id()
+	assert_that(state.rng_by_stream.keys()).contains(
+		["%d:jitter" % sender_id],
+	)
+	assert_that(state.rng_by_stream.keys()).contains(
+		["%d:duplicate" % sender_id],
+	)
+
+
 func test_clear_link_conditions_flushes_predictably() -> void:
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(5)
-	conditions.delay_polls = 10
-	conditions.jitter_polls = 4
-	conditions.reorder_probability = 1.0
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(5)
+	plan.delay_polls = 10
+	plan.jitter_polls = 4
+	plan.reorder_probability = 1.0
+	session.set_link_plan(server, plan)
 
 	client._set_target_peer(1)
 	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
@@ -254,7 +323,7 @@ func test_clear_link_conditions_flushes_predictably() -> void:
 	session.clear_link_conditions(server)
 
 	assert_that(_drain_packet_values(server)).is_equal(
-		[0, 2, 7, 1, 5, 6, 3, 4],
+		[7, 1, 4, 5, 3, 0, 2, 6],
 	)
 
 
@@ -264,11 +333,11 @@ func test_sender_condition_delays_only_that_sender() -> void:
 	var immediate_client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(10)
-	conditions.delay_polls = 2
-	session.set_link_conditions(
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.delay_polls = 2
+	session.set_link_plan(
 		server,
-		conditions,
+		plan,
 		delayed_client._get_unique_id(),
 	)
 
@@ -293,9 +362,9 @@ func test_wildcard_condition_still_delays_every_sender() -> void:
 	var second_client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(10)
-	conditions.delay_polls = 1
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.delay_polls = 1
+	session.set_link_plan(server, plan)
 
 	first_client._set_target_peer(1)
 	second_client._set_target_peer(1)
@@ -327,25 +396,26 @@ func test_manual_hold_release_still_preserves_order() -> void:
 	assert_that(server._get_packet_script()).is_equal(PackedByteArray([2]))
 
 
-func _run_unreliable_reorder(seed: int) -> Array:
+func _run_unreliable_reorder(seed: int, include_duplicates: bool = false) -> Array:
 	session = auto_free(LocalLoopbackSession.new())
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()
 	session.poll()
 
-	var conditions := NetwLinkConditions.new(seed)
-	conditions.jitter_polls = 4
-	conditions.reorder_probability = 1.0
-	session.set_link_conditions(server, conditions)
+	var plan := LocalLoopbackSession.LinkPlan.new(seed)
+	plan.jitter_polls = 4
+	plan.reorder_probability = 1.0
+	plan.duplicate_probability = 0.5 if include_duplicates else 0.0
+	session.set_link_plan(server, plan)
 
 	client._set_target_peer(1)
-	client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
 	for value in range(8):
+		client._set_transfer_mode(MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
 		client._put_packet_script(PackedByteArray([value]))
 		session.poll()
 
 	_poll_session(10)
-	return _drain_packet_values(server)
+	return _first_occurrences(_drain_packet_values(server))
 
 
 func _poll_session(count: int) -> void:
@@ -358,3 +428,11 @@ func _drain_packet_values(peer: LocalMultiplayerPeer) -> Array:
 	while peer._get_available_packet_count() > 0:
 		values.append(peer._get_packet_script()[0])
 	return values
+
+
+func _first_occurrences(values: Array) -> Array:
+	var result := []
+	for value in values:
+		if not result.has(value):
+			result.append(value)
+	return result

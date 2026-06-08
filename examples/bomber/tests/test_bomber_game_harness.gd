@@ -99,10 +99,10 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	var valeria_player := await valeria.await_player(&"valeria", 2.0) as Node2D
 	var valeria_on_jose := await jose.await_player(&"valeria", 2.0) as Node2D
 
-	var conditions := NetwLinkConditions.new(1)
-	conditions.loss_probability = 0.5
-	conditions.delay_polls = 4
-	game.set_link_conditions(jose, conditions, valeria)
+	game.link(jose, valeria).exact() \
+			.loss_prob(0.5) \
+			.delay_polls(4) \
+			.seed(1)
 
 	await game.sync_ticks(8)
 	valeria.simulate_action_press("move_right")

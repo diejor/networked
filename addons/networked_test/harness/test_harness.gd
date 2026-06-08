@@ -231,23 +231,14 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
-## Sets inbound link conditions on [param client]'s loopback peer.
-func set_link_conditions(
+## Returns fluent inbound link control for [param client]'s loopback peer.
+func link(
 		client: MultiplayerTree,
-		conditions: NetwLinkConditions,
-		sender_id: int = 0,
-) -> void:
+		from: Variant = null,
+) -> NetwLink:
 	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	_loopback.set_link_conditions(peer, conditions, sender_id)
-
-
-## Clears inbound link conditions on [param client]'s loopback peer.
-func clear_link_conditions(
-		client: MultiplayerTree,
-		sender_id: int = 0,
-) -> void:
-	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	_loopback.clear_link_conditions(peer, sender_id)
+	var sender_id := _sender_id_from(from)
+	return NetwLink.new(_session, peer, sender_id)
 
 
 ## Disconnects [param client] without freeing it.
@@ -660,6 +651,19 @@ func _wait_until(
 		timeout: float = DEFAULT_TIMEOUT,
 ) -> bool:
 	return await _waiter.until(cond, label, timeout)
+
+
+func _sender_id_from(from: Variant) -> int:
+	if from == null:
+		return 0
+	if from is int:
+		return from
+	if from is MultiplayerTree:
+		var peer := (from as MultiplayerTree).multiplayer_peer
+		return peer.get_unique_id() if peer else 0
+	if from is LocalMultiplayerPeer:
+		return (from as LocalMultiplayerPeer).get_unique_id()
+	return 0
 
 
 func _default_reporter(label: String, timeout: float) -> void:
