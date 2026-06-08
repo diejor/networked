@@ -231,12 +231,39 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
+## Degrades both network directions for [param client].
+func degrade(client: MultiplayerTree) -> NetwLink.NetwLinkMulti:
+	var inbound := path(_server, client)
+	var outbound := path(client, _server)
+	return NetwLink.NetwLinkMulti.new(inbound, outbound)
+
+
+## Applies [param profile] to every connected client.
+func degrade_clients(profile: NetwLink.Profile) -> void:
+	for client in _clients:
+		degrade(client).profile(profile)
+
+
+## Clears all link simulation in this harness session.
+func clear_links() -> void:
+	_session.clear_all_link_conditions()
+
+
+## Returns fluent path control for packets from [param from] to [param to].
+func path(from: MultiplayerTree, to: MultiplayerTree) -> NetwLink:
+	var peer := _loopback_peer_for(to, "path")
+	return NetwLink.new(_session, peer, _sender_id_from(from))
+
+
 ## Returns fluent inbound link control for [param client]'s loopback peer.
+##
+## Prefer [method degrade] or [method path]. This method preserves the old
+## receiver keyed API used by existing tests.
 func link(
 		client: MultiplayerTree,
 		from: Variant = null,
 ) -> NetwLink:
-	var peer := client.multiplayer_peer as LocalMultiplayerPeer
+	var peer := _loopback_peer_for(client, "link")
 	var sender_id := _sender_id_from(from)
 	return NetwLink.new(_session, peer, sender_id)
 
@@ -664,6 +691,25 @@ func _sender_id_from(from: Variant) -> int:
 	if from is LocalMultiplayerPeer:
 		return (from as LocalMultiplayerPeer).get_unique_id()
 	return 0
+
+
+func _loopback_peer_for(
+		tree: MultiplayerTree,
+		method_name: String,
+) -> LocalMultiplayerPeer:
+	assert(
+		tree != null,
+		"NetwTestHarness.%s: tree is required." % method_name,
+	)
+	var peer := tree.multiplayer_peer as LocalMultiplayerPeer
+	assert(
+		peer != null,
+		(
+				"NetwTestHarness.%s: link simulation requires "
+				+ "LocalLoopbackBackend."
+		) % method_name,
+	)
+	return peer
 
 
 func _default_reporter(label: String, timeout: float) -> void:

@@ -117,16 +117,15 @@ func count_bombs(runner: NetwSceneRunner) -> int:
 	return count
 
 
-## Restores normal links from every remote runner to [param host].
+## Restores normal links for every remote runner.
 func settle_network(
 		runners: Array[NetwSceneRunner],
 		ticks: int = 60,
 ) -> void:
 	if runners.is_empty():
 		return
-	var host := runners[0]
 	for i in range(1, runners.size()):
-		game.link(runners[i], host).clear()
+		game.degrade(runners[i]).clear()
 	var remaining := ticks
 	while remaining > 0:
 		var batch := mini(20, remaining)

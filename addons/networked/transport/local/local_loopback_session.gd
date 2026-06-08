@@ -10,6 +10,7 @@ var server_peer: LocalMultiplayerPeer
 var client_peers: Array[LocalMultiplayerPeer] = []
 var server_app_id: StringName = &""
 var _poll_count: int = 0
+var _last_scoped_poll_frame: int = -1
 var _links_by_peer: Dictionary = { }
 var _held_peers: Dictionary = { }
 
@@ -144,7 +145,9 @@ class LinkConditions:
 ## Poll-level loopback impairment plan for [LocalLoopbackSession].
 ##
 ## [member delay_polls] and [member jitter_polls] are deterministic session
-## poll counts. Use [method set_link_plan] for exact golden tests.
+## poll counts. Use [method set_link_plan] for deterministic tests. Prefer
+## [method NetwGameHarness.degrade] or [method NetwGameHarness.path] in
+## game harness tests.
 ##
 ## [codeblock]
 ## var plan := LocalLoopbackSession.LinkPlan.new(44)
@@ -186,6 +189,13 @@ class LinkPlan:
 		return copy
 
 
+	## Returns [member delay_polls] converted back to milliseconds.
+	func effective_latency_ms(polls_per_second: int = 0) -> float:
+		var pps := polls_per_second if polls_per_second > 0 \
+		else Engine.get_physics_ticks_per_second()
+		return 1000.0 * float(delay_polls) / float(maxi(1, pps))
+
+
 class _LinkState:
 	var conditions_by_sender: Dictionary = { }
 	var plans_by_sender: Dictionary = { }
@@ -217,9 +227,11 @@ func init_server_side() -> void:
 		return
 
 	if server_peer:
+		server_peer.loopback_session = null
 		server_peer.close()
 
 	server_peer = LocalMultiplayerPeer.new()
+	server_peer.loopback_session = self
 	var err := server_peer.create_server()
 	if err != OK:
 		Netw.dbg.warn(
@@ -235,6 +247,7 @@ func create_client_peer() -> LocalMultiplayerPeer:
 	init_server_side()
 
 	var client := LocalMultiplayerPeer.new()
+	client.loopback_session = self
 	var client_id := randi_range(2, 2147483647)
 	var err := client.create_client(client_id)
 	if err != OK:
@@ -265,6 +278,19 @@ func get_client_peer() -> LocalMultiplayerPeer:
 ## Polls the server and all active client peers each frame.
 func poll() -> void:
 	_poll_count += 1
+	_poll_peers()
+
+
+## Polls all active peers and advances time once per engine process frame.
+func poll_frame_scoped() -> void:
+	var frame := Engine.get_process_frames()
+	if frame != _last_scoped_poll_frame:
+		_last_scoped_poll_frame = frame
+		_poll_count += 1
+	_poll_peers()
+
+
+func _poll_peers() -> void:
 	if server_peer:
 		_poll_or_hold(server_peer)
 	for client in client_peers:
@@ -313,6 +339,7 @@ func set_link_conditions(
 	state.conditions_by_sender[sender_id] = copy
 	state.plans_by_sender[sender_id] = copy.compile(_polls_per_second())
 	_clear_sender_rng(state, sender_id)
+	_capture_linked_queued_packets(peer)
 
 
 ## Sets an exact deterministic inbound link plan for [param peer].
@@ -332,6 +359,7 @@ func set_link_plan(
 	state.conditions_by_sender.erase(sender_id)
 	state.plans_by_sender[sender_id] = plan.clone()
 	_clear_sender_rng(state, sender_id)
+	_capture_linked_queued_packets(peer)
 
 
 ## Clears inbound link conditions for [param peer] and [param sender_id].
@@ -349,6 +377,20 @@ func clear_link_conditions(
 		_release_due(peer, true)
 		if state.in_flight.is_empty():
 			_links_by_peer.erase(peer)
+
+
+## Clears all installed link conditions and flushes delayed packets.
+func clear_all_link_conditions() -> void:
+	for peer: LocalMultiplayerPeer in _links_by_peer.keys():
+		var state: _LinkState = _links_by_peer[peer]
+		state.conditions_by_sender.clear()
+		state.plans_by_sender.clear()
+		state.rng_by_stream.clear()
+		state.reliable_due_by_channel.clear()
+		if not _held_peers.has(peer):
+			_release_due(peer, true)
+			if state.in_flight.is_empty():
+				_links_by_peer.erase(peer)
 
 
 ## Returns the installed inbound link conditions for [param peer].
@@ -376,37 +418,54 @@ func get_link_plan(
 ## Closes all peers and resets the session so a new server can be hosted.
 func reset() -> void:
 	if server_peer:
+		server_peer.loopback_session = null
 		server_peer.close()
 	for client in client_peers:
 		if client:
+			client.loopback_session = null
 			client.close()
 	server_peer = null
 	server_app_id = &""
 	client_peers.clear()
 	_poll_count = 0
+	_last_scoped_poll_frame = -1
 	_links_by_peer.clear()
 	_held_peers.clear()
 
 
 func _poll_or_hold(peer: LocalMultiplayerPeer) -> void:
+	# Conditioning now happens at receive time in capture_incoming. Poll only
+	# drives connection events and releases packets whose due poll has arrived.
 	if _held_peers.has(peer):
 		_capture_held_packets(peer)
 		return
 
-	var state := _links_by_peer.get(peer) as _LinkState
-	if state and _has_link_plans(state):
-		peer.poll()
-		_capture_conditioned_packets(peer, state)
-		_release_due(peer)
-		return
-
-	if state and not state.in_flight.is_empty():
-		_release_due(peer)
-		if state.in_flight.is_empty():
-			_links_by_peer.erase(peer)
-		return
-
 	peer.poll()
+	if _links_by_peer.has(peer):
+		_release_due(peer)
+
+
+## Offers an inbound [param packet] for [param peer] to link conditions at
+## receive time. Returns [code]true[/code] when the session takes ownership of
+## the packet (held in flight or dropped), so the caller must not deliver it.
+func capture_incoming(peer: LocalMultiplayerPeer, packet: Dictionary) -> bool:
+	if _held_peers.has(peer):
+		var held := _ensure_link(peer)
+		_enqueue_packet(held, packet, 9223372036854775807)
+		return true
+
+	var state := _links_by_peer.get(peer) as _LinkState
+	if not state or not _has_link_plans(state):
+		return false
+	var plan := _plan_for_packet(state, packet)
+	if not plan:
+		return false
+
+	if _is_reliable_packet(packet):
+		_capture_reliable_packet(state, packet, plan)
+	else:
+		_capture_unreliable_packet(state, packet, plan)
+	return true
 
 
 func _capture_held_packets(peer: LocalMultiplayerPeer) -> void:
@@ -416,25 +475,6 @@ func _capture_held_packets(peer: LocalMultiplayerPeer) -> void:
 	for packet in peer._packet_queue:
 		_enqueue_packet(state, packet, 9223372036854775807)
 	peer._packet_queue.clear()
-
-
-func _capture_conditioned_packets(
-		peer: LocalMultiplayerPeer,
-		state: _LinkState,
-) -> void:
-	if peer._packet_queue.is_empty():
-		return
-	var passthrough: Array[Dictionary] = []
-	for packet in peer._packet_queue:
-		var plan := _plan_for_packet(state, packet)
-		if not plan:
-			passthrough.append(packet)
-			continue
-		if _is_reliable_packet(packet):
-			_capture_reliable_packet(state, packet, plan)
-			continue
-		_capture_unreliable_packet(state, packet, plan)
-	peer._packet_queue = passthrough
 
 
 func _release_due(peer: LocalMultiplayerPeer, flush_all: bool = false) -> void:
@@ -458,11 +498,12 @@ func _release_due(peer: LocalMultiplayerPeer, flush_all: bool = false) -> void:
 
 	var existing := peer._packet_queue.duplicate()
 	peer._packet_queue.clear()
+	peer._packet_queue.append_array(existing)
 	for entry: Dictionary in due:
 		var packet: Dictionary = entry.get("packet", { })
 		if _sender_is_linked(peer, packet):
 			peer._packet_queue.append(packet)
-	peer._packet_queue.append_array(existing)
+	_prune_reliable_due(state)
 	if state.in_flight.is_empty() \
 			and not _has_link_plans(state) \
 			and not _held_peers.has(peer):
@@ -504,13 +545,30 @@ func _enqueue_packet(
 	state.seq += 1
 
 
+func _capture_linked_queued_packets(peer: LocalMultiplayerPeer) -> void:
+	if peer._packet_queue.is_empty():
+		return
+
+	var state := _ensure_link(peer)
+	var remaining: Array[Dictionary] = []
+	for packet: Dictionary in peer._packet_queue:
+		var plan := _plan_for_packet(state, packet)
+		if not plan:
+			remaining.append(packet)
+		elif _is_reliable_packet(packet):
+			_capture_reliable_packet(state, packet, plan)
+		else:
+			_capture_unreliable_packet(state, packet, plan)
+	peer._packet_queue = remaining
+
+
 func _capture_reliable_packet(
 		state: _LinkState,
-		packet: Dictionary,
-		plan: LinkPlan,
+	packet: Dictionary,
+	plan: LinkPlan,
 ) -> void:
 	var sender_id: int = packet.get("peer", 0)
-	var due_poll := _poll_count + maxi(0, plan.delay_polls)
+	var due_poll := _poll_count + maxi(0, plan.delay_polls) + 1
 	if _roll(state, sender_id, "loss", plan.seed, plan.loss_probability):
 		due_poll += maxi(1, plan.retransmit_polls)
 	var key := "%d:%d" % [sender_id, int(packet.get("channel", 0))]
@@ -529,7 +587,7 @@ func _capture_unreliable_packet(
 	if _roll(state, sender_id, "loss", plan.seed, plan.loss_probability):
 		return
 
-	var due_poll := _poll_count + maxi(0, plan.delay_polls)
+	var due_poll := _poll_count + maxi(0, plan.delay_polls) + 1
 	due_poll += _draw_jitter(state, sender_id, plan)
 	if _roll(
 			state,
@@ -546,7 +604,8 @@ func _capture_unreliable_packet(
 			plan.seed,
 			plan.throttle_probability,
 	):
-		state.throttle_until_poll = _poll_count + maxi(1, plan.throttle_polls)
+		state.throttle_until_poll = \
+				_poll_count + maxi(1, plan.throttle_polls) + 1
 	if state.throttle_until_poll > _poll_count:
 		due_poll = maxi(due_poll, state.throttle_until_poll)
 
@@ -613,6 +672,12 @@ func _clear_sender_rng(state: _LinkState, sender_id: int) -> void:
 			state.rng_by_stream.erase(key)
 	for key: String in state.reliable_due_by_channel.keys():
 		if key.begins_with(prefix):
+			state.reliable_due_by_channel.erase(key)
+
+
+func _prune_reliable_due(state: _LinkState) -> void:
+	for key: String in state.reliable_due_by_channel.keys():
+		if int(state.reliable_due_by_channel[key]) <= _poll_count:
 			state.reliable_due_by_channel.erase(key)
 
 

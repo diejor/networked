@@ -4,15 +4,7 @@ extends BomberAiSuite
 func test_full_match_under_rough_link() -> void:
 	var runners := await add_players_and_start(2)
 
-	game.link(runners[1], runners[0]) \
-			.latency_ms(600) \
-			.jitter_ms(200) \
-			.loss(0.05)
-	
-	game.link(runners[0], runners[1]) \
-			.latency_ms(600) \
-			.jitter_ms(200) \
-			.loss(0.05)
+	game.degrade(runners[1]).profile(NetwLink.Profile.MOBILE_4G)
 
 	var ais := make_ais(runners, BomberAI.Goal.score())
 	await run_until(
@@ -32,10 +24,7 @@ func test_positions_converge_after_ai_stops_on_rough_link() -> void:
 	var runners := await add_players_and_start(3)
 
 	for i in range(1, runners.size()):
-		game.link(runners[i], runners[0]) \
-			.latency_ms(600) \
-			.jitter_ms(200) \
-			.loss(0.05)
+		game.degrade(runners[i]).profile(NetwLink.Profile.MOBILE_4G)
 
 	var ais := make_ais(runners, BomberAI.Goal.wander())
 
@@ -74,10 +63,9 @@ func test_four_ais_progressive_link_degradation() -> void:
 	var stages := [0.1, 0.3, 0.5]
 	for loss in stages:
 		for i in range(1, runners.size()):
-			game.link(runners[i], runners[0]).exact() \
-					.loss_prob(loss) \
-					.delay_polls(int(loss * 10)) \
-					.seed(1)
+			game.degrade(runners[i]) \
+					.profile(NetwLink.Profile.MOBILE_4G) \
+					.loss(loss)
 
 		await run_until(ais, 100)
 

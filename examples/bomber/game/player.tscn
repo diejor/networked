@@ -229,4 +229,5 @@ visual_root = NodePath("../sprite")
 visual_root_property_map = Dictionary[StringName, StringName]({
 &"synced_position": &"position"
 })
+smoothing_time = 0.1
 metadata/_custom_type_script = "uid://b21bbqt166ive"

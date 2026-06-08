@@ -168,12 +168,53 @@ func show_views() -> ParticipantViewport:
 	return _display_viewport
 
 
+## Degrades both network directions for [param runner].
+##
+## [method NetwLink.NetwLinkMulti.inbound] narrows to server to player
+## traffic. [method NetwLink.NetwLinkMulti.outbound] narrows to player to
+## server traffic.
+func degrade(runner: NetwSceneRunner) -> NetwLink.NetwLinkMulti:
+	assert(_host != null, "NetwGameHarness.degrade: add host first.")
+	assert(
+		runner != _host,
+		"NetwGameHarness.degrade: host has no remote player link.",
+	)
+	var inbound := path(_host, runner)
+	var outbound := path(runner, _host)
+	return NetwLink.NetwLinkMulti.new(inbound, outbound)
+
+
+## Applies [param profile] to every runner except the host.
+func degrade_clients(profile: NetwLink.Profile) -> void:
+	for runner in _runners:
+		if runner != _host:
+			degrade(runner).profile(profile)
+
+
+## Clears all link simulation in this harness session.
+func clear_links() -> void:
+	_loopback.session().clear_all_link_conditions()
+
+
+## Returns fluent path control for packets from [param from_runner] to
+## [param to_runner].
+func path(
+		from_runner: NetwSceneRunner,
+		to_runner: NetwSceneRunner,
+) -> NetwLink:
+	var peer := _loopback_peer_for(to_runner, "path")
+	return NetwLink.new(_loopback.session(), peer, from_runner.peer_id)
+
+
 ## Returns fluent inbound link control for [param runner]'s loopback peer.
+##
+## Prefer [method degrade] or [method path]. This method preserves the old
+## receiver keyed API used by existing tests.
 func link(
 		runner: NetwSceneRunner,
 		from_runner: NetwSceneRunner = null,
 ) -> NetwLink:
-	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	var peer := _loopback_peer_for(runner, "link")
 	var sender_id := from_runner.peer_id if from_runner else 0
 	return NetwLink.new(_loopback.session(), peer, sender_id)
 
@@ -249,6 +290,25 @@ func _finish_online_runner(runner: NetwSceneRunner) -> void:
 func _show_display_window() -> void:
 	if _host:
 		_host.move_window_to_foreground()
+
+
+func _loopback_peer_for(
+		runner: NetwSceneRunner,
+		method_name: String,
+) -> LocalMultiplayerPeer:
+	assert(
+		runner != null and runner.tree != null,
+		"NetwGameHarness.%s: runner is not connected." % method_name,
+	)
+	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	assert(
+		peer != null,
+		(
+				"NetwGameHarness.%s: link simulation requires "
+				+ "LocalLoopbackBackend."
+		) % method_name,
+	)
+	return peer
 
 
 func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:

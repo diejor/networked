@@ -54,9 +54,9 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	var valeria_world := await valeria.await_scene(&"World", 2.0)
-	var jose_world := await jose.await_scene(&"World", 2.0)
-	var jose_player := await jose.await_player(&"jose", 2.0) as Node2D
+	var valeria_world := await valeria.await_scene(&"World")
+	var jose_world := await jose.await_scene(&"World")
+	var jose_player := await jose.await_player(&"jose") as Node2D
 	var valeria_player := valeria.find_player(&"valeria") as Node2D
 
 	await game.sync_ticks(8)
@@ -94,12 +94,12 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	await valeria.await_scene(&"World", 2.0)
-	var jose_world := await jose.await_scene(&"World", 2.0)
-	var valeria_player := await valeria.await_player(&"valeria", 2.0) as Node2D
-	var valeria_on_jose := await jose.await_player(&"valeria", 2.0) as Node2D
+	await valeria.await_scene(&"World")
+	var jose_world := await jose.await_scene(&"World")
+	var valeria_player := await valeria.await_player(&"valeria") as Node2D
+	var valeria_on_jose := await jose.await_player(&"valeria") as Node2D
 
-	game.link(jose, valeria).exact() \
+	game.degrade(valeria).exact() \
 			.loss_prob(0.5) \
 			.delay_polls(4) \
 			.seed(1)
@@ -131,8 +131,8 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	var world := await valeria.await_scene(&"World", 2.0)
-	var jose_view := await jose.await_player(&"jose", 2.0) as Node2D
+	var world := await valeria.await_scene(&"World")
+	var jose_view := await jose.await_player(&"jose") as Node2D
 	var jose_on_host := valeria.find_player(&"jose") as Node2D
 
 	await game.sync_ticks(8)
@@ -168,8 +168,8 @@ func test_disconnect_during_match_ends_the_game() -> void:
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	await valeria.await_scene(&"World", 2.0)
-	await valeria.await_player(&"jose", 2.0)
+	await valeria.await_scene(&"World")
+	await valeria.await_player(&"jose")
 
 	var gamestate := valeria.tree.get_service(BomberGamestate) as BomberGamestate
 	var errored: Array[bool] = [false]

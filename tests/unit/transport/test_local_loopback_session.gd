@@ -94,13 +94,26 @@ func test_closed_client_does_not_block_new_client() -> void:
 
 
 func test_reset_clears_server_and_all_clients() -> void:
-	session.create_client_peer()
-	session.create_client_peer()
+	var first_client := session.create_client_peer()
+	var second_client := session.create_client_peer()
+	var server := session.server_peer
 	session.server_app_id = &"test-app"
 	session.reset()
 	assert_that(session.server_peer).is_null()
 	assert_that(session.server_app_id).is_equal(&"")
 	assert_that(session.client_peers).is_empty()
+	assert_that(server.loopback_session).is_null()
+	assert_that(first_client.loopback_session).is_null()
+	assert_that(second_client.loopback_session).is_null()
+
+
+func test_peer_close_breaks_loopback_session_reference() -> void:
+	var client := session.create_client_peer()
+	assert_that(client.loopback_session).is_same(session)
+
+	client.close()
+
+	assert_that(client.loopback_session).is_null()
 
 
 func test_session_is_independent_of_shared_singleton() -> void:
@@ -165,6 +178,56 @@ func test_link_delay_releases_on_due_poll() -> void:
 	session.poll()
 	assert_that(server._get_available_packet_count()).is_equal(0)
 
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(1)
+	assert_that(server._get_packet_script()).is_equal(payload)
+
+
+func test_frame_scoped_poll_advances_delay_once_per_engine_frame() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.delay_polls = 2
+	session.set_link_plan(server, plan)
+
+	var payload := PackedByteArray([1, 2, 3])
+	client._set_target_peer(1)
+	client._put_packet_script(payload)
+
+	session.poll_frame_scoped()
+	session.poll_frame_scoped()
+	session.poll_frame_scoped()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(1)
+	assert_that(server._get_packet_script()).is_equal(payload)
+
+
+func test_set_link_plan_captures_existing_queued_packets() -> void:
+	var server := session.get_server_peer()
+	var client := session.create_client_peer()
+	session.poll()
+
+	var payload := PackedByteArray([9, 8, 7])
+	client._set_target_peer(1)
+	client._put_packet_script(payload)
+	assert_that(server._get_available_packet_count()).is_equal(1)
+
+	var plan := LocalLoopbackSession.LinkPlan.new(10)
+	plan.delay_polls = 2
+	session.set_link_plan(server, plan)
+
+	assert_that(server._get_available_packet_count()).is_equal(0)
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
+	session.poll()
+	assert_that(server._get_available_packet_count()).is_equal(0)
 	session.poll()
 	assert_that(server._get_available_packet_count()).is_equal(1)
 	assert_that(server._get_packet_script()).is_equal(payload)

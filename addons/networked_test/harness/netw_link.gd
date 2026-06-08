@@ -1,15 +1,23 @@
 ## Fluent local loopback link control for harness tests.
 ##
-## [method latency_ms], [method loss], and [method profile] update one
-## inbound peer link and return this handle for chaining.
-##
+## [method NetwGameHarness.degrade] applies both directions for one player.
+## [method NetwGameHarness.path] exposes one directional path.
+## [method latency_ms], [method loss], and [method profile] update the
+## selected path and return this handle for chaining.
 ## [codeblock]
-## game.link(client, host).latency_ms(200).loss(0.05)
-## game.link(client).profile(NetwLink.Profile.POOR_3G).jitter_ms(40)
+## game.degrade(client).profile(NetwLink.Profile.POOR_3G)
+## game.degrade(client).inbound().latency_ms(120)
+## game.path(client, host).loss(0.1)
+## [/codeblock]
+## [codeblock]
+## inbound: server to player. This affects what the player sees.
+## outbound: player to server. This affects when player actions arrive.
+## degrade(): inbound and outbound.
+## path(from_runner, to_runner): packets from one runner to another runner.
 ## [/codeblock]
 ##
 ## [method exact] exposes [LocalLoopbackSession.LinkPlan] poll counts for
-## golden tests. Use [method clear] to restore a perfect link.
+## tests. Use [method clear] to restore a perfect path.
 class_name NetwLink
 extends RefCounted
 
@@ -31,6 +39,8 @@ func _init(
 		peer: LocalMultiplayerPeer,
 		sender_id: int = 0,
 ) -> void:
+	assert(session != null, "NetwLink: local loopback session is required.")
+	assert(peer != null, "NetwLink: local loopback peer is required.")
 	_session = session
 	_peer = peer
 	_sender_id = sender_id
@@ -84,6 +94,14 @@ func profile(profile_id: Profile) -> NetwLink:
 	return _apply_conditions(_profile_conditions(profile_id))
 
 
+## Returns the effective latency after millisecond values are quantized.
+func effective_latency_ms() -> float:
+	var plan := _session.get_link_plan(_peer, _sender_id)
+	if not plan:
+		return 0.0
+	return plan.effective_latency_ms()
+
+
 ## Returns the exact poll-level authoring surface.
 func exact() -> NetwLinkExact:
 	var plan := _session.get_link_plan(_peer, _sender_id)
@@ -125,6 +143,113 @@ func _profile_conditions(
 			return LocalLoopbackSession.LinkConditions.satellite()
 		_:
 			return LocalLoopbackSession.LinkConditions.perfect()
+
+
+## Fluent control for one player's inbound, outbound, or both paths.
+##
+## Created by [method NetwGameHarness.degrade]. Direction filters such as
+## [method inbound] and [method outbound] return a new handle so the original
+## both direction handle remains reusable.
+class NetwLinkMulti:
+	extends RefCounted
+
+	var _inbound: NetwLink
+	var _outbound: NetwLink
+	var _links: Array[NetwLink] = []
+
+
+	func _init(
+			inbound_link: NetwLink,
+			outbound_link: NetwLink,
+	) -> void:
+		_inbound = inbound_link
+		_outbound = outbound_link
+		_links = []
+		if _inbound:
+			_links.append(_inbound)
+		if _outbound:
+			_links.append(_outbound)
+
+
+	## Selects the server to player path.
+	func inbound() -> NetwLinkMulti:
+		return _from_links(_inbound, null)
+
+
+	## Selects the player to server path.
+	func outbound() -> NetwLinkMulti:
+		return _from_links(null, _outbound)
+
+
+	## Sets baseline latency in milliseconds.
+	func latency_ms(ms: float) -> NetwLinkMulti:
+		for link in _links:
+			link.latency_ms(ms)
+		return self
+
+
+	## Sets jitter in milliseconds for unreliable traffic.
+	func jitter_ms(ms: float) -> NetwLinkMulti:
+		for link in _links:
+			link.jitter_ms(ms)
+		return self
+
+
+	## Sets packet loss probability.
+	func loss(probability: float) -> NetwLinkMulti:
+		for link in _links:
+			link.loss(probability)
+		return self
+
+
+	## Sets unreliable reorder probability.
+	func reorder(probability: float) -> NetwLinkMulti:
+		for link in _links:
+			link.reorder(probability)
+		return self
+
+
+	## Sets unreliable duplicate probability.
+	func duplicate(probability: float) -> NetwLinkMulti:
+		for link in _links:
+			link.duplicate(probability)
+		return self
+
+
+	## Sets unreliable throttle probability and freeze length.
+	func throttle(probability: float, ms: float = 0.0) -> NetwLinkMulti:
+		for link in _links:
+			link.throttle(probability, ms)
+		return self
+
+
+	## Resets every selected path to [param profile_id].
+	func profile(profile_id: Profile) -> NetwLinkMulti:
+		for link in _links:
+			link.profile(profile_id)
+		return self
+
+
+	## Returns the exact poll-level authoring surface for one path.
+	func exact() -> NetwLinkExact:
+		assert(
+			_links.size() == 1,
+			"NetwLinkMulti.exact: select inbound() or outbound() first.",
+		)
+		return _links[0].exact()
+
+
+	## Clears every selected path.
+	func clear() -> void:
+		for link in _links:
+			link.clear()
+
+
+	static func _from_links(
+			inbound_link: NetwLink,
+			outbound_link: NetwLink,
+	) -> NetwLinkMulti:
+		return NetwLinkMulti.new(inbound_link, outbound_link)
 
 
 ## Poll-level link control for deterministic low-level tests.

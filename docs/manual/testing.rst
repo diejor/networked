@@ -110,6 +110,65 @@ cannot be scoped to one slot, so it is unsupported for slot routed game tests.
 
         assert_that(alice_on_bob.position.x).is_greater(start)
 
+Simulating network conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Link simulation is a local loopback test tool. It is available through
+:ref:`NetwGameHarness <class_NetwGameHarness>` and
+:ref:`NetwTestHarness <class_NetwTestHarness>` when their participants use
+:ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>`. ENet, WebRTC,
+WebSocket, and Steam transports do not apply these conditions.
+
+The player focused API is the normal entry point. A degraded player has both
+directions affected because a poor connection usually changes what the player
+sees and when their actions reach the server. In a game harness, the listen
+server host has no remote player link, so batch degradation targets clients.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.degrade(runner).profile(NetwLink.Profile.POOR_3G)
+    game.degrade(runner).latency_ms(150).loss(0.03)
+    game.degrade_clients(NetwLink.Profile.MOBILE_4G)
+    game.clear_links()
+
+Direction filters read as the player experiences the network:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.degrade(runner).inbound().latency_ms(180)
+    game.degrade(runner).outbound().loss(0.10)
+
+``inbound()`` means server to player. It affects what the player sees.
+``outbound()`` means player to server. It affects when the player's actions
+arrive.
+
+For pair control, use ``path(from_runner, to_runner)``. The arguments
+read in packet flow order.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.path(alice, bob).latency_ms(200)
+    game.path(bob, alice).exact().delay_polls(6).seed(44)
+
+Use millisecond conditions for behavioral tests. Use ``exact()`` only for
+golden tests that need poll level control over
+:ref:`LocalLoopbackSession.LinkPlan <class_LocalLoopbackSession.LinkPlan>`.
+Integration tests should assert behavior such as convergence, packets in
+flight, and player visible state. Exact packet order is a unit level contract
+because capture at receive time follows packet arrival order.
+
+Common scenarios:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.degrade(runner).latency_ms(180)
+    game.degrade(runner).profile(NetwLink.Profile.POOR_3G)
+    game.degrade(runner).outbound().loss(0.10)
+
 Transport-specific tests
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
