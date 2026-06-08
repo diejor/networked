@@ -21,6 +21,8 @@ var fallback: SubViewport:
 ## Currently resolved participant display viewport.
 var current: SubViewport:
 	get:
+		if not is_instance_valid(_current):
+			_current = null
 		return _current
 
 var _tree: MultiplayerTree = null

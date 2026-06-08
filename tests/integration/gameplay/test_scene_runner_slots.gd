@@ -38,7 +38,7 @@ func test_slot_send_input_is_isolated_from_global_input() -> void:
 func test_scene_runner_routes_action_to_one_slot() -> void:
 	var a := _make_slot_scene("A", false)
 	var b := _make_slot_scene("B", true)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	auto_free(runner)
 
 	runner.simulate_action_press(String(ACTION))
@@ -59,7 +59,7 @@ func test_scene_runner_routes_action_to_one_slot() -> void:
 # GdUnitSceneRunnerImpl contract that NetwSceneRunner wraps.
 func test_scene_runner_routes_key_to_one_slot() -> void:
 	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	auto_free(runner)
 
 	runner.simulate_key_press(KEY_A)
@@ -76,7 +76,7 @@ func test_scene_runner_routes_key_to_one_slot() -> void:
 
 func test_scene_runner_routes_mouse_button_to_one_slot() -> void:
 	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	auto_free(runner)
 
 	runner.simulate_mouse_button_press(MOUSE_BUTTON_LEFT)
@@ -93,7 +93,7 @@ func test_scene_runner_routes_mouse_button_to_one_slot() -> void:
 
 func test_scene_runner_reset_input_to_default_clears_tracking() -> void:
 	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	auto_free(runner)
 
 	runner.simulate_action_press(String(ACTION))
@@ -114,7 +114,7 @@ func test_scene_runner_reset_input_to_default_clears_tracking() -> void:
 
 func test_scene_runner_reports_harness_owned_time_footguns() -> void:
 	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	auto_free(runner)
 
 	var time_factor_error := _capture_reported_failure(
@@ -130,7 +130,7 @@ func test_scene_runner_reports_harness_owned_time_footguns() -> void:
 
 func test_scene_runner_await_player_reports_through_waiter() -> void:
 	var a := _make_slot_scene("A", false)
-	var runner := NetwSceneRunner.new(a.scene, a.slot, &"alice")
+	var runner := NetwSceneRunner.new(a.scene, a.slot, &"valeria")
 	var reports: Array[String] = []
 	auto_free(runner)
 	runner.waiter = NetwWaiter.new(
@@ -142,7 +142,7 @@ func test_scene_runner_await_player_reports_through_waiter() -> void:
 	var player := await runner.await_player(&"nobody", 0.01)
 
 	assert_that(player).is_null()
-	assert_that(reports).contains_exactly(["player 'nobody' in 'alice' 0.01"])
+	assert_that(reports).contains_exactly(["player 'nobody' in 'valeria' 0.01"])
 
 
 func _capture_reported_failure(callable: Callable) -> String:

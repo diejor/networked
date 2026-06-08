@@ -94,7 +94,7 @@ func _join_shared_backend_without_spawn(
 
 
 func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
-	var tree := await _host_listen_with_spawned_player("alice")
+	var tree := await _host_listen_with_spawned_player("valeria")
 	var sm := tree.get_service(MultiplayerSceneManager)
 	assert_bool(sm.active_scenes.is_empty()).is_false()
 	var first_gates := _gate_count(tree)
@@ -105,7 +105,7 @@ func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 	await tree.disconnect_player()
 	_assert_session_teardown_empty(tree)
 
-	var err := await _rehost_with_spawned_player(tree, "alice")
+	var err := await _rehost_with_spawned_player(tree, "valeria")
 	assert_int(err).is_equal(OK)
 
 	assert_int(tree.state).is_equal(MultiplayerTree.State.ONLINE)
@@ -136,12 +136,12 @@ func test_server_crash_converges_to_offline_and_no_role() -> void:
 
 
 func test_disconnect_then_join_different_backend_on_same_tree() -> void:
-	var tree := await _host_listen_with_spawned_player("alice")
+	var tree := await _host_listen_with_spawned_player("valeria")
 
 	await tree.disconnect_player()
 	_assert_session_teardown_empty(tree)
 
-	var err := await _join_shared_backend_without_spawn(tree, "alice")
+	var err := await _join_shared_backend_without_spawn(tree, "valeria")
 	assert_int(err).is_equal(OK)
 
 	assert_int(tree.state).is_equal(MultiplayerTree.State.ONLINE)

@@ -761,7 +761,7 @@ func host(quiet: bool = false) -> Error:
 ## [method submit_join] runs.
 ## [codeblock]
 ## var payload := JoinPayload.new()
-## payload.username = "Alice"
+## payload.username = "valeria"
 ##
 ## var target := JoinTarget.new()
 ## target.backend = ENetBackend.new()
@@ -1154,7 +1154,7 @@ func _debug_autoconnect() -> void:
 ## joins update [method get_joined_players] and emit [signal player_joined].
 ## [codeblock]
 ## var payload := JoinPayload.new()
-## payload.username = "Alice"
+## payload.username = "valeria"
 ## tree.submit_join(payload)
 ## [/codeblock]
 @rpc("any_peer", "call_local", "reliable")

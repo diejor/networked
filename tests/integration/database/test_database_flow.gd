@@ -40,7 +40,7 @@ func test_save_flow_writes_to_backend() -> void:
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
-				&"alice",
+				&"valeria",
 				{
 					&"position": Vector2(10, 20),
 					&"health": 100,
@@ -48,7 +48,7 @@ func test_save_flow_writes_to_backend() -> void:
 			)
 	)
 
-	var record: Dictionary = db._find_by_id(&"players", &"alice")
+	var record: Dictionary = db._find_by_id(&"players", &"valeria")
 	assert_that(record.get(&"position")).is_equal(Vector2(10, 20))
 	assert_that(record.get(&"health")).is_equal(100)
 
@@ -60,7 +60,7 @@ func test_load_flow_reads_from_disk() -> void:
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
-				&"bob",
+				&"jose",
 				{
 					&"position": Vector2(5, 15),
 					&"health": 80,
@@ -80,7 +80,7 @@ func test_load_flow_reads_from_disk() -> void:
 	db2._register_schema(&"players", [&"position", &"health"])
 	await get_tree().process_frame
 
-	var record: Dictionary = db2._find_by_id(&"players", &"bob")
+	var record: Dictionary = db2._find_by_id(&"players", &"jose")
 	assert_that(record.get(&"position")).is_equal(Vector2(5, 15))
 	assert_that(record.get(&"health")).is_equal(80)
 
@@ -92,7 +92,7 @@ func test_two_entities_isolated() -> void:
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
-				&"alice",
+				&"valeria",
 				{
 					&"position": Vector2(1, 2),
 					&"health": 100,
@@ -100,7 +100,7 @@ func test_two_entities_isolated() -> void:
 			)
 			tx.queue_upsert(
 				&"players",
-				&"bob",
+				&"jose",
 				{
 					&"position": Vector2(9, 8),
 					&"health": 50,
@@ -108,11 +108,11 @@ func test_two_entities_isolated() -> void:
 			)
 	)
 
-	var alice: Dictionary = db._find_by_id(&"players", &"alice")
-	var bob: Dictionary = db._find_by_id(&"players", &"bob")
+	var valeria: Dictionary = db._find_by_id(&"players", &"valeria")
+	var jose: Dictionary = db._find_by_id(&"players", &"jose")
 
-	assert_that(alice.get(&"position")).is_equal(Vector2(1, 2))
-	assert_that(bob.get(&"position")).is_equal(Vector2(9, 8))
+	assert_that(valeria.get(&"position")).is_equal(Vector2(1, 2))
+	assert_that(jose.get(&"position")).is_equal(Vector2(9, 8))
 
 
 func test_ghost_table_warning_on_initialize() -> void:

@@ -61,6 +61,7 @@ func add_host(
 	assert(err == OK, "host_player() failed: %s" % error_string(err))
 
 	_finish_online_runner(runner)
+	await _wait_for_roster(runner)
 	if wait_for_player:
 		await _wait_for_local_player(runner)
 	return runner
@@ -87,9 +88,29 @@ func add_client(
 	assert(err == OK, "join() failed: %s" % error_string(err))
 
 	_finish_online_runner(runner)
+	await _wait_for_roster(runner)
 	if wait_for_player:
 		await _wait_for_local_player(runner)
 	return runner
+
+
+## Disconnects [param runner] and waits for the server to drop its peer.
+##
+## Mirrors [method add_client]: the call settles before returning, so the host
+## roster and any disconnect driven game logic have run by the time it resolves.
+func disconnect_runner(runner: NetwSceneRunner) -> void:
+	var peer_id := _loopback.disconnect_tree(runner.tree)
+	if peer_id == 0 or not _host or runner == _host:
+		return
+	var timed_out := await _wait_until(
+		func() -> bool:
+			for rj: ResolvedJoin in _host.tree.get_joined_players():
+				if rj.peer_id == peer_id:
+					return false
+			return true,
+		"server to drop peer %d" % peer_id,
+	)
+	assert(not timed_out, "Timed out waiting for server to drop peer.")
 
 
 ## Advances the shared scene tree by [param n] network ticks.
@@ -271,6 +292,23 @@ func _collect_nodes(root: Node) -> Array[Node]:
 	for child in root.get_children():
 		nodes.append_array(_collect_nodes(child))
 	return nodes
+
+
+# Waits until the server roster admits runner's peer. The client side join
+# future resolves before the host finishes registering the peer, so blocking
+# on the roster keeps add_host and add_client fully settled on return.
+func _wait_for_roster(runner: NetwSceneRunner) -> void:
+	if not _host:
+		return
+	var timed_out := await _wait_until(
+		func() -> bool:
+			for rj: ResolvedJoin in _host.tree.get_joined_players():
+				if rj.peer_id == runner.peer_id:
+					return true
+			return false,
+		"server roster to admit %s" % runner.username,
+	)
+	assert(not timed_out, "Timed out waiting for server to admit peer.")
 
 
 func _wait_for_local_player(runner: NetwSceneRunner) -> void:

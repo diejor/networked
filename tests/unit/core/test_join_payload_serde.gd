@@ -17,8 +17,8 @@ func test_round_trip_preserves_scalars(
 		peer_id: int,
 		is_debug: bool,
 		test_parameters := [
-			["alice", 7, false],
-			["bob", 0, true],
+			["valeria", 7, false],
+			["jose", 0, true],
 			["carol", 42, false],
 			["", -1, true],
 		],
@@ -40,7 +40,7 @@ func test_default_is_debug_is_false() -> void:
 	# not null. Guards against the [code]data.get("is_debug", false)[/code]
 	# default in [method JoinPayload.deserialize].
 	var original := JoinPayload.new()
-	original.username = &"alice"
+	original.username = &"valeria"
 
 	var restored := _round_trip(original)
 	assert_that(restored.is_debug).is_false()
@@ -50,7 +50,7 @@ func test_empty_spawn_round_trips_to_empty() -> void:
 	# A payload with no spawn intent must deserialize into an empty
 	# dictionary, not null and not a stale value.
 	var original := JoinPayload.new()
-	original.username = &"alice"
+	original.username = &"valeria"
 
 	var restored := _round_trip(original)
 	assert_that(restored.spawn).is_equal({ })
@@ -60,7 +60,7 @@ func test_spawn_dict_round_trips() -> void:
 	# The opaque spawn dictionary (a SpawnPolicy.to_dict payload) must survive
 	# serialize/deserialize verbatim, including StringName and NodePath values.
 	var original := JoinPayload.new()
-	original.username = &"alice"
+	original.username = &"valeria"
 	original.spawn = EntitySpawnPolicy.from_scene_node_path(
 		_spawner_path(&"Level1", "Players/MultiplayerEntity"),
 	).to_dict()

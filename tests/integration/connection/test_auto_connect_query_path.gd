@@ -23,7 +23,7 @@ func test_no_listener_falls_through_to_host() -> void:
 
 	var err: Error = await tree.join_or_host(
 		target,
-		_make_payload("alice"),
+		_make_payload("valeria"),
 	)
 
 	assert_int(err).is_equal(OK)
@@ -44,7 +44,7 @@ func test_live_listener_joins_as_client() -> void:
 
 	var err: Error = await client.join_or_host(
 		target,
-		_make_payload("bob"),
+		_make_payload("jose"),
 	)
 
 	assert_int(err).is_equal(OK)

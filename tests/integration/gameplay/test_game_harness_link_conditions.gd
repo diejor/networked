@@ -22,7 +22,7 @@ func test_set_link_conditions_routes_to_correct_peer() -> void:
 	await game.setup()
 
 	var host := await game.add_host("host", false)
-	var client := await game.add_client("alice", false)
+	var client := await game.add_client("valeria", false)
 	var session := game._loopback
 	var host_peer := host.tree.multiplayer_peer as LocalMultiplayerPeer
 	var client_peer := client.tree.multiplayer_peer as LocalMultiplayerPeer
@@ -51,7 +51,7 @@ func test_set_link_conditions_delays_inbound_rpc() -> void:
 	await game.setup()
 
 	var host := await game.add_host("host", false)
-	var client := await game.add_client("alice", false)
+	var client := await game.add_client("valeria", false)
 	var host_probe := host.find(_PROBE_PATH) as InboundRpcProbe
 	assert_that(host_probe).is_not_null()
 

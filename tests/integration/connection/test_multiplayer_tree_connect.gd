@@ -32,7 +32,7 @@ func before_test() -> void:
 
 func test_client_is_online_after_auto_connect_player() -> void:
 	var tree := await harness.add_connect_player(
-		harness.make_sceneless_payload("alice"),
+		harness.make_sceneless_payload("valeria"),
 	)
 
 	assert_that(tree.is_online()).is_true()
@@ -40,7 +40,7 @@ func test_client_is_online_after_auto_connect_player() -> void:
 
 func test_host_player_starts_server_and_joins() -> void:
 	var tree := await harness.add_host_player(
-		harness.make_sceneless_payload("alice"),
+		harness.make_sceneless_payload("valeria"),
 	)
 
 	assert_that(tree.is_online()).is_true()
@@ -63,7 +63,7 @@ func test_host_player_starts_server_and_joins() -> void:
 func test_listen_server_auto_connect_player_spawns_player() -> void:
 	var tree := await harness.add_listen_server(
 		harness.make_spawn_payload(
-			"alice",
+			"valeria",
 			level_builder.resource_path,
 			SPAWNER_PATH,
 		),
@@ -73,4 +73,4 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 
 	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
-	assert_that(player.name).is_equal("alice|1")
+	assert_that(player.name).is_equal("valeria|1")

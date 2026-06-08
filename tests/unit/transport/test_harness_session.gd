@@ -44,17 +44,17 @@ func test_loopback_adapter_accepts_join_target_address() -> void:
 
 
 func test_build_join_payload_without_spawn() -> void:
-	var payload := session.build_join_payload("alice")
+	var payload := session.build_join_payload("valeria")
 
-	assert_that(payload.username).is_equal("alice")
+	assert_that(payload.username).is_equal("valeria")
 	assert_that(payload.spawn).is_empty()
 
 
 func test_build_join_payload_uses_dictionary_spawn() -> void:
 	var spawn := { &"scene": "arena", &"node": "Spawner" }
-	var payload := session.build_join_payload("alice", spawn)
+	var payload := session.build_join_payload("valeria", spawn)
 
-	assert_that(payload.username).is_equal("alice")
+	assert_that(payload.username).is_equal("valeria")
 	assert_that(payload.spawn).is_equal(spawn)
 
 
@@ -63,9 +63,9 @@ func test_build_join_payload_uses_join_payload_spawn() -> void:
 	source.username = "ignored"
 	source.spawn = { &"scene": "arena" }
 
-	var payload := session.build_join_payload("alice", source)
+	var payload := session.build_join_payload("valeria", source)
 
-	assert_that(payload.username).is_equal("alice")
+	assert_that(payload.username).is_equal("valeria")
 	assert_that(payload.spawn).is_equal(source.spawn)
 
 
@@ -74,9 +74,9 @@ func test_build_join_payload_uses_scene_node_path_spawn() -> void:
 	path.scene_path = "res://levels/Arena.tscn"
 	path.node_path = "Player/MultiplayerEntity"
 
-	var payload := session.build_join_payload("alice", path)
+	var payload := session.build_join_payload("valeria", path)
 
-	assert_that(payload.username).is_equal("alice")
+	assert_that(payload.username).is_equal("valeria")
 	assert_that(payload.spawn).is_not_empty()
 
 
@@ -136,7 +136,7 @@ func test_connect_tree_joins_existing_host() -> void:
 	var err: Error = await session.connect_tree(
 		client,
 		NetwHarnessSession.Entry.JOIN,
-		session.build_join_payload("alice"),
+		session.build_join_payload("valeria"),
 	)
 
 	assert_that(err).is_equal(OK)
@@ -192,7 +192,7 @@ func test_disconnect_tree_closes_peer_and_releases_held_packets() -> void:
 	var join_err: Error = await session.connect_tree(
 		client,
 		NetwHarnessSession.Entry.JOIN,
-		session.build_join_payload("alice"),
+		session.build_join_payload("valeria"),
 	)
 	assert_that(join_err).is_equal(OK)
 

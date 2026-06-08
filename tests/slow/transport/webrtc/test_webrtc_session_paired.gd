@@ -20,7 +20,7 @@ func test_paired_signaler_reaches_native_connection() -> void:
 	var client := WebRTCTestSupport.make_client_tree(self, "_join")
 	var target := WebRTCTestSupport.make_join_target(client, host.room)
 
-	var err: Error = await client.join(target, _payload("alice"))
+	var err: Error = await client.join(target, _payload("valeria"))
 
 	assert_int(err).is_equal(OK)
 	assert_bool(client.is_online()).is_true()

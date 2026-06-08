@@ -6,8 +6,8 @@ class_name TestMultiplayerEntity
 extends NetwTestSuite
 
 func test_parse_peer_with_valid_name() -> void:
-	assert_that(NetwEntity.parse_peer("alice|42")).is_equal(42)
-	assert_that(NetwEntity.parse_entity("alice|42")).is_equal(&"alice")
+	assert_that(NetwEntity.parse_peer("valeria|42")).is_equal(42)
+	assert_that(NetwEntity.parse_entity("valeria|42")).is_equal(&"valeria")
 
 
 func test_parse_peer_with_large_peer_id() -> void:
@@ -38,19 +38,19 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
-	var entity := MultiplayerEntity.new()
-	entity.name = "MultiplayerEntity"
-	root.add_child(entity)
-	entity.owner = root
+	var mp_entity := MultiplayerEntity.new()
+	mp_entity.name = "MultiplayerEntity"
+	root.add_child(mp_entity)
+	mp_entity.owner = root
 
-	NetwEntity.bundle(root, 42, &"alice")
+	NetwEntity.bundle(root, 42, &"valeria")
 
 	var entity := NetwEntity.of(root)
-	assert_that(root.name).is_equal("alice|42")
-	assert_that(entity.entity_id).is_equal(&"alice")
+	assert_that(root.name).is_equal("valeria|42")
+	assert_that(entity.entity_id).is_equal(&"valeria")
 	assert_that(entity.peer_id).is_equal(42)
-	assert_that(entity.entity_id).is_equal(&"alice")
-	assert_that(entity.peer_id).is_equal(42)
+	assert_that(mp_entity.entity_id).is_equal(&"valeria")
+	assert_that(mp_entity.peer_id).is_equal(42)
 
 
 func test_netw_entity_template_flag_reflects_spawner() -> void:
@@ -59,11 +59,11 @@ func test_netw_entity_template_flag_reflects_spawner() -> void:
 
 	assert_that(entity.is_template).is_false()
 
-	var entity := MultiplayerEntity.new()
-	root.add_child(entity)
-	entity.owner = root
+	var mp_entity := MultiplayerEntity.new()
+	root.add_child(mp_entity)
+	mp_entity.owner = root
 
-	entity.set_multiplayer_entity(entity)
+	entity.set_multiplayer_entity(mp_entity)
 
 	assert_that(entity.is_template).is_true()
 
@@ -123,7 +123,7 @@ func test_spawner_collector_does_not_contribute_identity() -> void:
 
 func _make_player_root(peer_id: int) -> Array:
 	var root: Node2D = auto_free(Node2D.new())
-	root.name = "Alice|%d" % peer_id
+	root.name = "valeria|%d" % peer_id
 
 	var entity := MultiplayerEntity.new()
 	entity.name = "MultiplayerEntity"

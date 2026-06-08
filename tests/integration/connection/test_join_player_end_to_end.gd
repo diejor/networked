@@ -9,7 +9,7 @@ extends NetwTestSuite
 const _SPAWNER_NODE_PATH := "TestPlayerFull/MultiplayerEntity"
 
 var harness: NetwTestHarness
-var alice: MultiplayerTree
+var valeria: MultiplayerTree
 var player_builder: PlayerBuilder
 var level_builder: LevelBuilder
 
@@ -31,12 +31,12 @@ func before_test() -> void:
 	harness = make_harness()
 	await harness.setup(NetwTestSuite.create_scene_manager)
 	harness.register_spawnable_scene(level_builder.packed)
-	alice = await harness.add_client()
+	valeria = await harness.add_client()
 
 
 func test_join_player_spawns_with_authority_and_replicates_to_client() -> void:
 	var player := await harness.join_player(
-		alice,
+		valeria,
 		level_builder.resource_path,
 		_SPAWNER_NODE_PATH,
 	)
@@ -45,8 +45,8 @@ func test_join_player_spawns_with_authority_and_replicates_to_client() -> void:
 	var scene := harness.scene_on_server(level_builder.scene_name)
 	assert_that(scene).is_not_null()
 	assert_that(player.get_parent()).is_equal(scene.level)
-	var expected_id := alice.multiplayer_peer.get_unique_id()
+	var expected_id := valeria.multiplayer_peer.get_unique_id()
 	assert_that(player.get_multiplayer_authority()).is_equal(expected_id)
 
-	var client_player := await harness.wait_for_player(alice, level_builder.scene_name)
+	var client_player := await harness.wait_for_player(valeria, level_builder.scene_name)
 	assert_that(client_player).is_not_null()

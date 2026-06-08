@@ -18,19 +18,19 @@ func before_test() -> void:
 
 
 func test_host_input_reaches_local_player_after_add_host() -> void:
-	var alice := await game.add_host("alice", true, _level_1_spawn())
+	var valeria := await game.add_host("valeria", true, _level_1_spawn())
 
-	var player := alice.local_player as Node2D
+	var player := valeria.local_player as Node2D
 	assert_that(player).is_not_null()
 	var start := player.position.x
 
-	alice.simulate_action_press("move_right")
+	valeria.simulate_action_press("move_right")
 	await game.sync_ticks(8)
 
 	assert_that(player.position.x).is_greater(start)
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
-	alice.simulate_action_release("move_right")
+	valeria.simulate_action_release("move_right")
 	await game.sync_ticks(2)
 
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
@@ -38,23 +38,23 @@ func test_host_input_reaches_local_player_after_add_host() -> void:
 
 func test_client_input_reaches_local_player() -> void:
 	game.show_views()
-	await game.add_host("alice", true, _level_1_spawn())
-	var bob := await game.add_client("bob", true, _level_1_spawn())
+	await game.add_host("valeria", true, _level_1_spawn())
+	var jose := await game.add_client("jose", true, _level_1_spawn())
 
-	var player := bob.local_player as Node2D
+	var player := jose.local_player as Node2D
 	assert_that(player).is_not_null()
 	var input := _input_for(player)
 	var start := player.position.x
 
 	await game.sync_ticks(16)
-	bob.simulate_action_press("move_right")
+	jose.simulate_action_press("move_right")
 	await game.sync_ticks(8)
 
 	assert_that(input.state[&"move_right"]).is_true()
 	assert_that(player.position.x).is_greater(start)
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
-	bob.simulate_action_release("move_right")
+	jose.simulate_action_release("move_right")
 	await game.sync_ticks(2)
 
 	assert_that(input.state[&"move_right"]).is_false()
@@ -62,40 +62,40 @@ func test_client_input_reaches_local_player() -> void:
 
 
 func test_host_input_replicates_to_client() -> void:
-	var alice := await game.add_host("alice", true, _level_1_spawn())
-	var bob := await game.add_client("bob", true, _level_1_spawn())
+	var valeria := await game.add_host("valeria", true, _level_1_spawn())
+	var jose := await game.add_client("jose", true, _level_1_spawn())
 
 	game.show_views()
 
-	var alice_on_bob: Node2D = await bob.await_player(&"alice", 2.0)
-	var start := alice_on_bob.position.x
+	var valeria_on_jose: Node2D = await jose.await_player(&"valeria", 2.0)
+	var start := valeria_on_jose.position.x
 
 	await game.sync_ticks(16)
-	alice.simulate_action_press("move_right")
+	valeria.simulate_action_press("move_right")
 	await game.sync_ticks(16)
-	alice.simulate_action_release("move_right")
+	valeria.simulate_action_release("move_right")
 	await game.sync_ticks(16)
 
-	assert_that(alice_on_bob.position.x).is_greater(start)
+	assert_that(valeria_on_jose.position.x).is_greater(start)
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
 
 func test_show_views_displays_each_participant() -> void:
-	var alice := await game.add_host("alice", true, _level_1_spawn())
-	var bob := await game.add_client("bob", true, _level_1_spawn())
-	var host_view := alice.tree.get_service(HostSceneView) as HostSceneView
+	var valeria := await game.add_host("valeria", true, _level_1_spawn())
+	var jose := await game.add_client("jose", true, _level_1_spawn())
+	var host_view := valeria.tree.get_service(HostSceneView) as HostSceneView
 	if not host_view:
-		host_view = alice.tree.find_service_node(HostSceneView) as HostSceneView
+		host_view = valeria.tree.find_service_node(HostSceneView) as HostSceneView
 
 	var display := game.show_views()
 	await get_tree().process_frame
 
 	assert_that(host_view).is_not_null()
-	assert_that(display.view_for_slot(alice.slot)).is_not_null()
-	assert_that(display.view_for_slot(bob.slot)).is_not_null()
+	assert_that(display.view_for_slot(valeria.slot)).is_not_null()
+	assert_that(display.view_for_slot(jose.slot)).is_not_null()
 	assert_that(host_view.visible).is_false()
 
-	display.remove_slot(alice.slot)
+	display.remove_slot(valeria.slot)
 	await get_tree().process_frame
 
 	assert_that(host_view.visible).is_true()
@@ -104,12 +104,12 @@ func test_show_views_displays_each_participant() -> void:
 func test_show_views_can_be_called_before_adding_participants() -> void:
 	var display := game.show_views()
 
-	var alice := await game.add_host("alice", true, _level_1_spawn())
-	var bob := await game.add_client("bob", true, _level_1_spawn())
+	var valeria := await game.add_host("valeria", true, _level_1_spawn())
+	var jose := await game.add_client("jose", true, _level_1_spawn())
 	await get_tree().process_frame
 
-	assert_that(display.view_for_slot(alice.slot)).is_not_null()
-	assert_that(display.view_for_slot(bob.slot)).is_not_null()
+	assert_that(display.view_for_slot(valeria.slot)).is_not_null()
+	assert_that(display.view_for_slot(jose.slot)).is_not_null()
 
 
 func _input_for(player: Node) -> MoveInputComponent:

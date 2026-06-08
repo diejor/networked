@@ -210,7 +210,7 @@ func test_join_without_tree_emits_join_failed() -> void:
 
 	var target := _make_target()
 	var payload := JoinPayload.new()
-	payload.username = &"alice"
+	payload.username = &"valeria"
 	var err := await session.join(target, payload)
 
 	assert_int(err).is_equal(ERR_UNCONFIGURED)
@@ -236,7 +236,7 @@ func test_join_missing_backend_emits_join_failed() -> void:
 	)
 
 	var payload := JoinPayload.new()
-	payload.username = &"alice"
+	payload.username = &"valeria"
 	var err := await session.join(target, payload)
 
 	assert_int(err).is_equal(ERR_INVALID_PARAMETER)
@@ -256,7 +256,7 @@ func test_host_without_tree_emits_host_failed() -> void:
 	var config := ConnectHostConfig.new()
 	config.backend = ENetBackend.new()
 	var payload := JoinPayload.new()
-	payload.username = &"alice"
+	payload.username = &"valeria"
 	var err := await session.host(config, payload)
 
 	assert_int(err).is_equal(ERR_UNCONFIGURED)
@@ -278,7 +278,7 @@ func test_host_missing_backend_emits_host_failed() -> void:
 	var config := ConnectHostConfig.new()
 	# No backend, no provider_id -> direct path with null template.
 	var payload := JoinPayload.new()
-	payload.username = &"alice"
+	payload.username = &"valeria"
 	var err := await session.host(config, payload)
 
 	assert_int(err).is_equal(ERR_INVALID_PARAMETER)

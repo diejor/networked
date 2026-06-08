@@ -42,7 +42,7 @@ func test_prepare_failure_aborts_connect() -> void:
 
 	var err := await client_tree.join_or_host(
 		target,
-		_join_payload("alice"),
+		_join_payload("valeria"),
 	)
 	assert_that(err).is_not_equal(OK)
 	assert_that(client_tree.is_online()).is_false()
@@ -73,7 +73,7 @@ func test_no_auth_provider_trusts_client_username() -> void:
 
 	var err := await client_tree.join_or_host(
 		target,
-		_join_payload("bob"),
+		_join_payload("jose"),
 	)
 	assert_that(err).is_equal(OK)
 	@warning_ignore("redundant_await")
@@ -82,7 +82,7 @@ func test_no_auth_provider_trusts_client_username() -> void:
 			.is_emitted("player_joined", [any()])
 
 	assert_that(joined_rjs).has_size(1)
-	assert_that(joined_rjs[0].username).is_equal(StringName("bob"))
+	assert_that(joined_rjs[0].username).is_equal(StringName("jose"))
 
 
 func _join_payload(username: String) -> JoinPayload:
