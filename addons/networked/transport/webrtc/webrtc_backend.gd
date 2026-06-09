@@ -107,6 +107,9 @@ func _make_signaler() -> WebRTCSignaler
 ##     ┖╴credential (String)
 ## [/codeblock]
 func setup(tree: MultiplayerTree) -> Error:
+	if Netw.is_test_env():
+		return OK
+
 	if not global_ice_servers.is_empty():
 		return OK
 
