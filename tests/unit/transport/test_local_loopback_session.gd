@@ -459,13 +459,13 @@ func test_manual_hold_release_still_preserves_order() -> void:
 	assert_that(server._get_packet_script()).is_equal(PackedByteArray([2]))
 
 
-func _run_unreliable_reorder(seed: int, include_duplicates: bool = false) -> Array:
+func _run_unreliable_reorder(_seed: int, include_duplicates: bool = false) -> Array:
 	session = auto_free(LocalLoopbackSession.new())
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()
 	session.poll()
 
-	var plan := LocalLoopbackSession.LinkPlan.new(seed)
+	var plan := LocalLoopbackSession.LinkPlan.new(_seed)
 	plan.jitter_polls = 4
 	plan.reorder_probability = 1.0
 	plan.duplicate_probability = 0.5 if include_duplicates else 0.0

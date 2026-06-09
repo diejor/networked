@@ -50,6 +50,16 @@ signal room_created(room_id: String)
 		"username": "openrelayproject",
 		"credential": "openrelayproject",
 	},
+	{
+		"urls": ["turns:openrelay.metered.ca:443?transport=tcp"],
+		"username": "openrelayproject",
+		"credential": "openrelayproject",
+	},
+	{
+		"urls": ["turns:openrelay.metered.ca:443"],
+		"username": "openrelayproject",
+		"credential": "openrelayproject",
+	},
 ]
 
 ## Seconds a joining client waits for the native link before re-offering to the

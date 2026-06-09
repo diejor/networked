@@ -19,6 +19,7 @@ extends WebRTCBackend
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.webtorrent.dev",
+	"wss://tracker.btorrent.xyz",
 ]
 
 ## Seconds the offer and answer wait for ICE to gather before announcing, so

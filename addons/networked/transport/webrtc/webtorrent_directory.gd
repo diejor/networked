@@ -45,6 +45,7 @@ extends LobbyDirectory
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.webtorrent.dev",
+	"wss://tracker.btorrent.xyz",
 ]
 
 ## Tag stamped on every room card and required on received cards, so different
