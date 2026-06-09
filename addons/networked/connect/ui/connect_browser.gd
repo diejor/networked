@@ -352,12 +352,13 @@ func _update_details() -> void:
 			"Unavailable" if unavailable else _status_text(r),
 		),
 	)
-	_details_container.add_child(
-		_create_detail_item(
-			"Latency",
-			"%d ms" % r.latency_ms if r and r.is_ok() else "-",
-		),
-	)
+	if r == null or r.latency_ms != -1:
+		_details_container.add_child(
+			_create_detail_item(
+				"Latency",
+				"%d ms" % r.latency_ms if r and r.is_ok() else "-",
+			),
+		)
 	_details_container.add_child(
 		_create_detail_item("Players", _players_text(r)),
 	)
@@ -504,11 +505,13 @@ func _on_session_left() -> void:
 		show()
 
 
-func _on_join_failed(target: JoinTarget, reason: String) -> void:
-	_hide_connecting_overlay()
-	if reason == "Connection aborted by user":
+func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
+	if result != null and result.status == ConnectResult.Status.ABORTED:
+		_hide_connecting_overlay()
 		return
-	_show_banner(reason)
+	var msg := ConnectUiShared.format_connect_error(result)
+	_show_banner(msg)
+	_connecting_popup.show_failed(msg)
 	if target != null:
 		var payload := _last_join_payload
 		if payload == null:

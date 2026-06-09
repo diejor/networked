@@ -55,8 +55,12 @@ signal directory_unavailable(directory_id: StringName, reason: String)
 ## A join attempt began against [param target].
 signal join_started(target: JoinTarget)
 
-## A join attempt failed. [param reason] is a human-readable string.
-signal join_failed(target: JoinTarget, reason: String)
+## A join attempt failed. [param result] is the [ConnectResult] outcome.
+signal join_failed(target: JoinTarget, result: ConnectResult)
+
+## A connection succeeded. [param result] is the [ConnectResult] containing
+## happy-path diagnostics.
+signal connection_diagnostics(result: ConnectResult)
 
 ## A host attempt began.
 signal host_started()
@@ -430,14 +434,14 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if target == null:
 		Netw.dbg.warn("ConnectSession join failed: target is null.")
-		join_failed.emit(null, "target is null")
+		join_failed.emit(null, ConnectResult.error("target is null"))
 		return ERR_INVALID_PARAMETER
 	if payload == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: payload is null.",
 			[_target_summary(target)],
 		)
-		join_failed.emit(target, "join payload is null")
+		join_failed.emit(target, ConnectResult.error("join payload is null"))
 		return ERR_INVALID_PARAMETER
 	var tree := get_tree_bound()
 	if tree == null:
@@ -447,7 +451,9 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		)
 		join_failed.emit(
 			target,
-			"no MultiplayerTree bound; call bind_tree first",
+			ConnectResult.error(
+				"no MultiplayerTree bound; call bind_tree first",
+			),
 		)
 		return ERR_UNCONFIGURED
 
@@ -466,14 +472,23 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var timeout := hint if hint > 0.0 else SELF_MANAGED_TIMEOUT_CEILING
 	var err := await tree.join(target, payload, timeout, true)
 	if err != OK:
-		if join_aborted_flag:
-			join_failed.emit(target, "Connection aborted by user")
-		else:
-			join_failed.emit(
-				target,
-				"connect failed (%s)" % error_string(err),
-			)
+		var result := tree.last_connect_result
+		if result == null:
+			if join_aborted_flag:
+				result = ConnectResult.aborted("Connection aborted by user")
+			else:
+				result = ConnectResult.error(
+					"connect failed (%s)" % error_string(err),
+				)
+		join_failed.emit(target, result)
 		return err
+
+	var result := tree.last_connect_result
+	if result == null:
+		result = ConnectResult.ok()
+	if tree.backend:
+		result.diagnostics = tree.backend.get_connection_diagnostics(1)
+	connection_diagnostics.emit(result)
 
 	# session_entered fires from _on_tree_state_changed when the tree reaches
 	# ONLINE, so every entry path (including debug auto-connect) is covered.

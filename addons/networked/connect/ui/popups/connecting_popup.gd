@@ -14,6 +14,7 @@ func _ready() -> void:
 
 ## Displays the connecting screen and updates details from [param target].
 func open_connecting(target: JoinTarget) -> void:
+	_cancel_button.text = "Cancel"
 	var backend_name := ConnectUiShared.format_backend_label(target.backend)
 	var display_addr := target.address.strip_edges()
 	if display_addr.is_empty():
@@ -23,6 +24,13 @@ func open_connecting(target: JoinTarget) -> void:
 				"Connecting to %s server at %s..."
 				% [backend_name, display_addr]
 		)
+	popup_centered()
+
+
+## Displays the failure screen with [param message].
+func show_failed(message: String) -> void:
+	_title.text = message
+	_cancel_button.text = "Close"
 	popup_centered()
 
 

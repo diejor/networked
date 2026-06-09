@@ -4,6 +4,7 @@
 ##
 ## A [FakeTrackerClient] records every announce the signaler makes, so the tests
 ## assert the wire shape directly with no tracker traffic.
+@tool
 class_name TestTrackerSignalerBundling
 extends NetwTestSuite
 
@@ -192,3 +193,186 @@ func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
 	sig._parse_packet(topup)
 
 	assert_array(counts).is_equal([1, 2])
+
+
+func test_connect_result_helpers_and_mapping() -> void:
+	var r_ok := ConnectResult.ok()
+	assert_bool(r_ok.is_ok()).is_true()
+	assert_int(r_ok.status).is_equal(ConnectResult.Status.OK)
+
+	var r_timeout := ConnectResult.timed_out("failed timeout")
+	assert_bool(r_timeout.is_ok()).is_false()
+	assert_int(r_timeout.status).is_equal(ConnectResult.Status.TIMED_OUT)
+	assert_str(r_timeout.message).is_equal("failed timeout")
+
+	var r_unreachable := ConnectResult.unreachable(
+		&"TURN_UNREACHABLE",
+		"unreachable msg",
+	)
+	assert_int(r_unreachable.status).is_equal(
+		ConnectResult.Status.UNREACHABLE,
+	)
+	assert_str(r_unreachable.detail).is_equal("TURN_UNREACHABLE")
+	assert_str(r_unreachable.message).is_equal("unreachable msg")
+
+	var r_refused := ConnectResult.refused("refused msg")
+	assert_int(r_refused.status).is_equal(ConnectResult.Status.REFUSED)
+	assert_str(r_refused.message).is_equal("refused msg")
+
+	var r_aborted := ConnectResult.aborted("aborted msg")
+	assert_int(r_aborted.status).is_equal(ConnectResult.Status.ABORTED)
+	assert_str(r_aborted.message).is_equal("aborted msg")
+
+	var r_error := ConnectResult.error("error msg")
+	assert_int(r_error.status).is_equal(ConnectResult.Status.ERROR)
+	assert_str(r_error.message).is_equal("error msg")
+
+	assert_bool(str(r_ok).contains("ok")).is_true()
+	assert_bool(str(r_timeout).contains("timed_out")).is_true()
+	assert_bool(str(r_unreachable).contains("unreachable")).is_true()
+
+
+func test_signaling_unavailable_on_lost() -> void:
+	var backend := PairedWebRTCBackend.new()
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	var failed_results: Array = []
+	backend.connect_failed.connect(
+		func(result: ConnectResult):
+			failed_results.append(result)
+	)
+
+	var peer = backend.create_join_peer(tree, "some_room", "Player")
+	assert_that(peer).is_not_null()
+
+	backend._signaler.lost.emit()
+
+	assert_int(failed_results.size()).is_equal(1)
+	var res: ConnectResult = failed_results[0]
+	assert_int(res.status).is_equal(ConnectResult.Status.UNREACHABLE)
+	assert_str(res.detail).is_equal("SIGNALING_UNAVAILABLE")
+
+	backend.peer_reset_state()
+	tree.queue_free()
+
+
+func test_signaling_unavailable_on_timeout() -> void:
+	var backend := DelayReadyWebRTCBackend.new()
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	var failed_results: Array = []
+	backend.connect_failed.connect(
+		func(result: ConnectResult):
+			failed_results.append(result)
+	)
+
+	var peer = backend.create_join_peer(tree, "some_room", "Player")
+	assert_that(peer).is_not_null()
+
+	backend.poll(0.001)
+	assert_int(failed_results.size()).is_equal(0)
+
+	await get_tree().create_timer(0.2).timeout
+
+	backend.poll(0.001)
+
+	assert_int(failed_results.size()).is_equal(1)
+	var res: ConnectResult = failed_results[0]
+	assert_int(res.status).is_equal(
+		ConnectResult.Status.UNREACHABLE,
+	)
+	assert_str(res.detail).is_equal("SIGNALING_UNAVAILABLE")
+
+	backend.peer_reset_state()
+	tree.queue_free()
+
+
+func test_filter_ice_servers() -> void:
+	var servers: Array[Dictionary] = [
+		{ "urls": ["stun:stun.l.google.com:19302"] },
+		{
+			"urls": ["turn:openrelay.metered.ca:80"],
+			"username": "user",
+			"credential": "cred",
+		},
+		{
+			"urls": ["turns:openrelay.metered.ca:443?transport=tcp"],
+			"username": "user",
+			"credential": "cred",
+		},
+		{
+			"urls": ["turns:openrelay.metered.ca:443"],
+			"username": "user",
+			"credential": "cred",
+		},
+		{
+			"urls": ["turns:other.com:443"],
+		},
+	]
+
+	var filtered := WebRTCBackend._filter_ice_servers(servers)
+	if OS.has_feature("web"):
+		assert_int(filtered.size()).is_equal(5)
+	else:
+		assert_int(filtered.size()).is_equal(2)
+		assert_str(filtered[0]["urls"][0]).is_equal(
+			"stun:stun.l.google.com:19302",
+		)
+		assert_str(filtered[1]["urls"][0]).is_equal(
+			"turn:openrelay.metered.ca:80",
+		)
+
+
+func test_filter_unsupported_turn_toggle() -> void:
+	var backend := DelayReadyWebRTCBackend.new()
+	backend.filter_unsupported_turn = false
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	backend._build_session_and_signaler()
+	# Because filter is disabled, it should get the unfiltered servers
+	assert_int(backend._session.ice_servers.size()).is_equal(4)
+
+	backend.peer_reset_state()
+	tree.queue_free()
+
+
+class DelayReadySignaler extends WebRTCSignaler:
+	func open(_room_id: String, _local_multiplayer_id: int) -> Error:
+		return OK
+
+
+	func poll(_dt: float) -> void:
+		pass
+
+
+	func close() -> void:
+		pass
+
+
+	func send(
+			_to_multiplayer_id: int,
+			_to_signaler_id: String,
+			_kind: String,
+			_payload: Dictionary,
+	) -> void:
+		pass
+
+
+	func local_signaler_id() -> String:
+		return "delay"
+
+
+	func room_id() -> String:
+		return "delay"
+
+
+class DelayReadyWebRTCBackend extends WebRTCBackend:
+	func _make_signaler() -> WebRTCSignaler:
+		return DelayReadySignaler.new()
+
+
+	func connect_timeout_hint() -> float:
+		return 0.2

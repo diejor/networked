@@ -108,10 +108,9 @@ func connect_to(urls: Array[String]) -> Error:
 			ws.set_meta("connect_time", now)
 			_sockets.append(ws)
 		else:
-			Netw.dbg.warn(
+			Netw.dbg.info(
 				"WebTorrentTrackerClient: failed to connect %s",
 				[url],
-				func(m): push_warning(m)
 			)
 	Netw.dbg.debug(
 		"WebTorrentTrackerClient: %d/%d tracker socket(s) opening.",
@@ -142,13 +141,13 @@ func poll() -> void:
 		if state == WebSocketPeer.STATE_CONNECTING:
 			var started: int = ws.get_meta("connect_time", 0)
 			if started > 0 and now - started > CONNECT_TIMEOUT_USEC:
-				_warn_dropped(ws, "timed out")
+				_log_dropped(ws, "timed out")
 				ws.close()
 				to_remove.append(ws)
 			continue
 
 		if state == WebSocketPeer.STATE_CLOSED:
-			_warn_dropped(ws, "closed")
+			_log_dropped(ws, "closed")
 			to_remove.append(ws)
 			continue
 
@@ -242,9 +241,8 @@ func _log_tracker_notice(packet_text: String) -> void:
 	)
 
 
-func _warn_dropped(ws: WebSocketPeer, why: String) -> void:
-	Netw.dbg.warn(
+func _log_dropped(ws: WebSocketPeer, why: String) -> void:
+	Netw.dbg.info(
 		"WebTorrentTrackerClient: tracker %s: %s",
 		[why, ws.get_meta("url", "unknown")],
-		func(m): push_warning(m)
 	)

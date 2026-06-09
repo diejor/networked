@@ -8,6 +8,11 @@
 ## [signal room_created] with the room id. [method create_join_peer] accepts
 ## that id as its address.
 ##
+## [br][br]
+## Swapping the signaling model (WebTorrent, dedicated, or direct) only
+## requires returning a different [WebRTCSignaler] from
+## [method _make_signaler].
+##
 ## Browser hosts are full peer-to-peer hosts. If the browser throttles an
 ## unfocused tab, signaling can stall until the tab is visible again. Prefer a
 ## relay or dedicated host when web-hosted rooms must stay reachable while the
@@ -89,10 +94,15 @@ signal room_created(room_id: String)
 ## forwarded to [member WebRTCSession.topup_interval].
 @export_range(0.05, 5.0, 0.05, "suffix:s") var topup_interval: float = 0.25
 
+## If [code]true[/code], filters out TURN over TCP and TLS configurations on native
+## platforms (non-web) to prevent console warnings from libjuice.
+@export var filter_unsupported_turn: bool = true
+
 var _session: WebRTCSession = null
 var _signaler: WebRTCSignaler = null
-var _last_failure_reason := ""
 var _is_server := false
+var _signaling_ready := false
+var _connect_started_ms := 0
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.
@@ -194,6 +204,7 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	room_created.emit(room)
 	Netw.dbg.info("Room session ready at `%s` (saved to clipboard).", [room])
 	DisplayServer.clipboard_set(room)
+	_register_local_room(room)
 	return _session.webrtc_peer
 
 
@@ -206,6 +217,8 @@ func create_join_peer(
 	Netw.dbg.trace("WebRTCBackend: create_join_peer at %s", [server_address])
 	_is_server = false
 	_build_session_and_signaler()
+	if _is_local_room(server_address):
+		_session.is_local_session = true
 
 	var client_id := randi() % 1000000 + 2
 	# create_client opens the offer toward the server; it is announced once the
@@ -213,6 +226,8 @@ func create_join_peer(
 	if _session.create_client(client_id) != OK:
 		_clear_session_and_signaler()
 		return null
+
+	_connect_started_ms = Time.get_ticks_msec()
 
 	var err := _signaler.open(server_address, client_id)
 	if err != OK:
@@ -228,6 +243,7 @@ func poll(dt: float) -> void:
 		_session.poll(dt)
 	if _signaler:
 		_signaler.poll(dt)
+	_poll_signaling_check()
 
 
 ## Starts closing active [WebRTCDataChannel]s before peer teardown.
@@ -241,10 +257,15 @@ func close_channels() -> void:
 
 func _build_session_and_signaler() -> void:
 	_session = WebRTCSession.new()
-	if not global_ice_servers.is_empty():
-		_session.ice_servers = global_ice_servers
+	var raw_servers = (
+			global_ice_servers
+			if not global_ice_servers.is_empty()
+			else ice_servers
+	)
+	if filter_unsupported_turn:
+		_session.ice_servers = _filter_ice_servers(raw_servers)
 	else:
-		_session.ice_servers = ice_servers
+		_session.ice_servers = raw_servers
 	_session.connect_retry = connect_retry
 	_session.max_connect_attempts = max_connect_attempts
 	_session.gather_timeout = gather_timeout
@@ -257,8 +278,8 @@ func _build_session_and_signaler() -> void:
 	_session.native_connected.connect(_signaler.on_session_connected)
 	_session.native_disconnected.connect(_on_native_disconnected)
 	_session.failed.connect(_on_session_failed)
-	_signaler.ready.connect(func() -> void: signaling_connected.emit())
-	_signaler.lost.connect(func() -> void: signaling_disconnected.emit())
+	_signaler.ready.connect(_on_signaling_connected)
+	_signaler.lost.connect(_on_signaling_disconnected)
 
 
 func _clear_session_and_signaler() -> void:
@@ -272,15 +293,88 @@ func _clear_session_and_signaler() -> void:
 
 func _on_native_connected(id: int) -> void:
 	Netw.dbg.info("WebRTC native connection established with id %d.", [id])
+	if not _is_server and id == 1:
+		var diags := _session.connection_diagnostics(1)
+		var phases: Dictionary = diags.get("phases", { })
+		var offer_ms: int = phases.get("offer_ms", 0)
+		var answer_ms: int = phases.get("answer_ms", 0)
+		var native_ms: int = phases.get("native_ms", 0)
+		var offer_t := (
+				float(offer_ms - _connect_started_ms) / 1000.0
+				if offer_ms > 0 else 0.0
+		)
+		var answer_t := (
+				float(answer_ms - _connect_started_ms) / 1000.0
+				if answer_ms > 0 else 0.0
+		)
+		var native_t := (
+				float(native_ms - _connect_started_ms) / 1000.0
+				if native_ms > 0 else 0.0
+		)
+		var total_t := (
+				float(Time.get_ticks_msec() - _connect_started_ms) / 1000.0
+		)
+		var stats: Dictionary = diags.get("candidates", { })
+		var host_count := int(stats.get("host", 0))
+		var srflx_count := int(stats.get("srflx", 0))
+		var relay_count := int(stats.get("relay", 0))
+		var relay_str := "no"
+		if relay_count > 0:
+			if host_count > 0 or srflx_count > 0:
+				relay_str = "maybe (relay candidate gathered)"
+			else:
+				relay_str = "yes"
+		Netw.dbg.info(
+			"WebRTC join established in %.1fs: offer=%.1fs "
+			+ "answer=%.1fs native=%.1fs relay=%s.",
+			[total_t, offer_t, answer_t, native_t, relay_str],
+		)
 
 
 func _on_native_disconnected(id: int) -> void:
 	Netw.dbg.info("WebRTC native connection lost with id %d.", [id])
 
 
-func _on_session_failed(_id: int, reason: String) -> void:
-	_last_failure_reason = reason
-	connect_failed.emit(reason)
+func _on_session_failed(id: int, reason: String) -> void:
+	var diags := _session.connection_diagnostics(id)
+	var code := StringName(reason)
+	var status := ConnectResult.Status.UNREACHABLE
+	if reason == "HOST_UNRESPONSIVE":
+		status = ConnectResult.Status.TIMED_OUT
+
+	var result := ConnectResult.unreachable(code, "", diags)
+	result.status = status
+	connect_failed.emit(result)
+
+
+func _on_signaling_connected() -> void:
+	_signaling_ready = true
+	signaling_connected.emit()
+
+
+func _on_signaling_disconnected() -> void:
+	_signaling_ready = false
+	signaling_disconnected.emit()
+	if not _is_server and _session and not _session._connected_ids.has(1):
+		var res := ConnectResult.unreachable(
+			&"SIGNALING_UNAVAILABLE",
+			"Could not reach signaling.",
+		)
+		connect_failed.emit(res)
+
+
+func _poll_signaling_check() -> void:
+	if not _is_server and _session and _connect_started_ms > 0:
+		if not _session._connected_ids.has(1):
+			var elapsed := (Time.get_ticks_msec() - _connect_started_ms) / 1000.0
+			var threshold := connect_timeout_hint() - 0.1
+			if elapsed >= threshold and not _signaling_ready:
+				_connect_started_ms = 0 # trigger once
+				var res := ConnectResult.unreachable(
+					&"SIGNALING_UNAVAILABLE",
+					"Could not reach signaling.",
+				)
+				connect_failed.emit(res)
 
 
 ## Returns the active room id, or the parent default.
@@ -330,15 +424,132 @@ func copy_from(source: BackendPeer) -> void:
 		max_connect_attempts = other.max_connect_attempts
 		gather_timeout = other.gather_timeout
 		topup_interval = other.topup_interval
+		filter_unsupported_turn = other.filter_unsupported_turn
 
 
 ## Clears the active session and signaler.
 func peer_reset_state() -> void:
 	Netw.dbg.trace("WebRTCBackend: resetting peer state.")
+	if _signaler and not _signaler.room_id().is_empty():
+		_unregister_local_room(_signaler.room_id())
 	_clear_session_and_signaler()
 	_is_server = false
+	_signaling_ready = false
+	_connect_started_ms = 0
+
+
+## Returns a diagnostics snapshot for [param peer_id] from the session.
+func get_connection_diagnostics(peer_id: int) -> Dictionary:
+	if _session:
+		return _session.connection_diagnostics(peer_id)
+	return { }
 
 
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebRTC"
+
+
+# Filters out TURN TCP/TLS servers since libjuice only supports TURN UDP.
+static func _filter_ice_servers(
+		servers: Array[Dictionary],
+) -> Array[Dictionary]:
+	# Web browsers support TURN over TCP/TLS natively. Native desktop/mobile
+	# WebRTC (libjuice) is UDP-only and will print warnings for TCP/TLS URLs.
+	if OS.has_feature("web"):
+		return servers
+
+	var filtered: Array[Dictionary] = []
+	filtered.assign(
+		servers.map(_map_ice_server).filter(_is_ice_server_valid),
+	)
+	return filtered
+
+
+# Filters unsupported URLs from a server, returning {} if none remain.
+static func _map_ice_server(server: Dictionary) -> Dictionary:
+	var urls = server.get("urls") as Array
+	assert(urls != null, "ICE server configuration is missing 'urls' key")
+
+	var clean_urls = urls.filter(_is_url_supported_native)
+	if clean_urls.is_empty():
+		return { }
+
+	var copy := server.duplicate()
+	copy["urls"] = clean_urls
+	return copy
+
+
+# Returns true if the processed server dictionary is not empty.
+static func _is_ice_server_valid(server: Dictionary) -> bool:
+	return not server.is_empty()
+
+
+# Returns true if a URL is not secure TURN (TLS) or TURN over TCP.
+static func _is_url_supported_native(url: String) -> bool:
+	var u := url.to_lower().strip_edges()
+	return not (
+			u.begins_with("turns:")
+			or u.contains("transport=tcp")
+			or u.contains("transport=tls")
+	)
+
+
+# Registers a room ID as active locally on this machine.
+static func _register_local_room(room_id: String) -> void:
+	if room_id.is_empty():
+		return
+	var path := "user://local_webrtc_rooms.txt"
+	var rooms: Array[String] = []
+	if FileAccess.file_exists(path):
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file:
+			while not file.eof_reached():
+				var line := file.get_line().strip_edges()
+				if not line.is_empty():
+					rooms.append(line)
+	if not rooms.has(room_id):
+		rooms.append(room_id)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		for r in rooms:
+			file.store_line(r)
+
+
+# Unregisters a room ID.
+static func _unregister_local_room(room_id: String) -> void:
+	if room_id.is_empty():
+		return
+	var path := "user://local_webrtc_rooms.txt"
+	if not FileAccess.file_exists(path):
+		return
+	var rooms: Array[String] = []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file:
+		while not file.eof_reached():
+			var line := file.get_line().strip_edges()
+			if not line.is_empty() and line != room_id:
+				rooms.append(line)
+	if rooms.is_empty():
+		DirAccess.remove_absolute(path)
+	else:
+		var write_file := FileAccess.open(path, FileAccess.WRITE)
+		if write_file:
+			for r in rooms:
+				write_file.store_line(r)
+
+
+# Returns true if the room ID was hosted locally.
+static func _is_local_room(room_id: String) -> bool:
+	if room_id.is_empty():
+		return false
+	var path := "user://local_webrtc_rooms.txt"
+	if not FileAccess.file_exists(path):
+		return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file:
+		while not file.eof_reached():
+			var line := file.get_line().strip_edges()
+			if line == room_id:
+				return true
+	return false

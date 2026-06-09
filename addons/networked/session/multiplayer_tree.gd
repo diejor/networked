@@ -238,7 +238,11 @@ func _warn_if_role_unset() -> void:
 			_auth.set_auth_provider(value)
 			_auth.prepare()
 
+## Outcome of the last connection handshake.
+var last_connect_result: ConnectResult = null
+
 @export_group("Session")
+
 ## Game-build tag that gates session admission, baked into every build.
 ##
 ## A joining peer whose tag differs is rejected during the auth handshake before
@@ -775,7 +779,9 @@ func join(
 		timeout: float = 5.0,
 		quiet: bool = false,
 ) -> Error:
+	last_connect_result = null
 	assert(state == State.OFFLINE, "Must be offline to join.")
+
 	assert(
 		desired_role != Role.DEDICATED_SERVER,
 		"join() needs a local player; a dedicated server hosts via host().",
@@ -865,21 +871,40 @@ func _open_join_transport(
 		backend.connect_failed,
 		timer,
 	)
-	var failed_reason := String(connect_result.get("reason", ""))
+	var failed_reason_obj: Variant = connect_result.get("reason")
 	var did_timeout := String(connect_result.get("result", "")) == "timeout"
 	var did_fail := String(connect_result.get("result", "")) == "failure"
+	if did_timeout:
+		last_connect_result = ConnectResult.timed_out("Connection timed out")
+	elif _join_aborted:
+		last_connect_result = ConnectResult.aborted("Connection aborted by user")
+	elif did_fail:
+		if failed_reason_obj is ConnectResult:
+			last_connect_result = failed_reason_obj
+		else:
+			last_connect_result = ConnectResult.error(str(failed_reason_obj))
+
 	if did_timeout or did_fail or _join_aborted:
 		_transition(State.OFFLINE)
 		if not quiet and not _join_aborted:
 			var message := "Connection timed out. Server probably is not up."
-			if did_fail and not failed_reason.is_empty():
-				message = "Connection failed: %s." % failed_reason
+			if did_fail and last_connect_result != null:
+				message = "Connection failed: %s." % (
+						last_connect_result.message
+						if not last_connect_result.message.is_empty()
+						else str(last_connect_result)
+				)
 			Netw.dbg.error(
 				message,
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
 
+	last_connect_result = ConnectResult.ok()
+	if backend:
+		last_connect_result.diagnostics = (
+				backend.get_connection_diagnostics(1)
+		)
 	role = Role.CLIENT
 	_transition(State.ONLINE)
 	return OK

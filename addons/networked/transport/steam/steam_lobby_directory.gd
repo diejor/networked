@@ -453,6 +453,13 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				func(m): push_warning(m)
 			)
 			continue
+
+		var uid := _wrapper.get_lobby_data(id, "uid")
+		if (
+				not browser_filter_uid.is_empty()
+				and uid != browser_filter_uid
+		):
+			continue
 		var info := LobbyInfo.make(
 			id,
 			_wrapper.get_lobby_data(id, "name"),

@@ -13,6 +13,14 @@
 ## signaler.open(room_id, local_multiplayer_id)    # host passes id 1
 ## room := signaler.room_id()                      # host: generated room hash
 ## [/codeblock]
+##
+## [br][br]
+## [b]Signaling Models[/b]
+## [br]
+## Different signaling implementations can be swapped by subclassing:
+## [br]- [b]WebTorrent Tracker[/b]: Zero infrastructure. Good for web demos.
+## [br]- [b]Dedicated WebSocket[/b]: Production path via a standalone server.
+## [br]- [b]Direct WebSocket[/b]: Used for local testing and dedicated hosts.
 @abstract
 class_name WebRTCSignaler
 extends RefCounted

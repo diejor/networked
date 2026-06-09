@@ -20,9 +20,10 @@
 class_name BackendPeer
 extends Resource
 
-## Emitted when an in-progress client connection has a backend-specific
-## terminal failure reason.
-signal connect_failed(reason: String)
+## Emitted when an in-progress client connection has a terminal failure.
+## [br][br]
+## Carries a [ConnectResult] outcome.
+signal connect_failed(result: ConnectResult)
 
 const _MSEC_TO_SEC := 0.001
 const _PERCENT_TO_RATIO := 0.01
@@ -288,6 +289,12 @@ func clone() -> BackendPeer:
 	var inst := duplicate() as BackendPeer
 	inst.copy_from(self)
 	return inst
+
+
+## Returns a diagnostics snapshot for [param _peer_id] containing connection
+## phase timestamps and statistics.
+func get_connection_diagnostics(_peer_id: int) -> Dictionary:
+	return { }
 
 
 ## Returns the display name for this backend.

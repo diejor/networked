@@ -69,6 +69,11 @@ var topup_interval: float = 0.25
 
 var webrtc_peer: WebRTCMultiplayerPeer = null
 
+## If [code]true[/code], this session is connecting to a local peer on the same
+## machine, bypassing TURN configuration to avoid warnings.
+var is_local_session: bool = false
+
+var _local_peers: Dictionary = { }
 var _is_server := false
 # multiplayer_id -> last known opaque signaler address, echoed on outbound.
 var _signaler_ids: Dictionary = { }
@@ -102,6 +107,12 @@ var _last_send_ms: Dictionary = { }
 var _gather_deadline_ms: Dictionary = { }
 # True once the client logged the give-up summary, so it logs at most once.
 var _retry_failed_logged := false
+# multiplayer_id -> msec the local offer description was created.
+var _offer_sent_ms: Dictionary = { }
+# multiplayer_id -> msec the local answer description was created.
+var _answer_sent_ms: Dictionary = { }
+# multiplayer_id -> msec the native WebRTC connection succeeded.
+var _native_connected_ms: Dictionary = { }
 
 
 ## Creates the underlying peer in server mode. Mirrors
@@ -156,7 +167,8 @@ func deliver(
 		return
 	if not from_signaler_id.is_empty():
 		_signaler_ids[from_multiplayer_id] = from_signaler_id
-	_ensure_connection(from_multiplayer_id, from_signaler_id)
+	var is_local := bool(payload.get("is_local", false))
+	_ensure_connection(from_multiplayer_id, from_signaler_id, is_local)
 	match kind:
 		"offer":
 			_handle_offer(from_multiplayer_id, payload)
@@ -181,6 +193,29 @@ func candidate_summary(multiplayer_id: int) -> Dictionary:
 	return (stats as Dictionary).duplicate()
 
 
+## Returns a diagnostics snapshot for [param multiplayer_id] containing
+## connection phase timestamps and candidate statistics.
+## [br][br]
+## [code]relay_used[/code] is true only if no direct (host or srflx) candidates
+## were gathered, meaning a relay was strictly required. Use
+## [code]candidates.relay[/code] to see if a relay was gathered/reachable.
+func connection_diagnostics(multiplayer_id: int) -> Dictionary:
+	var stats := candidate_summary(multiplayer_id)
+	var host_count := int(stats.get("host", 0))
+	var srflx_count := int(stats.get("srflx", 0))
+	var relay_count := int(stats.get("relay", 0))
+	var relay_used := relay_count > 0 and host_count == 0 and srflx_count == 0
+	return {
+		"phases": {
+			"offer_ms": _offer_sent_ms.get(multiplayer_id, 0),
+			"answer_ms": _answer_sent_ms.get(multiplayer_id, 0),
+			"native_ms": _native_connected_ms.get(multiplayer_id, 0),
+		},
+		"candidates": stats,
+		"relay_used": relay_used,
+	}
+
+
 ## Starts closing active [WebRTCDataChannel]s before [method close].
 ##
 ## Callers that can yield should poll or await a few frames after this method
@@ -198,6 +233,8 @@ func close() -> void:
 		close_channels()
 		webrtc_peer.close()
 	webrtc_peer = null
+	is_local_session = false
+	_local_peers.clear()
 	_signaler_ids.clear()
 	_remote_desc_set.clear()
 	_pending_candidates.clear()
@@ -214,6 +251,9 @@ func close() -> void:
 	_last_send_ms.clear()
 	_gather_deadline_ms.clear()
 	_retry_failed_logged = false
+	_offer_sent_ms.clear()
+	_answer_sent_ms.clear()
+	_native_connected_ms.clear()
 
 
 func _bind_peer(peer: WebRTCMultiplayerPeer) -> void:
@@ -223,22 +263,27 @@ func _bind_peer(peer: WebRTCMultiplayerPeer) -> void:
 
 # Creates the WebRTCPeerConnection for multiplayer_id if absent. The client
 # side calls create_offer toward the server (id 1).
-func _ensure_connection(multiplayer_id: int, signaler_id: String) -> void:
+func _ensure_connection(
+		multiplayer_id: int,
+		signaler_id: String,
+		is_local: bool = false,
+) -> void:
 	if webrtc_peer.has_peer(multiplayer_id):
 		return
 	if not signaler_id.is_empty():
 		_signaler_ids[multiplayer_id] = signaler_id
 	_attempts[multiplayer_id] = 1
-	_open_connection(multiplayer_id)
+	_open_connection(multiplayer_id, is_local)
 
 
 # Builds a fresh WebRTCPeerConnection for multiplayer_id and arms the attempt
 # clock. The client side offers toward the server (id 1).
-func _open_connection(multiplayer_id: int) -> void:
+func _open_connection(multiplayer_id: int, is_local: bool = false) -> void:
 	Netw.dbg.trace(
 		"WebRTCSession: opening WebRTCPeerConnection for id %d (attempt %d).",
 		[multiplayer_id, _attempts.get(multiplayer_id, 1)],
 	)
+	_local_peers[multiplayer_id] = is_local
 	_remote_desc_set[multiplayer_id] = false
 	_pending_candidates[multiplayer_id] = []
 	_applied_remote_candidates[multiplayer_id] = { }
@@ -246,6 +291,10 @@ func _open_connection(multiplayer_id: int) -> void:
 	_attempt_started_ms[multiplayer_id] = Time.get_ticks_msec()
 	_local_desc.erase(multiplayer_id)
 	_local_candidates[multiplayer_id] = []
+	_offer_sent_ms.erase(multiplayer_id)
+	_answer_sent_ms.erase(multiplayer_id)
+	_native_connected_ms.erase(multiplayer_id)
+
 	_bundle_sent[multiplayer_id] = false
 	_candidates_dirty[multiplayer_id] = false
 	_topups_done[multiplayer_id] = false
@@ -255,7 +304,8 @@ func _open_connection(multiplayer_id: int) -> void:
 			ReconnectingPeerConnection.new() if reconnect_masking
 			else WebRTCPeerConnection.new()
 	)
-	connection.initialize({ "iceServers": ice_servers })
+	var active_servers = [] if (is_local or is_local_session) else ice_servers
+	connection.initialize({ "iceServers": active_servers })
 	connection.session_description_created.connect(
 		_on_session_description_created.bind(multiplayer_id),
 	)
@@ -401,8 +451,13 @@ func _on_session_description_created(
 ) -> void:
 	var connection := _connection(multiplayer_id)
 	connection.set_local_description(type, sdp)
+	if type == "offer":
+		_offer_sent_ms[multiplayer_id] = Time.get_ticks_msec()
+	elif type == "answer":
+		_answer_sent_ms[multiplayer_id] = Time.get_ticks_msec()
 	_local_desc[multiplayer_id] = { "type": type, "sdp": sdp }
 	_bundle_sent[multiplayer_id] = true
+
 	_candidates_dirty[multiplayer_id] = false
 	_topups_done[multiplayer_id] = false
 	_gather_deadline_ms[multiplayer_id] = (
@@ -472,6 +527,10 @@ func _send_bundle(multiplayer_id: int) -> void:
 		"WebRTCSession: sending %s bundle for id %d (%d candidate(s)).",
 		[String(desc["type"]), multiplayer_id, candidates.size()],
 	)
+	var is_local: bool = (
+			is_local_session
+			or bool(_local_peers.get(multiplayer_id, false))
+	)
 	signal_out.emit(
 		multiplayer_id,
 		String(_signaler_ids.get(multiplayer_id, "")),
@@ -480,6 +539,7 @@ func _send_bundle(multiplayer_id: int) -> void:
 			"type": desc["type"],
 			"sdp": desc["sdp"],
 			"candidates": candidates.duplicate(),
+			"is_local": is_local,
 		},
 	)
 
@@ -505,7 +565,9 @@ func _candidate_key(payload: Dictionary) -> String:
 
 func _on_peer_connected(multiplayer_id: int) -> void:
 	_connected_ids[multiplayer_id] = true
+	_native_connected_ms[multiplayer_id] = Time.get_ticks_msec()
 	var stats: Dictionary = _candidate_stats.get(multiplayer_id, _empty_stats())
+
 	Netw.dbg.debug(
 		"WebRTCSession: native link up id %d (host=%d srflx=%d relay=%d).",
 		[multiplayer_id, stats.host, stats.srflx, stats.relay],

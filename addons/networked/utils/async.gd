@@ -100,7 +100,7 @@ class _FailureResolver extends RefCounted:
 			resolved.emit(
 				{ "result": "success", "reason": "" },
 			)
-		_on_failure = func(reason: String):
+		_on_failure = func(reason: Variant):
 			resolved.emit(
 				{ "result": "failure", "reason": reason },
 			)

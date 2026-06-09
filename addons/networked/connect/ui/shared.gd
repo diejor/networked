@@ -52,6 +52,39 @@ static func format_spawner_label(path: SceneNodePath) -> String:
 	return path.node_path
 
 
+## Returns a user-friendly error string for [param result].
+##
+## Maps the [ConnectResult] status and details to friendly descriptions.
+static func format_connect_error(result: ConnectResult) -> String:
+	if result == null:
+		return "Unknown error."
+	match result.status:
+		ConnectResult.Status.OK:
+			return "Success."
+		ConnectResult.Status.TIMED_OUT:
+			return "Connection timed out."
+		ConnectResult.Status.REFUSED:
+			return "Connection refused."
+		ConnectResult.Status.ABORTED:
+			return "Connection aborted by user."
+		ConnectResult.Status.UNREACHABLE:
+			match result.detail:
+				&"TURN_UNREACHABLE":
+					return "Relay server unreachable."
+				&"HOST_UNRESPONSIVE":
+					return "Host did not respond."
+				&"SIGNALING_UNAVAILABLE":
+					return "Could not reach signaling."
+				&"NAT_TRAVERSAL_FAILED":
+					return "Could not establish a direct connection."
+				_:
+					return "Server unreachable."
+		_:
+			if not result.message.is_empty():
+				return result.message
+			return "Connection failed."
+
+
 static func _backend_class_name(backend: BackendPeer) -> String:
 	var script := backend.get_script()
 	if script and not script.get_global_name().is_empty():
