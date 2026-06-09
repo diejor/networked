@@ -124,12 +124,14 @@ func close() -> void:
 # Announces departure so the tracker drops this peer_id from the swarm at once,
 # instead of leaving a stale rendezvous for others to keep dialing.
 func _send_stop() -> void:
-	_broadcast({
-		"action": "announce",
-		"info_hash": _info_hash,
-		"peer_id": _local_peer_id,
-		"event": "stopped",
-	})
+	_broadcast(
+		{
+			"action": "announce",
+			"info_hash": _info_hash,
+			"peer_id": _local_peer_id,
+			"event": "stopped",
+		},
+	)
 
 
 func on_session_connected(multiplayer_id: int) -> void:
@@ -373,11 +375,21 @@ func _parse_packet(data: Dictionary) -> void:
 				received.emit(godot_id, remote_peer_id, "candidate", payload)
 		"offer":
 			_handle_inbound(
-				data, godot_id, remote_peer_id, "offer", payload, _handled_offers
+				data,
+				godot_id,
+				remote_peer_id,
+				"offer",
+				payload,
+				_handled_offers,
 			)
 		"answer":
 			_handle_inbound(
-				data, godot_id, remote_peer_id, "answer", payload, _handled_answers
+				data,
+				godot_id,
+				remote_peer_id,
+				"answer",
+				payload,
+				_handled_answers,
 			)
 
 
@@ -403,7 +415,8 @@ func _handle_inbound(
 		_answers.erase(remote_peer_id)
 	_mark_handled_signal(handled, remote_peer_id, signal_id, payload)
 	Netw.dbg.debug(
-		"TrackerSignaler: [%s] from id %d.", [slot.to_upper(), godot_id]
+		"TrackerSignaler: [%s] from id %d.",
+		[slot.to_upper(), godot_id],
 	)
 	received.emit(godot_id, remote_peer_id, slot, payload)
 	_emit_bundled_candidates(godot_id, remote_peer_id, payload)

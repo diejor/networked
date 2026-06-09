@@ -206,8 +206,8 @@ func _open_connection(multiplayer_id: int) -> void:
 	_candidate_stats[multiplayer_id] = _empty_stats()
 	_attempt_started_ms[multiplayer_id] = Time.get_ticks_msec()
 	var connection: WebRTCPeerConnection = (
-		ReconnectingPeerConnection.new() if reconnect_masking
-		else WebRTCPeerConnection.new()
+			ReconnectingPeerConnection.new() if reconnect_masking
+			else WebRTCPeerConnection.new()
 	)
 	connection.initialize({ "iceServers": ice_servers })
 	connection.session_description_created.connect(
@@ -266,7 +266,8 @@ func _handle_offer(multiplayer_id: int, payload: Dictionary) -> void:
 	# otherwise crash the browser with an empty-description parse error.
 	if String(payload.get("sdp", "")).is_empty():
 		Netw.dbg.debug(
-			"WebRTCSession dropped SDP-less offer for id %d.", [multiplayer_id]
+			"WebRTCSession dropped SDP-less offer for id %d.",
+			[multiplayer_id],
 		)
 		return
 	# A fresh offer on an unconnected link is a client retry: restart the host
@@ -293,7 +294,8 @@ func _handle_answer(multiplayer_id: int, payload: Dictionary) -> void:
 	# otherwise crash the browser with an empty-description parse error.
 	if String(payload.get("sdp", "")).is_empty():
 		Netw.dbg.debug(
-			"WebRTCSession dropped SDP-less answer for id %d.", [multiplayer_id]
+			"WebRTCSession dropped SDP-less answer for id %d.",
+			[multiplayer_id],
 		)
 		return
 	var err := _connection(multiplayer_id).set_remote_description(
