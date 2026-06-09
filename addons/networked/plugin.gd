@@ -82,3 +82,16 @@ func _register_settings() -> void:
 			"hint": PROPERTY_HINT_NONE,
 		},
 	)
+
+	var turn_credentials_setting := "networked/webrtc/turn_credentials_url"
+	if not ProjectSettings.has_setting(turn_credentials_setting):
+		ProjectSettings.set_setting(turn_credentials_setting, "")
+
+	ProjectSettings.set_initial_value(turn_credentials_setting, "")
+	ProjectSettings.add_property_info(
+		{
+			"name": turn_credentials_setting,
+			"type": TYPE_STRING,
+			"hint": PROPERTY_HINT_NONE,
+		},
+	)

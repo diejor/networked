@@ -12,6 +12,13 @@
 ## unfocused tab, signaling can stall until the tab is visible again. Prefer a
 ## relay or dedicated host when web-hosted rooms must stay reachable while the
 ## host tab is backgrounded.
+## [br][br]
+## [b]Credentials and TURN configuration[/b]
+## [br]
+## Configure the project setting [code]networked/webrtc/turn_credentials_url[/code]
+## to point to your secure Cloudflare Worker or backend service that issues ephemeral
+## TURN/STUN credentials. During connection setup, the backend will dynamically
+## query this URL to populate the active [member global_ice_servers].
 ## [codeblock]
 ## # session.signal_out -> signaler.send,  signaler.received -> session.deliver
 ## @abstract func _make_signaler() -> WebRTCSignaler
@@ -31,22 +38,6 @@ signal signaling_connected
 signal signaling_disconnected
 ## Emitted on the host when the room id is ready to share.
 signal room_created(room_id: String)
-
-## Secure Cloudflare Worker URL to fetch ephemeral TURN/STUN credentials.
-##
-## Leave empty to use the default public [member ice_servers] configuration.
-## The credentials are automatically and asynchronously fetched during the
-## backend [method BackendPeer.setup] phase.
-## [br][br]
-## The fetched JSON response must match this schema:
-## [codeblock]
-## Array
-##  ┖╴{ }
-##     ┠╴urls (String or Array)
-##     ┠╴username (String)
-##     ┖╴credential (String)
-## [/codeblock]
-@export var turn_credentials_url: String = ""
 
 ## Display name advertised by [WebTorrentDirectory] for hosted rooms.
 @export var server_name: String = ""
@@ -103,17 +94,34 @@ func _make_signaler() -> WebRTCSignaler
 
 ## Prepares WebRTC backend by fetching secure credentials when configured.
 ##
-## If [member turn_credentials_url] is set, this method performs an asynchronous
-## [HTTPRequest] to fetch ICE credentials and populates [member global_ice_servers].
+## If the global setting [code]networked/webrtc/turn_credentials_url[/code]
+## is set in ProjectSettings, this method performs an asynchronous [HTTPRequest]
+## to fetch ICE credentials and populates [member global_ice_servers].
+## [br][br]
+## The fetched JSON response must match this schema:
+## [codeblock]
+## Array
+##  ┖╴{ }
+##     ┠╴urls (String or Array)
+##     ┠╴username (String)
+##     ┖╴credential (String)
+## [/codeblock]
 func setup(tree: MultiplayerTree) -> Error:
-	if not global_ice_servers.is_empty() or turn_credentials_url.is_empty():
+	if not global_ice_servers.is_empty():
+		return OK
+
+	var url := ""
+	if ProjectSettings.has_setting("networked/webrtc/turn_credentials_url"):
+		url = ProjectSettings.get_setting("networked/webrtc/turn_credentials_url")
+
+	if url.is_empty():
 		return OK
 
 	var http := HTTPRequest.new()
 	http.timeout = 5.0
 	tree.add_child(http)
 
-	var err := http.request(turn_credentials_url)
+	var err := http.request(url)
 	if err != OK:
 		Netw.dbg.warn(
 			"WebRTC credentials request initiation failed: %s",
@@ -137,7 +145,7 @@ func setup(tree: MultiplayerTree) -> Error:
 			global_ice_servers = servers
 			Netw.dbg.info(
 				"WebRTC credentials fetched successfully from %s.",
-				[turn_credentials_url],
+				[url],
 			)
 		else:
 			Netw.dbg.warn(
@@ -300,7 +308,6 @@ func copy_from(source: BackendPeer) -> void:
 		ice_servers = other.ice_servers.duplicate(true)
 		connect_retry = other.connect_retry
 		max_connect_attempts = other.max_connect_attempts
-		turn_credentials_url = other.turn_credentials_url
 
 
 ## Clears the active session and signaler.
