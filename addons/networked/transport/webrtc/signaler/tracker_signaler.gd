@@ -31,6 +31,9 @@ extends WebRTCSignaler
 ## Seconds to keep tracker signaling alive after the native WebRTC link is up.
 const SIGNALING_CLOSE_DELAY := 3.0
 
+## Enables per-packet relay diagnostics for tracker payload validation.
+var trace_relayed_payloads := false
+
 var trackers: Array[String] = []
 
 var _tracker: WebTorrentTrackerClient = null
@@ -42,9 +45,12 @@ var _local_godot_id := 0
 var _server_wt_id := ""
 var _native_up := false
 
-# remote_peer_id:sha1(sdp) -> true, so a re-sent offer or answer is handled once.
+# remote_peer_id:sha1(sdp):sha1(candidates) -> true, so exact re-sends are
+# handled once but candidate top-ups still pass through.
 var _handled_offers := { }
 var _handled_answers := { }
+# key -> directed announce waiting for the first open tracker socket.
+var _pending_directed := { }
 var _announce_timer := 0.0
 var _signaling_close_delay := -1.0
 # Tracker-requested minimum seconds between announces, used as the presence
@@ -98,6 +104,7 @@ func poll(dt: float) -> void:
 
 
 func close() -> void:
+	_pending_directed.clear()
 	if _tracker:
 		_send_stop()
 		_tracker.close()
@@ -156,20 +163,22 @@ func _send_directed(to_peer: String, type: String, payload: Dictionary) -> void:
 		"TrackerSignaler: directed [%s] to %s... (%d candidate(s)).",
 		[type.to_upper(), to_peer.substr(0, 6), (candidates as Array).size()],
 	)
-	_broadcast(
-		{
-			"action": "announce",
-			"info_hash": _info_hash,
-			"peer_id": _local_peer_id,
-			"to_peer_id": to_peer,
-			"offer_id": "0",
-			"answer": {
-				"type": type,
-				"sdp": String(payload.get("sdp", "")),
-				"candidates": candidates,
-			},
+	var msg := {
+		"action": "announce",
+		"info_hash": _info_hash,
+		"peer_id": _local_peer_id,
+		"to_peer_id": to_peer,
+		"offer_id": "0",
+		"answer": {
+			"type": type,
+			"sdp": String(payload.get("sdp", "")),
+			"candidates": candidates,
 		},
-	)
+	}
+	if _tracker and _tracker.has_open():
+		_broadcast(msg)
+		return
+	_pending_directed["%s:%s" % [to_peer, type]] = msg
 
 
 # Re-announces presence so the tracker keeps this peer routable for directed
@@ -182,7 +191,6 @@ func _drive_presence() -> void:
 	_announce_timer = 0.0
 	if _tracker.has_open():
 		_tracker.broadcast(_build_presence())
-
 
 # -- Tracker plumbing -------------------------------------------------------
 
@@ -212,6 +220,7 @@ func _on_signaling_lost() -> void:
 # Sends the first presence announce when a tracker socket opens.
 func _announce_to(ws: WebSocketPeer) -> void:
 	_tracker.send(ws, _build_presence())
+	_flush_pending_directed()
 
 
 # A bare announce that registers this peer_id in the swarm so the tracker can
@@ -224,6 +233,14 @@ func _build_presence() -> Dictionary:
 		"peer_id": _local_peer_id,
 		"numwant": 1,
 	}
+
+
+func _flush_pending_directed() -> void:
+	if _pending_directed.is_empty() or _tracker == null or not _tracker.has_open():
+		return
+	for msg: Dictionary in _pending_directed.values():
+		_tracker.broadcast(msg)
+	_pending_directed.clear()
 
 
 # Decodes a tracker packet and reports it up as a received() signal, dropping
@@ -249,7 +266,8 @@ func _parse_packet(data: Dictionary) -> void:
 	var dict: Dictionary = payload
 
 	var type: String = dict.get("type", "")
-	_trace_relayed_payload("answer", type, dict)
+	if trace_relayed_payloads:
+		_trace_relayed_payload("answer", type, dict)
 	match type:
 		"offer":
 			_handle_inbound(godot_id, remote_peer_id, "offer", dict, _handled_offers)
@@ -257,8 +275,8 @@ func _parse_packet(data: Dictionary) -> void:
 			_handle_inbound(godot_id, remote_peer_id, "answer", dict, _handled_answers)
 
 
-# Reports one inbound offer or answer once, deduped by its SDP so the sender's
-# reliability re-sends do not reprocess it.
+# Reports one inbound offer or answer once, deduped by its SDP and candidate
+# bundle so top-ups pass while exact reliability re-sends do not reprocess it.
 func _handle_inbound(
 		godot_id: int,
 		remote_peer_id: String,
@@ -266,7 +284,9 @@ func _handle_inbound(
 		payload: Dictionary,
 		handled: Dictionary,
 ) -> void:
-	var key := remote_peer_id + ":" + String(payload.get("sdp", "")).sha1_text()
+	var key := remote_peer_id \
+			+ ":" + String(payload.get("sdp", "")).sha1_text() \
+			+ ":" + _candidate_hash(payload)
 	if handled.has(key):
 		Netw.dbg.trace(
 			"TrackerSignaler: ignoring duplicate [%s] from id %d.",
@@ -286,9 +306,14 @@ func _candidate_count(payload: Dictionary) -> int:
 	return (candidates as Array).size() if typeof(candidates) == TYPE_ARRAY else 0
 
 
-# Phase 0 probe: reports what a tracker actually relays, to confirm bundled ICE
-# candidates (especially TURN relay ones) survive the directed answer slot.
-# Remove once the directed-bundle model is confirmed on real trackers.
+func _candidate_hash(payload: Dictionary) -> String:
+	var candidates: Variant = payload.get("candidates", [])
+	if typeof(candidates) != TYPE_ARRAY:
+		return "".sha1_text()
+	return JSON.stringify(candidates).sha1_text()
+
+
+# Reports what a tracker relays when [member trace_relayed_payloads] is enabled.
 func _trace_relayed_payload(slot: String, type: String, payload: Dictionary) -> void:
 	var sdp_len := String(payload.get("sdp", "")).length()
 	var bundled: Variant = payload.get("candidates", null)

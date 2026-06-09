@@ -20,6 +20,10 @@
 class_name BackendPeer
 extends Resource
 
+## Emitted when an in-progress client connection has a backend-specific
+## terminal failure reason.
+signal connect_failed(reason: String)
+
 const _MSEC_TO_SEC := 0.001
 const _PERCENT_TO_RATIO := 0.01
 const _LEGACY_SECONDS_MAX := 1.0

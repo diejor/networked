@@ -15,12 +15,11 @@
 ## each frame: session.poll(delta)
 ## [/codeblock]
 ## [br][br]
-## ICE is not trickled. The session holds the local description until
-## [constant WebRTCPeerConnection.GATHERING_STATE_COMPLETE] (or
-## [member gather_timeout] elapses), then sends the SDP with every gathered
-## candidate as one bundle, so the candidates survive a relay that forwards only
-## offers and answers. A client whose native link has not opened within
-## [member connect_retry] re-sends that same bundle, up to
+## ICE is trickled by top-up bundles. The session sends the local description
+## immediately, then re-sends the same SDP with its growing candidate list until
+## [constant WebRTCPeerConnection.GATHERING_STATE_COMPLETE] or
+## [member gather_timeout] ends the top-up window. A client whose native link
+## has not opened within [member connect_retry] re-sends the final bundle, up to
 ## [member max_connect_attempts], without tearing the connection down.
 class_name WebRTCSession
 extends RefCounted
@@ -29,6 +28,8 @@ extends RefCounted
 signal native_connected(multiplayer_id: int)
 ## Emitted when the native WebRTC link to [param multiplayer_id] drops.
 signal native_disconnected(multiplayer_id: int)
+## Emitted when the client gives up opening the native link.
+signal failed(multiplayer_id: int, reason: String)
 
 ## Emitted when SDP or ICE must reach a remote. [param kind] is
 ## [code]"offer"[/code], [code]"answer"[/code], or [code]"candidate"[/code].
@@ -59,9 +60,12 @@ var max_connect_attempts: int = 3
 var reconnect_masking: bool = true
 
 ## Seconds the session waits for ICE gathering to complete before sending the
-## offer/answer bundle regardless, so a gather that never reports complete still
+## final offer/answer top-up, so a gather that never reports complete still
 ## signals the candidates it managed to collect.
 var gather_timeout: float = 6.0
+
+## Minimum seconds between candidate top-up bundles while ICE is gathering.
+var topup_interval: float = 0.25
 
 var webrtc_peer: WebRTCMultiplayerPeer = null
 
@@ -72,6 +76,8 @@ var _signaler_ids: Dictionary = { }
 var _remote_desc_set: Dictionary = { }
 # multiplayer_id -> Array[Dictionary] of candidates awaiting the remote desc.
 var _pending_candidates: Dictionary = { }
+# multiplayer_id -> candidate keys already applied to the remote connection.
+var _applied_remote_candidates: Dictionary = { }
 # multiplayer_id -> { host, srflx, relay } counts gathered this attempt.
 var _candidate_stats: Dictionary = { }
 # multiplayer_id -> bool, mirrors the native link state.
@@ -84,8 +90,14 @@ var _attempts: Dictionary = { }
 var _local_desc: Dictionary = { }
 # multiplayer_id -> Array[Dictionary] of locally gathered ICE candidates.
 var _local_candidates: Dictionary = { }
-# multiplayer_id -> bool, true once the gathered bundle has been sent.
+# multiplayer_id -> bool, true once any local description bundle has been sent.
 var _bundle_sent: Dictionary = { }
+# multiplayer_id -> bool, true once newly gathered candidates need a top-up.
+var _candidates_dirty: Dictionary = { }
+# multiplayer_id -> bool, true once the final gathering top-up has been sent.
+var _topups_done: Dictionary = { }
+# multiplayer_id -> msec the bundle was last sent at.
+var _last_send_ms: Dictionary = { }
 # multiplayer_id -> msec at which a still-gathering bundle is sent regardless.
 var _gather_deadline_ms: Dictionary = { }
 # True once the client logged the give-up summary, so it logs at most once.
@@ -189,6 +201,7 @@ func close() -> void:
 	_signaler_ids.clear()
 	_remote_desc_set.clear()
 	_pending_candidates.clear()
+	_applied_remote_candidates.clear()
 	_candidate_stats.clear()
 	_connected_ids.clear()
 	_attempt_started_ms.clear()
@@ -196,6 +209,9 @@ func close() -> void:
 	_local_desc.clear()
 	_local_candidates.clear()
 	_bundle_sent.clear()
+	_candidates_dirty.clear()
+	_topups_done.clear()
+	_last_send_ms.clear()
 	_gather_deadline_ms.clear()
 	_retry_failed_logged = false
 
@@ -225,11 +241,15 @@ func _open_connection(multiplayer_id: int) -> void:
 	)
 	_remote_desc_set[multiplayer_id] = false
 	_pending_candidates[multiplayer_id] = []
+	_applied_remote_candidates[multiplayer_id] = { }
 	_candidate_stats[multiplayer_id] = _empty_stats()
 	_attempt_started_ms[multiplayer_id] = Time.get_ticks_msec()
 	_local_desc.erase(multiplayer_id)
 	_local_candidates[multiplayer_id] = []
 	_bundle_sent[multiplayer_id] = false
+	_candidates_dirty[multiplayer_id] = false
+	_topups_done[multiplayer_id] = false
+	_last_send_ms[multiplayer_id] = 0
 	_gather_deadline_ms.erase(multiplayer_id)
 	var connection: WebRTCPeerConnection = (
 			ReconnectingPeerConnection.new() if reconnect_masking
@@ -267,6 +287,7 @@ func _maybe_retry() -> void:
 		if not _retry_failed_logged:
 			_retry_failed_logged = true
 			_log_attempt_summary(1, "failed")
+			failed.emit(1, _failure_reason(1))
 		return
 	_attempts[1] = int(_attempts.get(1, 1)) + 1
 	Netw.dbg.trace(
@@ -287,15 +308,16 @@ func _handle_offer(multiplayer_id: int, payload: Dictionary) -> void:
 			[multiplayer_id],
 		)
 		return
-	var connection := _connection(multiplayer_id)
-	var err := connection.set_remote_description("offer", payload.get("sdp", ""))
-	if err != OK:
-		Netw.dbg.debug(
-			"WebRTCSession ignored stale offer for id %d: %s",
-			[multiplayer_id, error_string(err)],
-		)
-		return
-	_remote_desc_set[multiplayer_id] = true
+	if not _remote_desc_set.get(multiplayer_id, false):
+		var connection := _connection(multiplayer_id)
+		var err := connection.set_remote_description("offer", payload.get("sdp", ""))
+		if err != OK:
+			Netw.dbg.debug(
+				"WebRTCSession ignored stale offer for id %d: %s",
+				[multiplayer_id, error_string(err)],
+			)
+			return
+		_remote_desc_set[multiplayer_id] = true
 	_apply_bundled_candidates(multiplayer_id, payload)
 	_flush_pending_candidates(multiplayer_id)
 
@@ -311,17 +333,18 @@ func _handle_answer(multiplayer_id: int, payload: Dictionary) -> void:
 			[multiplayer_id],
 		)
 		return
-	var err := _connection(multiplayer_id).set_remote_description(
-		"answer",
-		payload.get("sdp", ""),
-	)
-	if err != OK:
-		Netw.dbg.debug(
-			"WebRTCSession ignored stale answer for id %d: %s",
-			[multiplayer_id, error_string(err)],
+	if not _remote_desc_set.get(multiplayer_id, false):
+		var err := _connection(multiplayer_id).set_remote_description(
+			"answer",
+			payload.get("sdp", ""),
 		)
-		return
-	_remote_desc_set[multiplayer_id] = true
+		if err != OK:
+			Netw.dbg.debug(
+				"WebRTCSession ignored stale answer for id %d: %s",
+				[multiplayer_id, error_string(err)],
+			)
+			return
+		_remote_desc_set[multiplayer_id] = true
 	_apply_bundled_candidates(multiplayer_id, payload)
 	_flush_pending_candidates(multiplayer_id)
 
@@ -358,6 +381,12 @@ func _close_peer_channels(peer_info: Dictionary) -> void:
 
 
 func _add_candidate(multiplayer_id: int, payload: Dictionary) -> void:
+	var key := _candidate_key(payload)
+	var applied: Dictionary = _applied_remote_candidates.get(multiplayer_id, { })
+	if applied.has(key):
+		return
+	applied[key] = true
+	_applied_remote_candidates[multiplayer_id] = applied
 	_connection(multiplayer_id).add_ice_candidate(
 		payload.get("sdpMid", ""),
 		payload.get("sdpMLineIndex", 0),
@@ -372,13 +401,14 @@ func _on_session_description_created(
 ) -> void:
 	var connection := _connection(multiplayer_id)
 	connection.set_local_description(type, sdp)
-	# Hold the description until ICE gathering completes so its candidates ride
-	# the same bundle, instead of trickling into a slot the relay strips.
 	_local_desc[multiplayer_id] = { "type": type, "sdp": sdp }
-	_bundle_sent[multiplayer_id] = false
+	_bundle_sent[multiplayer_id] = true
+	_candidates_dirty[multiplayer_id] = false
+	_topups_done[multiplayer_id] = false
 	_gather_deadline_ms[multiplayer_id] = (
 			Time.get_ticks_msec() + int(gather_timeout * 1000.0)
 	)
+	_send_bundle(multiplayer_id)
 
 
 func _on_ice_candidate_created(
@@ -398,14 +428,14 @@ func _on_ice_candidate_created(
 			"sdpMLineIndex": index,
 		},
 	)
+	_candidates_dirty[multiplayer_id] = true
 
 
-# Sends each connection's offer or answer once ICE gathering completes (or its
-# gather window elapses), bundling every gathered candidate into the one message
-# a relay forwards intact.
+# Coalesces growing candidate bundles while ICE gathers, then sends one final
+# bundle when the gather window ends.
 func _drive_signaling() -> void:
 	for multiplayer_id: int in _local_desc.keys():
-		if _bundle_sent.get(multiplayer_id, false):
+		if _topups_done.get(multiplayer_id, false):
 			continue
 		if not webrtc_peer.has_peer(multiplayer_id):
 			continue
@@ -413,19 +443,18 @@ func _drive_signaling() -> void:
 				== WebRTCPeerConnection.GATHERING_STATE_COMPLETE
 		var timed_out := Time.get_ticks_msec() \
 				>= int(_gather_deadline_ms.get(multiplayer_id, 0))
-		if not complete and not timed_out:
+		if complete or timed_out:
+			_candidates_dirty[multiplayer_id] = false
+			_topups_done[multiplayer_id] = true
+			_send_bundle(multiplayer_id)
 			continue
-		_bundle_sent[multiplayer_id] = true
-		var candidates: Array = _local_candidates.get(multiplayer_id, [])
-		Netw.dbg.trace(
-			"WebRTCSession: sending %s bundle for id %d (%d candidate(s)%s).",
-			[
-				String(_local_desc[multiplayer_id]["type"]),
-				multiplayer_id,
-				candidates.size(),
-				"" if complete else ", gather timed out",
-			],
-		)
+		if not _candidates_dirty.get(multiplayer_id, false):
+			continue
+		var elapsed_ms := Time.get_ticks_msec() \
+				- int(_last_send_ms.get(multiplayer_id, 0))
+		if elapsed_ms < int(topup_interval * 1000.0):
+			continue
+		_candidates_dirty[multiplayer_id] = false
 		_send_bundle(multiplayer_id)
 
 
@@ -435,7 +464,14 @@ func _send_bundle(multiplayer_id: int) -> void:
 	var desc: Dictionary = _local_desc.get(multiplayer_id, { })
 	if desc.is_empty():
 		return
-	_attempt_started_ms[multiplayer_id] = Time.get_ticks_msec()
+	var now := Time.get_ticks_msec()
+	_attempt_started_ms[multiplayer_id] = now
+	_last_send_ms[multiplayer_id] = now
+	var candidates: Array = _local_candidates.get(multiplayer_id, [])
+	Netw.dbg.trace(
+		"WebRTCSession: sending %s bundle for id %d (%d candidate(s)).",
+		[String(desc["type"]), multiplayer_id, candidates.size()],
+	)
 	signal_out.emit(
 		multiplayer_id,
 		String(_signaler_ids.get(multiplayer_id, "")),
@@ -443,7 +479,7 @@ func _send_bundle(multiplayer_id: int) -> void:
 		{
 			"type": desc["type"],
 			"sdp": desc["sdp"],
-			"candidates": (_local_candidates.get(multiplayer_id, []) as Array).duplicate(),
+			"candidates": candidates.duplicate(),
 		},
 	)
 
@@ -457,6 +493,14 @@ func _apply_bundled_candidates(multiplayer_id: int, payload: Dictionary) -> void
 	for candidate: Variant in candidates:
 		if typeof(candidate) == TYPE_DICTIONARY:
 			_add_candidate(multiplayer_id, candidate)
+
+
+func _candidate_key(payload: Dictionary) -> String:
+	return "%s:%d:%s" % [
+		String(payload.get("sdpMid", "")),
+		int(payload.get("sdpMLineIndex", 0)),
+		String(payload.get("candidate", "")),
+	]
 
 
 func _on_peer_connected(multiplayer_id: int) -> void:
@@ -495,15 +539,25 @@ func _log_attempt_summary(multiplayer_id: int, why: String) -> void:
 			[multiplayer_id, why, stats.host, stats.srflx],
 		)
 	else:
+		var action := "retrying signaling" if why != "failed" else "giving up"
 		Netw.dbg.debug(
 			"WebRTCSession: id %d %s (host=%d srflx=%d relay=%d); "
-			+ "relay reachable, retrying signaling.",
-			[multiplayer_id, why, stats.host, stats.srflx, stats.relay],
+			+ "relay reachable, %s.",
+			[multiplayer_id, why, stats.host, stats.srflx, stats.relay, action],
 		)
 
 
 func _empty_stats() -> Dictionary:
 	return { "host": 0, "srflx": 0, "relay": 0 }
+
+
+func _failure_reason(multiplayer_id: int) -> String:
+	if not _remote_desc_set.get(multiplayer_id, false):
+		return "HOST_UNRESPONSIVE"
+	var stats: Dictionary = _candidate_stats.get(multiplayer_id, _empty_stats())
+	if int(stats.get("relay", 0)) == 0:
+		return "TURN_UNREACHABLE"
+	return "NAT_TRAVERSAL_FAILED"
 
 
 func _connection(multiplayer_id: int) -> WebRTCPeerConnection:

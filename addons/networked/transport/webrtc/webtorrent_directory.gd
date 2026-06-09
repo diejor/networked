@@ -417,22 +417,35 @@ func _collect_room(card: Dictionary) -> void:
 	var players := int(card.get("players", 0))
 	var max_players := int(card.get("max", 0))
 	var room_name := String(card.get("name", ""))
-	Netw.dbg.debug(
-		"WebTorrentDirectory: discovered room %s with app_id='%s'.",
-		[room_hash, String(card.get("app_id", ""))],
-	)
 
 	if _collected.has(room_hash):
 		var existing: LobbyInfo = _collected[room_hash]
+		var changed := existing.players != players \
+				or existing.max_players != max_players \
+				or existing.lobby_name != room_name
 		existing.players = players
 		existing.max_players = max_players
 		existing.lobby_name = room_name
 		existing.metadata = _room_metadata(card)
+		if changed:
+			Netw.dbg.trace(
+				"WebTorrentDirectory: updated room %s (%d/%d) app_id='%s'.",
+				[
+					room_hash,
+					players,
+					max_players,
+					String(card.get("app_id", "")),
+				],
+			)
 		return
 
 	var id := _next_id
 	_next_id += 1
 	_id_to_hash[id] = room_hash
+	Netw.dbg.debug(
+		"WebTorrentDirectory: discovered room %s (%d/%d) app_id='%s'.",
+		[room_hash, players, max_players, String(card.get("app_id", ""))],
+	)
 	_collected[room_hash] = LobbyInfo.make(
 		id,
 		room_name,

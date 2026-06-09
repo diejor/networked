@@ -17,6 +17,33 @@ class RecordingSignaler extends TrackerSignaler:
 		return fake
 
 
+class DelayedFakeTrackerClient extends FakeTrackerClient:
+	var open := false
+
+
+	func connect_to(_urls: Array[String]) -> Error:
+		connected.emit()
+		return OK
+
+
+	func has_open() -> bool:
+		return open
+
+
+	func open_socket() -> void:
+		open = true
+		socket_opened.emit(WebSocketPeer.new())
+
+
+class DelayedRecordingSignaler extends TrackerSignaler:
+	var fake: DelayedFakeTrackerClient
+
+
+	func _make_tracker() -> WebTorrentTrackerClient:
+		fake = DelayedFakeTrackerClient.new()
+		return fake
+
+
 func _cand(_name: String) -> Dictionary:
 	return {
 		"type": "candidate",
@@ -48,6 +75,30 @@ func test_client_offer_is_directed_to_host_with_bundled_candidates() -> void:
 	assert_str(String(msg["to_peer_id"])).is_equal("a1b2c3d4e5" + "0000000001")
 	assert_bool(msg.has("offers")).is_false()
 	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(2)
+
+
+func test_offer_sent_before_tracker_open_flushes_on_socket_open() -> void:
+	var sig := DelayedRecordingSignaler.new(["wss://example"])
+	sig.open("a1b2c3d4e5f60718293a", 2)
+	sig.send(
+		1,
+		"",
+		"offer",
+		{
+			"type": "offer",
+			"sdp": "OFFER",
+			"candidates": [_cand("c1")],
+		},
+	)
+
+	assert_array(sig.fake.sdp_announces("offer")).is_empty()
+	sig.fake.open_socket()
+
+	var offers := sig.fake.sdp_announces("offer")
+	assert_array(offers).has_size(1)
+	var msg: Dictionary = offers[0]
+	assert_str(String(msg["to_peer_id"])).is_equal("a1b2c3d4e5" + "0000000001")
+	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(1)
 
 
 func test_host_answer_is_directed_to_client_with_bundled_candidates() -> void:
@@ -105,3 +156,39 @@ func test_inbound_offer_reports_once_and_dedupes_resends() -> void:
 
 	# Reported once; the candidates ride inside the payload, not as own signals.
 	assert_array(got).is_equal(["answer"])
+
+
+func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
+	var sig := RecordingSignaler.new(["wss://example"])
+	sig.open("a1b2c3d4e5f60718293a", 2)
+	var room := sig.room_id()
+	var counts: Array = []
+	sig.received.connect(
+		func(
+				_id: int,
+				_peer: String,
+				_kind: String,
+				payload: Dictionary,
+		) -> void:
+			counts.append((payload.get("candidates", []) as Array).size())
+	)
+
+	var first := {
+		"info_hash": room,
+		"peer_id": "00000000000000000001",
+		"answer": { "type": "answer", "sdp": "S", "candidates": [_cand("c1")] },
+	}
+	var topup := {
+		"info_hash": room,
+		"peer_id": "00000000000000000001",
+		"answer": {
+			"type": "answer",
+			"sdp": "S",
+			"candidates": [_cand("c1"), _cand("c2")],
+		},
+	}
+	sig._parse_packet(first)
+	sig._parse_packet(topup)
+	sig._parse_packet(topup)
+
+	assert_array(counts).is_equal([1, 2])

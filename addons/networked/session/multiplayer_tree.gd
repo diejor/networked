@@ -860,11 +860,22 @@ func _open_join_transport(
 		api.multiplayer_peer = peer
 
 	var timer := get_tree().create_timer(timeout)
-	if await Async.timeout(connected_to_server, timer) or _join_aborted:
+	var connect_result := await Async.timeout_or_failure(
+		connected_to_server,
+		backend.connect_failed,
+		timer,
+	)
+	var failed_reason := String(connect_result.get("reason", ""))
+	var did_timeout := String(connect_result.get("result", "")) == "timeout"
+	var did_fail := String(connect_result.get("result", "")) == "failure"
+	if did_timeout or did_fail or _join_aborted:
 		_transition(State.OFFLINE)
 		if not quiet and not _join_aborted:
+			var message := "Connection timed out. Server probably is not up."
+			if did_fail and not failed_reason.is_empty():
+				message = "Connection failed: %s." % failed_reason
 			Netw.dbg.error(
-				"Connection timed out. Server probably is not up.",
+				message,
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT

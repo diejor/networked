@@ -167,7 +167,7 @@ func _decode(packet: PackedByteArray) -> void:
 
 # Logs tracker protocol notices without raising engine warnings.
 func _log_tracker_notice(packet_text: String) -> void:
-	Netw.dbg.debug(
+	Netw.dbg.trace(
 		"WebTorrentTrackerClient: tracker notice %s",
 		[packet_text],
 	)

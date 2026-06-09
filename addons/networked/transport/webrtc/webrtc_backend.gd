@@ -82,11 +82,16 @@ signal room_created(room_id: String)
 @export_range(1, 10) var max_connect_attempts: int = 3
 
 ## Seconds the session waits for ICE gathering to complete before sending the
-## offer/answer bundle anyway, forwarded to [member WebRTCSession.gather_timeout].
+## final offer/answer top-up, forwarded to [member WebRTCSession.gather_timeout].
 @export_range(0.5, 15.0, 0.1, "suffix:s") var gather_timeout: float = 6.0
+
+## Minimum seconds between candidate top-up bundles while ICE is gathering,
+## forwarded to [member WebRTCSession.topup_interval].
+@export_range(0.05, 5.0, 0.05, "suffix:s") var topup_interval: float = 0.25
 
 var _session: WebRTCSession = null
 var _signaler: WebRTCSignaler = null
+var _last_failure_reason := ""
 var _is_server := false
 
 
@@ -243,6 +248,7 @@ func _build_session_and_signaler() -> void:
 	_session.connect_retry = connect_retry
 	_session.max_connect_attempts = max_connect_attempts
 	_session.gather_timeout = gather_timeout
+	_session.topup_interval = topup_interval
 	_signaler = _make_signaler()
 
 	_session.signal_out.connect(_signaler.send)
@@ -250,6 +256,7 @@ func _build_session_and_signaler() -> void:
 	_session.native_connected.connect(_on_native_connected)
 	_session.native_connected.connect(_signaler.on_session_connected)
 	_session.native_disconnected.connect(_on_native_disconnected)
+	_session.failed.connect(_on_session_failed)
 	_signaler.ready.connect(func() -> void: signaling_connected.emit())
 	_signaler.lost.connect(func() -> void: signaling_disconnected.emit())
 
@@ -269,6 +276,11 @@ func _on_native_connected(id: int) -> void:
 
 func _on_native_disconnected(id: int) -> void:
 	Netw.dbg.info("WebRTC native connection lost with id %d.", [id])
+
+
+func _on_session_failed(_id: int, reason: String) -> void:
+	_last_failure_reason = reason
+	connect_failed.emit(reason)
 
 
 ## Returns the active room id, or the parent default.
@@ -317,6 +329,7 @@ func copy_from(source: BackendPeer) -> void:
 		connect_retry = other.connect_retry
 		max_connect_attempts = other.max_connect_attempts
 		gather_timeout = other.gather_timeout
+		topup_interval = other.topup_interval
 
 
 ## Clears the active session and signaler.
