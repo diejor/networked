@@ -46,19 +46,14 @@ func close() -> void:
 	pass
 
 
-## Returns the recorded announces that carry a real offer or answer, dropping
-## the trickle and presence announces so a test can assert ICE bundling.
-func sdp_announces(slot: String) -> Array[Dictionary]:
+## Returns the recorded directed announces whose answer slot carries the given
+## inner type ([code]"offer"[/code] or [code]"answer"[/code]), dropping presence
+## and stop announces so a test can assert the directed bundle shape.
+func sdp_announces(type: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for data in announces:
-		if slot == "offer":
-			var offers: Array = data.get("offers", [])
-			for entry: Variant in offers:
-				if typeof(entry) == TYPE_DICTIONARY \
-						and (entry as Dictionary).get("offer", { }).get("type") == "offer":
-					out.append(data)
-					break
-		elif data.has("answer") \
-				and (data["answer"] as Dictionary).get("type") == "answer":
+		var answer: Variant = data.get("answer")
+		if typeof(answer) == TYPE_DICTIONARY \
+				and (answer as Dictionary).get("type") == type:
 			out.append(data)
 	return out

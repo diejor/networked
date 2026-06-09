@@ -73,14 +73,17 @@ signal room_created(room_id: String)
 	},
 ]
 
-## Seconds a joining client waits for the native link before re-offering to the
-## host with a fresh rendezvous, forwarded to
-## [member WebRTCSession.connect_retry].
-@export_range(0.5, 30.0, 0.1, "suffix:s") var connect_retry: float = 4.0
+## Seconds a joining client waits for the native link after sending its offer
+## bundle before re-sending it, forwarded to [member WebRTCSession.connect_retry].
+@export_range(0.5, 30.0, 0.1, "suffix:s") var connect_retry: float = 8.0
 
 ## Offer attempts a joining client makes before it leaves failure to the connect
 ## budget, forwarded to [member WebRTCSession.max_connect_attempts].
 @export_range(1, 10) var max_connect_attempts: int = 3
+
+## Seconds the session waits for ICE gathering to complete before sending the
+## offer/answer bundle anyway, forwarded to [member WebRTCSession.gather_timeout].
+@export_range(0.5, 15.0, 0.1, "suffix:s") var gather_timeout: float = 6.0
 
 var _session: WebRTCSession = null
 var _signaler: WebRTCSignaler = null
@@ -239,6 +242,7 @@ func _build_session_and_signaler() -> void:
 		_session.ice_servers = ice_servers
 	_session.connect_retry = connect_retry
 	_session.max_connect_attempts = max_connect_attempts
+	_session.gather_timeout = gather_timeout
 	_signaler = _make_signaler()
 
 	_session.signal_out.connect(_signaler.send)
@@ -297,10 +301,11 @@ func query_server_info(
 	return ServerInfoResult.unsupported()
 
 
-## Budgets the connect timeout for the retry-aware WebRTC join, so a stalled
-## attempt can re-offer within the window rather than failing on the first try.
+## Budgets the connect timeout for the retry-aware WebRTC join, covering the
+## initial ICE gather plus every re-send window so a stalled attempt re-sends
+## rather than failing on the first try.
 func connect_timeout_hint() -> float:
-	return connect_retry * float(max_connect_attempts) + 4.0
+	return gather_timeout + connect_retry * float(max_connect_attempts) + 4.0
 
 
 ## Preserves authored WebRTC settings after [method Resource.duplicate].
@@ -311,6 +316,7 @@ func copy_from(source: BackendPeer) -> void:
 		ice_servers = other.ice_servers.duplicate(true)
 		connect_retry = other.connect_retry
 		max_connect_attempts = other.max_connect_attempts
+		gather_timeout = other.gather_timeout
 
 
 ## Clears the active session and signaler.

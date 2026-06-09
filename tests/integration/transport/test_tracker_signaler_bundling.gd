@@ -1,5 +1,6 @@
-## Proves [TrackerSignaler] tunnels ICE through the offer and answer slots a
-## WebTorrent tracker actually routes, instead of the broken trickle paths.
+## Proves [TrackerSignaler] sends offers and answers as directed messages in the
+## answer slot a WebTorrent tracker forwards verbatim, each carrying its full ICE
+## candidate bundle, instead of the offers[] matchmaking array a tracker strips.
 ##
 ## A [FakeTrackerClient] records every announce the signaler makes, so the tests
 ## assert the wire shape directly with no tracker traffic.
@@ -25,67 +26,66 @@ func _cand(_name: String) -> Dictionary:
 	}
 
 
-func test_client_offer_bundles_candidates_with_stable_id() -> void:
+func test_client_offer_is_directed_to_host_with_bundled_candidates() -> void:
 	var sig := RecordingSignaler.new(["wss://example"])
 	sig.open("a1b2c3d4e5f60718293a", 2)
-	sig.send(1, "", "offer", { "type": "offer", "sdp": "OFFER" })
-	sig.send(1, "", "candidate", _cand("c1"))
-	sig.send(1, "", "candidate", _cand("c2"))
-	sig.poll(0.5) # past the default 0.4s gather grace
+	# The session hands the signaler one bundle: SDP plus every candidate.
+	sig.send(
+		1,
+		"",
+		"offer",
+		{
+			"type": "offer",
+			"sdp": "OFFER",
+			"candidates": [_cand("c1"), _cand("c2")],
+		},
+	)
 
 	var offers := sig.fake.sdp_announces("offer")
 	assert_array(offers).has_size(1)
-	var entry: Dictionary = offers[0]["offers"][0]
-	var offer_id := String(entry["offer_id"])
-	assert_str(offer_id).is_not_empty()
-	assert_int((entry["offer"]["candidates"] as Array).size()).is_equal(2)
-
-	# No candidate ever leaves in its own announce while trickle is disabled.
-	for data: Dictionary in sig.fake.announces:
-		for slot: Variant in data.get("offers", []):
-			assert_str(String((slot as Dictionary)["offer"].get("type"))) \
-					.is_equal("offer")
-
-	# Re-announcing to reach a late host keeps the same offer_id.
-	sig.poll(2.5)
-	var offers2 := sig.fake.sdp_announces("offer")
-	assert_int(offers2.size()).is_greater_equal(2)
-	assert_str(String(offers2[-1]["offers"][0]["offer_id"])).is_equal(offer_id)
+	var msg: Dictionary = offers[0]
+	# Directed at the host's derived address, never the offers[] matchmaking array.
+	assert_str(String(msg["to_peer_id"])).is_equal("a1b2c3d4e5" + "0000000001")
+	assert_bool(msg.has("offers")).is_false()
+	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(2)
 
 
-func test_host_answer_bundles_candidates_and_reuses_offer_id() -> void:
+func test_host_answer_is_directed_to_client_with_bundled_candidates() -> void:
 	var sig := RecordingSignaler.new(["wss://example"])
 	sig.open("", 1)
 	var room := sig.room_id()
 	var client_peer := "00000000000000000002"
 
-	# Inbound client offer registers the offer_id the answer must reuse.
+	# Inbound client offer in the directed answer slot, so the host learns it.
+	var got_peer := [""]
+	sig.received.connect(
+		func(_id: int, peer: String, _kind: String, _payload: Dictionary) -> void:
+			got_peer[0] = peer
+	)
 	sig._parse_packet(
 		{
 			"info_hash": room,
 			"peer_id": client_peer,
-			"offer": { "type": "offer", "sdp": "CLIENT_OFFER" },
-			"offer_id": "OID123",
+			"answer": { "type": "offer", "sdp": "CLIENT_OFFER" },
 		},
 	)
+	assert_str(got_peer[0]).is_equal(client_peer)
 
-	sig.send(0, client_peer, "answer", { "type": "answer", "sdp": "ANSWER" })
-	sig.send(0, client_peer, "candidate", _cand("h1"))
-	sig.poll(0.5)
+	sig.send(
+		0,
+		client_peer,
+		"answer",
+		{ "type": "answer", "sdp": "ANSWER", "candidates": [_cand("h1")] },
+	)
 
 	var answers := sig.fake.sdp_announces("answer")
 	assert_array(answers).has_size(1)
 	var msg: Dictionary = answers[0]
-	assert_str(String(msg["offer_id"])).is_equal("OID123")
 	assert_str(String(msg["to_peer_id"])).is_equal(client_peer)
 	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(1)
 
-	# Draining again must not resend the answer onto the consumed offer_id.
-	sig.poll(0.5)
-	assert_array(sig.fake.sdp_announces("answer")).has_size(1)
 
-
-func test_inbound_bundle_fans_out_to_offer_then_candidates() -> void:
+func test_inbound_offer_reports_once_and_dedupes_resends() -> void:
 	var sig := RecordingSignaler.new(["wss://example"])
 	sig.open("a1b2c3d4e5f60718293a", 2)
 	var room := sig.room_id()
@@ -95,16 +95,13 @@ func test_inbound_bundle_fans_out_to_offer_then_candidates() -> void:
 			got.append(kind)
 	)
 
-	sig._parse_packet(
-		{
-			"info_hash": room,
-			"peer_id": "00000000000000000001",
-			"answer": {
-				"type": "answer",
-				"sdp": "S",
-				"candidates": [_cand("c1"), _cand("c2")],
-			},
-		},
-	)
+	var answer_msg := {
+		"info_hash": room,
+		"peer_id": "00000000000000000001",
+		"answer": { "type": "answer", "sdp": "S", "candidates": [_cand("c1")] },
+	}
+	sig._parse_packet(answer_msg)
+	sig._parse_packet(answer_msg) # a reliability re-send carrying the same SDP
 
-	assert_array(got).is_equal(["answer", "candidate", "candidate"])
+	# Reported once; the candidates ride inside the payload, not as own signals.
+	assert_array(got).is_equal(["answer"])
