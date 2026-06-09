@@ -110,5 +110,5 @@ func _update_inputs_process_mode(peer_id: int) -> void:
 		inputs.process_mode = Node.PROCESS_MODE_INHERIT
 		return
 	inputs.process_mode = Node.PROCESS_MODE_INHERIT \
-			if multiplayer.get_unique_id() == peer_id \
-			else Node.PROCESS_MODE_DISABLED
+	if multiplayer.get_unique_id() == peer_id \
+	else Node.PROCESS_MODE_DISABLED

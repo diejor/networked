@@ -122,8 +122,8 @@ func _claim_target_ownership() -> void:
 		assert(
 			not is_instance_valid(owner) or owner == self,
 			(
-				"ParticipantView: '%s' is already displayed by another view. "
-				+ "A SubViewport can be owned by only one ParticipantView."
+					"ParticipantView: '%s' is already displayed by another view. "
+					+ "A SubViewport can be owned by only one ParticipantView."
 			) % _target.name,
 		)
 	_target.set_meta(_OWNER_META, get_instance_id())

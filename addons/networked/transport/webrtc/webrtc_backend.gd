@@ -25,7 +25,6 @@ extends BackendPeer
 ## to all backend instances.
 static var global_ice_servers: Array[Dictionary] = []
 
-
 ## Emitted when the signaler reports a usable signaling route.
 signal signaling_connected
 ## Emitted when the signaler reports its signaling routes gone.

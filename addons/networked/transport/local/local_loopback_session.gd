@@ -564,8 +564,8 @@ func _capture_linked_queued_packets(peer: LocalMultiplayerPeer) -> void:
 
 func _capture_reliable_packet(
 		state: _LinkState,
-	packet: Dictionary,
-	plan: LinkPlan,
+		packet: Dictionary,
+		plan: LinkPlan,
 ) -> void:
 	var sender_id: int = packet.get("peer", 0)
 	var due_poll := _poll_count + maxi(0, plan.delay_polls) + 1
@@ -590,32 +590,32 @@ func _capture_unreliable_packet(
 	var due_poll := _poll_count + maxi(0, plan.delay_polls) + 1
 	due_poll += _draw_jitter(state, sender_id, plan)
 	if _roll(
-			state,
-			sender_id,
-			"reorder",
-			plan.seed,
-			plan.reorder_probability,
+		state,
+		sender_id,
+		"reorder",
+		plan.seed,
+		plan.reorder_probability,
 	):
 		due_poll += 1
 	if state.throttle_until_poll <= _poll_count and _roll(
-			state,
-			sender_id,
-			"throttle",
-			plan.seed,
-			plan.throttle_probability,
+		state,
+		sender_id,
+		"throttle",
+		plan.seed,
+		plan.throttle_probability,
 	):
 		state.throttle_until_poll = \
-				_poll_count + maxi(1, plan.throttle_polls) + 1
+		_poll_count + maxi(1, plan.throttle_polls) + 1
 	if state.throttle_until_poll > _poll_count:
 		due_poll = maxi(due_poll, state.throttle_until_poll)
 
 	_enqueue_packet(state, packet, due_poll)
 	if _roll(
-			state,
-			sender_id,
-			"duplicate",
-			plan.seed,
-			plan.duplicate_probability,
+		state,
+		sender_id,
+		"duplicate",
+		plan.seed,
+		plan.duplicate_probability,
 	):
 		_enqueue_packet(state, packet.duplicate(true), due_poll + 1)
 

@@ -6,7 +6,7 @@ const LEVEL_1 := preload("res://examples/daily/Level1.tscn")
 const LEVEL_2 := preload("res://examples/daily/Level2.tscn")
 const PLAYER := preload("res://examples/daily/Player.tscn")
 const LEVEL_1_SPAWN := (
-	"uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
+		"uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
 )
 
 var game: NetwGameHarness

@@ -1,7 +1,6 @@
 # GdUnitGeneratedTestDescriptor
 extends BomberAiSuite
 
-
 func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 	var runners := await add_players_and_start(4)
 	var ais := make_ais(runners, BomberAI.Goal.score())

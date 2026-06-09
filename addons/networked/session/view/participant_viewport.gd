@@ -6,11 +6,11 @@
 class_name ParticipantViewport
 extends Control
 
-var _views_by_slot: Dictionary[ParticipantSlot, ParticipantView] = {}
-var _slots_by_view: Dictionary[ParticipantView, ParticipantSlot] = {}
-var _host_views_by_slot: Dictionary[ParticipantSlot, HostSceneView] = {}
-var _source_changed_by_slot: Dictionary[ParticipantSlot, Callable] = {}
-var _device_views: Dictionary[int, ParticipantView] = {}
+var _views_by_slot: Dictionary[ParticipantSlot, ParticipantView] = { }
+var _slots_by_view: Dictionary[ParticipantView, ParticipantSlot] = { }
+var _host_views_by_slot: Dictionary[ParticipantSlot, HostSceneView] = { }
+var _source_changed_by_slot: Dictionary[ParticipantSlot, Callable] = { }
+var _device_views: Dictionary[int, ParticipantView] = { }
 var _focused_view: ParticipantView = null
 
 

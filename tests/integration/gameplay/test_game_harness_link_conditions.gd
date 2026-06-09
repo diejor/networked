@@ -2,7 +2,7 @@ class_name TestGameHarnessLinkConditions
 extends NetwTestSuite
 
 const _GAME_SCENE := preload(
-		"res://tests/support/game_harness_probe_scene.tscn",
+	"res://tests/support/game_harness_probe_scene.tscn"
 )
 const _PROBE_PATH := NodePath("MultiplayerTree/InboundRpcProbe")
 

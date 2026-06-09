@@ -1,7 +1,6 @@
 # GdUnitGeneratedTestDescriptor
 extends BomberAiSuite
 
-
 func test_active_ai_disconnects_mid_match() -> void:
 	var runners := await add_players_and_start(3)
 	var ais := make_ais(runners, BomberAI.Goal.score())
