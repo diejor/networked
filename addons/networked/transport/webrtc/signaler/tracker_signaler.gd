@@ -37,6 +37,11 @@ var trace_relayed_payloads := false
 var trackers: Array[String] = []
 
 var _tracker: WebTorrentTrackerClient = null
+var _tracker_shared := false
+var _on_tracker_connected: Callable
+var _on_tracker_disconnected: Callable
+var _on_tracker_socket_opened: Callable
+var _on_tracker_message: Callable
 var _is_server := false
 var _info_hash := ""
 var _local_peer_id := ""
@@ -107,8 +112,7 @@ func close() -> void:
 	_pending_directed.clear()
 	if _tracker:
 		_send_stop()
-		_tracker.close()
-	_tracker = null
+	_release_tracker()
 
 
 # Announces departure so the tracker drops this peer_id from the swarm at once,
@@ -195,21 +199,68 @@ func _drive_presence() -> void:
 # -- Tracker plumbing -------------------------------------------------------
 
 
-# Builds the tracker transport. A test overrides this to record announces.
+# Builds an injected tracker transport. Tests override this to record announces.
 func _make_tracker() -> WebTorrentTrackerClient:
-	return WebTorrentTrackerClient.new()
+	return null
 
 
 func _connect_trackers() -> Error:
-	_tracker = _make_tracker()
-	_tracker.connected.connect(func() -> void: ready.emit())
-	_tracker.disconnected.connect(_on_signaling_lost)
-	_tracker.socket_opened.connect(_announce_to)
-	_tracker.message_received.connect(_parse_packet)
-	var err := _tracker.connect_to(trackers)
+	var injected := _make_tracker()
+	var err := OK
+	if injected:
+		_tracker = injected
+		err = _tracker.connect_to(trackers)
+	else:
+		var acquired := WebTorrentTrackerClient.acquire_shared(trackers)
+		err = int(acquired.get("error", OK))
+		_tracker = acquired.get("client", null) as WebTorrentTrackerClient
+		_tracker_shared = _tracker != null
 	if err != OK:
 		lost.emit()
+		return err
+	if _tracker == null:
+		lost.emit()
+		return ERR_CANT_CONNECT
+	_connect_tracker_signals()
+	if _tracker.has_open():
+		ready.emit()
+		_announce_existing_sockets()
+		_flush_pending_directed()
 	return err
+
+
+func _connect_tracker_signals() -> void:
+	_on_tracker_connected = func() -> void: ready.emit()
+	_on_tracker_disconnected = _on_signaling_lost
+	_on_tracker_socket_opened = _announce_to
+	_on_tracker_message = _parse_packet
+	_tracker.connected.connect(_on_tracker_connected)
+	_tracker.disconnected.connect(_on_tracker_disconnected)
+	_tracker.socket_opened.connect(_on_tracker_socket_opened)
+	_tracker.message_received.connect(_on_tracker_message)
+
+
+func _disconnect_tracker_signals() -> void:
+	if _tracker == null:
+		return
+	if _tracker.connected.is_connected(_on_tracker_connected):
+		_tracker.connected.disconnect(_on_tracker_connected)
+	if _tracker.disconnected.is_connected(_on_tracker_disconnected):
+		_tracker.disconnected.disconnect(_on_tracker_disconnected)
+	if _tracker.socket_opened.is_connected(_on_tracker_socket_opened):
+		_tracker.socket_opened.disconnect(_on_tracker_socket_opened)
+	if _tracker.message_received.is_connected(_on_tracker_message):
+		_tracker.message_received.disconnect(_on_tracker_message)
+
+
+func _release_tracker() -> void:
+	_disconnect_tracker_signals()
+	if _tracker_shared:
+		WebTorrentTrackerClient.release_shared(trackers, _tracker)
+	else:
+		_tracker.close()
+	_tracker = null
+	_tracker_shared = false
 
 
 func _on_signaling_lost() -> void:
@@ -221,6 +272,11 @@ func _on_signaling_lost() -> void:
 func _announce_to(ws: WebSocketPeer) -> void:
 	_tracker.send(ws, _build_presence())
 	_flush_pending_directed()
+
+
+func _announce_existing_sockets() -> void:
+	for ws in _tracker.open_sockets():
+		_announce_to(ws)
 
 
 # A bare announce that registers this peer_id in the swarm so the tracker can
@@ -356,8 +412,7 @@ func _process_signaling_close_delay(dt: float) -> void:
 	Netw.dbg.trace("TrackerSignaler: closing delayed signaling trackers.")
 	if _tracker:
 		_send_stop()
-		_tracker.close()
-	_tracker = null
+		_release_tracker()
 
 
 func _broadcast(data: Dictionary) -> void:

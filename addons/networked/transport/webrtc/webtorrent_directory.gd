@@ -74,6 +74,7 @@ extends LobbyDirectory
 @export_range(1, 50) var board_fanout: int = 16
 
 var _tracker: WebTorrentTrackerClient = null
+var _tracker_shared := false
 var _board_hash := ""
 var _peer_id := ""
 
@@ -122,8 +123,7 @@ func _exit_tree() -> void:
 	NetwServices.unregister(self)
 	NetwServices.unregister(self, LobbyDirectory)
 	if _tracker:
-		_tracker.close()
-		_tracker = null
+		_release_tracker()
 
 
 func _process(dt: float) -> void:
@@ -169,8 +169,7 @@ func _maintain_board(dt: float) -> void:
 	# Idle past the grace: release the sockets until interest returns.
 	if _tracker != null:
 		Netw.dbg.debug("WebTorrentDirectory: board idle, closing trackers.")
-		_tracker.close()
-		_tracker = null
+		_release_tracker()
 	_reconnect_acc = 0.0
 
 
@@ -186,7 +185,7 @@ func _keep_board_warm(dt: float) -> void:
 	_reconnect_acc += dt
 	if _reconnect_acc >= BOARD_RECONNECT_COOLDOWN:
 		_reconnect_acc = 0.0
-		_tracker = null
+		_release_tracker()
 		_ensure_tracker()
 
 
@@ -358,15 +357,35 @@ func _count_players() -> int:
 func _ensure_tracker() -> void:
 	if _tracker != null:
 		return
-	_tracker = WebTorrentTrackerClient.new()
-	_tracker.message_received.connect(_on_message)
-	if _tracker.connect_to(trackers) != OK:
+	var acquired := WebTorrentTrackerClient.acquire_shared(trackers)
+	var err := int(acquired.get("error", OK))
+	_tracker = acquired.get("client", null) as WebTorrentTrackerClient
+	_tracker_shared = _tracker != null
+	if err != OK:
 		# Latch so the 5s reconnect loop reports one outage, not one per retry.
 		if not _provider_unavailable_latched:
 			_provider_unavailable_latched = true
 			provider_unavailable.emit("No WebRTC tracker reachable for the board.")
+	elif _tracker == null:
+		if not _provider_unavailable_latched:
+			_provider_unavailable_latched = true
+			provider_unavailable.emit("No WebRTC tracker reachable for the board.")
 	else:
+		_tracker.message_received.connect(_on_message)
 		_provider_unavailable_latched = false
+
+
+func _release_tracker() -> void:
+	if _tracker == null:
+		return
+	if _tracker.message_received.is_connected(_on_message):
+		_tracker.message_received.disconnect(_on_message)
+	if _tracker_shared:
+		WebTorrentTrackerClient.release_shared(trackers, _tracker)
+	else:
+		_tracker.close()
+	_tracker = null
+	_tracker_shared = false
 
 
 func _on_message(data: Dictionary) -> void:

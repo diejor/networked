@@ -35,8 +35,61 @@ signal message_received(data: Dictionary)
 ## How long a socket may sit in the connecting state before it is dropped.
 const CONNECT_TIMEOUT_USEC := 10_000_000
 
+static var _shared_clients := { }
+
 var _sockets: Array[WebSocketPeer] = []
 var _any_open := false
+var _last_poll_frame := -1
+
+
+## Acquires a shared client for [param urls].
+##
+## The returned [Dictionary] contains [code]client[/code] and [code]error[/code].
+## First acquire opens sockets. Later acquires reuse them and increment a
+## reference count. Call [method release_shared] with the same [param urls].
+static func acquire_shared(urls: Array[String]) -> Dictionary:
+	var key := _shared_key(urls)
+	if _shared_clients.has(key):
+		var existing: Dictionary = _shared_clients[key]
+		var existing_client := existing.client as WebTorrentTrackerClient
+		if existing_client.is_active():
+			existing.refs = int(existing.refs) + 1
+			return { "client": existing_client, "error": OK }
+		existing_client.close()
+		_shared_clients.erase(key)
+
+	var client := WebTorrentTrackerClient.new()
+	var err := client.connect_to(urls)
+	if err != OK:
+		return { "client": null, "error": err }
+	_shared_clients[key] = { "client": client, "refs": 1 }
+	return { "client": client, "error": OK }
+
+
+## Releases a client acquired with [method acquire_shared].
+##
+## The final release closes the shared sockets and removes the registry entry.
+static func release_shared(urls: Array[String], client: WebTorrentTrackerClient) -> void:
+	if client == null:
+		return
+	var key := _shared_key(urls)
+	if not _shared_clients.has(key):
+		return
+	var existing: Dictionary = _shared_clients[key]
+	if existing.client != client:
+		return
+	existing.refs = int(existing.refs) - 1
+	if int(existing.refs) > 0:
+		return
+	client.close()
+	_shared_clients.erase(key)
+
+
+# Builds a stable registry key from tracker URLs.
+static func _shared_key(urls: Array[String]) -> String:
+	var sorted := urls.duplicate()
+	sorted.sort()
+	return JSON.stringify(sorted)
 
 
 ## Opens a [WebSocketPeer] to each url in [param urls], replacing any existing
@@ -75,6 +128,10 @@ func connect_to(urls: Array[String]) -> Error:
 func poll() -> void:
 	if _sockets.is_empty():
 		return
+	var frame := Engine.get_process_frames()
+	if _last_poll_frame == frame:
+		return
+	_last_poll_frame = frame
 
 	var now := Time.get_ticks_usec()
 	var to_remove: Array[WebSocketPeer] = []
@@ -135,6 +192,18 @@ func has_open() -> bool:
 		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
 			return true
 	return false
+
+
+## Returns currently open sockets.
+##
+## Late consumers use this to announce on sockets that opened before they
+## acquired a shared client.
+func open_sockets() -> Array[WebSocketPeer]:
+	var out: Array[WebSocketPeer] = []
+	for ws in _sockets:
+		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			out.append(ws)
+	return out
 
 
 ## Returns [code]true[/code] while any socket is still open or connecting.
