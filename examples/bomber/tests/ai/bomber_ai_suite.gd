@@ -58,18 +58,23 @@ func make_ais(
 
 
 ## Ticks all AIs for up to [param max_ticks], stopping when [param done]
-## returns [code]true[/code]. Returns the tick count reached.
+## returns [code]true[/code] or when [param timeout_s] is exceeded.
+## Returns the tick count reached.
 func run_until(
 		ais: Array[BomberAI],
 		max_ticks: int,
 		done: Callable = Callable(),
+		timeout_s: float = 5.0,
 ) -> int:
+	var start_ms := Time.get_ticks_msec()
 	for tick in max_ticks:
 		for ai: BomberAI in ais:
 			ai.tick()
 		await game.sync_ticks(1)
 		if done.is_valid() and done.call():
 			return tick
+		if (Time.get_ticks_msec() - start_ms) / 1000.0 >= timeout_s:
+			break
 	return max_ticks
 
 
