@@ -16,7 +16,7 @@
 ## [b]Credentials and TURN configuration[/b]
 ## [br]
 ## Configure the project setting [code]networked/webrtc/turn_credentials_url[/code]
-## to point to your secure Cloudflare Worker or backend service that issues ephemeral
+## to point to your secure or backend service that issues ephemeral
 ## TURN/STUN credentials. During connection setup, the backend will dynamically
 ## query this URL to populate the active [member global_ice_servers].
 ## [codeblock]

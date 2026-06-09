@@ -66,6 +66,10 @@ var _handled_offers := { }
 var _handled_answers := { }
 var _announce_timer := 0.0
 var _signaling_close_delay := -1.0
+# Tracker-requested minimum seconds between announces, used as the re-announce
+# floor so the discovery loop never outpaces a tracker's rate limit. 0 keeps the
+# built-in floor.
+var _min_announce_period := 0.0
 
 
 func _init(p_trackers: Array[String] = []) -> void:
@@ -112,8 +116,20 @@ func poll(dt: float) -> void:
 
 func close() -> void:
 	if _tracker:
+		_send_stop()
 		_tracker.close()
 	_tracker = null
+
+
+# Announces departure so the tracker drops this peer_id from the swarm at once,
+# instead of leaving a stale rendezvous for others to keep dialing.
+func _send_stop() -> void:
+	_broadcast({
+		"action": "announce",
+		"info_hash": _info_hash,
+		"peer_id": _local_peer_id,
+		"event": "stopped",
+	})
 
 
 func on_session_connected(multiplayer_id: int) -> void:
@@ -146,7 +162,6 @@ func send(
 			var answer := _ensure_answer(to_signaler_id)
 			answer["sdp"] = String(payload.get("sdp", ""))
 			answer["offer_id"] = String(_peer_map.get(to_signaler_id + "_offer_id", ""))
-			answer["candidates"] = []
 			answer["grace"] = 0.0 if allow_tracker_trickle_ice else gather_grace
 			answer["sent"] = false
 		"candidate":
@@ -172,7 +187,7 @@ func _drive_client_offer(dt: float) -> void:
 			)
 			_tracker.broadcast(_build_announce())
 		return
-	if _offer_announced and not _native_up and _announce_timer > 2.0:
+	if _offer_announced and not _native_up and _announce_timer > _reannounce_period():
 		_announce_timer = 0.0
 		Netw.dbg.trace("TrackerSignaler: re-announcing offer to reach host.")
 		_tracker.broadcast(_build_announce())
@@ -316,23 +331,54 @@ func _parse_packet(data: Dictionary) -> void:
 	if data.get("info_hash", "") != _info_hash:
 		return
 
+	# Tracker announce replies carry no peer_id but advertise the minimum
+	# announce spacing, so capture it before the peer_id filter drops them.
+	_capture_announce_interval(data)
+
 	var remote_peer_id: String = data.get("peer_id", "")
 	if remote_peer_id == _local_peer_id or remote_peer_id.length() != 20:
 		return
 
 	var godot_id: int = remote_peer_id.substr(10, 10).to_int()
 
-	if not _is_server and _server_wt_id.is_empty():
-		_server_wt_id = remote_peer_id
+	# A client tracks the host (id 1) by its peer_id. A restarted host returns
+	# under a fresh peer_id, so re-latch whenever id 1 arrives from a new one,
+	# otherwise straggler candidates keep trickling to the dead peer.
+	if not _is_server and godot_id == 1 and remote_peer_id != _server_wt_id:
 		Netw.dbg.debug(
-			"TrackerSignaler: client found server peer_id %s...",
-			[_server_wt_id.substr(0, 6)],
+			"TrackerSignaler: client latched server peer_id %s... (was %s).",
+			[remote_peer_id.substr(0, 6), _server_wt_id.substr(0, 6)],
 		)
+		_server_wt_id = remote_peer_id
 
+	var slot := ""
 	if data.has("offer"):
-		_handle_inbound(data, godot_id, remote_peer_id, "offer", _handled_offers)
+		slot = "offer"
 	elif data.has("answer"):
-		_handle_inbound(data, godot_id, remote_peer_id, "answer", _handled_answers)
+		slot = "answer"
+	else:
+		return
+
+	var payload: Variant = data.get(slot)
+	if typeof(payload) != TYPE_DICTIONARY:
+		return
+
+	# The payload "type" is authoritative: a tracker may relay a trickled
+	# candidate inside the "offer" slot, so the slot name cannot be trusted to
+	# classify the message.
+	var type: String = payload.get("type", "")
+	match type:
+		"candidate":
+			if _is_candidate_payload_valid(payload):
+				received.emit(godot_id, remote_peer_id, "candidate", payload)
+		"offer":
+			_handle_inbound(
+				data, godot_id, remote_peer_id, "offer", payload, _handled_offers
+			)
+		"answer":
+			_handle_inbound(
+				data, godot_id, remote_peer_id, "answer", payload, _handled_answers
+			)
 
 
 # Routes one inbound offer/answer slot: a candidate marker fans straight out,
@@ -342,15 +388,9 @@ func _handle_inbound(
 		godot_id: int,
 		remote_peer_id: String,
 		slot: String,
+		payload: Dictionary,
 		handled: Dictionary,
 ) -> void:
-	var payload: Variant = data.get(slot)
-	if typeof(payload) != TYPE_DICTIONARY:
-		return
-	if (payload as Dictionary).get("type") == "candidate":
-		received.emit(godot_id, remote_peer_id, "candidate", payload)
-		return
-
 	var signal_id := String(data.get("offer_id", ""))
 	if _has_handled_signal(handled, remote_peer_id, signal_id, payload):
 		Netw.dbg.trace(
@@ -360,8 +400,11 @@ func _handle_inbound(
 		return
 	if slot == "offer":
 		_peer_map[remote_peer_id + "_offer_id"] = signal_id
+		_answers.erase(remote_peer_id)
 	_mark_handled_signal(handled, remote_peer_id, signal_id, payload)
-	Netw.dbg.debug("TrackerSignaler: [%s] from id %d.", [slot.to_upper(), godot_id])
+	Netw.dbg.debug(
+		"TrackerSignaler: [%s] from id %d.", [slot.to_upper(), godot_id]
+	)
 	received.emit(godot_id, remote_peer_id, slot, payload)
 	_emit_bundled_candidates(godot_id, remote_peer_id, payload)
 
@@ -377,8 +420,35 @@ func _emit_bundled_candidates(
 	if typeof(candidates) != TYPE_ARRAY:
 		return
 	for candidate: Variant in candidates:
-		if typeof(candidate) == TYPE_DICTIONARY:
+		if _is_candidate_payload_valid(candidate):
 			received.emit(godot_id, remote_peer_id, "candidate", candidate)
+
+
+# Guards the engine from a malformed candidate: the session forwards the dict
+# straight to add_ice_candidate, so a missing or mistyped field would error.
+func _is_candidate_payload_valid(candidate: Variant) -> bool:
+	if typeof(candidate) != TYPE_DICTIONARY:
+		return false
+	var dict: Dictionary = candidate
+	if typeof(dict.get("candidate")) != TYPE_STRING:
+		return false
+	if typeof(dict.get("sdpMid")) != TYPE_STRING:
+		return false
+	return typeof(dict.get("sdpMLineIndex")) in [TYPE_INT, TYPE_FLOAT]
+
+
+# Reads the tracker's advertised minimum announce spacing so the re-announce
+# loop can honor it. Tracker dialects spell the key a few ways.
+func _capture_announce_interval(data: Dictionary) -> void:
+	var raw: Variant = data.get("min interval", data.get("min_interval", null))
+	if typeof(raw) in [TYPE_INT, TYPE_FLOAT]:
+		_min_announce_period = float(raw)
+
+
+# The discovery re-announce period: fast by default, but never faster than a
+# rate-limiting tracker's advertised minimum.
+func _reannounce_period() -> float:
+	return maxf(2.0, _min_announce_period)
 
 
 func _process_signaling_close_delay(dt: float) -> void:
@@ -391,6 +461,7 @@ func _process_signaling_close_delay(dt: float) -> void:
 	# Intentional wind-down after the native link is up, so no lost() here.
 	Netw.dbg.trace("TrackerSignaler: closing delayed signaling trackers.")
 	if _tracker:
+		_send_stop()
 		_tracker.close()
 	_tracker = null
 

@@ -52,6 +52,11 @@ var connect_retry: float = 4.0
 ## final failure to the owning connect budget.
 var max_connect_attempts: int = 3
 
+## Wraps each connection in a [ReconnectingPeerConnection] so a transient ICE
+## drop does not tear the peer down and re-trigger signaling. Disable to fall
+## back to a plain [WebRTCPeerConnection].
+var reconnect_masking: bool = true
+
 var webrtc_peer: WebRTCMultiplayerPeer = null
 
 var _is_server := false
@@ -200,7 +205,10 @@ func _open_connection(multiplayer_id: int) -> void:
 	_pending_candidates[multiplayer_id] = []
 	_candidate_stats[multiplayer_id] = _empty_stats()
 	_attempt_started_ms[multiplayer_id] = Time.get_ticks_msec()
-	var connection := WebRTCPeerConnection.new()
+	var connection: WebRTCPeerConnection = (
+		ReconnectingPeerConnection.new() if reconnect_masking
+		else WebRTCPeerConnection.new()
+	)
 	connection.initialize({ "iceServers": ice_servers })
 	connection.session_description_created.connect(
 		_on_session_description_created.bind(multiplayer_id),
@@ -254,6 +262,13 @@ func _maybe_retry() -> void:
 func _handle_offer(multiplayer_id: int, payload: Dictionary) -> void:
 	if not webrtc_peer.has_peer(multiplayer_id):
 		return
+	# Never hand the engine SDP-less payload: a misrouted candidate would
+	# otherwise crash the browser with an empty-description parse error.
+	if String(payload.get("sdp", "")).is_empty():
+		Netw.dbg.debug(
+			"WebRTCSession dropped SDP-less offer for id %d.", [multiplayer_id]
+		)
+		return
 	# A fresh offer on an unconnected link is a client retry: restart the host
 	# side so the engine accepts the renegotiation cleanly.
 	if _remote_desc_set.get(multiplayer_id, false) \
@@ -273,6 +288,13 @@ func _handle_offer(multiplayer_id: int, payload: Dictionary) -> void:
 
 func _handle_answer(multiplayer_id: int, payload: Dictionary) -> void:
 	if not webrtc_peer.has_peer(multiplayer_id):
+		return
+	# Never hand the engine SDP-less payload: a misrouted candidate would
+	# otherwise crash the browser with an empty-description parse error.
+	if String(payload.get("sdp", "")).is_empty():
+		Netw.dbg.debug(
+			"WebRTCSession dropped SDP-less answer for id %d.", [multiplayer_id]
+		)
 		return
 	var err := _connection(multiplayer_id).set_remote_description(
 		"answer",
