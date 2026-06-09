@@ -21,12 +21,33 @@
 class_name WebRTCBackend
 extends BackendPeer
 
+## Globally cached ICE servers list. Stored class-wide to propagate dynamically
+## to all backend instances.
+static var global_ice_servers: Array[Dictionary] = []
+
+
 ## Emitted when the signaler reports a usable signaling route.
 signal signaling_connected
 ## Emitted when the signaler reports its signaling routes gone.
 signal signaling_disconnected
 ## Emitted on the host when the room id is ready to share.
 signal room_created(room_id: String)
+
+## Secure Cloudflare Worker URL to fetch ephemeral TURN/STUN credentials.
+##
+## Leave empty to use the default public [member ice_servers] configuration.
+## The credentials are automatically and asynchronously fetched during the
+## backend [method BackendPeer.setup] phase.
+## [br][br]
+## The fetched JSON response must match this schema:
+## [codeblock]
+## Array
+##  ┖╴{ }
+##     ┠╴urls (String or Array)
+##     ┠╴username (String)
+##     ┖╴credential (String)
+## [/codeblock]
+@export var turn_credentials_url: String = ""
 
 ## Display name advertised by [WebTorrentDirectory] for hosted rooms.
 @export var server_name: String = ""
@@ -79,6 +100,60 @@ var _is_server := false
 ## Builds the [WebRTCSignaler] this backend signals through.
 @abstract
 func _make_signaler() -> WebRTCSignaler
+
+
+## Prepares WebRTC backend by fetching secure credentials when configured.
+##
+## If [member turn_credentials_url] is set, this method performs an asynchronous
+## [HTTPRequest] to fetch ICE credentials and populates [member global_ice_servers].
+func setup(tree: MultiplayerTree) -> Error:
+	if not global_ice_servers.is_empty() or turn_credentials_url.is_empty():
+		return OK
+
+	var http := HTTPRequest.new()
+	http.timeout = 5.0
+	tree.add_child(http)
+
+	var err := http.request(turn_credentials_url)
+	if err != OK:
+		Netw.dbg.warn(
+			"WebRTC credentials request initiation failed: %s",
+			[error_string(err)],
+		)
+		http.queue_free()
+		return OK
+
+	var results: Array = await http.request_completed
+	http.queue_free()
+
+	var status_code: int = results[1]
+	var response_body: PackedByteArray = results[3]
+
+	if status_code == 200:
+		var json_text := response_body.get_string_from_utf8()
+		var parsed: Variant = JSON.parse_string(json_text)
+		if typeof(parsed) == TYPE_ARRAY:
+			var servers: Array[Dictionary] = []
+			servers.assign(parsed)
+			global_ice_servers = servers
+			Netw.dbg.info(
+				"WebRTC credentials fetched successfully from %s.",
+				[turn_credentials_url],
+			)
+		else:
+			Netw.dbg.warn(
+				"WebRTC credentials parse failed. Response was "
+				+ "not a JSON array. Falling back to default ICE servers.",
+				[],
+			)
+	else:
+		Netw.dbg.warn(
+			"WebRTC credentials fetch failed. Server responded "
+			+ "with code %d. Falling back to default ICE servers.",
+			[status_code],
+		)
+
+	return OK
 
 
 ## Implements [method BackendPeer.create_host_peer] for a WebRTC room.
@@ -148,7 +223,10 @@ func close_channels() -> void:
 
 func _build_session_and_signaler() -> void:
 	_session = WebRTCSession.new()
-	_session.ice_servers = ice_servers
+	if not global_ice_servers.is_empty():
+		_session.ice_servers = global_ice_servers
+	else:
+		_session.ice_servers = ice_servers
 	_session.connect_retry = connect_retry
 	_session.max_connect_attempts = max_connect_attempts
 	_signaler = _make_signaler()
@@ -223,6 +301,7 @@ func copy_from(source: BackendPeer) -> void:
 		ice_servers = other.ice_servers.duplicate(true)
 		connect_retry = other.connect_retry
 		max_connect_attempts = other.max_connect_attempts
+		turn_credentials_url = other.turn_credentials_url
 
 
 ## Clears the active session and signaler.

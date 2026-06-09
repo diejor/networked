@@ -22,6 +22,15 @@ metadata/_custom_type_script = "uid://b8xpp6r4y1ku2"
 
 [sub_resource type="Resource" id="Resource_mss8j"]
 script = ExtResource("6_8u2o1")
+trackers = Array[String](["wss://tracker.openwebtorrent.com", "wss://tracker.webtorrent.dev"])
+turn_credentials_url = "https://bomber.diejorarr.workers.dev"
+ice_servers = Array[Dictionary]([{
+"urls": ["stun:stun.l.google.com:19302"]
+}, {
+"credential": "openrelayproject",
+"urls": ["turn:openrelay.metered.ca:80"],
+"username": "openrelayproject"
+}])
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]

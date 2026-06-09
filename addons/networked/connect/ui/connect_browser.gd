@@ -182,8 +182,6 @@ func _setup_session() -> void:
 		_connect = _bound_connect
 	else:
 		_connect = Netw.ctx(tree if tree != null else self).connect
-	if _connect == null:
-		return
 	_session_ready = true
 	_connect.load_server_list(server_list_path)
 	_bind_session_signals()

@@ -21,7 +21,6 @@ var _connect: NetwConnect
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
 
-
 func _ready() -> void:
 	_connect = _ctx.connect
 
