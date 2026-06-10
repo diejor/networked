@@ -854,12 +854,7 @@ func _collect_properties(
 	if not sync.replication_config:
 		return props
 
-	var root_node: Node = null
-	if sync.root_path != NodePath("."):
-		root_node = sync.get_node(sync.root_path)
-	else:
-		root_node = sync.get_parent()
-
+	var root_node := sync.get_node_or_null(sync.root_path)
 	if not is_instance_valid(root_node):
 		return props
 

@@ -18,11 +18,12 @@ var _tp_level_scene_path: String = ""
 var _tp_spawner_node_path: String = ""
 var _player_sync_config_builder: SyncConfigBuilder = null
 var _custom_synchronizers: Array[Dictionary] = []
+var _save_properties: Array[Dictionary] = []
 
 static var _uid_counter: int = 0
 
 
-# Initializes the player builder. If no name is provided, a unique sequential name is auto-generated.
+# Initializes the player builder. Autogenerates a unique name when omitted.
 func _init(p_player_name: String = "") -> void:
 	if p_player_name.is_empty():
 		_uid_counter += 1
@@ -31,7 +32,7 @@ func _init(p_player_name: String = "") -> void:
 	player_name = StringName(p_player_name)
 
 
-## Resets the unique sequential name counter. Used in test teardown for determinism.
+## Resets the unique sequential name counter for deterministic tests.
 static func reset_counter() -> void:
 	_uid_counter = 0
 
@@ -68,6 +69,27 @@ func with_tp(
 	return self
 
 
+## Pre-bakes root [param property] as a save-tracked property.
+##
+## The path [code]NodePath(".:" + property)[/code] is baked into
+## [member SaveComponent.replication_config] before [method pack], so
+## [method SaveComponent.finalize] can process it without a post-spawn
+## contribution call.
+func with_save_property(
+		property: StringName,
+		spawn: bool = false,
+		watch: bool = true,
+) -> PlayerBuilder:
+	_save_properties.append(
+		{
+			"property": property,
+			"spawn": spawn,
+			"watch": watch,
+		},
+	)
+	return self
+
+
 ## Configures the [MultiplayerSynchronizer] (PlayerSync) with a sync config.
 func with_player_sync(
 		config_builder: SyncConfigBuilder,
@@ -78,11 +100,10 @@ func with_player_sync(
 
 ## Configures a custom [MultiplayerSynchronizer] to be attached to the player.
 ##
-## Places [param sync] under [param parent_path] relative to the player root,
-## using the synchronizer's own [member Node.name]. Intermediate nodes along
-## [param parent_path] are created automatically if they do not exist.
-## [member MultiplayerSynchronizer.root_path] is automatically resolved to
-## point to the root node.
+## Places [param sync] under [param parent_path] relative to the player root.
+## Uses [member Node.name] for the final node name. Intermediate nodes along
+## [param parent_path] are created automatically when missing.
+## [member MultiplayerSynchronizer.root_path] is resolved to the player root.
 ## [br][br]
 ## [codeblock]
 ## var sync := MultiplayerSynchronizer.new()
@@ -95,10 +116,12 @@ func with_synchronizer(
 		sync: MultiplayerSynchronizer,
 		parent_path: String = "",
 ) -> PlayerBuilder:
-	_custom_synchronizers.append({
-		"synchronizer": sync,
-		"parent_path": parent_path,
-	})
+	_custom_synchronizers.append(
+		{
+			"synchronizer": sync,
+			"parent_path": parent_path,
+		},
+	)
 	return self
 
 
@@ -117,7 +140,17 @@ func build() -> Node:
 		var save_comp := SaveComponent.new()
 		save_comp.set("database", _save_database)
 		save_comp.set("table_name", _save_table)
-		save_comp.replication_config = SceneReplicationConfig.new()
+		var cfg := SceneReplicationConfig.new()
+		for entry: Dictionary in _save_properties:
+			var path := NodePath(".:" + entry["property"])
+			cfg.add_property(path)
+			cfg.property_set_replication_mode(
+				path,
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+			)
+			cfg.property_set_spawn(path, entry.get("spawn", false))
+			cfg.property_set_watch(path, entry.get("watch", true))
+		save_comp.replication_config = cfg
 		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
 		save_comp.root_path = save_comp.get_path_to(root)
 

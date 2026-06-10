@@ -60,7 +60,6 @@ var bound_entity: Entity = DictionaryEntity.new()
 
 func _init() -> void:
 	name = "SaveComponent"
-	root_path = "."
 	unique_name_in_owner = true
 	delta_interval = 5.0
 	replication_interval = 5.0
@@ -73,7 +72,6 @@ func _notification(what: int) -> void:
 		return
 	match what:
 		NOTIFICATION_PARENTED:
-			root_path = NodePath(".")
 			var entity := Netw.ctx(self).entity
 			if entity:
 				entity.set_save(self)
@@ -240,7 +238,7 @@ func pull_from_scene() -> void:
 
 # Writes value for entity_key directly into the live scene node.
 func _write_scene(entity_key: StringName, value: Variant) -> void:
-	var root := get_node_or_null(_target_root)
+	var root := get_node_or_null(root_path)
 	if not root:
 		return
 	var path := _properties.get(entity_key, NodePath(""))
@@ -298,11 +296,11 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 
 # Returns the stable entity identifier used as the database record ID.
 func _get_entity_id() -> StringName:
-	var root: Node = null
-	if Engine.is_editor_hint():
-		root = get_node_or_null(root_path)
-	else:
+	var root: Node
+	if is_instance_valid(owner):
 		root = owner
+	else:
+		root = get_node_or_null(root_path)
 
 	if not root:
 		return &""
@@ -434,10 +432,15 @@ func _instantiate_sync() -> void:
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings: PackedStringArray = []
 
-	if root_path != NodePath("."):
+	if root_path == NodePath(".") or root_path.is_empty():
 		warnings.append(
-			"SaveComponent requires [code]root_path[/code] to be set to "
-			+ "[code].[/code] (self) for proper sync resolution.",
+			"SaveComponent [code]root_path[/code] should point to the entity "
+			+ "root (e.g. [code]..[/code] or [code]../..[/code]), not to self.",
+		)
+	elif not has_node(root_path):
+		warnings.append(
+			"SaveComponent [code]root_path[/code] [code]%s[/code] is unresolvable." \
+					% str(root_path),
 		)
 
 	if not database:
@@ -462,14 +465,15 @@ func _get_configuration_warnings() -> PackedStringArray:
 	if not config or config.get_properties().is_empty():
 		warnings.append("No properties are tracked. Pick properties in the Replication panel.")
 	else:
-		var validation_root := self
+		var validation_root := get_node_or_null(root_path) if has_node(root_path) else null
 		for prop in config.get_properties():
+			if not validation_root:
+				break
 			var res := validation_root.get_node_and_resource(prop)
 			if not res[0] or res[2].is_empty():
 				warnings.append(
-					"Property [code]%s[/code] not found on SaveComponent. " % [str(prop)]
-					+ "Paths are resolved relative to SaveComponent; use [code]..:position[/code] "
-					+ "to reference the owner node.",
+					"Property [code]%s[/code] not found relative to the entity root." \
+							% str(prop),
 				)
 
 	return warnings

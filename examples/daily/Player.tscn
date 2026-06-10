@@ -16,7 +16,7 @@ scene_path = "uid://bqi7mvxdnvgch"
 node_path = "MultiplayerSpawner"
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_dgaqa"]
-properties/0/path = NodePath("../..:position")
+properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 2
 
@@ -71,7 +71,7 @@ metadata/_custom_type_script = "uid://cwf8sf34fk0ib"
 
 [node name="SaveComponent" type="MultiplayerSynchronizer" parent="Components" unique_id=2118460329]
 unique_name_in_owner = true
-root_path = NodePath(".")
+root_path = NodePath("../..")
 replication_interval = 5.0
 delta_interval = 5.0
 replication_config = SubResource("SceneReplicationConfig_dgaqa")
