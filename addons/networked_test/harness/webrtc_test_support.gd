@@ -88,6 +88,31 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	await clear_optional_sctp_reset_error()
 
 
+## Detaches every outward signal subscriber from [param session], then closes
+## it.
+##
+## A recovery test cross-wires two raw [WebRTCSession]s by forwarding each one's
+## [signal WebRTCSession.signal_out] into the other's
+## [method WebRTCSession.deliver]. Those connections make the two sessions
+## reference each other through their listener closures, a cycle GDScript cannot
+## collect. [method WebRTCSession.close] only clears
+## [member WebRTCSession.webrtc_peer], so it leaves the cross edges intact.
+## Dropping the subscribers here releases both sessions at test end.
+static func dispose_session(session: WebRTCSession) -> void:
+	if session == null:
+		return
+	var signals: Array[Signal] = [
+		session.signal_out,
+		session.native_connected,
+		session.native_disconnected,
+		session.failed,
+	]
+	for sig in signals:
+		for conn in sig.get_connections():
+			sig.disconnect(conn.callable)
+	session.close()
+
+
 ## Drops the benign native SCTP reset gdUnit would otherwise report as a
 ## failure.
 ##

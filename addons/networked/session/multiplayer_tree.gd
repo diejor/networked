@@ -335,6 +335,7 @@ var multiplayer_peer: MultiplayerPeer:
 
 var _tree_name: String = ""
 var _join_aborted: bool = false
+var _deletion_finalized: bool = false
 
 ## Local player [Node] for this tree, or [code]null[/code].
 ##
@@ -1157,6 +1158,9 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 
+	if Netw.is_test_env():
+		return
+
 	if auto_host_headless and backend != null \
 			and DisplayServer.get_name() == "headless":
 		# host() resolves the live role from desired_role.
@@ -1558,6 +1562,16 @@ func _unbind_api_signals(target: SceneMultiplayer) -> void:
 		target.server_disconnected.disconnect(_on_server_disconnected)
 
 
+func _notification(what: int) -> void:
+	# A tree freed through a parent (rather than its own queue_free) reaches
+	# tree_exiting with is_queued_for_deletion() false, so _on_exiting treats it
+	# as a reparent and leaves the peer mounted. PREDELETE is the unambiguous
+	# deletion signal (it never fires on reparent), so release the peer here when
+	# the queued tree_exiting path did not already run.
+	if what == NOTIFICATION_PREDELETE:
+		_close_peer_on_delete()
+
+
 func _on_exiting() -> void:
 	Netw.dbg.trace("MultiplayerTree: Exiting.")
 
@@ -1572,6 +1586,31 @@ func _on_exiting() -> void:
 		api.multiplayer_peer.close()
 		api.multiplayer_peer = null
 	_unmount_api(true)
+
+	if backend:
+		backend.peer_reset_state()
+
+	dispose()
+	_deletion_finalized = true
+
+
+# Releases the live peer and breaks circular references for a tree freed via a
+# parent, the case _on_exiting misreads as a reparent. Idempotent through
+# [member _deletion_finalized] so it never double-tears-down with _on_exiting.
+func _close_peer_on_delete() -> void:
+	if _deletion_finalized or Engine.is_editor_hint():
+		return
+	# A node still in the tree at PREDELETE is part of a SceneTree-wide teardown
+	# cascade, where closing the peer makes siblings error on get_unique_id and
+	# the leak no longer matters. Only the genuine parent-freed case (already
+	# detached by tree_exiting) needs cleanup here.
+	if is_inside_tree():
+		return
+	_deletion_finalized = true
+
+	if api and api.has_multiplayer_peer():
+		api.multiplayer_peer.close()
+		api.multiplayer_peer = null
 
 	if backend:
 		backend.peer_reset_state()

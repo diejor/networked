@@ -9,6 +9,13 @@ func before_test() -> void:
 	session = auto_free(LocalLoopbackSession.new())
 
 
+func after_test() -> void:
+	super.after_test()
+	if session:
+		session.reset()
+		session = null
+
+
 func test_get_server_peer_returns_server() -> void:
 	var srv := session.get_server_peer()
 	assert_that(srv).is_not_null()
@@ -460,6 +467,8 @@ func test_manual_hold_release_still_preserves_order() -> void:
 
 
 func _run_unreliable_reorder(_seed: int, include_duplicates: bool = false) -> Array:
+	if session:
+		session.reset()
 	session = auto_free(LocalLoopbackSession.new())
 	var server := session.get_server_peer()
 	var client := session.create_client_peer()

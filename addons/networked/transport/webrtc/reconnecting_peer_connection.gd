@@ -23,14 +23,16 @@ var _inner := WebRTCPeerConnection.new()
 func _init() -> void:
 	# Re-emit the inner connection's local SDP and ICE up through this wrapper so
 	# a session bound to it sees them as if it owned a plain connection.
-	_inner.session_description_created.connect(
-		func(type: String, sdp: String) -> void:
-			session_description_created.emit(type, sdp)
-	)
-	_inner.ice_candidate_created.connect(
-		func(media: String, index: int, name: String) -> void:
-			ice_candidate_created.emit(media, index, name)
-	)
+	_inner.session_description_created.connect(_on_session_description_created)
+	_inner.ice_candidate_created.connect(_on_ice_candidate_created)
+
+
+func _on_session_description_created(type: String, sdp: String) -> void:
+	session_description_created.emit(type, sdp)
+
+
+func _on_ice_candidate_created(media: String, index: int, name: String) -> void:
+	ice_candidate_created.emit(media, index, name)
 
 
 func _get_connection_state() -> WebRTCPeerConnection.ConnectionState:
@@ -77,4 +79,8 @@ func _poll() -> Error:
 
 
 func _close() -> void:
+	if _inner.session_description_created.is_connected(_on_session_description_created):
+		_inner.session_description_created.disconnect(_on_session_description_created)
+	if _inner.ice_candidate_created.is_connected(_on_ice_candidate_created):
+		_inner.ice_candidate_created.disconnect(_on_ice_candidate_created)
 	_inner.close()

@@ -124,8 +124,19 @@ func poll() -> void:
 		client_peer.poll()
 
 
-## Closes all peer connections and resets the session to its initial state.
 func reset() -> void:
+	if pc_server:
+		if _server_sdp_callable.is_valid() and pc_server.session_description_created.is_connected(_server_sdp_callable):
+			pc_server.session_description_created.disconnect(_server_sdp_callable)
+		if _server_ice_callable.is_valid() and pc_server.ice_candidate_created.is_connected(_server_ice_callable):
+			pc_server.ice_candidate_created.disconnect(_server_ice_callable)
+
+	if pc_client:
+		if _client_sdp_callable.is_valid() and pc_client.session_description_created.is_connected(_client_sdp_callable):
+			pc_client.session_description_created.disconnect(_client_sdp_callable)
+		if _client_ice_callable.is_valid() and pc_client.ice_candidate_created.is_connected(_client_ice_callable):
+			pc_client.ice_candidate_created.disconnect(_client_ice_callable)
+
 	if server_peer:
 		server_peer.close()
 	if client_peer:

@@ -77,6 +77,8 @@ func test_client_offer_is_directed_to_host_with_bundled_candidates() -> void:
 	assert_bool(msg.has("offers")).is_false()
 	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(2)
 
+	sig.close()
+
 
 func test_offer_sent_before_tracker_open_flushes_on_socket_open() -> void:
 	var sig := DelayedRecordingSignaler.new(["wss://example"])
@@ -100,6 +102,8 @@ func test_offer_sent_before_tracker_open_flushes_on_socket_open() -> void:
 	var msg: Dictionary = offers[0]
 	assert_str(String(msg["to_peer_id"])).is_equal("a1b2c3d4e5" + "0000000001")
 	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(1)
+
+	sig.close()
 
 
 func test_host_answer_is_directed_to_client_with_bundled_candidates() -> void:
@@ -136,6 +140,8 @@ func test_host_answer_is_directed_to_client_with_bundled_candidates() -> void:
 	assert_str(String(msg["to_peer_id"])).is_equal(client_peer)
 	assert_int((msg["answer"]["candidates"] as Array).size()).is_equal(1)
 
+	sig.close()
+
 
 func test_inbound_offer_reports_once_and_dedupes_resends() -> void:
 	var sig := RecordingSignaler.new(["wss://example"])
@@ -157,6 +163,8 @@ func test_inbound_offer_reports_once_and_dedupes_resends() -> void:
 
 	# Reported once; the candidates ride inside the payload, not as own signals.
 	assert_array(got).is_equal(["answer"])
+
+	sig.close()
 
 
 func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
@@ -193,6 +201,8 @@ func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
 	sig._parse_packet(topup)
 
 	assert_array(counts).is_equal([1, 2])
+
+	sig.close()
 
 
 func test_connect_result_helpers_and_mapping() -> void:
@@ -274,7 +284,7 @@ func test_signaling_unavailable_on_timeout() -> void:
 	backend.poll(0.001)
 	assert_int(failed_results.size()).is_equal(0)
 
-	await get_tree().create_timer(0.2).timeout
+	OS.delay_msec(200)
 
 	backend.poll(0.001)
 

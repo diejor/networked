@@ -295,6 +295,9 @@ func get_result(target: JoinTarget) -> ServerInfoResult:
 ## affected. Emits [signal target_removed] for the prior set and
 ## [signal target_added] for the loaded set.
 func load_server_list(path: String = server_list_path) -> void:
+	if Netw.is_test_env() and path.begins_with("user://"):
+		if not path.contains("_test_"):
+			path = "user://servers_test.tres"
 	server_list_path = path
 	var loaded := ServerList.load_or_new(path)
 	server_list = loaded
@@ -310,6 +313,9 @@ func load_server_list(path: String = server_list_path) -> void:
 ## loaded. Returns the [enum @GlobalScope.Error] from
 ## [ResourceSaver.save].
 func save_server_list(path: String = server_list_path) -> Error:
+	if Netw.is_test_env() and path.begins_with("user://"):
+		if not path.contains("_test_"):
+			path = "user://servers_test.tres"
 	server_list_path = path
 	if server_list == null:
 		server_list = ServerList.new()

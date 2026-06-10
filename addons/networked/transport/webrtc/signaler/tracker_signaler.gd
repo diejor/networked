@@ -241,16 +241,19 @@ func _connect_tracker_signals() -> void:
 
 
 func _disconnect_tracker_signals() -> void:
-	if _tracker == null:
-		return
-	if _tracker.connected.is_connected(_on_tracker_connected):
-		_tracker.connected.disconnect(_on_tracker_connected)
-	if _tracker.disconnected.is_connected(_on_tracker_disconnected):
-		_tracker.disconnected.disconnect(_on_tracker_disconnected)
-	if _tracker.socket_opened.is_connected(_on_tracker_socket_opened):
-		_tracker.socket_opened.disconnect(_on_tracker_socket_opened)
-	if _tracker.message_received.is_connected(_on_tracker_message):
-		_tracker.message_received.disconnect(_on_tracker_message)
+	if _tracker:
+		if _tracker.connected.is_connected(_on_tracker_connected):
+			_tracker.connected.disconnect(_on_tracker_connected)
+		if _tracker.disconnected.is_connected(_on_tracker_disconnected):
+			_tracker.disconnected.disconnect(_on_tracker_disconnected)
+		if _tracker.socket_opened.is_connected(_on_tracker_socket_opened):
+			_tracker.socket_opened.disconnect(_on_tracker_socket_opened)
+		if _tracker.message_received.is_connected(_on_tracker_message):
+			_tracker.message_received.disconnect(_on_tracker_message)
+	_on_tracker_connected = Callable()
+	_on_tracker_disconnected = Callable()
+	_on_tracker_socket_opened = Callable()
+	_on_tracker_message = Callable()
 
 
 func _release_tracker() -> void:

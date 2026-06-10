@@ -139,3 +139,14 @@ func test_teleport_reparents_on_server_and_snaps_client_to_marker() -> void:
 		level_2_builder.scene_name,
 	) as Node2D
 	assert_that(client_player2.global_position).is_equal(Vector2(100, 100))
+
+	# The server's _request_teleport keeps running after it notifies the client
+	# that resolves the promise above: it still awaits AreaReparentGuard.flush()
+	# over physics frames before releasing the guard and ending its span. Let
+	# that settle before the suite frees the trees, otherwise the suspended
+	# await strands and leaks the guard, its span, and the coroutine state.
+	var server_tp: TPComponent = server_player.get_node("%TPComponent")
+	for i in 8:
+		if server_tp._tp_guard == null:
+			break
+		await get_tree().physics_frame

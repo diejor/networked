@@ -68,8 +68,8 @@ func test_answer_bundle_carries_candidates_and_connects() -> void:
 	assert_bool(host_kinds.has("candidate")).is_false()
 	assert_bool(host_kinds.has("answer")).is_true()
 	assert_int(answer_candidates[0]).is_greater(0)
-	host.close()
-	client.close()
+	WebRTCTestSupport.dispose_session(host)
+	WebRTCTestSupport.dispose_session(client)
 
 
 func test_offer_sends_immediately_then_topups_candidates() -> void:
@@ -93,7 +93,7 @@ func test_offer_sends_immediately_then_topups_candidates() -> void:
 	assert_int(offer_counts.size()).is_greater_equal(2)
 	assert_int(int(offer_counts[0])).is_equal(0)
 	assert_int(int(offer_counts[offer_counts.size() - 1])).is_greater(0)
-	client.close()
+	WebRTCTestSupport.dispose_session(client)
 
 
 func test_failed_emits_host_unresponsive_without_answer() -> void:
@@ -115,7 +115,7 @@ func test_failed_emits_host_unresponsive_without_answer() -> void:
 		await get_tree().process_frame
 
 	assert_array(reasons).is_equal(["HOST_UNRESPONSIVE"])
-	client.close()
+	WebRTCTestSupport.dispose_session(client)
 
 
 func test_dropped_first_offer_recovers_via_retry() -> void:
@@ -164,5 +164,5 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 
 	assert_bool(dropped[0]).is_true()
 	assert_bool(connected[0]).is_true()
-	host.close()
-	client.close()
+	WebRTCTestSupport.dispose_session(host)
+	WebRTCTestSupport.dispose_session(client)

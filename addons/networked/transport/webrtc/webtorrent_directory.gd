@@ -190,6 +190,8 @@ func _keep_board_warm(dt: float) -> void:
 
 
 func list_lobbies() -> void:
+	if Netw.is_test_env():
+		return
 	# The board stays warm, so browsing only opens a fresh collect window.
 	_ensure_tracker()
 	_collected.clear()
@@ -220,6 +222,8 @@ func make_join_target(lobby: LobbyInfo) -> JoinTarget:
 
 
 func host_lobby(server_name: String) -> MultiplayerPeer:
+	if Netw.is_test_env():
+		return null
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
 		Netw.dbg.warn("WebTorrentDirectory: host_lobby found no MultiplayerTree.")
@@ -241,6 +245,8 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 
 
 func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+	if Netw.is_test_env():
+		return null
 	var room_hash := String(_id_to_hash.get(lobby_id, ""))
 	if room_hash.is_empty():
 		Netw.dbg.warn(
@@ -277,6 +283,8 @@ func advertise_room(
 		server_name: String,
 		max_players: int,
 ) -> void:
+	if Netw.is_test_env():
+		return
 	if room_hash.length() != 20:
 		Netw.dbg.warn(
 			"WebTorrentDirectory: refusing to advertise malformed room hash '%s'.",

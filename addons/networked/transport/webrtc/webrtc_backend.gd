@@ -284,10 +284,30 @@ func _build_session_and_signaler() -> void:
 
 func _clear_session_and_signaler() -> void:
 	if _session:
+		if _signaler:
+			if _session.signal_out.is_connected(_signaler.send):
+				_session.signal_out.disconnect(_signaler.send)
+			if _session.native_connected.is_connected(_signaler.on_session_connected):
+				_session.native_connected.disconnect(_signaler.on_session_connected)
+		if _session.native_connected.is_connected(_on_native_connected):
+			_session.native_connected.disconnect(_on_native_connected)
+		if _session.native_disconnected.is_connected(_on_native_disconnected):
+			_session.native_disconnected.disconnect(_on_native_disconnected)
+		if _session.failed.is_connected(_on_session_failed):
+			_session.failed.disconnect(_on_session_failed)
 		_session.close()
-	_session = null
+
 	if _signaler:
+		if _session:
+			if _signaler.received.is_connected(_session.deliver):
+				_signaler.received.disconnect(_session.deliver)
+		if _signaler.ready.is_connected(_on_signaling_connected):
+			_signaler.ready.disconnect(_on_signaling_connected)
+		if _signaler.lost.is_connected(_on_signaling_disconnected):
+			_signaler.lost.disconnect(_on_signaling_disconnected)
 		_signaler.close()
+
+	_session = null
 	_signaler = null
 
 
