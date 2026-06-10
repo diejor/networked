@@ -17,6 +17,7 @@ var _save_table: StringName = &""
 var _tp_level_scene_path: String = ""
 var _tp_spawner_node_path: String = ""
 var _player_sync_config_builder: SyncConfigBuilder = null
+var _custom_synchronizers: Array[Dictionary] = []
 
 static var _uid_counter: int = 0
 
@@ -75,6 +76,32 @@ func with_player_sync(
 	return self
 
 
+## Configures a custom [MultiplayerSynchronizer] to be attached to the player.
+##
+## Places [param sync] under [param parent_path] relative to the player root,
+## using the synchronizer's own [member Node.name]. Intermediate nodes along
+## [param parent_path] are created automatically if they do not exist.
+## [member MultiplayerSynchronizer.root_path] is automatically resolved to
+## point to the root node.
+## [br][br]
+## [codeblock]
+## var sync := MultiplayerSynchronizer.new()
+## sync.name = "ProxySync"
+## var builder := PlayerBuilder.new()
+## builder.with_synchronizer(sync, "Components")
+## # Result: root/Components/ProxySync
+## [/codeblock]
+func with_synchronizer(
+		sync: MultiplayerSynchronizer,
+		parent_path: String = "",
+) -> PlayerBuilder:
+	_custom_synchronizers.append({
+		"synchronizer": sync,
+		"parent_path": parent_path,
+	})
+	return self
+
+
 ## Composes and returns a live player node tree.
 func build() -> Node:
 	var root: Node = _root_type.new()
@@ -92,6 +119,7 @@ func build() -> Node:
 		save_comp.set("table_name", _save_table)
 		save_comp.replication_config = SceneReplicationConfig.new()
 		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
+		save_comp.root_path = save_comp.get_path_to(root)
 
 	if not _tp_level_scene_path.is_empty():
 		var tp_comp := TPComponent.new()
@@ -110,6 +138,30 @@ func build() -> Node:
 		sync_cfg = SceneReplicationConfig.new()
 	player_sync.replication_config = sync_cfg
 	var _a4: Node = SceneAssembly.attach(root, player_sync, root)
+	player_sync.root_path = player_sync.get_path_to(root)
+
+	for entry in _custom_synchronizers:
+		var sync: MultiplayerSynchronizer = entry["synchronizer"]
+		var parent_path: String = entry["parent_path"]
+
+		var parent: Node = root
+		if not parent_path.is_empty():
+			var path_node := NodePath(parent_path)
+			for i in range(path_node.get_name_count()):
+				var part_name: String = path_node.get_name(i)
+				var child := parent.get_node_or_null(part_name)
+				if child == null:
+					child = Node.new()
+					child.name = part_name
+					SceneAssembly.attach(parent, child, root)
+				parent = child
+
+		assert(parent != null, "PlayerBuilder: parent_path not found: " + parent_path)
+		if sync.get_parent() != null:
+			sync.owner = null
+			sync.get_parent().remove_child(sync)
+		SceneAssembly.attach(parent, sync, root)
+		sync.root_path = sync.get_path_to(root)
 
 	return root
 

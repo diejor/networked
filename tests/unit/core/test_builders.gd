@@ -309,6 +309,43 @@ func _assert_configs_match(
 		).is_equal(cfg_real.property_get_sync(prop))
 
 
+func test_player_builder_with_custom_synchronizer() -> void:
+	var sync_node := MultiplayerSynchronizer.new()
+	sync_node.name = "MyCustomSync"
+
+	var builder := PlayerBuilder.new("CustomSyncPlayer") \
+			.with_root(Node2D) \
+			.with_synchronizer(sync_node, "Components/Nested")
+
+	var live: Node2D = auto_free(builder.build()) as Node2D
+	assert_that(live.name).is_equal("CustomSyncPlayer")
+
+	var components_node: Node = live.get_node("Components")
+	assert_that(components_node).is_not_null()
+	assert_that(components_node.owner).is_equal(live)
+
+	var nested_node: Node = components_node.get_node("Nested")
+	assert_that(nested_node).is_not_null()
+	assert_that(nested_node.owner).is_equal(live)
+
+	var sync_found: MultiplayerSynchronizer = \
+			nested_node.get_node("MyCustomSync") as MultiplayerSynchronizer
+	assert_that(sync_found).is_equal(sync_node)
+	assert_that(sync_found.owner).is_equal(live)
+	assert_that(sync_found.root_path).is_equal(NodePath("../../.."))
+
+	var packed: PackedScene = builder.pack()
+	assert_that(packed).is_not_null()
+
+	var inst: Node2D = auto_free(packed.instantiate()) as Node2D
+	assert_that(inst.name).is_equal("CustomSyncPlayer")
+
+	var inst_sync: MultiplayerSynchronizer = \
+			inst.get_node("Components/Nested/MyCustomSync") as MultiplayerSynchronizer
+	assert_that(inst_sync).is_not_null()
+	assert_that(inst_sync.root_path).is_equal(NodePath("../../.."))
+
+
 func _assert_identical_shape(node1: Node, node2: Node) -> void:
 	assert_that(node1.name).is_equal(node2.name)
 	assert_that(node1.get_class()).is_equal(node2.get_class())
