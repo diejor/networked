@@ -734,7 +734,7 @@ func _target_summary(target: JoinTarget) -> String:
 	if target == null:
 		return "<null>"
 	var address := target.address
-	if target.backend != null:
+	if address.is_empty() and target.backend != null:
 		var join_address := target.backend.get_join_address()
 		if not join_address.is_empty():
 			address = join_address

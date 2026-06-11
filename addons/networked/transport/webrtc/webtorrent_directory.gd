@@ -218,6 +218,9 @@ func make_join_target(lobby: LobbyInfo) -> JoinTarget:
 	target.address = String(lobby.metadata.get("room_hash", ""))
 	target.metadata = lobby.metadata.duplicate()
 	target.backend = _make_backend()
+	var ns := String(lobby.metadata.get("signaling_namespace", ""))
+	if not ns.is_empty():
+		target.backend.signaling_namespace = ns
 	return target
 
 
@@ -285,10 +288,10 @@ func advertise_room(
 ) -> void:
 	if Netw.is_test_env():
 		return
-	if room_hash.length() != 20:
+	if room_hash.is_empty():
 		Netw.dbg.warn(
-			"WebTorrentDirectory: refusing to advertise malformed room hash '%s'.",
-			[room_hash],
+			"WebTorrentDirectory: refusing to advertise empty room hash.",
+			func(m): push_warning(m),
 		)
 		return
 	_room_hash = room_hash
@@ -439,7 +442,7 @@ func _collect_room(card: Dictionary) -> void:
 	if String(card.get("uid", "")) != browser_filter_uid:
 		return
 	var room_hash := String(card.get("hash", ""))
-	if room_hash.length() != 20:
+	if room_hash.is_empty():
 		return
 	var players := int(card.get("players", 0))
 	var max_players := int(card.get("max", 0))
@@ -494,6 +497,10 @@ func _emit_collected() -> void:
 
 
 func _room_card() -> Dictionary:
+	var ns := ""
+	var mt := MultiplayerTree.resolve(self)
+	if mt and mt.backend is WebRTCBackend:
+		ns = (mt.backend as WebRTCBackend).signaling_namespace
 	return {
 		"t": "room",
 		"hash": _room_hash,
@@ -502,6 +509,7 @@ func _room_card() -> Dictionary:
 		"max": _room_max,
 		"uid": browser_filter_uid,
 		"app_id": _local_app_id(),
+		"signaling_namespace": ns,
 	}
 
 
@@ -511,6 +519,7 @@ func _room_metadata(card: Dictionary) -> Dictionary:
 		"host": String(card.get("name", "")),
 		"browser_filter_uid": String(card.get("uid", "")),
 		"app_id": String(card.get("app_id", "")),
+		"signaling_namespace": String(card.get("signaling_namespace", "")),
 	}
 
 

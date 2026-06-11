@@ -594,7 +594,11 @@ func _account_candidate(multiplayer_id: int, candidate: String) -> void:
 
 func _log_attempt_summary(multiplayer_id: int, why: String) -> void:
 	var stats: Dictionary = _candidate_stats.get(multiplayer_id, _empty_stats())
-	if stats.relay == 0:
+	var is_local := (
+			is_local_session
+			or bool(_local_peers.get(multiplayer_id, false))
+	)
+	if stats.relay == 0 and not is_local:
 		Netw.dbg.warn(
 			"WebRTCSession: id %d %s with no relay candidate gathered "
 			+ "(host=%d srflx=%d); TURN may be unreachable.",

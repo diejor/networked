@@ -129,6 +129,7 @@ func _reset_global_test_state() -> void:
 		LocalLoopbackSession.shared = null
 
 	FileSystemBackend._clear_path_registry()
+	WebTorrentTrackerClient.clear_shared_clients()
 
 
 func _assert_clean_state(event: GdUnitEvent) -> void:

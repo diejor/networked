@@ -47,6 +47,17 @@ signal room_created(room_id: String)
 ## Display name advertised by [WebTorrentDirectory] for hosted rooms.
 @export var server_name: String = ""
 
+## Optional namespace to isolate signaling and room codes on public networks.
+## Non-empty values enable short, player-friendly room codes.
+@export var signaling_namespace: String = ""
+
+@export_tool_button("Generate signaling namespace") var _generate_signaling_namespace := func() -> void:
+	signaling_namespace = _random_signaling_namespace()
+
+## Character set used to generate short room codes.
+## Excludes ambiguous characters (like 0, O, 1, I, l) by default.
+@export_multiline var room_code_characters: String = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
 ## ICE server definitions passed to each [WebRTCPeerConnection].
 ##
 ## Each entry is one STUN or TURN server. A STUN entry needs only
@@ -404,26 +415,30 @@ func get_join_address() -> String:
 	return super.get_join_address()
 
 
-## Returns a [code]"Room Hash"[/code] [AddressHint].
+## Returns a [code]"Room ID"[/code] [AddressHint].
 func get_address_hint() -> AddressHint:
+	var placeholder := (
+			"5-char code"
+			if not signaling_namespace.is_empty()
+			else "20-char hex"
+	)
 	return AddressHint.make(
-		"Room Hash",
-		"20-char hex",
+		"Room ID",
+		placeholder,
 		"Room identifier copied from the host (also auto-copied to clipboard "
 		+ "on host).",
 		false,
 		false,
 	)
-
-
 ## Keeps [method BackendPeer.query_server_info] unsupported for room ids.
+
 ##
 ## WebRTC discovery uses signaling. An [AuthProbeClient] probe would need a full
 ## ICE handshake, which is too expensive for browser refresh.
 func query_server_info(
 		_address: String,
 		_timeout: float = 2.0,
-) -> ServerInfoResult:
+ ) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
 
@@ -439,12 +454,15 @@ func copy_from(source: BackendPeer) -> void:
 	if source is WebRTCBackend:
 		var other := source as WebRTCBackend
 		server_name = other.server_name
+		signaling_namespace = other.signaling_namespace
+		room_code_characters = other.room_code_characters
 		ice_servers = other.ice_servers.duplicate(true)
 		connect_retry = other.connect_retry
 		max_connect_attempts = other.max_connect_attempts
 		gather_timeout = other.gather_timeout
 		topup_interval = other.topup_interval
 		filter_unsupported_turn = other.filter_unsupported_turn
+
 
 
 ## Clears the active session and signaler.
@@ -573,3 +591,12 @@ static func _is_local_room(room_id: String) -> bool:
 			if line == room_id:
 				return true
 	return false
+
+
+# Builds a fresh random namespace for the editor tool button.
+func _random_signaling_namespace() -> String:
+	const CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
+	var out := ""
+	for i in 15:
+		out += CHARS[randi() % CHARS.length()]
+	return out

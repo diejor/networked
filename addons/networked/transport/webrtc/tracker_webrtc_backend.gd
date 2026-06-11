@@ -24,7 +24,12 @@ extends WebRTCBackend
 
 
 func _make_signaler() -> WebRTCSignaler:
-	return TrackerSignaler.new(trackers)
+	return TrackerSignaler.new(
+		trackers,
+		signaling_namespace,
+		room_code_characters,
+	)
+
 
 
 ## Preserves the tracker list after [method Resource.duplicate].

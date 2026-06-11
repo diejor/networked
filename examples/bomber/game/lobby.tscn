@@ -22,22 +22,7 @@ metadata/_custom_type_script = "uid://b8xpp6r4y1ku2"
 
 [sub_resource type="Resource" id="Resource_mss8j"]
 script = ExtResource("6_8u2o1")
-trackers = Array[String](["wss://tracker.openwebtorrent.com", "wss://tracker.webtorrent.dev", "wss://tracker.btorrent.xyz"])
-server_name = Array[Dictionary]([{
-"urls": ["stun:stun.l.google.com:19302"]
-}, {
-"credential": "openrelayproject",
-"urls": ["turn:openrelay.metered.ca:80"],
-"username": "openrelayproject"
-}, {
-"credential": "openrelayproject",
-"urls": ["turns:openrelay.metered.ca:443?transport=tcp"],
-"username": "openrelayproject"
-}, {
-"credential": "openrelayproject",
-"urls": ["turns:openrelay.metered.ca:443"],
-"username": "openrelayproject"
-}])
+signaling_namespace = "m28yegka0obpnnv"
 ice_servers = Array[Dictionary]([{
 "urls": ["stun:stun.l.google.com:19302"]
 }, {
@@ -45,8 +30,7 @@ ice_servers = Array[Dictionary]([{
 "urls": ["turn:openrelay.metered.ca:80"],
 "username": "openrelayproject"
 }])
-connect_retry = 3
-max_connect_attempts = null
+connect_retry = 3.0
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]

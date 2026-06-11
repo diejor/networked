@@ -511,13 +511,15 @@ func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
 		return
 	var msg := ConnectUiShared.format_connect_error(result)
 	_show_banner(msg)
-	_connecting_popup.show_failed(msg)
-	if target != null:
+	if target != null and target.backend.supports_embedded_server():
+		_hide_connecting_overlay()
 		var payload := _last_join_payload
 		if payload == null:
 			payload = JoinPayload.new()
 			payload.username = StringName(_last_username)
 		_prompt_host_fallback(target, payload)
+	else:
+		_connecting_popup.show_failed(msg)
 
 
 func _show_connecting_overlay(target: JoinTarget) -> void:

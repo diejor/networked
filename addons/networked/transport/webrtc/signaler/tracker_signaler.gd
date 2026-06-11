@@ -35,15 +35,14 @@ const SIGNALING_CLOSE_DELAY := 3.0
 var trace_relayed_payloads := false
 
 var trackers: Array[String] = []
+var signaling_namespace := ""
+var room_code_characters := ""
 
 var _tracker: WebTorrentTrackerClient = null
 var _tracker_shared := false
-var _on_tracker_connected: Callable
-var _on_tracker_disconnected: Callable
-var _on_tracker_socket_opened: Callable
-var _on_tracker_message: Callable
 var _is_server := false
 var _info_hash := ""
+var _room_id := ""
 var _local_peer_id := ""
 var _local_godot_id := 0
 # The host's derived address, so a client sends its offer straight to it.
@@ -64,8 +63,14 @@ var _signaling_close_delay := -1.0
 var _min_announce_period := 0.0
 
 
-func _init(p_trackers: Array[String] = []) -> void:
+func _init(
+		p_trackers: Array[String] = [],
+		p_namespace: String = "",
+		p_characters: String = "",
+) -> void:
 	trackers = p_trackers
+	signaling_namespace = p_namespace
+	room_code_characters = p_characters
 
 
 func open(p_room_id: String, local_multiplayer_id: int) -> Error:
@@ -73,11 +78,20 @@ func open(p_room_id: String, local_multiplayer_id: int) -> Error:
 	_is_server = local_multiplayer_id == 1
 	if _is_server:
 		# The signaler owns room-id generation; room semantics are its own.
-		_info_hash = _generate_hash()
-	elif p_room_id.length() != 20:
-		_info_hash = p_room_id.sha1_text().substr(0, 20)
+		if not signaling_namespace.is_empty():
+			_room_id = _generate_short_code()
+		else:
+			_room_id = _generate_hash()
 	else:
-		_info_hash = p_room_id
+		_room_id = p_room_id
+
+	if not signaling_namespace.is_empty():
+		_info_hash = (signaling_namespace + ":" + _room_id).sha1_text().substr(0, 20)
+	elif _room_id.length() != 20:
+		_info_hash = _room_id.sha1_text().substr(0, 20)
+	else:
+		_info_hash = _room_id
+
 	# The peer_id derives from the room hash for the host, so it must be known.
 	_local_peer_id = _generate_peer_id(local_multiplayer_id)
 	if not _is_server:
@@ -86,13 +100,13 @@ func open(p_room_id: String, local_multiplayer_id: int) -> Error:
 		_server_wt_id = _host_peer_id()
 	Netw.dbg.debug(
 		"TrackerSignaler: opening room %s as id %d (peer_id %s...).",
-		[_info_hash, local_multiplayer_id, _local_peer_id.substr(0, 6)],
+		[_room_id, local_multiplayer_id, _local_peer_id.substr(0, 6)],
 	)
 	return _connect_trackers()
 
 
 func room_id() -> String:
-	return _info_hash
+	return _room_id
 
 
 func local_signaler_id() -> String:
@@ -230,30 +244,22 @@ func _connect_trackers() -> Error:
 
 
 func _connect_tracker_signals() -> void:
-	_on_tracker_connected = func() -> void: ready.emit()
-	_on_tracker_disconnected = _on_signaling_lost
-	_on_tracker_socket_opened = _announce_to
-	_on_tracker_message = _parse_packet
-	_tracker.connected.connect(_on_tracker_connected)
-	_tracker.disconnected.connect(_on_tracker_disconnected)
-	_tracker.socket_opened.connect(_on_tracker_socket_opened)
-	_tracker.message_received.connect(_on_tracker_message)
+	_tracker.connected.connect(_on_tracker_ready)
+	_tracker.disconnected.connect(_on_signaling_lost)
+	_tracker.socket_opened.connect(_announce_to)
+	_tracker.message_received.connect(_parse_packet)
 
 
 func _disconnect_tracker_signals() -> void:
 	if _tracker:
-		if _tracker.connected.is_connected(_on_tracker_connected):
-			_tracker.connected.disconnect(_on_tracker_connected)
-		if _tracker.disconnected.is_connected(_on_tracker_disconnected):
-			_tracker.disconnected.disconnect(_on_tracker_disconnected)
-		if _tracker.socket_opened.is_connected(_on_tracker_socket_opened):
-			_tracker.socket_opened.disconnect(_on_tracker_socket_opened)
-		if _tracker.message_received.is_connected(_on_tracker_message):
-			_tracker.message_received.disconnect(_on_tracker_message)
-	_on_tracker_connected = Callable()
-	_on_tracker_disconnected = Callable()
-	_on_tracker_socket_opened = Callable()
-	_on_tracker_message = Callable()
+		if _tracker.connected.is_connected(_on_tracker_ready):
+			_tracker.connected.disconnect(_on_tracker_ready)
+		if _tracker.disconnected.is_connected(_on_signaling_lost):
+			_tracker.disconnected.disconnect(_on_signaling_lost)
+		if _tracker.socket_opened.is_connected(_announce_to):
+			_tracker.socket_opened.disconnect(_announce_to)
+		if _tracker.message_received.is_connected(_parse_packet):
+			_tracker.message_received.disconnect(_parse_packet)
 
 
 func _release_tracker() -> void:
@@ -269,6 +275,11 @@ func _release_tracker() -> void:
 func _on_signaling_lost() -> void:
 	Netw.dbg.info("TrackerSignaler: all trackers closed.")
 	lost.emit()
+
+
+# Relays the tracker connected signal to the public signaler ready signal.
+func _on_tracker_ready() -> void:
+	ready.emit()
 
 
 # Sends the first presence announce when a tracker socket opens.
@@ -431,6 +442,17 @@ func _generate_hash() -> String:
 	for i in 20:
 		hash_str += chars[randi() % chars.length()]
 	return hash_str
+
+
+func _generate_short_code() -> String:
+	var chars := room_code_characters
+	if chars.is_empty():
+		chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+	var code := ""
+	for i in 5:
+		code += chars[randi() % chars.length()]
+	return code
+
 
 
 func _generate_peer_id(godot_id: int) -> String:

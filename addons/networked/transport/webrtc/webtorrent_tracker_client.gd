@@ -85,6 +85,19 @@ static func release_shared(urls: Array[String], client: WebTorrentTrackerClient)
 	_shared_clients.erase(key)
 
 
+## Clears all shared tracker clients and closes their sockets.
+##
+## This is primarily used for testing teardown to prevent static leaks.
+static func clear_shared_clients() -> void:
+	for key in _shared_clients:
+		var entry: Dictionary = _shared_clients[key]
+		var client := entry.client as WebTorrentTrackerClient
+		if client:
+			client.close()
+	_shared_clients.clear()
+
+
+
 # Builds a stable registry key from tracker URLs.
 static func _shared_key(urls: Array[String]) -> String:
 	var sorted := urls.duplicate()
