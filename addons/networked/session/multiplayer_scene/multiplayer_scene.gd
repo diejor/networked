@@ -31,6 +31,11 @@ var level: Node:
 		add_child(level)
 		hook_spawn_signals(level)
 		level.owner = self
+		if is_instance_valid(gate):
+			NetwEntity.ensure(self).provide(
+				NetwEntity.Slot.INTEREST_GATE,
+				gate,
+			)
 
 var _context: NetwContext
 

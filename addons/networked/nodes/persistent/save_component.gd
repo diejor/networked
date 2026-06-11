@@ -74,7 +74,7 @@ func _notification(what: int) -> void:
 		NOTIFICATION_PARENTED:
 			var entity := Netw.ctx(self).entity
 			if entity:
-				entity.set_save(self)
+				entity.save = self
 				if not entity.spawning.is_connected(hydrate_from_db):
 					entity.spawning.connect(hydrate_from_db)
 		NOTIFICATION_WM_CLOSE_REQUEST:

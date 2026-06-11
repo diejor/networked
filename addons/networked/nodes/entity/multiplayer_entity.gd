@@ -99,12 +99,14 @@ var peer_id := 0:
 		else:
 			_pending_peer_id = value
 
+
 func _get_entity_record() -> NetwEntity:
 	if not is_instance_valid(owner):
 		return null
 	if owner.has_meta(NetwEntity.META_KEY):
 		return owner.get_meta(NetwEntity.META_KEY) as NetwEntity
 	return null
+
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -178,7 +180,7 @@ func _notification(what: int) -> void:
 	var entity := Netw.ctx(self).entity
 	if not entity or not entity.owner:
 		return
-	entity.set_multiplayer_entity(self)
+	entity.multiplayer_entity = self
 	_ensure_replication_config()
 	_hydrate_identity_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):

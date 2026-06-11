@@ -63,7 +63,7 @@ func test_netw_entity_template_flag_reflects_spawner() -> void:
 	root.add_child(mp_entity)
 	mp_entity.owner = root
 
-	entity.set_multiplayer_entity(mp_entity)
+	entity.multiplayer_entity = mp_entity
 
 	assert_that(entity.is_template).is_true()
 
