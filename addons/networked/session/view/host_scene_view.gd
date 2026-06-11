@@ -1,4 +1,4 @@
-## Renders the host's currently-active [SubViewport] scene into the root viewport.
+## Renders the host's currently-active [SubViewport] scene into this viewport.
 ##
 ## On listen-server hosts, this view pulls the local player's current scene
 ## from the [MultiplayerTree] and [MultiplayerSceneManager] and draws it
@@ -20,8 +20,8 @@
 ## [br][br]
 ## Defaults to filling its parent rect with
 ## [constant Control.PRESET_FULL_RECT]. When
-## parented under a plain [Node], the view re-syncs to the root window on
-## resize. Stretch behavior mirrors Godot's project-level
+## parented under a plain [Node], the view re-syncs to its enclosing viewport
+## on resize. Stretch behavior mirrors Godot's project-level
 ## [code]display/window/stretch/*[/code] settings via [StretchLayout], assign
 ## [member stretch_override] to deviate per-view.
 class_name HostSceneView
@@ -59,9 +59,6 @@ func _exit_tree() -> void:
 
 
 ## Sets whether this automatic host view should draw and forward input.
-##
-## Display containers suppress the automatic view while another
-## [ParticipantView] owns the same target.
 func set_suppressed(suppressed: bool) -> void:
 	if _suppressed == suppressed:
 		return

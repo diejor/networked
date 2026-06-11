@@ -8,6 +8,9 @@ extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
+const PARTICIPANT_WINDOW_SCENE := preload(
+	"res://addons/networked/session/view/ParticipantWindow.tscn"
+)
 
 var reporter: Callable = _default_reporter
 
@@ -178,7 +181,6 @@ func wait_for_transitions(runners: Array[NetwSceneRunner] = []) -> void:
 			await sync_ticks(1)
 
 
-
 ## Advances ordinary frames without asserting network tick progress.
 ##
 ## Use this for temporary visual pauses after [method show_views].
@@ -195,7 +197,7 @@ func set_time_factor(factor: float) -> void:
 	Engine.set_physics_ticks_per_second(int(_saved_physics_ticks * factor))
 
 
-## Displays every participant slot in one window.
+## Displays every participant window in one window.
 ##
 ## Tests remain headless unless this method is called.
 func show_views() -> ParticipantViewport:
@@ -263,7 +265,7 @@ func link(
 	return NetwLink.new(_loopback.session(), peer, sender_id)
 
 
-## Frees all participant slots and resets global harness state.
+## Frees all participant windows and resets global harness state.
 func teardown() -> void:
 	if _torn_down:
 		return
@@ -301,8 +303,8 @@ func _create_runner(
 		username: String,
 		role: MultiplayerTree.Role,
 ) -> NetwSceneRunner:
-	var slot := ParticipantSlot.new()
-	slot.name = "Slot_%s" % username
+	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
+	slot.name = "Window_%s" % username
 	add_child(slot)
 
 	var scene := _main_scene.instantiate()

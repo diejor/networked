@@ -1,7 +1,8 @@
 ## Tracks the [SubViewport] that represents one participant's rendered world.
 ##
 ## Host roles display the active [MultiplayerScene] viewport. Pure clients use
-## [member fallback] because their world is mounted under the participant slot.
+## [member fallback] because their world is mounted under the participant
+## window.
 class_name ParticipantDisplaySource
 extends RefCounted
 

@@ -41,17 +41,17 @@ func _ready() -> void:
 		return
 	_settings = stretch_override if stretch_override else StretchSettings.from_project()
 	_sync_root_sized_rect()
-	var root := get_tree().root
-	if not root.size_changed.is_connected(_sync_root_sized_rect):
-		root.size_changed.connect(_sync_root_sized_rect)
+	var viewport := get_viewport()
+	if viewport and not viewport.size_changed.is_connected(_sync_root_sized_rect):
+		viewport.size_changed.connect(_sync_root_sized_rect)
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	var root := get_tree().root
-	if root and root.size_changed.is_connected(_sync_root_sized_rect):
-		root.size_changed.disconnect(_sync_root_sized_rect)
+	var viewport := get_viewport()
+	if viewport and viewport.size_changed.is_connected(_sync_root_sized_rect):
+		viewport.size_changed.disconnect(_sync_root_sized_rect)
 	clear_target()
 
 
@@ -161,7 +161,10 @@ func _apply_layout() -> void:
 func _sync_root_sized_rect() -> void:
 	if get_parent() is Control:
 		return
-	var rect := get_tree().root.get_visible_rect()
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	var rect := viewport.get_visible_rect()
 	anchor_left = 0.0
 	anchor_top = 0.0
 	anchor_right = 0.0

@@ -30,9 +30,6 @@ func test_slot_send_input_is_isolated_from_global_input() -> void:
 	assert_that(a.input.state[ACTION]).is_true()
 	assert_that(b.input.state[ACTION]).is_false()
 	assert_that(Input.is_action_pressed(ACTION)).is_false()
-	assert_that(a.slot.render_target_update_mode).is_equal(
-		SubViewport.UPDATE_DISABLED,
-	)
 
 
 func test_scene_runner_routes_action_to_one_slot() -> void:
@@ -155,8 +152,8 @@ func _capture_reported_failure(callable: Callable) -> String:
 
 
 func _make_slot_scene(label: String, mounted: bool) -> Dictionary:
-	var slot := ParticipantSlot.new()
-	slot.name = "Slot%s" % label
+	var slot := ParticipantWindow.new()
+	slot.name = "Window%s" % label
 	add_child(slot)
 	auto_free(slot)
 

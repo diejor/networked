@@ -116,13 +116,17 @@ func test_show_views_displays_each_participant() -> void:
 	await get_tree().process_frame
 
 	assert_that(host_view).is_not_null()
-	assert_that(display.view_for_slot(valeria.slot)).is_not_null()
-	assert_that(display.view_for_slot(jose.slot)).is_not_null()
-	assert_that(host_view.visible).is_false()
+	assert_that(display.has_slot(valeria.slot)).is_true()
+	assert_that(display.has_slot(jose.slot)).is_true()
+	assert_that(valeria.slot.visible).is_true()
+	assert_that(jose.slot.visible).is_true()
+	assert_that(host_view.visible).is_true()
 
 	display.remove_slot(valeria.slot)
 	await get_tree().process_frame
 
+	assert_that(display.has_slot(valeria.slot)).is_false()
+	assert_that(valeria.slot.visible).is_false()
 	assert_that(host_view.visible).is_true()
 
 
@@ -133,8 +137,8 @@ func test_show_views_can_be_called_before_adding_participants() -> void:
 	var jose := await game.add_client("jose", true, _level_1_spawn())
 	await get_tree().process_frame
 
-	assert_that(display.view_for_slot(valeria.slot)).is_not_null()
-	assert_that(display.view_for_slot(jose.slot)).is_not_null()
+	assert_that(display.has_slot(valeria.slot)).is_true()
+	assert_that(display.has_slot(jose.slot)).is_true()
 
 
 func _input_for(player: Node) -> MoveInputComponent:

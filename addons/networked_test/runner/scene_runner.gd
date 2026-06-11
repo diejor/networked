@@ -1,4 +1,4 @@
-## Slot scoped [GdUnitSceneRunner] for one [ParticipantSlot].
+## Window scoped [GdUnitSceneRunner] for one [ParticipantWindow].
 ##
 ## All inherited input simulation methods route through [member slot].
 ## Session wide time and stepping are owned by [NetwGameHarness].
@@ -11,8 +11,8 @@ var tree: MultiplayerTree
 ## Frame anchored waiter used by [method await_player] and [method await_scene].
 var waiter: NetwWaiter
 
-## Viewport slot wrapping this runner's scene.
-var slot: ParticipantSlot
+## Viewport window wrapping this runner's scene.
+var slot: ParticipantWindow
 
 ## Peer id assigned by the active [MultiplayerPeer].
 var peer_id: int = 0
@@ -28,7 +28,7 @@ var local_player: Node:
 
 func _init(
 		p_scene: Node,
-		p_slot: ParticipantSlot,
+		p_slot: ParticipantWindow,
 		p_username: StringName,
 		p_verbose: bool = false,
 ) -> void:
