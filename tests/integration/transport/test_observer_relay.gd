@@ -16,7 +16,9 @@ var level_builder: LevelBuilder
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new().with_root(Node2D)
+	player_builder = PlayerBuilder.new().with_root(Node2D) \
+			.with_multiplayer_entity() \
+			.with_interest()
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new() \
@@ -45,10 +47,8 @@ func _spawn_owner_with_component(report: bool) -> Node:
 		harness.server(),
 		level_builder.scene_name,
 	)
-	var component := InterestComponent.new()
+	var component := server_player.get_node("InterestComponent") as InterestComponent
 	component.report_observers = report
-	server_player.add_child(component)
-	component.owner = server_player
 	# Spawn the player on the client too so the relay's path lookup
 	# resolves to a live node on the receiving side.
 	await harness.wait_for_player(client0, level_builder.scene_name)

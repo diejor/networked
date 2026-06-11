@@ -32,7 +32,7 @@ var level_builder: LevelBuilder
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new().with_root(Node2D)
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_multiplayer_entity()
 	player_builder.pack()
 
 	var proxy := _ServerProbeProxy.new()

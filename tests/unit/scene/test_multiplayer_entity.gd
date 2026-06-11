@@ -183,3 +183,48 @@ func test_unwrap_returns_spawner_or_null() -> void:
 
 	var empty_root: Node2D = auto_free(Node2D.new())
 	assert_that(MultiplayerEntity.unwrap(empty_root)).is_null()
+
+
+func test_netw_entity_ensure_attaches_to_specified_root() -> void:
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	parent.add_child(child)
+	auto_free(parent)
+	auto_free(child)
+
+	var entity := NetwEntity.ensure(child)
+	assert_that(entity).is_not_null()
+	assert_that(child.has_meta(NetwEntity.META_KEY)).is_true()
+	assert_that(child.get_meta(NetwEntity.META_KEY)).is_equal(entity)
+
+
+func test_multiplayer_entity_identity_forwarding() -> void:
+	var mp_entity := MultiplayerEntity.new()
+	auto_free(mp_entity)
+
+	mp_entity.entity_id = &"custom_id"
+	mp_entity.peer_id = 99
+	assert_that(mp_entity.entity_id).is_equal(&"custom_id")
+	assert_that(mp_entity.peer_id).is_equal(99)
+
+	var root := Node2D.new()
+	auto_free(root)
+	root.add_child(mp_entity)
+	mp_entity.owner = root
+
+	mp_entity._notification(Node.NOTIFICATION_PARENTED)
+
+	var entity := NetwEntity.of(root)
+	assert_that(entity).is_not_null()
+	assert_that(entity.entity_id).is_equal(&"custom_id")
+	assert_that(entity.peer_id).is_equal(99)
+
+	entity.entity_id = &"updated_id"
+	entity.peer_id = 100
+	assert_that(mp_entity.entity_id).is_equal(&"updated_id")
+	assert_that(mp_entity.peer_id).is_equal(100)
+
+	mp_entity.entity_id = &"final_id"
+	mp_entity.peer_id = 101
+	assert_that(entity.entity_id).is_equal(&"final_id")
+	assert_that(entity.peer_id).is_equal(101)

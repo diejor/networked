@@ -16,7 +16,7 @@ func _make_entity(entity_name: String = "ent") -> NetwEntity:
 	root.name = entity_name
 	add_child(root)
 	auto_free(root)
-	return NetwEntity.of(root)
+	return NetwEntity.ensure(root)
 
 
 func test_viewer_mutations_change_verdict() -> void:

@@ -188,11 +188,42 @@ var _parent_entity_ref: WeakRef
 static func of(node: Node) -> NetwEntity:
 	if not is_instance_valid(node):
 		return null
-	var root := _find_root(node)
+	if node.has_meta(META_KEY):
+		return node.get_meta(META_KEY) as NetwEntity
+
+	var n := node
+	while n != null:
+		if n.has_meta(META_KEY):
+			return n.get_meta(META_KEY) as NetwEntity
+		if n.owner != null and n.owner.has_meta(META_KEY):
+			return n.owner.get_meta(META_KEY) as NetwEntity
+		n = n.get_parent()
+
+	if node.owner != null:
+		var e := NetwEntity.new()
+		e._attach_to(node.owner)
+		return e
+
+	if not node.is_inside_tree():
+		var root := node
+		while root.get_parent() != null:
+			root = root.get_parent()
+		var e := NetwEntity.new()
+		e._attach_to(root)
+		return e
+
+	return null
+
+
+## Force get-or-create [NetwEntity] on the specific [param root] node.
+##
+## Attaches the [NetwEntity] to [param root] as its entity root, even if
+## [param root] has an ambiguous owner or parent.
+static func ensure(root: Node) -> NetwEntity:
 	if not is_instance_valid(root):
 		return null
 	if root.has_meta(META_KEY):
-		return root.get_meta(META_KEY)
+		return root.get_meta(META_KEY) as NetwEntity
 	var e := NetwEntity.new()
 	e._attach_to(root)
 	return e
@@ -261,34 +292,7 @@ static func bundle(
 	if entity:
 		entity.entity_id = entity_id
 		entity.peer_id = peer_id
-	var mp_entity := MultiplayerEntity.unwrap(node)
-	if mp_entity:
-		mp_entity.entity_id = entity_id
-		mp_entity.peer_id = peer_id
 	return node
-
-
-## Walks to the entity root for [param node].
-static func _find_root(node: Node) -> Node:
-	if node.has_meta(META_KEY):
-		return node
-	if node.owner != null:
-		return node.owner
-	var n := node
-	while n.get_parent() != null:
-		n = n.get_parent()
-		if n.has_meta(META_KEY):
-			return n
-	if n != node:
-		Netw.dbg.trace(
-			("NetwEntity.of: walked from '%s' up to topmost "
-					+ "ancestor '%s' with no META and no Node.owner; "
-					+ "attaching entity to '%s'. Set Node.owner or "
-					+ "pre-attach META on the intended root to "
-					+ "disambiguate."),
-			[node.name, n.name, n.name],
-		)
-	return n
 
 
 func _attach_to(root: Node) -> void:

@@ -20,6 +20,10 @@ var _player_sync_config_builder: SyncConfigBuilder = null
 var _custom_synchronizers: Array[Dictionary] = []
 var _save_properties: Array[Dictionary] = []
 
+var _has_interest: bool = false
+var _interest_layers: Array[StringName] = []
+var _interest_report: bool = false
+
 static var _uid_counter: int = 0
 
 
@@ -125,6 +129,21 @@ func with_synchronizer(
 	return self
 
 
+## Configures the [InterestComponent] on the player entity.
+##
+## Attaches an [InterestComponent] child node to the player, pre-configuring
+## it with the specified interest [param layers] and observer reporting mode
+## [param report_observers].
+func with_interest(
+		layers: Array[StringName] = [],
+		report_observers: bool = false,
+) -> PlayerBuilder:
+	_has_interest = true
+	_interest_layers = layers
+	_interest_report = report_observers
+	return self
+
+
 ## Composes and returns a live player node tree.
 func build() -> Node:
 	var root: Node = _root_type.new()
@@ -161,6 +180,13 @@ func build() -> Node:
 		snp.node_path = _tp_spawner_node_path
 		tp_comp.set("starting_scene_path", snp)
 		var _a3: Node = SceneAssembly.attach(root, tp_comp, root)
+
+	if _has_interest:
+		var interest_comp := InterestComponent.new()
+		interest_comp.name = "InterestComponent"
+		interest_comp.layer_ids = _interest_layers
+		interest_comp.report_observers = _interest_report
+		var _a5: Node = SceneAssembly.attach(root, interest_comp, root)
 
 	var player_sync: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
 	player_sync.name = "PlayerSync"

@@ -20,7 +20,7 @@ var player1: Node
 
 
 func before_test() -> void:
-	player_builder = PlayerBuilder.new().with_root(Node2D)
+	player_builder = PlayerBuilder.new().with_root(Node2D).with_multiplayer_entity()
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new() \

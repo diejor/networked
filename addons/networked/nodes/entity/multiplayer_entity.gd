@@ -64,21 +64,47 @@ signal despawned
 ## Which peer gets multiplayer authority over [member Node.owner].
 @export var authority_mode: AuthorityMode = AuthorityMode.SERVER
 
+var _pending_entity_id: StringName = &""
+var _pending_peer_id := 0
+
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
 @export var entity_id: StringName = &"":
+	get:
+		var entity := _get_entity_record()
+		if entity:
+			return entity.entity_id
+		return _pending_entity_id
 	set(value):
-		entity_id = value
-		_sync_entity_identity()
+		var entity := _get_entity_record()
+		if entity:
+			entity.entity_id = value
+		else:
+			_pending_entity_id = value
 
 ## Peer this entity represents, propagated to
 ## [member NetwEntity.peer_id]. Drives auto-despawn on
 ## disconnect, [member MultiplayerTree.local_player] tracking, and
 ## scene registration. [code]0[/code] for non-player entities.
 var peer_id := 0:
+	get:
+		var entity := _get_entity_record()
+		if entity:
+			return entity.peer_id
+		return _pending_peer_id
 	set(value):
-		peer_id = value
-		_sync_entity_identity()
+		var entity := _get_entity_record()
+		if entity:
+			entity.peer_id = value
+		else:
+			_pending_peer_id = value
+
+func _get_entity_record() -> NetwEntity:
+	if not is_instance_valid(owner):
+		return null
+	if owner.has_meta(NetwEntity.META_KEY):
+		return owner.get_meta(NetwEntity.META_KEY) as NetwEntity
+	return null
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -154,7 +180,7 @@ func _notification(what: int) -> void:
 		return
 	entity.set_multiplayer_entity(self)
 	_ensure_replication_config()
-	_sync_entity_identity()
+	_hydrate_identity_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
 		entity.owner_tree_entered.connect(_on_owner_tree_entered)
 
@@ -215,7 +241,9 @@ func _on_owner_tree_entered() -> void:
 	if not owner:
 		return
 	_dbg.trace("Entity '%s' entering tree.", [owner.name])
-	_hydrate_identity_from_name()
+	var entity := Netw.ctx(self).entity
+	if entity:
+		_hydrate_identity_once(entity)
 	_sanitize_replication_config()
 	_apply_authority()
 	if is_template:
@@ -223,7 +251,6 @@ func _on_owner_tree_entered() -> void:
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
 
-	var entity := Netw.ctx(self).entity
 	if entity:
 		entity.spawning.emit()
 	spawning.emit()
@@ -261,25 +288,17 @@ func _apply_authority() -> void:
 				)
 
 
-# Hydrates spawn identity from the legacy node-name transport.
-func _hydrate_identity_from_name() -> void:
-	if not owner:
-		return
-	if entity_id.is_empty():
-		entity_id = NetwEntity.parse_entity(owner.name)
-	if peer_id == 0:
-		peer_id = NetwEntity.parse_peer(owner.name)
-	_sync_entity_identity()
-
-
-func _sync_entity_identity() -> void:
-	if not owner:
-		return
-	var entity := NetwEntity.of(self)
-	if not entity:
-		return
-	entity.entity_id = entity_id
-	entity.peer_id = peer_id
+func _hydrate_identity_once(entity: NetwEntity) -> void:
+	if entity.entity_id.is_empty():
+		if not _pending_entity_id.is_empty():
+			entity.entity_id = _pending_entity_id
+		elif owner:
+			entity.entity_id = NetwEntity.parse_entity(owner.name)
+	if entity.peer_id == 0:
+		if _pending_peer_id != 0:
+			entity.peer_id = _pending_peer_id
+		elif owner:
+			entity.peer_id = NetwEntity.parse_peer(owner.name)
 
 
 # Keeps the synchronizer valid even when identity uses owner.name transport.
