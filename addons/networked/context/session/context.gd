@@ -78,7 +78,7 @@ var _connect: NetwConnect
 ## [member _origin] is invalid.
 var entity: NetwEntity:
 	get:
-		return NetwEntity.of(_origin) if is_instance_valid(_origin) else null
+		return NetwEntity.resolve(_origin) if is_instance_valid(_origin) else null
 
 
 func _init(

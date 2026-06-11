@@ -71,8 +71,12 @@ func test_parented_contributes_layer_ids_property() -> void:
 	# flushes it to [member MultiplayerEntity.replication_config] later;
 	# that flush is covered by other suites.
 	var entity := NetwEntity.of(root)
-	var path := NodePath("InterestComponent:layer_ids")
-	assert_that(entity._pending_spawn_props.has(path)).is_true()
+	var found := false
+	for c in entity._pending_spawn_props:
+		if c.source == component and c.property == &"layer_ids":
+			found = true
+			break
+	assert_that(found).is_true()
 
 # ---------------------------------------------------------------------------
 # Registration on tree-enter / tree-exit.

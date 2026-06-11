@@ -55,7 +55,7 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 
 func test_netw_entity_template_flag_reflects_spawner() -> void:
 	var root: Node2D = auto_free(Node2D.new())
-	var entity := NetwEntity.of(root)
+	var entity := NetwEntity.ensure(root)
 
 	assert_that(entity.is_template).is_false()
 
@@ -228,3 +228,72 @@ func test_multiplayer_entity_identity_forwarding() -> void:
 	mp_entity.peer_id = 101
 	assert_that(entity.entity_id).is_equal(&"final_id")
 	assert_that(entity.peer_id).is_equal(101)
+
+
+func test_netw_entity_of_lookup_only() -> void:
+	var root := Node2D.new()
+	auto_free(root)
+
+	# Pure lookup should return null for a clean node
+	assert_that(NetwEntity.of(root)).is_null()
+
+	# After ensure is called, it should be found
+	var entity := NetwEntity.ensure(root)
+	assert_that(NetwEntity.of(root)).is_equal(entity)
+
+
+func test_netw_entity_resolve_orphan_vs_intree() -> void:
+	# Orphan parented-time scenario
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	parent.add_child(child)
+	auto_free(parent)
+	auto_free(child)
+
+	# resolve(child) should walk up to topmost orphan parent and ensure it
+	var entity := NetwEntity.resolve(child)
+	assert_that(entity).is_not_null()
+	assert_that(NetwEntity.of(parent)).is_equal(entity)
+	assert_that(NetwEntity.of(child)).is_equal(entity)
+
+	# In-tree lookup-only scenario
+	var live_parent := Node2D.new()
+	var live_child := Node2D.new()
+	live_parent.add_child(live_child)
+	add_child(live_parent)
+	auto_free(live_parent)
+	auto_free(live_child)
+
+	# Since live_child is in the tree and has no existing NetwEntity, resolve should return null
+	assert_that(NetwEntity.resolve(live_child)).is_null()
+
+
+func test_nested_entity_record_forwarding_on_tree_enter() -> void:
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	child.name = "ChildNode"
+	auto_free(parent)
+	auto_free(child)
+
+	# Ensure a separate entity record on child while it is an orphan
+	var child_entity := NetwEntity.ensure(child)
+	child_entity.contribute_spawn_property(child, &"ammo")
+
+	# At this point, child has 1 pending spawn property
+	assert_that(child_entity._pending_spawn_props.size()).is_equal(1)
+
+	# Now parent it to the parent node, which has a NetwEntity
+	var parent_entity := NetwEntity.ensure(parent)
+	parent.add_child(child)
+	child.owner = parent
+
+	# Trigger tree entered on child (which runs _handle_tree_entered)
+	child_entity._handle_tree_entered()
+
+	# The child's pending contributions should be forwarded to the parent entity
+	assert_that(child_entity._pending_spawn_props.is_empty()).is_true()
+	assert_that(parent_entity._pending_spawn_props.size()).is_equal(1)
+
+	var forwarded := parent_entity._pending_spawn_props[0]
+	assert_that(forwarded.source).is_equal(child)
+	assert_that(forwarded.property).is_equal(&"ammo")

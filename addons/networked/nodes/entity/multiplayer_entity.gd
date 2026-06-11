@@ -294,11 +294,13 @@ func _hydrate_identity_once(entity: NetwEntity) -> void:
 			entity.entity_id = _pending_entity_id
 		elif owner:
 			entity.entity_id = NetwEntity.parse_entity(owner.name)
+	_pending_entity_id = entity.entity_id
 	if entity.peer_id == 0:
 		if _pending_peer_id != 0:
 			entity.peer_id = _pending_peer_id
 		elif owner:
 			entity.peer_id = NetwEntity.parse_peer(owner.name)
+	_pending_peer_id = entity.peer_id
 
 
 # Keeps the synchronizer valid even when identity uses owner.name transport.

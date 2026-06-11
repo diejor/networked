@@ -96,6 +96,17 @@ class _PropertyContribution extends RefCounted:
 			watch,
 		)
 
+
+# Buffered spawn-property contribution.
+class _SpawnContribution extends RefCounted:
+	var source: Node
+	var property: StringName
+
+
+	func _init(p_source: Node, p_property: StringName) -> void:
+		source = p_source
+		property = p_property
+
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
 
@@ -172,7 +183,7 @@ var _multiplayer_entity_ref: WeakRef
 var _save_ref: WeakRef
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
-var _pending_spawn_props: Array[NodePath] = []
+var _pending_spawn_props: Array[_SpawnContribution] = []
 var _pending_save_props: Array[_PropertyContribution] = []
 
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
@@ -183,35 +194,15 @@ var _parent_entity_ref: WeakRef
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root.
 ##
-## Creates the record on first access. Set [member Node.owner] or attach
-## metadata first when a runtime-built subtree has an ambiguous root.
+## Walks parent chain for [constant META_KEY]. Returns [code]null[/code] if not found.
 static func of(node: Node) -> NetwEntity:
 	if not is_instance_valid(node):
 		return null
-	if node.has_meta(META_KEY):
-		return node.get_meta(META_KEY) as NetwEntity
-
 	var n := node
 	while n != null:
 		if n.has_meta(META_KEY):
 			return n.get_meta(META_KEY) as NetwEntity
-		if n.owner != null and n.owner.has_meta(META_KEY):
-			return n.owner.get_meta(META_KEY) as NetwEntity
 		n = n.get_parent()
-
-	if node.owner != null:
-		var e := NetwEntity.new()
-		e._attach_to(node.owner)
-		return e
-
-	if not node.is_inside_tree():
-		var root := node
-		while root.get_parent() != null:
-			root = root.get_parent()
-		var e := NetwEntity.new()
-		e._attach_to(root)
-		return e
-
 	return null
 
 
@@ -227,6 +218,27 @@ static func ensure(root: Node) -> NetwEntity:
 	var e := NetwEntity.new()
 	e._attach_to(root)
 	return e
+
+
+## Climbs parent chain to topmost orphan during instantiation to get-or-create;
+## falls back to lookup-only once in-tree.
+static func resolve(node: Node) -> NetwEntity:
+	if not is_instance_valid(node):
+		return null
+
+	var existing := of(node)
+	if existing:
+		return existing
+
+	if node.is_inside_tree():
+		return null
+
+	var root := node
+	while root.get_parent() != null:
+		if root.get_parent().is_inside_tree():
+			return null
+		root = root.get_parent()
+	return ensure(root)
 
 
 ## Returns the entity id from a [code]entity_id|peer_id[/code] name.
@@ -288,7 +300,7 @@ static func bundle(
 		entity_id: StringName,
 ) -> Node:
 	node.name = format_name(str(entity_id), peer_id)
-	var entity := of(node)
+	var entity := ensure(node)
 	if entity:
 		entity.entity_id = entity_id
 		entity.peer_id = peer_id
@@ -308,10 +320,31 @@ func _attach_to(root: Node) -> void:
 
 func _handle_tree_entered() -> void:
 	_owner_exiting_tree = false
+	_parent_entity_resolved = false
+	_parent_entity_ref = null
+
 	if _tree_entered_fired:
 		return
 	_tree_entered_fired = true
 	owner_tree_entered.emit()
+
+	if get_multiplayer_entity() == null:
+		var parent := parent_entity()
+		if parent:
+			for c in _pending_spawn_props:
+				parent.contribute_spawn_property(c.source, c.property)
+			_pending_spawn_props.clear()
+
+			for c in _pending_save_props:
+				parent.contribute_save_property(
+					c.source,
+					c.virtual_name,
+					c.property,
+					c.mode,
+					c.spawn,
+					c.watch,
+				)
+			_pending_save_props.clear()
 
 
 func _handle_tree_exiting() -> void:
@@ -329,8 +362,10 @@ func has_entered_tree() -> bool:
 ## Buffered spawn-property contributions are flushed immediately.
 func set_multiplayer_entity(entity: MultiplayerEntity) -> void:
 	_multiplayer_entity_ref = weakref(entity)
-	for path in _pending_spawn_props:
-		entity.add_spawn_property(path)
+	for contribution in _pending_spawn_props:
+		var path := property_path(contribution.source, contribution.property)
+		if not path.is_empty():
+			entity.add_spawn_property(path)
 	_pending_spawn_props.clear()
 
 
@@ -368,15 +403,17 @@ func get_save() -> SaveComponent:
 ##         )
 ## [/codeblock]
 func contribute_spawn_property(source: Node, property: StringName) -> void:
-	var path := property_path(source, property)
-	if path.is_empty():
-		return
 	var entity := get_multiplayer_entity()
 	if entity:
-		entity.add_spawn_property(path)
+		var path := property_path(source, property)
+		if not path.is_empty():
+			entity.add_spawn_property(path)
 		return
-	if path not in _pending_spawn_props:
-		_pending_spawn_props.append(path)
+	
+	for c in _pending_spawn_props:
+		if c.source == source and c.property == property:
+			return
+	_pending_spawn_props.append(_SpawnContribution.new(source, property))
 
 
 ## Adds a property to the entity's save component.
@@ -390,8 +427,6 @@ func contribute_save_property(
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
-	if property_path(source, property).is_empty():
-		return
 	var save := get_save()
 	if save:
 		var contribution := _PropertyContribution.new(
