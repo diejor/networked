@@ -9,7 +9,7 @@ var tree: SceneTree
 var clock: MultiplayerClock
 var physics_fps := 60
 var fallback_tickrate := 30
-var timeout_frames := 100
+var timeout_frames := 500
 
 
 func _init(

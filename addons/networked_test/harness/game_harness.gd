@@ -135,6 +135,35 @@ func sync_ticks(n: int) -> void:
 	await stepper.sync_ticks(n)
 
 
+## Waits for a transition animation ([TPLayerAPI]) to finish on a specific
+## [param runner].
+func wait_for_transition(runner: NetwSceneRunner) -> void:
+	var tp_layer := runner.tree.get_service(TPLayerAPI) as TPLayerAPI
+	while tp_layer and tp_layer.transition_anim.is_playing():
+		await sync_ticks(1)
+
+
+## Waits for transition animations ([TPLayerAPI]) to finish on a list of
+## [param runners].
+## [br]If the list is empty, it waits for transitions on all active runners
+## registered in this harness.
+func wait_for_transitions(runners: Array[NetwSceneRunner] = []) -> void:
+	var list := runners if not runners.is_empty() else _runners
+	var active_transitions := true
+	while active_transitions:
+		active_transitions = false
+		for runner in list:
+			var tp_layer := (
+					runner.tree.get_service(TPLayerAPI) as TPLayerAPI
+			)
+			if tp_layer and tp_layer.transition_anim.is_playing():
+				active_transitions = true
+				break
+		if active_transitions:
+			await sync_ticks(1)
+
+
+
 ## Advances ordinary frames without asserting network tick progress.
 ##
 ## Use this for temporary visual pauses after [method show_views].

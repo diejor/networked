@@ -491,6 +491,30 @@ func _cache_sync_intervals() -> void:
 	var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
 
 	for sync in all_syncs:
+		if not sync.public_visibility:
+			continue
+		if sync is SaveComponent or sync is MultiplayerEntity:
+			continue
+
+		# Skip synchronizers that do not replicate any properties we interpolate.
+		var replicates_our_property := false
+		if sync.replication_config:
+			for path in sync.replication_config.get_properties():
+				if path.get_subname_count() > 0:
+					var clean_name := path.get_subname(
+						path.get_subname_count() - 1
+					)
+					for state in _states:
+						if state.name == clean_name:
+							replicates_our_property = true
+							break
+				if replicates_our_property:
+					break
+
+		if not replicates_our_property:
+			continue
+
+
 		max_interval = maxf(max_interval, maxf(sync.replication_interval, sync.delta_interval))
 		if not sync.synchronized.is_connected(_on_synced):
 			sync.synchronized.connect(_on_synced)
@@ -787,7 +811,7 @@ class _Batcher extends RefCounted:
 
 
 	func update_all(delta: float) -> void:
-		var frame := Engine.get_frames_drawn()
+		var frame := Engine.get_process_frames()
 		if delta > 0.0 and frame == _last_update_frame:
 			return
 		_last_update_frame = frame

@@ -3,8 +3,10 @@
 ## entities under the scene) and post-admission visibility, and
 ## asserts the client-side invariant that [code]layer.entities[/code]
 ## is populated by [method InterestGate.track_entity].
+@tool
 class_name TestSceneInterestGate
 extends NetwTestSuite
+
 
 class _ServerProbeProxy extends ProxySynchronizer:
 	func _enter_tree() -> void:
