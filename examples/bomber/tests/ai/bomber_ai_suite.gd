@@ -73,10 +73,8 @@ func run_until(
 		if clock:
 			tickrate = clock.tickrate
 
-	var limit := max_ticks
-	if done.is_valid():
-		var max_timeout_ticks := int(timeout_s * tickrate)
-		limit = mini(max_ticks, max_timeout_ticks)
+	var max_timeout_ticks := int(timeout_s * tickrate)
+	var limit := mini(max_ticks, max_timeout_ticks)
 
 	for tick in limit:
 		for ai: BomberAI in ais:
