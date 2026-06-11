@@ -44,6 +44,16 @@ enum Ownership {
 	SERVER,
 }
 
+## Key roles identifying generic component slots on this entity record.
+enum Slot {
+	## Backup store slot for the entity's [SaveComponent].
+	SAVE,
+	## Orchestration slot for the entity's [MultiplayerEntity].
+	MULTIPLAYER_ENTITY,
+	## Ancestor visibility gate slot.
+	INTEREST_GATE,
+}
+
 
 # Buffered proxy-style property contribution.
 #
@@ -176,11 +186,11 @@ var is_player: bool:
 ## registered spawner.
 var is_template: bool:
 	get:
-		var entity := get_multiplayer_entity()
+		var entity := multiplayer_entity
 		return entity.is_template if entity else false
 
-var _multiplayer_entity_ref: WeakRef
-var _save_ref: WeakRef
+var _slots: Dictionary[int, WeakRef] = {}
+var _slot_requires: Dictionary[int, Array] = {}
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
 var _pending_spawn_props: Array[_SpawnContribution] = []
@@ -328,12 +338,14 @@ func _handle_tree_entered() -> void:
 	_tree_entered_fired = true
 	owner_tree_entered.emit()
 
-	if get_multiplayer_entity() == null:
+	if multiplayer_entity == null:
 		var parent := parent_entity()
 		if parent:
 			for c in _pending_spawn_props:
 				parent.contribute_spawn_property(c.source, c.property)
 			_pending_spawn_props.clear()
+			if _slot_requires.has(Slot.MULTIPLAYER_ENTITY):
+				_slot_requires[Slot.MULTIPLAYER_ENTITY].clear()
 
 			for c in _pending_save_props:
 				parent.contribute_save_property(
@@ -345,6 +357,8 @@ func _handle_tree_entered() -> void:
 					c.watch,
 				)
 			_pending_save_props.clear()
+			if _slot_requires.has(Slot.SAVE):
+				_slot_requires[Slot.SAVE].clear()
 
 
 func _handle_tree_exiting() -> void:
@@ -357,36 +371,66 @@ func has_entered_tree() -> bool:
 	return _tree_entered_fired
 
 
-## Registers this entity's [MultiplayerEntity].
+## Associate [param component] with [param slot_id] on this entity record.
 ##
-## Buffered spawn-property contributions are flushed immediately.
-func set_multiplayer_entity(entity: MultiplayerEntity) -> void:
-	_multiplayer_entity_ref = weakref(entity)
-	for contribution in _pending_spawn_props:
-		var path := property_path(contribution.source, contribution.property)
-		if not path.is_empty():
-			entity.add_spawn_property(path)
-	_pending_spawn_props.clear()
+## Clears the slot reference when [param component] is [code]null[/code].
+## Runs any pending consumers queued via [method require] immediately.
+func provide(slot_id: int, component: Object) -> void:
+	if component == null:
+		_slots.erase(slot_id)
+		return
+	_slots[slot_id] = weakref(component)
+	if _slot_requires.has(slot_id):
+		var list: Array = _slot_requires[slot_id]
+		var consumers := list.duplicate()
+		list.clear()
+		for consumer in consumers:
+			if (consumer as Callable).is_valid():
+				(consumer as Callable).call(component)
 
 
-## Returns the registered [MultiplayerEntity], or [code]null[/code].
-func get_multiplayer_entity() -> MultiplayerEntity:
-	return _multiplayer_entity_ref.get_ref() as MultiplayerEntity if _multiplayer_entity_ref else null
-
-
-## Registers this entity's [SaveComponent].
+## Request the component from [param slot_id], executing [param consumer] once available.
 ##
-## Buffered save-property contributions are flushed immediately.
-func set_save(save: SaveComponent) -> void:
-	_save_ref = weakref(save)
-	for contribution in _pending_save_props:
-		contribution.register_with(save)
-	_pending_save_props.clear()
+## Runs [param consumer] immediately if the component is already present.
+func require(slot_id: int, consumer: Callable) -> void:
+	var component := slot(slot_id)
+	if component:
+		consumer.call(component)
+		return
+	if not _slot_requires.has(slot_id):
+		_slot_requires[slot_id] = []
+	_slot_requires[slot_id].append(consumer)
 
 
-## Returns the registered [SaveComponent], or [code]null[/code].
-func get_save() -> SaveComponent:
-	return _save_ref.get_ref() as SaveComponent if _save_ref else null
+## Returns the component bound to [param slot_id], or [code]null[/code] if missing.
+##
+## Evicts dead weak references automatically.
+func slot(slot_id: int) -> Object:
+	if _slots.has(slot_id):
+		var wr: WeakRef = _slots[slot_id]
+		var ref := wr.get_ref()
+		if ref != null:
+			return ref
+		else:
+			_slots.erase(slot_id)
+	return null
+
+
+## The entity's [SaveComponent] slot, if provided.
+var save: SaveComponent:
+	get:
+		return slot(Slot.SAVE) as SaveComponent
+	set(value):
+		provide(Slot.SAVE, value)
+		_pending_save_props.clear()
+
+## The entity's [MultiplayerEntity] slot, if provided.
+var multiplayer_entity: MultiplayerEntity:
+	get:
+		return slot(Slot.MULTIPLAYER_ENTITY) as MultiplayerEntity
+	set(value):
+		provide(Slot.MULTIPLAYER_ENTITY, value)
+		_pending_spawn_props.clear()
 
 
 ## Adds [param property] from [param source] to the entity's spawn packet.
@@ -403,17 +447,25 @@ func get_save() -> SaveComponent:
 ##         )
 ## [/codeblock]
 func contribute_spawn_property(source: Node, property: StringName) -> void:
-	var entity := get_multiplayer_entity()
-	if entity:
+	var mp_ent := multiplayer_entity
+	if mp_ent:
 		var path := property_path(source, property)
 		if not path.is_empty():
-			entity.add_spawn_property(path)
+			mp_ent.add_spawn_property(path)
 		return
 	
 	for c in _pending_spawn_props:
 		if c.source == source and c.property == property:
 			return
-	_pending_spawn_props.append(_SpawnContribution.new(source, property))
+	
+	var contribution := _SpawnContribution.new(source, property)
+	_pending_spawn_props.append(contribution)
+	
+	require(Slot.MULTIPLAYER_ENTITY, func(ent: MultiplayerEntity) -> void:
+		var path := property_path(contribution.source, contribution.property)
+		if not path.is_empty():
+			ent.add_spawn_property(path)
+	)
 
 
 ## Adds a property to the entity's save component.
@@ -427,8 +479,8 @@ func contribute_save_property(
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
-	var save := get_save()
-	if save:
+	var save_comp := save
+	if save_comp:
 		var contribution := _PropertyContribution.new(
 			source,
 			virtual_name,
@@ -437,19 +489,22 @@ func contribute_save_property(
 			spawn,
 			watch,
 		)
-		contribution.register_with(save)
+		contribution.register_with(save_comp)
 		return
 	if _has_pending_save_property(virtual_name, source, property):
 		return
-	_pending_save_props.append(
-		_PropertyContribution.new(
-			source,
-			virtual_name,
-			property,
-			mode,
-			spawn,
-			watch,
-		),
+	var contribution := _PropertyContribution.new(
+		source,
+		virtual_name,
+		property,
+		mode,
+		spawn,
+		watch,
+	)
+	_pending_save_props.append(contribution)
+	
+	require(Slot.SAVE, func(s: SaveComponent) -> void:
+		contribution.register_with(s)
 	)
 
 
