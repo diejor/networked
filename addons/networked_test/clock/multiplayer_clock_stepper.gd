@@ -34,7 +34,7 @@ func sync_ticks(ticks: int) -> void:
 	var tickrate := clock.tickrate if clock.tickrate > 0 else fallback_tickrate
 	var estimated_frames := ceili(
 		(float(ticks) * float(physics_fps) / float(tickrate))
-		/ Engine.time_scale
+		/ Engine.time_scale,
 	)
 
 	await _advance_bulk_frames(maxi(0, estimated_frames - 2))

@@ -189,8 +189,8 @@ var is_template: bool:
 		var entity := multiplayer_entity
 		return entity.is_template if entity else false
 
-var _slots: Dictionary[int, WeakRef] = {}
-var _slot_requires: Dictionary[int, Array] = {}
+var _slots: Dictionary[int, WeakRef] = { }
+var _slot_requires: Dictionary[int, Array] = { }
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
 var _pending_spawn_props: Array[_SpawnContribution] = []
@@ -415,7 +415,6 @@ func slot(slot_id: int) -> Object:
 			_slots.erase(slot_id)
 	return null
 
-
 ## The entity's [SaveComponent] slot, if provided.
 var save: SaveComponent:
 	get:
@@ -453,18 +452,20 @@ func contribute_spawn_property(source: Node, property: StringName) -> void:
 		if not path.is_empty():
 			mp_ent.add_spawn_property(path)
 		return
-	
+
 	for c in _pending_spawn_props:
 		if c.source == source and c.property == property:
 			return
-	
+
 	var contribution := _SpawnContribution.new(source, property)
 	_pending_spawn_props.append(contribution)
-	
-	require(Slot.MULTIPLAYER_ENTITY, func(ent: MultiplayerEntity) -> void:
-		var path := property_path(contribution.source, contribution.property)
-		if not path.is_empty():
-			ent.add_spawn_property(path)
+
+	require(
+		Slot.MULTIPLAYER_ENTITY,
+		func(ent: MultiplayerEntity) -> void:
+			var path := property_path(contribution.source, contribution.property)
+			if not path.is_empty():
+				ent.add_spawn_property(path)
 	)
 
 
@@ -502,9 +503,11 @@ func contribute_save_property(
 		watch,
 	)
 	_pending_save_props.append(contribution)
-	
-	require(Slot.SAVE, func(s: SaveComponent) -> void:
-		contribution.register_with(s)
+
+	require(
+		Slot.SAVE,
+		func(s: SaveComponent) -> void:
+			contribution.register_with(s)
 	)
 
 

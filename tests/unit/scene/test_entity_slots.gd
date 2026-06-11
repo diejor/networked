@@ -2,7 +2,6 @@
 class_name TestEntitySlots
 extends NetwTestSuite
 
-
 func test_provide_and_slot_retrieval() -> void:
 	var entity := NetwEntity.new()
 	var node := Node.new()
@@ -37,8 +36,10 @@ func test_require_immediate() -> void:
 	entity.provide(NetwEntity.Slot.SAVE, node)
 
 	var received := [null]
-	entity.require(NetwEntity.Slot.SAVE, func(comp: Object) -> void:
-		received[0] = comp as Node
+	entity.require(
+		NetwEntity.Slot.SAVE,
+		func(comp: Object) -> void:
+			received[0] = comp as Node
 	)
 
 	assert_that(received[0]).is_equal(node)
@@ -50,8 +51,10 @@ func test_require_deferred() -> void:
 	auto_free(node)
 
 	var received := [null]
-	entity.require(NetwEntity.Slot.SAVE, func(comp: Object) -> void:
-		received[0] = comp as Node
+	entity.require(
+		NetwEntity.Slot.SAVE,
+		func(comp: Object) -> void:
+			received[0] = comp as Node
 	)
 
 	assert_that(received[0]).is_null()
@@ -76,7 +79,9 @@ func test_re_provide_overwrites_and_flushes() -> void:
 
 	# New requires should receive node2 immediately
 	var received := [null]
-	entity.require(NetwEntity.Slot.SAVE, func(comp: Object) -> void:
-		received[0] = comp as Node
+	entity.require(
+		NetwEntity.Slot.SAVE,
+		func(comp: Object) -> void:
+			received[0] = comp as Node
 	)
 	assert_that(received[0]).is_equal(node2)

@@ -502,7 +502,7 @@ func _cache_sync_intervals() -> void:
 			for path in sync.replication_config.get_properties():
 				if path.get_subname_count() > 0:
 					var clean_name := path.get_subname(
-						path.get_subname_count() - 1
+						path.get_subname_count() - 1,
 					)
 					for state in _states:
 						if state.name == clean_name:
@@ -513,7 +513,6 @@ func _cache_sync_intervals() -> void:
 
 		if not replicates_our_property:
 			continue
-
 
 		max_interval = maxf(max_interval, maxf(sync.replication_interval, sync.delta_interval))
 		if not sync.synchronized.is_connected(_on_synced):

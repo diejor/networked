@@ -144,6 +144,7 @@ func test_nested_scene_late_path_binding_and_record_forwarding() -> void:
 class TestWeaponComponent extends Node:
 	var ammo: int = 42
 
+
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_PARENTED:
 			var entity := NetwEntity.resolve(self)

@@ -7,7 +7,6 @@
 class_name TestSceneInterestGate
 extends NetwTestSuite
 
-
 class _ServerProbeProxy extends ProxySynchronizer:
 	func _enter_tree() -> void:
 		set_multiplayer_authority(1)
