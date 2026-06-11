@@ -107,13 +107,13 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	await game.sync_ticks(8)
 	valeria.simulate_action_press("move_right")
 	valeria.simulate_action_press("set_bomb")
-	await game.sync_ticks(16)
+	var bomb_seen := await _wait_for_bomb(jose_world, 32)
 	valeria.simulate_action_release("move_right")
 	valeria.simulate_action_release("set_bomb")
-	await game.sync_ticks(40)
 
 	# Reliable spawn punches through the lossy link.
-	assert_int(_count_bombs(jose_world)).is_greater(0)
+	assert_bool(bomb_seen).is_true()
+	await game.sync_ticks(40)
 	# Unreliable position stream recovers to the authoritative value.
 	assert_float(valeria_on_jose.position.x).is_equal_approx(
 		valeria_player.position.x,
@@ -194,6 +194,14 @@ func _count_bombs(world: MultiplayerScene) -> int:
 		if child is Area2D:
 			count += 1
 	return count
+
+
+func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
+	for i in ticks:
+		await game.sync_ticks(1)
+		if _count_bombs(world) > 0:
+			return true
+	return false
 
 
 func _first_bomb(world: MultiplayerScene) -> Area2D:

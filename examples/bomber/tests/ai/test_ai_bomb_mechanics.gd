@@ -1,22 +1,30 @@
 # GdUnitGeneratedTestDescriptor
 extends BomberAiSuite
 
+const PLAYER_SCRIPT := preload("res://examples/bomber/game/player.gd")
+
+
 func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 	var runners := await add_players_and_start(4)
 	var ais := make_ais(runners, BomberAI.Goal.score())
 
-	await run_until(ais, 60)
+	var ticks := 60
+	await run_until(ais, ticks)
 
 	# Bomb count is consistent across all peers.
 	var host_bombs := count_bombs(game.host)
 	for r in runners:
 		assert_int(count_bombs(r)).is_equal(host_bombs)
 
-	# No more than 1 active bomb per player (BOMB_RATE gate).
-	# Since a bomb lasts 3.4 seconds and BOMB_RATE is 0.5s, a player can
-	# have multiple concurrent active bombs. The rate limit ensures we do
-	# not spawn one every tick.
-	assert_int(host_bombs).is_less_equal(runners.size() * 3)
+	# Each player starts off cooldown, then can spawn once per BOMB_RATE.
+	# The rate limit keeps the total far below one bomb per AI tick.
+	var clock := game.host.tree.get_service(MultiplayerClock) as MultiplayerClock
+	var tickrate := clock.tickrate if clock else NetwGameHarness.DEFAULT_TICKRATE
+	var seconds := float(ticks) / float(tickrate)
+	var max_bombs_per_player := 1 + ceili(seconds / PLAYER_SCRIPT.BOMB_RATE)
+	assert_int(host_bombs).is_less_equal(
+		runners.size() * max_bombs_per_player,
+	)
 
 
 func test_stunned_ai_cannot_place_bombs() -> void:
