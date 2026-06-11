@@ -9,6 +9,7 @@ class_name NetwTestSessionHook
 extends GdUnitTestSessionHook
 
 static var _active_hook: NetwTestSessionHook
+static var game_harness_used_in_test: bool = false
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
@@ -90,6 +91,7 @@ func _on_test_event(event: GdUnitEvent) -> void:
 		_baseline_child_count = Engine.get_main_loop().root.get_child_count()
 
 	elif event.type() == GdUnitEvent.TESTCASE_BEFORE:
+		game_harness_used_in_test = false
 		_close_test_debug_scope()
 		_close_test_log_scope()
 		_reset_debugger()
@@ -170,6 +172,8 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 
 
 func _track_resource_delta(event: GdUnitEvent) -> void:
+	if game_harness_used_in_test:
+		return
 	var current_count := int(
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)

@@ -51,7 +51,8 @@ func _physics_process(delta: float) -> void:
 			$"../../BombSpawner".spawn([position, peer_id])
 	else:
 		# The client simply updates the position to the last known one.
-		position = synced_position
+		if stunned or multiplayer.get_unique_id() != peer_id:
+			position = synced_position
 
 	if not stunned:
 		# Everybody runs physics. Clients predict their next frame.

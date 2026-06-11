@@ -203,6 +203,7 @@ horizontal_alignment = 1
 shape = SubResource("1")
 
 [node name="anim" type="AnimationPlayer" parent="." unique_id=365298786]
+callback_mode_process = 0
 libraries/ = SubResource("AnimationLibrary_yb83i")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1095522834]

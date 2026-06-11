@@ -8,7 +8,7 @@ func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 	await run_until(ais, 60)
 
 	# Bomb count is consistent across all peers.
-	var host_bombs := count_bombs(runners[0])
+	var host_bombs := count_bombs(game.host)
 	for r in runners:
 		assert_int(count_bombs(r)).is_equal(host_bombs)
 
@@ -23,8 +23,8 @@ func test_stunned_ai_cannot_place_bombs() -> void:
 	var runners := await add_players_and_start(2)
 
 	# Stun jose from the host (server authority).
-	var jose_on_host := await runners[0].await_player(&"jose", 2.0) as Node2D
-	jose_on_host.exploded.rpc(runners[0].peer_id)
+	var jose_on_host := await game.host.await_player(&"jose", 2.0) as Node2D
+	jose_on_host.exploded.rpc(game.host.peer_id)
 	await game.sync_ticks(2)
 	assert_bool(is_stunned(runners[1], &"jose")).is_true()
 
@@ -32,9 +32,9 @@ func test_stunned_ai_cannot_place_bombs() -> void:
 	jose_ai.goal = BomberAI.Goal.score()
 	jose_ai.flee_enabled = false
 
-	var bombs_before := count_bombs(runners[0])
+	var bombs_before := count_bombs(game.host)
 	await run_until([jose_ai], 10)
-	var bombs_after := count_bombs(runners[0])
+	var bombs_after := count_bombs(game.host)
 
 	# The stunned player spawned no new bombs.
 	assert_int(bombs_after).is_less_equal(bombs_before)

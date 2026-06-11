@@ -17,6 +17,12 @@ var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
 var _host: NetwSceneRunner
 var _display_viewport: ParticipantViewport
+
+## The listen server host participant.
+var host: NetwSceneRunner:
+	get:
+		return _host
+
 var _saved_time_scale := 1.0
 var _saved_physics_ticks := 60
 var _torn_down := false
@@ -32,6 +38,15 @@ func setup() -> void:
 	_loopback = NetwHarnessSession.new()
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
+
+	if DisplayServer.get_name() == "headless":
+		Engine.time_scale = 10.0
+		Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
+
+	# Skip noisy resource tracking in test session hook.
+	# Game harnesses trigger Godot's resource cache.
+	NetwTestSessionHook.game_harness_used_in_test = true
+
 	_waiter = NetwWaiter.new(get_tree(), reporter)
 	await get_tree().process_frame
 

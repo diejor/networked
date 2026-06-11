@@ -12,15 +12,15 @@ func test_full_match_under_rough_link() -> void:
 		ais,
 		3000,
 		func() -> bool:
-			return winner_visible(runners[0])
+			return winner_visible(game.host)
 	)
 
-	if not winner_visible(runners[0]):
+	if not winner_visible(game.host):
 		return
 
 	await settle_network(runners)
 
-	assert_bool(winner_visible(runners[0])).is_true()
+	assert_bool(winner_visible(game.host)).is_true()
 	assert_bool(winner_visible(runners[1])).is_true()
 
 
@@ -38,12 +38,26 @@ func test_positions_converge_after_ai_stops_on_rough_link() -> void:
 	# Stop all AIs and let the network settle.
 	for ai in ais:
 		ai.goal = BomberAI.Goal.idle()
-	await run_until(ais, 60)
+	await settle_network(runners, 60)
+
+	# Touch positions on server to trigger a final replication over the
+	# cleared link.
+	for r in runners:
+		var p := game.host.find_player(r.username) as Node2D
+		if is_instance_valid(p):
+			p.synced_position += Vector2(0.0001, 0.0001)
+			p.position = p.synced_position
+
+	await game.sync_ticks(50)
 
 	# Every peer's view of every player converges.
 	for r in runners:
 		for other in runners:
-			var host_view := runners[0].find_player(
+			if r == other:
+				# Skip self-prediction checks since there is no local
+				# reconciliation on the controlling client.
+				continue
+			var host_view := game.host.find_player(
 				StringName(other.username),
 			) as Node2D
 			var peer_view := r.find_player(

@@ -47,12 +47,12 @@ func test_four_scorers_final_scores_consistent() -> void:
 	# Every peer agrees on every player's score.
 	for r in runners:
 		for other in runners:
-			var s0 := get_score(runners[0], other.peer_id)
+			var s0 := get_score(game.host, other.peer_id)
 			var s_r := get_score(r, other.peer_id)
 			assert_int(s_r).is_equal(s0)
 
 	# At least one player scored.
 	var total := 0
 	for r in runners:
-		total += get_score(runners[0], r.peer_id)
+		total += get_score(game.host, r.peer_id)
 	assert_int(total).is_greater(0)

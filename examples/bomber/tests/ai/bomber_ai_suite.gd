@@ -66,16 +66,25 @@ func run_until(
 		done: Callable = Callable(),
 		timeout_s: float = 5.0,
 ) -> int:
-	var start_ms := Time.get_ticks_msec()
-	for tick in max_ticks:
+	var tickrate := 30
+	if game.host:
+		var clock := game.host.tree.get_service(MultiplayerClock) \
+				as MultiplayerClock
+		if clock:
+			tickrate = clock.tickrate
+
+	var limit := max_ticks
+	if done.is_valid():
+		var max_timeout_ticks := int(timeout_s * tickrate)
+		limit = mini(max_ticks, max_timeout_ticks)
+
+	for tick in limit:
 		for ai: BomberAI in ais:
 			ai.tick()
 		await game.sync_ticks(1)
 		if done.is_valid() and done.call():
 			return tick
-		if (Time.get_ticks_msec() - start_ms) / 1000.0 >= timeout_s:
-			break
-	return max_ticks
+	return limit
 
 
 func rocks_left(runner: NetwSceneRunner) -> int:
