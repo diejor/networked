@@ -160,7 +160,7 @@ func setup(tree: MultiplayerTree) -> Error:
 	var url := ""
 	if ProjectSettings.has_setting("networked/webrtc/turn_credentials_url"):
 		url = ProjectSettings.get_setting(
-			"networked/webrtc/turn_credentials_url"
+			"networked/webrtc/turn_credentials_url",
 		)
 
 	if url.is_empty():
@@ -168,10 +168,10 @@ func setup(tree: MultiplayerTree) -> Error:
 
 	var headers: PackedStringArray = []
 	if ProjectSettings.has_setting(
-		"networked/webrtc/turn_credentials_headers"
+		"networked/webrtc/turn_credentials_headers",
 	):
 		headers = ProjectSettings.get_setting(
-			"networked/webrtc/turn_credentials_headers"
+			"networked/webrtc/turn_credentials_headers",
 		)
 
 	var http := HTTPRequest.new()

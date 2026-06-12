@@ -99,11 +99,13 @@ func _register_settings() -> void:
 	var turn_headers_setting := "networked/webrtc/turn_credentials_headers"
 	if not ProjectSettings.has_setting(turn_headers_setting):
 		ProjectSettings.set_setting(
-			turn_headers_setting, PackedStringArray()
+			turn_headers_setting,
+			PackedStringArray(),
 		)
 
 	ProjectSettings.set_initial_value(
-		turn_headers_setting, PackedStringArray()
+		turn_headers_setting,
+		PackedStringArray(),
 	)
 	ProjectSettings.add_property_info(
 		{
