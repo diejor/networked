@@ -142,6 +142,14 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.join(target, payload) if s else ERR_UNCONFIGURED
 
+
+## Aborts the current in-progress join attempt.
+func abort_join() -> void:
+	var s := _ref.get_ref() as ConnectSession
+	if s:
+		s.abort_join()
+
+
 # -- Probing & refresh ------------------------------------------------------
 
 

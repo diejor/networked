@@ -2,7 +2,7 @@
 ## [WebRTCSignaler].
 ##
 ## This base owns the [WebRTCSession] and wires it to a signaler a subclass
-## supplies through [method _make_signaler], so the WebRTC peer machinery is
+## supplies through [method make_signaler], so the WebRTC peer machinery is
 ## reused unchanged across every signaling transport. [TrackerWebRTCBackend] is
 ## the WebTorrent implementation. [method create_host_peer] emits
 ## [signal room_created] with the room id. [method create_join_peer] accepts
@@ -11,7 +11,7 @@
 ## [br][br]
 ## Swapping the signaling model (WebTorrent, dedicated, or direct) only
 ## requires returning a different [WebRTCSignaler] from
-## [method _make_signaler].
+## [method make_signaler].
 ##
 ## Browser hosts are full peer-to-peer hosts. If the browser throttles an
 ## unfocused tab, signaling can stall until the tab is visible again. Prefer a
@@ -26,7 +26,7 @@
 ## query this URL to populate the active [member global_ice_servers].
 ## [codeblock]
 ## # session.signal_out -> signaler.send,  signaler.received -> session.deliver
-## @abstract func _make_signaler() -> WebRTCSignaler
+## @abstract func make_signaler() -> WebRTCSignaler
 ## [/codeblock]
 @tool
 @abstract
@@ -115,11 +115,12 @@ var _is_server := false
 var _signaling_ready := false
 var _connect_started_ms := 0
 var _connect_offer_progress_sent := false
+var _connect_progress := _ConnectProgress.new()
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.
 @abstract
-func _make_signaler() -> WebRTCSignaler
+func make_signaler() -> WebRTCSignaler
 
 
 ## Prepares WebRTC backend by fetching secure credentials when configured.
@@ -240,13 +241,14 @@ func create_join_peer(
 		return null
 
 	_connect_started_ms = Time.get_ticks_msec()
+	_connect_progress.start(_connect_started_ms, connect_timeout_hint())
 
 	var err := _signaler.open(server_address, client_id)
 	if err != OK:
 		Netw.dbg.error("WebRTC signaler open failed: %s", [error_string(err)])
 		_clear_session_and_signaler()
 		return null
-	_emit_connect_progress("Reaching signaling...", 0.2)
+	_set_connect_progress_message("Reaching signaling...")
 	return _session.webrtc_peer
 
 
@@ -257,6 +259,7 @@ func poll(dt: float) -> void:
 	if _signaler:
 		_signaler.poll(dt)
 	_poll_signaling_check()
+	_poll_connect_progress()
 
 
 ## Starts closing active [WebRTCDataChannel]s before peer teardown.
@@ -283,7 +286,7 @@ func _build_session_and_signaler() -> void:
 	_session.max_connect_attempts = max_connect_attempts
 	_session.gather_timeout = gather_timeout
 	_session.topup_interval = topup_interval
-	_signaler = _make_signaler()
+	_signaler = make_signaler()
 
 	_session.signal_out.connect(_signaler.send)
 	_session.signal_out.connect(_on_session_signal_out)
@@ -329,6 +332,7 @@ func _clear_session_and_signaler() -> void:
 	_session = null
 	_signaler = null
 	_connect_offer_progress_sent = false
+	_connect_progress.stop()
 
 
 func _on_native_connected(id: int) -> void:
@@ -369,6 +373,7 @@ func _on_native_connected(id: int) -> void:
 			+ "answer=%.1fs native=%.1fs relay=%s.",
 			[total_t, offer_t, answer_t, native_t, relay_str],
 		)
+	_connect_progress.stop()
 
 
 func _on_native_disconnected(id: int) -> void:
@@ -376,6 +381,8 @@ func _on_native_disconnected(id: int) -> void:
 
 
 func _on_session_failed(id: int, reason: String) -> void:
+	_connect_started_ms = 0
+	_connect_progress.stop()
 	var diags := _session.connection_diagnostics(id)
 	var code := StringName(reason)
 	var status := ConnectResult.Status.UNREACHABLE
@@ -390,13 +397,15 @@ func _on_session_failed(id: int, reason: String) -> void:
 func _on_signaling_connected() -> void:
 	_signaling_ready = true
 	signaling_connected.emit()
-	_emit_connect_progress("Exchanging connection info...", 0.5)
+	_set_connect_progress_message("Exchanging connection info...")
 
 
 func _on_signaling_disconnected() -> void:
 	_signaling_ready = false
 	signaling_disconnected.emit()
 	if not _is_server and _session and not _session._connected_ids.has(1):
+		_connect_started_ms = 0
+		_connect_progress.stop()
 		var res := ConnectResult.unreachable(
 			&"SIGNALING_UNAVAILABLE",
 			"Could not reach signaling.",
@@ -408,6 +417,7 @@ func _on_signaling_unreachable() -> void:
 	_signaling_ready = false
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
+		_connect_progress.stop()
 		var res := ConnectResult.unreachable(
 			&"SIGNALING_UNREACHABLE",
 			"Could not reach any signaling server.",
@@ -424,12 +434,28 @@ func _on_session_signal_out(
 	if kind != "offer" or _connect_offer_progress_sent:
 		return
 	_connect_offer_progress_sent = true
-	_emit_connect_progress("Negotiating peer link...", 0.75)
+	_set_connect_progress_message("Negotiating peer link...")
 
 
-func _emit_connect_progress(message: String, ratio: float) -> void:
+func _set_connect_progress_message(message: String) -> void:
 	if not _is_server:
-		connect_progress.emit(message, ratio)
+		_emit_connect_progress(
+			_connect_progress.set_message(message, Time.get_ticks_msec()),
+		)
+
+
+func _poll_connect_progress() -> void:
+	if _is_server:
+		return
+	if _session and _session._connected_ids.has(1):
+		return
+	_emit_connect_progress(_connect_progress.poll(Time.get_ticks_msec()))
+
+
+func _emit_connect_progress(sample: Dictionary) -> void:
+	if sample.is_empty():
+		return
+	connect_progress.emit(sample.message, sample.ratio)
 
 
 func _poll_signaling_check() -> void:
@@ -439,6 +465,7 @@ func _poll_signaling_check() -> void:
 			var threshold := connect_timeout_hint() - 0.1
 			if elapsed >= threshold and not _signaling_ready:
 				_connect_started_ms = 0 # trigger once
+				_connect_progress.stop()
 				var res := ConnectResult.unreachable(
 					&"SIGNALING_UNAVAILABLE",
 					"Could not reach signaling.",
@@ -524,6 +551,60 @@ func get_connection_diagnostics(peer_id: int) -> Dictionary:
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebRTC"
+
+
+class _ConnectProgress:
+	const EASE := 50.
+	const MAX_RATIO := 0.98
+	const EMIT_INTERVAL_MS := 100
+
+	var _start_ms := 0
+	var _bound := 0.0
+	var _message := ""
+	var _last_emit_ms := 0
+
+
+	func start(start_ms: int, bound: float) -> void:
+		_start_ms = start_ms
+		_bound = maxf(bound, 0.1)
+		_message = ""
+		_last_emit_ms = 0
+
+
+	func stop() -> void:
+		_start_ms = 0
+		_bound = 0.0
+		_message = ""
+		_last_emit_ms = 0
+
+
+	func set_message(message: String, now_ms: int) -> Dictionary:
+		_message = message
+		return _sample(now_ms, true)
+
+
+	func poll(now_ms: int) -> Dictionary:
+		return _sample(now_ms, false)
+
+
+	func ratio(now_ms: int) -> float:
+		if _start_ms <= 0 or _bound <= 0.0:
+			return 0.0
+		var elapsed := float(now_ms - _start_ms) / 1000.0
+		var scaled := maxf(0.0, elapsed / _bound)
+		return clampf(1.0 - exp(-EASE * scaled), 0.0, MAX_RATIO)
+
+
+	func _sample(now_ms: int, force: bool) -> Dictionary:
+		if _start_ms <= 0 or _message.is_empty():
+			return { }
+		if not force and now_ms - _last_emit_ms < EMIT_INTERVAL_MS:
+			return { }
+		_last_emit_ms = now_ms
+		return {
+			"message": _message,
+			"ratio": ratio(now_ms),
+		}
 
 
 # Filters out TURN TCP/TLS servers since libjuice only supports TURN UDP.

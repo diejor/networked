@@ -72,6 +72,16 @@ func test_webrtc_backend_properties() -> void:
 	assert_str(hint2.placeholder).is_equal("5-char code")
 
 
+func test_webrtc_progress_ratio_tracks_timeout_budget() -> void:
+	var progress := WebRTCBackend._ConnectProgress.new()
+	progress.start(1000, 10.0)
+
+	assert_float(progress.ratio(1000)).is_equal(0.0)
+	assert_float(progress.ratio(3000)).is_greater(0.6)
+	assert_float(progress.ratio(6000)).is_greater(0.9)
+	assert_float(progress.ratio(12000)).is_equal(0.98)
+
+
 func test_webtorrent_directory_propagates_properties() -> void:
 	var dir: WebTorrentDirectory = auto_free(WebTorrentDirectory.new())
 

@@ -380,7 +380,7 @@ class DelayReadySignaler extends WebRTCSignaler:
 
 
 class DelayReadyWebRTCBackend extends WebRTCBackend:
-	func _make_signaler() -> WebRTCSignaler:
+	func make_signaler() -> WebRTCSignaler:
 		return DelayReadySignaler.new()
 
 

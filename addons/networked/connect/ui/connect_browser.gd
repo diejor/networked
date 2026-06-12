@@ -34,9 +34,6 @@ const _JOIN_DIRECT_POPUP_SCENE := preload(
 const _CONNECTING_POPUP_SCENE := preload(
 	"res://addons/networked/connect/ui/popups/connecting_popup.tscn"
 )
-const _HOST_FALLBACK_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/host_fallback_popup.tscn"
-)
 const _DETAIL_ITEM_SCENE := preload(
 	"res://addons/networked/connect/ui/detail_item.tscn"
 )
@@ -79,7 +76,6 @@ var _host_popup: HostPopup
 var _join_popup: JoinPopup
 var _join_direct_popup: JoinDirectPopup
 var _connecting_popup: ConnectingPopup
-var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
 
 var _tree: MultiplayerTree
@@ -138,10 +134,6 @@ func _ready() -> void:
 	_connecting_popup = _CONNECTING_POPUP_SCENE.instantiate()
 	add_child(_connecting_popup)
 	_connecting_popup.cancelled.connect(_on_popup_cancelled)
-
-	_host_fallback_popup = _HOST_FALLBACK_POPUP_SCENE.instantiate()
-	add_child(_host_fallback_popup)
-	_host_fallback_popup.submitted.connect(_on_host_fallback_submitted)
 
 	_row_menu = _MENU_SCENE.instantiate() as Menu
 	add_child(_row_menu)
@@ -519,16 +511,8 @@ func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
 		return
 	var msg := ConnectUiShared.format_connect_error(result)
 	_show_banner(msg)
-	if target != null and target.backend.supports_embedded_server():
-		_hide_connecting_overlay()
-		var payload := _last_join_payload
-		if payload == null:
-			payload = JoinPayload.new()
-			payload.username = StringName(_last_username)
-		_prompt_host_fallback(target, payload)
-	else:
-		var detail := ConnectUiShared.format_connect_detail(result)
-		_connecting_popup.show_failed(msg, detail)
+	var detail := ConnectUiShared.format_connect_detail(result)
+	_connecting_popup.show_failed(msg, detail)
 
 
 func _on_join_progress(
@@ -549,25 +533,8 @@ func _hide_connecting_overlay() -> void:
 	$VBox.modulate.a = 1.0
 
 
-func _prompt_host_fallback(
-		target: JoinTarget,
-		_payload: JoinPayload,
-) -> void:
-	if not target.backend.supports_embedded_server():
-		return
-	_host_fallback_popup.open_host_fallback(target)
-
-
 func _on_popup_cancelled() -> void:
 	_connect.abort_join()
-
-
-func _on_host_fallback_submitted(target: JoinTarget) -> void:
-	_host_popup.open_host(
-		[target.backend],
-		spawner_options,
-		_last_username,
-	)
 
 
 func _join_with_preflight(
@@ -585,12 +552,6 @@ func _join_with_preflight(
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
-		return
-	if result != null and (
-			result.status == ServerInfoResult.Status.TIMEOUT
-			or result.status == ServerInfoResult.Status.UNREACHABLE
-	):
-		_prompt_host_fallback(target, payload)
 		return
 	_show_connecting_overlay(target)
 	var err := await _connect.join(target, payload)

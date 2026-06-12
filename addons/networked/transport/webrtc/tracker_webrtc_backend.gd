@@ -23,7 +23,7 @@ extends WebRTCBackend
 ]
 
 
-func _make_signaler() -> WebRTCSignaler:
+func make_signaler() -> WebRTCSignaler:
 	return TrackerSignaler.new(
 		trackers,
 		signaling_namespace,
