@@ -1,7 +1,7 @@
 ## Tests for [MultiplayerEntity].
 ##
 ## Covers [NetwEntity] identity helpers, spawn-property collection,
-## and [enum MultiplayerEntity.AuthorityMode] behavior.
+## and [enum MultiplayerEntity.InitialController] behavior.
 class_name TestMultiplayerEntity
 extends NetwTestSuite
 
@@ -34,7 +34,7 @@ func test_parse_peer_invalid_names_return_empty_identity() -> void:
 	).is_equal(0)
 
 
-func test_netw_entity_bundle_encodes_name_and_identity() -> void:
+func test_netw_entity_bind_encodes_name_and_identity() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
@@ -43,7 +43,7 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	root.add_child(mp_entity)
 	mp_entity.owner = root
 
-	NetwEntity.bundle(root, 42, &"valeria")
+	NetwEntity.bind(root, &"valeria", 42)
 
 	var entity := NetwEntity.of(root)
 	assert_that(root.name).is_equal("valeria|42")
@@ -51,6 +51,40 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	assert_that(entity.peer_id).is_equal(42)
 	assert_that(mp_entity.entity_id).is_equal(&"valeria")
 	assert_that(mp_entity.peer_id).is_equal(42)
+
+
+func test_netw_entity_spawn_identity_decodes_envelope() -> void:
+	var rj := ResolvedJoin.new()
+	rj.username = &"valeria"
+	rj.peer_id = 42
+	var data := NetwEntity.decorate_spawn(
+		{
+			"spawn_index": 7,
+		},
+		rj,
+	)
+	var spawn_identity := NetwEntity.spawn_identity(data)
+
+	assert_that(spawn_identity.entity_id).is_equal(&"valeria")
+	assert_that(spawn_identity.peer_id).is_equal(42)
+	assert_that(data["spawn_index"]).is_equal(7)
+
+
+func test_netw_entity_decorate_spawn_uses_resolved_join() -> void:
+	var rj := ResolvedJoin.new()
+	rj.username = &"valeria"
+	rj.peer_id = 42
+	var source := {
+		"spawn_index": 7,
+	}
+
+	var data := NetwEntity.decorate_spawn(source, rj)
+	var netw: Dictionary = data["_netw"]
+
+	assert_that(source.has("_netw")).is_false()
+	assert_that(data["spawn_index"]).is_equal(7)
+	assert_that(netw["entity_id"]).is_equal(&"valeria")
+	assert_that(netw["peer_id"]).is_equal(42)
 
 
 func test_netw_entity_template_flag_reflects_spawner() -> void:
@@ -134,25 +168,30 @@ func _make_player_root(peer_id: int) -> Array:
 	return [root, entity]
 
 
-func test_authority_mode_updates_from_name_when_client_owned() -> void:
+func test_initial_controller_uses_represented_peer_from_name() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var entity: MultiplayerEntity = parts[1]
 
-	entity.authority_mode = MultiplayerEntity.AuthorityMode.CLIENT
+	entity.initial_controller = \
+	MultiplayerEntity.InitialController.REPRESENTED_PEER
 	entity._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
+	assert_that(entity.controller).is_equal(42)
+	assert_that(NetwEntity.of(root).controller).is_equal(42)
+	assert_that(NetwEntity.of(root).control_kind) \
+			.is_equal(NetwEntity.ControlKind.PEER)
 
 
-func test_authority_mode_leaves_server_and_invalid_names_unchanged() -> void:
+func test_initial_controller_leaves_server_and_invalid_names_unchanged() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var entity: MultiplayerEntity = parts[1]
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
 
-	entity.authority_mode = MultiplayerEntity.AuthorityMode.SERVER
+	entity.initial_controller = MultiplayerEntity.InitialController.SERVER
 	entity._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -166,10 +205,31 @@ func test_authority_mode_leaves_server_and_invalid_names_unchanged() -> void:
 	no_peer_spawner.owner = no_peer_root
 	no_peer_spawner.root_path = no_peer_spawner.get_path_to(no_peer_root)
 
-	no_peer_spawner.authority_mode = MultiplayerEntity.AuthorityMode.CLIENT
+	no_peer_spawner.initial_controller = \
+	MultiplayerEntity.InitialController.REPRESENTED_PEER
 	no_peer_spawner._on_owner_tree_entered()
 
 	assert_that(no_peer_root.get_multiplayer_authority()).is_equal(1)
+
+
+func test_live_controller_reapplies_authority_and_derived_views() -> void:
+	var parts := _make_player_root(0)
+	var root: Node2D = parts[0]
+	var entity: MultiplayerEntity = parts[1]
+
+	entity._on_owner_tree_entered()
+	entity.grant_control(42)
+
+	var record := NetwEntity.of(root)
+	assert_that(root.get_multiplayer_authority()).is_equal(42)
+	assert_that(record.controller).is_equal(42)
+	assert_that(record.control_kind).is_equal(NetwEntity.ControlKind.PEER)
+
+	entity.revoke_control()
+
+	assert_that(root.get_multiplayer_authority()).is_equal(1)
+	assert_that(record.controller).is_equal(0)
+	assert_that(record.control_kind).is_equal(NetwEntity.ControlKind.SERVER)
 
 
 func test_unwrap_returns_spawner_or_null() -> void:
@@ -194,8 +254,8 @@ func test_netw_entity_ensure_attaches_to_specified_root() -> void:
 
 	var entity := NetwEntity.ensure(child)
 	assert_that(entity).is_not_null()
-	assert_that(child.has_meta(NetwEntity.META_KEY)).is_true()
-	assert_that(child.get_meta(NetwEntity.META_KEY)).is_equal(entity)
+	assert_that(child.has_meta(NetwEntity._META_KEY)).is_true()
+	assert_that(child.get_meta(NetwEntity._META_KEY)).is_equal(entity)
 
 
 func test_multiplayer_entity_identity_forwarding() -> void:

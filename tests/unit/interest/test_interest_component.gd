@@ -188,7 +188,7 @@ func test_off_tree_entity_keeps_admission_until_driven() -> void:
 	var root := Node.new()
 	root.name = "Player"
 	var entity := NetwEntity.new()
-	root.set_meta(NetwEntity.META_KEY, entity)
+	root.set_meta(NetwEntity._META_KEY, entity)
 	entity.owner = root
 	auto_free(root)
 

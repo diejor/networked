@@ -11,10 +11,8 @@ extends MultiplayerSynchronizer
 ##
 ## [br][br]
 ## The synchronizer itself always has multiplayer authority [code]1[/code]
-## (server), regardless of the [member owner]'s authority mode. This
-## guarantees the server can always issue spawn and despawn commands,
-## even for client-authoritative entities whose owner has a peer-specific
-## authority.
+## so the server can always issue spawn and despawn commands. The
+## [member owner]'s authority is derived from [member controller].
 ##
 ## [br][br]
 ## Contributions [b]must[/b] happen at parented-time, not at
@@ -24,11 +22,9 @@ extends MultiplayerSynchronizer
 ##
 ## [br][br]
 ## See [method instantiate_from], [method spawn_under],
-## [method spawn_player], and [method despawn] for the spawn/despawn API.
+## [method spawn_player], and [method despawn] for the spawn/despawn interface.
 ##
 ## Siblings react to the spawn lifecycle via [signal NetwEntity.spawning]
-## (replaces the older [code]_on_entity_spawning[/code] propagate-call
-## hook).
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
@@ -41,16 +37,63 @@ extends MultiplayerSynchronizer
 ##         hydrate_from_db()
 ## [/codeblock]
 
-enum AuthorityMode {
-	## Authority stays at the server peer ([code]1[/code]).
+## Initial control rule applied when an entity first spawns.
+##
+## [member peer_id] still decides whether this entity represents a player.
+## [enum InitialController] only decides who steers it before any transfer.
+## [codeblock]
+## MultiplayerEntity.initial_controller -> SERVER
+## # NPC, prop, or server-controlled player entity. controller == 0.
+##
+## MultiplayerEntity.initial_controller -> REPRESENTED_PEER
+## # Player entity controlled by its represented peer. controller == peer_id.
+## [/codeblock]
+enum InitialController {
+	## The server controls the entity at spawn.
 	SERVER,
-	## Authority is parsed from [code]entity_id|peer_id[/code]
-	## in the owner's node name.
-	CLIENT,
+	## The represented peer controls the entity at spawn.
+	REPRESENTED_PEER,
+}
+
+## Whether players can ask the server to transfer control.
+##
+## [enum Transfer] does not grant ownership locally. A request always reaches
+## the server first and may be denied through [signal control_requested].
+## [codeblock]
+## MultiplayerEntity.transfer -> FIXED
+## # Requests are ignored. Use for fixed player entities and server props.
+##
+## MultiplayerEntity.transfer -> REQUESTABLE
+## # Peers may call request_control(). The server arbitrates.
+## [/codeblock]
+enum Transfer {
+	## Control never changes through [method request_control].
+	FIXED,
+	## Peers may request control from the server.
+	REQUESTABLE,
+}
+
+## Lifetime rule for an entity whose controller disconnects.
+##
+## This rule only applies when the disconnected peer controls the entity
+## without being represented by it. Player representation still despawns
+## through [member peer_id].
+## [codeblock]
+## MultiplayerEntity.on_controller_disconnect -> REVERT_TO_SERVER
+## # A dropped vehicle stays in the world.
+##
+## MultiplayerEntity.on_controller_disconnect -> DESPAWN
+## # A temporary controlled object disappears with its controller.
+## [/codeblock]
+enum DisconnectRule {
+	## Control reverts to the server when the controller disconnects.
+	REVERT_TO_SERVER,
+	## The entity despawns when the controller disconnects.
+	DESPAWN,
 }
 
 ## Emitted after [member entity_id] and multiplayer authority
-## are resolved, but [b]before[/b] sibling [code]_enter_tree[/code].
+## are resolved, but [b]before[/b] sibling [method Node._enter_tree].
 ## Mirrors [signal NetwEntity.spawning] for callers that already hold a
 ## [MultiplayerEntity] reference.
 signal spawning
@@ -61,11 +104,57 @@ signal despawning(reason: StringName)
 ## Emitted after teardown when the node leaves the tree.
 signal despawned
 
-## Which peer gets multiplayer authority over [member Node.owner].
-@export var authority_mode: AuthorityMode = AuthorityMode.SERVER
+## Emitted after [member controller] changes.
+signal control_changed(previous_peer: int, peer: int)
+
+## Emitted on the server when a peer requests control.
+signal control_requested(peer_id: int, request: ControlRequest)
+
+## Spawn-time control rule.
+##
+## Use [constant InitialController.REPRESENTED_PEER] when a player entity
+## starts controlled by [member peer_id]. Use [constant InitialController.SERVER]
+## for props, NPCs, and player entities the server should steer at spawn.
+## [codeblock]
+## MultiplayerEntity.initial_controller -> REPRESENTED_PEER
+## # Player entity controlled by its represented peer.
+##
+## MultiplayerEntity.initial_controller -> SERVER
+## # Server-controlled entity.
+## [/codeblock]
+@export var initial_controller := InitialController.SERVER
+
+## Player request policy for control transfer.
+##
+## [constant Transfer.REQUESTABLE] lets peers call [method request_control].
+## The server emits [signal control_requested] before granting the request.
+## [codeblock]
+## MultiplayerEntity.transfer -> REQUESTABLE
+## MultiplayerEntity.control_requested -> _can_control
+##
+## func _can_control(peer_id: int, request: ControlRequest) -> void:
+##     if not is_close_enough(peer_id):
+##         request.deny()
+## [/codeblock]
+@export var transfer := Transfer.FIXED
+
+## Controller disconnect behavior for non-player control.
+##
+## This does not replace the player representation rule. If [member peer_id]
+## disconnects, the represented player entity still despawns.
+## [codeblock]
+## MultiplayerEntity.on_controller_disconnect -> REVERT_TO_SERVER
+## # Vehicles stay in the world when their driver leaves.
+##
+## MultiplayerEntity.on_controller_disconnect -> DESPAWN
+## # Temporary controlled objects disappear with their controller.
+## [/codeblock]
+@export var on_controller_disconnect := DisconnectRule.REVERT_TO_SERVER
 
 var _pending_entity_id: StringName = &""
 var _pending_peer_id := 0
+var _pending_controller := 0
+var _pending_controller_binding_set := false
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -99,12 +188,38 @@ var peer_id := 0:
 		else:
 			_pending_peer_id = value
 
+## Peer currently steering [member Node.owner]. [code]0[/code] is server.
+var controller := 0:
+	get:
+		return _effective_controller()
+	set(value):
+		_set_controller_value(value, true)
+
+## Whether [member controller] overrides [member initial_controller].
+##
+## This exists for spawn transport. [member controller] value [code]0[/code]
+## can mean either "derive from [member initial_controller]" or "the server
+## explicitly controls this entity now". Late joiners need this flag to tell
+## those states apart.
+## [codeblock]
+## MultiplayerEntity.controller_binding_set -> false
+## # Derive controller from initial_controller.
+##
+## MultiplayerEntity.controller_binding_set -> true
+## # Use the stored controller value.
+## [/codeblock]
+var controller_binding_set := false:
+	get:
+		return _pending_controller_binding_set
+	set(value):
+		_pending_controller_binding_set = value
+
 
 func _get_entity_record() -> NetwEntity:
 	if not is_instance_valid(owner):
 		return null
-	if owner.has_meta(NetwEntity.META_KEY):
-		return owner.get_meta(NetwEntity.META_KEY) as NetwEntity
+	if owner.has_meta(NetwEntity._META_KEY):
+		return owner.get_meta(NetwEntity._META_KEY) as NetwEntity
 	return null
 
 
@@ -182,7 +297,10 @@ func _notification(what: int) -> void:
 		return
 	entity.multiplayer_entity = self
 	_ensure_replication_config()
+	entity.contribute_spawn_property(self, &"controller")
+	entity.contribute_spawn_property(self, &"controller_binding_set")
 	_hydrate_identity_once(entity)
+	_hydrate_controller_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
 		entity.owner_tree_entered.connect(_on_owner_tree_entered)
 
@@ -193,6 +311,8 @@ func _enter_tree() -> void:
 	if owner:
 		root_path = get_path_to(owner)
 	set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+	if controller_binding_set:
+		_apply_control()
 
 
 func _ready() -> void:
@@ -204,7 +324,7 @@ func _ready() -> void:
 		_apply_template_state()
 		return
 	if (
-			peer_id != 0
+			(peer_id != 0 or controller != 0)
 			and not multiplayer.peer_disconnected.is_connected(
 				_on_peer_disconnected,
 			)
@@ -222,21 +342,14 @@ func _exit_tree() -> void:
 	despawned.emit()
 
 
-# Drives the entity's spawn lifecycle. Connected to
-# [signal NetwEntity.owner_tree_entered] in [method _notification].
-# [br][br]
-# Order:
-# [br]1. [method _sanitize_replication_config] - coerce all entries to
-#     spawn-only / [constant SceneReplicationConfig.REPLICATION_MODE_NEVER].
-#     Sibling contributions have already landed during
-#     [constant Node.NOTIFICATION_PARENTED] via
-#     [method NetwEntity.contribute_spawn_property].
-# [br]2. [method _apply_authority] - settle authority.
-# [br]3. Emit [signal NetwEntity.spawning] (and the local
-#     [signal spawning] mirror) - siblings react with hydration etc.
-# [br]4. [method _register_with_scene] - join the enclosing
-#     [MultiplayerScene]'s visibility filters.
-# [br]5. Emit [signal NetwEntity.spawned].
+# Starts the entity lifecycle after identity is available.
+#
+# Spawn contributions are locked before sibling components hydrate. Control
+# authority is applied before [signal NetwEntity.spawning]. Scene registration
+# still follows representation through [member peer_id].
+# [codeblock]
+# spawn properties -> control authority -> spawning -> scene registration
+# [/codeblock]
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -246,8 +359,9 @@ func _on_owner_tree_entered() -> void:
 	var entity := Netw.ctx(self).entity
 	if entity:
 		_hydrate_identity_once(entity)
+		_hydrate_controller_once(entity)
 	_sanitize_replication_config()
-	_apply_authority()
+	_apply_control()
 	if is_template:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
@@ -261,33 +375,63 @@ func _on_owner_tree_entered() -> void:
 		entity.spawned.emit()
 
 
-# Applies [member authority_mode] to [member Node.owner].
-func _apply_authority() -> void:
+# Applies the effective controller to [member Node.owner].
+func _apply_control() -> void:
 	if not owner:
 		return
-	match authority_mode:
-		AuthorityMode.SERVER:
-			pass
-		AuthorityMode.CLIENT:
-			if peer_id == 0:
-				if entity_id.is_empty():
-					return
-				var msg := (
-						"Cannot apply client authority to '%s': peer_id is 0."
-						% owner.name
-				)
-				_dbg.error("%s", [msg], func(m): push_error(m))
-				assert(false, msg)
-				return
-			else:
-				_dbg.debug(
-					"Setting authority for %s to %d",
-					[owner.name, peer_id],
-				)
-				owner.set_multiplayer_authority(peer_id)
-				set_multiplayer_authority(
-					MultiplayerPeer.TARGET_PEER_SERVER,
-				)
+	var previous := owner.get_multiplayer_authority()
+	var peer := _effective_controller()
+	var authority_peer := peer if peer != 0 else MultiplayerPeer.TARGET_PEER_SERVER
+	_dbg.debug(
+		"Setting authority for %s to %d",
+		[owner.name, authority_peer],
+	)
+	var is_server := not multiplayer or multiplayer.is_server()
+	if is_server:
+		# Server establishes authority recursively across the tree, then
+		# re-pins the MultiplayerEntity itself to the server (1).
+		owner.set_multiplayer_authority(authority_peer, true)
+		set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+	else:
+		# Clients must not call set_multiplayer_authority recursively on
+		# child synchronizers during tree-entry/spawning because Godot's
+		# replication system has not yet registered their network IDs (which
+		# would trigger a C++ assertion error).
+		#
+		# Instead, the client relies on Godot's MultiplayerSpawner to
+		# automatically synchronize the child synchronizers' authorities from
+		# the server:
+		#
+		#  Server (recursive+re-pin)        Client (spawner-synced spawn)
+		#  |- owner (auth = P)              |- owner (auth = P) [Set here]
+		#  |- PlayerSync (auth = P)         |- PlayerSync (auth = P) [Spawner]
+		#  +- MultiplayerEntity (auth = 1)  +- MultiplayerEntity (auth = 1) [Spawner]
+		#
+		if is_node_ready():
+			# Dynamic mid-game control change on client. Safe to recurse.
+			owner.set_multiplayer_authority(authority_peer, true)
+			set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+		else:
+			# Initial spawn phase on client. Do not touch synchronizers.
+			owner.set_multiplayer_authority(authority_peer, false)
+
+	var previous_controller := 0 if previous == 1 else previous
+	if previous_controller != peer:
+		control_changed.emit(previous_controller, peer)
+		var entity := _get_entity_record()
+		if entity:
+			entity.control_changed.emit(previous_controller, peer)
+
+
+func _effective_controller() -> int:
+	if controller_binding_set:
+		return _pending_controller
+	match initial_controller:
+		InitialController.SERVER:
+			return 0
+		InitialController.REPRESENTED_PEER:
+			return peer_id
+	return 0
 
 
 func _hydrate_identity_once(entity: NetwEntity) -> void:
@@ -305,20 +449,26 @@ func _hydrate_identity_once(entity: NetwEntity) -> void:
 	_pending_peer_id = entity.peer_id
 
 
+func _hydrate_controller_once(entity: NetwEntity) -> void:
+	if _pending_controller_binding_set:
+		entity._pending_controller = _pending_controller
+	else:
+		_pending_controller = entity._pending_controller
+	controller_binding_set = _pending_controller_binding_set
+
+
 # Keeps the synchronizer valid even when identity uses owner.name transport.
 func _ensure_replication_config() -> void:
 	if not replication_config:
 		replication_config = SceneReplicationConfig.new()
 
 
-# [code]true[/code] when [member authority_mode] can resolve to a
-# concrete peer. [code]SERVER[/code] is always bound;
-# [code]CLIENT[/code] requires [member peer_id] or an encoded owner name.
+# [code]true[/code] when [member initial_controller] can resolve.
 func _has_authority_binding() -> bool:
-	match authority_mode:
-		AuthorityMode.SERVER:
+	match initial_controller:
+		InitialController.SERVER:
 			return true
-		AuthorityMode.CLIENT:
+		InitialController.REPRESENTED_PEER:
 			return peer_id != 0 or NetwEntity.parse_peer(owner.name) != 0
 	return false
 
@@ -424,15 +574,124 @@ func _is_local_represented_peer() -> bool:
 func _on_peer_disconnected(disconnected_peer_id: int) -> void:
 	if not multiplayer or not multiplayer.is_server():
 		return
-	if peer_id != disconnected_peer_id:
+	if peer_id == disconnected_peer_id:
+		_dbg.info(
+			"Peer %d disconnected. Despawning represented entity %s.",
+			[disconnected_peer_id, owner.name],
+		)
+		var opts := DespawnOpts.new()
+		opts.reason = &"peer_disconnected"
+		despawn(opts)
 		return
-	_dbg.info(
-		"Peer %d disconnected. Despawning represented entity %s.",
-		[disconnected_peer_id, owner.name],
-	)
-	var opts := DespawnOpts.new()
-	opts.reason = &"peer_disconnected"
-	despawn(opts)
+
+	if controller != disconnected_peer_id:
+		return
+	match on_controller_disconnect:
+		DisconnectRule.REVERT_TO_SERVER:
+			_apply_control_change(0)
+		DisconnectRule.DESPAWN:
+			var opts := DespawnOpts.new()
+			opts.reason = &"controller_disconnected"
+			despawn(opts)
+
+
+## Requests control from the server.
+## [br][br][b]Player request.[/b]
+func request_control() -> void:
+	_rpc_request_control.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER)
+
+
+## Grants control to [param peer_id].
+## [br][br][b]Server Only.[/b]
+func grant_control(peer_id: int) -> void:
+	if not _ensure_server_action(&"grant_control"):
+		return
+	_apply_control_change(peer_id)
+
+
+## Revokes control and returns authority to the server.
+## [br][br][b]Server Only.[/b]
+func revoke_control() -> void:
+	if not _ensure_server_action(&"revoke_control"):
+		return
+	_apply_control_change(0)
+
+
+## Sets [member NetwEntity.controller] from the entity record.
+func set_controller(peer: int) -> void:
+	_set_controller_value(peer, true)
+	_apply_control()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_control() -> void:
+	if not multiplayer or not multiplayer.is_server():
+		_dbg.warn(
+			"Ignoring control request on non-server peer %d.",
+			[multiplayer.get_unique_id() if multiplayer else 0],
+			func(m): push_warning(m),
+		)
+		return
+	var requester := multiplayer.get_remote_sender_id()
+	if requester == 0 and multiplayer.multiplayer_peer:
+		requester = multiplayer.get_unique_id()
+	if transfer != Transfer.REQUESTABLE:
+		_dbg.warn(
+			"Rejecting control request from peer %d for %s. Transfer is fixed.",
+			[requester, owner.name if owner else "<no owner>"],
+			func(m): push_warning(m),
+		)
+		return
+	var request := ControlRequest.new()
+	request.requester = requester
+	control_requested.emit(requester, request)
+	if request.denied:
+		_dbg.warn(
+			"Control request from peer %d for %s was denied.",
+			[requester, owner.name if owner else "<no owner>"],
+			func(m): push_warning(m),
+		)
+		return
+	_apply_control_change(requester)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_apply_control(peer: int) -> void:
+	_set_controller_value(peer, true)
+	_apply_control()
+
+
+func _apply_control_change(peer: int) -> void:
+	if multiplayer and multiplayer.multiplayer_peer:
+		_rpc_apply_control.rpc(peer)
+	else:
+		_rpc_apply_control(peer)
+
+
+func _set_controller_value(peer: int, bound: bool) -> void:
+	_pending_controller = peer
+	_pending_controller_binding_set = bound
+	var entity := _get_entity_record()
+	if entity:
+		entity._pending_controller = peer
+	if (
+			peer != 0
+			and multiplayer
+			and multiplayer.is_server()
+			and not multiplayer.peer_disconnected.is_connected(
+				_on_peer_disconnected,
+			)
+	):
+		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _ensure_server_action(action: StringName) -> bool:
+	if not multiplayer or multiplayer.is_server():
+		return true
+	var msg := "%s is server-only." % action
+	_dbg.error("%s", [msg], func(m): push_error(m))
+	assert(false, msg)
+	return false
 
 # Public spawn/despawn API.
 
@@ -458,7 +717,7 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 		owner,
 		func(c: MultiplayerEntity) -> void:
 			if not id.is_empty():
-				NetwEntity.bundle(c.owner, 0, id)
+				NetwEntity.bind(c.owner, id, 0)
 	)
 	var p := parent if parent else owner.get_parent()
 	p.add_child(copy)
@@ -472,7 +731,7 @@ func instantiate_player(rj: ResolvedJoin) -> Node:
 	var copy := instantiate_from(
 		owner,
 		func(c: MultiplayerEntity) -> void:
-			NetwEntity.bundle(c.owner, rj.peer_id, rj.username)
+			NetwEntity.bind(c.owner, rj.username, rj.peer_id)
 	)
 	return copy
 

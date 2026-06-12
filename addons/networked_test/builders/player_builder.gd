@@ -151,7 +151,8 @@ func build() -> Node:
 
 	if _has_entity:
 		var entity := MultiplayerEntity.new()
-		entity.set("authority_mode", MultiplayerEntity.AuthorityMode.CLIENT)
+		entity.initial_controller = \
+		MultiplayerEntity.InitialController.REPRESENTED_PEER
 		entity.set_meta("_custom_type_script", "uid://bspawnrcomp001")
 		var _a1: Node = SceneAssembly.attach(root, entity, root)
 

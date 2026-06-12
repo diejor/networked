@@ -32,31 +32,24 @@ func spawn_joined_players(joined_players: Array[ResolvedJoin]) -> void:
 		if _has_player(rj):
 			continue
 
-		spawn(
-			{
-				"peer_id": rj.peer_id,
-				"spawn_index": index,
-				"username": str(rj.username),
-			},
-		)
+		var data := { spawn_index = index }
+		spawn(NetwEntity.decorate_spawn(data, rj))
 
 
 func _spawn_player(data: Variant) -> Node:
 	var spawn_data: Dictionary = data if data is Dictionary else { }
-	var peer_id := int(spawn_data.get("peer_id", 0))
-	var username := str(spawn_data.get("username", ""))
-	var spawn_index := int(spawn_data.get("spawn_index", 0))
-
-	# Ensure the score UI knows about this player on all peers (host and clients).
-	var world := ctx.scene.get_level()
-	var score := world.get_node("Score")
-	score.add_player(peer_id, username)
+	var spawn_identity := NetwEntity.spawn_identity(spawn_data)
 
 	var player := PLAYER_SCENE.instantiate()
-	NetwEntity.bundle(player, peer_id, StringName(username))
+	spawn_identity.bind(player)
+	var username := str(spawn_identity.entity_id)
+	var spawn_index := int(spawn_data.get("spawn_index", 0))
 
-	var spawn_position := _get_spawn_position(spawn_index)
-	player.set("synced_position", spawn_position)
+	var world := ctx.scene.get_level()
+	var score := world.get_node("Score")
+	score.add_player(spawn_identity.peer_id, username)
+
+	player.set("synced_position", _get_spawn_position(spawn_index))
 
 	var label := player.get_node("%label") as Label
 	label.text = username
@@ -66,14 +59,7 @@ func _spawn_player(data: Variant) -> Node:
 
 func _has_player(rj: ResolvedJoin) -> bool:
 	var players_root := get_node_or_null(spawn_path)
-	if not players_root:
-		return false
-
-	var node_name := NetwEntity.format_name(
-		str(rj.username),
-		rj.peer_id,
-	)
-	return players_root.get_node_or_null(node_name) != null
+	return NetwEntity.find(players_root, rj) != null if players_root else false
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:

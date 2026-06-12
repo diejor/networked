@@ -15,9 +15,10 @@
 ## as an NPC or world object. See [member is_player] and [enum Ownership].
 ##
 ## [br][br]
-## The entity root is the node carrying [constant META_KEY]. In packed
-## entity scenes this is normally the scene root. Siblings should access
-## it through [code]Netw.ctx(self).entity[/code] or [method of].
+## The entity root is the node representing the networked entity (typically
+## the scene root in packed entity scenes). Siblings should access
+## it through [code]Netw.ctx(self).entity[/code] (see [member NetwContext.entity] 
+## or [method of].
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
@@ -32,7 +33,13 @@
 class_name NetwEntity
 extends RefCounted
 
-const META_KEY := &"netw_entity"
+# Metadata key that stores the [NetwEntity] record on an entity root.
+const _META_KEY := &"netw_entity"
+
+# Reserved key for Networked identity inside custom spawn dictionaries.
+# User payload remains at the top level. [method decorate_spawn] writes this
+# key, and [method spawn_identity] reads it back before [method bind].
+const _SPAWN_NETW_KEY := "_netw"
 
 ## Whether an entity represents a joined peer or the server, derived from
 ## [member peer_id].
@@ -41,6 +48,15 @@ enum Ownership {
 	PEER,
 	## Server-owned entity such as an NPC or world object. [member peer_id]
 	## is [code]0[/code].
+	SERVER,
+}
+
+## Whether an entity is server controlled or peer controlled, derived from
+## [member controller].
+enum ControlKind {
+	## A peer currently controls the entity. [member controller] is non-zero.
+	PEER,
+	## Server controlled entity. [member controller] is [code]0[/code].
 	SERVER,
 }
 
@@ -148,6 +164,9 @@ signal observer_entered(layer_id: StringName, peer_id: int)
 ## this entity through [param layer_id].
 signal observer_left(layer_id: StringName, peer_id: int)
 
+## Emitted when [member controller] changes.
+signal control_changed(previous_peer: int, peer: int)
+
 ## [member Node.owner] that holds this entity.
 var owner: Node
 ## Stable display/save/debug label for this entity.
@@ -162,6 +181,54 @@ var entity_id: StringName = &""
 ## [method MultiplayerEntity.despawn] when its peer disconnects. This is the
 ## source of the player test. See [member is_player].
 var peer_id := 0
+
+var _pending_controller := 0
+
+## Peer that currently steers this entity. [code]0[/code] means the server.
+##
+## [MultiplayerEntity] applies [member controller] to
+## [method Node.set_multiplayer_authority]. Setting this property on a live
+## entity routes through [method MultiplayerEntity.set_controller].
+## [codeblock]
+## var entity := NetwEntity.of(ball)
+## if entity.control_kind == NetwEntity.ControlKind.PEER:
+##     show_controller(entity.controller_participant)
+## [/codeblock]
+var controller: int:
+	get:
+		var entity := multiplayer_entity
+		if entity:
+			return entity.controller
+		return _pending_controller
+	set(value):
+		var entity := multiplayer_entity
+		if entity:
+			entity.set_controller(value)
+		else:
+			_set_controller_value(value)
+
+## Derived from [member controller]. See [enum ControlKind].
+var control_kind: ControlKind:
+	get:
+		return ControlKind.PEER if controller != 0 else ControlKind.SERVER
+
+## [code]true[/code] when the local peer controls this entity.
+var is_controlled_locally: bool:
+	get:
+		if controller == 0 or not is_instance_valid(owner):
+			return false
+		if not owner.multiplayer or owner.multiplayer.multiplayer_peer == null:
+			return false
+		return controller == owner.multiplayer.get_unique_id()
+
+## Joined player record for [member controller], rebuilt from the local
+## [MultiplayerTree] roster. Never serialized.
+var controller_participant: ResolvedJoin:
+	get:
+		if controller == 0 or not is_instance_valid(owner):
+			return null
+		var mt := MultiplayerTree.resolve(owner)
+		return mt.get_joined_player(controller) if mt else null
 
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
@@ -204,14 +271,15 @@ var _parent_entity_ref: WeakRef
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root.
 ##
-## Walks parent chain for [constant META_KEY]. Returns [code]null[/code] if not found.
+## Walks the parent chain to locate the entity root. Returns [code]null[/code]
+## if not found.
 static func of(node: Node) -> NetwEntity:
 	if not is_instance_valid(node):
 		return null
 	var n := node
 	while n != null:
-		if n.has_meta(META_KEY):
-			return n.get_meta(META_KEY) as NetwEntity
+		if n.has_meta(_META_KEY):
+			return n.get_meta(_META_KEY) as NetwEntity
 		n = n.get_parent()
 	return null
 
@@ -223,8 +291,8 @@ static func of(node: Node) -> NetwEntity:
 static func ensure(root: Node) -> NetwEntity:
 	if not is_instance_valid(root):
 		return null
-	if root.has_meta(META_KEY):
-		return root.get_meta(META_KEY) as NetwEntity
+	if root.has_meta(_META_KEY):
+		return root.get_meta(_META_KEY) as NetwEntity
 	var e := NetwEntity.new()
 	e._attach_to(root)
 	return e
@@ -269,9 +337,119 @@ static func parse_peer(node_name: String) -> int:
 	return 0
 
 
-## Formats [param entity_id] and [param peer_id] as a node name.
-static func format_name(entity_id: String, peer_id: int) -> String:
+# Formats entity_id and peer_id as a node name.
+static func _format_name(entity_id: String, peer_id: int) -> String:
 	return "%s|%d" % [entity_id, peer_id]
+
+
+## Returns the node name for the player represented by [param rj].
+static func name_for(rj: ResolvedJoin) -> String:
+	return _format_name(rj.username, rj.peer_id)
+
+
+## Returns the player node associated with [param rj] under [param root],
+## or [code]null[/code] if not found.
+static func find(root: Node, rj: ResolvedJoin) -> Node:
+	if not is_instance_valid(root) or rj == null:
+		return null
+	return root.get_node_or_null(name_for(rj))
+
+
+## Binds [param entity_id] and [param peer_id] onto [param node].
+##
+## This is the public identity binding surface. Once bound, the node's name
+## is owned by the network synchronization system and must not be modified.
+## [codeblock]
+## var player := NetwEntity.bind(copy, username, peer_id)
+## scene.add_player(player)
+## [/codeblock]
+static func bind(
+		node: Node,
+		entity_id: StringName,
+		peer_id: int,
+) -> Node:
+	node.name = _format_name(str(entity_id), peer_id)
+	var entity := ensure(node)
+	if entity:
+		entity.entity_id = entity_id
+		entity.peer_id = peer_id
+	return node
+
+
+## Decodes bindable identity from custom spawn data.
+##
+## Use the original spawn [Dictionary] for gameplay data. This method only
+## extracts the identity needed to call [method NetwEntity.SpawnIdentity.bind].
+## [codeblock]
+## # Server:
+## var data := NetwEntity.decorate_spawn(
+##     {spawn_index = index},
+##     resolved_join
+## )
+## spawner.spawn(data)
+##
+## #             |
+## #             v (Network spawn replication)
+## #             |
+##
+## # Client (spawn_function):
+## func _custom_spawn(data: Dictionary) -> Node:
+##     var spawn_identity := NetwEntity.spawn_identity(data)
+##
+##     var player := PLAYER.instantiate()
+##     spawn_identity.bind(player)
+##
+##     player.spawn_index = data.spawn_index
+##     return player
+## [/codeblock]
+static func spawn_identity(data: Dictionary) -> SpawnIdentity:
+	return SpawnIdentity.new(data)
+
+
+## Deprecated compatibility alias for [method spawn_identity].
+static func spawn(data: Dictionary) -> SpawnIdentity:
+	return spawn_identity(data)
+
+
+## Returns [param data] with Networked spawn identity attached.
+##
+## The returned [Dictionary] is a duplicate. The input [param data] is not
+## mutated. [code]_netw[/code] is reserved and must not already be present.
+static func decorate_spawn(
+		data: Dictionary,
+		rj: ResolvedJoin,
+) -> Dictionary:
+	assert(
+		not data.has(_SPAWN_NETW_KEY),
+		"NetwEntity.decorate_spawn: '_netw' is reserved.",
+	)
+	var out := data.duplicate(true)
+	out[_SPAWN_NETW_KEY] = {
+		"entity_id": rj.username,
+		"peer_id": rj.peer_id,
+	}
+	return out
+
+
+## Bindable identity decoded from custom spawn data.
+class SpawnIdentity extends RefCounted:
+	## Decoded entity ID for the spawned node, mapped from
+	## [member NetwEntity.entity_id].
+	var entity_id: StringName = &""
+	## Decoded peer ID for the spawned node, mapped from
+	## [member NetwEntity.peer_id].
+	var peer_id: int = 0
+
+
+	func _init(spawn_data: Dictionary) -> void:
+		var netw: Dictionary = spawn_data.get(_SPAWN_NETW_KEY, { })
+		entity_id = StringName(netw.get("entity_id", ""))
+		peer_id = int(netw.get("peer_id", 0))
+
+
+	## Binds this identity onto [param node].
+	func bind(node: Node) -> Node:
+		return NetwEntity.bind(node, entity_id, peer_id)
 
 
 ## Returns a [NodePath] from [param source] to [param target].
@@ -298,28 +476,16 @@ func property_path(
 	return NodePath("%s:%s" % [rel, property])
 
 
-## Encodes identity into [param node] and its [NetwEntity].
-##
-## [codeblock]
-## var player := NetwEntity.bundle(copy, peer_id, username)
-## scene.add_player(player)
-## [/codeblock]
-static func bundle(
-		node: Node,
-		peer_id: int,
-		entity_id: StringName,
-) -> Node:
-	node.name = format_name(str(entity_id), peer_id)
-	var entity := ensure(node)
-	if entity:
-		entity.entity_id = entity_id
-		entity.peer_id = peer_id
-	return node
+func _set_controller_value(value: int) -> void:
+	var previous := _pending_controller
+	_pending_controller = value
+	if previous != value:
+		control_changed.emit(previous, value)
 
 
 func _attach_to(root: Node) -> void:
 	owner = root
-	root.set_meta(META_KEY, self)
+	root.set_meta(_META_KEY, self)
 	if not root.tree_entered.is_connected(_handle_tree_entered):
 		root.tree_entered.connect(_handle_tree_entered)
 	if not root.tree_exiting.is_connected(_handle_tree_exiting):
@@ -566,7 +732,7 @@ func _walk_for_parent_entity() -> NetwEntity:
 		return null
 	var n := owner.get_parent()
 	while is_instance_valid(n):
-		if n.has_meta(META_KEY):
-			return n.get_meta(META_KEY) as NetwEntity
+		if n.has_meta(_META_KEY):
+			return n.get_meta(_META_KEY) as NetwEntity
 		n = n.get_parent()
 	return null

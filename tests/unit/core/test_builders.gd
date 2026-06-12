@@ -269,8 +269,12 @@ func _assert_scenes_match(node1: Node, node2: Node) -> void:
 		var scenes2 := sp2.get("_spawnable_scenes") as PackedStringArray
 		assert_that(scenes2.size()).is_equal(scenes1.size())
 
-	if node1.get_class() == "MultiplayerEntity" or node2.get_class() == "MultiplayerEntity":
-		assert_that(node2.get("authority_mode")).is_equal(node1.get("authority_mode"))
+	if (
+			node1.get_class() == "MultiplayerEntity"
+			or node2.get_class() == "MultiplayerEntity"
+	):
+		assert_that(node2.get("initial_controller")) \
+				.is_equal(node1.get("initial_controller"))
 
 	if node1.get_class() == "SaveComponent" or node2.get_class() == "SaveComponent":
 		assert_that(node2.get("database")).is_equal(node1.get("database"))

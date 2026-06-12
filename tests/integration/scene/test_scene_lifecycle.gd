@@ -209,6 +209,6 @@ func _add_scene_player(
 		username: StringName,
 ) -> Node:
 	var player := Node2D.new()
-	NetwEntity.bundle(player, peer_id, username)
+	NetwEntity.bind(player, username, peer_id)
 	scene.add_player(player)
 	return player

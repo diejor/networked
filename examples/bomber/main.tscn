@@ -24,6 +24,7 @@ metadata/_custom_type_script = "uid://dp77sylvhe357"
 unique_name_in_owner = true
 script = ExtResource("2_wto4k")
 backend = SubResource("Resource_ytyuk")
+auto_host_headless = false
 auth_provider = SubResource("Resource_gbknk")
 app_id = &"7x283tsfmy1xpr4"
 

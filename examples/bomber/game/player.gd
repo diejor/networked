@@ -21,7 +21,7 @@ var current_anim: String = ""
 func _ready() -> void:
 	stunned = false
 	position = synced_position
-	var peer_id := _get_player_peer_id()
+	var peer_id := player_entity.peer_id
 	if peer_id != 0:
 		inputs.set_multiplayer_authority(peer_id)
 		$"Inputs/InputsSync".set_multiplayer_authority(peer_id)
@@ -29,7 +29,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var peer_id := _get_player_peer_id()
+	var peer_id := player_entity.peer_id
 	if (
 			multiplayer.multiplayer_peer == null
 			or multiplayer.get_unique_id() == peer_id
@@ -99,11 +99,6 @@ func exploded(_by_who: int) -> void:
 	stunned = true
 	$anim.play(&"stunned")
 
-
-func _get_player_peer_id() -> int:
-	if player_entity:
-		return player_entity.peer_id
-	return NetwEntity.parse_peer(name)
 
 
 func _update_inputs_process_mode(peer_id: int) -> void:

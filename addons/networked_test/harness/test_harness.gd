@@ -542,7 +542,7 @@ func spawn_player(
 			"spawn_player: expected PackedScene, Node, or builder.",
 		)
 		return null
-	NetwEntity.bundle(player, peer_id, StringName(username))
+	NetwEntity.bind(player, StringName(username), peer_id)
 	var scene := scene_on_server(scene_name)
 	scene.add_player(player)
 	return player
@@ -552,7 +552,10 @@ func spawn_player(
 func player_name_for(client: MultiplayerTree) -> StringName:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	return NetwEntity.format_name(username, peer_id)
+	var rj := ResolvedJoin.new()
+	rj.username = StringName(username)
+	rj.peer_id = peer_id
+	return StringName(NetwEntity.name_for(rj))
 
 #endregion
 

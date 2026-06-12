@@ -180,9 +180,8 @@ func _cell_center(cell: Vector2i) -> Vector2:
 
 func _extract_player_name(node: Node) -> StringName:
 	var entity := NetwEntity.of(node)
-	if entity:
-		return entity.entity_id
-	return StringName(NetwEntity.parse_entity(node.name))
+	assert(entity, "Node must have a valid NetwEntity record")
+	return entity.entity_id
 
 # -- Strategy -----------------------------------------------------------------
 

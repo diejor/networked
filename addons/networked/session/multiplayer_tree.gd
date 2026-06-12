@@ -256,7 +256,7 @@ var last_connect_result: ConnectResult = null
 ## corrupts the session. Bump it whenever the wire protocol breaks. Leave it
 ## empty to disable the gate.
 ## [codeblock]
-## "" -> tag 0 -> any same-version peer admitted (gate off)
+## "" -> tag 0 -> any same version peer admitted (gate off)
 ## "bomber-v2" -> only peers carrying "bomber-v2" admitted
 ## [/codeblock]
 @export var app_id: StringName = "":

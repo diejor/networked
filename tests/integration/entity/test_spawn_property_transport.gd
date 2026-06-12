@@ -134,7 +134,7 @@ func _spawn_probe_player(client: MultiplayerTree, marker: String) -> Node:
 			probe.identity_packet["marker"] = marker
 	)
 	template.free()
-	NetwEntity.bundle(player, peer_id, StringName(username))
+	NetwEntity.bind(player, StringName(username), peer_id)
 	var scene := harness.scene_on_server(level_builder.scene_name)
 	scene.add_player(player)
 	return player
@@ -145,7 +145,7 @@ func _make_probe_player_scene() -> PackedScene:
 	root.name = "SpawnIdentityProbePlayer"
 
 	var probe := SpawnIdentityProbeEntity.new()
-	probe.set("authority_mode", MultiplayerEntity.AuthorityMode.CLIENT)
+	probe.initial_controller = MultiplayerEntity.InitialController.REPRESENTED_PEER
 	probe.set_meta("_custom_type_script", "uid://spawnidentityprobe")
 	SceneAssembly.attach(root, probe, root)
 

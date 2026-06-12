@@ -220,6 +220,7 @@ replication_config = SubResource("SceneReplicationConfig_w53uu")
 [node name="MultiplayerEntity" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
 replication_config = SubResource("SceneReplicationConfig_pu4sp")
 script = ExtResource("5_p4qid")
+on_controller_disconnect = 1
 
 [node name="MultiplayerInterpolator" type="Node" parent="." unique_id=1650089841]
 script = ExtResource("6_3dwf2")
