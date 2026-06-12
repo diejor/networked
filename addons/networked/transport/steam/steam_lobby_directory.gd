@@ -49,7 +49,9 @@ var _pending_list: bool = false
 var _pending_create_name: String = ""
 var _pending_join_lobby_id: int = 0
 var _init_ok: bool = false
+var _joining: bool = false
 
+signal peer_connect_failed(reason: String)
 signal _lobby_created_internal(peer: MultiplayerPeer)
 signal _lobby_joined_internal(peer: MultiplayerPeer)
 
@@ -118,6 +120,8 @@ func _enter_tree() -> void:
 	_wrapper.connect_signal("lobby_joined", _on_lobby_joined)
 	_wrapper.connect_signal("lobby_match_list", _on_lobby_match_list)
 	_wrapper.connect_signal("join_requested", _on_join_requested)
+	_wrapper.connect_signal("p2p_session_connect_fail", _on_p2p_connect_fail)
+	_wrapper.connect_signal("network_connection_status_changed", _on_network_connection_status_changed)
 
 	NetwServices.register(self)
 
@@ -139,6 +143,8 @@ func _exit_tree() -> void:
 		_wrapper.disconnect_signal("lobby_joined", _on_lobby_joined)
 		_wrapper.disconnect_signal("lobby_match_list", _on_lobby_match_list)
 		_wrapper.disconnect_signal("join_requested", _on_join_requested)
+		_wrapper.disconnect_signal("p2p_session_connect_fail", _on_p2p_connect_fail)
+		_wrapper.disconnect_signal("network_connection_status_changed", _on_network_connection_status_changed)
 
 	if _lobby_id != 0 and _wrapper:
 		_wrapper.leave_lobby(_lobby_id)
@@ -206,6 +212,7 @@ func list_lobbies() -> void:
 
 
 func leave_lobby() -> void:
+	_joining = false
 	_pending_join_lobby_id = 0
 	if _lobby_id == 0 or not _wrapper:
 		return
@@ -269,14 +276,18 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	if _lobby_id != 0:
 		_wrapper.leave_lobby(_lobby_id)
 		_lobby_id = 0
+	_joining = true
 	_pending_join_lobby_id = lobby_id
 	_wrapper.join_lobby(lobby_id)
 
 	var timer := get_tree().create_timer(10.0)
 	var timed_out := await Async.timeout(_lobby_joined_internal, timer)
 	if timed_out:
+		_joining = false
 		Netw.dbg.error("SteamLobbyDirectory: join_lobby_peer timed out.")
 		return null
+	if _peer == null:
+		_joining = false
 	return _peer
 
 
@@ -290,6 +301,8 @@ func _bind_tree_signals(mt: MultiplayerTree) -> void:
 
 
 func _on_tree_peer_changed(_peer_id: int) -> void:
+	if _peer_id == 1:
+		_joining = false
 	if _lobby_id == 0 or not _wrapper:
 		return
 	var count: int = _wrapper.get_num_lobby_members(_lobby_id)
@@ -506,3 +519,20 @@ func _is_own_lobby(lobby_id: int) -> bool:
 		return false
 	var local_id := _wrapper.get_steam_id()
 	return local_id != 0 and _wrapper.get_lobby_owner(lobby_id) == local_id
+
+
+func _on_p2p_connect_fail(steam_id: int, error: int) -> void:
+	if _joining:
+		Netw.dbg.warn("SteamLobbyDirectory: P2P connect failed to %d (error %d)" % [steam_id, error])
+		_joining = false
+		peer_connect_failed.emit("P2P session connect fail")
+
+
+func _on_network_connection_status_changed(info: Dictionary) -> void:
+	if not _joining:
+		return
+	var state: int = info.get("connection_state", -1)
+	if state == 4 or state == 5: # ClosedByPeer or ProblemDetectedLocally
+		Netw.dbg.warn("SteamLobbyDirectory: connection status failed (%d)" % state)
+		_joining = false
+		peer_connect_failed.emit("Network connection status failed")

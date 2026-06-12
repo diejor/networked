@@ -115,7 +115,6 @@ var _is_server := false
 var _signaling_ready := false
 var _connect_started_ms := 0
 var _connect_offer_progress_sent := false
-var _connect_progress := _ConnectProgress.new()
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.
@@ -241,25 +240,25 @@ func create_join_peer(
 		return null
 
 	_connect_started_ms = Time.get_ticks_msec()
-	_connect_progress.start(_connect_started_ms, connect_timeout_hint())
 
 	var err := _signaler.open(server_address, client_id)
 	if err != OK:
 		Netw.dbg.error("WebRTC signaler open failed: %s", [error_string(err)])
 		_clear_session_and_signaler()
 		return null
-	_set_connect_progress_message("Reaching signaling...")
+	_set_connect_step(&"discovery")
+	_set_connect_message("Reaching signaling...")
 	return _session.webrtc_peer
 
 
 ## Implements [method BackendPeer.poll] for session and signaler state.
 func poll(dt: float) -> void:
+	super.poll(dt)
 	if _session:
 		_session.poll(dt)
 	if _signaler:
 		_signaler.poll(dt)
 	_poll_signaling_check()
-	_poll_connect_progress()
 
 
 ## Starts closing active [WebRTCDataChannel]s before peer teardown.
@@ -332,7 +331,6 @@ func _clear_session_and_signaler() -> void:
 	_session = null
 	_signaler = null
 	_connect_offer_progress_sent = false
-	_connect_progress.stop()
 
 
 func _on_native_connected(id: int) -> void:
@@ -373,7 +371,6 @@ func _on_native_connected(id: int) -> void:
 			+ "answer=%.1fs native=%.1fs relay=%s.",
 			[total_t, offer_t, answer_t, native_t, relay_str],
 		)
-	_connect_progress.stop()
 
 
 func _on_native_disconnected(id: int) -> void:
@@ -382,7 +379,6 @@ func _on_native_disconnected(id: int) -> void:
 
 func _on_session_failed(id: int, reason: String) -> void:
 	_connect_started_ms = 0
-	_connect_progress.stop()
 	var diags := _session.connection_diagnostics(id)
 	var code := StringName(reason)
 	var status := ConnectResult.Status.UNREACHABLE
@@ -397,7 +393,8 @@ func _on_session_failed(id: int, reason: String) -> void:
 func _on_signaling_connected() -> void:
 	_signaling_ready = true
 	signaling_connected.emit()
-	_set_connect_progress_message("Exchanging connection info...")
+	_set_connect_step(&"handshake")
+	_set_connect_message("Exchanging connection info...")
 
 
 func _on_signaling_disconnected() -> void:
@@ -405,7 +402,6 @@ func _on_signaling_disconnected() -> void:
 	signaling_disconnected.emit()
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		_connect_progress.stop()
 		var res := ConnectResult.unreachable(
 			&"SIGNALING_UNAVAILABLE",
 			"Could not reach signaling.",
@@ -417,7 +413,6 @@ func _on_signaling_unreachable() -> void:
 	_signaling_ready = false
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		_connect_progress.stop()
 		var res := ConnectResult.unreachable(
 			&"SIGNALING_UNREACHABLE",
 			"Could not reach any signaling server.",
@@ -434,28 +429,8 @@ func _on_session_signal_out(
 	if kind != "offer" or _connect_offer_progress_sent:
 		return
 	_connect_offer_progress_sent = true
-	_set_connect_progress_message("Negotiating peer link...")
-
-
-func _set_connect_progress_message(message: String) -> void:
-	if not _is_server:
-		_emit_connect_progress(
-			_connect_progress.set_message(message, Time.get_ticks_msec()),
-		)
-
-
-func _poll_connect_progress() -> void:
-	if _is_server:
-		return
-	if _session and _session._connected_ids.has(1):
-		return
-	_emit_connect_progress(_connect_progress.poll(Time.get_ticks_msec()))
-
-
-func _emit_connect_progress(sample: Dictionary) -> void:
-	if sample.is_empty():
-		return
-	connect_progress.emit(sample.message, sample.ratio)
+	_set_connect_step(&"traversal")
+	_set_connect_message("Negotiating peer link...")
 
 
 func _poll_signaling_check() -> void:
@@ -465,7 +440,6 @@ func _poll_signaling_check() -> void:
 			var threshold := connect_timeout_hint() - 0.1
 			if elapsed >= threshold and not _signaling_ready:
 				_connect_started_ms = 0 # trigger once
-				_connect_progress.stop()
 				var res := ConnectResult.unreachable(
 					&"SIGNALING_UNAVAILABLE",
 					"Could not reach signaling.",
@@ -551,60 +525,6 @@ func get_connection_diagnostics(peer_id: int) -> Dictionary:
 ## Returns the display name for this backend.
 func get_display_name() -> String:
 	return "WebRTC"
-
-
-class _ConnectProgress:
-	const EASE := 50.
-	const MAX_RATIO := 0.98
-	const EMIT_INTERVAL_MS := 100
-
-	var _start_ms := 0
-	var _bound := 0.0
-	var _message := ""
-	var _last_emit_ms := 0
-
-
-	func start(start_ms: int, bound: float) -> void:
-		_start_ms = start_ms
-		_bound = maxf(bound, 0.1)
-		_message = ""
-		_last_emit_ms = 0
-
-
-	func stop() -> void:
-		_start_ms = 0
-		_bound = 0.0
-		_message = ""
-		_last_emit_ms = 0
-
-
-	func set_message(message: String, now_ms: int) -> Dictionary:
-		_message = message
-		return _sample(now_ms, true)
-
-
-	func poll(now_ms: int) -> Dictionary:
-		return _sample(now_ms, false)
-
-
-	func ratio(now_ms: int) -> float:
-		if _start_ms <= 0 or _bound <= 0.0:
-			return 0.0
-		var elapsed := float(now_ms - _start_ms) / 1000.0
-		var scaled := maxf(0.0, elapsed / _bound)
-		return clampf(1.0 - exp(-EASE * scaled), 0.0, MAX_RATIO)
-
-
-	func _sample(now_ms: int, force: bool) -> Dictionary:
-		if _start_ms <= 0 or _message.is_empty():
-			return { }
-		if not force and now_ms - _last_emit_ms < EMIT_INTERVAL_MS:
-			return { }
-		_last_emit_ms = now_ms
-		return {
-			"message": _message,
-			"ratio": ratio(now_ms),
-		}
 
 
 # Filters out TURN TCP/TLS servers since libjuice only supports TURN UDP.

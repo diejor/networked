@@ -78,6 +78,9 @@ signal api_swapped(
 		reason: String,
 )
 
+# Internal signal to relay connection failure outcomes.
+signal _connect_failed(result: ConnectResult)
+
 ## Session lifecycle state for this tree.
 ## [codeblock]
 ## OFFLINE
@@ -854,12 +857,14 @@ func _open_join_transport(
 	)
 	if _join_aborted:
 		_transition(State.OFFLINE)
+		last_connect_result = ConnectResult.aborted("Connection aborted by user")
 		return ERR_CANT_CONNECT
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
 	if peer == null and not api_was_adopted:
 		_transition(State.OFFLINE)
+		last_connect_result = ConnectResult.error("Failed to join: backend produced no peer.")
 		if not quiet:
 			Netw.dbg.error(
 				"Failed to join: backend produced no peer.",
@@ -870,12 +875,39 @@ func _open_join_transport(
 	if peer != null:
 		api.multiplayer_peer = peer
 
+	if (peer != null or api_was_adopted) and backend:
+		backend.begin_connect_progress(timeout)
+
+	var on_backend_failed := func(res: ConnectResult) -> void:
+		_connect_failed.emit(res)
+	var on_api_failed := func() -> void:
+		_connect_failed.emit(
+			ConnectResult.unreachable(
+				&"PEER_CONNECT_FAILED",
+				"Could not reach the server.",
+			),
+		)
+
+	if backend:
+		backend.connect_failed.connect(on_backend_failed, CONNECT_ONE_SHOT)
+	if api:
+		api.connection_failed.connect(on_api_failed, CONNECT_ONE_SHOT)
+
 	var timer := get_tree().create_timer(timeout)
 	var connect_result := await Async.timeout_or_failure(
 		connected_to_server,
-		backend.connect_failed,
+		_connect_failed,
 		timer,
 	)
+
+	if backend:
+		if backend.connect_failed.is_connected(on_backend_failed):
+			backend.connect_failed.disconnect(on_backend_failed)
+		backend.end_connect_progress()
+	if api:
+		if api.connection_failed.is_connected(on_api_failed):
+			api.connection_failed.disconnect(on_api_failed)
+
 	var failed_reason_obj: Variant = connect_result.get("reason")
 	var did_timeout := String(connect_result.get("result", "")) == "timeout"
 	var did_fail := String(connect_result.get("result", "")) == "failure"

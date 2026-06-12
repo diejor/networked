@@ -38,7 +38,7 @@ class _ProgressBackend:
 			_address: String,
 			_username: String = "",
 	) -> MultiplayerPeer:
-		connect_progress.emit("Mock progress", 0.5)
+		connect_progress.emit(&"connecting", "Mock progress", 0.5)
 		return null
 
 
@@ -276,7 +276,8 @@ func test_join_progress_relays_live_backend_progress() -> void:
 	target.backend = _ProgressBackend.new()
 	var captured: Array = []
 	session.join_progress.connect(
-		func(t, message, ratio): captured.append([t, message, ratio])
+		func(t, step, message, ratio):
+			captured.append([t, step, message, ratio])
 	)
 
 	var payload := JoinPayload.new()
@@ -286,8 +287,9 @@ func test_join_progress_relays_live_backend_progress() -> void:
 	assert_int(err).is_equal(ERR_CANT_CONNECT)
 	assert_int(captured.size()).is_equal(1)
 	assert_that(captured[0][0]).is_same(target)
-	assert_str(captured[0][1]).is_equal("Mock progress")
-	assert_float(captured[0][2]).is_equal(0.5)
+	assert_str(captured[0][1]).is_equal(&"connecting")
+	assert_str(captured[0][2]).is_equal("Mock progress")
+	assert_float(captured[0][3]).is_equal(0.5)
 
 	tree.backend = null
 	target.backend = null

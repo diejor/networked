@@ -79,6 +79,10 @@ static func format_connect_error(result: ConnectResult) -> String:
 					return "No signaling server reachable."
 				&"NAT_TRAVERSAL_FAILED":
 					return "Could not establish a direct connection."
+				&"STEAM_P2P_FAILED":
+					return "Steam peer connection failed."
+				&"PEER_CONNECT_FAILED":
+					return "Could not reach the server."
 				_:
 					return "Server unreachable."
 		_:

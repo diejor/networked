@@ -33,7 +33,7 @@ func open_connecting(target: JoinTarget) -> void:
 
 
 ## Updates the displayed progress [param message] and determinate [param ratio].
-func update_progress(message: String, ratio: float) -> void:
+func update_progress(_step: StringName, message: String, ratio: float) -> void:
 	if not message.is_empty():
 		_title.text = message
 	_progress.visible = ratio >= 0.0

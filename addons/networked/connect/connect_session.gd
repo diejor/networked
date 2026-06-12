@@ -59,7 +59,7 @@ signal join_started(target: JoinTarget)
 signal join_failed(target: JoinTarget, result: ConnectResult)
 
 ## A join attempt advanced through transport-specific progress.
-signal join_progress(target: JoinTarget, message: String, ratio: float)
+signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
 
 ## A connection succeeded. [param result] is the [ConnectResult] containing
 ## happy-path diagnostics.
@@ -705,11 +705,12 @@ func _on_directory_unavailable(reason: String, id: StringName) -> void:
 
 
 func _on_backend_connect_progress(
+		step: StringName,
 		message: String,
 		ratio: float,
 		target: JoinTarget,
 ) -> void:
-	join_progress.emit(target, message, ratio)
+	join_progress.emit(target, step, message, ratio)
 
 
 # Swaps the saved set to [param loaded] while keeping the existing instance for

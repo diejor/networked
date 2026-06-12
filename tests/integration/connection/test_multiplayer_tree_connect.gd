@@ -74,3 +74,45 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
 	assert_that(player.name).is_equal("valeria|1")
+
+
+func test_join_fail_fast_on_offline_address() -> void:
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+
+	var target := JoinTarget.new()
+	target.backend = ENetBackend.new()
+	target.address = "127.0.0.1"
+
+	var payload := JoinPayload.new()
+	payload.username = "offline_client"
+
+	tree.state_changed.connect(
+		func(_old: MultiplayerTree.State, new: MultiplayerTree.State) -> void:
+			if new != MultiplayerTree.State.CONNECTING:
+				return
+			var trigger_failure: Callable
+			trigger_failure = func() -> void:
+				var api := tree.api
+				if (
+						api != null
+						and not api.connection_failed
+						.get_connections().is_empty()
+				):
+					api.connection_failed.emit()
+				else:
+					trigger_failure.call_deferred()
+			trigger_failure.call_deferred()
+	)
+
+	var time_before := Time.get_ticks_msec()
+	var err := await tree.join(target, payload, 5.0, true)
+	var elapsed := (Time.get_ticks_msec() - time_before) / 1000.0
+
+	assert_int(err).is_equal(ERR_CANT_CONNECT)
+	assert_bool(elapsed < 4.0).is_true()
+	assert_that(tree.last_connect_result).is_not_null()
+	assert_str(tree.last_connect_result.message) \
+			.is_equal("Could not reach the server.")
+
+	tree.queue_free()

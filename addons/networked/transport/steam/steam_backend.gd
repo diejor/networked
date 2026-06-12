@@ -17,16 +17,27 @@ var _dir: SteamLobbyDirectory
 
 
 ## Resolves the [SteamLobbyDirectory] service for lobby operations.
-func setup(_tree: MultiplayerTree) -> Error:
-	_dir = _tree.get_service(SteamLobbyDirectory) as SteamLobbyDirectory
+func setup(tree: MultiplayerTree) -> Error:
+	_dir = tree.get_service(SteamLobbyDirectory) as SteamLobbyDirectory
 	if _dir == null:
-		_dir = _tree.get_service(LobbyDirectory) as SteamLobbyDirectory
+		_dir = tree.get_service(LobbyDirectory) as SteamLobbyDirectory
 	if _dir == null:
 		Netw.dbg.warn(
 			"SteamBackend: SteamLobbyDirectory service not registered.",
 		)
 		return ERR_UNCONFIGURED
+	if not _dir.peer_connect_failed.is_connected(_on_dir_peer_connect_failed):
+		_dir.peer_connect_failed.connect(_on_dir_peer_connect_failed)
 	return OK
+
+
+func peer_reset_state() -> void:
+	if _dir and _dir.peer_connect_failed.is_connected(_on_dir_peer_connect_failed):
+		_dir.peer_connect_failed.disconnect(_on_dir_peer_connect_failed)
+
+
+func _on_dir_peer_connect_failed(_reason: String) -> void:
+	connect_failed.emit(ConnectResult.unreachable(&"STEAM_P2P_FAILED", "Steam peer connection failed."))
 
 
 ## Implements [method BackendPeer.create_host_peer] by creating a Steam lobby.

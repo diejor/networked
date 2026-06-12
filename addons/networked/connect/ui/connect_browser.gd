@@ -517,10 +517,11 @@ func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
 
 func _on_join_progress(
 		_target: JoinTarget,
+		step: StringName,
 		message: String,
 		ratio: float,
 ) -> void:
-	_connecting_popup.update_progress(message, ratio)
+	_connecting_popup.update_progress(step, message, ratio)
 
 
 func _show_connecting_overlay(target: JoinTarget) -> void:

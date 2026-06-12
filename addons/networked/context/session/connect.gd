@@ -82,7 +82,7 @@ signal join_started(target: JoinTarget)
 ## A join attempt failed. [param reason] is a human-readable string.
 signal join_failed(target: JoinTarget, reason: String)
 ## A join attempt advanced through transport-specific progress.
-signal join_progress(target: JoinTarget, message: String, ratio: float)
+signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
 ## A host attempt began.
 signal host_started()
 ## A host attempt failed. [param reason] is a human-readable string.
@@ -148,7 +148,6 @@ func abort_join() -> void:
 	var s := _ref.get_ref() as ConnectSession
 	if s:
 		s.abort_join()
-
 
 # -- Probing & refresh ------------------------------------------------------
 
