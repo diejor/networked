@@ -75,6 +75,8 @@ static func format_connect_error(result: ConnectResult) -> String:
 					return "Host did not respond."
 				&"SIGNALING_UNAVAILABLE":
 					return "Could not reach signaling."
+				&"SIGNALING_UNREACHABLE":
+					return "No signaling server reachable."
 				&"NAT_TRAVERSAL_FAILED":
 					return "Could not establish a direct connection."
 				_:
@@ -83,6 +85,23 @@ static func format_connect_error(result: ConnectResult) -> String:
 			if not result.message.is_empty():
 				return result.message
 			return "Connection failed."
+
+
+## Returns an optional second line for useful [ConnectResult] diagnostics.
+static func format_connect_detail(result: ConnectResult) -> String:
+	if result == null:
+		return ""
+	var stats: Dictionary = result.diagnostics.get("candidates", { })
+	if stats.is_empty():
+		return ""
+	var host_count := int(stats.get("host", 0))
+	var srflx_count := int(stats.get("srflx", 0))
+	var relay_count := int(stats.get("relay", 0))
+	if host_count == 0 and srflx_count == 0 and relay_count == 0:
+		return "No connection candidates were gathered."
+	if bool(result.diagnostics.get("relay_used", false)):
+		return "Only relay candidates were gathered."
+	return ""
 
 
 static func _backend_class_name(backend: BackendPeer) -> String:

@@ -65,6 +65,9 @@ signal host_ready()
 ## Emitted when the connection state changes.
 signal state_changed(old_state: State, new_state: State)
 
+## Emitted after [member backend] is cloned for a client join attempt.
+signal backend_ready_for_join(backend: BackendPeer)
+
 ## Emitted when [member api] is replaced.
 ##
 ## Both [param old_api] and [param new_api] may be valid. Consumers that cached
@@ -801,6 +804,7 @@ func join(
 		return ERR_INVALID_PARAMETER
 
 	self.backend = backend_instance
+	backend_ready_for_join.emit(self.backend)
 	var prepare_err := await _prepare_session(join_payload)
 	if prepare_err != OK:
 		return prepare_err

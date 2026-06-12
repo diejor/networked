@@ -24,6 +24,8 @@ extends RefCounted
 signal connected
 ## Emitted once every previously open tracker socket has closed.
 signal disconnected
+## Emitted once when every tracker socket closes before any socket opens.
+signal unreachable
 ## Emitted when [param ws] first opens, so the owner can send its first
 ## announce to that socket.
 signal socket_opened(ws: WebSocketPeer)
@@ -39,6 +41,7 @@ static var _shared_clients := { }
 
 var _sockets: Array[WebSocketPeer] = []
 var _any_open := false
+var _signaled_unreachable := false
 var _last_poll_frame := -1
 
 
@@ -97,7 +100,6 @@ static func clear_shared_clients() -> void:
 	_shared_clients.clear()
 
 
-
 # Builds a stable registry key from tracker URLs.
 static func _shared_key(urls: Array[String]) -> String:
 	var sorted := urls.duplicate()
@@ -112,6 +114,7 @@ static func _shared_key(urls: Array[String]) -> String:
 ## connecting, or [constant @GlobalScope.ERR_CANT_CONNECT] otherwise.
 func connect_to(urls: Array[String]) -> Error:
 	close()
+	_signaled_unreachable = false
 	var now := Time.get_ticks_usec()
 	for url in urls:
 		Netw.dbg.trace("WebTorrentTrackerClient: connecting to %s", [url])
@@ -180,6 +183,10 @@ func poll() -> void:
 
 	for ws in to_remove:
 		_sockets.erase(ws)
+
+	if _sockets.is_empty() and not _any_open and not _signaled_unreachable:
+		_signaled_unreachable = true
+		unreachable.emit()
 
 	if _any_open and not has_open():
 		_any_open = false

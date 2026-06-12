@@ -31,7 +31,6 @@ func _make_signaler() -> WebRTCSignaler:
 	)
 
 
-
 ## Preserves the tracker list after [method Resource.duplicate].
 func copy_from(source: BackendPeer) -> void:
 	super.copy_from(source)

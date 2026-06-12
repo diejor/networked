@@ -38,6 +38,8 @@ signal ready
 ## Emitted when the signaling provider becomes unavailable unexpectedly. An
 ## intentional wind-down after the native WebRTC link is up does not emit this.
 signal lost
+## Emitted when no signaling route can be reached during initial open.
+signal unreachable
 
 
 ## Opens signaling for [param room_id] as [param local_multiplayer_id]. A host

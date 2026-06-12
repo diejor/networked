@@ -1,7 +1,6 @@
 ## Unit tests for [TrackerSignaler] room code generation and info_hash calculation.
 extends GdUnitTestSuite
 
-
 func test_default_signaling_generates_20_char_hex_hash() -> void:
 	var signaler: TrackerSignaler = auto_free(
 		TrackerSignaler.new(["ws://127.0.0.1:9999"]),
@@ -14,11 +13,13 @@ func test_default_signaling_generates_20_char_hex_hash() -> void:
 
 
 func test_namespaced_short_codes_generates_5_char_code() -> void:
-	var signaler: TrackerSignaler = auto_free(TrackerSignaler.new(
-		["ws://127.0.0.1:9999"],
-		"my_game_namespace",
-		"ABC"
-	))
+	var signaler: TrackerSignaler = auto_free(
+		TrackerSignaler.new(
+			["ws://127.0.0.1:9999"],
+			"my_game_namespace",
+			"ABC",
+		),
+	)
 	var err := signaler.open("", 1)
 	assert_int(err).is_equal(OK)
 	var room := signaler.room_id()
@@ -34,10 +35,12 @@ func test_namespaced_short_codes_generates_5_char_code() -> void:
 
 
 func test_client_join_uses_passed_room_code() -> void:
-	var signaler: TrackerSignaler = auto_free(TrackerSignaler.new(
-		["ws://127.0.0.1:9999"],
-		"my_game_namespace"
-	))
+	var signaler: TrackerSignaler = auto_free(
+		TrackerSignaler.new(
+			["ws://127.0.0.1:9999"],
+			"my_game_namespace",
+		),
+	)
 	var err := signaler.open("XYZ12", 2)
 	assert_int(err).is_equal(OK)
 	var room := signaler.room_id()
@@ -77,7 +80,7 @@ func test_webtorrent_directory_propagates_properties() -> void:
 		"Test Lobby 1",
 		2,
 		8,
-		{ "room_hash": "ABCDE" }
+		{ "room_hash": "ABCDE" },
 	)
 
 	var target1: JoinTarget = dir.make_join_target(lobby1)
@@ -98,8 +101,8 @@ func test_webtorrent_directory_propagates_properties() -> void:
 		8,
 		{
 			"room_hash": "FGHIJ",
-			"signaling_namespace": "card_ns"
-		}
+			"signaling_namespace": "card_ns",
+		},
 	)
 
 	var target2: JoinTarget = dir.make_join_target(lobby2)
@@ -108,3 +111,27 @@ func test_webtorrent_directory_propagates_properties() -> void:
 	)
 	assert_str(webrtc2.signaling_namespace).is_equal("card_ns")
 
+
+func test_tracker_client_unreachable_fires_once_and_rearms() -> void:
+	var tracker := WebTorrentTrackerClient.new()
+	var count := [0]
+	tracker.unreachable.connect(func(): count[0] += 1)
+
+	var ws := WebSocketPeer.new()
+	ws.set_meta("url", "ws://127.0.0.1:1")
+	tracker._sockets.append(ws)
+	tracker.poll()
+	await get_tree().process_frame
+	tracker.poll()
+
+	assert_int(count[0]).is_equal(1)
+
+	tracker.connect_to([])
+	var ws2 := WebSocketPeer.new()
+	ws2.set_meta("url", "ws://127.0.0.1:2")
+	tracker._sockets.append(ws2)
+	await get_tree().process_frame
+	tracker.poll()
+
+	assert_int(count[0]).is_equal(2)
+	tracker.close()

@@ -1,5 +1,7 @@
 [gd_resource type="Theme" format=3 uid="uid://ccui2theme888"]
 
+[ext_resource type="StyleBox" uid="uid://bd3t4wvxv3m0r" path="res://addons/networked/connect/ui/popup_panel_style_box.tres" id="1_popup"]
+
 [resource]
 default_font_size = 24
 BadgePanelContainer/base_type = &"PanelContainer"
@@ -21,6 +23,7 @@ OptionButton/font_sizes/font_size = 24
 PopupMenu/colors/font_color = Color(0.9, 0.93, 0.96, 1)
 PopupMenu/colors/font_hover_color = Color(1, 1, 1, 1)
 PopupMenu/font_sizes/font_size = 21
+PopupPanel/styles/panel = ExtResource("1_popup")
 SmallLabel/base_type = &"Label"
 SmallLabel/colors/font_color = Color(0.5, 0.53, 0.6, 1)
 SmallLabel/font_sizes/font_size = 16

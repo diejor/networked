@@ -58,6 +58,9 @@ signal join_started(target: JoinTarget)
 ## A join attempt failed. [param result] is the [ConnectResult] outcome.
 signal join_failed(target: JoinTarget, result: ConnectResult)
 
+## A join attempt advanced through transport-specific progress.
+signal join_progress(target: JoinTarget, message: String, ratio: float)
+
 ## A connection succeeded. [param result] is the [ConnectResult] containing
 ## happy-path diagnostics.
 signal connection_diagnostics(result: ConnectResult)
@@ -476,7 +479,21 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	# backend (hint < 0) falls back to a safety-net ceiling.
 	var hint := target.backend.connect_timeout_hint() if target.backend else 5.0
 	var timeout := hint if hint > 0.0 else SELF_MANAGED_TIMEOUT_CEILING
+	var progress_cb := _on_backend_connect_progress.bind(target)
+	var progress_source: BackendPeer = null
+	var backend_ready_cb := func(backend: BackendPeer) -> void:
+		if backend == null:
+			return
+		progress_source = backend
+		if not backend.connect_progress.is_connected(progress_cb):
+			backend.connect_progress.connect(progress_cb)
+	tree.backend_ready_for_join.connect(backend_ready_cb, CONNECT_ONE_SHOT)
 	var err := await tree.join(target, payload, timeout, true)
+	if tree.backend_ready_for_join.is_connected(backend_ready_cb):
+		tree.backend_ready_for_join.disconnect(backend_ready_cb)
+	if progress_source != null \
+			and progress_source.connect_progress.is_connected(progress_cb):
+		progress_source.connect_progress.disconnect(progress_cb)
 	if err != OK:
 		var result := tree.last_connect_result
 		if result == null:
@@ -685,6 +702,14 @@ func _on_directory_unavailable(reason: String, id: StringName) -> void:
 		[String(id), reason],
 	)
 	directory_unavailable.emit(id, reason)
+
+
+func _on_backend_connect_progress(
+		message: String,
+		ratio: float,
+		target: JoinTarget,
+) -> void:
+	join_progress.emit(target, message, ratio)
 
 
 # Swaps the saved set to [param loaded] while keeping the existing instance for

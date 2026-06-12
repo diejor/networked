@@ -25,6 +25,14 @@ extends Resource
 ## Carries a [ConnectResult] outcome.
 signal connect_failed(result: ConnectResult)
 
+## Emitted while an in-progress client connection advances.
+## [br][br]
+## Backends with meaningful substeps emit [param ratio] between [code]0[/code]
+## and [code]1[/code]. A negative [param ratio] marks indeterminate progress.
+## Backends that never emit this leave [ConnectingPopup] on its default label.
+## [signal connect_failed] still carries the terminal failure outcome.
+signal connect_progress(message: String, ratio: float)
+
 const _MSEC_TO_SEC := 0.001
 const _PERCENT_TO_RATIO := 0.01
 const _LEGACY_SECONDS_MAX := 1.0

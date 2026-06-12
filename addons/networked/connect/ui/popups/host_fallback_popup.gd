@@ -12,6 +12,9 @@ var _pending_target: JoinTarget = null
 
 
 func _ready() -> void:
+	visible = false
+	popup_window = false
+	exclusive = true
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
 

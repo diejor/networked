@@ -26,6 +26,22 @@ class _UnavailableBackend:
 		return false
 
 
+class _ProgressBackend:
+	extends BackendPeer
+
+	func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+		return null
+
+
+	func create_join_peer(
+			_tree: MultiplayerTree,
+			_address: String,
+			_username: String = "",
+	) -> MultiplayerPeer:
+		connect_progress.emit("Mock progress", 0.5)
+		return null
+
+
 class _MockDirectory:
 	extends LobbyDirectory
 
@@ -245,6 +261,36 @@ func test_join_missing_backend_emits_join_failed() -> void:
 	assert_int(captured.size()).is_equal(1)
 	assert_bool(captured[0].message.contains("failed")).is_true()
 
+	tree.queue_free()
+	session.queue_free()
+
+
+func test_join_progress_relays_live_backend_progress() -> void:
+	var session := ConnectSession.new()
+	add_child(session)
+	var tree := MultiplayerTree.new()
+	add_child(tree)
+	session.bind_tree(tree)
+
+	var target := _make_target()
+	target.backend = _ProgressBackend.new()
+	var captured: Array = []
+	session.join_progress.connect(
+		func(t, message, ratio): captured.append([t, message, ratio])
+	)
+
+	var payload := JoinPayload.new()
+	payload.username = &"valeria"
+	var err := await session.join(target, payload)
+
+	assert_int(err).is_equal(ERR_CANT_CONNECT)
+	assert_int(captured.size()).is_equal(1)
+	assert_that(captured[0][0]).is_same(target)
+	assert_str(captured[0][1]).is_equal("Mock progress")
+	assert_float(captured[0][2]).is_equal(0.5)
+
+	tree.backend = null
+	target.backend = null
 	tree.queue_free()
 	session.queue_free()
 

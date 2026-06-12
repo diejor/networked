@@ -115,6 +115,10 @@ var _connect: NetwConnect
 
 
 func _ready() -> void:
+	var viewport := get_viewport()
+	if viewport:
+		viewport.gui_embed_subwindows = true
+
 	_add_popup = _ADD_POPUP_SCENE.instantiate()
 	add_child(_add_popup)
 	_add_popup.submitted.connect(_on_target_submitted)
@@ -210,6 +214,8 @@ func _bind_session_signals() -> void:
 		_connect.host_failed.connect(_show_banner)
 	if not _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.connect(_on_join_failed)
+	if not _connect.join_progress.is_connected(_on_join_progress):
+		_connect.join_progress.connect(_on_join_progress)
 	if not _connect.directory_unavailable.is_connected(
 		_on_directory_unavailable,
 	):
@@ -233,6 +239,8 @@ func _unbind_session_signals() -> void:
 		_connect.host_failed.disconnect(_show_banner)
 	if _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.disconnect(_on_join_failed)
+	if _connect.join_progress.is_connected(_on_join_progress):
+		_connect.join_progress.disconnect(_on_join_progress)
 	if _connect.directory_unavailable.is_connected(_on_directory_unavailable):
 		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
 
@@ -519,7 +527,16 @@ func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
 			payload.username = StringName(_last_username)
 		_prompt_host_fallback(target, payload)
 	else:
-		_connecting_popup.show_failed(msg)
+		var detail := ConnectUiShared.format_connect_detail(result)
+		_connecting_popup.show_failed(msg, detail)
+
+
+func _on_join_progress(
+		_target: JoinTarget,
+		message: String,
+		ratio: float,
+) -> void:
+	_connecting_popup.update_progress(message, ratio)
 
 
 func _show_connecting_overlay(target: JoinTarget) -> void:

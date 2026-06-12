@@ -246,6 +246,7 @@ func _connect_trackers() -> Error:
 func _connect_tracker_signals() -> void:
 	_tracker.connected.connect(_on_tracker_ready)
 	_tracker.disconnected.connect(_on_signaling_lost)
+	_tracker.unreachable.connect(_on_signaling_unreachable)
 	_tracker.socket_opened.connect(_announce_to)
 	_tracker.message_received.connect(_parse_packet)
 
@@ -256,6 +257,8 @@ func _disconnect_tracker_signals() -> void:
 			_tracker.connected.disconnect(_on_tracker_ready)
 		if _tracker.disconnected.is_connected(_on_signaling_lost):
 			_tracker.disconnected.disconnect(_on_signaling_lost)
+		if _tracker.unreachable.is_connected(_on_signaling_unreachable):
+			_tracker.unreachable.disconnect(_on_signaling_unreachable)
 		if _tracker.socket_opened.is_connected(_announce_to):
 			_tracker.socket_opened.disconnect(_announce_to)
 		if _tracker.message_received.is_connected(_parse_packet):
@@ -275,6 +278,11 @@ func _release_tracker() -> void:
 func _on_signaling_lost() -> void:
 	Netw.dbg.info("TrackerSignaler: all trackers closed.")
 	lost.emit()
+
+
+func _on_signaling_unreachable() -> void:
+	Netw.dbg.info("TrackerSignaler: no tracker could be reached.")
+	unreachable.emit()
 
 
 # Relays the tracker connected signal to the public signaler ready signal.
@@ -452,7 +460,6 @@ func _generate_short_code() -> String:
 	for i in 5:
 		code += chars[randi() % chars.length()]
 	return code
-
 
 
 func _generate_peer_id(godot_id: int) -> String:

@@ -114,6 +114,7 @@ var _signaler: WebRTCSignaler = null
 var _is_server := false
 var _signaling_ready := false
 var _connect_started_ms := 0
+var _connect_offer_progress_sent := false
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.
@@ -245,6 +246,7 @@ func create_join_peer(
 		Netw.dbg.error("WebRTC signaler open failed: %s", [error_string(err)])
 		_clear_session_and_signaler()
 		return null
+	_emit_connect_progress("Reaching signaling...", 0.2)
 	return _session.webrtc_peer
 
 
@@ -284,6 +286,7 @@ func _build_session_and_signaler() -> void:
 	_signaler = _make_signaler()
 
 	_session.signal_out.connect(_signaler.send)
+	_session.signal_out.connect(_on_session_signal_out)
 	_signaler.received.connect(_session.deliver)
 	_session.native_connected.connect(_on_native_connected)
 	_session.native_connected.connect(_signaler.on_session_connected)
@@ -291,6 +294,7 @@ func _build_session_and_signaler() -> void:
 	_session.failed.connect(_on_session_failed)
 	_signaler.ready.connect(_on_signaling_connected)
 	_signaler.lost.connect(_on_signaling_disconnected)
+	_signaler.unreachable.connect(_on_signaling_unreachable)
 
 
 func _clear_session_and_signaler() -> void:
@@ -300,6 +304,8 @@ func _clear_session_and_signaler() -> void:
 				_session.signal_out.disconnect(_signaler.send)
 			if _session.native_connected.is_connected(_signaler.on_session_connected):
 				_session.native_connected.disconnect(_signaler.on_session_connected)
+		if _session.signal_out.is_connected(_on_session_signal_out):
+			_session.signal_out.disconnect(_on_session_signal_out)
 		if _session.native_connected.is_connected(_on_native_connected):
 			_session.native_connected.disconnect(_on_native_connected)
 		if _session.native_disconnected.is_connected(_on_native_disconnected):
@@ -316,10 +322,13 @@ func _clear_session_and_signaler() -> void:
 			_signaler.ready.disconnect(_on_signaling_connected)
 		if _signaler.lost.is_connected(_on_signaling_disconnected):
 			_signaler.lost.disconnect(_on_signaling_disconnected)
+		if _signaler.unreachable.is_connected(_on_signaling_unreachable):
+			_signaler.unreachable.disconnect(_on_signaling_unreachable)
 		_signaler.close()
 
 	_session = null
 	_signaler = null
+	_connect_offer_progress_sent = false
 
 
 func _on_native_connected(id: int) -> void:
@@ -381,6 +390,7 @@ func _on_session_failed(id: int, reason: String) -> void:
 func _on_signaling_connected() -> void:
 	_signaling_ready = true
 	signaling_connected.emit()
+	_emit_connect_progress("Exchanging connection info...", 0.5)
 
 
 func _on_signaling_disconnected() -> void:
@@ -392,6 +402,34 @@ func _on_signaling_disconnected() -> void:
 			"Could not reach signaling.",
 		)
 		connect_failed.emit(res)
+
+
+func _on_signaling_unreachable() -> void:
+	_signaling_ready = false
+	if not _is_server and _session and not _session._connected_ids.has(1):
+		_connect_started_ms = 0
+		var res := ConnectResult.unreachable(
+			&"SIGNALING_UNREACHABLE",
+			"Could not reach any signaling server.",
+		)
+		connect_failed.emit(res)
+
+
+func _on_session_signal_out(
+		_to_multiplayer_id: int,
+		_to_signaler_id: String,
+		kind: String,
+		_payload: Dictionary,
+) -> void:
+	if kind != "offer" or _connect_offer_progress_sent:
+		return
+	_connect_offer_progress_sent = true
+	_emit_connect_progress("Negotiating peer link...", 0.75)
+
+
+func _emit_connect_progress(message: String, ratio: float) -> void:
+	if not _is_server:
+		connect_progress.emit(message, ratio)
 
 
 func _poll_signaling_check() -> void:
@@ -432,13 +470,14 @@ func get_address_hint() -> AddressHint:
 	)
 ## Keeps [method BackendPeer.query_server_info] unsupported for room ids.
 
+
 ##
 ## WebRTC discovery uses signaling. An [AuthProbeClient] probe would need a full
 ## ICE handshake, which is too expensive for browser refresh.
 func query_server_info(
 		_address: String,
 		_timeout: float = 2.0,
- ) -> ServerInfoResult:
+) -> ServerInfoResult:
 	return ServerInfoResult.unsupported()
 
 
@@ -462,7 +501,6 @@ func copy_from(source: BackendPeer) -> void:
 		gather_timeout = other.gather_timeout
 		topup_interval = other.topup_interval
 		filter_unsupported_turn = other.filter_unsupported_turn
-
 
 
 ## Clears the active session and signaler.
