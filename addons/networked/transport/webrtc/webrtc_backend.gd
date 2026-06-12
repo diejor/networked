@@ -20,13 +20,22 @@
 ## [br][br]
 ## [b]Credentials and TURN configuration[/b]
 ## [br]
-## Configure the project setting [code]networked/webrtc/turn_credentials_url[/code]
-## to point to your secure or backend service that issues ephemeral
-## TURN/STUN credentials. During connection setup, the backend will dynamically
-## query this URL to populate the active [member global_ice_servers].
+## Configure the project setting
+## [code]networked/webrtc/turn_credentials_url[/code] to point to your secure
+## or backend service that issues ephemeral TURN/STUN credentials. During
+## connection setup, the backend will dynamically query this URL to populate
+## the active [member global_ice_servers].
 ## [codeblock]
-## # session.signal_out -> signaler.send,  signaler.received -> session.deliver
-## @abstract func make_signaler() -> WebRTCSignaler
+## networked/webrtc/turn_credentials_url = "https://api.mygame.com/turn"
+## [/codeblock]
+## If your credentials backend requires authentication (such as custom tokens
+## or signatures), define the project setting
+## [code]networked/webrtc/turn_credentials_headers[/code] with the headers to
+## send:
+## [codeblock]
+## PackedStringArray
+##  ┠╴"Authorization: Bearer my_secret_token"
+##  ┖╴"X-Api-Key: my_secret_api_key"
 ## [/codeblock]
 @tool
 @abstract
@@ -128,6 +137,11 @@ func make_signaler() -> WebRTCSignaler
 ## is set in ProjectSettings, this method performs an asynchronous [HTTPRequest]
 ## to fetch ICE credentials and populates [member global_ice_servers].
 ## [br][br]
+## Custom headers specified in
+## [code]networked/webrtc/turn_credentials_headers[/code] are included in the
+## request. If this setting is empty, a standard request with no custom
+## headers is sent to preserve compatibility with third-party APIs.
+## [br][br]
 ## The fetched JSON response must match this schema:
 ## [codeblock]
 ## Array
@@ -145,16 +159,26 @@ func setup(tree: MultiplayerTree) -> Error:
 
 	var url := ""
 	if ProjectSettings.has_setting("networked/webrtc/turn_credentials_url"):
-		url = ProjectSettings.get_setting("networked/webrtc/turn_credentials_url")
+		url = ProjectSettings.get_setting(
+			"networked/webrtc/turn_credentials_url"
+		)
 
 	if url.is_empty():
 		return OK
+
+	var headers: PackedStringArray = []
+	if ProjectSettings.has_setting(
+		"networked/webrtc/turn_credentials_headers"
+	):
+		headers = ProjectSettings.get_setting(
+			"networked/webrtc/turn_credentials_headers"
+		)
 
 	var http := HTTPRequest.new()
 	http.timeout = 5.0
 	tree.add_child(http)
 
-	var err := http.request(url)
+	var err := http.request(url, headers)
 	if err != OK:
 		Netw.dbg.warn(
 			"WebRTC credentials request initiation failed: %s",

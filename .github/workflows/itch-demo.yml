@@ -68,6 +68,14 @@ jobs:
       - name: Import resources
         run: godot --headless --import || true
 
+      - name: Create Godot Override Configuration
+        env:
+          T_TOKEN: ${{ secrets.TURN_AUTH_TOKEN }}
+        run: |
+          echo "[networked]" > override.cfg
+          VAL="PackedStringArray(\"X-Turn-Auth-Token: $T_TOKEN\")"
+          echo "webrtc/turn_credentials_headers=$VAL" >> override.cfg
+
       - name: Export Web (Bomber)
         run: |
           mkdir -v -p build/web
