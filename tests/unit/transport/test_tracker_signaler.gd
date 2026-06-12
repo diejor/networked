@@ -72,7 +72,6 @@ func test_webrtc_backend_properties() -> void:
 	assert_str(hint2.placeholder).is_equal("5-char code")
 
 
-
 func test_webtorrent_directory_propagates_properties() -> void:
 	var dir: WebTorrentDirectory = auto_free(WebTorrentDirectory.new())
 
