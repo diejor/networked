@@ -79,9 +79,7 @@ func test_set_link_conditions_for_sender() -> void:
 		client._get_unique_id(),
 	)
 	assert_that(installed.latency_ms).is_equal(50.0)
-	assert_that(
-		session.get_link_plan(server, client._get_unique_id()).delay_polls,
-	).is_equal(3)
+	assert_that(installed.effective_latency_ms()).is_equal(50.0)
 
 	session.clear_link_conditions(server, client._get_unique_id())
 	assert_that(

@@ -1,13 +1,12 @@
 ## Fluent local loopback link control for harness tests.
 ##
-## [method NetwGameHarness.degrade] applies both directions for one player.
-## [method NetwGameHarness.path] exposes one directional path.
-## [method latency_ms], [method loss], and [method profile] update the
-## selected path and return this handle for chaining.
+## Every setter mutates the installed [LocalLoopbackSession.LinkConditions] for
+## one directional path and returns this handle for chaining, so impairment is
+## authored in one continuous expression.
 ## [codeblock]
 ## game.degrade(client).profile(NetwLink.Profile.POOR_3G)
 ## game.degrade(client).inbound().latency_ms(120)
-## game.path(client, host).loss(0.1)
+## game.path(client, host).loss(0.1).latency_ms(66).seed(1)
 ## [/codeblock]
 ## [codeblock]
 ## inbound: server to player. This affects what the player sees.
@@ -16,8 +15,7 @@
 ## path(from_runner, to_runner): packets from one runner to another runner.
 ## [/codeblock]
 ##
-## [method exact] exposes [LocalLoopbackSession.LinkPlan] poll counts for
-## tests. Use [method clear] to restore a perfect path.
+## Use [method clear] to restore a perfect path.
 class_name NetwLink
 extends RefCounted
 
@@ -81,11 +79,26 @@ func duplicate(probability: float) -> NetwLink:
 	return _apply_conditions(conditions)
 
 
-## Sets unreliable throttle probability and freeze length.
+## Sets unreliable throttle probability and freeze length in milliseconds.
 func throttle(probability: float, ms: float = 0.0) -> NetwLink:
 	var conditions := _conditions()
 	conditions.throttle = probability
 	conditions.throttle_ms = ms
+	return _apply_conditions(conditions)
+
+
+## Sets reliable retransmit delay in milliseconds. A negative value restores
+## auto derivation from [member LocalLoopbackSession.LinkConditions.latency_ms].
+func retransmit_ms(ms: float) -> NetwLink:
+	var conditions := _conditions()
+	conditions.retransmit_ms = ms
+	return _apply_conditions(conditions)
+
+
+## Sets the deterministic random seed.
+func seed(n: int) -> NetwLink:
+	var conditions := _conditions()
+	conditions.seed = n
 	return _apply_conditions(conditions)
 
 
@@ -94,20 +107,12 @@ func profile(profile_id: Profile) -> NetwLink:
 	return _apply_conditions(_profile_conditions(profile_id))
 
 
-## Returns the effective latency after millisecond values are quantized.
+## Returns the installed baseline latency in milliseconds.
 func effective_latency_ms() -> float:
-	var plan := _session.get_link_plan(_peer, _sender_id)
-	if not plan:
+	var conditions := _session.get_link_conditions(_peer, _sender_id)
+	if not conditions:
 		return 0.0
-	return plan.effective_latency_ms()
-
-
-## Returns the exact poll-level authoring surface.
-func exact() -> NetwLinkExact:
-	var plan := _session.get_link_plan(_peer, _sender_id)
-	if not plan:
-		plan = LocalLoopbackSession.LinkPlan.new()
-	return NetwLinkExact.new(_session, _peer, _sender_id, plan)
+	return conditions.effective_latency_ms()
 
 
 ## Clears this peer and sender link.
@@ -216,10 +221,24 @@ class NetwLinkMulti:
 		return self
 
 
-	## Sets unreliable throttle probability and freeze length.
+	## Sets unreliable throttle probability and freeze length in milliseconds.
 	func throttle(probability: float, ms: float = 0.0) -> NetwLinkMulti:
 		for link in _links:
 			link.throttle(probability, ms)
+		return self
+
+
+	## Sets reliable retransmit delay in milliseconds on every selected path.
+	func retransmit_ms(ms: float) -> NetwLinkMulti:
+		for link in _links:
+			link.retransmit_ms(ms)
+		return self
+
+
+	## Sets the deterministic random seed on every selected path.
+	func seed(n: int) -> NetwLinkMulti:
+		for link in _links:
+			link.seed(n)
 		return self
 
 
@@ -228,15 +247,6 @@ class NetwLinkMulti:
 		for link in _links:
 			link.profile(profile_id)
 		return self
-
-
-	## Returns the exact poll-level authoring surface for one path.
-	func exact() -> NetwLinkExact:
-		assert(
-			_links.size() == 1,
-			"NetwLinkMulti.exact: select inbound() or outbound() first.",
-		)
-		return _links[0].exact()
 
 
 	## Clears every selected path.
@@ -250,82 +260,3 @@ class NetwLinkMulti:
 			outbound_link: NetwLink,
 	) -> NetwLinkMulti:
 		return NetwLinkMulti.new(inbound_link, outbound_link)
-
-
-## Poll-level link control for deterministic low-level tests.
-##
-## Each setter updates the installed [LocalLoopbackSession.LinkPlan] and returns
-## this handle for chaining.
-class NetwLinkExact:
-	extends RefCounted
-
-	var _session: LocalLoopbackSession
-	var _peer: LocalMultiplayerPeer
-	var _sender_id: int = 0
-	var _plan: LocalLoopbackSession.LinkPlan
-
-
-	func _init(
-			session: LocalLoopbackSession,
-			peer: LocalMultiplayerPeer,
-			sender_id: int,
-			plan: LocalLoopbackSession.LinkPlan,
-	) -> void:
-		_session = session
-		_peer = peer
-		_sender_id = sender_id
-		_plan = plan.clone()
-
-
-	## Sets baseline delay in session polls.
-	func delay_polls(n: int) -> NetwLinkExact:
-		_plan.delay_polls = n
-		return _apply()
-
-
-	## Sets unreliable jitter in session polls.
-	func jitter_polls(n: int) -> NetwLinkExact:
-		_plan.jitter_polls = n
-		return _apply()
-
-
-	## Sets packet loss probability.
-	func loss_prob(probability: float) -> NetwLinkExact:
-		_plan.loss_probability = probability
-		return _apply()
-
-
-	## Sets unreliable reorder probability.
-	func reorder_prob(probability: float) -> NetwLinkExact:
-		_plan.reorder_probability = probability
-		return _apply()
-
-
-	## Sets unreliable duplicate probability.
-	func duplicate_prob(probability: float) -> NetwLinkExact:
-		_plan.duplicate_probability = probability
-		return _apply()
-
-
-	## Sets unreliable throttle probability and freeze polls.
-	func throttle_prob(probability: float, polls: int = 0) -> NetwLinkExact:
-		_plan.throttle_probability = probability
-		_plan.throttle_polls = polls
-		return _apply()
-
-
-	## Sets reliable retransmit delay in session polls.
-	func retransmit_polls(n: int) -> NetwLinkExact:
-		_plan.retransmit_polls = n
-		return _apply()
-
-
-	## Sets the deterministic random seed.
-	func seed(n: int) -> NetwLinkExact:
-		_plan.seed = n
-		return _apply()
-
-
-	func _apply() -> NetwLinkExact:
-		_session.set_link_plan(_peer, _plan, _sender_id)
-		return self

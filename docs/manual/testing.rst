@@ -316,17 +316,17 @@ should be explicit. The arguments are ordered as sender, then receiver.
 
 Most game tests should set conditions in milliseconds or use a
 :ref:`NetwLink.Profile <enum_NetwLink_Profile>`. Use
-:ref:`exact() <class_NetwLink_method_exact>` only when the test is about
-poll-level packet ordering. Exact plans expose
+:ref:`exact() <class_NetwLink_method_exact>` only when the test needs an exact
+deterministic plan. Exact plans expose
 :ref:`LocalLoopbackSession.LinkPlan <class_LocalLoopbackSession_LinkPlan>`
-and make the test depend on the loopback transport's polling model.
+in milliseconds.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
     game.path(alice, bob).exact() \
             .loss_prob(0.5) \
-            .delay_polls(4) \
+            .delay_ms(66.0) \
             .seed(1)
 
 Real transports

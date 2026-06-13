@@ -90,9 +90,9 @@ func test_rough_link_replicates_to_client() -> void:
 	var start := valeria_on_jose.position.x
 
 	# Apply a rough link with 50% packet loss and delay
-	game.path(valeria, jose).exact() \
-			.loss_prob(0.5) \
-			.delay_polls(4) \
+	game.path(valeria, jose) \
+			.loss(0.5) \
+			.latency_ms(66.0) \
 			.seed(1)
 
 	await game.sync_ticks(16)

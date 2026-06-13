@@ -27,19 +27,19 @@ func test_link_routes_to_correct_peer() -> void:
 	var host_peer := host.tree.multiplayer_peer as LocalMultiplayerPeer
 	var client_peer := client.tree.multiplayer_peer as LocalMultiplayerPeer
 
-	game.link(client).exact().delay_polls(4).seed(1)
-	assert_that(session.get_link_plan(client_peer)).is_not_null()
-	assert_that(session.get_link_plan(client_peer).delay_polls).is_equal(4)
+	game.link(client).latency_ms(40.0).seed(1)
+	assert_that(session.get_link_conditions(client_peer)).is_not_null()
+	assert_that(session.get_link_conditions(client_peer).latency_ms).is_equal(40.0)
 
-	game.link(host, client).exact().delay_polls(7).seed(2)
+	game.link(host, client).latency_ms(70.0).seed(2)
 	assert_that(
-		session.get_link_plan(host_peer, client.peer_id),
+		session.get_link_conditions(host_peer, client.peer_id),
 	).is_not_null()
 	assert_that(
-		session.get_link_plan(host_peer, client.peer_id).delay_polls,
-	).is_equal(7)
+		session.get_link_conditions(host_peer, client.peer_id).latency_ms,
+	).is_equal(70.0)
 	# The sender keyed condition must not leak into the wildcard slot.
-	assert_that(session.get_link_plan(host_peer)).is_null()
+	assert_that(session.get_link_conditions(host_peer)).is_null()
 
 
 func test_degrade_and_path_read_in_data_flow_order() -> void:
@@ -54,24 +54,24 @@ func test_degrade_and_path_read_in_data_flow_order() -> void:
 
 	game.degrade(client).latency_ms(150.0)
 	assert_that(
-		session.get_link_plan(client_peer, host.peer_id).delay_polls,
-	).is_equal(9)
+		session.get_link_conditions(client_peer, host.peer_id).latency_ms,
+	).is_equal(150.0)
 	assert_that(
-		session.get_link_plan(host_peer, client.peer_id).delay_polls,
-	).is_equal(9)
+		session.get_link_conditions(host_peer, client.peer_id).latency_ms,
+	).is_equal(150.0)
 
-	game.degrade(client).inbound().exact().delay_polls(4)
+	game.degrade(client).inbound().latency_ms(40.0)
 	assert_that(
-		session.get_link_plan(client_peer, host.peer_id).delay_polls,
-	).is_equal(4)
+		session.get_link_conditions(client_peer, host.peer_id).latency_ms,
+	).is_equal(40.0)
 	assert_that(
-		session.get_link_plan(host_peer, client.peer_id).delay_polls,
-	).is_equal(9)
+		session.get_link_conditions(host_peer, client.peer_id).latency_ms,
+	).is_equal(150.0)
 
-	game.path(client, host).exact().delay_polls(7)
+	game.path(client, host).latency_ms(70.0)
 	assert_that(
-		session.get_link_plan(host_peer, client.peer_id).delay_polls,
-	).is_equal(7)
+		session.get_link_conditions(host_peer, client.peer_id).latency_ms,
+	).is_equal(70.0)
 
 
 func test_link_delays_inbound_rpc() -> void:
@@ -83,20 +83,36 @@ func test_link_delays_inbound_rpc() -> void:
 	var host_probe := host.find(_PROBE_PATH) as InboundRpcProbe
 	assert_that(host_probe).is_not_null()
 
+	# An undelayed inbound RPC lands on the client.
 	host_probe.apply_value.rpc(10)
-	var baseline_ticks := await _ticks_until_value(client, 10, 8)
-	assert_that(baseline_ticks).is_greater_equal(0)
+	assert_that(await _ticks_until_value(client, 10, 8)).is_greater_equal(0)
 
-	game.link(client).exact().delay_polls(6).seed(20)
-
+	# A delay far longer than the test window holds the next RPC in flight. The
+	# magnitude keeps the assertion independent of how much loopback time one
+	# network tick spans, which shifts with the harness physics rate.
+	game.link(client).latency_ms(1_000_000.0).seed(20)
 	host_probe.apply_value.rpc(20)
-	await game.sync_ticks(1)
 	var client_peer := client.tree.multiplayer_peer as LocalMultiplayerPeer
-	var state = game._loopback.session()._links_by_peer[client_peer]
-	assert_that(state.in_flight.size()).is_greater(0)
-	var delayed_ticks := await _ticks_until_value(client, 20, 16)
+	var held := await _wait_for_in_flight(client_peer, 8)
 
-	assert_that(delayed_ticks).is_greater(baseline_ticks)
+	# The packet sits in flight and the client keeps the old value: the link
+	# delayed the inbound RPC rather than dropping or applying it.
+	assert_that(held).is_true()
+	assert_that((client.find(_PROBE_PATH) as InboundRpcProbe).value).is_equal(10)
+
+	# Clearing the link flushes the held packet, so the update finally arrives.
+	game.link(client).clear()
+	assert_that(await _ticks_until_value(client, 20, 8)).is_greater_equal(0)
+
+
+func _wait_for_in_flight(peer: LocalMultiplayerPeer, max_ticks: int) -> bool:
+	var session := game._loopback.session()
+	for tick in range(max_ticks + 1):
+		if session._links_by_peer.has(peer) \
+				and session._links_by_peer[peer].in_flight.size() > 0:
+			return true
+		await game.sync_ticks(1)
+	return false
 
 
 func _ticks_until_value(

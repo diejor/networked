@@ -189,15 +189,6 @@ func set_link_conditions(
 	_session.set_link_conditions(peer, conditions, sender_id)
 
 
-## Sets an exact inbound link plan on [param peer].
-func set_link_plan(
-		peer: LocalMultiplayerPeer,
-		plan: LocalLoopbackSession.LinkPlan,
-		sender_id: int = 0,
-) -> void:
-	_session.set_link_plan(peer, plan, sender_id)
-
-
 ## Clears inbound link conditions on [param peer] and [param sender_id].
 func clear_link_conditions(
 		peer: LocalMultiplayerPeer,
@@ -212,11 +203,3 @@ func get_link_conditions(
 		sender_id: int = 0,
 ) -> LocalLoopbackSession.LinkConditions:
 	return _session.get_link_conditions(peer, sender_id)
-
-
-## Returns the installed inbound link plan for [param peer].
-func get_link_plan(
-		peer: LocalMultiplayerPeer,
-		sender_id: int = 0,
-) -> LocalLoopbackSession.LinkPlan:
-	return _session.get_link_plan(peer, sender_id)

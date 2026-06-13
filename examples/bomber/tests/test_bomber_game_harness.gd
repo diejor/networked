@@ -99,9 +99,9 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	var valeria_player := await valeria.await_player(&"valeria") as Node2D
 	var valeria_on_jose := await jose.await_player(&"valeria") as Node2D
 
-	game.path(valeria, jose).exact() \
-			.loss_prob(0.5) \
-			.delay_polls(4) \
+	game.path(valeria, jose) \
+			.loss(0.5) \
+			.latency_ms(66.0) \
 			.seed(1)
 
 	await game.sync_ticks(8)
