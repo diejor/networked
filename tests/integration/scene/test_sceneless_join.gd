@@ -27,7 +27,7 @@ func before_test() -> void:
 	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
 
 	harness = make_harness()
-	await harness.setup(null, level_builder.packed)
+	await harness.setup(level_builder.packed)
 	client = await harness.add_client()
 
 

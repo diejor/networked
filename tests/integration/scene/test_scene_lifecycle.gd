@@ -20,7 +20,7 @@ func before_test() -> void:
 	level_2_builder.pack()
 
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
 	harness.register_spawnable_scene(level_builder.packed)
 	harness.register_spawnable_scene(level_2_builder.packed)
@@ -40,7 +40,7 @@ func test_startup_scenes_are_active_and_idempotent() -> void:
 
 func test_on_demand_scene_skipped_at_startup() -> void:
 	var h2 := make_unmanaged_harness()
-	await h2.setup(NetwTestSuite.create_scene_manager)
+	await h2.setup_factory(NetwTestSuite.create_scene_manager)
 	h2.set_scene_policy(
 		level_2_builder.scene_name,
 		MultiplayerSceneManager.LoadMode.ON_DEMAND,

@@ -20,7 +20,7 @@ func before_test() -> void:
 		var sm := NetwTestSuite.create_scene_manager()
 		sm.add_spawnable_scene(level_builder.resource_path)
 		return sm
-	await harness.setup(sm_factory)
+	await harness.setup_factory(sm_factory)
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
 

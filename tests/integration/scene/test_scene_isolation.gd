@@ -12,7 +12,7 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 
 	level_builder = LevelBuilder.new() \
 			.with_root(Node2D) \

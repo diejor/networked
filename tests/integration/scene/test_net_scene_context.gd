@@ -29,7 +29,7 @@ func before_test() -> void:
 	level_builder.pack()
 
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 
 	harness.register_spawnable_scene(level_builder.packed)
 
@@ -91,7 +91,7 @@ func test_scene_reports_current_players() -> void:
 
 func test_wait_for_players_suspends_until_player_enters() -> void:
 	var h := make_unmanaged_harness()
-	await h.setup(NetwTestSuite.create_scene_manager)
+	await h.setup_factory(NetwTestSuite.create_scene_manager)
 	h.register_spawnable_scene(level_builder.packed)
 	var c: MultiplayerTree = await h.add_client()
 	var ctx: NetwContext = h.scene_on_server().get_context()

@@ -89,7 +89,7 @@ func throttle(probability: float, ms: float = 0.0) -> NetwLink:
 	return _apply_conditions(conditions)
 
 
-## Resets the link to [param profile].
+## Resets the link to [param profile_id].
 func profile(profile_id: Profile) -> NetwLink:
 	return _apply_conditions(_profile_conditions(profile_id))
 

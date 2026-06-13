@@ -5,23 +5,78 @@
 Testing
 =======
 
-Networked ships a small companion library in ``addons/networked_test``. It is
-the same rig the addon uses for its own coverage, so anything you can read
-here you can copy into a game project.
+Networked's test helpers let one Godot process run a full multiplayer
+session. A test can create a server, connect clients, advance the shared
+:godot:`SceneTree <SceneTree>`, and assert on each peer's view of the game
+without launching extra editor or export instances.
 
-The two classes you use day to day are
-:ref:`NetwTestSuite <class_NetwTestSuite>` as the GdUnit4 base, and
-:ref:`NetwTestHarness <class_NetwTestHarness>` for multi peer flows. Register
-:ref:`NetwTestSessionHook <class_NetwTestSessionHook>` in your GdUnit4
-settings so debug state resets between tests and root node leaks are reported.
+The helpers live in ``addons/networked_test``. They are normal Godot nodes
+and resources, but the common path starts from
+:ref:`NetwTestSuite <class_NetwTestSuite>`, the GdUnit4 base class that owns
+per-test cleanup, timeout reporting, and log controls.
 
-Writing a multiplayer test
---------------------------
+The mental model
+----------------
 
-A good multiplayer test reads like the game itself. Spin up a harness, add
-peers, drive a flow, assert what the player sees. The harness owns peer
-registration, scene mirroring, and teardown ordering. Harnesses created with
-``make_harness()`` are torn down automatically after each test case.
+A multiplayer test needs two separate questions answered:
+
+1. Did the server accept the peer and route the session state correctly?
+2. Did the expected node, signal, input, or replicated value appear on the
+   peer that should see it?
+
+:ref:`NetwTestHarness <class_NetwTestHarness>` answers the first question
+at the addon API level. It builds one dedicated server
+:ref:`MultiplayerTree <class_MultiplayerTree>`, adds client
+:ref:`MultiplayerTree <class_MultiplayerTree>` nodes, and carries packets
+through :ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>`.
+
+:ref:`NetwGameHarness <class_NetwGameHarness>` answers the second question
+with a real game scene. It instantiates the game's main scene once per
+participant, puts every participant in a slot, and returns a
+:ref:`NetwSceneRunner <class_NetwSceneRunner>` for each peer so the test can
+drive that peer's input and inspect that peer's world.
+
+:ref:`NetwTestSessionHook <class_NetwTestSessionHook>` resets Networked's
+global test state between cases. A live harness should be created in
+``before_test()`` or inside the test method, not in ``before()``, because
+``before()`` runs before the per-case reset.
+
+Three categories of test
+------------------------
+
+Use the smallest harness that still exercises the behavior you care about.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 35 40
+
+   * - Category
+     - Use it for
+     - Typical entry point
+   * - Isolated unit tests
+     - Pure data structures, resources, and components that do not need a
+       session.
+     - Plain :ref:`NetwTestSuite <class_NetwTestSuite>` helpers such as
+       :ref:`make_test_entity() <class_NetwTestSuite_method_make_test_entity>`.
+   * - Session tests
+     - Join flows, roster state, scene activation, spawn policy, and
+       replication contracts at the addon API boundary.
+     - :ref:`make_harness() <class_NetwTestSuite_method_make_harness>` and
+       :ref:`NetwTestHarness <class_NetwTestHarness>`.
+   * - Game tests
+     - Player input, UI-facing game state, scene transitions, and behavior
+       that only makes sense in the real main scene.
+     - :ref:`make_game_harness() <class_NetwTestSuite_method_make_game_harness>`
+       and :ref:`NetwGameHarness <class_NetwGameHarness>`.
+
+Session tests
+-------------
+
+Use :ref:`NetwTestHarness <class_NetwTestHarness>` when the test should talk
+to Networked's public session API directly. The harness creates the server
+tree immediately, but it does not host until the first client connects. That
+gives the test a place to register spawnable scenes and configure scene
+policies first.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -41,46 +96,73 @@ registration, scene mirroring, and teardown ordering. Harnesses created with
 
     func before_test() -> void:
         harness = make_harness()
-        await harness.setup(NetwTestSuite.create_scene_manager)
+        await harness.setup_factory(NetwTestSuite.create_scene_manager)
         harness.register_spawnable_scene(LEVEL)
-        alice = await harness.add_client()
+        alice = await harness.add_client("alice")
 
-    func test_spawn_assigns_authority() -> void:
+    func test_spawn_assigns_authority_to_owning_peer() -> void:
         var player := harness.spawn_player(alice, PLAYER)
-        await harness.wait_for_player(alice, &"TestLevel")
+        var alice_player := await harness.wait_for_player(
+            alice,
+            &"TestLevel"
+        )
+
+        assert_that(alice_player).is_not_null()
         assert_that(player.get_multiplayer_authority()).is_equal(
             alice.multiplayer_peer.get_unique_id()
         )
 
-If your test reaches into private addon state to make a multiplayer flow
-work, the harness is missing a public helper. Open an issue rather than
-working around it. The test should not know about peer registration timing,
-loopback transport setup, or frame drains.
+The setup path is the important part:
 
-If a test needs its own cleanup, call the base hook last:
+- :ref:`make_harness() <class_NetwTestSuite_method_make_harness>` creates a
+  managed harness.
+  :ref:`NetwTestSuite.after_test() <class_NetwTestSuite_method_after_test>`
+  tears it down after the case.
+- :ref:`setup_factory() <class_NetwTestHarness_method_setup_factory>` gives
+  each peer its own fresh
+  :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`.
+- :ref:`register_spawnable_scene() <class_NetwTestHarness_method_register_spawnable_scene>`
+  mirrors the level path onto clients created by
+  :ref:`add_client() <class_NetwTestHarness_method_add_client>`.
+- :ref:`spawn_player() <class_NetwTestHarness_method_spawn_player>` drives the
+  server-side spawn.
+  :ref:`wait_for_player() <class_NetwTestHarness_method_wait_for_player>`
+  waits until the selected client can see it.
+
+When a case needs a second independent session, use
+:ref:`make_unmanaged_harness() <class_NetwTestSuite_method_make_unmanaged_harness>`
+and call :ref:`teardown() <class_NetwTestHarness_method_teardown>` yourself.
+For ordinary cases, prefer the managed harness.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    func after_test() -> void:
-        get_tree().paused = false
-        await super.after_test()
+    func test_two_independent_sessions() -> void:
+        var first := make_harness()
+        await first.setup_factory(NetwTestSuite.create_scene_manager)
 
-Use ``make_unmanaged_harness()`` only when one test case intentionally needs
-an extra harness. Unmanaged harnesses must be torn down explicitly.
+        var second := make_unmanaged_harness()
+        await second.setup_factory(NetwTestSuite.create_scene_manager)
 
-Testing real game scenes
-~~~~~~~~~~~~~~~~~~~~~~~~
+        await second.teardown()
 
-Use ``make_game_harness(main_scene)`` when the test should adopt a real
-game ``main.tscn`` instead of building trees from fixtures. The harness
-mounts each participant in a ``ParticipantSlot``, promotes one instance to a
-listen server, connects client instances through local loopback, and owns
-``sync_ticks()`` for the shared clock.
+Game tests
+----------
 
-Per participant input must enter through ``_unhandled_input``. Prefer
-``InputComponent`` for player controls. Polling the global ``Input`` singleton
-cannot be scoped to one slot, so it is unsupported for slot routed game tests.
+Use :ref:`NetwGameHarness <class_NetwGameHarness>` when the behavior depends
+on the actual game scene. Each participant runs a separate instance of the
+main scene inside a :ref:`ParticipantWindow <class_ParticipantWindow>`.
+:ref:`add_host() <class_NetwGameHarness_method_add_host>` creates a
+listen-server player, and
+:ref:`add_client() <class_NetwGameHarness_method_add_client>` connects more
+players to it.
+
+The returned :ref:`NetwSceneRunner <class_NetwSceneRunner>` is the handle
+for one participant. Use its inherited GdUnit4 input simulation methods to
+send input, wait for scenes with
+:ref:`await_scene() <class_NetwSceneRunner_method_await_scene>`, and inspect
+that participant's copy of a player with
+:ref:`await_player() <class_NetwSceneRunner_method_await_player>`.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -89,6 +171,9 @@ cannot be scoped to one slot, so it is unsupported for slot routed game tests.
     extends NetwTestSuite
 
     const MAIN := preload("res://examples/daily/Main.tscn")
+    const LEVEL_1_SPAWN := (
+        "uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
+    )
 
     var game: NetwGameHarness
 
@@ -97,8 +182,9 @@ cannot be scoped to one slot, so it is unsupported for slot routed game tests.
         await game.setup()
 
     func test_bob_sees_alice_move() -> void:
-        var alice := await game.add_host("alice")
-        var bob := await game.add_client("bob")
+        var spawn := SceneNodePath.new(LEVEL_1_SPAWN)
+        var alice := await game.add_host("alice", true, spawn)
+        var bob := await game.add_client("bob", true, spawn)
 
         var alice_on_bob: Node2D = await bob.await_player(&"alice")
         var start := alice_on_bob.position.x
@@ -110,77 +196,153 @@ cannot be scoped to one slot, so it is unsupported for slot routed game tests.
 
         assert_that(alice_on_bob.position.x).is_greater(start)
 
-Simulating network conditions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This test asserts from Bob's view of the world. That is the useful
+distinction. Alice's local player might move while replication is broken.
+Asking Bob's :ref:`NetwSceneRunner <class_NetwSceneRunner>` for Alice's
+player proves that the visible remote copy moved.
 
-Link simulation is a local loopback test tool. It is available through
-:ref:`NetwGameHarness <class_NetwGameHarness>` and
-:ref:`NetwTestHarness <class_NetwTestHarness>` when their participants use
-:ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>`. ENet, WebRTC,
-WebSocket, and Steam transports do not apply these conditions.
+Input in a game harness
+~~~~~~~~~~~~~~~~~~~~~~~
 
-The player focused API is the normal entry point. A degraded player has both
-directions affected because a poor connection usually changes what the player
-sees and when their actions reach the server. In a game harness, the listen
-server host has no remote player link, so batch degradation targets clients.
+Every participant shares one process, so the global
+:godot:`Input <Input>` singleton cannot represent one player. Slot-routed
+tests send events through the participant's
+:ref:`NetwSceneRunner <class_NetwSceneRunner>`, and the game should receive
+them through
+:godot:`_unhandled_input() <Node#class_node_private_method__unhandled_input>`.
 
-.. tabs::
- .. code-tab:: gdscript GDScript
+.. tip::
 
-    game.degrade(runner).profile(NetwLink.Profile.POOR_3G)
-    game.degrade(runner).latency_ms(150).loss(0.03)
-    game.degrade_clients(NetwLink.Profile.MOBILE_4G)
-    game.clear_links()
-
-Direction filters read as the player experiences the network:
+   :ref:`InputComponent <class_InputComponent>` and
+   :ref:`MoveInputComponent <class_MoveInputComponent>` are built for this
+   pattern. The component stores the input state on the player node, while
+   the runner scopes the event to the participant slot.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    game.degrade(runner).inbound().latency_ms(180)
-    game.degrade(runner).outbound().loss(0.10)
+    func test_client_input_reaches_only_that_client() -> void:
+        var host := await game.add_host("host", true, spawn)
+        var client := await game.add_client("client", true, spawn)
 
-``inbound()`` means server to player. It affects what the player sees.
-``outbound()`` means player to server. It affects when the player's actions
-arrive.
+        var host_player := host.local_player as Node2D
+        var client_player := client.local_player as Node2D
+        var host_start := host_player.position.x
+        var client_start := client_player.position.x
 
-For pair control, use ``path(from_runner, to_runner)``. The arguments
-read in packet flow order.
+        client.simulate_action_press("move_right")
+        await game.sync_ticks(8)
+        client.simulate_action_release("move_right")
+
+        assert_that(client_player.position.x).is_greater(client_start)
+        assert_float(host_player.position.x).is_equal_approx(host_start, 1.0)
+
+Driving time
+------------
+
+Networked tests should wait on named multiplayer events when a helper exists,
+and advance ticks when the game simulation itself needs time to run.
+
+:ref:`NetwTestHarness <class_NetwTestHarness>` routes waits such as
+:ref:`add_client() <class_NetwTestHarness_method_add_client>`,
+:ref:`join_player() <class_NetwTestHarness_method_join_player>`,
+:ref:`wait_for_scene() <class_NetwTestHarness_method_wait_for_scene>`, and
+:ref:`wait_for_player() <class_NetwTestHarness_method_wait_for_player>`
+through one timeout reporter. If the expected event does not happen, the
+failure names the thing the test was waiting for.
+
+:ref:`NetwGameHarness.sync_ticks() <class_NetwGameHarness_method_sync_ticks>`
+advances the shared tree by network ticks. Use it after player input,
+physics-driven motion, animation gates, or replication that is expected to
+converge over time.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    client.simulate_action_press("move_right")
+    await game.sync_ticks(8)
+    client.simulate_action_release("move_right")
+    await game.sync_ticks(2)
+
+.. warning::
+
+   If the game uses :ref:`TPLayerAPI <class_TPLayerAPI>` transitions, wait
+   with
+   :ref:`wait_for_transition() <class_NetwGameHarness_method_wait_for_transition>`
+   or
+   :ref:`wait_for_transitions() <class_NetwGameHarness_method_wait_for_transitions>`.
+   Those helpers wait for the transition state directly instead of relying
+   on frame loops.
+
+Network conditions
+------------------
+
+Link simulation is part of
+:ref:`LocalLoopbackSession <class_LocalLoopbackSession>`, so it works with
+:ref:`NetwTestHarness <class_NetwTestHarness>` and
+:ref:`NetwGameHarness <class_NetwGameHarness>`. It does not change ENet,
+WebRTC, WebSocket, or Steam sockets.
+
+Use :ref:`degrade() <class_NetwGameHarness_method_degrade>` when a test talks
+about one player's connection. It applies to both directions:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.degrade(bob).profile(NetwLink.Profile.POOR_3G)
+    game.degrade(bob).latency_ms(150).loss(0.03)
+
+Use the direction filters when only one side of the exchange matters:
+
+- :ref:`NetwLink.NetwLinkMulti.inbound() <class_NetwLink_NetwLinkMulti_method_inbound>`
+  selects server-to-player traffic. It changes what that player receives.
+- :ref:`NetwLink.NetwLinkMulti.outbound() <class_NetwLink_NetwLinkMulti_method_outbound>`
+  selects player-to-server traffic. It changes when that player's actions
+  reach the server.
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    game.degrade(bob).inbound().latency_ms(180)
+    game.degrade(bob).outbound().loss(0.10)
+
+Use :ref:`path() <class_NetwGameHarness_method_path>` when the packet flow
+should be explicit. The arguments are ordered as sender, then receiver.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
     game.path(alice, bob).latency_ms(200)
-    game.path(bob, alice).exact().delay_polls(6).seed(44)
 
-Use millisecond conditions for behavioral tests. Use ``exact()`` only for
-golden tests that need poll level control over
-:ref:`LocalLoopbackSession.LinkPlan <class_LocalLoopbackSession.LinkPlan>`.
-Integration tests should assert behavior such as convergence, packets in
-flight, and player visible state. Exact packet order is a unit level contract
-because capture at receive time follows packet arrival order.
-
-Common scenarios:
+Most game tests should set conditions in milliseconds or use a
+:ref:`NetwLink.Profile <enum_NetwLink_Profile>`. Use
+:ref:`exact() <class_NetwLink_method_exact>` only when the test is about
+poll-level packet ordering. Exact plans expose
+:ref:`LocalLoopbackSession.LinkPlan <class_LocalLoopbackSession_LinkPlan>`
+and make the test depend on the loopback transport's polling model.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    game.degrade(runner).latency_ms(180)
-    game.degrade(runner).profile(NetwLink.Profile.POOR_3G)
-    game.degrade(runner).outbound().loss(0.10)
+    game.path(alice, bob).exact() \
+            .loss_prob(0.5) \
+            .delay_polls(4) \
+            .seed(1)
 
-Transport-specific tests
-~~~~~~~~~~~~~~~~~~~~~~~~
+Real transports
+---------------
 
-:ref:`NetwTestHarness <class_NetwTestHarness>` is built around
-:ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>` and does not
-generalize to real transports. For tests that need real UDP sockets --
-exercising the auth-phase handshake behind
-:ref:`query_server_info() <class_BackendPeer_method_query_server_info>`,
-ENet-level disconnect semantics, port-aware addressing -- use
-:ref:`EnetTestSupport <class_EnetTestSupport>` instead. The two helpers
-are complementary, not composable; pick the one whose contract matches
-the unit under test.
+:ref:`NetwTestHarness <class_NetwTestHarness>` uses
+:ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>` because it is fast
+and deterministic. That also means it cannot test behavior that only exists
+on real sockets, such as ENet addressing, bound ports, or the pre-game
+:ref:`BackendPeer.query_server_info()
+<class_BackendPeer_method_query_server_info>`
+probe.
+
+Use :ref:`EnetTestSupport <class_EnetTestSupport>` when the test needs real
+UDP. It starts a host tree on an actual port and returns the address data a
+client backend can probe.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -190,102 +352,18 @@ the unit under test.
         var client_backend := EnetTestSupport.make_client_backend(host.port)
 
         var result: ServerInfoResult = await client_backend.query_server_info(
-            "127.0.0.1", 2.0
+            "127.0.0.1",
+            2.0
         )
-        assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
 
+        assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
         await EnetTestSupport.stop_tree(host.tree)
 
-Three categories of test
-------------------------
 
-The line between a sample a game author would copy and coverage written by
-an addon maintainer matters. Keep the three categories visible.
+.. tip::
 
-- Public SDK examples. Use only
-  :ref:`NetwTestSuite <class_NetwTestSuite>` and
-  :ref:`NetwTestHarness <class_NetwTestHarness>` on the public side. No
-  private methods, no fixtures outside ``addons/networked_test/fixtures``.
-  These are the tests a user can copy.
-- Addon integration tests. Allowed to touch addon internals when the
-  scenario demands it. Mark them with a region or a class doc comment so
-  the reader knows why.
-- Internal algorithm tests. May call private methods such as
-  ``_calibrate()`` on the
-  unit under test. The file structure should make the intent obvious. Use
-  Godot code regions to fence them off.
-
-.. tabs::
- .. code-tab:: gdscript GDScript
-
-    #region Public contract
-    ...
-    #endregion
-
-    #region Internal algorithm
-    ...
-    #endregion
-
-Tables and oracles
-------------------
-
-For deterministic APIs, a parameter table is almost always clearer than a
-stack of near identical test functions. Each row reads as one row of the
-specification, and the failing row names the case.
-
-.. tabs::
- .. code-tab:: gdscript GDScript
-
-    func test_display_tick_with_offset(
-        tick: int,
-        offset: int,
-        expected: int,
-        test_parameters := [
-            [10, 0, 10],
-            [10, 3, 7],
-            [2,  5, 0],
-        ],
-    ) -> void:
-        var clock := _make_clock()
-        clock.display_offset = offset
-        clock.tick = tick
-        assert_that(clock.display_tick).is_equal(expected)
-
-When a structure has more states than examples can cover, run a simple
-reference model next to the implementation and assert they agree. The
-oracle should be deliberately boring. A plain array or a linear search is
-the right tool. Name the test after the invariant it protects, not the
-mechanism.
-
-.. tabs::
- .. code-tab:: gdscript GDScript
-
-    var buf := HistoryBuffer.new(4)
-    var oracle: Array = []
-
-    for i in 12:
-        var tick := base_tick + i
-        var value := "value_%d" % tick
-        buf.record(tick, value)
-        oracle.append([tick, value])
-        if oracle.size() > 4:
-            oracle.pop_front()
-
-    assert_that(buf.oldest_tick()).is_equal(oracle.front()[0])
-    assert_that(buf.newest_tick()).is_equal(oracle.back()[0])
-
-Awaits and timeouts
--------------------
-
-User facing tests should not poll frames. The harness wraps every wait
-through a single timeout reporter, so calls such as
-:ref:`add_client() <class_NetwTestHarness_method_add_client>`,
-:ref:`join_player() <class_NetwTestHarness_method_join_player>`, and
-:ref:`wait_for_player() <class_NetwTestHarness_method_wait_for_player>`
-fail the test cleanly when the expected event does not arrive.
-
-Outside GdUnit4, assign your own reporter to
-:ref:`reporter <class_NetwTestHarness_property_reporter>`. The
-``NetwTestHarness`` core is framework agnostic, the GdUnit4 binding is just
-one adapter. ``NetwGameHarness`` also injects timeout reporting, but its
-``NetwSceneRunner`` is GdUnit4-backed for slot-scoped input simulation.
+   Inside a test case, use
+   :ref:`enable_logs() <class_NetwTestSuite_method_enable_logs>` for
+   Networked logging and
+   :ref:`enable_debugger() <class_NetwTestSuite_method_enable_debugger>` for
+   reporter-backed traces.

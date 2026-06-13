@@ -9,7 +9,7 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
 
 	level_builder = LevelBuilder.new() \
@@ -42,7 +42,7 @@ func test_server_spawns_scene_after_host() -> void:
 func test_two_clients_both_connect_to_server_with_scene() -> void:
 	await harness.teardown()
 	harness = make_unmanaged_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	harness.register_spawnable_scene(level_builder.packed)
 	await harness.add_client()
 	await harness.add_client()

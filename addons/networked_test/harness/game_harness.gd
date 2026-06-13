@@ -18,13 +18,10 @@ var _main_scene: PackedScene
 var _loopback: NetwHarnessSession
 var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
-var _host: NetwSceneRunner
 var _display_viewport: ParticipantViewport
 
 ## The listen server host participant.
-var host: NetwSceneRunner:
-	get:
-		return _host
+var host: NetwSceneRunner
 
 var _saved_time_scale := 1.0
 var _saved_physics_ticks := 60
@@ -64,12 +61,12 @@ func add_host(
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
-	assert(_host == null, "NetwGameHarness.add_host: host already exists.")
+	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
 		MultiplayerTree.Role.LISTEN_SERVER,
 	)
-	_host = runner
+	host = runner
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
@@ -95,7 +92,7 @@ func add_client(
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
-	assert(_host != null, "NetwGameHarness.add_client: add host first.")
+	assert(host != null, "NetwGameHarness.add_client: add host first.")
 	var runner := _create_runner(username, MultiplayerTree.Role.CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
@@ -118,11 +115,11 @@ func add_client(
 ## roster and any disconnect driven game logic have run by the time it resolves.
 func disconnect_runner(runner: NetwSceneRunner) -> void:
 	var peer_id := _loopback.disconnect_tree(runner.tree)
-	if peer_id == 0 or not _host or runner == _host:
+	if peer_id == 0 or not host or runner == host:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in _host.tree.get_joined_players():
+			for rj: ResolvedJoin in host.tree.get_joined_players():
 				if rj.peer_id == peer_id:
 					return false
 			return true,
@@ -137,8 +134,8 @@ func sync_ticks(n: int) -> void:
 	if n == 0:
 		return
 
-	var clock := _host.tree.get_service(MultiplayerClock) as MultiplayerClock \
-	if _host else null
+	var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock \
+	if host else null
 	if not clock:
 		for i in n:
 			await get_tree().process_frame
@@ -220,20 +217,20 @@ func show_views() -> ParticipantViewport:
 ## traffic. [method NetwLink.NetwLinkMulti.outbound] narrows to player to
 ## server traffic.
 func degrade(runner: NetwSceneRunner) -> NetwLink.NetwLinkMulti:
-	assert(_host != null, "NetwGameHarness.degrade: add host first.")
+	assert(host != null, "NetwGameHarness.degrade: add host first.")
 	assert(
-		runner != _host,
+		runner != host,
 		"NetwGameHarness.degrade: host has no remote player link.",
 	)
-	var inbound := path(_host, runner)
-	var outbound := path(runner, _host)
+	var inbound := path(host, runner)
+	var outbound := path(runner, host)
 	return NetwLink.NetwLinkMulti.new(inbound, outbound)
 
 
 ## Applies [param profile] to every runner except the host.
 func degrade_clients(profile: NetwLink.Profile) -> void:
 	for runner in _runners:
-		if runner != _host:
+		if runner != host:
 			degrade(runner).profile(profile)
 
 
@@ -286,7 +283,7 @@ func teardown() -> void:
 		await NetwTestSuite.drain_frames(get_tree(), 2)
 
 	_runners.clear()
-	_host = null
+	host = null
 
 	if _loopback:
 		_loopback.reset()
@@ -334,8 +331,8 @@ func _finish_online_runner(runner: NetwSceneRunner) -> void:
 
 
 func _show_display_window() -> void:
-	if _host:
-		_host.move_window_to_foreground()
+	if host:
+		host.move_window_to_foreground()
 
 
 func _loopback_peer_for(
@@ -359,10 +356,6 @@ func _loopback_peer_for(
 
 func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:
 	return _loopback.build_join_payload(username, spawn)
-
-
-func _resolve_spawn_dict(spawn: Variant, username: String) -> Dictionary:
-	return _loopback.resolve_spawn_dict(spawn, username)
 
 
 func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:
@@ -389,11 +382,11 @@ func _collect_nodes(root: Node) -> Array[Node]:
 # future resolves before the host finishes registering the peer, so blocking
 # on the roster keeps add_host and add_client fully settled on return.
 func _wait_for_roster(runner: NetwSceneRunner) -> void:
-	if not _host:
+	if not host:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in _host.tree.get_joined_players():
+			for rj: ResolvedJoin in host.tree.get_joined_players():
 				if rj.peer_id == runner.peer_id:
 					return true
 			return false,

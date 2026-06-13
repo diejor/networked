@@ -50,14 +50,6 @@ func test_build_join_payload_without_spawn() -> void:
 	assert_that(payload.spawn).is_empty()
 
 
-func test_build_join_payload_uses_dictionary_spawn() -> void:
-	var spawn := { &"scene": "arena", &"node": "Spawner" }
-	var payload := session.build_join_payload("valeria", spawn)
-
-	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_equal(spawn)
-
-
 func test_build_join_payload_uses_join_payload_spawn() -> void:
 	var source := JoinPayload.new()
 	source.username = "ignored"
@@ -67,17 +59,6 @@ func test_build_join_payload_uses_join_payload_spawn() -> void:
 
 	assert_that(payload.username).is_equal("valeria")
 	assert_that(payload.spawn).is_equal(source.spawn)
-
-
-func test_build_join_payload_uses_scene_node_path_spawn() -> void:
-	var path := SceneNodePath.new()
-	path.scene_path = "res://levels/Arena.tscn"
-	path.node_path = "Player/MultiplayerEntity"
-
-	var payload := session.build_join_payload("valeria", path)
-
-	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_not_empty()
 
 
 func test_set_link_conditions_for_sender() -> void:

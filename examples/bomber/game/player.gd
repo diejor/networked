@@ -100,7 +100,6 @@ func exploded(_by_who: int) -> void:
 	$anim.play(&"stunned")
 
 
-
 func _update_inputs_process_mode(peer_id: int) -> void:
 	if multiplayer.multiplayer_peer == null:
 		inputs.process_mode = Node.PROCESS_MODE_INHERIT

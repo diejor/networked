@@ -9,7 +9,7 @@ func before_test() -> void:
 	harness = make_harness()
 	# No lobby manager. This suite only tests the connection layer.
 	# Tests add clients themselves so signal handlers can be connected first.
-	await harness.setup(null)
+	await harness.setup()
 
 
 func test_two_clients_connect_online_with_distinct_peer_ids() -> void:

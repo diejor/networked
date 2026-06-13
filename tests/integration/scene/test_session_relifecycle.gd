@@ -30,7 +30,7 @@ func before_test() -> void:
 	template_instance.free()
 
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	harness.register_spawnable_scene(level_builder.packed)
 
 

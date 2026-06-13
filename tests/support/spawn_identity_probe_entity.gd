@@ -13,7 +13,7 @@ func _notification(what: int) -> void:
 		if entity:
 			entity.contribute_spawn_property(self, &"identity_packet")
 			if not entity.owner_tree_entered.is_connected(
-					_on_owner_tree_entered,
+				_on_owner_tree_entered,
 			):
 				entity.owner_tree_entered.connect(_on_owner_tree_entered)
 	super._notification(what)

@@ -75,9 +75,9 @@ func with_tp(
 
 ## Pre-bakes root [param property] as a save-tracked property.
 ##
-## The path [code]NodePath(".:" + property)[/code] is baked into
-## [member SaveComponent.replication_config] before [method pack], so
-## [method SaveComponent.finalize] can process it without a post-spawn
+## The path [code]NodePath(".:" + property)[/code] is baked into the
+## [SaveComponent] replication config before [method pack], so
+## [method ProxySynchronizer.finalize] can process it without a post-spawn
 ## contribution call.
 func with_save_property(
 		property: StringName,

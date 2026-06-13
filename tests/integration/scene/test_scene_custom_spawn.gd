@@ -21,7 +21,7 @@ func before_test() -> void:
 	level_2_builder.pack()
 
 	harness = make_harness()
-	await harness.setup(NetwTestSuite.create_scene_manager)
+	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	server_mgr = harness.server_scene_manager()
 	var client := await harness.add_client()
 	client_mgr = harness.scene_manager_for(client)
