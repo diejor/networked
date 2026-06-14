@@ -198,10 +198,10 @@ static func _get_expected_authority(
 	if not entity:
 		return NetwEntity.parse_peer(node.name)
 
-	match entity.authority_mode:
-		MultiplayerEntity.AuthorityMode.SERVER:
+	match entity.initial_controller:
+		MultiplayerEntity.InitialController.SERVER:
 			return MultiplayerPeer.TARGET_PEER_SERVER
-		MultiplayerEntity.AuthorityMode.CLIENT:
+		MultiplayerEntity.InitialController.REPRESENTED_PEER:
 			return NetwEntity.parse_peer(node.name)
 	return 0
 

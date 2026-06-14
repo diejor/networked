@@ -28,6 +28,14 @@ layout_mode = 2
 text = "Connecting..."
 horizontal_alignment = 1
 
+[node name="ProgressBar" type="ProgressBar" parent="Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+show_percentage = false
+
 [node name="Spacer" type="Control" parent="Margin/VBox"]
 layout_mode = 2
 size_flags_vertical = 3

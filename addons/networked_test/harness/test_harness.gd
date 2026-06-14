@@ -31,7 +31,8 @@ var _session: LocalLoopbackSession
 var _loopback: NetwHarnessSession
 var _server: MultiplayerTree
 var _clients: Array[MultiplayerTree] = []
-var _scene_manager_src: Variant
+var _scene_manager_factory: Callable = Callable()
+var _scene_manager_scene: PackedScene = null
 var _world_scene: PackedScene
 var _waiter: NetwWaiter
 var _extra_sessions: Array[LocalLoopbackSession] = []
@@ -51,17 +52,29 @@ var _torn_down := false
 ## harness.register_spawnable_scene(LEVEL)
 ## var client := await harness.add_client()
 ## [/codeblock]
-func setup(
-		scene_manager_src: Variant = null,
-		world_scene: PackedScene = null,
-) -> void:
-	_scene_manager_src = scene_manager_src
+func setup(world_scene: PackedScene = null) -> void:
+	_setup_session(world_scene)
+	await get_tree().process_frame
+
+
+func setup_scene(scene: PackedScene, world_scene: PackedScene = null) -> void:
+	_scene_manager_scene = scene
+	_setup_session(world_scene)
+	await get_tree().process_frame
+
+
+func setup_factory(factory: Callable, world_scene: PackedScene = null) -> void:
+	_scene_manager_factory = factory
+	_setup_session(world_scene)
+	await get_tree().process_frame
+
+
+func _setup_session(world_scene: PackedScene = null) -> void:
 	_world_scene = world_scene
 	_loopback = NetwHarnessSession.new()
 	_session = _loopback.session()
 	_waiter = NetwWaiter.new(get_tree(), reporter)
 	_setup_server()
-	await get_tree().process_frame
 
 
 ## Frees harness peers and resets loopback sessions.
@@ -103,7 +116,8 @@ func teardown() -> void:
 		if extra_session:
 			extra_session.reset()
 	_extra_sessions.clear()
-	_scene_manager_src = null
+	_scene_manager_factory = Callable()
+	_scene_manager_scene = null
 	_world_scene = null
 	_waiter = null
 	reporter = Callable()
@@ -128,11 +142,12 @@ func teardown() -> void:
 ## var client := await harness.add_client()
 ## assert_bool(client.is_online()).is_true()
 ## [/codeblock]
-func add_client() -> MultiplayerTree:
+func add_client(username: String = "") -> MultiplayerTree:
 	await _ensure_server_hosted()
 
 	var index := _clients.size()
-	var username := "test_player_%d" % index
+	if username.is_empty():
+		username = "test_player_%d" % index
 
 	var client := _make_service_tree(
 		MultiplayerTree.Role.CLIENT,
@@ -231,23 +246,41 @@ func release_packets_to_client(client: MultiplayerTree) -> void:
 	_session.release_inbound_packets(peer)
 
 
-## Sets inbound link conditions on [param client]'s loopback peer.
-func set_link_conditions(
-		client: MultiplayerTree,
-		conditions: NetwLinkConditions,
-		sender_id: int = 0,
-) -> void:
-	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	_loopback.set_link_conditions(peer, conditions, sender_id)
+## Degrades both network directions for [param client].
+func degrade(client: MultiplayerTree) -> NetwLink.NetwLinkMulti:
+	var inbound := path(_server, client)
+	var outbound := path(client, _server)
+	return NetwLink.NetwLinkMulti.new(inbound, outbound)
 
 
-## Clears inbound link conditions on [param client]'s loopback peer.
-func clear_link_conditions(
+## Applies [param profile] to every connected client.
+func degrade_clients(profile: NetwLink.Profile) -> void:
+	for client in _clients:
+		degrade(client).profile(profile)
+
+
+## Clears all link simulation in this harness session.
+func clear_links() -> void:
+	_session.clear_all_link_conditions()
+
+
+## Returns fluent path control for packets from [param from] to [param to].
+func path(from: MultiplayerTree, to: MultiplayerTree) -> NetwLink:
+	var peer := _loopback_peer_for(to, "path")
+	var sender_id := from.multiplayer_peer.get_unique_id() if from and from.multiplayer_peer else 0
+	return NetwLink.new(_session, peer, sender_id)
+
+
+## Returns fluent inbound link control for [param client]'s loopback peer.
+##
+## Prefer [method degrade] or [method path]. This method preserves the old
+## receiver keyed API used by existing tests.
+func link(
 		client: MultiplayerTree,
-		sender_id: int = 0,
-) -> void:
-	var peer := client.multiplayer_peer as LocalMultiplayerPeer
-	_loopback.clear_link_conditions(peer, sender_id)
+		from_peer_id: int = 0,
+) -> NetwLink:
+	var peer := _loopback_peer_for(client, "link")
+	return NetwLink.new(_session, peer, from_peer_id)
 
 
 ## Disconnects [param client] without freeing it.
@@ -382,7 +415,10 @@ func make_spawn_payload(
 	var entity_path := SceneNodePath.new()
 	entity_path.scene_path = level_scene_path
 	entity_path.node_path = spawner_node_path
-	return _loopback.build_join_payload(username, entity_path)
+	var payload := JoinPayload.new()
+	payload.username = username
+	payload.spawn = EntitySpawnPolicy.from_scene_node_path(entity_path).to_dict()
+	return payload
 
 
 ## Builds a [JoinPayload] for harness driven session entry.
@@ -502,39 +538,46 @@ func register_built_scene(packed: PackedScene) -> void:
 
 ## Spawns a player into a server scene without the join RPC.
 ##
-## Accepts [param scene_or_builder] which can be a [PackedScene], a live [Node],
-## or a builder implementing [method build]. Returns the spawned player node.
+## Accepts [param scene] as a [PackedScene]. Returns the spawned player node.
 func spawn_player(
 		client: MultiplayerTree,
-		scene_or_builder: Variant,
+		scene: PackedScene,
+		scene_name: StringName = "",
+) -> Node:
+	var node := scene.instantiate()
+	return spawn_player_node(client, node, scene_name)
+
+
+func spawn_player_node(
+		client: MultiplayerTree,
+		node: Node,
 		scene_name: StringName = "",
 ) -> Node:
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var username: String = client.get_meta(&"_harness_username")
-	var player: Node
-	if scene_or_builder is PackedScene:
-		player = (scene_or_builder as PackedScene).instantiate()
-	elif scene_or_builder is Node:
-		player = scene_or_builder as Node
-	elif scene_or_builder.has_method("build"):
-		player = scene_or_builder.build() as Node
-	else:
-		assert(
-			false,
-			"spawn_player: expected PackedScene, Node, or builder.",
-		)
-		return null
-	NetwEntity.bundle(player, peer_id, StringName(username))
+	NetwEntity.bind(node, StringName(username), peer_id)
 	var scene := scene_on_server(scene_name)
-	scene.add_player(player)
-	return player
+	scene.add_player(node)
+	return node
+
+
+func spawn_player_factory(
+		client: MultiplayerTree,
+		factory: Callable,
+		scene_name: StringName = "",
+) -> Node:
+	var node := factory.call() as Node
+	return spawn_player_node(client, node, scene_name)
 
 
 ## Returns the server side player node name for [param client].
 func player_name_for(client: MultiplayerTree) -> StringName:
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
-	return NetwEntity.format_name(username, peer_id)
+	var rj := ResolvedJoin.new()
+	rj.username = StringName(username)
+	rj.peer_id = peer_id
+	return StringName(NetwEntity.name_for(rj))
 
 #endregion
 
@@ -549,18 +592,8 @@ func player_name_for(client: MultiplayerTree) -> StringName:
 ## harness.register_spawnable_scene(LEVEL)
 ## var client := await harness.add_client()
 ## [/codeblock]
-func register_spawnable_scene(scene: Variant) -> void:
-	var path: String
-	if scene is PackedScene:
-		path = (scene as PackedScene).resource_path
-	elif scene is String:
-		path = scene
-	else:
-		assert(
-			false,
-			"register_spawnable_scene: expected PackedScene or String.",
-		)
-		return
+func register_spawnable_scene(scene: PackedScene) -> void:
+	var path := scene.resource_path
 
 	var sm := server_scene_manager()
 	assert(sm, "register_spawnable_scene: server has no MultiplayerSceneManager.")
@@ -662,6 +695,25 @@ func _wait_until(
 	return await _waiter.until(cond, label, timeout)
 
 
+func _loopback_peer_for(
+		tree: MultiplayerTree,
+		method_name: String,
+) -> LocalMultiplayerPeer:
+	assert(
+		tree != null,
+		"NetwTestHarness.%s: tree is required." % method_name,
+	)
+	var peer := tree.multiplayer_peer as LocalMultiplayerPeer
+	assert(
+		peer != null,
+		(
+				"NetwTestHarness.%s: link simulation requires "
+				+ "LocalLoopbackBackend."
+		) % method_name,
+	)
+	return peer
+
+
 func _default_reporter(label: String, timeout: float) -> void:
 	push_error("Timed out waiting for '%s' after %.2fs." % [label, timeout])
 
@@ -677,14 +729,11 @@ func _ensure_server_hosted() -> void:
 
 
 func _instantiate_scene_manager() -> MultiplayerSceneManager:
-	var sm: MultiplayerSceneManager = null
-	if _scene_manager_src is PackedScene:
-		sm = (_scene_manager_src as PackedScene).instantiate()
-	elif _scene_manager_src is Callable:
-		sm = (_scene_manager_src as Callable).call()
-	elif _scene_manager_src is MultiplayerSceneManager:
-		sm = _scene_manager_src as MultiplayerSceneManager
-	return sm
+	if _scene_manager_scene != null:
+		return _scene_manager_scene.instantiate()
+	if not _scene_manager_factory.is_null():
+		return _scene_manager_factory.call()
+	return null
 
 
 # Installs the default spawn policy unless the test supplied one.
@@ -729,7 +778,7 @@ func _make_service_tree(
 		_extra_sessions.append(backend.session)
 		tree.backend = backend
 
-	if _scene_manager_src:
+	if _scene_manager_scene != null or not _scene_manager_factory.is_null():
 		var sm := _instantiate_scene_manager()
 		if sm:
 			if role != MultiplayerTree.Role.DEDICATED_SERVER:

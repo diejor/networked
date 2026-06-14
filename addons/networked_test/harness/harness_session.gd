@@ -35,7 +35,7 @@ class BackendAdapter:
 		return null
 
 
-	## Releases transport resources for [param tree].
+	## Releases transport resources for a tree.
 	func teardown(
 			_tree: MultiplayerTree,
 			_scene_tree: SceneTree,
@@ -162,31 +162,6 @@ func disconnect_tree(tree: MultiplayerTree) -> int:
 	return peer_id
 
 
-## Resolves [param spawn] into a [JoinPayload] spawn dictionary.
-##
-## [param spawn] may be a [SceneNodePath], [JoinPayload], [Dictionary], or
-## [code]null[/code]. When [param spawn] is a [JoinPayload], only
-## [member JoinPayload.spawn] is used.
-func resolve_spawn_dict(spawn: Variant, username: String = "") -> Dictionary:
-	if spawn == null:
-		return { }
-	if spawn is JoinPayload:
-		return spawn.spawn
-	if spawn is Dictionary:
-		return spawn
-	if spawn is SceneNodePath:
-		return EntitySpawnPolicy.from_scene_node_path(spawn).to_dict()
-
-	assert(
-		false,
-		(
-				"NetwHarnessSession: spawn for '%s' must be SceneNodePath, "
-				+ "JoinPayload, Dictionary, or null."
-		) % username,
-	)
-	return { }
-
-
 ## Builds a [JoinPayload] for [param username] and [param spawn].
 func build_join_payload(
 		username: String,
@@ -194,14 +169,21 @@ func build_join_payload(
 ) -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
-	payload.spawn = resolve_spawn_dict(spawn, username)
+	if spawn is JoinPayload:
+		payload.spawn = spawn.spawn
+	elif spawn is SceneNodePath:
+		payload.spawn = EntitySpawnPolicy.from_scene_node_path(spawn).to_dict()
+	elif spawn is SpawnPolicy:
+		payload.spawn = spawn.to_dict()
+	elif spawn is Dictionary:
+		payload.spawn = spawn
 	return payload
 
 
 ## Sets inbound link conditions on [param peer].
 func set_link_conditions(
 		peer: LocalMultiplayerPeer,
-		conditions: NetwLinkConditions,
+		conditions: LocalLoopbackSession.LinkConditions,
 		sender_id: int = 0,
 ) -> void:
 	_session.set_link_conditions(peer, conditions, sender_id)
@@ -219,5 +201,5 @@ func clear_link_conditions(
 func get_link_conditions(
 		peer: LocalMultiplayerPeer,
 		sender_id: int = 0,
-) -> NetwLinkConditions:
+) -> LocalLoopbackSession.LinkConditions:
 	return _session.get_link_conditions(peer, sender_id)

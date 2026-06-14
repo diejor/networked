@@ -20,6 +20,21 @@
 class_name BackendPeer
 extends Resource
 
+## Emitted when an in-progress client connection has a terminal failure.
+## [br][br]
+## Carries a [ConnectResult] outcome.
+signal connect_failed(result: ConnectResult)
+
+## Emitted while an in-progress client connection advances.
+## [br][br]
+## The [param step] indicates the connection phase name, [param message]
+## is a human-readable progress details message, and [param ratio] is the progress
+## ratio between [code]0.0[/code] and [code]1.0[/code].
+## [signal connect_failed] still carries the terminal failure outcome.
+signal connect_progress(step: StringName, message: String, ratio: float)
+
+var _connect_progress := ConnectProgressTracker.new()
+
 const _MSEC_TO_SEC := 0.001
 const _PERCENT_TO_RATIO := 0.01
 const _LEGACY_SECONDS_MAX := 1.0
@@ -165,11 +180,49 @@ func create_join_peer(
 ) -> MultiplayerPeer
 
 
+## Begins tracking connection progress with the given timeout [param bound].
+##
+## Starts the time-eased progress tracking and sets the default connection message.
+## [codeblock]
+## backend.begin_connect_progress(10.0)
+## [/codeblock]
+func begin_connect_progress(bound: float) -> void:
+	_connect_progress.start(Time.get_ticks_msec(), bound)
+	_set_connect_message("Connecting...")
+
+
+## Ends tracking connection progress.
+##
+## Stops the progress tracker and cleans up the active progress state.
+## [codeblock]
+## backend.end_connect_progress()
+## [/codeblock]
+func end_connect_progress() -> void:
+	_connect_progress.stop()
+
+
 ## Polls backend state outside [member MultiplayerTree.api].
 ##
 ## [MultiplayerTree] polls [member MultiplayerTree.api] separately.
 func poll(_dt: float) -> void:
-	pass
+	_emit_connect_progress(_connect_progress.poll(Time.get_ticks_msec()))
+
+
+func _set_connect_message(message: String) -> void:
+	_emit_connect_progress(
+		_connect_progress.set_message(message, Time.get_ticks_msec()),
+	)
+
+
+func _set_connect_step(step: StringName) -> void:
+	_emit_connect_progress(
+		_connect_progress.set_step(step, Time.get_ticks_msec()),
+	)
+
+
+func _emit_connect_progress(sample: Dictionary) -> void:
+	if not sample.is_empty():
+		connect_progress.emit(sample.step, sample.message, sample.ratio)
 
 
 ## Clears backend state before a new session or teardown.
@@ -284,6 +337,12 @@ func clone() -> BackendPeer:
 	var inst := duplicate() as BackendPeer
 	inst.copy_from(self)
 	return inst
+
+
+## Returns a diagnostics snapshot for [param _peer_id] containing connection
+## phase timestamps and statistics.
+func get_connection_diagnostics(_peer_id: int) -> Dictionary:
+	return { }
 
 
 ## Returns the display name for this backend.

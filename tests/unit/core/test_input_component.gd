@@ -10,6 +10,15 @@ const ACTIONS := [
 	&"sprint",
 ]
 
+
+# Records gather() invocations so the tick-aligned refresh seam can be asserted.
+class _GatherProbe extends MoveInputComponent:
+	var gather_calls := 0
+
+
+	func gather() -> void:
+		gather_calls += 1
+
 var comp: MoveInputComponent
 
 
@@ -107,3 +116,20 @@ func test_on_tick_emits_snapshot_with_tick_state_and_actions() -> void:
 	assert_that(
 		(container.data as Dictionary).get(&"sprint", false),
 	).is_false()
+
+
+func test_before_tick_runs_gather_each_tick() -> void:
+	var probe := _GatherProbe.new()
+	add_child(probe)
+	auto_free(probe)
+	probe._on_before_tick(0.0, 3)
+	probe._on_before_tick(0.0, 4)
+	assert_that(probe.gather_calls).is_equal(2)
+
+
+func test_base_gather_is_noop_for_non_overriders() -> void:
+	# MoveInputComponent does not override gather, so the before-tick refresh is a
+	# harmless no-op and leaves the tracked state untouched.
+	comp.state[&"move_right"] = true
+	comp._on_before_tick(0.0, 1)
+	assert_that(comp.is_down(&"move_right")).is_true()

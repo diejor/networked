@@ -1,8 +1,7 @@
 ## Tests [TPComponent] scene name resolution and path caching.
 ##
-## These tests do NOT invoke networking. The teleport flow
-## ([method TPComponent.request_teleport], [method TPComponent._reparent_to_scene])
-## requires real peers and belongs in integration tests.
+## These tests do NOT invoke networking. The teleport flow requires real peers
+## and belongs in integration tests.
 class_name TestTPComponent
 extends NetwTestSuite
 
@@ -78,8 +77,12 @@ func test_parented_contributes_paths_without_node_owner() -> void:
 	var spawner := MultiplayerEntity.new()
 	components.add_child(spawner)
 
+	# Resolve deferred node properties now that the hierarchy is stable.
+	save.finalize()
+
 	var spawn_path := NodePath("Components/TPComponent:current_scene_path")
-	var save_path := NodePath("../TPComponent:current_scene_path")
+	# Real path is relative to save's root.
+	var save_path := NodePath("TPComponent:current_scene_path")
 
 	assert_that(spawner.replication_config.has_property(spawn_path)).is_true()
 	assert_that(save.get_real_path(&"current_scene_path")).is_equal(save_path)

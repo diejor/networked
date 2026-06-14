@@ -135,6 +135,12 @@ var ticktime: float:
 	get:
 		return 1.0 / float(tickrate)
 
+## Multiplier to scale velocities from physics rate to tick rate.
+## Used to compensate for CharacterBody's move_and_slide ignoring tick delta.
+var physics_factor: float:
+	get:
+		return float(Engine.physics_ticks_per_second) / float(tickrate)
+
 ## The fractional position [0, 1) within the current tick.
 var tick_factor: float:
 	set(v):
@@ -201,11 +207,34 @@ var recommended_display_offset: int:
 ## Returns [code]true[/code] if the client has calibrated with the server.
 var is_synchronized: bool = false
 
+## Test seam. When [code]true[/code], [method _physics_process] stops advancing
+## the tick loop so a deterministic stepper owns ticking through
+## [method force_step]. Enabling it marks the clock [member is_synchronized] so
+## the real ping calibration is bypassed.
+var manual_tick: bool = false:
+	set(value):
+		manual_tick = value
+		if value:
+			is_synchronized = true
+
 ## Returns [code]true[/code] if jitter is below
 ## [member jitter_stability_threshold].
 var is_stable: bool:
 	get:
 		return _stats.is_stable
+
+
+## Test seam. Synchronously emits [param count] full ticks without consulting
+## real time, mirroring the [method _physics_process] tick loop body so
+## [signal before_tick], [signal on_tick], [signal after_tick] and [member tick]
+## advance identically. Pair with [member manual_tick] so the real loop does not
+## also run.
+func force_step(count: int = 1) -> void:
+	for _i in range(count):
+		before_tick.emit(ticktime, tick)
+		on_tick.emit(ticktime, tick)
+		after_tick.emit(ticktime, tick)
+		tick += 1
 
 
 ## Locates the [MultiplayerClock] registered on the node's multiplayer API.
@@ -279,6 +308,9 @@ func _physics_process(delta: float) -> void:
 
 	if multiplayer.multiplayer_peer.get_connection_status() != \
 			MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+
+	if manual_tick:
 		return
 
 	_last_physics_time_usec = Time.get_ticks_usec()

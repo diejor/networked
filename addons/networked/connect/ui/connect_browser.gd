@@ -34,9 +34,6 @@ const _JOIN_DIRECT_POPUP_SCENE := preload(
 const _CONNECTING_POPUP_SCENE := preload(
 	"res://addons/networked/connect/ui/popups/connecting_popup.tscn"
 )
-const _HOST_FALLBACK_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/host_fallback_popup.tscn"
-)
 const _DETAIL_ITEM_SCENE := preload(
 	"res://addons/networked/connect/ui/detail_item.tscn"
 )
@@ -79,7 +76,6 @@ var _host_popup: HostPopup
 var _join_popup: JoinPopup
 var _join_direct_popup: JoinDirectPopup
 var _connecting_popup: ConnectingPopup
-var _host_fallback_popup: HostFallbackPopup
 var _row_menu: Menu
 
 var _tree: MultiplayerTree
@@ -115,6 +111,10 @@ var _connect: NetwConnect
 
 
 func _ready() -> void:
+	var viewport := get_viewport()
+	if viewport:
+		viewport.gui_embed_subwindows = true
+
 	_add_popup = _ADD_POPUP_SCENE.instantiate()
 	add_child(_add_popup)
 	_add_popup.submitted.connect(_on_target_submitted)
@@ -134,10 +134,6 @@ func _ready() -> void:
 	_connecting_popup = _CONNECTING_POPUP_SCENE.instantiate()
 	add_child(_connecting_popup)
 	_connecting_popup.cancelled.connect(_on_popup_cancelled)
-
-	_host_fallback_popup = _HOST_FALLBACK_POPUP_SCENE.instantiate()
-	add_child(_host_fallback_popup)
-	_host_fallback_popup.submitted.connect(_on_host_fallback_submitted)
 
 	_row_menu = _MENU_SCENE.instantiate() as Menu
 	add_child(_row_menu)
@@ -182,8 +178,6 @@ func _setup_session() -> void:
 		_connect = _bound_connect
 	else:
 		_connect = Netw.ctx(tree if tree != null else self).connect
-	if _connect == null:
-		return
 	_session_ready = true
 	_connect.load_server_list(server_list_path)
 	_bind_session_signals()
@@ -212,6 +206,8 @@ func _bind_session_signals() -> void:
 		_connect.host_failed.connect(_show_banner)
 	if not _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.connect(_on_join_failed)
+	if not _connect.join_progress.is_connected(_on_join_progress):
+		_connect.join_progress.connect(_on_join_progress)
 	if not _connect.directory_unavailable.is_connected(
 		_on_directory_unavailable,
 	):
@@ -235,6 +231,8 @@ func _unbind_session_signals() -> void:
 		_connect.host_failed.disconnect(_show_banner)
 	if _connect.join_failed.is_connected(_on_join_failed):
 		_connect.join_failed.disconnect(_on_join_failed)
+	if _connect.join_progress.is_connected(_on_join_progress):
+		_connect.join_progress.disconnect(_on_join_progress)
 	if _connect.directory_unavailable.is_connected(_on_directory_unavailable):
 		_connect.directory_unavailable.disconnect(_on_directory_unavailable)
 
@@ -354,12 +352,13 @@ func _update_details() -> void:
 			"Unavailable" if unavailable else _status_text(r),
 		),
 	)
-	_details_container.add_child(
-		_create_detail_item(
-			"Latency",
-			"%d ms" % r.latency_ms if r and r.is_ok() else "-",
-		),
-	)
+	if r == null or r.latency_ms != -1:
+		_details_container.add_child(
+			_create_detail_item(
+				"Latency",
+				"%d ms" % r.latency_ms if r and r.is_ok() else "-",
+			),
+		)
 	_details_container.add_child(
 		_create_detail_item("Players", _players_text(r)),
 	)
@@ -506,17 +505,23 @@ func _on_session_left() -> void:
 		show()
 
 
-func _on_join_failed(target: JoinTarget, reason: String) -> void:
-	_hide_connecting_overlay()
-	if reason == "Connection aborted by user":
+func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
+	if result != null and result.status == ConnectResult.Status.ABORTED:
+		_hide_connecting_overlay()
 		return
-	_show_banner(reason)
-	if target != null:
-		var payload := _last_join_payload
-		if payload == null:
-			payload = JoinPayload.new()
-			payload.username = StringName(_last_username)
-		_prompt_host_fallback(target, payload)
+	var msg := ConnectUiShared.format_connect_error(result)
+	_show_banner(msg)
+	var detail := ConnectUiShared.format_connect_detail(result)
+	_connecting_popup.show_failed(msg, detail)
+
+
+func _on_join_progress(
+		_target: JoinTarget,
+		step: StringName,
+		message: String,
+		ratio: float,
+) -> void:
+	_connecting_popup.update_progress(step, message, ratio)
 
 
 func _show_connecting_overlay(target: JoinTarget) -> void:
@@ -529,25 +534,8 @@ func _hide_connecting_overlay() -> void:
 	$VBox.modulate.a = 1.0
 
 
-func _prompt_host_fallback(
-		target: JoinTarget,
-		_payload: JoinPayload,
-) -> void:
-	if not target.backend.supports_embedded_server():
-		return
-	_host_fallback_popup.open_host_fallback(target)
-
-
 func _on_popup_cancelled() -> void:
 	_connect.abort_join()
-
-
-func _on_host_fallback_submitted(target: JoinTarget) -> void:
-	_host_popup.open_host(
-		[target.backend],
-		spawner_options,
-		_last_username,
-	)
 
 
 func _join_with_preflight(
@@ -565,12 +553,6 @@ func _join_with_preflight(
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
-		return
-	if result != null and (
-			result.status == ServerInfoResult.Status.TIMEOUT
-			or result.status == ServerInfoResult.Status.UNREACHABLE
-	):
-		_prompt_host_fallback(target, payload)
 		return
 	_show_connecting_overlay(target)
 	var err := await _connect.join(target, payload)

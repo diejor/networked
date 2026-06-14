@@ -97,8 +97,7 @@ func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
 
 
 ## Builds a [NetwEntity]-rooted node suitable for isolated unit and
-## integration tests. Pre-attaches the entity via
-## [constant NetwEntity.META_KEY] and sets [member Node.owner] so
+## integration tests. Pre-attaches the entity and sets [member Node.owner] so
 ## [method NetwEntity.of] short-circuits instead of walking past
 ## test-fixture ancestors. The returned root is registered with
 ## [code]auto_free[/code].
@@ -120,7 +119,7 @@ func make_test_entity(
 	root.name = entity_name
 	var entity := NetwEntity.new()
 	entity.peer_id = peer_id
-	root.set_meta(NetwEntity.META_KEY, entity)
+	root.set_meta(NetwEntity._META_KEY, entity)
 	entity.owner = root
 	parent.add_child(root)
 	auto_free(root)

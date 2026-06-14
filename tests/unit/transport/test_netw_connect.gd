@@ -27,6 +27,26 @@ func test_relays_target_added() -> void:
 	session.queue_free()
 
 
+func test_relays_join_progress() -> void:
+	var session := ConnectSession.new()
+	add_child(session)
+	var facade := NetwConnect.new(session)
+
+	var target := _make_target()
+	var captured: Array = []
+	facade.join_progress.connect(
+		func(t, message, ratio): captured.append([t, message, ratio])
+	)
+
+	session.join_progress.emit(target, "Progress", 0.25)
+
+	assert_int(captured.size()).is_equal(1)
+	assert_that(captured[0][0]).is_same(target)
+	assert_str(captured[0][1]).is_equal("Progress")
+	assert_float(captured[0][2]).is_equal(0.25)
+	session.queue_free()
+
+
 func test_forwards_add_target_round_trip() -> void:
 	var session := ConnectSession.new()
 	add_child(session)

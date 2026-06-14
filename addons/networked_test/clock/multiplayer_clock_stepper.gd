@@ -9,7 +9,7 @@ var tree: SceneTree
 var clock: MultiplayerClock
 var physics_fps := 60
 var fallback_tickrate := 30
-var timeout_frames := 100
+var timeout_frames := 500
 
 
 func _init(
@@ -33,7 +33,8 @@ func sync_ticks(ticks: int) -> void:
 	var target_tick := clock.tick + ticks
 	var tickrate := clock.tickrate if clock.tickrate > 0 else fallback_tickrate
 	var estimated_frames := ceili(
-		float(ticks) * float(physics_fps) / float(tickrate),
+		(float(ticks) * float(physics_fps) / float(tickrate))
+		/ Engine.time_scale,
 	)
 
 	await _advance_bulk_frames(maxi(0, estimated_frames - 2))

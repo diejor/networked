@@ -27,11 +27,12 @@ file_logging/enable_file_logging=true
 
 [display]
 
+window/subwindows/embed_subwindows=false
 window/stretch/mode="viewport"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/tube/plugin.cfg")
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg")
 
 [gdunit4]
 
@@ -41,6 +42,7 @@ hooks/session_hooks=Dictionary[String, bool]({
 "res://addons/gdUnit4/src/core/hooks/GdUnitXMLReporterTestSessionHook.gd": true,
 "res://addons/networked_test/gdunit4/session_hook.gd": true
 })
+settings/test/test_lookup_folder="tests"
 
 [input]
 
@@ -82,6 +84,7 @@ limits/debugger/max_chars_per_second=262144
 [networked]
 
 logging/active_profile="uid://dd2xtj1kbwpm7"
+webrtc/turn_credentials_url="https://bomber.diejorarr.workers.dev/"
 
 [physics]
 

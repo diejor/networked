@@ -81,6 +81,8 @@ signal directory_unavailable(directory_id: StringName, reason: String)
 signal join_started(target: JoinTarget)
 ## A join attempt failed. [param reason] is a human-readable string.
 signal join_failed(target: JoinTarget, reason: String)
+## A join attempt advanced through transport-specific progress.
+signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
 ## A host attempt began.
 signal host_started()
 ## A host attempt failed. [param reason] is a human-readable string.
@@ -102,6 +104,7 @@ func _init(session: ConnectSession) -> void:
 	session.directory_unavailable.connect(directory_unavailable.emit)
 	session.join_started.connect(join_started.emit)
 	session.join_failed.connect(join_failed.emit)
+	session.join_progress.connect(join_progress.emit)
 	session.host_started.connect(host_started.emit)
 	session.host_failed.connect(host_failed.emit)
 	session.session_entered.connect(session_entered.emit)
@@ -138,6 +141,13 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.join(target, payload) if s else ERR_UNCONFIGURED
+
+
+## Aborts the current in-progress join attempt.
+func abort_join() -> void:
+	var s := _ref.get_ref() as ConnectSession
+	if s:
+		s.abort_join()
 
 # -- Probing & refresh ------------------------------------------------------
 

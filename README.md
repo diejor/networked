@@ -26,3 +26,7 @@
 - **Flexible Architectures:** Supports listen-server and dedicated server, easily swap between Client-Server and P2P all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
 - **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and native Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)).
 - **Robust Integration Testing:** Full end-to-end integration tests are supported using the custom in-process [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
+
+## Credits
+
+- **Tube:** The WebRTC tracker signaling architecture and user-friendly room code concepts were inspired by and adapted from the [Tube](https://github.com/koopmyers/tube) Godot addon created by [koopmyers](https://github.com/koopmyers).

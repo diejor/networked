@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://1lyfl4rl61dd"]
+
+[ext_resource type="Script" path="res://addons/networked/session/view/participant_window.gd" id="1_participant_window"]
+
+[node name="ParticipantWindow" type="Window" unique_id=162578426]
+oversampling_override = 1.0
+visible = false
+borderless = true
+script = ExtResource("1_participant_window")

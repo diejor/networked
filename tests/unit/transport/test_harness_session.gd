@@ -50,14 +50,6 @@ func test_build_join_payload_without_spawn() -> void:
 	assert_that(payload.spawn).is_empty()
 
 
-func test_build_join_payload_uses_dictionary_spawn() -> void:
-	var spawn := { &"scene": "arena", &"node": "Spawner" }
-	var payload := session.build_join_payload("valeria", spawn)
-
-	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_equal(spawn)
-
-
 func test_build_join_payload_uses_join_payload_spawn() -> void:
 	var source := JoinPayload.new()
 	source.username = "ignored"
@@ -69,24 +61,13 @@ func test_build_join_payload_uses_join_payload_spawn() -> void:
 	assert_that(payload.spawn).is_equal(source.spawn)
 
 
-func test_build_join_payload_uses_scene_node_path_spawn() -> void:
-	var path := SceneNodePath.new()
-	path.scene_path = "res://levels/Arena.tscn"
-	path.node_path = "Player/MultiplayerEntity"
-
-	var payload := session.build_join_payload("valeria", path)
-
-	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_not_empty()
-
-
 func test_set_link_conditions_for_sender() -> void:
 	var server := session.session().get_server_peer()
 	var client := session.session().create_client_peer()
 	session.session().poll()
 
-	var conditions := NetwLinkConditions.new(44)
-	conditions.delay_polls = 3
+	var conditions := LocalLoopbackSession.LinkConditions.new(44)
+	conditions.latency_ms = 50.0
 	session.set_link_conditions(
 		server,
 		conditions,
@@ -97,7 +78,8 @@ func test_set_link_conditions_for_sender() -> void:
 		server,
 		client._get_unique_id(),
 	)
-	assert_that(installed.delay_polls).is_equal(3)
+	assert_that(installed.latency_ms).is_equal(50.0)
+	assert_that(installed.effective_latency_ms()).is_equal(50.0)
 
 	session.clear_link_conditions(server, client._get_unique_id())
 	assert_that(

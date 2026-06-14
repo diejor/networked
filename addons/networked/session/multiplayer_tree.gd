@@ -65,6 +65,9 @@ signal host_ready()
 ## Emitted when the connection state changes.
 signal state_changed(old_state: State, new_state: State)
 
+## Emitted after [member backend] is cloned for a client join attempt.
+signal backend_ready_for_join(backend: BackendPeer)
+
 ## Emitted when [member api] is replaced.
 ##
 ## Both [param old_api] and [param new_api] may be valid. Consumers that cached
@@ -74,6 +77,9 @@ signal api_swapped(
 		new_api: SceneMultiplayer,
 		reason: String,
 )
+
+# Internal signal to relay connection failure outcomes.
+signal _connect_failed(result: ConnectResult)
 
 ## Session lifecycle state for this tree.
 ## [codeblock]
@@ -238,7 +244,11 @@ func _warn_if_role_unset() -> void:
 			_auth.set_auth_provider(value)
 			_auth.prepare()
 
+## Outcome of the last connection handshake.
+var last_connect_result: ConnectResult = null
+
 @export_group("Session")
+
 ## Game-build tag that gates session admission, baked into every build.
 ##
 ## A joining peer whose tag differs is rejected during the auth handshake before
@@ -246,7 +256,7 @@ func _warn_if_role_unset() -> void:
 ## corrupts the session. Bump it whenever the wire protocol breaks. Leave it
 ## empty to disable the gate.
 ## [codeblock]
-## "" -> tag 0 -> any same-version peer admitted (gate off)
+## "" -> tag 0 -> any same version peer admitted (gate off)
 ## "bomber-v2" -> only peers carrying "bomber-v2" admitted
 ## [/codeblock]
 @export var app_id: StringName = "":
@@ -331,6 +341,7 @@ var multiplayer_peer: MultiplayerPeer:
 
 var _tree_name: String = ""
 var _join_aborted: bool = false
+var _deletion_finalized: bool = false
 
 ## Local player [Node] for this tree, or [code]null[/code].
 ##
@@ -775,7 +786,9 @@ func join(
 		timeout: float = 5.0,
 		quiet: bool = false,
 ) -> Error:
+	last_connect_result = null
 	assert(state == State.OFFLINE, "Must be offline to join.")
+
 	assert(
 		desired_role != Role.DEDICATED_SERVER,
 		"join() needs a local player; a dedicated server hosts via host().",
@@ -794,6 +807,7 @@ func join(
 		return ERR_INVALID_PARAMETER
 
 	self.backend = backend_instance
+	backend_ready_for_join.emit(self.backend)
 	var prepare_err := await _prepare_session(join_payload)
 	if prepare_err != OK:
 		return prepare_err
@@ -843,12 +857,14 @@ func _open_join_transport(
 	)
 	if _join_aborted:
 		_transition(State.OFFLINE)
+		last_connect_result = ConnectResult.aborted("Connection aborted by user")
 		return ERR_CANT_CONNECT
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
 	if peer == null and not api_was_adopted:
 		_transition(State.OFFLINE)
+		last_connect_result = ConnectResult.error("Failed to join: backend produced no peer.")
 		if not quiet:
 			Netw.dbg.error(
 				"Failed to join: backend produced no peer.",
@@ -859,16 +875,73 @@ func _open_join_transport(
 	if peer != null:
 		api.multiplayer_peer = peer
 
+	if (peer != null or api_was_adopted) and backend:
+		backend.begin_connect_progress(timeout)
+
+	var on_backend_failed := func(res: ConnectResult) -> void:
+		_connect_failed.emit(res)
+	var on_api_failed := func() -> void:
+		_connect_failed.emit(
+			ConnectResult.unreachable(
+				&"PEER_CONNECT_FAILED",
+				"Could not reach the server.",
+			),
+		)
+
+	if backend:
+		backend.connect_failed.connect(on_backend_failed, CONNECT_ONE_SHOT)
+	if api:
+		api.connection_failed.connect(on_api_failed, CONNECT_ONE_SHOT)
+
 	var timer := get_tree().create_timer(timeout)
-	if await Async.timeout(connected_to_server, timer) or _join_aborted:
+	var connect_result := await Async.timeout_or_failure(
+		connected_to_server,
+		_connect_failed,
+		timer,
+	)
+
+	if backend:
+		if backend.connect_failed.is_connected(on_backend_failed):
+			backend.connect_failed.disconnect(on_backend_failed)
+		backend.end_connect_progress()
+	if api:
+		if api.connection_failed.is_connected(on_api_failed):
+			api.connection_failed.disconnect(on_api_failed)
+
+	var failed_reason_obj: Variant = connect_result.get("reason")
+	var did_timeout := String(connect_result.get("result", "")) == "timeout"
+	var did_fail := String(connect_result.get("result", "")) == "failure"
+	if did_timeout:
+		last_connect_result = ConnectResult.timed_out("Connection timed out")
+	elif _join_aborted:
+		last_connect_result = ConnectResult.aborted("Connection aborted by user")
+	elif did_fail:
+		if failed_reason_obj is ConnectResult:
+			last_connect_result = failed_reason_obj
+		else:
+			last_connect_result = ConnectResult.error(str(failed_reason_obj))
+
+	if did_timeout or did_fail or _join_aborted:
 		_transition(State.OFFLINE)
 		if not quiet and not _join_aborted:
+			var message := "Connection timed out. Server probably is not up."
+			if did_fail and last_connect_result != null:
+				message = "Connection failed: %s." % (
+						last_connect_result.message
+						if not last_connect_result.message.is_empty()
+						else str(last_connect_result)
+				)
 			Netw.dbg.error(
-				"Connection timed out. Server probably is not up.",
+				message,
 				func(m): push_error(m)
 			)
 		return ERR_CANT_CONNECT
 
+	last_connect_result = ConnectResult.ok()
+	if backend:
+		last_connect_result.diagnostics = (
+				backend.get_connection_diagnostics(1)
+		)
 	role = Role.CLIENT
 	_transition(State.ONLINE)
 	return OK
@@ -1119,6 +1192,9 @@ func _await_adopted_client_connected() -> Error:
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
+		return
+
+	if Netw.is_test_env():
 		return
 
 	if auto_host_headless and backend != null \
@@ -1522,6 +1598,16 @@ func _unbind_api_signals(target: SceneMultiplayer) -> void:
 		target.server_disconnected.disconnect(_on_server_disconnected)
 
 
+func _notification(what: int) -> void:
+	# A tree freed through a parent (rather than its own queue_free) reaches
+	# tree_exiting with is_queued_for_deletion() false, so _on_exiting treats it
+	# as a reparent and leaves the peer mounted. PREDELETE is the unambiguous
+	# deletion signal (it never fires on reparent), so release the peer here when
+	# the queued tree_exiting path did not already run.
+	if what == NOTIFICATION_PREDELETE:
+		_close_peer_on_delete()
+
+
 func _on_exiting() -> void:
 	Netw.dbg.trace("MultiplayerTree: Exiting.")
 
@@ -1536,6 +1622,31 @@ func _on_exiting() -> void:
 		api.multiplayer_peer.close()
 		api.multiplayer_peer = null
 	_unmount_api(true)
+
+	if backend:
+		backend.peer_reset_state()
+
+	dispose()
+	_deletion_finalized = true
+
+
+# Releases the live peer and breaks circular references for a tree freed via a
+# parent, the case _on_exiting misreads as a reparent. Idempotent through
+# [member _deletion_finalized] so it never double-tears-down with _on_exiting.
+func _close_peer_on_delete() -> void:
+	if _deletion_finalized or Engine.is_editor_hint():
+		return
+	# A node still in the tree at PREDELETE is part of a SceneTree-wide teardown
+	# cascade, where closing the peer makes siblings error on get_unique_id and
+	# the leak no longer matters. Only the genuine parent-freed case (already
+	# detached by tree_exiting) needs cleanup here.
+	if is_inside_tree():
+		return
+	_deletion_finalized = true
+
+	if api and api.has_multiplayer_peer():
+		api.multiplayer_peer.close()
+		api.multiplayer_peer = null
 
 	if backend:
 		backend.peer_reset_state()

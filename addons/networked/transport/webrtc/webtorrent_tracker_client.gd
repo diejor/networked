@@ -24,6 +24,8 @@ extends RefCounted
 signal connected
 ## Emitted once every previously open tracker socket has closed.
 signal disconnected
+## Emitted once when every tracker socket closes before any socket opens.
+signal unreachable
 ## Emitted when [param ws] first opens, so the owner can send its first
 ## announce to that socket.
 signal socket_opened(ws: WebSocketPeer)
@@ -35,8 +37,74 @@ signal message_received(data: Dictionary)
 ## How long a socket may sit in the connecting state before it is dropped.
 const CONNECT_TIMEOUT_USEC := 10_000_000
 
+static var _shared_clients := { }
+
 var _sockets: Array[WebSocketPeer] = []
 var _any_open := false
+var _signaled_unreachable := false
+var _last_poll_frame := -1
+
+
+## Acquires a shared client for [param urls].
+##
+## The returned [Dictionary] contains [code]client[/code] and [code]error[/code].
+## First acquire opens sockets. Later acquires reuse them and increment a
+## reference count. Call [method release_shared] with the same [param urls].
+static func acquire_shared(urls: Array[String]) -> Dictionary:
+	var key := _shared_key(urls)
+	if _shared_clients.has(key):
+		var existing: Dictionary = _shared_clients[key]
+		var existing_client := existing.client as WebTorrentTrackerClient
+		if existing_client.is_active():
+			existing.refs = int(existing.refs) + 1
+			return { "client": existing_client, "error": OK }
+		existing_client.close()
+		_shared_clients.erase(key)
+
+	var client := WebTorrentTrackerClient.new()
+	var err := client.connect_to(urls)
+	if err != OK:
+		return { "client": null, "error": err }
+	_shared_clients[key] = { "client": client, "refs": 1 }
+	return { "client": client, "error": OK }
+
+
+## Releases a client acquired with [method acquire_shared].
+##
+## The final release closes the shared sockets and removes the registry entry.
+static func release_shared(urls: Array[String], client: WebTorrentTrackerClient) -> void:
+	if client == null:
+		return
+	var key := _shared_key(urls)
+	if not _shared_clients.has(key):
+		return
+	var existing: Dictionary = _shared_clients[key]
+	if existing.client != client:
+		return
+	existing.refs = int(existing.refs) - 1
+	if int(existing.refs) > 0:
+		return
+	client.close()
+	_shared_clients.erase(key)
+
+
+## Clears all shared tracker clients and closes their sockets.
+##
+## This is primarily used for testing teardown to prevent static leaks.
+static func clear_shared_clients() -> void:
+	for key in _shared_clients:
+		var entry: Dictionary = _shared_clients[key]
+		var client := entry.client as WebTorrentTrackerClient
+		if client:
+			client.close()
+	_shared_clients.clear()
+
+
+# Builds a stable registry key from tracker URLs.
+static func _shared_key(urls: Array[String]) -> String:
+	var sorted := urls.duplicate()
+	sorted.sort()
+	return JSON.stringify(sorted)
 
 
 ## Opens a [WebSocketPeer] to each url in [param urls], replacing any existing
@@ -46,6 +114,7 @@ var _any_open := false
 ## connecting, or [constant @GlobalScope.ERR_CANT_CONNECT] otherwise.
 func connect_to(urls: Array[String]) -> Error:
 	close()
+	_signaled_unreachable = false
 	var now := Time.get_ticks_usec()
 	for url in urls:
 		Netw.dbg.trace("WebTorrentTrackerClient: connecting to %s", [url])
@@ -55,10 +124,9 @@ func connect_to(urls: Array[String]) -> Error:
 			ws.set_meta("connect_time", now)
 			_sockets.append(ws)
 		else:
-			Netw.dbg.warn(
+			Netw.dbg.info(
 				"WebTorrentTrackerClient: failed to connect %s",
 				[url],
-				func(m): push_warning(m)
 			)
 	Netw.dbg.debug(
 		"WebTorrentTrackerClient: %d/%d tracker socket(s) opening.",
@@ -75,6 +143,10 @@ func connect_to(urls: Array[String]) -> Error:
 func poll() -> void:
 	if _sockets.is_empty():
 		return
+	var frame := Engine.get_process_frames()
+	if _last_poll_frame == frame:
+		return
+	_last_poll_frame = frame
 
 	var now := Time.get_ticks_usec()
 	var to_remove: Array[WebSocketPeer] = []
@@ -85,13 +157,13 @@ func poll() -> void:
 		if state == WebSocketPeer.STATE_CONNECTING:
 			var started: int = ws.get_meta("connect_time", 0)
 			if started > 0 and now - started > CONNECT_TIMEOUT_USEC:
-				_warn_dropped(ws, "timed out")
+				_log_dropped(ws, "timed out")
 				ws.close()
 				to_remove.append(ws)
 			continue
 
 		if state == WebSocketPeer.STATE_CLOSED:
-			_warn_dropped(ws, "closed")
+			_log_dropped(ws, "closed")
 			to_remove.append(ws)
 			continue
 
@@ -111,6 +183,10 @@ func poll() -> void:
 
 	for ws in to_remove:
 		_sockets.erase(ws)
+
+	if _sockets.is_empty() and not _any_open and not _signaled_unreachable:
+		_signaled_unreachable = true
+		unreachable.emit()
 
 	if _any_open and not has_open():
 		_any_open = false
@@ -135,6 +211,18 @@ func has_open() -> bool:
 		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
 			return true
 	return false
+
+
+## Returns currently open sockets.
+##
+## Late consumers use this to announce on sockets that opened before they
+## acquired a shared client.
+func open_sockets() -> Array[WebSocketPeer]:
+	var out: Array[WebSocketPeer] = []
+	for ws in _sockets:
+		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			out.append(ws)
+	return out
 
 
 ## Returns [code]true[/code] while any socket is still open or connecting.
@@ -167,15 +255,14 @@ func _decode(packet: PackedByteArray) -> void:
 
 # Logs tracker protocol notices without raising engine warnings.
 func _log_tracker_notice(packet_text: String) -> void:
-	Netw.dbg.debug(
+	Netw.dbg.trace(
 		"WebTorrentTrackerClient: tracker notice %s",
 		[packet_text],
 	)
 
 
-func _warn_dropped(ws: WebSocketPeer, why: String) -> void:
-	Netw.dbg.warn(
+func _log_dropped(ws: WebSocketPeer, why: String) -> void:
+	Netw.dbg.info(
 		"WebTorrentTrackerClient: tracker %s: %s",
 		[why, ws.get_meta("url", "unknown")],
-		func(m): push_warning(m)
 	)

@@ -9,9 +9,12 @@ class_name NetwTestSessionHook
 extends GdUnitTestSessionHook
 
 static var _active_hook: NetwTestSessionHook
+static var game_harness_used_in_test: bool = false
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
+var _baseline_time_scale: float = 1.0
+var _baseline_physics_ticks: int = 60
 var _pre_test_resource_count: int = 0
 var _top_resource_growths: Array = []
 const _TOP_RESOURCE_GROWTH_LIMIT := 5
@@ -65,6 +68,11 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_baseline_resource_count = int(
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)
+	# Snapshot the clean engine timing config before any harness runs, so the
+	# per-test reset can undo the headless 10x speedup NetwGameHarness installs
+	# even when a harness teardown is skipped.
+	_baseline_time_scale = Engine.time_scale
+	_baseline_physics_ticks = Engine.get_physics_ticks_per_second()
 
 	return GdUnitResult.success()
 
@@ -84,9 +92,13 @@ func shutdown(_session: GdUnitTestSession) -> GdUnitResult:
 
 func _on_test_event(event: GdUnitEvent) -> void:
 	if event.type() == GdUnitEvent.TESTSUITE_BEFORE:
+		# Ensure InputMap is fully loaded from project settings.
+		# This is essential on fresh CI environments without prior editor import.
+		InputMap.load_from_project_settings()
 		_baseline_child_count = Engine.get_main_loop().root.get_child_count()
 
 	elif event.type() == GdUnitEvent.TESTCASE_BEFORE:
+		game_harness_used_in_test = false
 		_close_test_debug_scope()
 		_close_test_log_scope()
 		_reset_debugger()
@@ -119,11 +131,22 @@ func _reset_debugger() -> void:
 func _reset_global_test_state() -> void:
 	NetwPathNamespace.reset()
 
+	# NetwGameHarness scales engine timing 10x under headless and restores it only
+	# in its own teardown. Force the clean baseline back between tests so a skipped
+	# teardown cannot leak a 10x physics rate into a later suite, where it would
+	# desync Engine.get_physics_ticks_per_second() from the static project setting
+	# that LocalLoopbackSession derives its delay clock from.
+	if Engine.time_scale != _baseline_time_scale:
+		Engine.time_scale = _baseline_time_scale
+	if Engine.get_physics_ticks_per_second() != _baseline_physics_ticks:
+		Engine.set_physics_ticks_per_second(_baseline_physics_ticks)
+
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
 
 	FileSystemBackend._clear_path_registry()
+	WebTorrentTrackerClient.clear_shared_clients()
 
 
 func _assert_clean_state(event: GdUnitEvent) -> void:
@@ -167,6 +190,8 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 
 
 func _track_resource_delta(event: GdUnitEvent) -> void:
+	if game_harness_used_in_test:
+		return
 	var current_count := int(
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)

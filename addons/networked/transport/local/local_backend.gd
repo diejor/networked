@@ -49,7 +49,7 @@ func create_join_peer(
 ## Implements [method BackendPeer.poll] by polling [member session].
 func poll(_dt: float) -> void:
 	if session:
-		session.poll()
+		session.poll_frame_scoped()
 
 
 ## Implements [method BackendPeer.query_server_info] from [member session].

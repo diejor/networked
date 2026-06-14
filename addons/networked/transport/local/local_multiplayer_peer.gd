@@ -24,6 +24,11 @@ var _peers_to_emit_disconnected: Array[int] = []
 var _packet_queue: Array[Dictionary] = []
 var _current_packet: Dictionary = { }
 
+## Owning [LocalLoopbackSession]. When set, inbound packets are offered to
+## [method LocalLoopbackSession.capture_incoming] at receive time so link
+## conditions can hold them before they ever reach [member _packet_queue].
+var loopback_session = null
+
 
 ## Initializes this peer as the server (unique ID [code]1[/code]).
 func create_server() -> Error:
@@ -137,14 +142,19 @@ func _receive_packet(p_buffer: PackedByteArray, p_sender: int, p_channel: int, p
 	if _closed or _closing:
 		return
 
-	_packet_queue.append(
-		{
-			"data": p_buffer,
-			"peer": p_sender,
-			"channel": p_channel,
-			"mode": p_mode,
-		},
-	)
+	var packet := {
+		"data": p_buffer,
+		"peer": p_sender,
+		"channel": p_channel,
+		"mode": p_mode,
+	}
+
+	# Offer to the session first so link conditions can hold or drop the packet
+	# at receive time, before it becomes visible to _get_packet_script.
+	if loopback_session and loopback_session.capture_incoming(self, packet):
+		return
+
+	_packet_queue.append(packet)
 	Netw.dbg.trace("Received packet from %d (Size: %d). Queue length: %d", [p_sender, p_buffer.size(), _packet_queue.size()])
 
 
@@ -204,6 +214,7 @@ func _close() -> void:
 func _finalize_close() -> void:
 	_closing = false
 	_closed = true
+	loopback_session = null
 
 	_peers_to_emit_connected.clear()
 	_peers_to_emit_disconnected.clear()

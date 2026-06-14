@@ -71,10 +71,7 @@ static func _collect_sync_properties(node: Node) -> Dictionary:
 		if not sync.replication_config:
 			continue
 
-		var root_node: Node = (
-				sync.get_node(sync.root_path) if sync.root_path != NodePath(".") \
-				else sync.get_parent()
-		)
+		var root_node := sync.get_node_or_null(sync.root_path)
 		if not is_instance_valid(root_node):
 			continue
 

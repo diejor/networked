@@ -55,8 +55,15 @@ signal directory_unavailable(directory_id: StringName, reason: String)
 ## A join attempt began against [param target].
 signal join_started(target: JoinTarget)
 
-## A join attempt failed. [param reason] is a human-readable string.
-signal join_failed(target: JoinTarget, reason: String)
+## A join attempt failed. [param result] is the [ConnectResult] outcome.
+signal join_failed(target: JoinTarget, result: ConnectResult)
+
+## A join attempt advanced through transport-specific progress.
+signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
+
+## A connection succeeded. [param result] is the [ConnectResult] containing
+## happy-path diagnostics.
+signal connection_diagnostics(result: ConnectResult)
 
 ## A host attempt began.
 signal host_started()
@@ -291,6 +298,9 @@ func get_result(target: JoinTarget) -> ServerInfoResult:
 ## affected. Emits [signal target_removed] for the prior set and
 ## [signal target_added] for the loaded set.
 func load_server_list(path: String = server_list_path) -> void:
+	if Netw.is_test_env() and path.begins_with("user://"):
+		if not path.contains("_test_"):
+			path = "user://servers_test.tres"
 	server_list_path = path
 	var loaded := ServerList.load_or_new(path)
 	server_list = loaded
@@ -306,6 +316,9 @@ func load_server_list(path: String = server_list_path) -> void:
 ## loaded. Returns the [enum @GlobalScope.Error] from
 ## [ResourceSaver.save].
 func save_server_list(path: String = server_list_path) -> Error:
+	if Netw.is_test_env() and path.begins_with("user://"):
+		if not path.contains("_test_"):
+			path = "user://servers_test.tres"
 	server_list_path = path
 	if server_list == null:
 		server_list = ServerList.new()
@@ -430,14 +443,14 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if target == null:
 		Netw.dbg.warn("ConnectSession join failed: target is null.")
-		join_failed.emit(null, "target is null")
+		join_failed.emit(null, ConnectResult.error("target is null"))
 		return ERR_INVALID_PARAMETER
 	if payload == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: payload is null.",
 			[_target_summary(target)],
 		)
-		join_failed.emit(target, "join payload is null")
+		join_failed.emit(target, ConnectResult.error("join payload is null"))
 		return ERR_INVALID_PARAMETER
 	var tree := get_tree_bound()
 	if tree == null:
@@ -447,7 +460,9 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		)
 		join_failed.emit(
 			target,
-			"no MultiplayerTree bound; call bind_tree first",
+			ConnectResult.error(
+				"no MultiplayerTree bound; call bind_tree first",
+			),
 		)
 		return ERR_UNCONFIGURED
 
@@ -464,16 +479,39 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	# backend (hint < 0) falls back to a safety-net ceiling.
 	var hint := target.backend.connect_timeout_hint() if target.backend else 5.0
 	var timeout := hint if hint > 0.0 else SELF_MANAGED_TIMEOUT_CEILING
+	var progress_cb := _on_backend_connect_progress.bind(target)
+	var progress_source: BackendPeer = null
+	var backend_ready_cb := func(backend: BackendPeer) -> void:
+		if backend == null:
+			return
+		progress_source = backend
+		if not backend.connect_progress.is_connected(progress_cb):
+			backend.connect_progress.connect(progress_cb)
+	tree.backend_ready_for_join.connect(backend_ready_cb, CONNECT_ONE_SHOT)
 	var err := await tree.join(target, payload, timeout, true)
+	if tree.backend_ready_for_join.is_connected(backend_ready_cb):
+		tree.backend_ready_for_join.disconnect(backend_ready_cb)
+	if progress_source != null \
+			and progress_source.connect_progress.is_connected(progress_cb):
+		progress_source.connect_progress.disconnect(progress_cb)
 	if err != OK:
-		if join_aborted_flag:
-			join_failed.emit(target, "Connection aborted by user")
-		else:
-			join_failed.emit(
-				target,
-				"connect failed (%s)" % error_string(err),
-			)
+		var result := tree.last_connect_result
+		if result == null:
+			if join_aborted_flag:
+				result = ConnectResult.aborted("Connection aborted by user")
+			else:
+				result = ConnectResult.error(
+					"connect failed (%s)" % error_string(err),
+				)
+		join_failed.emit(target, result)
 		return err
+
+	var result := tree.last_connect_result
+	if result == null:
+		result = ConnectResult.ok()
+	if tree.backend:
+		result.diagnostics = tree.backend.get_connection_diagnostics(1)
+	connection_diagnostics.emit(result)
 
 	# session_entered fires from _on_tree_state_changed when the tree reaches
 	# ONLINE, so every entry path (including debug auto-connect) is covered.
@@ -666,6 +704,15 @@ func _on_directory_unavailable(reason: String, id: StringName) -> void:
 	directory_unavailable.emit(id, reason)
 
 
+func _on_backend_connect_progress(
+		step: StringName,
+		message: String,
+		ratio: float,
+		target: JoinTarget,
+) -> void:
+	join_progress.emit(target, step, message, ratio)
+
+
 # Swaps the saved set to [param loaded] while keeping the existing instance for
 # any entry that reloads unchanged, so a redundant reload does not churn the
 # list or orphan a probe result keyed to the old instance.
@@ -713,7 +760,7 @@ func _target_summary(target: JoinTarget) -> String:
 	if target == null:
 		return "<null>"
 	var address := target.address
-	if target.backend != null:
+	if address.is_empty() and target.backend != null:
 		var join_address := target.backend.get_join_address()
 		if not join_address.is_empty():
 			address = join_address

@@ -152,13 +152,7 @@ static func assign_value(target: Node, path: NodePath, value: Variant) -> void:
 static func _extract_clean_name(path: NodePath) -> StringName:
 	if path.get_subname_count() == 0:
 		return &""
-
-	var s := str(path)
-	if s.begins_with(".:"):
-		return StringName(s.trim_prefix(".:"))
-	if s.begins_with(":"):
-		return StringName(s.trim_prefix(":"))
-	return StringName(s)
+	return path.get_subname(path.get_subname_count() - 1)
 
 
 ## Restricts all synchronizers on [param target_node] to only send data

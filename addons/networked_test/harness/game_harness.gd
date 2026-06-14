@@ -8,6 +8,9 @@ extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
+const PARTICIPANT_WINDOW_SCENE := preload(
+	"res://addons/networked/session/view/ParticipantWindow.tscn"
+)
 
 var reporter: Callable = _default_reporter
 
@@ -15,8 +18,11 @@ var _main_scene: PackedScene
 var _loopback: NetwHarnessSession
 var _waiter: NetwWaiter
 var _runners: Array[NetwSceneRunner] = []
-var _host: NetwSceneRunner
 var _display_viewport: ParticipantViewport
+
+## The listen server host participant.
+var host: NetwSceneRunner
+
 var _saved_time_scale := 1.0
 var _saved_physics_ticks := 60
 var _torn_down := false
@@ -32,6 +38,15 @@ func setup() -> void:
 	_loopback = NetwHarnessSession.new()
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
+
+	if DisplayServer.get_name() == "headless":
+		Engine.time_scale = 10.0
+		Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
+
+	# Skip noisy resource tracking in test session hook.
+	# Game harnesses trigger Godot's resource cache.
+	NetwTestSessionHook.game_harness_used_in_test = true
+
 	_waiter = NetwWaiter.new(get_tree(), reporter)
 	await get_tree().process_frame
 
@@ -46,12 +61,12 @@ func add_host(
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
-	assert(_host == null, "NetwGameHarness.add_host: host already exists.")
+	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
 		MultiplayerTree.Role.LISTEN_SERVER,
 	)
-	_host = runner
+	host = runner
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
@@ -77,7 +92,7 @@ func add_client(
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
-	assert(_host != null, "NetwGameHarness.add_client: add host first.")
+	assert(host != null, "NetwGameHarness.add_client: add host first.")
 	var runner := _create_runner(username, MultiplayerTree.Role.CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
@@ -100,11 +115,11 @@ func add_client(
 ## roster and any disconnect driven game logic have run by the time it resolves.
 func disconnect_runner(runner: NetwSceneRunner) -> void:
 	var peer_id := _loopback.disconnect_tree(runner.tree)
-	if peer_id == 0 or not _host or runner == _host:
+	if peer_id == 0 or not host or runner == host:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in _host.tree.get_joined_players():
+			for rj: ResolvedJoin in host.tree.get_joined_players():
 				if rj.peer_id == peer_id:
 					return false
 			return true,
@@ -119,8 +134,8 @@ func sync_ticks(n: int) -> void:
 	if n == 0:
 		return
 
-	var clock := _host.tree.get_service(MultiplayerClock) as MultiplayerClock \
-	if _host else null
+	var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock \
+	if host else null
 	if not clock:
 		for i in n:
 			await get_tree().process_frame
@@ -133,6 +148,34 @@ func sync_ticks(n: int) -> void:
 		DEFAULT_TICKRATE,
 	)
 	await stepper.sync_ticks(n)
+
+
+## Waits for a transition animation ([TPLayerAPI]) to finish on a specific
+## [param runner].
+func wait_for_transition(runner: NetwSceneRunner) -> void:
+	var tp_layer := runner.tree.get_service(TPLayerAPI) as TPLayerAPI
+	while tp_layer and tp_layer.transition_anim.is_playing():
+		await sync_ticks(1)
+
+
+## Waits for transition animations ([TPLayerAPI]) to finish on a list of
+## [param runners].
+## [br]If the list is empty, it waits for transitions on all active runners
+## registered in this harness.
+func wait_for_transitions(runners: Array[NetwSceneRunner] = []) -> void:
+	var list := runners if not runners.is_empty() else _runners
+	var active_transitions := true
+	while active_transitions:
+		active_transitions = false
+		for runner in list:
+			var tp_layer := (
+					runner.tree.get_service(TPLayerAPI) as TPLayerAPI
+			)
+			if tp_layer and tp_layer.transition_anim.is_playing():
+				active_transitions = true
+				break
+		if active_transitions:
+			await sync_ticks(1)
 
 
 ## Advances ordinary frames without asserting network tick progress.
@@ -151,7 +194,7 @@ func set_time_factor(factor: float) -> void:
 	Engine.set_physics_ticks_per_second(int(_saved_physics_ticks * factor))
 
 
-## Displays every participant slot in one window.
+## Displays every participant window in one window.
 ##
 ## Tests remain headless unless this method is called.
 func show_views() -> ParticipantViewport:
@@ -168,32 +211,58 @@ func show_views() -> ParticipantViewport:
 	return _display_viewport
 
 
-## Sets inbound link conditions on [param runner]'s loopback peer.
+## Degrades both network directions for [param runner].
 ##
-## [param from_runner] keys the conditions to one sender. A client runner only
-## ever receives from the server, so per-sender keying is meaningful mainly when
-## [param runner] is the host.
-func set_link_conditions(
+## [method NetwLink.NetwLinkMulti.inbound] narrows to server to player
+## traffic. [method NetwLink.NetwLinkMulti.outbound] narrows to player to
+## server traffic.
+func degrade(runner: NetwSceneRunner) -> NetwLink.NetwLinkMulti:
+	assert(host != null, "NetwGameHarness.degrade: add host first.")
+	assert(
+		runner != host,
+		"NetwGameHarness.degrade: host has no remote player link.",
+	)
+	var inbound := path(host, runner)
+	var outbound := path(runner, host)
+	return NetwLink.NetwLinkMulti.new(inbound, outbound)
+
+
+## Applies [param profile] to every runner except the host.
+func degrade_clients(profile: NetwLink.Profile) -> void:
+	for runner in _runners:
+		if runner != host:
+			degrade(runner).profile(profile)
+
+
+## Clears all link simulation in this harness session.
+func clear_links() -> void:
+	_loopback.session().clear_all_link_conditions()
+
+
+## Returns fluent path control for packets from [param from_runner] to
+## [param to_runner].
+func path(
+		from_runner: NetwSceneRunner,
+		to_runner: NetwSceneRunner,
+) -> NetwLink:
+	var peer := _loopback_peer_for(to_runner, "path")
+	return NetwLink.new(_loopback.session(), peer, from_runner.peer_id)
+
+
+## Returns fluent inbound link control for [param runner]'s loopback peer.
+##
+## Prefer [method degrade] or [method path]. This method preserves the old
+## receiver keyed API used by existing tests.
+func link(
 		runner: NetwSceneRunner,
-		conditions: NetwLinkConditions,
 		from_runner: NetwSceneRunner = null,
-) -> void:
-	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+) -> NetwLink:
+	var peer := _loopback_peer_for(runner, "link")
 	var sender_id := from_runner.peer_id if from_runner else 0
-	_loopback.set_link_conditions(peer, conditions, sender_id)
+	return NetwLink.new(_loopback.session(), peer, sender_id)
 
 
-## Clears inbound link conditions on [param runner]'s loopback peer.
-func clear_link_conditions(
-		runner: NetwSceneRunner,
-		from_runner: NetwSceneRunner = null,
-) -> void:
-	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
-	var sender_id := from_runner.peer_id if from_runner else 0
-	_loopback.clear_link_conditions(peer, sender_id)
-
-
-## Frees all participant slots and resets global harness state.
+## Frees all participant windows and resets global harness state.
 func teardown() -> void:
 	if _torn_down:
 		return
@@ -214,7 +283,7 @@ func teardown() -> void:
 		await NetwTestSuite.drain_frames(get_tree(), 2)
 
 	_runners.clear()
-	_host = null
+	host = null
 
 	if _loopback:
 		_loopback.reset()
@@ -231,8 +300,8 @@ func _create_runner(
 		username: String,
 		role: MultiplayerTree.Role,
 ) -> NetwSceneRunner:
-	var slot := ParticipantSlot.new()
-	slot.name = "Slot_%s" % username
+	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
+	slot.name = "Window_%s" % username
 	add_child(slot)
 
 	var scene := _main_scene.instantiate()
@@ -262,16 +331,31 @@ func _finish_online_runner(runner: NetwSceneRunner) -> void:
 
 
 func _show_display_window() -> void:
-	if _host:
-		_host.move_window_to_foreground()
+	if host:
+		host.move_window_to_foreground()
+
+
+func _loopback_peer_for(
+		runner: NetwSceneRunner,
+		method_name: String,
+) -> LocalMultiplayerPeer:
+	assert(
+		runner != null and runner.tree != null,
+		"NetwGameHarness.%s: runner is not connected." % method_name,
+	)
+	var peer := runner.tree.multiplayer_peer as LocalMultiplayerPeer
+	assert(
+		peer != null,
+		(
+				"NetwGameHarness.%s: link simulation requires "
+				+ "LocalLoopbackBackend."
+		) % method_name,
+	)
+	return peer
 
 
 func _make_join_payload(username: String, spawn: Variant = null) -> JoinPayload:
 	return _loopback.build_join_payload(username, spawn)
-
-
-func _resolve_spawn_dict(spawn: Variant, username: String) -> Dictionary:
-	return _loopback.resolve_spawn_dict(spawn, username)
 
 
 func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:
@@ -298,11 +382,11 @@ func _collect_nodes(root: Node) -> Array[Node]:
 # future resolves before the host finishes registering the peer, so blocking
 # on the roster keeps add_host and add_client fully settled on return.
 func _wait_for_roster(runner: NetwSceneRunner) -> void:
-	if not _host:
+	if not host:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in _host.tree.get_joined_players():
+			for rj: ResolvedJoin in host.tree.get_joined_players():
 				if rj.peer_id == runner.peer_id:
 					return true
 			return false,

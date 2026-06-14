@@ -27,7 +27,7 @@ func before_test() -> void:
 	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
 
 	harness = make_harness()
-	await harness.setup(null, level_builder.packed)
+	await harness.setup(level_builder.packed)
 	client = await harness.add_client()
 
 
@@ -62,7 +62,10 @@ func test_player_spawns_in_level_after_join() -> void:
 		join_payload.serialize(),
 	)
 
-	var player_name := NetwEntity.format_name(username, peer_id)
+	var rj := ResolvedJoin.new()
+	rj.username = username
+	rj.peer_id = peer_id
+	var player_name := NetwEntity.name_for(rj)
 	var scene_node_name := "%sScene" % level_builder.scene_name
 	var level := server.get_node_or_null(
 		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],

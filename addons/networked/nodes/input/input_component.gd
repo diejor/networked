@@ -51,9 +51,26 @@ func _ready() -> void:
 	if tick_mode:
 		var clock := MultiplayerClock.for_node(self)
 		if clock:
+			clock.before_tick.connect(_on_before_tick)
 			clock.on_tick.connect(_on_tick)
 		else:
 			_dbg.warn("tick_mode=true but no MultiplayerClock found on this node's multiplayer API.", func(m): push_warning(m))
+
+
+## Override to refresh this component's replicated input exports from the current
+## [member state] before each tick is simulated.
+##
+## Runs at [signal MultiplayerClock.before_tick] on the controlling peer only, so
+## the values a [InputSynchronizer] ships and a [PredictionComponent] snapshots are
+## the tick's gathered input, never a stale poll. The base is a no-op, so a
+## subclass that only emits [signal tick_snapshot] needs no override.
+## [codeblock]
+## func gather() -> void:
+##     motion = get_vector2(move_left, move_right, move_up, move_down)
+##     bombing = is_down(set_bomb)
+## [/codeblock]
+func gather() -> void:
+	pass
 
 
 ## Builds the initial [member state] dictionary from [method get_inputs].
@@ -87,6 +104,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				state[action] = false
 				_dbg.trace("Action %s Released", [action])
 				action_changed.emit(action, false)
+
+
+func _on_before_tick(_delta: float, _t: int) -> void:
+	gather()
 
 
 func _on_tick(_delta: float, t: int) -> void:

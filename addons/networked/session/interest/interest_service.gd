@@ -194,6 +194,8 @@ func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:
 		return false
 	if not _is_server():
 		return _current_layer_verdict(peer_id, entity)
+	if not _ancestors_admit(peer_id, entity):
+		return false
 	var per_peer: Dictionary = _admit_count.get(entity, { })
 	if per_peer.get(peer_id, 0) > 0:
 		return true
@@ -357,7 +359,29 @@ func _mark_gate_dirty(layer_id: StringName) -> void:
 	if layer_id.is_empty():
 		return
 	_dirty_gate_layers[layer_id] = true
+	_mark_gate_descendants_dirty(layer_id)
 	_schedule_visibility_flush()
+
+
+func _mark_gate_descendants_dirty(layer_id: StringName) -> void:
+	var gate: InterestGate = _gates.get(layer_id)
+	if not is_instance_valid(gate):
+		return
+	var host := NetwEntity.of(gate)
+	if host == null:
+		return
+	for entity: NetwEntity in _entity_filters.keys():
+		if _has_ancestor_entity(entity, host):
+			_dirty_entities[entity] = true
+
+
+func _has_ancestor_entity(entity: NetwEntity, ancestor: NetwEntity) -> bool:
+	var current := entity.parent_entity()
+	while current != null:
+		if current == ancestor:
+			return true
+		current = current.parent_entity()
+	return false
 
 
 func _schedule_visibility_flush() -> void:
@@ -501,12 +525,24 @@ func _drive_layer(layer: NetwInterestLayer) -> void:
 
 
 func _current_layer_verdict(peer_id: int, entity: NetwEntity) -> bool:
+	if not _ancestors_admit(peer_id, entity):
+		return false
 	var layer_ids: Dictionary = _entity_layers.get(entity, { })
 	for layer_id: StringName in layer_ids:
 		var layer := get_layer(layer_id)
 		if layer and layer.has_entity(entity) and layer.verdict_for(peer_id):
 			return true
 	return false
+
+
+func _ancestors_admit(peer_id: int, entity: NetwEntity) -> bool:
+	var current := entity.parent_entity()
+	while current != null:
+		var gate := current.slot(NetwEntity.Slot.INTEREST_GATE) as InterestGate
+		if is_instance_valid(gate) and not gate.verdict_for(peer_id):
+			return false
+		current = current.parent_entity()
+	return true
 
 
 func _live_peers(layer: NetwInterestLayer) -> Array[int]:

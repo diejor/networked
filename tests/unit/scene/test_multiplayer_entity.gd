@@ -1,7 +1,7 @@
 ## Tests for [MultiplayerEntity].
 ##
 ## Covers [NetwEntity] identity helpers, spawn-property collection,
-## and [enum MultiplayerEntity.AuthorityMode] behavior.
+## and [enum MultiplayerEntity.InitialController] behavior.
 class_name TestMultiplayerEntity
 extends NetwTestSuite
 
@@ -34,7 +34,7 @@ func test_parse_peer_invalid_names_return_empty_identity() -> void:
 	).is_equal(0)
 
 
-func test_netw_entity_bundle_encodes_name_and_identity() -> void:
+func test_netw_entity_bind_encodes_name_and_identity() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
@@ -43,7 +43,7 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	root.add_child(mp_entity)
 	mp_entity.owner = root
 
-	NetwEntity.bundle(root, 42, &"valeria")
+	NetwEntity.bind(root, &"valeria", 42)
 
 	var entity := NetwEntity.of(root)
 	assert_that(root.name).is_equal("valeria|42")
@@ -53,9 +53,43 @@ func test_netw_entity_bundle_encodes_name_and_identity() -> void:
 	assert_that(mp_entity.peer_id).is_equal(42)
 
 
+func test_netw_entity_spawn_identity_decodes_envelope() -> void:
+	var rj := ResolvedJoin.new()
+	rj.username = &"valeria"
+	rj.peer_id = 42
+	var data := NetwEntity.decorate_spawn(
+		{
+			"spawn_index": 7,
+		},
+		rj,
+	)
+	var spawn_identity := NetwEntity.spawn_identity(data)
+
+	assert_that(spawn_identity.entity_id).is_equal(&"valeria")
+	assert_that(spawn_identity.peer_id).is_equal(42)
+	assert_that(data["spawn_index"]).is_equal(7)
+
+
+func test_netw_entity_decorate_spawn_uses_resolved_join() -> void:
+	var rj := ResolvedJoin.new()
+	rj.username = &"valeria"
+	rj.peer_id = 42
+	var source := {
+		"spawn_index": 7,
+	}
+
+	var data := NetwEntity.decorate_spawn(source, rj)
+	var netw: Dictionary = data["_netw"]
+
+	assert_that(source.has("_netw")).is_false()
+	assert_that(data["spawn_index"]).is_equal(7)
+	assert_that(netw["entity_id"]).is_equal(&"valeria")
+	assert_that(netw["peer_id"]).is_equal(42)
+
+
 func test_netw_entity_template_flag_reflects_spawner() -> void:
 	var root: Node2D = auto_free(Node2D.new())
-	var entity := NetwEntity.of(root)
+	var entity := NetwEntity.ensure(root)
 
 	assert_that(entity.is_template).is_false()
 
@@ -63,7 +97,7 @@ func test_netw_entity_template_flag_reflects_spawner() -> void:
 	root.add_child(mp_entity)
 	mp_entity.owner = root
 
-	entity.set_multiplayer_entity(mp_entity)
+	entity.multiplayer_entity = mp_entity
 
 	assert_that(entity.is_template).is_true()
 
@@ -134,25 +168,30 @@ func _make_player_root(peer_id: int) -> Array:
 	return [root, entity]
 
 
-func test_authority_mode_updates_from_name_when_client_owned() -> void:
+func test_initial_controller_uses_represented_peer_from_name() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var entity: MultiplayerEntity = parts[1]
 
-	entity.authority_mode = MultiplayerEntity.AuthorityMode.CLIENT
+	entity.initial_controller = \
+	MultiplayerEntity.InitialController.REPRESENTED_PEER
 	entity._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
+	assert_that(entity.controller).is_equal(42)
+	assert_that(NetwEntity.of(root).controller).is_equal(42)
+	assert_that(NetwEntity.of(root).control_kind) \
+			.is_equal(NetwEntity.ControlKind.PEER)
 
 
-func test_authority_mode_leaves_server_and_invalid_names_unchanged() -> void:
+func test_initial_controller_leaves_server_and_invalid_names_unchanged() -> void:
 	var parts := _make_player_root(42)
 	var root: Node2D = parts[0]
 	var entity: MultiplayerEntity = parts[1]
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
 
-	entity.authority_mode = MultiplayerEntity.AuthorityMode.SERVER
+	entity.initial_controller = MultiplayerEntity.InitialController.SERVER
 	entity._on_owner_tree_entered()
 
 	assert_that(root.get_multiplayer_authority()).is_equal(1)
@@ -166,10 +205,31 @@ func test_authority_mode_leaves_server_and_invalid_names_unchanged() -> void:
 	no_peer_spawner.owner = no_peer_root
 	no_peer_spawner.root_path = no_peer_spawner.get_path_to(no_peer_root)
 
-	no_peer_spawner.authority_mode = MultiplayerEntity.AuthorityMode.CLIENT
+	no_peer_spawner.initial_controller = \
+	MultiplayerEntity.InitialController.REPRESENTED_PEER
 	no_peer_spawner._on_owner_tree_entered()
 
 	assert_that(no_peer_root.get_multiplayer_authority()).is_equal(1)
+
+
+func test_live_controller_reapplies_authority_and_derived_views() -> void:
+	var parts := _make_player_root(0)
+	var root: Node2D = parts[0]
+	var entity: MultiplayerEntity = parts[1]
+
+	entity._on_owner_tree_entered()
+	entity.grant_control(42)
+
+	var record := NetwEntity.of(root)
+	assert_that(root.get_multiplayer_authority()).is_equal(42)
+	assert_that(record.controller).is_equal(42)
+	assert_that(record.control_kind).is_equal(NetwEntity.ControlKind.PEER)
+
+	entity.revoke_control()
+
+	assert_that(root.get_multiplayer_authority()).is_equal(1)
+	assert_that(record.controller).is_equal(0)
+	assert_that(record.control_kind).is_equal(NetwEntity.ControlKind.SERVER)
 
 
 func test_unwrap_returns_spawner_or_null() -> void:
@@ -183,3 +243,117 @@ func test_unwrap_returns_spawner_or_null() -> void:
 
 	var empty_root: Node2D = auto_free(Node2D.new())
 	assert_that(MultiplayerEntity.unwrap(empty_root)).is_null()
+
+
+func test_netw_entity_ensure_attaches_to_specified_root() -> void:
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	parent.add_child(child)
+	auto_free(parent)
+	auto_free(child)
+
+	var entity := NetwEntity.ensure(child)
+	assert_that(entity).is_not_null()
+	assert_that(child.has_meta(NetwEntity._META_KEY)).is_true()
+	assert_that(child.get_meta(NetwEntity._META_KEY)).is_equal(entity)
+
+
+func test_multiplayer_entity_identity_forwarding() -> void:
+	var mp_entity := MultiplayerEntity.new()
+	auto_free(mp_entity)
+
+	mp_entity.entity_id = &"custom_id"
+	mp_entity.peer_id = 99
+	assert_that(mp_entity.entity_id).is_equal(&"custom_id")
+	assert_that(mp_entity.peer_id).is_equal(99)
+
+	var root := Node2D.new()
+	auto_free(root)
+	root.add_child(mp_entity)
+	mp_entity.owner = root
+
+	mp_entity._notification(Node.NOTIFICATION_PARENTED)
+
+	var entity := NetwEntity.of(root)
+	assert_that(entity).is_not_null()
+	assert_that(entity.entity_id).is_equal(&"custom_id")
+	assert_that(entity.peer_id).is_equal(99)
+
+	entity.entity_id = &"updated_id"
+	entity.peer_id = 100
+	assert_that(mp_entity.entity_id).is_equal(&"updated_id")
+	assert_that(mp_entity.peer_id).is_equal(100)
+
+	mp_entity.entity_id = &"final_id"
+	mp_entity.peer_id = 101
+	assert_that(entity.entity_id).is_equal(&"final_id")
+	assert_that(entity.peer_id).is_equal(101)
+
+
+func test_netw_entity_of_lookup_only() -> void:
+	var root := Node2D.new()
+	auto_free(root)
+
+	# Pure lookup should return null for a clean node
+	assert_that(NetwEntity.of(root)).is_null()
+
+	# After ensure is called, it should be found
+	var entity := NetwEntity.ensure(root)
+	assert_that(NetwEntity.of(root)).is_equal(entity)
+
+
+func test_netw_entity_resolve_orphan_vs_intree() -> void:
+	# Orphan parented-time scenario
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	parent.add_child(child)
+	auto_free(parent)
+	auto_free(child)
+
+	# resolve(child) should walk up to topmost orphan parent and ensure it
+	var entity := NetwEntity.resolve(child)
+	assert_that(entity).is_not_null()
+	assert_that(NetwEntity.of(parent)).is_equal(entity)
+	assert_that(NetwEntity.of(child)).is_equal(entity)
+
+	# In-tree lookup-only scenario
+	var live_parent := Node2D.new()
+	var live_child := Node2D.new()
+	live_parent.add_child(live_child)
+	add_child(live_parent)
+	auto_free(live_parent)
+	auto_free(live_child)
+
+	# Since live_child is in the tree and has no existing NetwEntity, resolve should return null
+	assert_that(NetwEntity.resolve(live_child)).is_null()
+
+
+func test_nested_entity_record_forwarding_on_tree_enter() -> void:
+	var parent := Node2D.new()
+	var child := Node2D.new()
+	child.name = "ChildNode"
+	auto_free(parent)
+	auto_free(child)
+
+	# Ensure a separate entity record on child while it is an orphan
+	var child_entity := NetwEntity.ensure(child)
+	child_entity.contribute_spawn_property(child, &"ammo")
+
+	# At this point, child has 1 pending spawn property
+	assert_that(child_entity._pending_spawn_props.size()).is_equal(1)
+
+	# Now parent it to the parent node, which has a NetwEntity
+	var parent_entity := NetwEntity.ensure(parent)
+	parent.add_child(child)
+	child.owner = parent
+
+	# Trigger tree entered on child (which runs _handle_tree_entered)
+	child_entity._handle_tree_entered()
+
+	# The child's pending contributions should be forwarded to the parent entity
+	assert_that(child_entity._pending_spawn_props.is_empty()).is_true()
+	assert_that(parent_entity._pending_spawn_props.size()).is_equal(1)
+
+	var forwarded := parent_entity._pending_spawn_props[0]
+	assert_that(forwarded.source).is_equal(child)
+	assert_that(forwarded.property).is_equal(&"ammo")

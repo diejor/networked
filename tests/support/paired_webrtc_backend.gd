@@ -13,5 +13,5 @@
 class_name PairedWebRTCBackend
 extends WebRTCBackend
 
-func _make_signaler() -> WebRTCSignaler:
+func make_signaler() -> WebRTCSignaler:
 	return PairedWebRTCSignaler.new()

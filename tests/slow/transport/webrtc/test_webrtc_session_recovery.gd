@@ -1,10 +1,10 @@
-## Proves [WebRTCSession] tolerates out of order ICE and recovers a stalled
-## join.
+## Proves [WebRTCSession] top-up bundles ICE and recovers a stalled join.
 ##
 ## Two raw sessions handshake over loopback ICE through a hand-wired relay the
-## test perturbs: one case delivers candidates before the answer that anchors
-## them, the other swallows the first answer so the client must re-offer. No
-## signaler or tracker is involved, so these exercise the session alone.
+## test perturbs: one case asserts the host signals answer bundles that carry
+## candidates (never separate trickle), the other swallows the first offer so the
+## client must re-send. No signaler or tracker is involved, so these exercise the
+## session alone.
 class_name TestWebRTCSessionRecovery
 extends NetwTestSuite
 
@@ -29,12 +29,12 @@ func _pump_until(
 		await get_tree().process_frame
 
 
-func test_candidate_before_description_still_connects() -> void:
+func test_answer_bundle_carries_candidates_and_connects() -> void:
 	var host := WebRTCSession.new()
 	host.ice_servers = []
 	var client := WebRTCSession.new()
 	client.ice_servers = []
-	# Keep retry out of this case; we are testing ordering, not recovery.
+	# Keep retry out of this case; we are testing top-up bundles, not recovery.
 	client.connect_retry = 60.0
 
 	var connected := [false]
@@ -48,38 +48,74 @@ func test_candidate_before_description_still_connects() -> void:
 			host.deliver(_CLIENT_ID, "client", kind, payload)
 	)
 
-	# Hold the host's answer and candidates, then release the candidates first so
-	# the client must queue them until set_remote_description lands.
-	var held_cands: Array = []
-	var held_answer := [null]
-	var released := [false]
+	# Record what the host signals. Top-ups are offer or answer bundles whose
+	# payloads carry candidates, never separate trickle candidate signals.
+	var host_kinds: Array = []
+	var answer_candidates := [0]
 	host.signal_out.connect(
 		func(_to: int, _sig: String, kind: String, payload: Dictionary) -> void:
-			if released[0]:
-				client.deliver(1, "host", kind, payload)
-			elif kind == "answer":
-				held_answer[0] = payload
-			elif kind == "candidate":
-				held_cands.append(payload)
-			else:
-				client.deliver(1, "host", kind, payload)
+			host_kinds.append(kind)
+			if kind == "answer":
+				answer_candidates[0] = (payload.get("candidates", []) as Array).size()
+			client.deliver(1, "host", kind, payload)
 	)
 
 	host.create_server()
 	client.create_client(_CLIENT_ID)
-
-	var release := func(frame: int) -> void:
-		if frame > 1 and not released[0] and held_answer[0] != null \
-				and not held_cands.is_empty():
-			released[0] = true
-			for c: Dictionary in held_cands:
-				client.deliver(1, "host", "candidate", c)
-			client.deliver(1, "host", "answer", held_answer[0])
-	await _pump_until(host, client, connected, release)
+	await _pump_until(host, client, connected, func(_f: int) -> void: pass)
 
 	assert_bool(connected[0]).is_true()
-	host.close()
-	client.close()
+	assert_bool(host_kinds.has("candidate")).is_false()
+	assert_bool(host_kinds.has("answer")).is_true()
+	assert_int(answer_candidates[0]).is_greater(0)
+	WebRTCTestSupport.dispose_session(host)
+	WebRTCTestSupport.dispose_session(client)
+
+
+func test_offer_sends_immediately_then_topups_candidates() -> void:
+	var client := WebRTCSession.new()
+	client.ice_servers = []
+	client.connect_retry = 60.0
+	client.topup_interval = 0.05
+	var offer_counts: Array = []
+	client.signal_out.connect(
+		func(_to: int, _sig: String, kind: String, payload: Dictionary) -> void:
+			if kind == "offer":
+				offer_counts.append((payload.get("candidates", []) as Array).size())
+	)
+
+	client.create_client(_CLIENT_ID)
+	var deadline := get_tree().create_timer(3.0)
+	while deadline.time_left > 0.0 and offer_counts.size() < 2:
+		client.poll(0.016)
+		await get_tree().process_frame
+
+	assert_int(offer_counts.size()).is_greater_equal(2)
+	assert_int(int(offer_counts[0])).is_equal(0)
+	assert_int(int(offer_counts[offer_counts.size() - 1])).is_greater(0)
+	WebRTCTestSupport.dispose_session(client)
+
+
+func test_failed_emits_host_unresponsive_without_answer() -> void:
+	var client := WebRTCSession.new()
+	client.ice_servers = []
+	client.connect_retry = 0.05
+	client.max_connect_attempts = 1
+	var reasons: Array = []
+	client.failed.connect(
+		func(id: int, reason: String) -> void:
+			if id == 1:
+				reasons.append(reason)
+	)
+
+	client.create_client(_CLIENT_ID)
+	var deadline := get_tree().create_timer(2.0)
+	while deadline.time_left > 0.0 and reasons.is_empty():
+		client.poll(0.016)
+		await get_tree().process_frame
+
+	assert_array(reasons).is_equal(["HOST_UNRESPONSIVE"])
+	WebRTCTestSupport.dispose_session(client)
 
 
 func test_dropped_first_offer_recovers_via_retry() -> void:
@@ -99,9 +135,9 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 				connected[0] = true
 	)
 
-	# Swallow attempt one entirely (its offer, then its candidates) so the host
-	# never starts a handshake and the client must re-offer to recover. Forward
-	# from the second offer onward.
+	# Swallow the first offer bundle entirely so the host never starts a
+	# handshake and the client must re-send to recover. Forward from the second
+	# offer onward.
 	var dropped := [false]
 	var forwarding := [false]
 	client.signal_out.connect(
@@ -128,5 +164,5 @@ func test_dropped_first_offer_recovers_via_retry() -> void:
 
 	assert_bool(dropped[0]).is_true()
 	assert_bool(connected[0]).is_true()
-	host.close()
-	client.close()
+	WebRTCTestSupport.dispose_session(host)
+	WebRTCTestSupport.dispose_session(client)

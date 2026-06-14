@@ -15,9 +15,10 @@
 ## as an NPC or world object. See [member is_player] and [enum Ownership].
 ##
 ## [br][br]
-## The entity root is the node carrying [constant META_KEY]. In packed
-## entity scenes this is normally the scene root. Siblings should access
-## it through [code]Netw.ctx(self).entity[/code] or [method of].
+## The entity root is the node representing the networked entity (typically
+## the scene root in packed entity scenes). Siblings should access
+## it through [code]Netw.ctx(self).entity[/code] (see [member NetwContext.entity] 
+## or [method of].
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
@@ -32,7 +33,13 @@
 class_name NetwEntity
 extends RefCounted
 
-const META_KEY := &"netw_entity"
+# Metadata key that stores the [NetwEntity] record on an entity root.
+const _META_KEY := &"netw_entity"
+
+# Reserved key for Networked identity inside custom spawn dictionaries.
+# User payload remains at the top level. [method decorate_spawn] writes this
+# key, and [method spawn_identity] reads it back before [method bind].
+const _SPAWN_NETW_KEY := "_netw"
 
 ## Whether an entity represents a joined peer or the server, derived from
 ## [member peer_id].
@@ -42,6 +49,33 @@ enum Ownership {
 	## Server-owned entity such as an NPC or world object. [member peer_id]
 	## is [code]0[/code].
 	SERVER,
+}
+
+## Whether an entity is server controlled or peer controlled, derived from
+## [member controller].
+enum ControlKind {
+	## A peer currently controls the entity. [member controller] is non-zero.
+	PEER,
+	## Server controlled entity. [member controller] is [code]0[/code].
+	SERVER,
+}
+
+## Key roles identifying generic component slots on this entity record.
+enum Slot {
+	## Backup store slot for the entity's [SaveComponent].
+	SAVE,
+	## Orchestration slot for the entity's [MultiplayerEntity].
+	MULTIPLAYER_ENTITY,
+	## Ancestor visibility gate slot.
+	INTEREST_GATE,
+	## Server-authoritative state slot for the entity's [StateSynchronizer].
+	STATE,
+	## Controller-authoritative input slot for the entity's [InputSynchronizer].
+	INPUT,
+	## Per-entity tick-keyed [NetwTimeline] of state and input snapshots.
+	TIMELINE,
+	## Prediction and reconciliation slot, filled by the prediction component.
+	PREDICTION,
 }
 
 
@@ -96,6 +130,17 @@ class _PropertyContribution extends RefCounted:
 			watch,
 		)
 
+
+# Buffered spawn-property contribution.
+class _SpawnContribution extends RefCounted:
+	var source: Node
+	var property: StringName
+
+
+	func _init(p_source: Node, p_property: StringName) -> void:
+		source = p_source
+		property = p_property
+
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
 
@@ -127,6 +172,9 @@ signal observer_entered(layer_id: StringName, peer_id: int)
 ## this entity through [param layer_id].
 signal observer_left(layer_id: StringName, peer_id: int)
 
+## Emitted when [member controller] changes.
+signal control_changed(previous_peer: int, peer: int)
+
 ## [member Node.owner] that holds this entity.
 var owner: Node
 ## Stable display/save/debug label for this entity.
@@ -141,6 +189,54 @@ var entity_id: StringName = &""
 ## [method MultiplayerEntity.despawn] when its peer disconnects. This is the
 ## source of the player test. See [member is_player].
 var peer_id := 0
+
+var _pending_controller := 0
+
+## Peer that currently steers this entity. [code]0[/code] means the server.
+##
+## [MultiplayerEntity] applies [member controller] to
+## [method Node.set_multiplayer_authority]. Setting this property on a live
+## entity routes through [method MultiplayerEntity.set_controller].
+## [codeblock]
+## var entity := NetwEntity.of(ball)
+## if entity.control_kind == NetwEntity.ControlKind.PEER:
+##     show_controller(entity.controller_participant)
+## [/codeblock]
+var controller: int:
+	get:
+		var entity := multiplayer_entity
+		if entity:
+			return entity.controller
+		return _pending_controller
+	set(value):
+		var entity := multiplayer_entity
+		if entity:
+			entity.set_controller(value)
+		else:
+			_set_controller_value(value)
+
+## Derived from [member controller]. See [enum ControlKind].
+var control_kind: ControlKind:
+	get:
+		return ControlKind.PEER if controller != 0 else ControlKind.SERVER
+
+## [code]true[/code] when the local peer controls this entity.
+var is_controlled_locally: bool:
+	get:
+		if controller == 0 or not is_instance_valid(owner):
+			return false
+		if not owner.multiplayer or owner.multiplayer.multiplayer_peer == null:
+			return false
+		return controller == owner.multiplayer.get_unique_id()
+
+## Joined player record for [member controller], rebuilt from the local
+## [MultiplayerTree] roster. Never serialized.
+var controller_participant: ResolvedJoin:
+	get:
+		if controller == 0 or not is_instance_valid(owner):
+			return null
+		var mt := MultiplayerTree.resolve(owner)
+		return mt.get_joined_player(controller) if mt else null
 
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
@@ -165,14 +261,14 @@ var is_player: bool:
 ## registered spawner.
 var is_template: bool:
 	get:
-		var entity := get_multiplayer_entity()
+		var entity := multiplayer_entity
 		return entity.is_template if entity else false
 
-var _multiplayer_entity_ref: WeakRef
-var _save_ref: WeakRef
+var _slots: Dictionary[Slot, WeakRef] = { }
+var _slot_requires: Dictionary[Slot, Array] = { }
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
-var _pending_spawn_props: Array[NodePath] = []
+var _pending_spawn_props: Array[_SpawnContribution] = []
 var _pending_save_props: Array[_PropertyContribution] = []
 
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
@@ -183,19 +279,52 @@ var _parent_entity_ref: WeakRef
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root.
 ##
-## Creates the record on first access. Set [member Node.owner] or attach
-## metadata first when a runtime-built subtree has an ambiguous root.
+## Walks the parent chain to locate the entity root. Returns [code]null[/code]
+## if not found.
 static func of(node: Node) -> NetwEntity:
 	if not is_instance_valid(node):
 		return null
-	var root := _find_root(node)
+	var n := node
+	while n != null:
+		if n.has_meta(_META_KEY):
+			return n.get_meta(_META_KEY) as NetwEntity
+		n = n.get_parent()
+	return null
+
+
+## Force get-or-create [NetwEntity] on the specific [param root] node.
+##
+## Attaches the [NetwEntity] to [param root] as its entity root, even if
+## [param root] has an ambiguous owner or parent.
+static func ensure(root: Node) -> NetwEntity:
 	if not is_instance_valid(root):
 		return null
-	if root.has_meta(META_KEY):
-		return root.get_meta(META_KEY)
+	if root.has_meta(_META_KEY):
+		return root.get_meta(_META_KEY) as NetwEntity
 	var e := NetwEntity.new()
 	e._attach_to(root)
 	return e
+
+
+## Climbs parent chain to topmost orphan during instantiation to get-or-create;
+## falls back to lookup-only once in-tree.
+static func resolve(node: Node) -> NetwEntity:
+	if not is_instance_valid(node):
+		return null
+
+	var existing := of(node)
+	if existing:
+		return existing
+
+	if node.is_inside_tree():
+		return null
+
+	var root := node
+	while root.get_parent() != null:
+		if root.get_parent().is_inside_tree():
+			return null
+		root = root.get_parent()
+	return ensure(root)
 
 
 ## Returns the entity id from a [code]entity_id|peer_id[/code] name.
@@ -216,9 +345,119 @@ static func parse_peer(node_name: String) -> int:
 	return 0
 
 
-## Formats [param entity_id] and [param peer_id] as a node name.
-static func format_name(entity_id: String, peer_id: int) -> String:
+# Formats entity_id and peer_id as a node name.
+static func _format_name(entity_id: String, peer_id: int) -> String:
 	return "%s|%d" % [entity_id, peer_id]
+
+
+## Returns the node name for the player represented by [param rj].
+static func name_for(rj: ResolvedJoin) -> String:
+	return _format_name(rj.username, rj.peer_id)
+
+
+## Returns the player node associated with [param rj] under [param root],
+## or [code]null[/code] if not found.
+static func find(root: Node, rj: ResolvedJoin) -> Node:
+	if not is_instance_valid(root) or rj == null:
+		return null
+	return root.get_node_or_null(name_for(rj))
+
+
+## Binds [param entity_id] and [param peer_id] onto [param node].
+##
+## This is the public identity binding surface. Once bound, the node's name
+## is owned by the network synchronization system and must not be modified.
+## [codeblock]
+## var player := NetwEntity.bind(copy, username, peer_id)
+## scene.add_player(player)
+## [/codeblock]
+static func bind(
+		node: Node,
+		entity_id: StringName,
+		peer_id: int,
+) -> Node:
+	node.name = _format_name(str(entity_id), peer_id)
+	var entity := ensure(node)
+	if entity:
+		entity.entity_id = entity_id
+		entity.peer_id = peer_id
+	return node
+
+
+## Decodes bindable identity from custom spawn data.
+##
+## Use the original spawn [Dictionary] for gameplay data. This method only
+## extracts the identity needed to call [method NetwEntity.SpawnIdentity.bind].
+## [codeblock]
+## # Server:
+## var data := NetwEntity.decorate_spawn(
+##     {spawn_index = index},
+##     resolved_join
+## )
+## spawner.spawn(data)
+##
+## #             |
+## #             v (Network spawn replication)
+## #             |
+##
+## # Client (spawn_function):
+## func _custom_spawn(data: Dictionary) -> Node:
+##     var spawn_identity := NetwEntity.spawn_identity(data)
+##
+##     var player := PLAYER.instantiate()
+##     spawn_identity.bind(player)
+##
+##     player.spawn_index = data.spawn_index
+##     return player
+## [/codeblock]
+static func spawn_identity(data: Dictionary) -> SpawnIdentity:
+	return SpawnIdentity.new(data)
+
+
+## Deprecated compatibility alias for [method spawn_identity].
+static func spawn(data: Dictionary) -> SpawnIdentity:
+	return spawn_identity(data)
+
+
+## Returns [param data] with Networked spawn identity attached.
+##
+## The returned [Dictionary] is a duplicate. The input [param data] is not
+## mutated. [code]_netw[/code] is reserved and must not already be present.
+static func decorate_spawn(
+		data: Dictionary,
+		rj: ResolvedJoin,
+) -> Dictionary:
+	assert(
+		not data.has(_SPAWN_NETW_KEY),
+		"NetwEntity.decorate_spawn: '_netw' is reserved.",
+	)
+	var out := data.duplicate(true)
+	out[_SPAWN_NETW_KEY] = {
+		"entity_id": rj.username,
+		"peer_id": rj.peer_id,
+	}
+	return out
+
+
+## Bindable identity decoded from custom spawn data.
+class SpawnIdentity extends RefCounted:
+	## Decoded entity ID for the spawned node, mapped from
+	## [member NetwEntity.entity_id].
+	var entity_id: StringName = &""
+	## Decoded peer ID for the spawned node, mapped from
+	## [member NetwEntity.peer_id].
+	var peer_id: int = 0
+
+
+	func _init(spawn_data: Dictionary) -> void:
+		var netw: Dictionary = spawn_data.get(_SPAWN_NETW_KEY, { })
+		entity_id = StringName(netw.get("entity_id", ""))
+		peer_id = int(netw.get("peer_id", 0))
+
+
+	## Binds this identity onto [param node].
+	func bind(node: Node) -> Node:
+		return NetwEntity.bind(node, entity_id, peer_id)
 
 
 ## Returns a [NodePath] from [param source] to [param target].
@@ -245,55 +484,16 @@ func property_path(
 	return NodePath("%s:%s" % [rel, property])
 
 
-## Encodes identity into [param node] and its [NetwEntity].
-##
-## [codeblock]
-## var player := NetwEntity.bundle(copy, peer_id, username)
-## scene.add_player(player)
-## [/codeblock]
-static func bundle(
-		node: Node,
-		peer_id: int,
-		entity_id: StringName,
-) -> Node:
-	node.name = format_name(str(entity_id), peer_id)
-	var entity := of(node)
-	if entity:
-		entity.entity_id = entity_id
-		entity.peer_id = peer_id
-	var mp_entity := MultiplayerEntity.unwrap(node)
-	if mp_entity:
-		mp_entity.entity_id = entity_id
-		mp_entity.peer_id = peer_id
-	return node
-
-
-## Walks to the entity root for [param node].
-static func _find_root(node: Node) -> Node:
-	if node.has_meta(META_KEY):
-		return node
-	if node.owner != null:
-		return node.owner
-	var n := node
-	while n.get_parent() != null:
-		n = n.get_parent()
-		if n.has_meta(META_KEY):
-			return n
-	if n != node:
-		Netw.dbg.trace(
-			("NetwEntity.of: walked from '%s' up to topmost "
-					+ "ancestor '%s' with no META and no Node.owner; "
-					+ "attaching entity to '%s'. Set Node.owner or "
-					+ "pre-attach META on the intended root to "
-					+ "disambiguate."),
-			[node.name, n.name, n.name],
-		)
-	return n
+func _set_controller_value(value: int) -> void:
+	var previous := _pending_controller
+	_pending_controller = value
+	if previous != value:
+		control_changed.emit(previous, value)
 
 
 func _attach_to(root: Node) -> void:
 	owner = root
-	root.set_meta(META_KEY, self)
+	root.set_meta(_META_KEY, self)
 	if not root.tree_entered.is_connected(_handle_tree_entered):
 		root.tree_entered.connect(_handle_tree_entered)
 	if not root.tree_exiting.is_connected(_handle_tree_exiting):
@@ -304,10 +504,35 @@ func _attach_to(root: Node) -> void:
 
 func _handle_tree_entered() -> void:
 	_owner_exiting_tree = false
+	_parent_entity_resolved = false
+	_parent_entity_ref = null
+
 	if _tree_entered_fired:
 		return
 	_tree_entered_fired = true
 	owner_tree_entered.emit()
+
+	if multiplayer_entity == null:
+		var parent := parent_entity()
+		if parent:
+			for c in _pending_spawn_props:
+				parent.contribute_spawn_property(c.source, c.property)
+			_pending_spawn_props.clear()
+			if _slot_requires.has(Slot.MULTIPLAYER_ENTITY):
+				_slot_requires[Slot.MULTIPLAYER_ENTITY].clear()
+
+			for c in _pending_save_props:
+				parent.contribute_save_property(
+					c.source,
+					c.virtual_name,
+					c.property,
+					c.mode,
+					c.spawn,
+					c.watch,
+				)
+			_pending_save_props.clear()
+			if _slot_requires.has(Slot.SAVE):
+				_slot_requires[Slot.SAVE].clear()
 
 
 func _handle_tree_exiting() -> void:
@@ -320,34 +545,93 @@ func has_entered_tree() -> bool:
 	return _tree_entered_fired
 
 
-## Registers this entity's [MultiplayerEntity].
+## Associate [param component] with [param slot_id] on this entity record.
 ##
-## Buffered spawn-property contributions are flushed immediately.
-func set_multiplayer_entity(entity: MultiplayerEntity) -> void:
-	_multiplayer_entity_ref = weakref(entity)
-	for path in _pending_spawn_props:
-		entity.add_spawn_property(path)
-	_pending_spawn_props.clear()
+## Clears the slot reference when [param component] is [code]null[/code].
+## Runs any pending consumers queued via [method require] immediately.
+func provide(slot_id: Slot, component: Object) -> void:
+	if component == null:
+		_slots.erase(slot_id)
+		return
+	_slots[slot_id] = weakref(component)
+	if _slot_requires.has(slot_id):
+		var list: Array = _slot_requires[slot_id]
+		var consumers := list.duplicate()
+		list.clear()
+		for consumer in consumers:
+			if (consumer as Callable).is_valid():
+				(consumer as Callable).call(component)
 
 
-## Returns the registered [MultiplayerEntity], or [code]null[/code].
-func get_multiplayer_entity() -> MultiplayerEntity:
-	return _multiplayer_entity_ref.get_ref() as MultiplayerEntity if _multiplayer_entity_ref else null
-
-
-## Registers this entity's [SaveComponent].
+## Request the component from [param slot_id], executing [param consumer] once available.
 ##
-## Buffered save-property contributions are flushed immediately.
-func set_save(save: SaveComponent) -> void:
-	_save_ref = weakref(save)
-	for contribution in _pending_save_props:
-		contribution.register_with(save)
-	_pending_save_props.clear()
+## Runs [param consumer] immediately if the component is already present.
+func require(slot_id: Slot, consumer: Callable) -> void:
+	var component := slot(slot_id)
+	if component:
+		consumer.call(component)
+		return
+	if not _slot_requires.has(slot_id):
+		_slot_requires[slot_id] = []
+	_slot_requires[slot_id].append(consumer)
 
 
-## Returns the registered [SaveComponent], or [code]null[/code].
-func get_save() -> SaveComponent:
-	return _save_ref.get_ref() as SaveComponent if _save_ref else null
+## Returns the component bound to [param slot_id], or [code]null[/code] if missing.
+##
+## Evicts dead weak references automatically.
+func slot(slot_id: Slot) -> Object:
+	if _slots.has(slot_id):
+		var wr: WeakRef = _slots[slot_id]
+		var ref := wr.get_ref()
+		if ref != null:
+			return ref
+		else:
+			_slots.erase(slot_id)
+	return null
+
+## The entity's [SaveComponent] slot, if provided.
+var save: SaveComponent:
+	get:
+		return slot(Slot.SAVE) as SaveComponent
+	set(value):
+		provide(Slot.SAVE, value)
+		_pending_save_props.clear()
+
+## The entity's [MultiplayerEntity] slot, if provided.
+var multiplayer_entity: MultiplayerEntity:
+	get:
+		return slot(Slot.MULTIPLAYER_ENTITY) as MultiplayerEntity
+	set(value):
+		provide(Slot.MULTIPLAYER_ENTITY, value)
+		_pending_spawn_props.clear()
+
+## The entity's [StateSynchronizer] slot, if provided.
+var state: StateSynchronizer:
+	get:
+		return slot(Slot.STATE) as StateSynchronizer
+	set(value):
+		provide(Slot.STATE, value)
+
+## The entity's [InputSynchronizer] slot, if provided.
+var input: InputSynchronizer:
+	get:
+		return slot(Slot.INPUT) as InputSynchronizer
+	set(value):
+		provide(Slot.INPUT, value)
+
+## The entity's [NetwTimeline] slot, if provided.
+var timeline: NetwTimeline:
+	get:
+		return slot(Slot.TIMELINE) as NetwTimeline
+	set(value):
+		provide(Slot.TIMELINE, value)
+
+## The entity's prediction component slot, if provided.
+var prediction: PredictionComponent:
+	get:
+		return slot(Slot.PREDICTION) as PredictionComponent
+	set(value):
+		provide(Slot.PREDICTION, value)
 
 
 ## Adds [param property] from [param source] to the entity's spawn packet.
@@ -364,15 +648,27 @@ func get_save() -> SaveComponent:
 ##         )
 ## [/codeblock]
 func contribute_spawn_property(source: Node, property: StringName) -> void:
-	var path := property_path(source, property)
-	if path.is_empty():
+	var mp_ent := multiplayer_entity
+	if mp_ent:
+		var path := property_path(source, property)
+		if not path.is_empty():
+			mp_ent.add_spawn_property(path)
 		return
-	var entity := get_multiplayer_entity()
-	if entity:
-		entity.add_spawn_property(path)
-		return
-	if path not in _pending_spawn_props:
-		_pending_spawn_props.append(path)
+
+	for c in _pending_spawn_props:
+		if c.source == source and c.property == property:
+			return
+
+	var contribution := _SpawnContribution.new(source, property)
+	_pending_spawn_props.append(contribution)
+
+	require(
+		Slot.MULTIPLAYER_ENTITY,
+		func(ent: MultiplayerEntity) -> void:
+			var path := property_path(contribution.source, contribution.property)
+			if not path.is_empty():
+				ent.add_spawn_property(path)
+	)
 
 
 ## Adds a property to the entity's save component.
@@ -386,10 +682,8 @@ func contribute_save_property(
 		spawn: bool = false,
 		watch: bool = true,
 ) -> void:
-	if property_path(source, property).is_empty():
-		return
-	var save := get_save()
-	if save:
+	var save_comp := save
+	if save_comp:
 		var contribution := _PropertyContribution.new(
 			source,
 			virtual_name,
@@ -398,19 +692,24 @@ func contribute_save_property(
 			spawn,
 			watch,
 		)
-		contribution.register_with(save)
+		contribution.register_with(save_comp)
 		return
 	if _has_pending_save_property(virtual_name, source, property):
 		return
-	_pending_save_props.append(
-		_PropertyContribution.new(
-			source,
-			virtual_name,
-			property,
-			mode,
-			spawn,
-			watch,
-		),
+	var contribution := _PropertyContribution.new(
+		source,
+		virtual_name,
+		property,
+		mode,
+		spawn,
+		watch,
+	)
+	_pending_save_props.append(contribution)
+
+	require(
+		Slot.SAVE,
+		func(s: SaveComponent) -> void:
+			contribution.register_with(s)
 	)
 
 
@@ -469,7 +768,7 @@ func _walk_for_parent_entity() -> NetwEntity:
 		return null
 	var n := owner.get_parent()
 	while is_instance_valid(n):
-		if n.has_meta(META_KEY):
-			return n.get_meta(META_KEY) as NetwEntity
+		if n.has_meta(_META_KEY):
+			return n.get_meta(_META_KEY) as NetwEntity
 		n = n.get_parent()
 	return null

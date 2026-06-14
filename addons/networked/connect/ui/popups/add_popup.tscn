@@ -1,14 +1,16 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://coofge1mfgu31"]
 
-[ext_resource type="Script" path="res://addons/networked/connect/ui/popups/add_popup.gd" id="1_add"]
+[ext_resource type="Script" uid="uid://bm1n2wjyf4far" path="res://addons/networked/connect/ui/popups/add_popup.gd" id="1_add"]
 [ext_resource type="Theme" uid="uid://ccui2theme888" path="res://addons/networked/connect/ui/connect_theme.tres" id="2_theme"]
 
-[node name="AddPopup" type="PopupPanel"]
+[node name="AddPopup" type="PopupPanel" unique_id=33601133]
+oversampling_override = 1.0
 size = Vector2i(500, 320)
+visible = false
 theme = ExtResource("2_theme")
 script = ExtResource("1_add")
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="." unique_id=70093540]
 offset_left = 4.0
 offset_top = 4.0
 offset_right = 496.0
@@ -18,68 +20,69 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="VBox" type="VBoxContainer" parent="Margin"]
+[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=1331225390]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="TitleLabel" type="Label" parent="Margin/VBox"]
+[node name="TitleLabel" type="Label" parent="Margin/VBox" unique_id=601653804]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Add server"
 
-[node name="BackendRow" type="HBoxContainer" parent="Margin/VBox"]
+[node name="BackendRow" type="HBoxContainer" parent="Margin/VBox" unique_id=584964816]
 layout_mode = 2
 
-[node name="BackendLabel" type="Label" parent="Margin/VBox/BackendRow"]
+[node name="BackendLabel" type="Label" parent="Margin/VBox/BackendRow" unique_id=677890169]
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "Backend"
 
-[node name="BackendPicker" type="OptionButton" parent="Margin/VBox/BackendRow"]
+[node name="BackendPicker" type="OptionButton" parent="Margin/VBox/BackendRow" unique_id=338540899]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="AddressRow" type="HBoxContainer" parent="Margin/VBox"]
+[node name="AddressRow" type="HBoxContainer" parent="Margin/VBox" unique_id=522988847]
 layout_mode = 2
 
-[node name="AddressLabel" type="Label" parent="Margin/VBox/AddressRow"]
+[node name="AddressLabel" type="Label" parent="Margin/VBox/AddressRow" unique_id=712627665]
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "Address"
 
-[node name="AddressEdit" type="LineEdit" parent="Margin/VBox/AddressRow"]
+[node name="AddressEdit" type="LineEdit" parent="Margin/VBox/AddressRow" unique_id=1735963380]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="NameRow" type="HBoxContainer" parent="Margin/VBox"]
+[node name="NameRow" type="HBoxContainer" parent="Margin/VBox" unique_id=1086081441]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Margin/VBox/NameRow"]
+[node name="NameLabel" type="Label" parent="Margin/VBox/NameRow" unique_id=1030071866]
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "Display name"
 
-[node name="NameEdit" type="LineEdit" parent="Margin/VBox/NameRow"]
+[node name="NameEdit" type="LineEdit" parent="Margin/VBox/NameRow" unique_id=1401916941]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+placeholder_text = "My Server"
 
-[node name="Spacer" type="Control" parent="Margin/VBox"]
+[node name="Spacer" type="Control" parent="Margin/VBox" unique_id=1958060912]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox"]
+[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox" unique_id=1309629537]
 layout_mode = 2
 alignment = 2
 
-[node name="CancelButton" type="Button" parent="Margin/VBox/ButtonRow"]
+[node name="CancelButton" type="Button" parent="Margin/VBox/ButtonRow" unique_id=309996179]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Cancel"
 
-[node name="ConfirmButton" type="Button" parent="Margin/VBox/ButtonRow"]
+[node name="ConfirmButton" type="Button" parent="Margin/VBox/ButtonRow" unique_id=571537436]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Add"

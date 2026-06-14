@@ -14,6 +14,9 @@ var _spawner_options: Array[SceneNodePath] = []
 
 
 func _ready() -> void:
+	visible = false
+	popup_window = false
+	exclusive = true
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
 

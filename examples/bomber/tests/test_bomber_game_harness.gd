@@ -54,9 +54,9 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	var valeria_world := await valeria.await_scene(&"World", 2.0)
-	var jose_world := await jose.await_scene(&"World", 2.0)
-	var jose_player := await jose.await_player(&"jose", 2.0) as Node2D
+	var valeria_world := await valeria.await_scene(&"World")
+	var jose_world := await jose.await_scene(&"World")
+	var jose_player := await jose.await_player(&"jose") as Node2D
 	var valeria_player := valeria.find_player(&"valeria") as Node2D
 
 	await game.sync_ticks(8)
@@ -94,26 +94,26 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	await valeria.await_scene(&"World", 2.0)
-	var jose_world := await jose.await_scene(&"World", 2.0)
-	var valeria_player := await valeria.await_player(&"valeria", 2.0) as Node2D
-	var valeria_on_jose := await jose.await_player(&"valeria", 2.0) as Node2D
+	await valeria.await_scene(&"World")
+	var jose_world := await jose.await_scene(&"World")
+	var valeria_player := await valeria.await_player(&"valeria") as Node2D
+	var valeria_on_jose := await jose.await_player(&"valeria") as Node2D
 
-	var conditions := NetwLinkConditions.new(1)
-	conditions.loss_probability = 0.5
-	conditions.delay_polls = 4
-	game.set_link_conditions(jose, conditions, valeria)
+	game.path(valeria, jose) \
+			.loss(0.5) \
+			.latency_ms(66.0) \
+			.seed(1)
 
 	await game.sync_ticks(8)
 	valeria.simulate_action_press("move_right")
 	valeria.simulate_action_press("set_bomb")
-	await game.sync_ticks(16)
+	var bomb_seen := await _wait_for_bomb(jose_world, 32)
 	valeria.simulate_action_release("move_right")
 	valeria.simulate_action_release("set_bomb")
-	await game.sync_ticks(40)
 
 	# Reliable spawn punches through the lossy link.
-	assert_int(_count_bombs(jose_world)).is_greater(0)
+	assert_bool(bomb_seen).is_true()
+	await game.sync_ticks(40)
 	# Unreliable position stream recovers to the authoritative value.
 	assert_float(valeria_on_jose.position.x).is_equal_approx(
 		valeria_player.position.x,
@@ -131,8 +131,8 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	var world := await valeria.await_scene(&"World", 2.0)
-	var jose_view := await jose.await_player(&"jose", 2.0) as Node2D
+	var world := await valeria.await_scene(&"World")
+	var jose_view := await jose.await_player(&"jose") as Node2D
 	var jose_on_host := valeria.find_player(&"jose") as Node2D
 
 	await game.sync_ticks(8)
@@ -168,8 +168,8 @@ func test_disconnect_during_match_ends_the_game() -> void:
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
 
-	await valeria.await_scene(&"World", 2.0)
-	await valeria.await_player(&"jose", 2.0)
+	await valeria.await_scene(&"World")
+	await valeria.await_player(&"jose")
 
 	var gamestate := valeria.tree.get_service(BomberGamestate) as BomberGamestate
 	var errored: Array[bool] = [false]
@@ -194,6 +194,14 @@ func _count_bombs(world: MultiplayerScene) -> int:
 		if child is Area2D:
 			count += 1
 	return count
+
+
+func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
+	for i in ticks:
+		await game.sync_ticks(1)
+		if _count_bombs(world) > 0:
+			return true
+	return false
 
 
 func _first_bomb(world: MultiplayerScene) -> Area2D:

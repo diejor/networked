@@ -45,6 +45,7 @@ extends LobbyDirectory
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.webtorrent.dev",
+	"wss://tracker.btorrent.xyz",
 ]
 
 ## Tag stamped on every room card and required on received cards, so different
@@ -73,6 +74,7 @@ extends LobbyDirectory
 @export_range(1, 50) var board_fanout: int = 16
 
 var _tracker: WebTorrentTrackerClient = null
+var _tracker_shared := false
 var _board_hash := ""
 var _peer_id := ""
 
@@ -103,6 +105,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	if Netw.is_test_env():
+		set_process(false)
 		return
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
@@ -120,8 +123,7 @@ func _exit_tree() -> void:
 	NetwServices.unregister(self)
 	NetwServices.unregister(self, LobbyDirectory)
 	if _tracker:
-		_tracker.close()
-		_tracker = null
+		_release_tracker()
 
 
 func _process(dt: float) -> void:
@@ -167,8 +169,7 @@ func _maintain_board(dt: float) -> void:
 	# Idle past the grace: release the sockets until interest returns.
 	if _tracker != null:
 		Netw.dbg.debug("WebTorrentDirectory: board idle, closing trackers.")
-		_tracker.close()
-		_tracker = null
+		_release_tracker()
 	_reconnect_acc = 0.0
 
 
@@ -184,11 +185,13 @@ func _keep_board_warm(dt: float) -> void:
 	_reconnect_acc += dt
 	if _reconnect_acc >= BOARD_RECONNECT_COOLDOWN:
 		_reconnect_acc = 0.0
-		_tracker = null
+		_release_tracker()
 		_ensure_tracker()
 
 
 func list_lobbies() -> void:
+	if Netw.is_test_env():
+		return
 	# The board stays warm, so browsing only opens a fresh collect window.
 	_ensure_tracker()
 	_collected.clear()
@@ -215,10 +218,15 @@ func make_join_target(lobby: LobbyInfo) -> JoinTarget:
 	target.address = String(lobby.metadata.get("room_hash", ""))
 	target.metadata = lobby.metadata.duplicate()
 	target.backend = _make_backend()
+	var ns := String(lobby.metadata.get("signaling_namespace", ""))
+	if not ns.is_empty():
+		target.backend.signaling_namespace = ns
 	return target
 
 
 func host_lobby(server_name: String) -> MultiplayerPeer:
+	if Netw.is_test_env():
+		return null
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
 		Netw.dbg.warn("WebTorrentDirectory: host_lobby found no MultiplayerTree.")
@@ -240,6 +248,8 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 
 
 func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+	if Netw.is_test_env():
+		return null
 	var room_hash := String(_id_to_hash.get(lobby_id, ""))
 	if room_hash.is_empty():
 		Netw.dbg.warn(
@@ -276,10 +286,12 @@ func advertise_room(
 		server_name: String,
 		max_players: int,
 ) -> void:
-	if room_hash.length() != 20:
+	if Netw.is_test_env():
+		return
+	if room_hash.is_empty():
 		Netw.dbg.warn(
-			"WebTorrentDirectory: refusing to advertise malformed room hash '%s'.",
-			[room_hash],
+			"WebTorrentDirectory: refusing to advertise empty room hash.",
+			func(m): push_warning(m),
 		)
 		return
 	_room_hash = room_hash
@@ -356,15 +368,35 @@ func _count_players() -> int:
 func _ensure_tracker() -> void:
 	if _tracker != null:
 		return
-	_tracker = WebTorrentTrackerClient.new()
-	_tracker.message_received.connect(_on_message)
-	if _tracker.connect_to(trackers) != OK:
+	var acquired := WebTorrentTrackerClient.acquire_shared(trackers)
+	var err := int(acquired.get("error", OK))
+	_tracker = acquired.get("client", null) as WebTorrentTrackerClient
+	_tracker_shared = _tracker != null
+	if err != OK:
 		# Latch so the 5s reconnect loop reports one outage, not one per retry.
 		if not _provider_unavailable_latched:
 			_provider_unavailable_latched = true
 			provider_unavailable.emit("No WebRTC tracker reachable for the board.")
+	elif _tracker == null:
+		if not _provider_unavailable_latched:
+			_provider_unavailable_latched = true
+			provider_unavailable.emit("No WebRTC tracker reachable for the board.")
 	else:
+		_tracker.message_received.connect(_on_message)
 		_provider_unavailable_latched = false
+
+
+func _release_tracker() -> void:
+	if _tracker == null:
+		return
+	if _tracker.message_received.is_connected(_on_message):
+		_tracker.message_received.disconnect(_on_message)
+	if _tracker_shared:
+		WebTorrentTrackerClient.release_shared(trackers, _tracker)
+	else:
+		_tracker.close()
+	_tracker = null
+	_tracker_shared = false
 
 
 func _on_message(data: Dictionary) -> void:
@@ -410,27 +442,40 @@ func _collect_room(card: Dictionary) -> void:
 	if String(card.get("uid", "")) != browser_filter_uid:
 		return
 	var room_hash := String(card.get("hash", ""))
-	if room_hash.length() != 20:
+	if room_hash.is_empty():
 		return
 	var players := int(card.get("players", 0))
 	var max_players := int(card.get("max", 0))
 	var room_name := String(card.get("name", ""))
-	Netw.dbg.debug(
-		"WebTorrentDirectory: discovered room %s with app_id='%s'.",
-		[room_hash, String(card.get("app_id", ""))],
-	)
 
 	if _collected.has(room_hash):
 		var existing: LobbyInfo = _collected[room_hash]
+		var changed := existing.players != players \
+				or existing.max_players != max_players \
+				or existing.lobby_name != room_name
 		existing.players = players
 		existing.max_players = max_players
 		existing.lobby_name = room_name
 		existing.metadata = _room_metadata(card)
+		if changed:
+			Netw.dbg.trace(
+				"WebTorrentDirectory: updated room %s (%d/%d) app_id='%s'.",
+				[
+					room_hash,
+					players,
+					max_players,
+					String(card.get("app_id", "")),
+				],
+			)
 		return
 
 	var id := _next_id
 	_next_id += 1
 	_id_to_hash[id] = room_hash
+	Netw.dbg.debug(
+		"WebTorrentDirectory: discovered room %s (%d/%d) app_id='%s'.",
+		[room_hash, players, max_players, String(card.get("app_id", ""))],
+	)
 	_collected[room_hash] = LobbyInfo.make(
 		id,
 		room_name,
@@ -452,6 +497,10 @@ func _emit_collected() -> void:
 
 
 func _room_card() -> Dictionary:
+	var ns := ""
+	var mt := MultiplayerTree.resolve(self)
+	if mt and mt.backend is WebRTCBackend:
+		ns = (mt.backend as WebRTCBackend).signaling_namespace
 	return {
 		"t": "room",
 		"hash": _room_hash,
@@ -460,6 +509,7 @@ func _room_card() -> Dictionary:
 		"max": _room_max,
 		"uid": browser_filter_uid,
 		"app_id": _local_app_id(),
+		"signaling_namespace": ns,
 	}
 
 
@@ -469,6 +519,7 @@ func _room_metadata(card: Dictionary) -> Dictionary:
 		"host": String(card.get("name", "")),
 		"browser_filter_uid": String(card.get("uid", "")),
 		"app_id": String(card.get("app_id", "")),
+		"signaling_namespace": String(card.get("signaling_namespace", "")),
 	}
 
 
