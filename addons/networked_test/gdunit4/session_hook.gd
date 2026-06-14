@@ -13,6 +13,8 @@ static var game_harness_used_in_test: bool = false
 
 var _baseline_child_count: int = 0
 var _baseline_resource_count: int = 0
+var _baseline_time_scale: float = 1.0
+var _baseline_physics_ticks: int = 60
 var _pre_test_resource_count: int = 0
 var _top_resource_growths: Array = []
 const _TOP_RESOURCE_GROWTH_LIMIT := 5
@@ -66,6 +68,11 @@ func startup(session: GdUnitTestSession) -> GdUnitResult:
 	_baseline_resource_count = int(
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 	)
+	# Snapshot the clean engine timing config before any harness runs, so the
+	# per-test reset can undo the headless 10x speedup NetwGameHarness installs
+	# even when a harness teardown is skipped.
+	_baseline_time_scale = Engine.time_scale
+	_baseline_physics_ticks = Engine.get_physics_ticks_per_second()
 
 	return GdUnitResult.success()
 
@@ -123,6 +130,16 @@ func _reset_debugger() -> void:
 
 func _reset_global_test_state() -> void:
 	NetwPathNamespace.reset()
+
+	# NetwGameHarness scales engine timing 10x under headless and restores it only
+	# in its own teardown. Force the clean baseline back between tests so a skipped
+	# teardown cannot leak a 10x physics rate into a later suite, where it would
+	# desync Engine.get_physics_ticks_per_second() from the static project setting
+	# that LocalLoopbackSession derives its delay clock from.
+	if Engine.time_scale != _baseline_time_scale:
+		Engine.time_scale = _baseline_time_scale
+	if Engine.get_physics_ticks_per_second() != _baseline_physics_ticks:
+		Engine.set_physics_ticks_per_second(_baseline_physics_ticks)
 
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()

@@ -135,6 +135,12 @@ var ticktime: float:
 	get:
 		return 1.0 / float(tickrate)
 
+## Multiplier to scale velocities from physics rate to tick rate.
+## Used to compensate for CharacterBody's move_and_slide ignoring tick delta.
+var physics_factor: float:
+	get:
+		return float(Engine.physics_ticks_per_second) / float(tickrate)
+
 ## The fractional position [0, 1) within the current tick.
 var tick_factor: float:
 	set(v):

@@ -42,7 +42,7 @@ func _enter_tree() -> void:
 	if not _mt:
 		return
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	forward_unhandled_input = true
 	if not _display_source.changed.is_connected(_on_display_source_changed):
 		_display_source.changed.connect(_on_display_source_changed)

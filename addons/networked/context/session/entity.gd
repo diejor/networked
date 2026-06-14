@@ -68,6 +68,14 @@ enum Slot {
 	MULTIPLAYER_ENTITY,
 	## Ancestor visibility gate slot.
 	INTEREST_GATE,
+	## Server-authoritative state slot for the entity's [StateSynchronizer].
+	STATE,
+	## Controller-authoritative input slot for the entity's [InputSynchronizer].
+	INPUT,
+	## Per-entity tick-keyed [NetwTimeline] of state and input snapshots.
+	TIMELINE,
+	## Prediction and reconciliation slot, filled by the prediction component.
+	PREDICTION,
 }
 
 
@@ -596,6 +604,34 @@ var multiplayer_entity: MultiplayerEntity:
 	set(value):
 		provide(Slot.MULTIPLAYER_ENTITY, value)
 		_pending_spawn_props.clear()
+
+## The entity's [StateSynchronizer] slot, if provided.
+var state: StateSynchronizer:
+	get:
+		return slot(Slot.STATE) as StateSynchronizer
+	set(value):
+		provide(Slot.STATE, value)
+
+## The entity's [InputSynchronizer] slot, if provided.
+var input: InputSynchronizer:
+	get:
+		return slot(Slot.INPUT) as InputSynchronizer
+	set(value):
+		provide(Slot.INPUT, value)
+
+## The entity's [NetwTimeline] slot, if provided.
+var timeline: NetwTimeline:
+	get:
+		return slot(Slot.TIMELINE) as NetwTimeline
+	set(value):
+		provide(Slot.TIMELINE, value)
+
+## The entity's prediction component slot, if provided.
+var prediction: PredictionComponent:
+	get:
+		return slot(Slot.PREDICTION) as PredictionComponent
+	set(value):
+		provide(Slot.PREDICTION, value)
 
 
 ## Adds [param property] from [param source] to the entity's spawn packet.

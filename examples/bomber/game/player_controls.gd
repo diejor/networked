@@ -30,8 +30,10 @@ func get_inputs() -> Array:
 	]
 
 
-## Updates [member motion] and [member bombing] from tracked input state.
-func update() -> void:
+## Refreshes [member motion] and [member bombing] from tracked input state each
+## tick. Called by [method InputComponent.gather] at
+## [signal MultiplayerClock.before_tick] on the controlling client.
+func gather() -> void:
 	motion = get_vector2(
 		move_left,
 		move_right,

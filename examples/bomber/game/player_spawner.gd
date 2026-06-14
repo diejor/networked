@@ -49,7 +49,7 @@ func _spawn_player(data: Variant) -> Node:
 	var score := world.get_node("Score")
 	score.add_player(spawn_identity.peer_id, username)
 
-	player.set("synced_position", _get_spawn_position(spawn_index))
+	player.position = _get_spawn_position(spawn_index)
 
 	var label := player.get_node("%label") as Label
 	label.text = username

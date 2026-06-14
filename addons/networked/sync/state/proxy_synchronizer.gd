@@ -186,8 +186,8 @@ func _filter_watch(_name: StringName, watch: bool) -> bool:
 
 ## Override to list virtual names that must appear first in the config.
 ##
-## Used by [TickAwareSynchronizer] to ensure [code]__tick[/code] is always
-## the leading property in the replication packet.
+## Used by [StampedSynchronizer] to keep [code]__tick[/code] (and the ack)
+## ahead of the payload in the replication packet.
 func _ordered_virtual_names() -> Array[StringName]:
 	return []
 

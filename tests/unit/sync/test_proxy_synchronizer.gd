@@ -1,8 +1,8 @@
-## Unit tests for [ProxySynchronizer] and [TickAwareSynchronizer].
+## Unit tests for [ProxySynchronizer].
 ##
 ## Covers property registration with options, read/write dispatch through
-## [method _read_property] / [method _write_property] hooks,
-## [method _get_property_list] reporting, and tick-aware finalize semantics.
+## [method _read_property] / [method _write_property] hooks, and
+## [method _get_property_list] reporting.
 class_name TestProxySynchronizer
 extends NetwTestSuite
 
@@ -22,26 +22,6 @@ class StubProxy extends ProxySynchronizer:
 	) -> void:
 		_store[_name] = value
 
-
-class StubTickAware extends TickAwareSynchronizer:
-	var _store: Dictionary[StringName, Variant] = { }
-
-
-	func _read_property(_name: StringName, path: NodePath) -> Variant:
-		if _name == &"__tick":
-			return super._read_property(_name, path)
-		return _store.get(_name)
-
-
-	func _write_property(
-			_name: StringName,
-			path: NodePath,
-			value: Variant,
-	) -> void:
-		if _name == &"__tick":
-			super._write_property(_name, path, value)
-			return
-		_store[_name] = value
 
 #region Registration
 
@@ -214,44 +194,5 @@ func test_finalize_applies_config_to_replication_config() -> void:
 	assert_that(proxy.replication_config).is_not_null()
 	var vpath := proxy._virtual_path(&"score")
 	assert_that(proxy.replication_config.has_property(vpath)).is_true()
-
-#endregion
-
-#region Tick-aware synchronizer
-
-func test_finalize_with_tick_inserts_tick_first_always_no_spawn() -> void:
-	var sync: StubTickAware = auto_free(StubTickAware.new())
-	sync.register_property(&"hp", NodePath(":hp"))
-	sync.finalize_with_tick()
-
-	var props := sync.replication_config.get_properties()
-	assert_that(props.size()).is_equal(2)
-
-	var tick_vpath := sync._virtual_path(&"__tick")
-	var hp_vpath := sync._virtual_path(&"hp")
-	assert_that(props[0]).is_equal(tick_vpath)
-	assert_that(props[1]).is_equal(hp_vpath)
-
-	assert_that(
-		sync.replication_config.property_get_replication_mode(tick_vpath),
-	).is_equal(SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
-	assert_that(
-		sync.replication_config.property_get_spawn(tick_vpath),
-	).is_false()
-
-
-# Tick writes land on [_pending_tick] (not the store), return true, and
-# do not interfere with the regular write-through path.
-func test_tick_set_dispatch_isolates_tick_from_store() -> void:
-	var sync: StubTickAware = auto_free(StubTickAware.new())
-	sync.register_property(&"pos", NodePath(":pos"))
-	sync.finalize_with_tick()
-
-	assert_that(sync._set(&"__tick", 42)).is_true()
-	assert_that(sync._pending_tick).is_equal(42)
-	assert_that(sync._store.has(&"__tick")).is_false()
-
-	sync._set(&"pos", Vector3.ONE)
-	assert_that(sync._store.get(&"pos")).is_equal(Vector3.ONE)
 
 #endregion

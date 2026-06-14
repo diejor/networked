@@ -45,8 +45,7 @@ func test_positions_converge_after_ai_stops_on_rough_link() -> void:
 	for r in runners:
 		var p := game.host.find_player(r.username) as Node2D
 		if is_instance_valid(p):
-			p.synced_position += Vector2(0.1, 0.1)
-			p.position = p.synced_position
+			p.position += Vector2(0.1, 0.1)
 
 	await game.sync_ticks(50)
 
