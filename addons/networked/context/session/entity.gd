@@ -256,8 +256,8 @@ var is_template: bool:
 		var entity := multiplayer_entity
 		return entity.is_template if entity else false
 
-var _slots: Dictionary[int, WeakRef] = { }
-var _slot_requires: Dictionary[int, Array] = { }
+var _slots: Dictionary[Slot, WeakRef] = { }
+var _slot_requires: Dictionary[Slot, Array] = { }
 var _tree_entered_fired: bool = false
 var _owner_exiting_tree: bool = false
 var _pending_spawn_props: Array[_SpawnContribution] = []
@@ -541,7 +541,7 @@ func has_entered_tree() -> bool:
 ##
 ## Clears the slot reference when [param component] is [code]null[/code].
 ## Runs any pending consumers queued via [method require] immediately.
-func provide(slot_id: int, component: Object) -> void:
+func provide(slot_id: Slot, component: Object) -> void:
 	if component == null:
 		_slots.erase(slot_id)
 		return
@@ -558,7 +558,7 @@ func provide(slot_id: int, component: Object) -> void:
 ## Request the component from [param slot_id], executing [param consumer] once available.
 ##
 ## Runs [param consumer] immediately if the component is already present.
-func require(slot_id: int, consumer: Callable) -> void:
+func require(slot_id: Slot, consumer: Callable) -> void:
 	var component := slot(slot_id)
 	if component:
 		consumer.call(component)
@@ -571,7 +571,7 @@ func require(slot_id: int, consumer: Callable) -> void:
 ## Returns the component bound to [param slot_id], or [code]null[/code] if missing.
 ##
 ## Evicts dead weak references automatically.
-func slot(slot_id: int) -> Object:
+func slot(slot_id: Slot) -> Object:
 	if _slots.has(slot_id):
 		var wr: WeakRef = _slots[slot_id]
 		var ref := wr.get_ref()
