@@ -196,6 +196,10 @@ var _trace_frame: int = 0
 var _expected_interval_ticks: int = 3
 var _has_explicit_sync_interval: bool = false
 
+# The single stamped state synchronizer whose authoring __tick keys history, or
+# null to fall back to the receive tick. Resolved in _cache_sync_intervals.
+var _authoring_sync: StampedSynchronizer = null
+
 var _peer_batcher: _Batcher
 var _was_starving: bool = false
 var _smoothed_floor: float = 0.0
@@ -490,6 +494,19 @@ func _cache_sync_intervals() -> void:
 	var all_syncs := SynchronizersCache.get_client_synchronizers(owner)
 	var synced_props := SynchronizersCache.get_all_synchronized_properties(owner)
 
+	# Opt-in authoring-tick keying: when exactly one stamped StateSynchronizer
+	# drives this entity, key history by the packet's authoring __tick so a
+	# shooter can name the server tick it actually displayed. Any other shape
+	# falls back to the receive tick.
+	_authoring_sync = null
+	var stamped_count := 0
+	for sync in all_syncs:
+		if sync is StateSynchronizer:
+			stamped_count += 1
+			_authoring_sync = sync
+	if stamped_count != 1:
+		_authoring_sync = null
+
 	for sync in all_syncs:
 		if not sync.public_visibility:
 			continue
@@ -532,6 +549,8 @@ func _cache_sync_intervals() -> void:
 
 func _on_synced() -> void:
 	var tick := _clock.tick
+	if _authoring_sync and _authoring_sync.last_received_tick >= 0:
+		tick = _authoring_sync.last_received_tick
 	for state in _states:
 		if not state.uses_signal:
 			continue

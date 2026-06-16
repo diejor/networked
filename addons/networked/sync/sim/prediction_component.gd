@@ -96,9 +96,7 @@ func _notification(what: int) -> void:
 		if not entity:
 			return
 		_entity = entity
-		_timeline = NetwTimeline.new()
 		entity.prediction = self
-		entity.timeline = _timeline
 		if not entity.control_changed.is_connected(_on_control_changed):
 			entity.control_changed.connect(_on_control_changed)
 
@@ -155,10 +153,12 @@ func _rewire() -> void:
 	state_sync.write_through = true
 	input_sync.on_input_received = Callable()
 	input_sync.timeline = null
+	_timeline = null
 
 	_clock = get_multiplayer_clock()
 	if _clock:
 		_tick_delta = _clock.ticktime
+	_sim = get_service(MultiplayerSimulation) as MultiplayerSimulation
 	if not simulate.is_valid():
 		var root := _entity.owner
 		if root and root.has_method(&"_network_tick"):
@@ -167,11 +167,17 @@ func _rewire() -> void:
 	_role = _resolve_role()
 	match _role:
 		Role.PREDICT:
+			# Owning client owns a local predicted timeline. The server's
+			# authoritative history lives in the registry, never here.
+			_timeline = NetwTimeline.new()
+			_entity.timeline = _timeline
 			state_sync.write_through = false
 			state_sync.on_state_received = _on_state
 			_latest_input_tick = -1
 			_register_with_sim()
 		Role.CONSUME:
+			# Server reads the registry timeline; the recorder writes state into it.
+			_timeline = _registry_timeline()
 			input_sync.timeline = _timeline
 			input_sync.on_input_received = _on_server_input
 			_next_input_tick = -1
@@ -179,9 +185,18 @@ func _rewire() -> void:
 			_last_input = { }
 			_register_with_sim()
 		Role.HOST_LOCAL:
+			_timeline = _registry_timeline()
 			_register_with_sim()
 		Role.REMOTE:
 			pass
+
+
+# Server roles read the registry-owned timeline, get-or-creating it so the order
+# of StateSynchronizer and PredictionComponent wiring does not matter.
+func _registry_timeline() -> NetwTimeline:
+	if _sim:
+		return _sim.register_timeline(_entity)
+	return null
 
 
 func _resolve_role() -> Role:
@@ -240,12 +255,13 @@ func _host_local_step(delta: float, tick: int) -> void:
 	# its own gathered input and publishes the result. No prediction, no
 	# reconciliation against itself.
 	var input := _entity.input.snapshot_payload()
-	_timeline.record_input(tick, input)
+	if _timeline:
+		_timeline.record_input(tick, input)
 	_run(input, delta, tick, true)
 	var state_sync := _entity.state
 	state_sync.authored_tick = tick
 	state_sync.server_ack = tick
-	_timeline.record_state(tick, _capture())
+	# Authoritative state is recorded by MultiplayerSimulation after the tick.
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +282,7 @@ func _consume_step(delta: float, server_tick: int) -> void:
 	var state_sync := _entity.state
 	state_sync.authored_tick = server_tick
 	state_sync.server_ack = _ack
-	_timeline.record_state(server_tick, _capture())
+	# Authoritative state is recorded by MultiplayerSimulation after the tick.
 
 
 func _consume_one(delta: float) -> void:
@@ -328,7 +344,6 @@ func _value_error(a: Variant, b: Variant) -> float:
 
 
 func _register_with_sim() -> void:
-	_sim = get_service(MultiplayerSimulation) as MultiplayerSimulation
 	if _sim:
 		_sim.register(self)
 

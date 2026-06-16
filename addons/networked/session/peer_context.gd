@@ -3,7 +3,7 @@
 ## Components register their own typed [code]Bucket[/code] inner classes here
 ## rather than using static variables. Each bucket type is keyed by its inner
 ## class object, so [NetwPeerContext] never imports or references consumer types.
-## [br][br]
+## 
 ## [codeblock]
 ## # Example usage:
 ## var bucket = peer_context.get_bucket(MyComponent.Bucket)

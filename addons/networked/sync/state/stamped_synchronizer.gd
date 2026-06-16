@@ -50,6 +50,11 @@ var write_through: bool = true
 ## [MultiplayerClock] tick instead.
 var authored_tick: int = -1
 
+## Authoring [constant TICK] of the most recently received packet, or
+## [code]-1[/code] before the first. [MultiplayerInterpolator] reads this to key
+## its history by the displayed authoring tick instead of the receive tick.
+var last_received_tick: int = -1
+
 var _pending_tick: int = -1
 # Last-known value per payload virtual name. Never cleared, so an ON_CHANGE
 # delta carrying only changed props still flushes a complete snapshot: unsent
@@ -152,6 +157,9 @@ func _read_property(name: StringName, path: NodePath) -> Variant:
 func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if name == TICK:
 		_pending_tick = int(value)
+		# Godot applies every property before emitting synchronized, so this is
+		# set before any handler runs, regardless of connection order.
+		last_received_tick = _pending_tick
 		return
 	_pending_payload[name] = value
 	if write_through:

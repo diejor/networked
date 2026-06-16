@@ -42,6 +42,38 @@ func configure() -> void:
 	register_stamp(ACK, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
 
 
+# State-sync presence is the rewind trigger: on the server, register the entity
+# so the simulation service records its authoritative history every tick, even
+# without a PredictionComponent. The server records via snapshot_payload(), never
+# through record(), so timeline stays null here (the server never receives its
+# own packets).
+func _ready() -> void:
+	super._ready()
+	if Engine.is_editor_hint():
+		return
+	if multiplayer and multiplayer.is_server():
+		var entity := NetwEntity.of(self)
+		var sim := _simulation()
+		if entity and sim:
+			sim.register_timeline(entity)
+
+
+func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
+	var entity := NetwEntity.of(self)
+	var sim := _simulation()
+	if entity and sim:
+		sim.unregister_timeline(entity)
+
+
+func _simulation() -> MultiplayerSimulation:
+	var mt := MultiplayerTree.resolve(self)
+	if not mt:
+		return null
+	return mt.get_service(MultiplayerSimulation) as MultiplayerSimulation
+
+
 func _ordered_virtual_names() -> Array[StringName]:
 	return [TICK, ACK]
 
