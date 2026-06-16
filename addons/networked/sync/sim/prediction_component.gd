@@ -1,30 +1,131 @@
 @tool
 ## Drives client-side prediction and server reconciliation for one entity.
 ##
-## The owning client predicts each tick and reconciles on the server's input
-## acknowledgment, never on tick equality, so there is no clock lead and no
-## determinism contract. Each entity has at most one input-owning peer, so the
-## timeline has exactly one writer per side and reconciliation replays only this
-## entity. Remote entities are display only and never simulate here.
+## The owning client predicts each tick and reconciles against
+## [member StateSynchronizer.server_ack], the server's input acknowledgment, never
+## against tick equality, so there is no clock lead and no determinism contract.
+## Each entity has at most one input-owning peer ([member NetwEntity.controller]),
+## so the [NetwTimeline] has exactly one writer per side and a correction replays
+## only this entity. Remote entities are display only and never simulate here.
 ##
+## [br][br][b]One node, four roles[/b]
+## [br]The same node tree runs on every peer. [method simulate_tick] dispatches on
+## [enum Role], resolved from authority at spawn, so the single node behaves as a
+## predictor on the controlling client and a consumer on the server.
 ## [codeblock]
-## owning client, every tick t:
-##     input := input_sync.snapshot_payload()
-##     timeline.record_input(t, input)
-##     _network_tick(input, dt, t, is_fresh = true)      # predict now
-##     timeline.record_state(t + 1, captured)
-##
-## owning client, on state(tick, ack):
-##     if diverged(predicted_at(ack + 1), authoritative):
-##         restore authoritative; replay inputs_in_range(ack + 1, now)
-##     timeline.trim_before(ack)
+## func simulate_tick(delta, tick):
+##     match _role:
+##         Role.PREDICT:    _predict_step(delta, tick)     # client: move now, remember
+##         Role.CONSUME:    _consume_step(delta, tick)      # server: replay received input
+##         Role.HOST_LOCAL: _host_local_step(delta, tick)   # host: authority + controller
+##         # Role.REMOTE: never simulates, the interpolator shows it
 ## [/codeblock]
 ##
-## Wires onto [NetwEntity] like the save component: it owns the entity
-## [NetwTimeline], binds the [StateSynchronizer] and [InputSynchronizer], and runs
-## the [code]_network_tick[/code] contract on the entity root through
-## [member simulate]. The per-tick step is driven by [MultiplayerSimulation] in a
-## deterministic order, reconciliation is driven by
+## [br][b]The one ack[/b]
+## [br]Two packets move. The [InputSynchronizer], whose authority follows
+## [member NetwEntity.controller], ships the controlling peer's input toward the
+## server stamped with [member StampedSynchronizer.authored_tick], the tick it was
+## gathered. The [StateSynchronizer] ships authoritative state back stamped the same
+## way and carrying [member StateSynchronizer.server_ack], surfaced to the client as
+## [constant StateSynchronizer.ACK], the last input tick the server has consumed.
+## That ack is the whole mechanism. It lets the client compare the server against
+## its own past prediction tick for tick, instead of against the body it shows now,
+## which has already raced ahead by a round trip.
+## [codeblock]
+## # InputSynchronizer, client -> server   (authored_tick = the tick it was gathered)
+## { StampedSynchronizer.TICK: authored_tick, &"motion": ... }
+## # StateSynchronizer, server -> client   (server_ack = last consumed input tick)
+## { StampedSynchronizer.TICK: authored_tick, StateSynchronizer.ACK: server_ack, &"position": ... }
+## [/codeblock]
+##
+## [b]The two loops[/b]
+## [br]The client never waits. It predicts on its own input every tick and records
+## both the input and the resulting state into its [NetwTimeline] through
+## [method NetwTimeline.record_input] and [method NetwTimeline.record_state]. The
+## server drains that input a half-trip late, so the acknowledgment it sends back,
+## and that the client reconciles against, is a full round trip old by the time it
+## lands. That lag is steady state, not a disagreement.
+## [codeblock]
+## scenario: hold right from tick 10, body moves +1/tick, half-trip = 3 ticks
+##
+## client tick    10   11   12   13   14   15   16
+## predicted       1    2    3    4    5    6    7
+##                 |-- input 10 ->|
+## server tick                   13   14   15   16
+## true pos                       1    2    3    4
+##                                |- state(10) ->|
+##                                  client gets {pos=1, ack=10} a round trip later
+## [/codeblock]
+## The per-role steps behind that picture:
+## [codeblock]
+## # controlling client, every tick; never waits on the server
+## func _predict_step(delta, tick):
+##     var input := _entity.input.snapshot_payload()
+##     _timeline.record_input(tick, input)
+##     _run(input, delta, tick, true)                # predict: move the body now
+##     _timeline.record_state(tick + 1, _capture())
+##
+## # server, every tick; input arrives late, so the cursor trails by a round trip
+## func _consume_step(delta, server_tick):
+##     var input := _timeline.input_at(_next_input_tick)
+##     _run(input, delta, _next_input_tick, true)    # advance the true body
+##     _ack = _next_input_tick                        # accounted up to here
+##     _next_input_tick += 1
+##
+## # controlling client, when a state packet arrives
+## func _on_state(recv_tick, ack, authoritative):
+##     var predicted := _timeline.latest_state_at_or_before(ack + 1)
+##     if _divergence(predicted, authoritative) > divergence_epsilon:
+##         _restore(authoritative)
+##         for entry in _timeline.inputs_in_range(ack + 1, _latest_input_tick):
+##             _run(entry.input, delta, entry.tick, false)   # replay, not fresh
+##     _timeline.trim_before(ack)
+## [/codeblock]
+##
+## [br][b]Why [code]ack + 1[/code][/b]
+## [br]Applying the input gathered at [code]t[/code] produces the state recorded at
+## [code]t + 1[/code], so an [constant StateSynchronizer.ACK] of [code]t[/code]
+## means the resulting state is the [code]t + 1[/code] entry, which the client looks
+## up with [method NetwTimeline.latest_state_at_or_before]. A prediction that holds
+## produces zero corrections however stale the link is, because the client checks
+## the server against the matching past entry, not against where the body has since
+## raced to.
+## [codeblock]
+## input[t]    :   10   11   12   13      input 10 is applied across the step
+## state[t+1]  :   11   12   13   14      its result is recorded at tick 11
+##                  ^^
+## ack = 10  ───────┘  matches state[11], so compare {pos=1} against state[11]
+##                     |1 - 1| = 0  ->  no correction, though the body is at 7
+## [/codeblock]
+##
+## [br][b]Reconciliation[/b]
+## [br]The same compare catches a wrong prediction. The body snaps to the
+## authoritative payload through [method StampedSynchronizer.apply_payload], then
+## every input the server has not yet acked replays on top of it with
+## [code]is_fresh = false[/code] so one-shot effects fire once. [member is_reconciling]
+## is true across the snap and replay, and [signal reconciled] carries the
+## divergence. [signal state_evaluated] reports every receive, including the
+## sub-[member divergence_epsilon] ones that do not correct.
+## [codeblock]
+## a stun froze the true body at 3 while the client predicted on to 9
+##
+## predicted   :  14:4  15:5  16:6  17:7  18:8  19:9   the client ran ahead
+## server says :  {pos=3, ack=13}   ->  predicted state[14] = 4,  |3-4| = 1
+##
+## snap body to authoritative 3, then replay inputs 14..now on top of truth:
+##   3 ──► 4 ──► 5 ──► 6 ──► 7 ──► 8 ──► 9             re-recorded as it walks
+## [/codeblock]
+##
+## [br][b]Wiring[/b]
+## [br]Wires onto [NetwEntity] like the save component. On the controlling client it
+## owns a local predicted [NetwTimeline] and keeps [member StampedSynchronizer.write_through]
+## false so the network never snaps the predicted body. On the server it reads the
+## registry timeline that [MultiplayerSimulation] records authoritative state into,
+## so this component only consumes input and never writes server history itself.
+## [member simulate] holds the single
+## [code]_network_tick(input, delta, tick, is_fresh)[/code] callable, defaulting to
+## the entity root. [method simulate_tick] is driven by [MultiplayerSimulation] in
+## deterministic order, and reconciliation is event driven off
 ## [member StateSynchronizer.on_state_received].
 class_name PredictionComponent
 extends NetwComponent
