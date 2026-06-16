@@ -4,9 +4,8 @@
 ## [NetwTimeline] registry each tick, lag compensation is a query, not a system:
 ## sampling the timeline at the shooter's perceived tick reproduces where the
 ## target was, so a late hit registers against the rewound position and misses
-## against the live one. Reads the real registry through
-## [method MultiplayerSimulation.timeline_of], the last consumer the spike
-## doubles fed.
+## against the live one. Exercises the public seam
+## [method NetwLagCompensation.sample] through [member MultiplayerTree.lag_compensation].
 class_name TestServerRewind
 extends NetwTestSuite
 
@@ -26,12 +25,10 @@ func test_sample_hits_rewound_misses_live() -> void:
 	s.hold_input(p, RIGHT)
 	s.run(60)
 
-	var tl := s.server_sim.timeline_of(p.server_entity)
-	assert_that(tl).is_not_null()
 	var view_tick: int = s.server_clock.tick - 8
-	var rewound: Dictionary = tl.latest_state_at_or_before(view_tick)
-	assert_that(rewound.is_empty()).is_false()
-	var rewound_pos: Vector2 = rewound[&"position"]
+	var past := s.server.lag_compensation.sample(p.server_entity, view_tick)
+	assert_that(past.is_empty()).is_false()
+	var rewound_pos: Vector2 = past.position
 	var live_pos: Vector2 = p.server_body.position
 
 	# The target moved between the perceived tick and now.
@@ -53,8 +50,7 @@ func test_clamps_view_tick_into_retained_window() -> void:
 
 	# A view tick older than anything retained returns neutral, the signal a real
 	# compensator clamps against rather than fabricating a position.
-	var tl := s.server_sim.timeline_of(p.server_entity)
-	var ancient: Dictionary = tl.latest_state_at_or_before(-100)
+	var ancient := s.server.lag_compensation.sample(p.server_entity, -100)
 	assert_that(ancient.is_empty()).is_true()
 
 
@@ -74,3 +70,19 @@ func test_despawn_linger_keeps_target_rewindable() -> void:
 	# Once the retained window passes the despawn tick, the entry expires.
 	tl.trim_before(despawn_tick + 1)
 	assert_that(tl.latest_state_at_or_before(20).is_empty()).is_true()
+
+
+func test_sample_is_empty_off_server() -> void:
+	var s := PredictionScenario.new()
+	await s.setup(self)
+	var p := await s.add_predicted_entity()
+	s.hold_input(p, RIGHT)
+	s.run(20)
+
+	# The client records no authoritative history, so its facade sample degrades to
+	# an empty snapshot rather than fabricating a position or erroring.
+	var on_client := s.client.lag_compensation.sample(
+		p.client_entity,
+		s.client_clock.tick - 4,
+	)
+	assert_that(on_client.is_empty()).is_true()

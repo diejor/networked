@@ -9,7 +9,6 @@
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_p4o8j"]
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/transport/steam/steam_lobby_directory.gd" id="9_p4o8j"]
-[ext_resource type="Script" uid="uid://7rlemmqrhvw7" path="res://addons/networked/sync/sim/multiplayer_simulation.gd" id="10_sim"]
 
 [sub_resource type="Resource" id="Resource_ytyuk"]
 script = ExtResource("2_3fkt7")
@@ -44,10 +43,6 @@ script = ExtResource("5_gbknk")
 script = ExtResource("7_wto4k")
 tickrate = 15
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
-
-[node name="MultiplayerSimulation" type="Node" parent="MultiplayerTree" unique_id=1936851772]
-script = ExtResource("10_sim")
-metadata/_custom_type_script = "uid://7rlemmqrhvw7"
 
 [node name="SteamLobbyDirectory" type="Node" parent="MultiplayerTree" unique_id=1067375394]
 script = ExtResource("9_p4o8j")

@@ -329,6 +329,14 @@ var api: SceneMultiplayer
 ## [member interest] is backed by the session [InterestService].
 var interest: NetwInterest
 
+## Lag-compensation facade for this tree.
+##
+## [member lag_compensation] is backed by the session [LagCompensationService],
+## which is auto-created on session entry like [InterestService]. See
+## [NetwLagCompensation] for the public query API ([method NetwLagCompensation.sample],
+## [method NetwLagCompensation.rewind]).
+var lag_compensation: NetwLagCompensation
+
 ## Deprecated compatibility alias for [member api].
 var multiplayer_api: SceneMultiplayer:
 	get:
@@ -427,6 +435,7 @@ var _auth: AuthCoordinator
 var _services: ServiceRegistry = ServiceRegistry.new()
 var _client_join_payload: JoinPayload
 var _interest_service: InterestService
+var _lag_compensation_service: LagCompensationService
 
 
 ## Registers a [Node] as a service for this session.
@@ -578,6 +587,7 @@ func _enter_tree() -> void:
 
 	_mount_api()
 	_ensure_interest_service()
+	_ensure_lag_compensation_service()
 	_ensure_host_scene_view()
 
 	if not player_joined.is_connected(_handle_join_spawn):
@@ -687,6 +697,7 @@ func _init() -> void:
 		_interest_service = InterestService.new()
 		_interest_service.name = &"InterestService"
 		interest = NetwInterest.new(self)
+		lag_compensation = NetwLagCompensation.new(self)
 		tree_exiting.connect(_on_exiting)
 
 
@@ -1456,6 +1467,28 @@ func _ensure_interest_service() -> void:
 	_interest_service = InterestService.new()
 	_interest_service.name = &"InterestService"
 	add_child(_interest_service)
+
+
+# Auto-creates the LagCompensationService so a tree is rewindable without mounting
+# a node in every scene, mirroring _ensure_interest_service. Adopts a node a scene
+# mounted manually, otherwise adds a fresh one as a tree child.
+func _ensure_lag_compensation_service() -> void:
+	if is_instance_valid(_lag_compensation_service) \
+			and is_ancestor_of(_lag_compensation_service):
+		return
+
+	var existing := get_node_or_null("LagCompensationService") \
+			as LagCompensationService
+	if not existing:
+		existing = find_service_node(LagCompensationService) \
+				as LagCompensationService
+	if existing:
+		_lag_compensation_service = existing
+		return
+
+	_lag_compensation_service = LagCompensationService.new()
+	_lag_compensation_service.name = &"LagCompensationService"
+	add_child(_lag_compensation_service)
 
 
 # Frees the transient service copied by duplicate().

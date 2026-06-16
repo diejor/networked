@@ -67,11 +67,11 @@ func _exit_tree() -> void:
 		sim.unregister_timeline(entity)
 
 
-func _simulation() -> MultiplayerSimulation:
+func _simulation() -> LagCompensationService:
 	var mt := MultiplayerTree.resolve(self)
 	if not mt:
 		return null
-	return mt.get_service(MultiplayerSimulation) as MultiplayerSimulation
+	return mt.get_service(LagCompensationService) as LagCompensationService
 
 
 func _ordered_virtual_names() -> Array[StringName]:

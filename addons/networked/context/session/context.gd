@@ -61,6 +61,11 @@ var connect: NetwConnect:
 ## found. See [NetwInterest] for the public API.
 var interest: NetwInterest
 
+## Lag-compensation query facade for the enclosing [MultiplayerTree].
+## [code]null[/code] when no enclosing tree is found. See
+## [NetwLagCompensation] for the public API.
+var lag_compensation: NetwLagCompensation
+
 ## Scene-level facade for the current [MultiplayerScene], if any.
 ## [code]null[/code] when the node is not inside an active scene.
 var scene: NetwScene
@@ -91,6 +96,7 @@ func _init(
 		tree = NetwTree.new(mt)
 		services = NetwServices.new(mt)
 		interest = mt.interest
+		lag_compensation = mt.lag_compensation
 	scene = scene_ctx
 	_origin = origin
 

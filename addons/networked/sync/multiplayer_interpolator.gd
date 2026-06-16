@@ -161,6 +161,34 @@ func reset() -> void:
 	starvation_ticks = 0
 
 
+## Returns the server authoring tick currently displayed for this entity, or
+## [code]-1[/code] when it cannot be named.
+##
+## A firing client carries this in its fire request so the server can rewind to
+## the tick the shooter actually saw, the [param tick] argument of
+## [method NetwLagCompensation.sample] and [method NetwLagCompensation.rewind]. It
+## is the authoring [code]__tick[/code] of the snapshot under the interpolation
+## playhead, which is half a round trip behind the live server state.
+##
+## [codeblock]
+## var view_tick := interpolator.displayed_authoring_tick()
+## if view_tick >= 0:
+##     fire_at_server.rpc_id(1, aim, view_tick)
+## [/codeblock]
+##
+## Returns [code]-1[/code] unless authoring-tick keying is active (exactly one
+## stamped [StateSynchronizer] drives the entity), and on an authority entity or
+## before the first snapshot is displayed, where no tick can be named.
+func displayed_authoring_tick() -> int:
+	if not _authoring_sync or _display_tick < 0:
+		return -1
+	for state in _states:
+		var prev: int = state.history.bracketing_ticks(_display_tick).x
+		if prev >= 0:
+			return prev
+	return -1
+
+
 ## Returns the [HistoryBuffer] for the given [param property], or [code]null[/code]
 ## if not found.
 func get_buffer(property: StringName) -> HistoryBuffer:
@@ -199,6 +227,11 @@ var _has_explicit_sync_interval: bool = false
 # The single stamped state synchronizer whose authoring __tick keys history, or
 # null to fall back to the receive tick. Resolved in _cache_sync_intervals.
 var _authoring_sync: StampedSynchronizer = null
+
+# Last playhead tick computed in _update_instance, in the history's tick space
+# (authoring ticks when authoring-tick keying is active). Drives
+# displayed_authoring_tick(). -1 until the first interpolated frame.
+var _display_tick: int = -1
 
 var _peer_batcher: _Batcher
 var _was_starving: bool = false
@@ -293,6 +326,7 @@ func _update_instance(
 	var time := (float(global_dt) + global_factor) - display_lag
 	var dt := int(floor(time))
 	var factor := time - float(dt)
+	_display_tick = dt
 
 	for state in _states:
 		state.apply(dt, factor, max_lerp_distance, should_trace, display_lag, smooth_weight)

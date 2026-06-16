@@ -1,7 +1,8 @@
 ## Real-node lag-comp scenario rig: host, one client, and predicted entities.
 ##
-## Wraps [NetwTestHarness] with a [MultiplayerClock] and a [MultiplayerSimulation]
-## on both peers, then composes matched [LagCompSimBody] pairs through
+## Wraps [NetwTestHarness] with a [MultiplayerClock] and the auto-created
+## [LagCompensationService] on both peers, then composes matched [LagCompSimBody]
+## pairs through
 ## [PlayerBuilder] so the real [StateSynchronizer], [InputSynchronizer], and
 ## [PredictionComponent] run end to end. A [LockstepStepper] drives both clocks
 ## in process, so corrections, replay depth, and divergence are deterministic and
@@ -29,8 +30,8 @@ var server: MultiplayerTree
 var client: MultiplayerTree
 var server_clock: MultiplayerClock
 var client_clock: MultiplayerClock
-var server_sim: MultiplayerSimulation
-var client_sim: MultiplayerSimulation
+var server_sim: LagCompensationService
+var client_sim: LagCompensationService
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -62,8 +63,9 @@ func setup(
 	client_clock = client.get_service(MultiplayerClock) as MultiplayerClock
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
-	server_sim = _mount_simulation(server)
-	client_sim = _mount_simulation(client)
+	# The service auto-registers on each tree, so resolve it rather than mounting one.
+	server_sim = server.get_service(LagCompensationService) as LagCompensationService
+	client_sim = client.get_service(LagCompensationService) as LagCompensationService
 	await _tree.process_frame
 
 	# Freeze both clocks under lockstep so every tick is driven by run(), with no
@@ -256,13 +258,6 @@ func latency_up(
 ## Tears the underlying harness down. Only needed for an unmanaged setup.
 func teardown() -> void:
 	await inner.teardown()
-
-
-func _mount_simulation(mt: MultiplayerTree) -> MultiplayerSimulation:
-	var sim := MultiplayerSimulation.new()
-	sim.name = "MultiplayerSimulation"
-	mt.add_child(sim)
-	return sim
 
 
 func _apply_scripted_inputs(_delta: float, tick: int) -> void:

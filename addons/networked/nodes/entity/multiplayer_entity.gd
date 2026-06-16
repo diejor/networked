@@ -774,7 +774,26 @@ func despawn(opts: DespawnOpts = null) -> void:
 		owner.set_multiplayer_authority(
 			MultiplayerPeer.TARGET_PEER_SERVER,
 		)
+	if opts.linger:
+		_linger_then_free(opts)
+		return
 	if opts.defer_free:
 		owner.queue_free.call_deferred()
 	else:
+		owner.queue_free()
+
+
+# Keeps a despawned entity rewindable for opts.linger_seconds, then frees it.
+# The node deactivates immediately through the same moves a template uses, so it
+# stops processing, replicating, and being recorded. Its NetwTimeline freezes at
+# the despawn boundary, so a late server rewind still finds where it was, and
+# freeing later runs the StateSynchronizer's unregister so the timeline expires.
+func _linger_then_free(opts: DespawnOpts) -> void:
+	_apply_template_state()
+	var tree := owner.get_tree()
+	if not tree:
+		owner.queue_free()
+		return
+	await tree.create_timer(opts.linger_seconds).timeout
+	if is_instance_valid(owner):
 		owner.queue_free()

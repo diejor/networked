@@ -26,6 +26,18 @@ var flush_save: bool = true
 ## from a freed authority peer.
 var defer_free: bool = true
 
+## When [code]true[/code], the entity deactivates now but is freed only after
+## [member linger_seconds], so a late shooter can still validate against where it
+## was. Its [NetwTimeline] freezes at the despawn boundary and expires when the
+## node frees. Default [code]false[/code] keeps the cheap rule: you cannot be shot
+## after the server saw you die.
+var linger: bool = false
+
+## Seconds a lingering entity stays rewindable before it frees. Sized to the server
+## rewind retention window, roughly one second of ticks. Ignored unless
+## [member linger] is [code]true[/code].
+var linger_seconds: float = 1.0
+
 
 func _init(p_reason: StringName = &"") -> void:
 	reason = p_reason

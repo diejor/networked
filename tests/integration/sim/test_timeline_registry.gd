@@ -1,4 +1,4 @@
-## Integration tests for the [MultiplayerSimulation] timeline registry + recorder.
+## Integration tests for the [LagCompensationService] timeline registry + recorder.
 ##
 ## Proves Decision 3 / 4: an entity with a server-authoritative [StateSynchronizer]
 ## and no [PredictionComponent] is registered by state-sync presence alone, and the
@@ -11,14 +11,15 @@ extends NetwTestSuite
 var _harness: NetwTestHarness
 var _server: MultiplayerTree
 var _server_clock: MultiplayerClock
-var _sim: MultiplayerSimulation
+var _sim: LagCompensationService
 
 
 func _pos(i: int) -> Vector2:
 	return Vector2(float(i) * 5.0, 0.0)
 
 
-# Server tree, hosted, with a clock and a MultiplayerSimulation bound to it.
+# Server tree, hosted, with a clock and the auto-created LagCompensationService
+# bound to it.
 func _setup_server() -> void:
 	_harness = make_harness()
 	await _harness.setup()
@@ -26,9 +27,8 @@ func _setup_server() -> void:
 	_server = _harness.server()
 	_server_clock = await _harness.add_clock(30, 3)
 
-	_sim = MultiplayerSimulation.new()
-	_sim.name = "MultiplayerSimulation"
-	_server.add_child(_sim)
+	# The service auto-registers on the tree, so resolve it rather than mounting one.
+	_sim = _server.get_service(LagCompensationService) as LagCompensationService
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
 
