@@ -1,13 +1,13 @@
-## Real-physics CharacterBody2D fixture for the move_and_slide replay spike.
+## Real-physics CharacterBody2D fixture for the move_and_slide replay regression.
 ##
 ## Mirrors examples/bomber player.gd's motion (velocity = motion * SPEED, then
-## move_and_slide) under the frozen _network_tick contract, so the spike tests
-## the exact physics bomber will replay during reconciliation. Built in code
-## with a rectangle collider; no authored scene. Deleted when Phase 0 lands.
-class_name SpikeKinematicBody
+## move_and_slide) under the frozen [code]_network_tick[/code] contract, so the
+## fixture exercises the exact physics bomber replays during reconciliation. Built
+## in code with a rectangle collider, no authored scene.
+class_name KinematicSimBody
 extends CharacterBody2D
 
-## Matches bomber's MOTION_SPEED so the spike's numbers transfer directly.
+## Matches bomber's MOTION_SPEED so the fixture's numbers transfer directly.
 const SPEED := 90.0
 
 var _half: Vector2

@@ -1,10 +1,10 @@
-## Programmatic static collision geometry for the move_and_slide replay spike.
+## Programmatic static collision geometry for the move_and_slide replay fixture.
 ##
 ## A flat floor (infinite WorldBoundaryShape2D placed at floor_y) plus an
-## optional vertical wall, built in code so the spike needs no authored scene.
+## optional vertical wall, built in code so the fixture needs no authored scene.
 ## Add it under the suite, auto_free it, await one physics_frame to commit the
 ## shapes, then the space is ready for body_test_motion queries.
-class_name SpikeArena
+class_name KinematicArena
 extends Node2D
 
 ## World-space Y of the floor surface. A body rests with its collider bottom on

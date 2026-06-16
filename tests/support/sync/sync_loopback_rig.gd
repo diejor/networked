@@ -25,15 +25,19 @@ var _stepper: LockstepStepper
 
 ## Builds the rig: host, one client, clocks on both, and a matched node pair each
 ## carrying the synchronizer [param factory] returns.
+##
+## Pass [code]managed = false[/code] to own teardown explicitly (e.g. a test that
+## builds several rigs in one case).
 func setup(
 		suite: NetwTestSuite,
 		factory: Callable,
 		tickrate: int = 60,
 		display_offset: int = 3,
+		managed: bool = true,
 ) -> void:
 	_tree = Engine.get_main_loop() as SceneTree
 	_tickrate = tickrate
-	inner = suite.make_harness()
+	inner = suite.make_harness() if managed else suite.make_unmanaged_harness()
 	await inner.setup()
 	client = await inner.add_client()
 	server_clock = await inner.add_clock(tickrate, display_offset)
@@ -48,6 +52,11 @@ func setup(
 	client.add_child(client_node)
 
 	await _tree.process_frame
+
+
+## Tears the underlying harness down. Only needed for an unmanaged setup.
+func teardown() -> void:
+	await inner.teardown()
 
 
 ## Advances both clocks by [param n] network ticks in-process, no real frames.

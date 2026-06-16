@@ -1,5 +1,5 @@
-## Spike: CharacterBody2D replay coherence for ack reconciliation (architecture
-## §9.2). Single-peer, real-physics, no networking.
+## CharacterBody2D replay coherence for ack reconciliation (architecture §9.2).
+## Single-peer, real-physics, no networking.
 ##
 ## Reconciliation restores an authoritative snapshot and replays the local
 ## player's pending inputs by calling _network_tick N times inside ONE physics
@@ -8,8 +8,10 @@
 ## real physics frames produce, that wall slide and floor flags stay correct,
 ## and that move_and_slide integrates with the physics delta (not the contract's
 ## delta arg) so a tick equals a physics tick only at tickrate == physics rate.
-## Deleted when Phase 0 lands; the fixture may survive as the bomber regression.
-class_name TestSpikeKinematicReplay
+## This is the permanent real-physics replay regression for bomber, not a
+## throwaway. It runs single-peer because the closed-form lockstep rigs never step
+## physics frames, which move_and_slide requires.
+class_name TestKinematicReplay
 extends NetwTestSuite
 
 
@@ -17,8 +19,8 @@ func _phys_dt() -> float:
 	return 1.0 / float(Engine.physics_ticks_per_second)
 
 
-func _make_arena(with_wall: bool = false) -> SpikeArena:
-	var arena := SpikeArena.new(with_wall)
+func _make_arena(with_wall: bool = false) -> KinematicArena:
+	var arena := KinematicArena.new(with_wall)
 	add_child(arena)
 	auto_free(arena)
 	return arena
@@ -28,8 +30,8 @@ func _make_arena(with_wall: bool = false) -> SpikeArena:
 # (layer 0), so a reference and a replay body can share one space at the same
 # start without interacting. The await commits both the arena and the body
 # shapes to the physics server before any body_test_motion query runs.
-func _make_body(start: Vector2) -> SpikeKinematicBody:
-	var body := SpikeKinematicBody.new()
+func _make_body(start: Vector2) -> KinematicSimBody:
+	var body := KinematicSimBody.new()
 	body.collision_layer = 0
 	body.collision_mask = 1
 	body.position = start
@@ -40,7 +42,7 @@ func _make_body(start: Vector2) -> SpikeKinematicBody:
 
 
 # Drives one _network_tick per real physics frame: the authoritative baseline.
-func _drive_real(body: SpikeKinematicBody, motion: Vector2, n: int) -> void:
+func _drive_real(body: KinematicSimBody, motion: Vector2, n: int) -> void:
 	var d := _phys_dt()
 	for i in n:
 		body._network_tick({&"motion": motion}, d, i, true)
@@ -48,7 +50,7 @@ func _drive_real(body: SpikeKinematicBody, motion: Vector2, n: int) -> void:
 
 
 # Replays N inputs back-to-back inside one frame: the reconciliation path.
-func _replay(body: SpikeKinematicBody, motion: Vector2, n: int) -> void:
+func _replay(body: KinematicSimBody, motion: Vector2, n: int) -> void:
 	var d := _phys_dt()
 	for i in n:
 		body._network_tick({&"motion": motion}, d, i, false)
@@ -116,7 +118,7 @@ func test_move_and_slide_uses_physics_delta_not_arg() -> void:
 	body._network_tick({&"motion": Vector2(1, 0)}, 999.0, 0, true)
 	await get_tree().physics_frame
 
-	var expected := SpikeKinematicBody.SPEED * _phys_dt()
+	var expected := KinematicSimBody.SPEED * _phys_dt()
 	assert_bool(absf(body.position.x - expected) < 0.05).is_true()
 	# The absurd 999 delta arg had no effect: motion is physics-delta scaled.
 	assert_bool(body.position.x < 10.0).is_true()

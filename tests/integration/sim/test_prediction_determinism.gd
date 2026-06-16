@@ -9,7 +9,7 @@ class_name TestPredictionDeterminism
 extends NetwTestSuite
 
 const RIGHT := { &"motion": Vector2.RIGHT }
-const STEP := SpikeSim.SPEED / 30.0
+const STEP := ClosedFormSim.SPEED / 30.0
 
 
 func test_exact_regime_outcome_is_reproducible() -> void:

@@ -41,6 +41,18 @@ var _client_peer_id: int
 var _entities: Array[PredictedEntity] = []
 var _entity_counter: int = 0
 
+## Entity-root type composed for each predicted pair through [PlayerBuilder].
+##
+## Must extend [LagCompSimBody] so the scripted [member LagCompSimBody.motion] and
+## [member LagCompSimBody.bombing] input and the [PredictedEntity] metric slots
+## still resolve. Defaults to the closed-form body. Point it at an alternate
+## closed-form subclass (a future predicted-action body) to drive that through the
+## same rig. A real-physics [CharacterBody2D] does not fit here: the
+## [LockstepStepper] never steps physics frames, so [method CharacterBody2D.move_and_slide]
+## would not advance. That replay path lives in its own single-peer fixture
+## ([code]test_kinematic_replay.gd[/code]).
+var body_type: Variant = LagCompSimBody
+
 
 ## Builds the scenario: host, one client, clocks, simulations, and the stepper.
 ##
@@ -94,7 +106,7 @@ func add_predicted_entity(
 	_entity_counter += 1
 	var ename := "Predicted%d" % _entity_counter
 	var builder := PlayerBuilder.new(ename) \
-			.with_root(LagCompSimBody) \
+			.with_root(body_type) \
 			.with_state(state_props) \
 			.with_input(input_props) \
 			.with_prediction(missing_policy, epsilon)

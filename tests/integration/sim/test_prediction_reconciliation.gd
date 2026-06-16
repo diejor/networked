@@ -95,7 +95,7 @@ func test_stall_policy_skips_lost_input() -> void:
 	)
 	# Ticks 0 and 2 move; the lost tick 1 contributes nothing.
 	_consume_with_hole(s, p)
-	var step := SpikeSim.SPEED * s.dt()
+	var step := ClosedFormSim.SPEED * s.dt()
 	assert_that(p.server_body.position.x).is_equal_approx(2.0 * step, 0.001)
 	assert_int(p.missing).is_equal(1)
 
@@ -110,7 +110,7 @@ func test_repeat_last_policy_carries_input() -> void:
 	)
 	# The lost tick repeats the prior input, so all three ticks move.
 	_consume_with_hole(s, p)
-	var step := SpikeSim.SPEED * s.dt()
+	var step := ClosedFormSim.SPEED * s.dt()
 	assert_that(p.server_body.position.x).is_equal_approx(3.0 * step, 0.001)
 	assert_int(p.missing).is_equal(1)
 
