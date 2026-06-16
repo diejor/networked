@@ -32,28 +32,18 @@ func _setup_server() -> void:
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
 
-# A server-authoritative state-synced entity, no prediction component.
+# A server-authoritative state-synced entity, no prediction component. The
+# builder's with_state composes the StateSynchronizer alone, so registration is
+# driven by state-sync presence, not a PredictionComponent.
 func _spawn_state_entity(entity_name: String) -> NetwEntity:
-	var node := Node2D.new()
-	node.name = entity_name
-	var entity := NetwEntity.ensure(node)
-
-	var state := StateSynchronizer.new()
-	state.name = "StateSync"
-	state.register_property(
-		&"position",
-		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
-		false,
-		true,
-	)
-	node.add_child(state)
-	state.owner = node
-	state.root_path = state.get_path_to(node)
+	var node := PlayerBuilder.new(entity_name) \
+			.with_root(Node2D) \
+			.with_state([&"position"]) \
+			.build()
 
 	_server.add_child(node)
 	await (Engine.get_main_loop() as SceneTree).process_frame
-	return entity
+	return NetwEntity.of(node)
 
 
 func test_state_sync_presence_registers_a_timeline() -> void:

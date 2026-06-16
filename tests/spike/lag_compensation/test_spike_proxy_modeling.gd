@@ -59,6 +59,10 @@ func test_a4_finalized_proxies_visible_to_cache() -> void:
 	assert_that(names.has("InputSync")).is_true()
 
 
+# This suite is the last consumer of SpikePredictRig (and through it
+# SpikePrediction/SpikeTimeline). The real-node prediction suites under
+# tests/integration/sim/ replaced the four migrated spike suites, so retiring the
+# prediction doubles is blocked only on moving these two rig-using cases off it.
 func test_a3_authority_derives_direction() -> void:
 	var rig := SpikePredictRig.new()
 	await rig.setup(self, _const_right)

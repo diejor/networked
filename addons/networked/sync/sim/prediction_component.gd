@@ -72,8 +72,22 @@ var corrections: int = 0
 ## Deepest replay window walked by any correction.
 var max_replay_depth: int = 0
 
+## Inputs the server consumed into authoritative state. Surfaced through
+## [method MultiplayerSimulation.metrics].
+var consumed_count: int = 0
+
+## Input ticks the server stepped over as lost. Surfaced through
+## [method MultiplayerSimulation.metrics].
+var missing_count: int = 0
+
 ## Emitted after a correction, with the divergence that triggered it.
 signal reconciled(error: float)
+
+## Emitted on every state receive on the owning client, before the trim, with
+## the full divergence including sub-epsilon values. The debug overlay and the
+## test observer read this to follow the whole divergence series, not just the
+## corrections that [signal reconciled] reports.
+signal state_evaluated(recv_tick: int, ack: int, divergence: float, corrected: bool)
 
 var _entity: NetwEntity
 var _role: Role = Role.REMOTE
@@ -222,7 +236,7 @@ func _predict_step(delta: float, tick: int) -> void:
 	_timeline.record_state(tick + 1, _capture())
 
 
-func _on_state(_recv_tick: int, ack: int, payload: Dictionary) -> void:
+func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 	if ack < 0:
 		return
 	var predicted := _timeline.latest_state_at_or_before(ack + 1)
@@ -230,10 +244,17 @@ func _on_state(_recv_tick: int, ack: int, payload: Dictionary) -> void:
 	if not predicted.is_empty():
 		divergence = _divergence(predicted, payload)
 
-	if divergence > divergence_epsilon:
+	var corrected := divergence > divergence_epsilon
+	if corrected:
 		is_reconciling = true
 		corrections += 1
 		_restore(payload)
+		# Anchor the authoritative state at its keyed tick so a later packet
+		# carrying the same ack compares against the corrected value, not the
+		# stale prediction it just replaced. Without this a duplicate ack (the
+		# server is input starved and re-sends the same ack) re-triggers this
+		# correction every tick until the ack advances past the stale entry.
+		_timeline.record_state(ack + 1, payload)
 		var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
 		max_replay_depth = maxi(max_replay_depth, window.size())
 		for entry in window:
@@ -243,6 +264,7 @@ func _on_state(_recv_tick: int, ack: int, payload: Dictionary) -> void:
 		is_reconciling = false
 
 	_timeline.trim_before(ack)
+	state_evaluated.emit(recv_tick, ack, divergence, corrected)
 
 
 # ---------------------------------------------------------------------------
@@ -292,11 +314,13 @@ func _consume_one(delta: float) -> void:
 		_last_input = input
 		_ack = _next_input_tick
 		_next_input_tick += 1
+		consumed_count += 1
 		return
 
 	# A later input arrived, so this tick's input is genuinely lost. Apply the
 	# policy and step over the hole. Otherwise it simply has not arrived yet.
 	if _timeline.newest_input_tick() > _next_input_tick:
+		missing_count += 1
 		if missing_policy == MissingInput.REPEAT_LAST and not _last_input.is_empty():
 			_run(_last_input, delta, _next_input_tick, true)
 		# STALL applies no movement at all.

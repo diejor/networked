@@ -24,6 +24,15 @@ var _has_interest: bool = false
 var _interest_layers: Array[StringName] = []
 var _interest_report: bool = false
 
+var _has_state: bool = false
+var _state_props: Array[StringName] = []
+var _has_input: bool = false
+var _input_props: Array[StringName] = []
+var _has_prediction: bool = false
+var _prediction_missing_policy: PredictionComponent.MissingInput = \
+		PredictionComponent.MissingInput.STALL
+var _prediction_epsilon: float = 0.01
+
 static var _uid_counter: int = 0
 
 
@@ -144,6 +153,47 @@ func with_interest(
 	return self
 
 
+## Configures a [StateSynchronizer] on the player entity.
+##
+## Attaches the server-authoritative state slot and registers each of
+## [param props] as an ON_CHANGE payload property at [code].:prop[/code] on the
+## entity root, so a predicting client compares against and a server records the
+## same whole-entity snapshot.
+func with_state(props: Array[StringName]) -> PlayerBuilder:
+	_has_state = true
+	_state_props = props
+	return self
+
+
+## Configures an [InputSynchronizer] on the player entity.
+##
+## Attaches the controller-authoritative input slot under an [code]Inputs[/code]
+## child (mirroring bomber's [code]$Inputs[/code]) and registers each of
+## [param props] as an ALWAYS payload property at [code].:prop[/code] on the
+## entity root. Authority binds to the controller through the entity lifecycle.
+func with_input(props: Array[StringName]) -> PlayerBuilder:
+	_has_input = true
+	_input_props = props
+	return self
+
+
+## Configures a [PredictionComponent] on the player entity.
+##
+## Attaches the prediction and reconciliation slot with [param missing_policy]
+## and [param epsilon]. Requires [method with_state] and [method with_input], and
+## an entity root that defines [code]_network_tick[/code] so
+## [member PredictionComponent.simulate] auto-binds.
+func with_prediction(
+		missing_policy: PredictionComponent.MissingInput = \
+				PredictionComponent.MissingInput.STALL,
+		epsilon: float = 0.01,
+) -> PlayerBuilder:
+	_has_prediction = true
+	_prediction_missing_policy = missing_policy
+	_prediction_epsilon = epsilon
+	return self
+
+
 ## Composes and returns a live player node tree.
 func build() -> Node:
 	var root: Node = _root_type.new()
@@ -188,6 +238,51 @@ func build() -> Node:
 		interest_comp.layer_ids = _interest_layers
 		interest_comp.report_observers = _interest_report
 		var _a5: Node = SceneAssembly.attach(root, interest_comp, root)
+
+	if _has_state or _has_input or _has_prediction:
+		# The state and input synchronizers resolve NetwEntity.of in
+		# NOTIFICATION_PARENTED, which fires on attach before tree entry, so the
+		# entity must exist on the root before any lag-comp component attaches.
+		# Reuse the one with_multiplayer_entity() created, else ensure it now.
+		NetwEntity.ensure(root)
+
+	if _has_state:
+		var state := StateSynchronizer.new()
+		state.name = "StateSync"
+		for prop in _state_props:
+			state.register_property(
+				prop,
+				NodePath(".:" + prop),
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+				false,
+				true,
+			)
+		var _a6: Node = SceneAssembly.attach(root, state, root)
+		state.root_path = state.get_path_to(root)
+
+	if _has_input:
+		var inputs := Node.new()
+		inputs.name = "Inputs"
+		var _a7: Node = SceneAssembly.attach(root, inputs, root)
+		var input := InputSynchronizer.new()
+		input.name = "InputSync"
+		for prop in _input_props:
+			input.register_property(
+				prop,
+				NodePath(".:" + prop),
+				SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
+				false,
+				false,
+			)
+		var _a8: Node = SceneAssembly.attach(inputs, input, root)
+		input.root_path = input.get_path_to(root)
+
+	if _has_prediction:
+		var prediction := PredictionComponent.new()
+		prediction.name = "PredictionComponent"
+		prediction.missing_policy = _prediction_missing_policy
+		prediction.divergence_epsilon = _prediction_epsilon
+		var _a9: Node = SceneAssembly.attach(root, prediction, root)
 
 	var player_sync: MultiplayerSynchronizer = MultiplayerSynchronizer.new()
 	player_sync.name = "PlayerSync"

@@ -107,23 +107,31 @@ func unregister_timeline(entity: NetwEntity) -> void:
 ##
 ## [codeblock]
 ## {
-##   ┠╴ entities: int      # registered components stepped this tick
-##   ┠╴ corrections: int   # summed reconciliation snaps since spawn
-##   ┖╴ max_replay_depth: int  # worst replay window walked
+##   ┠╴ entities: int          # registered components stepped this tick
+##   ┠╴ corrections: int       # summed reconciliation snaps since spawn
+##   ┠╴ max_replay_depth: int  # worst replay window walked
+##   ┠╴ consumed: int          # summed inputs the server consumed
+##   ┖╴ missing: int           # summed input ticks stepped over as lost
 ## }
 ## [/codeblock]
 func metrics() -> Dictionary:
 	var corrections := 0
 	var max_replay := 0
+	var consumed := 0
+	var missing := 0
 	for pc in _components:
 		if not is_instance_valid(pc):
 			continue
 		corrections += pc.corrections
 		max_replay = maxi(max_replay, pc.max_replay_depth)
+		consumed += pc.consumed_count
+		missing += pc.missing_count
 	return {
 		&"entities": _components.size(),
 		&"corrections": corrections,
 		&"max_replay_depth": max_replay,
+		&"consumed": consumed,
+		&"missing": missing,
 	}
 
 
