@@ -1,18 +1,15 @@
 @tool
-## Syncs and persists an entity's scene state to [member database].
+## Syncs and persists scene state to [member database].
 ##
-## Properties picked in the Replication panel are synchronized
-## across the network and flushed on change.
-##
-## State bounces through [member database]: every write is persisted,
-## and [method hydrate] reloads from the database on spawn.
+## [member record] stores the virtual properties selected on the
+## [member replication_config]. Writes update the record first so
+## [method flush] and [method hydrate] use the same saved state.
 ##
 ## [codeblock]
 ## %SaveComponent.set_value(&"gold", 500)
 ## var gold := %SaveComponent.get_value(&"gold", 0)
 ## [/codeblock]
 ##
-## See [method hydrate] and [method flush] for the load/save API.
 class_name SaveComponent
 extends ProxySynchronizer
 
@@ -38,10 +35,10 @@ class Bucket extends RefCounted:
 	var registered: Array[SaveComponent] = []
 	var shutting_down: bool = false
 
-## The entity whose data is tracked and persisted.
-var bound_entity: Entity = DictionaryEntity.new()
+## The [NetwRecord] whose data is tracked and persisted.
+var record: NetwRecord = DictionaryRecord.new()
 
-## The [NetwDatabase] to read/write this entity's state.
+## The [NetwDatabase] to read and write [member record].
 @export var database: NetwDatabase:
 	set(v):
 		database = v
@@ -108,9 +105,9 @@ func _exit_tree() -> void:
 # ProxySynchronizer overrides.
 
 
-# Receives a replicated value from the network and stores it in bound_entity.
+# Receives a replicated value from the network and stores it in record.
 func _write_property(name: StringName, _path: NodePath, value: Variant) -> void:
-	bound_entity.set_value(name, value)
+	record.set_value(name, value)
 	_state_changed = true
 	_save_once.call_deferred()
 
@@ -119,7 +116,7 @@ func _write_property(name: StringName, _path: NodePath, value: Variant) -> void:
 func _get_property_list() -> Array[Dictionary]:
 	var properties: Array[Dictionary] = []
 	for entity_key: StringName in _properties:
-		var value: Variant = bound_entity.get_value(entity_key, null)
+		var value: Variant = record.get_value(entity_key, null)
 		properties.append({ "name": entity_key, "type": typeof(value) })
 	return properties
 
@@ -132,10 +129,10 @@ func _setup_sync() -> void:
 		return
 	_initialized = true
 
-	assert(bound_entity, "SaveComponent: bound_entity must not be null.")
+	assert(record, "SaveComponent: record must not be null.")
 	assert(
-		bound_entity.resource_local_to_scene,
-		"SaveComponent: bound_entity '%s' is not local to scene." % bound_entity,
+		record.resource_local_to_scene,
+		"SaveComponent: record '%s' is not local to scene." % record,
 	)
 
 	if database:
@@ -152,18 +149,18 @@ func _setup_sync() -> void:
 		if scene_path.is_empty():
 			continue
 
-		if owner and not bound_entity.has_value(entity_key):
+		if owner and not record.has_value(entity_key):
 			var value = _read_property(entity_key, scene_path)
 			if value != null:
-				bound_entity.set_value(entity_key, value)
+				record.set_value(entity_key, value)
 
 	notify_property_list_changed()
 
 
-# Seeds bound_entity from the live scene for any key not yet populated.
+# Seeds record from the live scene for any key not yet populated.
 func _seed_entity_from_scene() -> void:
 	for entity_key: StringName in _properties:
-		if not owner or bound_entity.has_value(entity_key):
+		if not owner or record.has_value(entity_key):
 			continue
 		var scene_path: NodePath = _properties[entity_key]
 		if scene_path.is_empty():
@@ -171,7 +168,7 @@ func _seed_entity_from_scene() -> void:
 
 		var value = _read_property(entity_key, scene_path)
 		if value != null:
-			bound_entity.set_value(entity_key, value)
+			record.set_value(entity_key, value)
 
 # Public API.
 
@@ -181,19 +178,19 @@ func is_dirty() -> bool:
 	return _state_changed
 
 
-## Sets a value in the [member bound_entity] and flags the component as dirty.
+## Sets a value in the [member record] and flags the component as dirty.
 func set_value(key: StringName, value: Variant) -> void:
 	if not has_virtual_property(key):
 		_dbg.warn("Setting value for untracked key: [code]%s[/code]", [key])
 
-	bound_entity.set_value(key, value)
+	record.set_value(key, value)
 	_state_changed = true
 	_save_once.call_deferred()
 
 
-## Returns the value for [param key] from the [member bound_entity].
+## Returns the value for [param key] from the [member record].
 func get_value(key: StringName, default: Variant = null) -> Variant:
-	return bound_entity.get_value(key, default)
+	return record.get_value(key, default)
 
 
 ## Adds a tracked property from [param source].
@@ -211,29 +208,29 @@ func add_save_property(
 ) -> void:
 	register_node_property(virtual_name, source, property, mode, spawn, watch)
 
-# Scene to entity transfer.
+# Scene to record transfer.
 
 
-## Writes entity values for all tracked properties into the live scene nodes.
+## Writes [member record] values into the live scene nodes.
 func push_to_scene() -> Error:
 	if not _initialized:
 		_dbg.error("push_to_scene called before setup().", func(m): push_error(m))
 		return ERR_UNCONFIGURED
-	assert(bound_entity)
+	assert(record)
 	for entity_key: StringName in _properties:
-		if not bound_entity.has_value(entity_key):
+		if not record.has_value(entity_key):
 			continue
-		_write_scene(entity_key, bound_entity.get_value(entity_key))
+		_write_scene(entity_key, record.get_value(entity_key))
 	return OK
 
 
-## Reads live values from the scene into [member bound_entity].
+## Reads live values from the scene into [member record].
 func pull_from_scene() -> void:
 	assert(_initialized, "SaveComponent: pull_from_scene called before setup().")
 	for entity_key: StringName in _properties:
 		var value := _read_property(entity_key, _properties[entity_key])
 		if value != null:
-			bound_entity.set_value(entity_key, value)
+			record.set_value(entity_key, value)
 
 
 # Writes value for entity_key directly into the live scene node.
@@ -258,20 +255,19 @@ func _save_once() -> void:
 # Network transfer.
 
 
-## Sends the current entity state to [param peer_id].
+## Sends the current [member record] state to [param peer_id].
 ##
 ## When [param ack] is [code]true[/code], [signal push_acknowledged]
 ## fires after the remote peer applies the state.
 func push_to(peer_id: int, ack: bool = false) -> void:
 	pull_from_scene()
-	_request_push.rpc_id(peer_id, bound_entity.serialize(), ack)
+	_request_push.rpc_id(peer_id, record.serialize(), ack)
 
 
-# RPC called by a client to push its serialized entity state to this peer.
+# RPC called by a client to push its serialized record state to this peer.
 @rpc("any_peer", "call_local", "reliable")
 func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
-	# Reject a peer pushing state into an entity it does not own (RPCs can
-	# target any node).
+	# Reject a peer pushing state into an object it does not own.
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id != get_multiplayer_authority():
 		_dbg.warn(
@@ -280,7 +276,7 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 			func(m): push_warning(m)
 		)
 		return
-	bound_entity.deserialize(bytes)
+	record.deserialize(bytes)
 	push_to_scene()
 	_on_state_changed()
 	if ack:
@@ -294,7 +290,7 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 # Database persistence.
 
 
-# Returns the stable entity identifier used as the database record ID.
+# Returns the stable scene identifier used as the database record ID.
 func _get_entity_id() -> StringName:
 	var root: Node
 	if is_instance_valid(owner):
@@ -315,7 +311,7 @@ func _get_entity_id() -> StringName:
 	return StringName(root.name)
 
 
-## Flushes the current entity state to [member database] immediately.
+## Flushes the current [member record] to [member database] immediately.
 func flush() -> Error:
 	return _flush()
 
@@ -331,7 +327,7 @@ func _flush() -> Error:
 	var entity_id := _get_entity_id()
 	var db_err := database.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
-			tx.queue_upsert(table_name, entity_id, bound_entity.to_dict())
+			tx.queue_upsert(table_name, entity_id, record.to_dict())
 	)
 	if db_err == OK:
 		_dbg.trace("State flushed (table=%s, id=%s).", [table_name, entity_id])
@@ -344,26 +340,28 @@ func _flush() -> Error:
 	return db_err
 
 
-## Loads the database record for the current entity and pushes it
-## to the scene. Emits [signal loaded] even when no record exists.
+## Loads the database row for the current scene object.
+##
+## The loaded data is passed to [method hydrate]. [signal loaded] is emitted
+## even when no row exists.
 func hydrate_from_db() -> void:
 	if not database or table_name.is_empty():
 		return
 	if not _initialized:
 		_instantiate_sync()
-	var entity := database.table(table_name).fetch(_get_entity_id())
-	hydrate(entity.to_dict() if entity else { })
+	var stored_record := database.table(table_name).fetch(_get_entity_id())
+	hydrate(stored_record.to_dict() if stored_record else { })
 
 
-## Loads [param record] into [member bound_entity] and pushes it to
+## Loads [param data] into [member record] and pushes it to
 ## the scene. Seeds from scene defaults when the record is empty.
-func hydrate(record: Dictionary) -> void:
+func hydrate(data: Dictionary) -> void:
 	if not _initialized:
 		_instantiate_sync()
 	_seed_entity_from_scene()
 
-	if not record.is_empty():
-		bound_entity.from_dict(record)
+	if not data.is_empty():
+		record.from_dict(data)
 		push_to_scene()
 		_dbg.info(
 			"State hydrated (table=%s, id=%s).",
@@ -378,18 +376,18 @@ func hydrate(record: Dictionary) -> void:
 	loaded.emit()
 
 
-# Deserializes a network byte array into the entity and pushes the result to the scene.
+# Deserializes a network byte array into the record and pushes it to the scene.
 func _deserialize_scene(bytes: PackedByteArray) -> void:
 	_dbg.trace("deserializing scene (%d bytes).", [bytes.size()])
-	bound_entity.deserialize(bytes)
+	record.deserialize(bytes)
 	push_to_scene()
 
 
-# Pulls the latest data from the scene and serializes the entity for network transfer.
+# Pulls the latest scene data and serializes the record for network transfer.
 func _serialize_scene() -> PackedByteArray:
 	_dbg.trace("serializing scene.")
 	pull_from_scene()
-	return bound_entity.serialize()
+	return record.serialize()
 
 # Lifecycle.
 
@@ -401,7 +399,7 @@ func _on_state_changed() -> void:
 	client_synchronized.emit()
 
 
-# Initializes the synchronizer and registers the entity schema with [member database].
+# Initializes the synchronizer and registers the record schema.
 # Emits [signal NetwEntity.collecting_save_properties] before setup so
 # sibling components can contribute tracked paths regardless of whether
 # this is triggered by [method hydrate] (during the spawning phase) or

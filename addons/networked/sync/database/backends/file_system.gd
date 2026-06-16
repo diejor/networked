@@ -1,4 +1,4 @@
-## [NetwBackend] that stores records as [DictionaryEntity] files on disk.
+## [NetwBackend] that stores records as [DictionaryRecord] files on disk.
 ##
 ## Records are written to [code]<base_dir>/<table>/<id><extension>[/code].
 ## By default files use the compact binary [code].dict[/code] format.
@@ -126,10 +126,10 @@ func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 		DirAccess.make_dir_recursive_absolute(table_dir)
 
 	# Load existing record and merge so we never clobber untracked columns.
-	var record := DictionaryEntity.new()
+	var record := DictionaryRecord.new()
 	if ResourceLoader.exists(path):
-		var existing := ResourceLoader.load(path, "DictionaryEntity", ResourceLoader.CACHE_MODE_REPLACE)
-		if existing is DictionaryEntity:
+		var existing := ResourceLoader.load(path, "DictionaryRecord", ResourceLoader.CACHE_MODE_REPLACE)
+		if existing is DictionaryRecord:
 			record.data = existing.data.duplicate()
 
 	for key: StringName in data:
@@ -143,8 +143,8 @@ func find_by_id(table: StringName, id: StringName) -> Dictionary:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
 		return { }
-	var res := ResourceLoader.load(path, "DictionaryEntity", ResourceLoader.CACHE_MODE_REPLACE)
-	if res is DictionaryEntity:
+	var res := ResourceLoader.load(path, "DictionaryRecord", ResourceLoader.CACHE_MODE_REPLACE)
+	if res is DictionaryRecord:
 		return res.data.duplicate()
 	return { }
 
@@ -167,8 +167,8 @@ func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	while entry != "":
 		if not dir.current_is_dir() and entry.ends_with(ext):
 			var path := table_dir.path_join(entry)
-			var res := ResourceLoader.load(path, "DictionaryEntity", ResourceLoader.CACHE_MODE_REPLACE)
-			if res is DictionaryEntity:
+			var res := ResourceLoader.load(path, "DictionaryRecord", ResourceLoader.CACHE_MODE_REPLACE)
+			if res is DictionaryRecord:
 				var record: Dictionary = res.data
 				if _matches_filter(record, filter):
 					results.append(record.duplicate())

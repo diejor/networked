@@ -1,25 +1,25 @@
 ## Schema registry and API surface for the networked persistence layer.
 ##
-## Save this resource as a [code].tres[/code] file and assign it to the
-## [member SaveComponent.database] export on any entity that should participate
-## in the database.
+## Save this resource as a [code].tres[/code] file and assign it to
+## [member SaveComponent.database] on any object that should persist
+## [member SaveComponent.record].
 ##
 ## [br][br]
 ## [b]Table access:[/b] retrieve a [NetwDatabase.TableRepository] for a named
-## table with [method table], then fetch, put, or delete [Entity] records:
+## table with [method table], then fetch, put, or delete [NetwRecord] records:
 ## [codeblock]
-## # Fetch a player entity:
-## var entity := db.table(&"players").fetch(username)
+## # Fetch a player record:
+## var record := db.table(&"players").fetch(username)
 ##
 ## # Property-style access also works (autocomplete via _get_property_list):
-## var entity := db.players.fetch(username)
+## var same_record := db.players.fetch(username)
 ## [/codeblock]
 ##
-## [b]Typed tables:[/b] register an entity subclass so
+## [b]Typed tables:[/b] register a [NetwRecord] subclass so
 ## [method NetwDatabase.TableRepository.fetch] returns the right type automatically:
 ## [codeblock]
-## db.declare_table(&"rocks", [&"health", &"position"], RockEntity)
-## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
+## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
+## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 ##
 ## [b]Transaction API:[/b] batch writes via a closure to guarantee the commit
@@ -32,9 +32,7 @@
 ## [/codeblock]
 ##
 ## [b]Schema mismatch:[/b] when a loaded record contains columns not present in
-## the current schema (e.g. after a property rename) the
-## [member mismatch_policy] determines what happens — see
-## [enum SchemaMismatchPolicy].
+## the current schema, [member mismatch_policy] determines what happens.
 class_name NetwDatabase
 extends Resource
 
@@ -48,8 +46,7 @@ signal schema_registered(table: StringName, columns: Array[StringName])
 ## Emitted when a loaded record contains columns missing from the current schema
 ## or is missing columns the schema declares.
 ## [param unknown] = columns in the record but not in schema (triggers policy).
-## [param missing] = columns in schema but not in the record (safe — use scene
-## default).
+## [param missing] = columns in schema but not in the record.
 signal schema_mismatch(
 		table: StringName,
 		id: StringName, \
@@ -80,11 +77,11 @@ enum SchemaMismatchPolicy {
 ## What to do when a loaded record has columns absent from the current schema.
 @export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.PURGE
 
-# table → Array[StringName] of declared column names
+# table -> Array[StringName] of declared column names
 var _schema: Dictionary[StringName, Array] = { }
 var _initialized: bool = false
 
-# table → Script (entity subclass)
+# table -> Script for a NetwRecord subclass
 var _table_scripts: Dictionary[StringName, Script] = { }
 
 # ── Binding ───────────────────────────────────────────────────────────────────
@@ -114,35 +111,35 @@ func bind(component: SaveComponent, span: NetSpan = null) -> void:
 
 ## Returns the [NetwDatabase.TableRepository] for [param table_name].
 ##
-## Repositories are cached — repeated calls for the same name return the same
+## Repositories are cached. Repeated calls for the same name return the same
 ## instance. The table does not need to be registered before calling this;
 ## registration happens automatically through [method bind] or explicitly
 ## via [method declare_table].
 ## [codeblock lang=gdscript]
-## var entity := db.table(&"players").fetch(username)
+## var record := db.table(&"players").fetch(username)
 ## [/codeblock]
 func table(table_name: StringName) -> TableRepository:
 	var script := _table_scripts.get(table_name)
 	return TableRepository.new(self, table_name, script)
 
 
-## Declares [param table_name] with [param columns] and an optional typed
-## [param entity_script].
+## Declares [param table_name] with [param columns] and an optional
+## [param record_script].
 ##
 ## This is the public entry point for build-time or power-user schema
 ## declaration. Tables declared here are known before any runtime query,
 ## preventing silent schema-mismatch destruction of data.
 ## [codeblock lang=gdscript]
-## db.declare_table(&"rocks", [&"health", &"position"], RockEntity)
-## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
+## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
+## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 func declare_table(
 		table_name: StringName,
 		columns: Array[StringName] = [],
-		entity_script: Script = null,
+		record_script: Script = null,
 ) -> void:
-	if entity_script:
-		_table_scripts[table_name] = entity_script
+	if record_script:
+		_table_scripts[table_name] = record_script
 
 	if not columns.is_empty():
 		_register_schema(table_name, columns)
@@ -154,7 +151,7 @@ func declare_table(
 ##
 ## Any registered table name resolves to its [NetwDatabase.TableRepository]:
 ## [codeblock lang=gdscript]
-## var entity := db.players.fetch(username)   # same as db.table(&"players").fetch(...)
+## var record := db.players.fetch(username)
 ## [/codeblock]
 func _get(property: StringName) -> Variant:
 	if _schema.has(property):
@@ -281,14 +278,14 @@ func _apply_mismatch_policy(
 		return record
 
 	# Columns present in the schema but absent from the record are new
-	# additions — the scene will supply defaults. No policy action required.
+	# Additions use scene defaults. No policy action required.
 	if (diff.unknown as Array[StringName]).is_empty():
 		return record
 
 	match mismatch_policy:
 		SchemaMismatchPolicy.PURGE:
 			_delete_internal(table, id)
-			# ERR_FILE_NOT_FOUND signals "clean slate" — callers may fall back to
+			# ERR_FILE_NOT_FOUND signals a clean slate. Callers may fall back to
 			# spawner state just like a first-play scenario.
 			out_error[0] = ERR_FILE_NOT_FOUND
 			return { }
@@ -450,43 +447,44 @@ class TransactionContext:
 ## A typed read/write interface for a single database table.
 ##
 ## Obtain a repository from [NetwDatabase] via [method NetwDatabase.table].
-## Repositories surface CRUD operations and return hydrated [Entity] instances,
+## Repositories surface CRUD operations and return hydrated [NetwRecord] instances,
 ## keeping all I/O knowledge inside the persistence layer.
 ##
 ## [codeblock lang=gdscript]
-## # Fetch an entity and bind it to a SaveComponent:
-## var entity := db.table(&"players").fetch(username)
-## if entity:
-##     save_comp.bound_entity = entity
+## # Fetch a record and bind it to a SaveComponent:
+## var record := db.table(&"players").fetch(username)
+## if record:
+##     save_comp.record = record
 ##
 ## # Write changes back to the database:
-## var err := db.table(&"players").put(username, save_comp.bound_entity)
+## var err := db.table(&"players").put(username, save_comp.record)
 ##
 ## # Delete a record:
 ## db.table(&"players").delete(username)
 ##
-## # Fetch every entity in the table:
-## for entity in db.table(&"players").fetch_all():
-##     print(entity.get_value(&"score"))
+## # Fetch every record in the table:
+## for record in db.table(&"players").fetch_all():
+##     print(record.get_value(&"score"))
 ## [/codeblock]
 ##
-## [b]Custom entity classes:[/b] register an entity script via
+## [b]Custom record classes[/b]
+## [br]Register a [NetwRecord] script via
 ## [method NetwDatabase.declare_table] so [method fetch] returns a typed
-## subclass rather than a [DictionaryEntity]:
+## subclass rather than a [DictionaryRecord]:
 ## [codeblock lang=gdscript]
-## db.declare_table(&"rocks", [&"health", &"position"], RockEntity)
-## var rock: RockEntity = db.table(&"rocks").fetch(&"rock_1")
+## db.declare_table(&"rocks", [&"health", &"position"], RockRecord)
+## var rock: RockRecord = db.table(&"rocks").fetch(&"rock_1")
 ## [/codeblock]
 class TableRepository:
 	var _db: NetwDatabase
 	var _table: StringName
-	var _entity_script: Script
+	var _record_script: Script
 
 
-	func _init(db: NetwDatabase, table: StringName, entity_script: Script = null) -> void:
+	func _init(db: NetwDatabase, table: StringName, record_script: Script = null) -> void:
 		_db = db
 		_table = table
-		_entity_script = entity_script
+		_record_script = record_script
 
 
 	## Returns the column names registered for this table, or an empty array.
@@ -494,60 +492,60 @@ class TableRepository:
 		return _db.get_registered_columns(_table)
 
 
-	## Fetches the record for [param id] and returns it as a hydrated [Entity].
+	## Fetches the record for [param id] and returns it as a hydrated [NetwRecord].
 	##
 	## Returns [code]null[/code] when the record does not exist, the table has no
 	## registered schema, or a schema-mismatch policy blocks the load.
-	## The caller assigns the entity to the component:
+	## The caller assigns the [NetwRecord] to the component:
 	## [codeblock lang=gdscript]
-	## save_comp.bound_entity = db.table(&"players").fetch(username)
+	## save_comp.record = db.table(&"players").fetch(username)
 	## [/codeblock]
-	func fetch(id: StringName) -> Entity:
+	func fetch(id: StringName) -> NetwRecord:
 		var out_error: Array[int] = [OK]
 		var record: Dictionary = _db._find_by_id(_table, id, out_error)
 		if out_error[0] != OK or record.is_empty():
 			return null
-		var entity: Entity = _make_entity()
-		entity.from_dict(record)
-		return entity
+		var loaded_record: NetwRecord = _make_record()
+		loaded_record.from_dict(record)
+		return loaded_record
 
 
-	## Writes [param entity] to the database under [param id].
+	## Writes [param record] to the database under [param id].
 	##
-	## Uses [method Entity.to_dict] to produce the record; returns
+	## Uses [method NetwRecord.to_dict] to produce the record; returns
 	## [constant OK] on success or the first backend error encountered.
 	## [codeblock lang=gdscript]
-	## var err := db.table(&"players").put(username, save_comp.bound_entity)
+	## var err := db.table(&"players").put(username, save_comp.record)
 	## [/codeblock]
-	func put(id: StringName, entity: Entity) -> Error:
+	func put(id: StringName, record: NetwRecord) -> Error:
 		return _db.transaction(
 			func(tx: NetwDatabase.TransactionContext) -> void:
-				tx.queue_upsert(_table, id, entity.to_dict())
+				tx.queue_upsert(_table, id, record.to_dict())
 		)
 
 
 	## Permanently removes [param id] from the table.
-	## Idempotent — returns [constant OK] even when the record does not exist.
+	## Idempotent. Returns [constant OK] even when the record does not exist.
 	func delete(id: StringName) -> Error:
 		return _db.delete(_table, id)
 
 
-	## Returns every entity in the table matching [param filter].
+	## Returns every [NetwRecord] in the table matching [param filter].
 	## An empty [param filter] returns all records.
 	##
 	## [codeblock lang=gdscript]
 	## var active_players := db.table(&"players").fetch_all({&"online": true})
 	## [/codeblock]
-	func fetch_all(filter: Dictionary = { }) -> Array[Entity]:
-		var results: Array[Entity] = []
+	func fetch_all(filter: Dictionary = { }) -> Array[NetwRecord]:
+		var results: Array[NetwRecord] = []
 		for record in _db._find_all(_table, filter):
-			var entity: Entity = _make_entity()
-			entity.from_dict(record)
-			results.append(entity)
+			var loaded_record: NetwRecord = _make_record()
+			loaded_record.from_dict(record)
+			results.append(loaded_record)
 		return results
 
 
-	func _make_entity() -> Entity:
-		if _entity_script:
-			return _entity_script.new() as Entity
-		return DictionaryEntity.new()
+	func _make_record() -> NetwRecord:
+		if _record_script:
+			return _record_script.new() as NetwRecord
+		return DictionaryRecord.new()

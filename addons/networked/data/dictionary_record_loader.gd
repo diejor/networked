@@ -1,12 +1,14 @@
-## [ResourceFormatLoader] that reads [DictionaryEntity] resources from custom file formats.
+## [ResourceFormatLoader] that reads [DictionaryRecord] files.
 ##
-## Recognized class_name: [DictionaryEntity] (file [code]dictionary_save.gd[/code]).
+## [DictionaryRecordFormatLoader] supports text and binary record resources
+## for [NetwDatabase] backends and debug dumps.
 ##
-## Supports two extensions:
-## - [code].tdict[/code] - JSON text, loaded with [method JSON.parse].
-## - [code].dict[/code] - binary [code]store_var()[/code] dictionary.
+## [codeblock]
+## var record := load("user://players/alice.tdict") as DictionaryRecord
+## print(record.get_value(&"health", 100))
+## [/codeblock]
 @tool
-class_name DictionarySaveFormatLoader
+class_name DictionaryRecordFormatLoader
 extends ResourceFormatLoader
 
 const TEXT_EXT := "tdict"
@@ -18,15 +20,16 @@ func _get_recognized_extensions() -> PackedStringArray:
 
 
 func _handles_type(type: StringName) -> bool:
-	return (type == &"Resource"
-			or type == &"Entity"
-			or type == &"DictionaryEntity")
+	return (
+			type == &"Resource"
+			or type == &"NetwRecord"
+			or type == &"DictionaryRecord")
 
 
 func _get_resource_type(path: String) -> String:
 	var ext := path.get_extension().to_lower()
 	if ext == TEXT_EXT or ext == BIN_EXT:
-		return "DictionaryEntity"
+		return "DictionaryRecord"
 	return ""
 
 
@@ -45,22 +48,27 @@ func _exists(path: String) -> bool:
 	return FileAccess.file_exists(path)
 
 
-func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_mode: int) -> Variant:
+func _load(
+		path: String,
+		_original_path: String,
+		_use_sub_threads: bool,
+		_cache_mode: int,
+) -> Variant:
 	var ext := path.get_extension().to_lower()
 	assert(
 		ext == TEXT_EXT or ext == BIN_EXT,
-		"`dictionary_loader` given unsupported extension: %s." % ext,
+		"`DictionaryRecordFormatLoader` given unsupported extension: %s." % ext,
 	)
 
 	if not FileAccess.file_exists(path):
 		return ERR_FILE_NOT_FOUND
 
 	var file := FileAccess.open(path, FileAccess.READ)
-	assert(file != null, "Failed to open file in `DictionaryRFL.`")
+	assert(file != null, "Failed to open file in `DictionaryRecordFormatLoader`.")
 	if file == null:
 		return FileAccess.get_open_error()
 
-	var dict_res := DictionaryEntity.new()
+	var dict_res := DictionaryRecord.new()
 
 	match ext:
 		TEXT_EXT:
@@ -70,7 +78,7 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 			var err := json.parse(text)
 			assert(
 				err == OK,
-				"JSON parse failed for `DictionaryEntity` `\"*.tdict\"`. "
+				"JSON parse failed for `DictionaryRecord` `\"*.tdict\"`. "
 				+ "Error: %s" % error_string(err),
 			)
 
@@ -83,7 +91,7 @@ func _load(path: String, _original_path: String, _use_sub_threads: bool, _cache_
 			var decoded: Variant = file.get_var()
 			assert(
 				typeof(decoded) == TYPE_DICTIONARY,
-				"Binary `\"*.dict\"` did not contain a Dictionary for DictionaryEntity.",
+				"Binary `\"*.dict\"` did not contain a Dictionary.",
 			)
 			if typeof(decoded) != TYPE_DICTIONARY:
 				return ERR_FILE_CORRUPT
