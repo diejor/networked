@@ -103,6 +103,14 @@ func _interp() -> void:
 	)
 
 
+func _expected_min_lag() -> float:
+	var needed := float(_interpolator._expected_interval_ticks + 1)
+	var network_padding := float(
+		maxi(0, _clock.recommended_display_offset - _clock.display_offset),
+	)
+	return maxf(0.0, needed - float(_clock.display_offset) + network_padding)
+
+
 func test_authority_player_position_is_not_modified_by_process() -> void:
 	# _process must be a no-op when the owner is the local authority,
 	# otherwise the interpolator fights with the player's own _physics_process.
@@ -209,17 +217,15 @@ func test_position_smoothly_interpolates_between_updates() -> void:
 	assert_vector(_player.position).is_equal_approx(midpoint, Vector2(0.1, 0.1))
 
 
-func test_reset_seeds_smoothed_floor_to_min_lag() -> void:
+func test_reset_seeds_display_lag_to_min_lag() -> void:
 	# reset() must anchor both the resting floor and the live lag to the
 	# computed minimum, so dilation does not ramp from zero on spawn.
 	_interpolator.enable_smart_dilation = true
 	_interpolator.display_lag = 99.0
-	_interpolator._smoothed_floor = 99.0
 
 	_interpolator.reset()
 
-	var expected := _interpolator._calculate_min_lag()
-	assert_that(_interpolator._smoothed_floor).is_equal_approx(expected, 0.001)
+	var expected := _expected_min_lag()
 	assert_that(_interpolator.display_lag).is_equal_approx(expected, 0.001)
 
 
@@ -230,12 +236,17 @@ func test_dilation_eases_display_lag_toward_floor() -> void:
 	_network_update(P0)
 	_tick() # record a snapshot so the buffer is not starving
 
-	var target_floor := _interpolator._calculate_min_lag()
-	_interpolator._smoothed_floor = target_floor
+	_interpolator.reset()
+	var target_floor := _interpolator.display_lag
 	_interpolator.display_lag = target_floor + 8.0
 	_interpolator.starvation_ticks = 0
 
-	_interpolator._perform_dilation(_clock.display_tick, 0.016, false)
+	_interpolator._update_instance(
+		_clock.display_tick,
+		_clock.tick_factor,
+		0.016,
+		1.0,
+	)
 
 	assert_that(_interpolator.display_lag < target_floor + 8.0).is_true()
 	assert_that(_interpolator.display_lag > target_floor).is_true()
@@ -246,15 +257,19 @@ func test_dilation_grows_past_floor_on_sustained_starvation() -> void:
 	# must climb above the resting floor to rebuild the buffer.
 	_interpolator.enable_smart_dilation = true
 	_interpolator.max_extra_dilation = 10.0
-	_interpolator._smoothed_floor = 2.0
-	_interpolator.display_lag = 2.0
-	_interpolator.starvation_ticks = 0
+	_interpolator.reset()
+	var start_lag := _interpolator.display_lag
 
 	for _i in 6:
-		_interpolator._perform_dilation(_clock.display_tick, 0.5, false)
+		_interpolator._update_instance(
+			_clock.display_tick,
+			_clock.tick_factor,
+			0.5,
+			1.0,
+		)
 
 	assert_that(_interpolator.starvation_ticks >= 6).is_true()
-	assert_that(_interpolator.display_lag > 2.0).is_true()
+	assert_that(_interpolator.display_lag > start_lag).is_true()
 
 
 func test_slerp_mode_uses_spherical_interpolation() -> void:
@@ -296,3 +311,33 @@ func test_tick_factor_produces_sub_tick_movement() -> void:
 	var pos_at_factor_half := _player.position.x
 
 	assert_that(pos_at_factor_half > pos_at_factor_0).is_true()
+
+
+func test_remote_strategy_rebuilds_after_tree_reentry() -> void:
+	assert_that(_interpolator._strategy).is_not_null()
+	assert_int(_interpolator._strategy_role).is_equal(
+		MultiplayerInterpolator.DisplayRole.REMOTE,
+	)
+
+	_tree.remove_child(_player)
+	await get_tree().process_frame
+
+	assert_that(_interpolator._strategy).is_null()
+	assert_int(_interpolator._strategy_role).is_equal(
+		MultiplayerInterpolator.DisplayRole.DISABLED,
+	)
+
+	_request_ready_recursive(_player)
+	_tree.add_child(_player)
+	await get_tree().process_frame
+
+	assert_that(_interpolator._strategy).is_not_null()
+	assert_int(_interpolator._strategy_role).is_equal(
+		MultiplayerInterpolator.DisplayRole.REMOTE,
+	)
+
+
+func _request_ready_recursive(node: Node) -> void:
+	node.request_ready()
+	for child in node.get_children():
+		_request_ready_recursive(child)

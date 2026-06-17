@@ -205,6 +205,11 @@ var _ack: int = -1
 var _last_input: Dictionary = { }
 
 
+func _init() -> void:
+	name = "PredictionComponent"
+	unique_name_in_owner = true
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PARENTED:
 		var entity := NetwEntity.of(self)
