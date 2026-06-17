@@ -74,14 +74,14 @@ func sync_ticks(n: int) -> void:
 ## Installs an inbound delay (in polls) from the server onto the client.
 func delay_server_to_client(
 		delay_polls: int,
-		seed: int = 1,
+		_seed: int = 1,
 		jitter_polls: int = 0,
 		loss: float = 0.0,
 ) -> void:
 	var peer := client.multiplayer_peer as LocalMultiplayerPeer
 	inner.session().set_link_conditions(
 		peer,
-		_conditions(delay_polls, seed, jitter_polls, loss),
+		_conditions(delay_polls, _seed, jitter_polls, loss),
 		1,
 	)
 
@@ -103,11 +103,11 @@ func delay_client_to_server(
 
 func _conditions(
 		delay_polls: int,
-		seed: int,
+		_seed: int,
 		jitter_polls: int,
 		loss: float,
 ) -> LocalLoopbackSession.LinkConditions:
-	var conditions := LocalLoopbackSession.LinkConditions.new(seed)
+	var conditions := LocalLoopbackSession.LinkConditions.new(_seed)
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
 	conditions.latency_ms = float(delay_polls) * period
 	conditions.jitter_ms = float(jitter_polls) * period

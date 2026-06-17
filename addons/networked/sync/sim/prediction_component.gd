@@ -286,6 +286,10 @@ func _rewire() -> void:
 			# authoritative history lives in the registry, never here.
 			_timeline = NetwTimeline.new()
 			_entity.timeline = _timeline
+			# The input synchronizer reads this timeline to build its redundancy
+			# window. Safe: the owning client is the input authority and never
+			# receives its own input, so it only reads here.
+			input_sync.timeline = _timeline
 			state_sync.write_through = false
 			state_sync.on_state_received = _on_state
 			_latest_input_tick = -1
@@ -322,7 +326,6 @@ func _resolve_role() -> Role:
 		return Role.CONSUME
 	return Role.REMOTE
 
-
 # ---------------------------------------------------------------------------
 # Predict (owning client)
 # ---------------------------------------------------------------------------
@@ -340,6 +343,7 @@ func _predict_step(delta: float, tick: int) -> void:
 func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 	if ack < 0:
 		return
+	_entity.input.acknowledged_tick = ack
 	var predicted := _timeline.latest_state_at_or_before(ack + 1)
 	var divergence := INF
 	if not predicted.is_empty():
@@ -367,7 +371,6 @@ func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 	_timeline.trim_before(ack)
 	state_evaluated.emit(recv_tick, ack, divergence, corrected)
 
-
 # ---------------------------------------------------------------------------
 # Host-local (listen-server host controlling its own entity)
 # ---------------------------------------------------------------------------
@@ -385,7 +388,6 @@ func _host_local_step(delta: float, tick: int) -> void:
 	state_sync.authored_tick = tick
 	state_sync.server_ack = tick
 	# Authoritative state is recorded by LagCompensationService after the tick.
-
 
 # ---------------------------------------------------------------------------
 # Consume (server)
@@ -427,7 +429,6 @@ func _consume_one(delta: float) -> void:
 		# STALL applies no movement at all.
 		_ack = _next_input_tick
 		_next_input_tick += 1
-
 
 # ---------------------------------------------------------------------------
 # Shared

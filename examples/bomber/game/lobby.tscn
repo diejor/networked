@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="1_mrsco"]
 [ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="2_mss8j"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="6_8u2o1"]
+[ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="7_qil8s"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="10_browser"]
 [ext_resource type="PackedScene" path="res://examples/bomber/game/in_lobby.tscn" id="11_in"]
 [ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="12_backend"]
@@ -33,6 +34,10 @@ ice_servers = Array[Dictionary]([{
 connect_retry = 3.0
 metadata/_custom_type_script = "uid://covt80wkpucga"
 
+[sub_resource type="Resource" id="Resource_pbhs4"]
+script = ExtResource("7_qil8s")
+metadata/_custom_type_script = "uid://dqd358q7xpmeq"
+
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]
 script = ExtResource("1_mrsco")
 
@@ -47,7 +52,7 @@ offset_left = -341.0
 offset_top = -221.0
 offset_right = 341.0
 offset_bottom = 221.0
-backend_templates = Array[ExtResource("12_backend")]([SubResource("Resource_ws"), SubResource("Resource_steam"), SubResource("Resource_mss8j")])
+backend_templates = Array[ExtResource("12_backend")]([SubResource("Resource_ws"), SubResource("Resource_steam"), SubResource("Resource_mss8j"), SubResource("Resource_pbhs4")])
 
 [node name="TextureRect" type="TextureRect" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="0" unique_id=422029099]
 layout_mode = 2

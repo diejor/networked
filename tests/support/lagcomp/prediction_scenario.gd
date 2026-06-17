@@ -302,11 +302,11 @@ func _read(
 
 func _conditions(
 		delay_polls: int,
-		seed: int,
+		_seed: int,
 		jitter_polls: int,
 		loss: float,
 ) -> LocalLoopbackSession.LinkConditions:
-	var conditions := LocalLoopbackSession.LinkConditions.new(seed)
+	var conditions := LocalLoopbackSession.LinkConditions.new(_seed)
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
 	conditions.latency_ms = float(delay_polls) * period
 	conditions.jitter_ms = float(jitter_polls) * period

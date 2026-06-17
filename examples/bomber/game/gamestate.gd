@@ -47,8 +47,8 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	if is_instance_valid(world):
 		if multiplayer.is_server():
-			var name: String = players.get(id, "Peer %d" % id)
-			game_error.emit("Player " + name + " disconnected")
+			var _name: String = players.get(id, "Peer %d" % id)
+			game_error.emit("Player " + _name + " disconnected")
 			end_game()
 	else:
 		unregister_player(id)
