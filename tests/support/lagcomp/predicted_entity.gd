@@ -36,7 +36,6 @@ var _suite: NetwTestSuite
 var _hold_input: Dictionary = { &"motion": Vector2.ZERO, &"bombing": false }
 var _input_at: Dictionary = { }
 
-
 ## The consuming peer's body, an alias of [member server_root].
 var server_body: LagCompSimBody:
 	get:

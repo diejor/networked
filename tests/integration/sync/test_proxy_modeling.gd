@@ -10,7 +10,6 @@
 class_name TestProxyModeling
 extends NetwTestSuite
 
-
 func _build_player() -> Node2D:
 	var root := PlayerBuilder.new("ProxyPlayer") \
 			.with_root(Node2D) \

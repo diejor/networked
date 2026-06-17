@@ -42,12 +42,14 @@ func test_stamp_coherent_under_jitter() -> void:
 
 	var captures: Array[Dictionary] = []
 	(rig.client_sync as StateSynchronizer).on_state_received = (
-		func(tick: int, ack: int, payload: Dictionary) -> void:
-			captures.append({
-				&"tick": tick,
-				&"ack": ack,
-				&"position": payload.get(&"position", Vector2.ZERO),
-			})
+			func(tick: int, ack: int, payload: Dictionary) -> void:
+				captures.append(
+					{
+						&"tick": tick,
+						&"ack": ack,
+						&"position": payload.get(&"position", Vector2.ZERO),
+					},
+				)
 	)
 
 	# The same jitter/loss preset that tore the split ALWAYS+watched shape.
@@ -86,8 +88,8 @@ func test_owner_client_records_into_injected_timeline() -> void:
 
 	var received: Array[int] = []
 	(rig.client_sync as StateSynchronizer).on_state_received = (
-		func(tick: int, _ack: int, _payload: Dictionary) -> void:
-			received.append(tick)
+			func(tick: int, _ack: int, _payload: Dictionary) -> void:
+				received.append(tick)
 	)
 
 	rig.sync_ticks(60)

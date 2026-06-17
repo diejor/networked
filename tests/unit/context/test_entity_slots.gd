@@ -7,7 +7,6 @@
 class_name TestNetwEntitySlots
 extends NetwTestSuite
 
-
 func test_slots_provide_and_retrieve() -> void:
 	var entity := NetwEntity.new()
 	var state := auto_free(StateSynchronizer.new()) as StateSynchronizer

@@ -19,6 +19,7 @@ class _GatherProbe extends MoveInputComponent:
 	func gather() -> void:
 		gather_calls += 1
 
+
 var comp: MoveInputComponent
 
 

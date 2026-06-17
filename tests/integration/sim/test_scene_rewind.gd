@@ -32,11 +32,14 @@ func test_rewind_moves_live_node_to_history_then_restores() -> void:
 	# A Dictionary collects the in-callable reads: a GDScript lambda captures locals
 	# by value, so assignments to plain locals inside it would not escape.
 	var probe := { &"seen": Vector2.ZERO, &"hit_perceived": false, &"hit_live": false }
-	s.server.lag_compensation.rewind(targets, view_tick, func() -> void:
-		# Inside the callable the live node holds its perceived (past) position.
-		probe[&"seen"] = node.position
-		probe[&"hit_perceived"] = _hits(node.position, perceived)
-		probe[&"hit_live"] = _hits(node.position, live)
+	s.server.lag_compensation.rewind(
+		targets,
+		view_tick,
+		func() -> void:
+			# Inside the callable the live node holds its perceived (past) position.
+			probe[&"seen"] = node.position
+			probe[&"hit_perceived"] = _hits(node.position, perceived)
+			probe[&"hit_live"] = _hits(node.position, live)
 	)
 
 	# The body moved between the perceived tick and now.
@@ -61,8 +64,11 @@ func test_rewind_skips_entity_with_no_history() -> void:
 	var probe := { &"ran": false }
 	# A view tick with no retained state leaves the live node untouched, but still
 	# runs the callable (it simply has no rewound targets to read).
-	s.server.lag_compensation.rewind(targets, -100, func() -> void:
-		probe[&"ran"] = true
+	s.server.lag_compensation.rewind(
+		targets,
+		-100,
+		func() -> void:
+			probe[&"ran"] = true
 	)
 
 	assert_bool(probe[&"ran"]).is_true()

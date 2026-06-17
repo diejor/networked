@@ -100,7 +100,7 @@ func add_predicted_entity(
 		state_props: Array[StringName] = [&"position"],
 		input_props: Array[StringName] = [&"motion", &"bombing"],
 		missing_policy: PredictionComponent.MissingInput = \
-				PredictionComponent.MissingInput.STALL,
+		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
 ) -> PredictedEntity:
 	_entity_counter += 1

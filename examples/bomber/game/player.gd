@@ -18,7 +18,7 @@ var current_anim: String = ""
 @onready var ctx := Netw.ctx(self)
 @onready var clock := ctx.services.get_clock()
 @onready var gamestate: BomberGamestate = \
-	ctx.services.get_service(BomberGamestate)
+		ctx.services.get_service(BomberGamestate)
 
 
 func _ready() -> void:

@@ -14,7 +14,6 @@
 class_name HistoryRecorder
 extends RefCounted
 
-
 ## Records the current [method StampedSynchronizer.snapshot_payload] of every
 ## entity in [param registry] into its timeline at [param tick].
 func record(registry: TimelineRegistry, tick: int) -> void:

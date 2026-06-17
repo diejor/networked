@@ -52,11 +52,13 @@ func test_server_records_received_input_coherently() -> void:
 
 	var captures: Array[Dictionary] = []
 	(rig.server_sync as InputSynchronizer).on_input_received = (
-		func(tick: int, payload: Dictionary) -> void:
-			captures.append({
-				&"tick": tick,
-				&"motion": payload.get(&"motion", Vector2.ZERO),
-			})
+			func(tick: int, payload: Dictionary) -> void:
+				captures.append(
+					{
+						&"tick": tick,
+						&"motion": payload.get(&"motion", Vector2.ZERO),
+					},
+				)
 	)
 
 	rig.delay_client_to_server(4, 2, 6, 0.08)

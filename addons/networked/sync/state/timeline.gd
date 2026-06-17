@@ -103,7 +103,7 @@ func inputs_in_range(from: int, to: int) -> Array[Dictionary]:
 	for tick in range(start, to + 1):
 		var value: Variant = input.get_at(tick)
 		if value is Dictionary:
-			out.append({&"tick": tick, &"input": value})
+			out.append({ &"tick": tick, &"input": value })
 	return out
 
 

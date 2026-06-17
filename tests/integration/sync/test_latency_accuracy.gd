@@ -48,8 +48,8 @@ func _latencies(delay_polls: int, warmup: int, measure: int) -> Array:
 	# landed on, so recv - authored is the in-flight tick count.
 	var captures: Array[Dictionary] = []
 	(rig.client_sync as StateSynchronizer).on_state_received = (
-		func(tick: int, _ack: int, _payload: Dictionary) -> void:
-			captures.append({ &"tick": tick, &"recv_tick": rig.client_clock.tick })
+			func(tick: int, _ack: int, _payload: Dictionary) -> void:
+				captures.append({ &"tick": tick, &"recv_tick": rig.client_clock.tick })
 	)
 
 	rig.delay_server_to_client(delay_polls)

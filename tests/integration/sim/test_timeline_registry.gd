@@ -8,7 +8,6 @@
 class_name TestTimelineRegistry
 extends NetwTestSuite
 
-
 func test_state_sync_presence_registers_a_timeline() -> void:
 	var s := RewindScenario.new()
 	await s.setup(self)

@@ -39,7 +39,7 @@ func _network_tick(
 ## Captures the reconcilable spatial state. Reconciliation restores exactly this
 ## dictionary, then replays pending inputs over it.
 func snapshot() -> Dictionary:
-	return {&"position": position, &"velocity": velocity}
+	return { &"position": position, &"velocity": velocity }
 
 
 ## Restores a prior [method snapshot]. Note: is_on_floor() stays stale until the

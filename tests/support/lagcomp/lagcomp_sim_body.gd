@@ -39,6 +39,6 @@ func _network_tick(
 		is_fresh: bool,
 ) -> void:
 	var m: Vector2 = input.get(&"motion", Vector2.ZERO)
-	position = ClosedFormSim.integrate(position, {&"mx": m.x, &"my": m.y}, delta)
+	position = ClosedFormSim.integrate(position, { &"mx": m.x, &"my": m.y }, delta)
 	if is_fresh and bool(input.get(&"bombing", false)):
 		fire_count += 1

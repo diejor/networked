@@ -102,7 +102,7 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 		_pending_window.clear()
 	if name == INPUT_WINDOW:
 		_pending_window = SampleWindowCodec.decode(value, _payload_keys()) \
-				if value is PackedByteArray else []
+		if value is PackedByteArray else []
 		return
 	super._write_property(name, path, value)
 

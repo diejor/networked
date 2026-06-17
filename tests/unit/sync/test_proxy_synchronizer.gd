@@ -22,7 +22,6 @@ class StubProxy extends ProxySynchronizer:
 	) -> void:
 		_store[_name] = value
 
-
 #region Registration
 
 @warning_ignore("unused_parameter")
