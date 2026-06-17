@@ -170,10 +170,10 @@ properties/1/replication_mode = 2
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_input"]
 properties/0/path = NodePath("Inputs:motion")
 properties/0/spawn = true
-properties/0/replication_mode = 2
+properties/0/replication_mode = 1
 properties/1/path = NodePath("Inputs:bombing")
 properties/1/spawn = true
-properties/1/replication_mode = 2
+properties/1/replication_mode = 1
 
 [node name="player" type="CharacterBody2D" unique_id=1262329161]
 z_index = 10
@@ -228,7 +228,7 @@ tick_mode = true
 root_path = NodePath("../..")
 replication_config = SubResource("SceneReplicationConfig_input")
 script = ExtResource("6_input")
-stamp_mode = 2
+stamp_mode = 1
 
 [node name="PredictionComponent" type="Node" parent="." unique_id=1650089842]
 script = ExtResource("8_pred")

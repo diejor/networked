@@ -329,6 +329,22 @@ func clear_all_link_conditions() -> void:
 				_links_by_peer.erase(peer)
 
 
+## Drops delayed packets authored by [param sender_id] across all receivers.
+func purge_packets_from(sender_id: int) -> void:
+	for peer: LocalMultiplayerPeer in _links_by_peer.keys():
+		var state: _LinkState = _links_by_peer[peer]
+		for i in range(state.in_flight.size() - 1, -1, -1):
+			var entry: Dictionary = state.in_flight[i]
+			var packet: Dictionary = entry.get("packet", { })
+			if int(packet.get("peer", 0)) == sender_id:
+				state.in_flight.remove_at(i)
+		_clear_sender_rng(state, sender_id)
+		if state.in_flight.is_empty() \
+				and not _has_link_conditions(state) \
+				and not _held_peers.has(peer):
+			_links_by_peer.erase(peer)
+
+
 ## Returns the installed inbound link conditions for [param peer].
 func get_link_conditions(
 		peer: LocalMultiplayerPeer,

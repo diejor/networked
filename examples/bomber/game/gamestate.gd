@@ -47,7 +47,8 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	if is_instance_valid(world):
 		if multiplayer.is_server():
-			game_error.emit("Player " + players[id] + " disconnected")
+			var name: String = players.get(id, "Peer %d" % id)
+			game_error.emit("Player " + name + " disconnected")
 			end_game()
 	else:
 		unregister_player(id)
@@ -117,7 +118,11 @@ func _rpc_match_started() -> void:
 
 func end_game() -> void:
 	if is_instance_valid(world):
-		world.queue_free()
+		var sm := ctx.services.get_scene_manager()
+		if sm:
+			sm.retire_scene(&"World")
+		else:
+			world.queue_free()
 
 	game_ended.emit()
 	players.clear()

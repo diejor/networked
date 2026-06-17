@@ -179,6 +179,8 @@ func _purge_packets_from(sender_id: int) -> void:
 
 func _remote_closed(remote_id: int, remote_was_server: bool) -> void:
 	_purge_packets_from(remote_id)
+	if loopback_session:
+		loopback_session.purge_packets_from(remote_id)
 	linked_peers.erase(remote_id)
 
 	_peers_to_emit_disconnected.append(remote_id)
@@ -198,6 +200,8 @@ func _close() -> void:
 
 	var my_id := _unique_id
 	var peers := linked_peers.keys() # snapshot
+	if loopback_session:
+		loopback_session.purge_packets_from(my_id)
 
 	if not _is_server_peer:
 		_purge_packets_from(1)
@@ -239,6 +243,8 @@ func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
 
 	linked_peers.erase(p_peer)
 	_purge_packets_from(p_peer)
+	if loopback_session:
+		loopback_session.purge_packets_from(p_peer)
 	_peers_to_emit_disconnected.append(p_peer)
 
 	if other and not other._closed and not other._closing:

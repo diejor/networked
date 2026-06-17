@@ -357,6 +357,25 @@ func destroy_scene(name: StringName) -> void:
 	scene.queue_free()
 
 
+## Removes [param name] from [member active_scenes] immediately, then frees the
+## scene after [param drain_frames] process frames.
+##
+## Use this for teardown paths that must end game logic now while keeping stale
+## replication paths resolvable for a short drain window.
+func retire_scene(name: StringName, drain_frames: int = 8) -> void:
+	var scene := active_scenes.get(name) as MultiplayerScene
+	if not scene:
+		Netw.dbg.warn(
+			"Cannot retire scene '%s': not active.",
+			[name],
+			func(m): push_warning(m)
+		)
+		return
+	Netw.dbg.info("Retiring scene '%s'.", [name])
+	active_scenes.erase(name)
+	_free_retired_scene.call_deferred(scene, maxi(0, drain_frames))
+
+
 ## Returns an array of all active player nodes.
 func get_all_players() -> Array[Node]:
 	var players: Array[Node] = []
@@ -478,6 +497,13 @@ func _on_scene_despawned(node: Node) -> void:
 	var scene := node as MultiplayerScene
 	Netw.dbg.info("Scene despawned: %s", [scene.level.name])
 	active_scenes.erase(scene.level.name)
+
+
+func _free_retired_scene(scene: MultiplayerScene, drain_frames: int) -> void:
+	for i in drain_frames:
+		await get_tree().process_frame
+	if is_instance_valid(scene):
+		scene.queue_free()
 
 
 func _on_configured() -> void:
