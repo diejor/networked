@@ -114,6 +114,10 @@ func add_client(
 		)
 		assert(not timed_out, "Timed out waiting for client clock to synchronize.")
 
+	if clock:
+		# Disable subsequent pings and timing snaps during test simulation.
+		clock.ping_interval = 999.0
+
 	if wait_for_player:
 		await _wait_for_local_player(runner)
 	return runner

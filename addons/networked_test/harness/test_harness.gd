@@ -230,6 +230,7 @@ func add_clock(
 				func() -> bool: return client_clock.is_synchronized,
 				"client clock synchronization",
 			)
+		client_clock.ping_interval = 999.0
 	return server_clock
 
 
