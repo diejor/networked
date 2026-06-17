@@ -57,6 +57,16 @@ func setup(
 ## Tears the underlying harness down. Only needed for an unmanaged setup.
 func teardown() -> void:
 	await inner.teardown()
+	_stepper = null
+	inner = null
+	client = null
+	server_clock = null
+	client_clock = null
+	server_node = null
+	client_node = null
+	server_sync = null
+	client_sync = null
+	_tree = null
 
 
 ## Advances both clocks by [param n] network ticks in-process, no real frames.

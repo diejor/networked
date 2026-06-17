@@ -1502,7 +1502,7 @@ func _free_unparented_interest_service(keep: InterestService) -> void:
 	_interest_service.free()
 
 
-# Installs a placeholder api because Godot rejects null at scoped paths.
+# Clears the custom multiplayer API from the SceneTree path.
 func _unmount_api(release_meta: bool) -> void:
 	if not api:
 		return
@@ -1512,7 +1512,7 @@ func _unmount_api(release_meta: bool) -> void:
 		api.remove_meta(&"_multiplayer_tree")
 
 	if not api.root_path.is_empty():
-		get_tree().set_multiplayer(SceneMultiplayer.new(), api.root_path)
+		get_tree().set_multiplayer(null, api.root_path)
 
 
 # Replaces the owned api for backends that bring a SceneMultiplayer.
@@ -1526,7 +1526,7 @@ func _adopt_api(new_api: SceneMultiplayer, reason: String) -> void:
 		if old_api.has_meta(&"_multiplayer_tree"):
 			old_api.remove_meta(&"_multiplayer_tree")
 		if not old_api.root_path.is_empty():
-			get_tree().set_multiplayer(SceneMultiplayer.new(), old_api.root_path)
+			get_tree().set_multiplayer(null, old_api.root_path)
 
 	api = new_api
 	if api:

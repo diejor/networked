@@ -27,7 +27,15 @@ var _current_packet: Dictionary = { }
 ## Owning [LocalLoopbackSession]. When set, inbound packets are offered to
 ## [method LocalLoopbackSession.capture_incoming] at receive time so link
 ## conditions can hold them before they ever reach [member _packet_queue].
-var loopback_session = null
+var loopback_session_ref: WeakRef = null
+
+var loopback_session: LocalLoopbackSession:
+	get:
+		if loopback_session_ref:
+			return loopback_session_ref.get_ref() as LocalLoopbackSession
+		return null
+	set(val):
+		loopback_session_ref = weakref(val) if val else null
 
 
 ## Initializes this peer as the server (unique ID [code]1[/code]).
@@ -57,7 +65,7 @@ func force_connect_peer(peer_id: int, peer_reference: LocalMultiplayerPeer) -> v
 	if _closed or _closing:
 		return
 
-	linked_peers[peer_id] = peer_reference
+	linked_peers[peer_id] = weakref(peer_reference)
 	Netw.dbg.trace("Linked internally to peer %d.", [peer_id])
 
 	if _is_server_peer:
@@ -127,7 +135,8 @@ func _send_to_peer(peer_id: int, p_buffer: PackedByteArray) -> Error:
 		Netw.dbg.trace("Failed to send to %d: Not linked.", [peer_id])
 		return ERR_UNAVAILABLE
 
-	var target: LocalMultiplayerPeer = linked_peers[peer_id]
+	var peer_ref := linked_peers[peer_id] as WeakRef
+	var target: LocalMultiplayerPeer = peer_ref.get_ref() if peer_ref else null
 	if target == null or target._closed or target._closing:
 		linked_peers.erase(peer_id)
 		Netw.dbg.trace("Failed to send to %d: Target closed.", [peer_id])
@@ -208,9 +217,11 @@ func _close() -> void:
 		_peers_to_emit_disconnected.append(1)
 
 	for peer_id in peers:
-		var other: LocalMultiplayerPeer = linked_peers.get(peer_id)
-		if other:
-			other._remote_closed(my_id, _is_server_peer)
+		var peer_ref := linked_peers.get(peer_id) as WeakRef
+		if peer_ref:
+			var other := peer_ref.get_ref() as LocalMultiplayerPeer
+			if other:
+				other._remote_closed(my_id, _is_server_peer)
 
 	_finalize_close()
 
@@ -239,7 +250,10 @@ func _finalize_close() -> void:
 func _disconnect_peer(p_peer: int, _p_force: bool) -> void:
 	Netw.dbg.trace("Disconnecting peer %d (scheduled).", [p_peer])
 
-	var other: LocalMultiplayerPeer = linked_peers.get(p_peer)
+	var peer_ref := linked_peers.get(p_peer) as WeakRef
+	var other: LocalMultiplayerPeer = null
+	if peer_ref:
+		other = peer_ref.get_ref() as LocalMultiplayerPeer
 
 	linked_peers.erase(p_peer)
 	_purge_packets_from(p_peer)

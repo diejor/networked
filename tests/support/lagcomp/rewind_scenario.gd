@@ -124,3 +124,10 @@ func move_along(
 ## Tears the underlying harness down. Only needed for an unmanaged setup.
 func teardown() -> void:
 	await inner.teardown()
+	_stepper = null
+	inner = null
+	server = null
+	clock = null
+	sim = null
+	_suite = null
+	_tree = null

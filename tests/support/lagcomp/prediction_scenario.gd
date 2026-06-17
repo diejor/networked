@@ -270,6 +270,17 @@ func latency_up(
 ## Tears the underlying harness down. Only needed for an unmanaged setup.
 func teardown() -> void:
 	await inner.teardown()
+	_entities.clear()
+	_stepper = null
+	inner = null
+	server = null
+	client = null
+	server_clock = null
+	client_clock = null
+	server_sim = null
+	client_sim = null
+	_suite = null
+	_tree = null
 
 
 func _apply_scripted_inputs(_delta: float, tick: int) -> void:

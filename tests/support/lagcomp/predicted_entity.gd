@@ -27,9 +27,16 @@ var client_prediction: PredictionComponent
 ## Divergence recorder bound to the client predictor.
 var observer: PredictionObserver
 
-# Scenario back-reference (untyped to avoid a class cycle) and the suite, so
-# assert_converged can step ticks and raise GdUnit assertions.
-var _scenario: RefCounted
+var _scenario_ref: WeakRef = null
+
+var _scenario: RefCounted:
+	get:
+		if _scenario_ref:
+			return _scenario_ref.get_ref()
+		return null
+	set(val):
+		_scenario_ref = weakref(val) if val else null
+
 var _suite: NetwTestSuite
 
 # Scripted input: a persistent hold plus per-tick overrides keyed by predict tick.
