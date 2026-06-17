@@ -83,6 +83,7 @@ layout_mode = 2
 size_flags_horizontal = 10
 size_flags_vertical = 4
 mouse_filter = 2
+theme_override_constants/separation = 32
 
 [node name="PlayersLabel" type="Label" parent="MarginContainer/HBox/HBoxContainer" unique_id=701090156]
 unique_name_in_owner = true

@@ -39,9 +39,10 @@ func setup() -> void:
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
 
-	if DisplayServer.get_name() == "headless":
-		Engine.time_scale = 10.0
-		Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
+	# Disable 10x speedup in headless mode for stability.
+	# if DisplayServer.get_name() == "headless":
+	# 	Engine.time_scale = 10.0
+	# 	Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
 
 	# Skip noisy resource tracking in test session hook.
 	# Game harnesses trigger Godot's resource cache.
