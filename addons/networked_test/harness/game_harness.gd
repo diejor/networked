@@ -105,6 +105,15 @@ func add_client(
 
 	_finish_online_runner(runner)
 	await _wait_for_roster(runner)
+
+	var clock := runner.tree.get_service(MultiplayerClock) as MultiplayerClock
+	if clock and not clock.is_synchronized:
+		var timed_out := await _wait_until(
+			func() -> bool: return clock.is_synchronized,
+			"client clock for %s to synchronize" % runner.username,
+		)
+		assert(not timed_out, "Timed out waiting for client clock to synchronize.")
+
 	if wait_for_player:
 		await _wait_for_local_player(runner)
 	return runner
