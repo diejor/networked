@@ -119,7 +119,10 @@ func await_scene(
 
 
 func set_time_factor(_time_factor: float = 1.0) -> GdUnitSceneRunner:
-	GdAssertReports.report_error("use NetwGameHarness.set_time_factor", -1)
+	GdAssertReports.report_error(
+		"time scaling is unsupported, step with NetwGameHarness.sync_ticks",
+		-1,
+	)
 	return self
 
 

@@ -472,15 +472,34 @@ class Goal:
 	## Wander to random cells, occasionally bombing.
 	static func wander(rng: RandomNumberGenerator = null) -> Goal:
 		var g := WanderGoal.new()
-		g._rng = rng if rng else RandomNumberGenerator.new()
+		g._rng = rng if rng else _seeded_rng()
 		return g
 
 
 	## Cycle through random goals.
 	static func random(rng: RandomNumberGenerator = null) -> Goal:
 		var g := RandomGoal.new()
-		g._rng = rng if rng else RandomNumberGenerator.new()
+		g._rng = rng if rng else _seeded_rng()
 		return g
+
+
+	# Deterministic default RNG. Each goal gets a distinct seed by creation
+	# order so tests stay reproducible without callers passing a seed. Reset the
+	# counter per test through [method reset_seeds] so the seed a goal receives
+	# does not depend on goals built by earlier tests in the same process.
+	static var _seed_counter := 0
+
+
+	## Resets the default RNG seed counter. Call from test setup.
+	static func reset_seeds() -> void:
+		_seed_counter = 0
+
+
+	static func _seeded_rng() -> RandomNumberGenerator:
+		_seed_counter += 1
+		var rng := RandomNumberGenerator.new()
+		rng.seed = _seed_counter
+		return rng
 
 
 	## Stay put, but flee when threatened.

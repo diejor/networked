@@ -23,8 +23,6 @@ var _display_viewport: ParticipantViewport
 ## The listen server host participant.
 var host: NetwSceneRunner
 
-var _saved_time_scale := 1.0
-var _saved_physics_ticks := 60
 var _torn_down := false
 
 
@@ -36,12 +34,6 @@ func _init(scene: PackedScene = null) -> void:
 func setup() -> void:
 	assert(_main_scene != null, "NetwGameHarness.setup: scene is required.")
 	_loopback = NetwHarnessSession.new()
-	_saved_time_scale = Engine.time_scale
-	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
-
-	# No headless time_scale speedup. It desyncs loopback packet delivery from
-	# the sped-up clock, so consumed inputs and bomb spawns become timing
-	# dependent. Real-time stepping keeps the simulation deterministic.
 
 	# Skip noisy resource tracking in test session hook.
 	# Game harnesses trigger Godot's resource cache.
@@ -128,25 +120,29 @@ func disconnect_runner(runner: NetwSceneRunner) -> void:
 	assert(not timed_out, "Timed out waiting for server to drop peer.")
 
 
-## Advances the shared scene tree by [param n] network ticks.
+## Advances every participant by exactly [param n] network ticks through a
+## [FrameLockstepStepper]. The tick count is exact with no dependence on
+## wall-clock accumulation or [member Engine.time_scale].
 func sync_ticks(n: int) -> void:
 	assert(n >= 0, "NetwGameHarness.sync_ticks: n must be non-negative.")
 	if n == 0:
 		return
 
-	var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock \
-	if host else null
-	if not clock:
+	var clocks: Array[MultiplayerClock] = []
+	for runner in _runners:
+		if not runner or not runner.tree:
+			continue
+		var clock := runner.tree.get_service(MultiplayerClock) \
+				as MultiplayerClock
+		if clock:
+			clocks.append(clock)
+
+	if clocks.is_empty():
 		for i in n:
 			await get_tree().process_frame
 		return
 
-	var stepper := MultiplayerClockStepper.new(
-		get_tree(),
-		clock,
-		_saved_physics_ticks,
-		DEFAULT_TICKRATE,
-	)
+	var stepper := FrameLockstepStepper.new(get_tree(), clocks)
 	await stepper.sync_ticks(n)
 
 
@@ -185,13 +181,6 @@ func watch_frames(n: int) -> void:
 	assert(n >= 0, "NetwGameHarness.watch_frames: n must be non-negative.")
 	for i in n:
 		await get_tree().process_frame
-
-
-## Sets global simulation speed for this harness session.
-func set_time_factor(factor: float) -> void:
-	assert(factor > 0.0, "NetwGameHarness.set_time_factor: factor > 0.")
-	Engine.time_scale = factor
-	Engine.set_physics_ticks_per_second(int(_saved_physics_ticks * factor))
 
 
 ## Displays every participant window in one window.
@@ -267,9 +256,6 @@ func teardown() -> void:
 	if _torn_down:
 		return
 	_torn_down = true
-
-	Engine.time_scale = _saved_time_scale
-	Engine.set_physics_ticks_per_second(_saved_physics_ticks)
 
 	if is_instance_valid(_display_viewport):
 		_display_viewport.queue_free()

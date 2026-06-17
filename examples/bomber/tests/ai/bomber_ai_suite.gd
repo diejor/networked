@@ -22,6 +22,7 @@ var game: NetwGameHarness
 
 
 func before_test() -> void:
+	BomberAI.Goal.reset_seeds()
 	game = make_game_harness(MAIN)
 	await game.setup()
 	game.show_views()
@@ -57,32 +58,33 @@ func make_ais(
 	return ais
 
 
-## Ticks all AIs for up to [param max_ticks], stopping when [param done]
-## returns [code]true[/code] or when [param timeout_s] is exceeded.
-## Returns the tick count reached.
+## Ticks all AIs for up to [param max_ticks], stopping early when [param done]
+## returns [code]true[/code]. Returns the tick count reached. Stepping is
+## deterministic, so the loop runs the requested ticks with no wall-clock cap.
 func run_until(
 		ais: Array[BomberAI],
 		max_ticks: int,
 		done: Callable = Callable(),
-		timeout_s: float = 5.0,
 ) -> int:
-	var tickrate := 30
-	if game.host:
-		var clock := game.host.tree.get_service(MultiplayerClock) \
-				as MultiplayerClock
-		if clock:
-			tickrate = clock.tickrate
-
-	var max_timeout_ticks := int(timeout_s * tickrate)
-	var limit := mini(max_ticks, max_timeout_ticks)
-
-	for tick in limit:
+	for tick in max_ticks:
 		for ai: BomberAI in ais:
 			ai.tick()
 		await game.sync_ticks(1)
 		if done.is_valid() and done.call():
 			return tick
-	return limit
+	return max_ticks
+
+
+## Ticks until [param predicate] returns [code]true[/code] or [param max_ticks]
+## elapse. Returns whether it held. Use for eventual-consistency checks whose
+## settling tick count is not pinned, such as replication or interpolation
+## converging across peers.
+func tick_until(predicate: Callable, max_ticks: int = 120) -> bool:
+	for i in max_ticks:
+		if predicate.call():
+			return true
+		await game.sync_ticks(1)
+	return predicate.call()
 
 
 func rocks_left(runner: NetwSceneRunner) -> int:
