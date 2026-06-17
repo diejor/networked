@@ -2,6 +2,7 @@ class_name TestBomberGameHarness
 extends NetwTestSuite
 
 const MAIN := preload("res://examples/bomber/main.tscn")
+const PLAYER_SCRIPT := preload("res://examples/bomber/game/player.gd")
 
 var game: NetwGameHarness
 
@@ -63,6 +64,13 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var jose_start := jose_player.position.x
 	var valeria_held := valeria_player.position.x
 
+	# Measure the server ticks the held button actually spans. Bomb spawns are
+	# server driven and gated by BOMB_RATE seconds, so the legal count tracks
+	# elapsed ticks, not the requested count. The clock catches up in bursts and
+	# sync_ticks can overshoot its target, so a hardcoded bound is flaky under
+	# headless CI. Derive it from the ticks that elapsed instead.
+	var clock := valeria.tree.get_service(MultiplayerClock) as MultiplayerClock
+	var tick_before := clock.tick
 	jose.simulate_action_press("move_right")
 	jose.simulate_action_press("set_bomb")
 	await game.sync_ticks(12)
@@ -78,10 +86,15 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var host_bombs := _count_bombs(valeria_world)
 	var client_bombs := _count_bombs(jose_world)
 
+	# One bomb on press, then at most one more per BOMB_RATE across the window
+	# the server actually simulated, including any trailing consumed inputs.
+	var held_seconds := float(clock.tick - tick_before) / float(clock.tickrate)
+	var max_bombs := 1 + ceili(held_seconds / PLAYER_SCRIPT.BOMB_RATE)
+
 	# Reaches the host at all, so the spawn is server driven and replicated.
 	assert_int(host_bombs).is_greater(0)
 	# The cooldown holds: a held button does not spawn a bomb every tick.
-	assert_int(host_bombs).is_less_equal(2)
+	assert_int(host_bombs).is_less_equal(max_bombs)
 	# Both peers see the same bombs, so neither side spawned locally.
 	assert_int(client_bombs).is_equal(host_bombs)
 

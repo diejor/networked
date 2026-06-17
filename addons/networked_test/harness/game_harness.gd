@@ -39,10 +39,9 @@ func setup() -> void:
 	_saved_time_scale = Engine.time_scale
 	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
 
-	# Disable 10x speedup in headless mode for stability.
-	# if DisplayServer.get_name() == "headless":
-	# 	Engine.time_scale = 10.0
-	# 	Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
+	# No headless time_scale speedup. It desyncs loopback packet delivery from
+	# the sped-up clock, so consumed inputs and bomb spawns become timing
+	# dependent. Real-time stepping keeps the simulation deterministic.
 
 	# Skip noisy resource tracking in test session hook.
 	# Game harnesses trigger Godot's resource cache.
@@ -105,19 +104,6 @@ func add_client(
 
 	_finish_online_runner(runner)
 	await _wait_for_roster(runner)
-
-	var clock := runner.tree.get_service(MultiplayerClock) as MultiplayerClock
-	if clock and not clock.is_synchronized:
-		var timed_out := await _wait_until(
-			func() -> bool: return clock.is_synchronized,
-			"client clock for %s to synchronize" % runner.username,
-		)
-		assert(not timed_out, "Timed out waiting for client clock to synchronize.")
-
-	if clock:
-		# Disable subsequent pings and timing snaps during test simulation.
-		clock.ping_interval = 999.0
-
 	if wait_for_player:
 		await _wait_for_local_player(runner)
 	return runner
