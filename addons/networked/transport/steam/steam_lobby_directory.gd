@@ -3,7 +3,7 @@
 ## Add as a child of [MultiplayerTree]. Owns the [SteamWrapper], drives Steam
 ## callbacks each frame, and translates Steam signals into directory signals.
 ## [br][br]
-## Only one instance may exist per process; duplicates queue themselves for
+## Only one instance may exist per process. Duplicates queue themselves for
 ## deletion. [member browser_filter_uid] tags hosted lobbies so the browser
 ## only returns lobbies created with the same game id.
 class_name SteamLobbyDirectory

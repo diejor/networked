@@ -2,7 +2,7 @@
 ##
 ## A stable order by [member NetwEntity.entity_id] means the server consumes every
 ## entity identically each run, so a replayed trace is reproducible. The owning
-## client's predictor and the server's consumer register here; remote displays do
+## client's predictor and the server's consumer register here. Remote displays do
 ## not, so the loop only ever steps entities this peer simulates.
 ##
 ## [codeblock]

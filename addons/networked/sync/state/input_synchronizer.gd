@@ -29,7 +29,7 @@ const INPUT_WINDOW := &"__input_window"
 var on_input_received: Callable = Callable()
 
 ## Window size policy. [code]0[/code] derives the size from cadence (see
-## [method redundancy_packets]); a positive value is an explicit sample count.
+## [method redundancy_packets]). A positive value is an explicit sample count.
 ## [code]1[/code] disables the window so the payload props carry input directly.
 @export_range(0, 32, 1) var input_window_size: int = 0
 

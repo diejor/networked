@@ -119,7 +119,7 @@ func is_online() -> bool:
 
 ## Starts the instance as a network host using [param join_payload].
 ##
-## Use this when the caller knows they are hosting; otherwise see
+## Use this when the caller knows they are hosting. Otherwise, see
 ## [method auto_connect_player].
 func host_player(join_payload: JoinPayload) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
@@ -142,7 +142,7 @@ func join(
 	return await mt.join(target, join_payload, timeout, quiet)
 
 
-## Probes the target address; joins if reachable, hosts otherwise.
+## Probes the target address. Joins if reachable, hosts otherwise.
 ##
 ## See [method MultiplayerTree.join_or_host].
 func join_or_host(

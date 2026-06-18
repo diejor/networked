@@ -5,7 +5,7 @@ extends MultiplayerSynchronizer
 ## [member replication_config] bundles properties into the spawn packet
 ## so initial state arrives with the entity. Sibling components contribute
 ## paths through [method NetwEntity.contribute_spawn_property] from their
-## own [constant Node.NOTIFICATION_PARENTED]; the inspector's Replication
+## own [constant Node.NOTIFICATION_PARENTED]. The inspector's Replication
 ## panel can also pre-populate the list (its flags are coerced to
 ## spawn-only at runtime).
 ##
@@ -226,8 +226,8 @@ func _get_entity_record() -> NetwEntity:
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 ## [code]true[/code] when [member entity_id] is empty or authority
-## is unresolved. Templates are editor-placed factory scenes;
-## they skip the spawning lifecycle. Read-only.
+## is unresolved. Templates are editor-placed factory scenes.
+## They skip the spawning lifecycle. Read-only.
 var is_template: bool:
 	get:
 		return entity_id.is_empty() or not _has_authority_binding()
@@ -492,7 +492,7 @@ func _apply_template_state() -> void:
 ## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
 ## spawn flag set, sync/watch off).
 ##
-## Intended for use during spawn-property contributions. Idempotent --
+## Intended for use during spawn-property contributions. This is idempotent:
 ## adding the same path twice is a no-op.
 func add_spawn_property(prop: NodePath) -> void:
 	if not replication_config:

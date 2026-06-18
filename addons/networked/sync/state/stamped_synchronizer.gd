@@ -124,7 +124,7 @@ func apply_payload(snapshot: Dictionary) -> void:
 
 ## Registers [param vname] as a stamp on the stream implied by [param mode].
 ##
-## ON_CHANGE rides the reliable, ordered delta (watched); ALWAYS rides the
+## ON_CHANGE rides the reliable, ordered delta (watched). ALWAYS rides the
 ## volatile newest-wins sync (unwatched). Never split a stamp from the payload
 ## it tags across the two streams.
 func register_stamp(

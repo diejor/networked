@@ -68,7 +68,7 @@ func flush(frames: int = 2) -> void:
 
 
 ## Restores the body's prior [member Node.process_mode] and collision masks.
-## Safe to call more than once; subsequent calls are no-ops.
+## Safe to call more than once. Subsequent calls are no-ops.
 func release() -> void:
 	if not is_instance_valid(_body):
 		_prior_layer = _UNSET

@@ -1,7 +1,7 @@
 ## Applies [NetwInterestLayer] state to Godot replication.
 ##
-## One service lives under each [MultiplayerTree]. Layers are pure state;
-## this service installs entity visibility filters, drives server-side
+## One service lives under each [MultiplayerTree]. Layers are pure state.
+## This service installs entity visibility filters, drives server-side
 ## transition signals, updates bound [InterestGate] snapshots, and relays
 ## optional owner-side observer events.
 ##
@@ -12,7 +12,7 @@
 ## [br]- Bound layers: [InterestGate] admits local entities as they appear
 ## under the gated subtree.
 ## [br]- Unbound layers: the server relays transitions over the network.
-## Relay and entity spawn can race during same-tick admit storms; a bounded
+## Relay and entity spawn can race during same-tick admit storms. A bounded
 ## retry reconciles them.
 ##
 ## [br][br]

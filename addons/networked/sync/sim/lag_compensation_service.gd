@@ -68,7 +68,7 @@ func _exit_tree() -> void:
 
 ## Registers [param pc] so it is stepped each tick. Idempotent.
 ##
-## The owning client's predictor and the server's consumer register here; remote
+## The owning client's predictor and the server's consumer register here. Remote
 ## displays do not, so the loop only ever steps entities this peer simulates.
 func register(pc: PredictionComponent) -> void:
 	_runner.register(pc)

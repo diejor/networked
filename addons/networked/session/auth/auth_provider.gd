@@ -3,18 +3,18 @@
 ## Three lifecycle hooks called by [MultiplayerTree]:
 ## [br][br]
 ## [b]Client side:[/b]
-## [br]1. [method prepare] -- before transport opens. Populates
+## [br]1. [method prepare]: before transport opens. Populates
 ##     [JoinPayload] with metadata. Returns [constant OK] to proceed,
 ##     or an [enum Error] to abort the entry call
 ##     ([method MultiplayerTree.join],
 ##     [method MultiplayerTree.host_player], or
 ##     [method MultiplayerTree.join_or_host]).
-## [br]2. [method get_credentials] -- during Godot's auth phase.
+## [br]2. [method get_credentials]: during Godot's auth phase.
 ##     Returns proof bytes sent via [method SceneMultiplayer.send_auth].
 ##
 ## [br][br]
 ## [b]Server side:[/b]
-## [br]3. [method authenticate] -- when
+## [br]3. [method authenticate]: when
 ##     [member SceneMultiplayer.auth_callback] fires. Validates proof
 ##     bytes. Returns [NetwIdentity] to accept, [code]null[/code] to
 ##     reject. Set [member rejection_reason] on failure so the server can
@@ -22,7 +22,7 @@
 ##
 ## [br][br]
 ## [b]Listen-server host:[/b]
-## [br]4. [method get_host_identity] -- after [method MultiplayerTree.host] for
+## [br]4. [method get_host_identity]: after [method MultiplayerTree.host] for
 ##     peer 1. Godot's auth callback never fires for the local host, so this
 ##     provides a separate path. Returns [code]null[/code] to skip host auth.
 class_name NetwAuthProvider
@@ -39,8 +39,8 @@ var rejection_reason: String
 ## Populates [param payload] with provider metadata. Return [constant OK]
 ## to proceed, or an [enum Error] to abort the connection.
 ##
-## [b]Note:[/b] Implementations may [code]await[/code] HTTP calls or
-## browser flows. The owning entry call awaits this method.
+## Implementations may [code]await[/code] HTTP calls or browser flows.
+## The owning entry call awaits this method.
 func prepare(payload: JoinPayload) -> Error:
 	return OK
 

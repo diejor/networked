@@ -1,7 +1,7 @@
 ## The engine behind the server browser: holds the live server list and runs
 ## host / join.
 ##
-## Most games never touch this directly -- they go through [NetwConnect]
+## Most games never touch this directly. Instead, they go through [NetwConnect]
 ## ([code]Netw.ctx(self).connect[/code]), which wraps the one canonical
 ## session the [MultiplayerTree] owns. Reach for [ConnectSession] when you are
 ## building a [b]custom browser UI[/b] and want the raw node: it keeps the list
@@ -22,11 +22,13 @@
 ## [/codeblock]
 ##
 ## [br][br]
-## [b]Tree binding:[/b] host and join need a [MultiplayerTree]. A session added
-## under a tree binds to it automatically; otherwise call [method bind_tree].
+## [b]Tree Binding[/b]
+## [br]Host and join need a [MultiplayerTree]. A session added
+## under a tree binds to it automatically. Otherwise, call [method bind_tree].
 ##
 ## [br][br]
-## [b]Persistence is opt-in:[/b] targets live in memory until you
+## [b]Persistence Opt-In[/b]
+## [br]Targets live in memory until you
 ## [method load_server_list] / [method save_server_list] (or pass
 ## [code]persist = true[/code] to [method add_target] /
 ## [method remove_target]). Directory lobbies are always ephemeral.

@@ -2,7 +2,7 @@
 ##
 ## Returned by [method NetwAuthProvider.authenticate] and stored in
 ## [NetwIdentityBucket] on the server. The [member username] field is
-## server-authoritative -- [method MultiplayerTree.request_join_player]
+## server-authoritative. [method MultiplayerTree.request_join_player]
 ## uses it to override the client-claimed username.
 class_name NetwIdentity
 extends RefCounted

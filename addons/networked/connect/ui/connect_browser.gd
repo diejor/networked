@@ -1,4 +1,4 @@
-## A drop-in server browser UI -- server list, Add / Host / Refresh, and a
+## A drop-in server browser UI containing a server list, Add / Host / Refresh, and a
 ## join flow, ready to use.
 ##
 ## Drop this scene into your lobby, point it at your [MultiplayerTree], and

@@ -36,6 +36,7 @@ metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [sub_resource type="Resource" id="Resource_pbhs4"]
 script = ExtResource("7_qil8s")
+simulate_lag = true
 metadata/_custom_type_script = "uid://dqd358q7xpmeq"
 
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]

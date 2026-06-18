@@ -112,8 +112,8 @@ func bind(component: SaveComponent, span: NetSpan = null) -> void:
 ## Returns the [NetwDatabase.TableRepository] for [param table_name].
 ##
 ## Repositories are cached. Repeated calls for the same name return the same
-## instance. The table does not need to be registered before calling this;
-## registration happens automatically through [method bind] or explicitly
+## instance. The table does not need to be registered before calling this.
+## Registration happens automatically through [method bind] or explicitly
 ## via [method declare_table].
 ## [codeblock lang=gdscript]
 ## var record := db.table(&"players").fetch(username)
@@ -512,7 +512,7 @@ class TableRepository:
 
 	## Writes [param record] to the database under [param id].
 	##
-	## Uses [method NetwRecord.to_dict] to produce the record; returns
+	## Uses [method NetwRecord.to_dict] to produce the record. This returns
 	## [constant OK] on success or the first backend error encountered.
 	## [codeblock lang=gdscript]
 	## var err := db.table(&"players").put(username, save_comp.record)

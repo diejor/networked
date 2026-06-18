@@ -1,4 +1,107 @@
-## Smoothly interpolates a node's properties between network snapshots.
+## Smooths a networked entity's displayed motion between the sparse snapshots that
+## arrive over the wire.
+##
+## Snapshots land every few ticks and jittery, so this component never displays the
+## newest one. It plays the visual back behind the live state by a buffer delay, so
+## there is always a later snapshot to interpolate toward and motion stays smooth
+## across a gap. The trade is a fixed display latency of roughly that buffer depth.
+## This is the display half of a networked entity. [PredictionComponent] owns the
+## body, this owns only what the body looks like.
+##
+## [br][br][b]The playhead[/b]
+## [br]Each tracked property keeps a [HistoryBuffer] of recorded snapshots keyed by
+## tick, exposed through [method get_buffer]. A playhead reads that buffer behind
+## the newest entry, lands between two recorded ticks, and the displayed value is
+## the interpolation between them. [member display_lag] is how far behind the newest
+## entry the playhead sits.
+## [codeblock]
+## history (one per property), keyed by tick:
+##    9       12       15       18       21        newest received = 21
+##    ●        ●        ●        ●        ●
+##                      |---- playhead ---|
+##                      prev = 15   dt = 16.4   next = 18
+##
+## displayed = lerp(state[15], state[18], 0.4)
+##
+## the playhead trails the newest by display_lag, so a next snapshot always exists
+## [/codeblock]
+##
+## [b]Three roles[/b]
+## [br]The same node serves three display strategies, resolved from [NetwEntity]
+## control and [member Node.multiplayer_authority] unless [member display_role]
+## overrides it. The split mirrors [PredictionComponent]. An entity this peer
+## simulates is chased live, an entity it only receives is played back, and an
+## entity it has authority over needs no smoothing.
+## [codeblock]
+## func _resolve_display_role():
+##     if display_role != DisplayRole.AUTO:
+##         return display_role
+##     if _has_prediction_component() and _is_controlled_locally():
+##         return DisplayRole.PREDICTED   # we simulate it live; chase the predicted body
+##     if owner.is_multiplayer_authority():
+##         return DisplayRole.DISABLED    # we are the authority; the body is truth
+##     return DisplayRole.REMOTE          # someone else's entity; play snapshots back
+## [/codeblock]
+##
+## [b]Playing the playhead[/b]
+## [br]Once per frame the playhead is placed in the history's tick space from the
+## [MultiplayerClock] display clock, then every property lerps across the two ticks
+## that bracket it. [member MultiplayerClock.display_tick] already trails the
+## simulation by [member MultiplayerClock.display_offset], and [member display_lag]
+## subtracts the extra jitter buffer on top.
+## [codeblock]
+## # once per frame, per remote entity
+## var time := clock.display_tick + clock.tick_factor - display_lag
+## var dt := floori(time)              # the playhead tick
+## var factor := time - dt             # progress from dt toward dt + 1
+## _display_tick = dt
+## for state in _states:
+##     var bracket := state.history.find_bracketing_ticks(dt)   # [prev, next]
+##     state.apply(dt, factor)         # lerp(history[bracket.x], history[bracket.y], t)
+## [/codeblock]
+##
+## [b]Smart dilation[/b]
+## [br]The buffer depth is not fixed. [member display_lag] eases toward a floor
+## derived from the expected snapshot interval and the clock display offset, low
+## passed by [member floor_smoothing] and tracked at [member lag_adapt_rate]. When
+## snapshots starve no recorded tick sits after the playhead and it would run off
+## the end. After [member starvation_grace_frames] of starving the lag grows by
+## [member starvation_growth] up to [member max_extra_dilation] to rebuild the
+## buffer, and [member starvation_ticks] counts the current starving streak.
+## [member enable_smart_dilation] turns the whole loop off for a fixed zero lag.
+##
+## [br][br][b]Naming the displayed tick[/b]
+## [br]When exactly one stamped [StateSynchronizer] drives the entity, history is
+## keyed by the packet's authoring [code]__tick[/code]
+## ([member StampedSynchronizer.last_received_tick]) instead of the receive tick.
+## That lets [method displayed_authoring_tick] name the exact server tick under the
+## playhead, which a firing client sends to the server for lag-compensated rewind
+## through [method NetwLagCompensation.sample] and [method NetwLagCompensation.rewind].
+## The displayed tick is half a round trip behind the live server state, which is
+## exactly the world the shooter saw.
+## [codeblock]
+## packet { __tick = 15, position = ... }   recorded at history key 15
+## playhead lands under tick 15   ->   displayed_authoring_tick() == 15
+## the shooter sends 15 to the server, which rewinds every target to tick 15
+## [/codeblock]
+##
+## [b]Predicted display[/b]
+## [br]A locally predicted entity has no jitter buffer to drain, because its body is
+## simulated live every frame and races ahead of the network. [member predicted_mode]
+## picks the filter. [constant PredictedMode.CHASE] eases the visual toward the live
+## body with an exponential time from [member predicted_smooth_time].
+## [constant PredictedMode.BRACKETED] records the predicted body each tick and
+## interpolates the previous and current samples like a remote entity.
+##
+## [br][br][b]Writing the visual[/b]
+## [br]Smoothing must not fight the physics engine, so [member visual_root] points at
+## a child node that carries the smooth output while the owner body keeps the snapped
+## network pose. [member visual_output_mode] decides how the value lands.
+## [constant VisualOutputMode.OWNER_TRANSFORM_COMPENSATED] keeps the child at the
+## smooth owner pose, [constant VisualOutputMode.SOURCE_DELTA] applies the smoothed
+## delta to the child's initial offset, and [constant VisualOutputMode.PROPERTY_VALUE]
+## writes the value straight. [method snap_property] and [method reset] bypass
+## smoothing for teleports.
 @tool
 class_name MultiplayerInterpolator
 extends NetwComponent

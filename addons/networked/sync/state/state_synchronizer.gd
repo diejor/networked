@@ -91,6 +91,12 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	super._write_property(name, path, value)
 
 
+## Overrides [method StampedSynchronizer.record] to record [param payload]
+## at [param tick] in the state [member StampedSynchronizer.timeline] on the
+## client.
+##
+## Also invokes the [member on_state_received] callback to trigger prediction
+## reconciliation.
 func record(tick: int, payload: Dictionary) -> void:
 	if timeline:
 		timeline.record_state(tick, payload)

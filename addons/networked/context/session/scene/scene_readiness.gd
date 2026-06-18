@@ -1,7 +1,7 @@
-## Per-scene readiness gate — tracks which players have confirmed ready.
+## Per-scene readiness gate tracks which players have confirmed ready.
 ##
 ## Obtain via [method NetwScene.create_readiness_gate].
-## Clients call [method set_ready]; the server broadcasts the change to all peers.
+## Clients call [method set_ready]. The server broadcasts the change to all peers.
 ## [codeblock]
 ## # Game scene screen (runs on all peers):
 ## var gate := ctx.scene.create_readiness_gate()
@@ -18,7 +18,7 @@ extends RefCounted
 signal player_ready_changed(peer_id: int, is_ready: bool)
 ## Emitted when every tracked player is ready.
 ##
-## [b]Note:[/b] Also emits when a not-ready player leaves, if the remaining
+## This also emits when a not-ready player leaves, if the remaining
 ## players are all ready.
 signal all_ready()
 
@@ -63,7 +63,7 @@ func are_all_ready() -> bool:
 
 ## Marks the local player as ready (or not ready).
 ##
-## On a client this sends an RPC to the server; on the server/host it applies
+## On a client this sends an RPC to the server. On the server/host it applies
 ## the change directly. The update is broadcast to all peers automatically.
 func set_ready(ready: bool = true) -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene

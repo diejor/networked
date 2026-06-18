@@ -107,7 +107,7 @@ func _init(
 
 ## Returns [code]true[/code] if every facade present on this context is
 ## still valid. A context whose facades are individually [code]null[/code]
-## (e.g. orphan node, no scene) is still considered valid -- callers
+## (e.g. orphan node, no scene) is still considered valid. Callers
 ## null-check the specific member they need.
 func is_valid() -> bool:
 	if tree and not tree.is_valid():
@@ -130,7 +130,7 @@ func has_scene() -> bool:
 
 ## Returns a [NetwContext] for [param node].
 ##
-## Always returns a non-null context; individual facade members may be
+## Always returns a non-null context. Individual facade members may be
 ## [code]null[/code] when their underlying source is unreachable from
 ## [param node]. See class docs for per-member rules.
 static func for_node(node: Node) -> NetwContext:

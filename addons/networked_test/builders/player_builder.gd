@@ -185,7 +185,7 @@ func with_input(props: Array[StringName]) -> PlayerBuilder:
 ## [member PredictionComponent.simulate] auto-binds.
 func with_prediction(
 		missing_policy: PredictionComponent.MissingInput = \
-				PredictionComponent.MissingInput.STALL,
+		PredictionComponent.MissingInput.STALL,
 		epsilon: float = 0.01,
 ) -> PlayerBuilder:
 	_has_prediction = true

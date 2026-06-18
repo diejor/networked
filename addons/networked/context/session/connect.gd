@@ -37,27 +37,31 @@
 ## [signal session_entered] fires once you are in.
 ##
 ## [br][br]
-## [b]The live list.[/b] The session holds an in-memory list of targets: the
+## [b]The Live List[/b]
+## [br]The session holds an in-memory list of targets: the
 ## [i]saved[/i] ones you add or load from disk (a [member JoinTarget.address]
 ## reached through a [BackendPeer]), plus lobbies that registered directories
-## discover. [method get_targets] returns the whole list; [method get_saved_targets]
+## discover. [method get_targets] returns the whole list. [method get_saved_targets]
 ## and [method get_discovered_targets] return each half.
 ##
 ## [br][br]
-## [b]Directories.[/b] A [LobbyDirectory] is a platform lobby integration (Steam,
+## [b]Directories[/b]
+## [br]A [LobbyDirectory] is a platform lobby integration (Steam,
 ## etc.) you [method register_directory] under an id like [code]&"steam"[/code].
 ## On [method refresh] each directory reports its current lobbies, which fold
 ## into the live list as directory targets.
 ##
 ## [br][br]
-## [b]Probing.[/b] [method refresh] (all targets) and [method probe] (one) ask
-## each target for a [ServerInfoResult] -- status, player count, latency. The
-## result is cached per target and pushed to you via [signal target_updated];
+## [b]Probing[/b]
+## [br][method refresh] (all targets) and [method probe] (one) ask
+## each target for a [ServerInfoResult] containing status, player count, and latency. The
+## result is cached per target and pushed to you via [signal target_updated].
 ## [method get_result] returns the latest, or [code]null[/code] before the
 ## first one arrives.
 ##
 ## [br][br]
-## [b]Entering a session.[/b] [method host] and [method join] are where the
+## [b]Entering a Session[/b]
+## [br][method host] and [method join] are where the
 ## connect layer hands off to the [MultiplayerTree]: a target sets the
 ## tree's [BackendPeer] and opens transport. [signal session_entered] fires on
 ## success, and [signal session_left] when the tree later goes offline.
@@ -128,7 +132,7 @@ func is_session_active() -> bool:
 
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the
-## transport and the server name; [param payload] is the local player's identity.
+## transport and the server name. [param payload] is the local player's identity.
 ## On failure also emits [signal host_failed], on success [signal session_entered].
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
@@ -136,7 +140,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 
 ## Joins [param target] on the bound [MultiplayerTree]. [param payload] is the
-## local player's identity. Returns [code]OK[/code] or an [enum Error]; on
+## local player's identity. Returns [code]OK[/code] or an [enum Error]. On
 ## failure also emits [signal join_failed], on success [signal session_entered].
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
@@ -187,15 +191,15 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 		s.remove_target(target, persist)
 
 
-## Returns the whole live list -- saved targets first, then each directory's
+## Returns the whole live list, with saved targets first, then each directory's
 ## discovered lobbies.
 func get_targets() -> Array[JoinTarget]:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_targets() if s else []
 
 
-## Returns only the saved (address-based) targets -- the ones you added or
-## loaded, not directory lobbies.
+## Returns only the saved (address-based) targets (the ones you added or
+## loaded, not directory lobbies).
 func get_saved_targets() -> Array[JoinTarget]:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_saved_targets() if s else []
