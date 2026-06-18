@@ -2,6 +2,7 @@ extends NetwTestSuite
 
 func test_key_for_is_deterministic_and_namespaced() -> void:
 	var root := Node.new()
+	auto_free(root)
 	NetwEntity.bind(root, &"player", 7)
 	var entity := NetwEntity.of(root)
 	var effects := NetwEffects.new()
@@ -11,10 +12,12 @@ func test_key_for_is_deterministic_and_namespaced() -> void:
 
 func test_key_survives_entity_name_transport() -> void:
 	var root := Node.new()
+	auto_free(root)
 	NetwEntity.bind(root, &"player", 7)
 	var effects := NetwEffects.new()
 	var key := effects.key_for(NetwEntity.of(root), 12, 3)
 	var spawned := Node.new()
+	auto_free(spawned)
 
 	NetwEntity.bind(spawned, key, 0)
 
@@ -24,6 +27,7 @@ func test_key_survives_entity_name_transport() -> void:
 
 func test_adopt_drops_pending_without_revert() -> void:
 	var service := LagCompensationService.new()
+	auto_free(service)
 	var effects := service.effects
 	var reverted := { &"value": false }
 
@@ -41,6 +45,7 @@ func test_adopt_drops_pending_without_revert() -> void:
 
 func test_discard_runs_revert_once() -> void:
 	var service := LagCompensationService.new()
+	auto_free(service)
 	var effects := service.effects
 	var reverted := { &"count": 0 }
 
@@ -58,6 +63,7 @@ func test_discard_runs_revert_once() -> void:
 
 func test_timeout_discards_pending_effect() -> void:
 	var service := LagCompensationService.new()
+	auto_free(service)
 	var effects := service.effects
 	var reverted := { &"value": false }
 
@@ -75,9 +81,11 @@ func test_timeout_discards_pending_effect() -> void:
 
 func test_observer_adopts_already_bound_entity() -> void:
 	var service := LagCompensationService.new()
+	auto_free(service)
 	var effects := service.effects
 	var confirmed := { &"value": false }
 	var node := Node.new()
+	auto_free(node)
 	NetwEntity.bind(node, &"act__test__4__0", 0)
 
 	effects.arm(&"act__test__4__0", func() -> void: pass, 10)
@@ -94,10 +102,13 @@ func test_observer_adopts_already_bound_entity() -> void:
 
 func test_observer_adopts_from_entity_child() -> void:
 	var service := LagCompensationService.new()
+	auto_free(service)
 	var effects := service.effects
 	var confirmed := { &"value": false }
 	var node := Node.new()
+	auto_free(node)
 	var child := Node.new()
+	auto_free(child)
 	NetwEntity.bind(node, &"act__test__5__0", 0)
 	node.add_child(child)
 

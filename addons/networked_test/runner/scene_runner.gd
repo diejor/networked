@@ -43,6 +43,7 @@ func _init(
 	slot.add_child(_current_scene)
 	slot.child_exiting_tree.connect(_on_slot_child_exiting)
 	_simulate_start_time = LocalTime.now()
+	_scene_auto_free = true
 
 
 func _notification(what: int) -> void:
