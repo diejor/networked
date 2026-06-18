@@ -179,7 +179,6 @@ properties/1/replication_mode = 1
 z_index = 10
 motion_mode = 1
 script = ExtResource("1")
-stunned = null
 
 [node name="MultiplayerEntity" type="MultiplayerSynchronizer" parent="." unique_id=1781355410]
 replication_config = SubResource("SceneReplicationConfig_spawn")

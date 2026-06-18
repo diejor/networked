@@ -208,7 +208,7 @@ enum PredictedMode {
 ## [br]- [code]0.0[/code]: Crisp and instant (pure time-based interpolation).
 ## [br]- [code]> 0.0[/code]: Heavier, fluid motion that lags by roughly this
 ## many seconds. Frame-rate independent.
-@export_custom(0, "suffix:s") var smoothing_time: float = 0.0
+@export_custom(0, "suffix:s") var smoothing_time: float = 0.05
 
 ## Maximum distance allowed before the interpolator snaps to the target instead
 ## of lerping.

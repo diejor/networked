@@ -13,8 +13,7 @@
 [sub_resource type="Resource" id="Resource_ws"]
 script = ExtResource("13_ws")
 port = 10567
-simulate_lag = true
-lag_packet_loss_percent = 0.1
+lag_packet_loss_percent = 0.04
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
 [sub_resource type="Resource" id="Resource_steam"]
@@ -36,7 +35,7 @@ metadata/_custom_type_script = "uid://covt80wkpucga"
 
 [sub_resource type="Resource" id="Resource_pbhs4"]
 script = ExtResource("7_qil8s")
-simulate_lag = true
+lag_packet_loss_percent = 0.04
 metadata/_custom_type_script = "uid://dqd358q7xpmeq"
 
 [node name="Lobby" type="CanvasLayer" unique_id=1793047684]

@@ -82,7 +82,7 @@ var one_way_delay_max: float = 100.0
 @export_range(
 	0.0,
 	25.0,
-	0.1,
+	0.01,
 	"suffix:%",
 )
 var lag_packet_loss_percent: float = 0.0

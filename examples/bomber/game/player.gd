@@ -1,9 +1,10 @@
 extends CharacterBody2D
 
 const BOMB = preload("uid://3uxvvsya0q1t")
-const GHOST_BOMB = preload("res://examples/bomber/game/ghost_bomb.tscn")
+const GHOST_BOMB = preload("uid://qtc6lu84omhi")
 const TILE_SIZE := 48.0
 const BOMB_CELL_TOLERANCE := TILE_SIZE * 1.5
+
 
 ## The player's movement speed (in pixels per second).
 const MOTION_SPEED = 90.0
@@ -15,7 +16,6 @@ const BOMB_RATE = 0.5
 
 var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
-var _pending_bomb_cell := Vector2i.ZERO
 
 @onready var inputs: Node = $Inputs
 @onready var label: Label = %label
@@ -31,8 +31,11 @@ var _pending_bomb_cell := Vector2i.ZERO
 
 func _ready() -> void:
 	stunned = false
-	bomb_action.predict = _predict_bomb
-
+	bomb_action.predict = func() -> Node:
+		var ghost := GHOST_BOMB.instantiate()
+		ghost.position = position
+		add_sibling(ghost)
+		return ghost
 
 ## The simulation contract, run by the server (authoritative), the owning client
 ## (prediction), and the owning client again during replay (is_fresh = false).
@@ -40,7 +43,10 @@ func _ready() -> void:
 func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	last_bomb_time += delta
 	if is_fresh and entity.is_controlled_locally and not stunned and inputs.bombing:
-		_try_place_bomb(tick)
+		if last_bomb_time < BOMB_RATE:
+			return
+		bomb_action.request(tick, position)
+		last_bomb_time = 0.0
 
 	if stunned:
 		velocity = Vector2.ZERO
@@ -52,22 +58,8 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	velocity /= clock.physics_factor
 
 
-func _try_place_bomb(tick: int) -> void:
-	if last_bomb_time < BOMB_RATE:
-		return
-	_pending_bomb_cell = _cell_under_position(position)
-	bomb_action.request(tick, _pending_bomb_cell)
-	last_bomb_time = 0.0
-
-
-func _predict_bomb() -> Node:
-	var ghost := GHOST_BOMB.instantiate()
-	ghost.position = _cell_to_world(_pending_bomb_cell)
-	add_sibling(ghost)
-	return ghost
-
-
-func _place_bomb(action_context: NetwAction.Context, cell: Vector2i) -> void:
+# Validates and spawns a bomb on the server.
+func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
 	if not multiplayer or not multiplayer.is_server():
 		return
 	if last_bomb_time < BOMB_RATE:
@@ -77,33 +69,15 @@ func _place_bomb(action_context: NetwAction.Context, cell: Vector2i) -> void:
 	if not past.has_value(&"position"):
 		action_context.deny()
 		return
-	if not _cell_reachable_from(past.get_value(&"position"), cell):
+	if past.get_value(&"position").distance_to(pos) > BOMB_CELL_TOLERANCE:
 		action_context.deny()
 		return
 	last_bomb_time = 0.0
 	var real := BOMB.instantiate() as Area2D
-	real.position = _cell_to_world(cell)
+	real.position = pos
 	real.from_player = entity.peer_id
 	action_context.bind(real)
 	$"../../Bombs".add_child(real)
-
-
-func _cell_under_position(pos: Vector2) -> Vector2i:
-	return Vector2i(
-		int(round(pos.x / TILE_SIZE - 0.5)),
-		int(round(pos.y / TILE_SIZE - 0.5)),
-	)
-
-
-func _cell_to_world(cell: Vector2i) -> Vector2:
-	return Vector2(
-		float(cell.x) * TILE_SIZE + TILE_SIZE * 0.5,
-		float(cell.y) * TILE_SIZE + TILE_SIZE * 0.5,
-	)
-
-
-func _cell_reachable_from(pos: Vector2, cell: Vector2i) -> bool:
-	return pos.distance_to(_cell_to_world(cell)) <= BOMB_CELL_TOLERANCE
 
 
 func _process(_delta: float) -> void:
