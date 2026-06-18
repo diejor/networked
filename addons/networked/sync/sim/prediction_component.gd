@@ -123,7 +123,7 @@
 ## registry timeline that [LagCompensationService] records authoritative state into,
 ## so this component only consumes input and never writes server history itself.
 ## [member simulate] holds the single
-## [code]_network_tick(input, delta, tick, is_fresh)[/code] callable, defaulting to
+## [code]_network_tick(delta, tick, is_fresh)[/code] callable, defaulting to
 ## the entity root. [method simulate_tick] is driven by [LagCompensationService] in
 ## deterministic order, and reconciliation is event driven off
 ## [member StateSynchronizer.on_state_received].
@@ -158,7 +158,7 @@ enum MissingInput {
 @export var missing_policy: MissingInput = MissingInput.STALL
 
 ## The simulation step, defaulting to the entity root's
-## [code]_network_tick(input, delta, tick, is_fresh)[/code]. A delegating node may
+## [code]_network_tick(delta, tick, is_fresh)[/code]. A delegating node may
 ## set its own callable. It is a single callable, never a fan-out, so exactly one
 ## authoritative step runs per entity per tick.
 var simulate: Callable = Callable()
@@ -273,6 +273,7 @@ func _rewire() -> void:
 	state_sync.write_through = true
 	input_sync.on_input_received = Callable()
 	input_sync.timeline = null
+	input_sync.write_through = true
 	_timeline = null
 
 	_clock = get_multiplayer_clock()
@@ -304,6 +305,7 @@ func _rewire() -> void:
 			_timeline = _registry_timeline()
 			input_sync.timeline = _timeline
 			input_sync.on_input_received = _on_server_input
+			input_sync.write_through = false
 			_next_input_tick = -1
 			_ack = -1
 			_last_input = { }
@@ -367,9 +369,11 @@ func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 		_timeline.record_state(ack + 1, payload)
 		var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
 		max_replay_depth = maxi(max_replay_depth, window.size())
+		var live_input := _entity.input.snapshot_payload()
 		for entry in window:
 			_run(entry["input"], _tick_delta, entry["tick"], false)
 			_timeline.record_state(entry["tick"] + 1, _capture())
+		_entity.input.apply_payload(live_input)
 		reconciled.emit(divergence)
 		is_reconciling = false
 
@@ -441,8 +445,9 @@ func _consume_one(delta: float) -> void:
 
 
 func _run(input: Dictionary, delta: float, tick: int, is_fresh: bool) -> void:
+	_entity.input.apply_payload(input)
 	if simulate.is_valid():
-		simulate.call(input, delta, tick, is_fresh)
+		simulate.call(delta, tick, is_fresh)
 
 
 func _capture() -> Dictionary:

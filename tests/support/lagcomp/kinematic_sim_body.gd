@@ -10,6 +10,10 @@ extends CharacterBody2D
 ## Matches bomber's MOTION_SPEED so the fixture's numbers transfer directly.
 const SPEED := 90.0
 
+## Per-tick motion request, written by the framework via
+## [method StampedSynchronizer.apply_payload] before each simulation step.
+var motion: Vector2 = Vector2.ZERO
+
 var _half: Vector2
 
 
@@ -22,17 +26,17 @@ func _init(half_extents: Vector2 = Vector2(8, 8)) -> void:
 	add_child(shape)
 
 
-## The permanent simulation contract (architecture §4.4). The [param delta] arg
-## is carried but unused here: move_and_slide integrates with
+## The permanent simulation contract (architecture §4.4). Input is on the live
+## [member motion] property, applied by the framework. The [param delta] arg is
+## carried but unused here: move_and_slide integrates with
 ## get_physics_process_delta_time() internally, which is exactly the rate
 ## coupling test_move_and_slide_uses_physics_delta_not_arg pins down.
 func _network_tick(
-		input: Dictionary,
 		_delta: float,
 		_tick: int,
 		_is_fresh: bool,
 ) -> void:
-	velocity = (input.get(&"motion", Vector2.ZERO) as Vector2) * SPEED
+	velocity = motion * SPEED
 	move_and_slide()
 
 

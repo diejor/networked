@@ -27,11 +27,12 @@ func _ready() -> void:
 
 ## The simulation contract, run by the server (authoritative), the owning client
 ## (prediction), and the owning client again during replay (is_fresh = false).
-func _network_tick(input: Dictionary, delta: float, _tick: int, is_fresh: bool) -> void:
+## Input is on the live [code]inputs[/code] node, applied by the framework.
+func _network_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if stunned:
 		velocity = Vector2.ZERO
 	else:
-		velocity = input.get(&"motion", Vector2.ZERO) * MOTION_SPEED
+		velocity = inputs.motion * MOTION_SPEED
 
 	velocity *= clock.physics_factor
 	move_and_slide()
@@ -39,7 +40,7 @@ func _network_tick(input: Dictionary, delta: float, _tick: int, is_fresh: bool) 
 
 	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		last_bomb_time += delta
-		if is_fresh and not stunned and input.get(&"bombing", false):
+		if is_fresh and not stunned and inputs.bombing:
 			_try_place_bomb()
 
 

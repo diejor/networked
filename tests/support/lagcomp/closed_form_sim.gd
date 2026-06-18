@@ -1,7 +1,7 @@
 ## Closed-form simulation step shared by server, predicting client, and replay.
 ##
 ## The lag-comp contract is one method,
-## [code]_network_tick(input, delta, tick, is_fresh)[/code]. The body stays
+## [code]_network_tick(delta, tick, is_fresh)[/code]. The body stays
 ## closed-form on purpose so every test can compute the expected state
 ## analytically and assert exact equality. No [method CharacterBody2D.move_and_slide]
 ## here, that is a separate fixture ([code]test_kinematic_replay.gd[/code]). This

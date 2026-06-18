@@ -41,18 +41,20 @@ func _make_body(start: Vector2) -> KinematicSimBody:
 
 
 # Drives one _network_tick per real physics frame: the authoritative baseline.
-func _drive_real(body: KinematicSimBody, motion: Vector2, n: int) -> void:
+func _drive_real(body: KinematicSimBody, input_motion: Vector2, n: int) -> void:
 	var d := _phys_dt()
+	body.motion = input_motion
 	for i in n:
-		body._network_tick({ &"motion": motion }, d, i, true)
+		body._network_tick(d, i, true)
 		await get_tree().physics_frame
 
 
 # Replays N inputs back-to-back inside one frame: the reconciliation path.
-func _replay(body: KinematicSimBody, motion: Vector2, n: int) -> void:
+func _replay(body: KinematicSimBody, input_motion: Vector2, n: int) -> void:
 	var d := _phys_dt()
+	body.motion = input_motion
 	for i in n:
-		body._network_tick({ &"motion": motion }, d, i, false)
+		body._network_tick(d, i, false)
 	await get_tree().physics_frame
 
 
@@ -114,7 +116,8 @@ func test_move_and_slide_uses_physics_delta_not_arg() -> void:
 	_make_arena(false)
 	var body := await _make_body(Vector2(0, 0))
 
-	body._network_tick({ &"motion": Vector2(1, 0) }, 999.0, 0, true)
+	body.motion = Vector2(1, 0)
+	body._network_tick(999.0, 0, true)
 	await get_tree().physics_frame
 
 	var expected := KinematicSimBody.SPEED * _phys_dt()

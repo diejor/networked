@@ -28,17 +28,18 @@ var bombing: bool = false
 var fire_count: int = 0
 
 
-## Runs one closed-form simulation step for [param input] over [param delta].
+## Runs one closed-form simulation step over [param delta].
 ##
-## [param is_fresh] is [code]true[/code] on the live predict or consume pass and
-## [code]false[/code] on a reconciliation replay, so a one-shot fire counts once.
+## Input is on the live node ([member motion], [member bombing]), applied by the
+## framework before each call. [param is_fresh] is [code]true[/code] on the live
+## predict or consume pass and [code]false[/code] on a reconciliation replay, so
+## a one-shot fire counts once.
 func _network_tick(
-		input: Dictionary,
 		delta: float,
 		_tick: int,
 		is_fresh: bool,
 ) -> void:
-	var m: Vector2 = input.get(&"motion", Vector2.ZERO)
+	var m: Vector2 = motion
 	position = ClosedFormSim.integrate(position, { &"mx": m.x, &"my": m.y }, delta)
-	if is_fresh and bool(input.get(&"bombing", false)):
+	if is_fresh and bombing:
 		fire_count += 1
