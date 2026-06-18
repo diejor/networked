@@ -138,9 +138,10 @@ func _scan_world() -> WorldSnapshot:
 			if is_instance_valid(rock) and rock is Node2D:
 				snap.rock_cells.append(_to_cell(rock.position))
 
-	# Bombs (Area2D children of level).
-	for child: Node in level.get_children():
-		if child is Area2D:
+	# Bombs.
+	var bombs := level.get_node_or_null("Bombs")
+	if bombs:
+		for child: Node in bombs.get_children():
 			snap.bomb_cells.append(_to_cell((child as Node2D).position))
 
 	# Other players.
@@ -481,7 +482,6 @@ class Goal:
 		var g := RandomGoal.new()
 		g._rng = rng if rng else _seeded_rng()
 		return g
-
 
 	# Deterministic default RNG. Each goal gets a distinct seed by creation
 	# order so tests stay reproducible without callers passing a seed. Reset the

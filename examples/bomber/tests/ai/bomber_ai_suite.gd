@@ -124,11 +124,8 @@ func count_bombs(runner: NetwSceneRunner) -> int:
 	var world := _get_world(runner)
 	if not world or not world.level:
 		return 0
-	var count := 0
-	for child: Node in world.level.get_children():
-		if child is Area2D:
-			count += 1
-	return count
+	var bombs := world.level.get_node_or_null("Bombs")
+	return bombs.get_child_count() if bombs else 0
 
 
 ## Restores normal links for every remote runner.

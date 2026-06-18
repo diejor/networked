@@ -189,11 +189,8 @@ func _begin_game(host: NetwSceneRunner) -> void:
 
 
 func _count_bombs(world: MultiplayerScene) -> int:
-	var count := 0
-	for child in world.level.get_children():
-		if child is Area2D:
-			count += 1
-	return count
+	var bombs := world.level.get_node_or_null("Bombs")
+	return bombs.get_child_count() if bombs else 0
 
 
 func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
@@ -205,7 +202,10 @@ func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
 
 
 func _first_bomb(world: MultiplayerScene) -> Area2D:
-	for child in world.level.get_children():
+	var bombs := world.level.get_node_or_null("Bombs")
+	if not bombs:
+		return null
+	for child in bombs.get_children():
 		if child is Area2D:
 			return child
 	return null

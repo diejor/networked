@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://qtc6lu84omhi"]
+
+[ext_resource type="Texture2D" uid="uid://cedlo7fhabr54" path="res://examples/bomber/game/brickfloor.png" id="1"]
+
+[node name="GhostBomb" type="Node2D"]
+modulate = Color(1, 1, 1, 0.45)
+
+[node name="Sprite" type="Sprite2D" parent="."]
+position = Vector2(-2.92606, -2.92606)
+texture = ExtResource("1")
+region_enabled = true
+region_rect = Rect2(144, 0, 48, 48)

@@ -34,6 +34,7 @@ extends Node
 # polling. The clock can register after this service, which auto-registers before
 # any clock exists, so the bind retries until it appears.
 const _MAX_BIND_ATTEMPTS := 600
+const _DEFAULT_EFFECT_TIMEOUT_TICKS := 120
 
 var _clock: MultiplayerClock
 var _bind_attempts: int = 0
@@ -41,6 +42,15 @@ var _registry: TimelineRegistry = TimelineRegistry.new()
 var _recorder: HistoryRecorder = HistoryRecorder.new()
 var _runner: SimulationRunner = SimulationRunner.new()
 var _queries: RewindQueries
+var _effects: Dictionary[StringName, Dictionary] = { }
+var _effect_watchers: Dictionary[StringName, Dictionary] = { }
+var _action_slots: Dictionary[String, int] = { }
+var _observed_entities: Dictionary[NetwEntity, bool] = { }
+
+## Keyed optimistic effects for [NetwAction] and custom transports.
+var effects: NetwEffects:
+	get:
+		return NetwEffects.new(self)
 
 
 func _init() -> void:
@@ -57,11 +67,17 @@ func _enter_tree() -> void:
 		mt.session_entered.connect(_on_session_entered)
 	if mt.is_online():
 		_on_session_entered.call_deferred()
+	var tree := get_tree()
+	if tree and not tree.node_added.is_connected(_on_node_added):
+		tree.node_added.connect(_on_node_added)
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	var tree := get_tree()
+	if tree and tree.node_added.is_connected(_on_node_added):
+		tree.node_added.disconnect(_on_node_added)
 	_unbind_clock()
 	NetwServices.unregister(self, LagCompensationService)
 
@@ -126,6 +142,108 @@ func rewind(entities: Array[NetwEntity], tick: int, body: Callable) -> void:
 	_queries.rewind(entities, tick, body)
 
 
+func _effect_arm(
+		key: StringName,
+		revert: Callable,
+		timeout_ticks: int = 0,
+) -> void:
+	if key.is_empty():
+		return
+	var ttl := timeout_ticks
+	if ttl <= 0:
+		ttl = _DEFAULT_EFFECT_TIMEOUT_TICKS
+	_effects[key] = {
+		&"revert": revert,
+		&"deadline_tick": _current_tick() + ttl,
+	}
+
+
+func _effect_adopt(key: StringName) -> void:
+	if not _effects.has(key):
+		return
+	_effects.erase(key)
+	var watcher: Dictionary = _effect_watchers.get(key, { })
+	_effect_watchers.erase(key)
+	var confirmed: Callable = watcher.get(&"confirmed", Callable())
+	if confirmed.is_valid():
+		confirmed.call()
+
+
+func _effect_discard(key: StringName) -> void:
+	if not _effects.has(key):
+		return
+	var entry: Dictionary = _effects[key]
+	_effects.erase(key)
+	var revert := entry.get(&"revert") as Callable
+	if revert and revert.is_valid():
+		revert.call()
+	var watcher: Dictionary = _effect_watchers.get(key, { })
+	_effect_watchers.erase(key)
+	var denied: Callable = watcher.get(&"denied", Callable())
+	if denied.is_valid():
+		denied.call()
+
+
+func _watch_action(
+		key: StringName,
+		confirmed: Callable,
+		denied: Callable,
+) -> void:
+	if key.is_empty():
+		return
+	_effect_watchers[key] = {
+		&"confirmed": confirmed,
+		&"denied": denied,
+	}
+
+
+func _assign_action_slot(authority: Callable) -> int:
+	var target := authority.get_object() as Node
+	if not target:
+		return 0
+	var entity := NetwEntity.of(target)
+	if not entity:
+		return 0
+	var route := "%s:%s" % [entity.entity_id, authority.get_method()]
+	if _action_slots.has(route):
+		return _action_slots[route]
+	var slot := _action_slots.size()
+	_action_slots[route] = slot
+	return slot
+
+
+func _send_action_request(
+		target_path: NodePath,
+		method: StringName,
+		view_tick: int,
+		data: Variant,
+		key: StringName,
+) -> void:
+	if multiplayer and multiplayer.multiplayer_peer and not multiplayer.is_server():
+		_request_action.rpc_id(
+			MultiplayerPeer.TARGET_PEER_SERVER,
+			target_path,
+			method,
+			view_tick,
+			data,
+			key,
+		)
+		return
+	_request_action(target_path, method, view_tick, data, key)
+
+
+func _deny_action_to(requester: int, key: StringName) -> void:
+	var local_peer := multiplayer.get_unique_id() if multiplayer \
+			and multiplayer.multiplayer_peer else 0
+	if requester == 0 or requester == local_peer:
+		_effect_discard(key)
+		return
+	if multiplayer and multiplayer.multiplayer_peer:
+		_deny_action.rpc_id(requester, key)
+	else:
+		_effect_discard(key)
+
+
 func _on_session_entered() -> void:
 	_bind_attempts = 0
 	_try_bind_clock()
@@ -160,6 +278,88 @@ func _unbind_clock() -> void:
 
 func _on_tick(delta: float, tick: int) -> void:
 	_runner.step(delta, tick)
+	_sweep_effect_timeouts(tick)
 	# The server holds the truth, so only it records authoritative history.
 	if multiplayer and multiplayer.is_server():
 		_recorder.record(_registry, tick)
+
+
+@rpc("any_peer", "reliable")
+func _request_action(
+		target_path: NodePath,
+		method: StringName,
+		view_tick: int,
+		data: Variant,
+		key: StringName,
+) -> void:
+	if multiplayer and not multiplayer.is_server():
+		return
+	var requester := multiplayer.get_remote_sender_id() if multiplayer else 0
+	if requester == 0 and multiplayer and multiplayer.multiplayer_peer:
+		requester = multiplayer.get_unique_id()
+	var target := _node_from_tree_path(target_path)
+	if not target or not target.has_method(method):
+		_deny_action_to(requester, key)
+		return
+	var clamped_tick := mini(view_tick, _current_tick())
+	var ctx := NetwAction.Context.new(self, requester, clamped_tick, key)
+	if data == null:
+		target.call(method, ctx)
+	else:
+		target.call(method, ctx, data)
+
+
+@rpc("authority", "reliable")
+func _deny_action(key: StringName) -> void:
+	_effect_discard(key)
+
+
+func _node_from_tree_path(path: NodePath) -> Node:
+	var mt := MultiplayerTree.resolve(self)
+	if not mt:
+		return null
+	return mt.get_node_or_null(path)
+
+
+func _sweep_effect_timeouts(tick: int) -> void:
+	var expired: Array[StringName] = []
+	for key: StringName in _effects:
+		var entry: Dictionary = _effects[key]
+		if int(entry.get(&"deadline_tick", 0)) <= tick:
+			expired.append(key)
+	for key in expired:
+		_effect_discard(key)
+
+
+func _current_tick() -> int:
+	return _clock.tick if is_instance_valid(_clock) else 0
+
+
+func _on_node_added(node: Node) -> void:
+	_observe_node_entity(node)
+	call_deferred("_observe_node_entity_ref", weakref(node))
+
+
+func _observe_node_entity_ref(node_ref: WeakRef) -> void:
+	var node := node_ref.get_ref() as Node if node_ref else null
+	if not is_instance_valid(node):
+		return
+	_observe_node_entity(node)
+
+
+func _observe_node_entity(node: Node) -> void:
+	var entity := NetwEntity.of(node)
+	if not entity:
+		return
+	if not entity.entity_id.is_empty():
+		_effect_adopt(entity.entity_id)
+	if _observed_entities.has(entity):
+		return
+	_observed_entities[entity] = true
+	if not entity.spawned.is_connected(_on_entity_spawned):
+		entity.spawned.connect(_on_entity_spawned.bind(entity))
+
+
+func _on_entity_spawned(entity: NetwEntity) -> void:
+	if entity and not entity.entity_id.is_empty():
+		_effect_adopt(entity.entity_id)

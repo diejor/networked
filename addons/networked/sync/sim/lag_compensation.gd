@@ -1,15 +1,19 @@
 ## Public lag-compensation facade for one [MultiplayerTree].
 ##
-## Exposed at [member NetwContext.lag_compensation]. Lag compensation is a query,
-## not a system: with the server recording authoritative history every tick, this
-## facade answers "where was an entity when the shooter saw it" without the caller
-## touching the [LagCompensationService] node or the timeline registry directly.
+## Exposed at [member NetwContext.lag_compensation]. Lag compensation is a query
+## and action surface. With the server recording authoritative history every
+## tick, this facade answers "where was an entity when the shooter saw it" and
+## lets [NetwAction] correlate optimistic effects with authoritative results.
 ##
 ## [codeblock]
 ## var lag := Netw.ctx(self).lag_compensation
 ## var past := lag.sample(target_entity, view_tick)   # detached NetwSnapshot
 ## if past.has_value(&"position"):
 ##     validate_hit(origin, dir, past.position)
+##
+## var action := lag.action(_place_bomb)
+## action.predict = _predict_bomb
+## action.request(view_tick)
 ## [/codeblock]
 ##
 ## Resolves the backing [LagCompensationService] lazily, like [NetwInterest], so it
@@ -18,6 +22,12 @@ class_name NetwLagCompensation
 extends RefCounted
 
 var _tree_ref: WeakRef
+
+## Keyed optimistic effects owned by [LagCompensationService].
+var effects: NetwEffects:
+	get:
+		var service := _service()
+		return service.effects if service else NetwEffects.new()
 
 
 func _init(mt: MultiplayerTree) -> void:
@@ -64,6 +74,17 @@ func rewind(entities: Array[NetwEntity], tick: int, body: Callable) -> void:
 func timeline_of(entity: NetwEntity) -> NetwTimeline:
 	var service := _service()
 	return service.timeline_of(entity) if service else null
+
+
+## Returns a [NetwAction] bound to [param authority].
+##
+## [param authority] must be a method [Callable] on the entity root or one of
+## its children. The returned action uses [member effects] for local prediction
+## and the mounted [LagCompensationService] for private request transport.
+func action(authority: Callable) -> NetwAction:
+	var service := _service()
+	var slot := service._assign_action_slot(authority) if service else 0
+	return NetwAction.new(self, authority, slot)
 
 
 func _service() -> LagCompensationService:
