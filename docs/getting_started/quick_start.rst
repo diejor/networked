@@ -90,26 +90,23 @@ Create a second scene, ``player.tscn``, with a
 
 Now add a :ref:`MultiplayerEntity <class_MultiplayerEntity>` child to the
 :godot:`CharacterBody2D <CharacterBody2D>`. The component automatically renames itself to
-:ref:`MultiplayerEntity <class_MultiplayerEntity>` and registers a unique name. In the *Replication* panel
-at the bottom of the editor, add a single property: the body's :godot:`position <Node2D#class_node2d_property_position>`,
-with the *Spawn* checkbox enabled. This tells the server to bundle the
-player's starting position into the spawn packet so the entity appears in the
-right place on every client's first frame.
+``MultiplayerEntity`` and registers a unique name. In the *Replication* panel
+at the bottom of the editor, add a single property: the body's :godot:`position <Node2D#class_node2d_property_position>`.
 
 .. note::
 
-    All flags other than *Spawn* are coerced to off at runtime,
-    :ref:`MultiplayerEntity <class_MultiplayerEntity>` only uses the
-    replication config for the spawn snapshot. For continuous state
-    replication, add a sibling
+    :ref:`MultiplayerEntity <class_MultiplayerEntity>` only uses the replication
+    config for the spawn snapshot. At runtime, all listed properties are coerced
+    to spawn-only: their *Spawn* flag is forced to true, and their replication
+    mode is ignored and coerced to :godot:`SceneReplicationConfig.REPLICATION_MODE_NEVER <SceneReplicationConfig#class_SceneReplicationConfig_constant_REPLICATION_MODE_NEVER>`.
+    For continuous state replication, add a sibling
     :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` and configure
     it independently.
 
 Set the :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>` on the component to :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>` if you want
 the connecting player to drive their own movement. This is the common case
 for player avatars: server stays the source of truth for spawn and despawn,
-but the client peer owns the body itself and can read input from
-:godot:`Input <Input>`.
+but the client peer owns the body itself.
 
 Finally, create the level scene ``level.tscn`` with a :godot:`Node2D <Node2D>`
 root and instance ``player.tscn`` as a child. The player you place here is a
@@ -130,8 +127,7 @@ Joining the session
 You now have a scene that can host, but nothing tells it to. The simplest
 way to drive the connection is from a script attached to the ``Main`` root.
 A :ref:`JoinPayload <class_JoinPayload>` describes who is connecting and
-where they want to spawn. Transport identity (backend, address) is passed
-separately to the entry method:
+where they want to spawn:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -175,8 +171,8 @@ call :ref:`join() <class_MultiplayerTree_method_join>` instead.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project
-again: two windows appear, each spawns a player with the username they were
-given, and you should see both characters on each screen.
+again: two windows appear, each spawns a player, and you should see both
+characters on each screen.
 
 Adding player input
 -------------------
@@ -212,8 +208,8 @@ control with no extra wiring.
 
 To replicate that movement back to the other peer, add a sibling
 :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` to the player
-scene and register the body's :godot:`position <Node2D#class_node2d_property_position>` with replication mode *On Change*
-and the *Sync* flag enabled. Run the project again. Both players can now
+scene and register the body's :godot:`position <Node2D#class_node2d_property_position>` with replication mode :button:`On Change`
+and the :button:`Sync` flag enabled. Run the project again. Both players can now
 walk around, and each peer sees the other in real time.
 
 Where to go next
