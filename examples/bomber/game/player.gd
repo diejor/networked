@@ -49,7 +49,8 @@ func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 		if last_bomb_time < BOMB_RATE:
 			return
 		bomb_action.request(tick, position)
-		last_bomb_time = 0.0
+		if not multiplayer or not multiplayer.is_server():
+			last_bomb_time = 0.0
 
 	if stunned:
 		velocity = Vector2.ZERO

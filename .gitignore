@@ -13,7 +13,7 @@ tmp
 tmp_saves
 tmp_save
 saves
-save
+/save/
 
 # Ignore temporary files starting with a tilde (like your ~libwebrtc...dll)
 ~*
