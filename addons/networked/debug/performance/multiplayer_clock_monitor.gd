@@ -100,32 +100,38 @@ func _ensure_monitors_registered(category: String) -> void:
 	var store: Dictionary = _latest_data[category]
 
 	# Time-based metrics (expect seconds, format as ms)
+	# 2 corresponds to Performance.MONITOR_TYPE_TIME in Godot 4.6+
 	_reg(
 		prefix + "rtt",
 		func(): return store.get("rtt_raw", 0.0),
-		Performance.MONITOR_TYPE_TIME,
+		2,
 	)
 	_reg(
 		prefix + "jitter",
 		func(): return store.get("rtt_jitter", 0.0),
-		Performance.MONITOR_TYPE_TIME,
+		2,
 	)
 
 	# Quantity-based metrics (ticks)
+	# 0 corresponds to Performance.MONITOR_TYPE_QUANTITY in Godot 4.6+
 	_reg(
 		prefix + "error",
 		func(): return store.get("diff", 0),
-		Performance.MONITOR_TYPE_QUANTITY,
+		0,
 	)
 	_reg(
 		prefix + "recommended_offset",
 		func(): return store.get("recommended_display_offset", 0),
-		Performance.MONITOR_TYPE_QUANTITY,
+		0,
 	)
 
 
 func _reg(id: StringName, callable: Callable, type: int) -> void:
 	if not _registered_ids.has(id):
 		if not Performance.has_custom_monitor(id):
-			Performance.add_custom_monitor(id, callable, [], type)
+			var version := Engine.get_version_info()
+			if version.major > 4 or (version.major == 4 and version.minor >= 6):
+				Performance.call("add_custom_monitor", id, callable, [], type)
+			else:
+				Performance.call("add_custom_monitor", id, callable, [])
 		_registered_ids[id] = true

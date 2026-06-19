@@ -27,7 +27,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        godot-version: ['4.4', '4.5', '4.6', '4.7']
+        include:
+          - godot-version: '4.4'
+            gdunit-version: 'v5.1.0'
+          - godot-version: '4.5'
+            gdunit-version: 'installed'
+          - godot-version: '4.6'
+            gdunit-version: 'installed'
+          - godot-version: '4.7'
+            gdunit-version: 'installed'
     permissions:
       actions: write
       checks: write
@@ -47,7 +55,7 @@ jobs:
           godot-version: ${{ matrix.godot-version }}
           # Use the repo's vendored addons/gdUnit4 (6.0.0) instead of cloning
           # gdUnit4 'latest' at run time, so CI runs the same gdUnit as local.
-          version: 'installed'
+          version: ${{ matrix.gdunit-version }}
           paths: |
             res://tests/
             res://examples/
