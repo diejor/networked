@@ -113,7 +113,7 @@ WebSocket) enable it by delegating to
 :ref:`AuthProbeClient <class_AuthProbeClient>`. The
 :ref:`BackendPeer <class_BackendPeer>` default returns
 :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`,
-so session-id transports (Steam, in-process Local, Tube) and WebRTC (whose
+so session-id/lobby transports (Steam, in-process Local) and WebRTC (whose
 auth handshake requires a full, expensive ICE round trip) stay unsupported
 unless they implement their own discovery.
 :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
@@ -139,7 +139,7 @@ axis answered by
 :ref:`is_available() <class_BackendPeer_method_is_available>`, queried directly
 and never routed through a result status. This matters because
 :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>` already means
-"this backend skips probing" (Steam, Local, Tube, WebRTC) - a backend that is
+"this backend skips probing" (Steam, Local, WebRTC) - a backend that is
 unsupported for probing still connects fine. A backend that is *unavailable*
 cannot connect at all, which is a different thing.
 
@@ -207,10 +207,10 @@ probe.
 
 Two limits protect the host from misbehaving probers:
 
-- PROBE_RATE_LIMIT (10/sec by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a rolling cap on probe
+- :ref:`PROBE_RATE_LIMIT <class_AuthProbeResponder_constant_PROBE_RATE_LIMIT>` (10/sec by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a rolling cap on probe
   replies per second. Excess probes get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>` until the window
   reopens.
-- MAX_ACTIVE_PROBES (32 by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a cap on concurrent pending
+- :ref:`MAX_ACTIVE_PROBES <class_AuthProbeResponder_constant_MAX_ACTIVE_PROBES>` (32 by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a cap on concurrent pending
   probes tracked by the responder. Excess probes also get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>`.
 
 Stragglers (clients that crash before closing, or that never close on
@@ -248,7 +248,7 @@ to build a Minecraft-style server browser on top of
   result.
 - :ref:`ProbeManager <class_ProbeManager>` - a :godot:`Node <Node>` that caps
   concurrent sessions (:ref:`ProbeManager.max_concurrent <class_ProbeManager_property_max_concurrent>`, default 6) below the
-  server-side MAX_ACTIVE_PROBES cap on :ref:`AuthProbeResponder <class_AuthProbeResponder>`. :ref:`ProbeManager.cancel_all() <class_ProbeManager_method_cancel_all>` suppresses
+  server-side :ref:`MAX_ACTIVE_PROBES <class_AuthProbeResponder_constant_MAX_ACTIVE_PROBES>` cap on :ref:`AuthProbeResponder <class_AuthProbeResponder>`. :ref:`ProbeManager.cancel_all() <class_ProbeManager_method_cancel_all>` suppresses
   pending callbacks but does not abort the inner
   :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` - transient peers tear themselves down on
   their own timeout/completion path.
@@ -256,7 +256,7 @@ to build a Minecraft-style server browser on top of
   mapping :godot:`StringName <StringName>` ids to :ref:`LobbyDirectory <class_LobbyDirectory>` instances.
 
 The reference scene at
-``addons/networked/connect/server_browser.tscn`` wires these together:
+``addons/networked/connect/ui/connect_browser.tscn`` wires these together:
 it loads the persisted list, fires one probe per saved target through
 a :ref:`ProbeManager <class_ProbeManager>`, and renders rows grouped by provenance.
 All rows dispatch uniformly through :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>`
@@ -267,7 +267,7 @@ Wiring it up looks like:
 .. code-block:: gdscript
 
     var browser := preload(
-        "res://addons/networked/connect/server_browser.tscn"
+        "res://addons/networked/connect/ui/connect_browser.tscn"
     ).instantiate()
     browser.tree = multiplayer_tree
     browser.backend_templates = [ENetBackend.new(), WebSocketBackend.new()]
@@ -276,8 +276,3 @@ Wiring it up looks like:
     # Optional: surface lobbies from a SteamLobbyDirectory in the same list.
     var session := Netw.ctx(multiplayer_tree).connect
     session.register_directory(&"steam", steam_directory)
-
-A minimal address-only form lives at
-``addons/networked/connect/connect_overlay.tscn`` for projects that do
-not need the full browser. It emits a single ``connect_requested``
-signal carrying a :ref:`JoinTarget <class_JoinTarget>`.

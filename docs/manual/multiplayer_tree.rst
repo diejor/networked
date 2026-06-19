@@ -13,7 +13,7 @@ which players have been accepted into the world.
 Most user code never instantiates the tree manually. You add it as a node in
 the editor, fill in its inspector fields, and then either let it connect on
 :godot:`_ready() <Node#class_node_private_method__ready>` (via
-:button:`Init Join Payload`) or drive it from a script with
+:ref:`debug_join <class_MultiplayerTree_property_debug_join>`) or drive it from a script with
 :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`. This
 page describes the lifecycle, the role and state machine, custom transports,
 and configured roles.
@@ -86,7 +86,7 @@ or grey out a *Disconnect* button can subscribe once and be done.
     before the tree has finished
     configuring is a programmer error. The role is still :ref:`NONE <class_MultiplayerTree_constant_NONE>` and the
     addon will log a warning. Connect to the
-    :ref:`configured <class_MultiplayerTree_signal_configured>` signal
+    :ref:`session_entered <class_MultiplayerTree_signal_session_entered>` signal
     instead, or guard the read with :ref:`state <class_MultiplayerTree_property_state>` == :ref:`ONLINE <class_MultiplayerTree_constant_ONLINE>`.
 
 The :ref:`desired_role <class_MultiplayerTree_property_desired_role>`
@@ -131,14 +131,14 @@ A typical local flow looks like this:
    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`
    everywhere, including locally on the new peer.
 
-For the protocol behind ``query_server_info`` and probe isolation, see
+For the protocol behind :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` and probe isolation, see
 :doc:`pre_game_connection`.
 
 Matches from external matchmaking and lobby systems (like Steam lobbies) are
 unified under the exact same API: the directory service packages the matching
 lobby ID and backend template into a :ref:`JoinTarget <class_JoinTarget>`
 which is passed directly to :ref:`join() <class_MultiplayerTree_method_join>`.
-The tree then initializes the backend (e.g. `SteamBackend`) and finalizes the
+The tree then initializes the backend (e.g. :ref:`SteamBackend <class_SteamBackend>`) and finalizes the
 session through :ref:`join() <class_MultiplayerTree_method_join>` or
 :ref:`host_player() <class_MultiplayerTree_method_host_player>` identically
 to ENet or WebSocket connections.
@@ -149,7 +149,7 @@ Signals you will actually wire
 The tree exposes a generous list of signals. The ones you wire on day one
 are:
 
-- :ref:`configured <class_MultiplayerTree_signal_configured>`: the API and
+- :ref:`session_entered <class_MultiplayerTree_signal_session_entered>`: the API and
   scene manager are ready. Use this to register custom services or to read
   :ref:`role <class_MultiplayerTree_property_role>` for the first time.
 - :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`:
@@ -175,18 +175,19 @@ Closing a session is just calling
 It flushes the local peer's :ref:`SaveComponent <class_SaveComponent>` data,
 closes the multiplayer peer, awaits the server's confirmation (with a 3
 second cap), and then resets :ref:`state <class_MultiplayerTree_property_state>` to :ref:`OFFLINE <class_MultiplayerTree_constant_OFFLINE>` and :ref:`role <class_MultiplayerTree_property_role>` to
-:ref:`NONE <class_MultiplayerTree_constant_NONE>`. If the session ran with an automatically-spawned sibling
+:ref:`NONE <class_MultiplayerTree_constant_NONE>`. Exiting the :ref:`ONLINE <class_MultiplayerTree_constant_ONLINE>` state
+triggers the :ref:`session_ended <class_MultiplayerTree_signal_session_ended>` signal, letting session-scoped
+subscribers release their resources and clean up. If the session ran with an automatically-spawned sibling
 ``Server`` tree, that node is queue-freed as part of the teardown.
 
-The tree also cleans itself up when removed from the tree mid-session.
-:godot:`_exit_tree() <Node#class_node_private_method__exit_tree>` unmounts the API, closes the peer, and clears the auth
+The tree also cleans itself up when removed from the tree mid-session or queue-freed directly.
+This exit path unmounts the API, closes the peer, and clears the auth
 coordinator and service registry so nothing keeps a strong reference back
-to the dying tree.
+to the dying tree. However, because this bypasses the state machine transitions, the
+:ref:`session_ended <class_MultiplayerTree_signal_session_ended>` signal is not fired.
 
 .. tip::
 
     Networked never assumes you want to reconnect on the same tree
     instance. Tear it down, free it, and add a fresh one. The addon is
-    cheap to instantiate. The minimal
-    ``addons/networked/connect/connect_overlay.tscn`` example follows
-    that pattern and is a good model to copy.
+    cheap to instantiate.

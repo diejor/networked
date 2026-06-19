@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cakl64wxtsgth"]
 
 [ext_resource type="Script" uid="uid://dpokufhqiu4rj" path="res://addons/networked/nodes/tp/area_tp.gd" id="1_lteo1"]
+[ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="2_wetdl"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_mc20k"]
 radius = 42.047592
@@ -15,3 +16,14 @@ shape = SubResource("CircleShape2D_mc20k")
 
 [node name="Marker2D" type="Marker2D" parent="." unique_id=1623728489]
 position = Vector2(126, 122)
+
+[node name="Label" type="Label" parent="." unique_id=603578524]
+offset_left = -40.0
+offset_top = -77.0
+offset_right = 38.0
+offset_bottom = -54.0
+text = "TELEPORT"
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2104250637]
+scale = Vector2(0.375, 0.375)
+texture = ExtResource("2_wetdl")

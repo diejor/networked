@@ -167,10 +167,10 @@ that participant's copy of a player with
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    class_name TestDailyTwoPlayers
+    class_name TestQuickStartTwoPlayers
     extends NetwTestSuite
 
-    const MAIN := preload("res://examples/daily/Main.tscn")
+    const MAIN := preload("res://examples/quick_start/Main.tscn")
     const LEVEL_1_SPAWN := (
         "uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
     )

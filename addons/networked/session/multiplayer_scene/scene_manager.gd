@@ -182,7 +182,7 @@ func _get(property: StringName) -> Variant:
 ## [param scene_name] is the basename of the registered scene file (e.g.
 ## [code]&"Level1"[/code] for [code]res://levels/Level1.tscn[/code]).
 ##
-## Useful for runtime policy changes (e.g. bomber/daily switching from
+## Useful for runtime policy changes (e.g. bomber/quick_start switching from
 ## [constant LoadMode.ON_STARTUP] to [constant LoadMode.ON_DEMAND] for
 ## post-match scenes) and for tests configuring lifecycle without
 ## reaching into [code]_set("scene_config/...", ...)[/code].

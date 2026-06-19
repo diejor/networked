@@ -79,8 +79,7 @@ Anywhere in the session, recover the service with the typed accessor:
 
     var ctx := Netw.ctx(self)
     var gamestate: BomberGamestate = ctx.services.get_service(BomberGamestate)
-    if gamestate:
-        gamestate.begin_match()
+    gamestate.begin_match()
 
 Services must be descendants of the tree node. The tree asserts on this
 because it owns the service registry's lifetime. If you need a service

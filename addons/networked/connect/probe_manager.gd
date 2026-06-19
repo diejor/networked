@@ -2,9 +2,9 @@
 ## not flood the server.
 ##
 ## [member max_concurrent] sits below the server-side
-## [code]MAX_ACTIVE_PROBES[/code] (32 in [AuthProbeResponder]) so a single
+## [constant AuthProbeResponder.MAX_ACTIVE_PROBES] (32 in [AuthProbeResponder]) so a single
 ## client cannot self-throttle the host. [member default_timeout] stays
-## below [member SceneMultiplayer.auth_timeout] (3.0s) to avoid racing
+## below [code]SceneMultiplayer.auth_timeout[/code] (3.0s) to avoid racing
 ## the server-side reaper.
 ## [br][br]
 ## Submit work via [method query], and cancel everything in flight with

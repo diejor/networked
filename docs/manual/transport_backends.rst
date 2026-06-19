@@ -40,11 +40,11 @@ loopback, and both will get you through the entire
      - Yes
      - Yes
      - TCP-based, works in HTML5, slightly higher latency than ENet.
-   * - WebRTC (via `tube <https://github.com/koopmyers/tube>`__)
-     - No (peer-to-peer)
+   * - :ref:`WebRTCBackend <class_WebRTCBackend>`
      - Yes
-     - Requires a signalling server. Useful for matchmade lobbies without
-       running your own authoritative server.
+     - Yes
+     - Native WebRTC peer-to-peer transport. Requires a signaling server
+       (such as the optional :ref:`TrackerWebRTCBackend <class_TrackerWebRTCBackend>`).
    * - :ref:`SteamBackend <class_SteamBackend>`
      - No
      - No

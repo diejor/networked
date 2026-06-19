@@ -32,7 +32,7 @@ You should already have:
   single-player Godot scene before, you have enough.
 
 If you only want to read along, the snippets in this page are taken from the
-``examples/daily`` project that ships with the source repository. Open it in
+``examples/quick_start`` project that ships with the source repository. Open it in
 the editor and use :kbd:`F5` to follow along with a working scene.
 
 The mental model
@@ -56,7 +56,7 @@ will meet in this quick start are the moving parts of every session.
   this first project) replicates whole levels to clients. For a single-scene
   game you can skip it: dropping a world scene directly under the tree makes
   Networked auto-configure a one-scene manager behind the scenes.
-- :ref:`SpawnerComponent <class_SpawnerComponent>` marks one node in a scene
+- :ref:`MultiplayerEntity <class_MultiplayerEntity>` marks one node in a scene
   as the spawnable player template. It extends Godot's
   :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` and bundles
   initial state (position, peer authority, custom properties) into the spawn
@@ -70,16 +70,12 @@ Setting up the session
 
 Create a new empty scene with a :godot:`Node2D <Node2D>` root and save it as
 ``main.tscn``. Add a child :godot:`Node <Node>` named ``Client`` (this name
-is arbitrary. Attach the :ref:`MultiplayerTree <class_MultiplayerTree>` 
+is arbitrary). Attach the :ref:`MultiplayerTree <class_MultiplayerTree>` 
 script to the new node.
 
 In the inspector for ``Client``, click :button:`<empty>` next to the
-:button:`Backend` property and choose :menu:`New WebSocketBackend`. The
-WebSocket backend is convenient for early testing because it works in HTML5
-exports without any extra configuration. If you target desktop only, pick
-:menu:`New ENetBackend` instead. Both implement the same
-:ref:`BackendPeer <class_BackendPeer>` interface, so the rest of this page
-applies unchanged.
+:button:`Backend` property and choose :menu:`New ENetBackend`. This implements the
+:ref:`BackendPeer <class_BackendPeer>` interface.
 
 You now have a tree that can host or join, but no world for players to spawn
 into. Let's build one.
@@ -92,9 +88,9 @@ Create a second scene, ``player.tscn``, with a
 :godot:`Sprite2D <Sprite2D>` for visuals, and a
 :godot:`CollisionShape2D <CollisionShape2D>`. Save it.
 
-Now add a :ref:`SpawnerComponent <class_SpawnerComponent>` child to the
+Now add a :ref:`MultiplayerEntity <class_MultiplayerEntity>` child to the
 :godot:`CharacterBody2D <CharacterBody2D>`. The component automatically renames itself to
-:ref:`SpawnerComponent <class_SpawnerComponent>` and registers a unique name. In the *Replication* panel
+:ref:`MultiplayerEntity <class_MultiplayerEntity>` and registers a unique name. In the *Replication* panel
 at the bottom of the editor, add a single property: the body's :godot:`position <Node2D#class_node2d_property_position>`,
 with the *Spawn* checkbox enabled. This tells the server to bundle the
 player's starting position into the spawn packet so the entity appears in the
@@ -103,13 +99,13 @@ right place on every client's first frame.
 .. note::
 
     All flags other than *Spawn* are coerced to off at runtime,
-    :ref:`SpawnerComponent <class_SpawnerComponent>` only uses the
+    :ref:`MultiplayerEntity <class_MultiplayerEntity>` only uses the
     replication config for the spawn snapshot. For continuous state
     replication, add a sibling
     :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` and configure
     it independently.
 
-Set the body's *Authority Mode* on the component to :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` if you want
+Set the :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>` on the component to :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>` if you want
 the connecting player to drive their own movement. This is the common case
 for player avatars: server stays the source of truth for spawn and despawn,
 but the client peer owns the body itself and can read input from
@@ -122,7 +118,7 @@ copies it for each connecting peer. Add a :godot:`MultiplayerSpawner <Multiplaye
 that tracks ``player.tscn`` in the auto-spawn list.
 
 Back in ``main.tscn``, drag ``level.tscn`` as a child of the ``Client`` node.
-Because the level contains a :ref:`SpawnerComponent <class_SpawnerComponent>`
+Because the level contains a :ref:`MultiplayerEntity <class_MultiplayerEntity>`
 descendant, the tree's :godot:`_enter_tree() <Node#class_node_private_method__enter_tree>` will detect it on play and silently
 substitute it for a one-scene
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` configured to
@@ -148,11 +144,11 @@ separately to the entry method:
     func _ready() -> void:
         var spawner_path := SceneNodePath.new()
         spawner_path.scene_path = LEVEL.resource_path
-        spawner_path.node_path = "Player/%SpawnerComponent"
+        spawner_path.node_path = "Player/%MultiplayerEntity"
 
         var join := JoinPayload.new()
         join.username = "alice"
-        join.spawn = SpawnerComponentPolicy.from_scene_node_path(spawner_path).to_dict()
+        join.spawn = EntitySpawnPolicy.from_scene_node_path(spawner_path).to_dict()
 
         var target := JoinTarget.new()
         target.backend = client.backend
@@ -168,10 +164,10 @@ call :ref:`join() <class_MultiplayerTree_method_join>` instead.
 
 .. tip::
 
-    Dropping a world scene (one containing a ``SpawnerComponent``) directly
+    Dropping a world scene (one containing a ``MultiplayerEntity``) directly
     as a child of the :ref:`MultiplayerTree <class_MultiplayerTree>` auto-creates
     a :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` and assigns
-    the tree a :ref:`SpawnerComponentPolicy <class_SpawnerComponentPolicy>`, so
+    the tree a :ref:`EntitySpawnPolicy <class_EntitySpawnPolicy>`, so
     joining players spawn automatically without any spawn-handling code. A tree
     without a dropped world scene leaves ``spawn_policy`` unset, so you control
     spawning from
@@ -209,8 +205,8 @@ guard is essential: every peer runs :godot:`_physics_process() <Node#class_node_
 :godot:`CharacterBody2D <CharacterBody2D>` in the level, but only the peer
 that owns this particular body should be the one writing to ``velocity``.
 
-The :ref:`CLIENT <class_SpawnerComponent_constant_CLIENT>` authority mode you picked earlier means
-:ref:`SpawnerComponent <class_SpawnerComponent>` sets that peer's id as the
+The :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>` value on the :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>` property you picked earlier means
+:ref:`MultiplayerEntity <class_MultiplayerEntity>` sets that peer's id as the
 body's multiplayer authority right after spawn, so the right player is in
 control with no extra wiring.
 

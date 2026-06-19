@@ -4,7 +4,9 @@
 
 [resource]
 script = ExtResource("1_aghgm")
+global_level = 3
 module_overrides = {
-"addons.networked.core.multiplayer_interpolator": 5
+"debug": 5,
+"transport": 3
 }
 metadata/_custom_type_script = "uid://df08q81gaomy3"

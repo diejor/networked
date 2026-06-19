@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cthf7wjwb4n77"]
 
-[ext_resource type="PackedScene" uid="uid://cakl64wxtsgth" path="res://examples/daily/Teleporter.tscn" id="1_8mrap"]
+[ext_resource type="PackedScene" uid="uid://cakl64wxtsgth" path="res://examples/quick_start/Teleporter.tscn" id="1_8mrap"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="2_q04gf"]
 [ext_resource type="Texture2D" uid="uid://ntsmds3f8a11" path="res://addons/networked/addons/scene_node_path/icon.svg" id="3_s8dg4"]
 

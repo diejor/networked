@@ -192,6 +192,6 @@ contains:
   :ref:`MultiplayerInterpolator <class_MultiplayerInterpolator>` on remote copies to
   smooth out the snapshotted position between server ticks.
 
-The ``examples/daily/Player.tscn`` and
+The ``examples/quick_start/Player.tscn`` and
 ``examples/bomber/game/player.tscn`` scenes in the repository both follow
 this shape and are good reference reads.

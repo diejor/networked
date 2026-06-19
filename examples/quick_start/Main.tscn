@@ -101,7 +101,7 @@ metadata/_custom_type_script = "uid://lb7h272e5fhb"
 
 [node name="WebTorrentDirectory" type="Node" parent="Client" unique_id=667483632]
 script = ExtResource("8_xoeqs")
-browser_filter_uid = "networked-example-daily"
+browser_filter_uid = "networked-example-quick-start"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
@@ -119,4 +119,4 @@ offset_bottom = 247.0
 tree = NodePath("../../Client")
 backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo"), SubResource("Resource_y6djk")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
-server_list_path = "user://daily/servers.tres"
+server_list_path = "user://quick_start/servers.tres"
