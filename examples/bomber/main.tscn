@@ -29,13 +29,11 @@ auth_provider = SubResource("Resource_gbknk")
 app_id = &"7x283tsfmy1xpr4"
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="MultiplayerTree" unique_id=274629760]
-_spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
+_spawnable_scenes = PackedStringArray("uid://l523ox2awhi6")
 spawn_path = NodePath(".")
 script = ExtResource("4_p4o8j")
-scene_config/Level1/load_mode = 1
-scene_config/Level1/empty_action = 1
-scene_config/Level2/load_mode = 1
-scene_config/Level2/empty_action = 1
+scene_config/world/load_mode = 1
+scene_config/world/empty_action = 1
 
 [node name="Gamestate" type="Node" parent="MultiplayerTree" unique_id=487890910]
 unique_name_in_owner = true
