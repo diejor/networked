@@ -180,6 +180,7 @@ func test_disconnect_during_match_ends_the_game() -> void:
 
 	assert_bool(errored[0]).is_true()
 	assert_that(gamestate.world).is_null()
+	await drain_frames(get_tree(), 10)
 
 
 func _begin_game(host: NetwSceneRunner) -> void:

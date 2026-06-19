@@ -123,13 +123,15 @@ func request(view_tick: int, data: Variant = null) -> void:
 	var ghost: Node = null
 	if predict.is_valid():
 		ghost = predict.call() as Node
+	var ghost_ref := weakref(ghost) if ghost else null
 	var revert_callable := _revert_callable(ghost)
 	_lag.effects.arm(key, revert_callable, timeout_ticks)
 	service._watch_action(
 		key,
 		func() -> void:
-			if is_instance_valid(ghost):
-				ghost.queue_free()
+			var node := ghost_ref.get_ref() as Node if ghost_ref else null
+			if is_instance_valid(node):
+				node.queue_free()
 			_emit_confirmed(),
 		_emit_denied,
 	)
@@ -144,11 +146,16 @@ func request(view_tick: int, data: Variant = null) -> void:
 
 
 func _revert_callable(ghost: Node) -> Callable:
+	var ghost_ref := weakref(ghost) if ghost else null
 	if revert.is_valid():
-		return revert.bind(ghost)
+		return func() -> void:
+			var node := ghost_ref.get_ref() as Node if ghost_ref else null
+			if is_instance_valid(node):
+				revert.call(node)
 	return func() -> void:
-		if is_instance_valid(ghost):
-			ghost.queue_free()
+		var node := ghost_ref.get_ref() as Node if ghost_ref else null
+		if is_instance_valid(node):
+			node.queue_free()
 
 
 func _service() -> LagCompensationService:

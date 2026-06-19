@@ -21,6 +21,7 @@ func test_active_ai_disconnects_mid_match() -> void:
 
 	assert_bool(errored[0]).is_true()
 	assert_bool(gamestate.world == null).is_true()
+	await drain_frames(get_tree(), 10)
 
 
 func test_half_lobby_disconnects_during_active_play() -> void:
@@ -42,3 +43,4 @@ func test_half_lobby_disconnects_during_active_play() -> void:
 
 	assert_bool(errored[0]).is_true()
 	assert_bool(gamestate.world == null).is_true()
+	await drain_frames(get_tree(), 10)

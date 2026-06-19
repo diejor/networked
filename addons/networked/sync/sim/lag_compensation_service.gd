@@ -273,7 +273,10 @@ func _deny_action_to(requester: int, key: StringName) -> void:
 		_effect_discard(key)
 		return
 	if multiplayer and multiplayer.multiplayer_peer:
-		_deny_action.rpc_id(requester, key)
+		if requester in multiplayer.get_peers():
+			_deny_action.rpc_id(requester, key)
+		else:
+			_effect_discard(key)
 	else:
 		_effect_discard(key)
 
