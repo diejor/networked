@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_VERSION: 4.6 # drives the export_templates dir name (4.6.stable)
+  GODOT_VERSION: 4.7 # drives the export_templates dir name (4.7.stable)
 
 jobs:
   deploy:
@@ -29,7 +29,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04 # 24.04 required for Godot 4
     container:
-      image: barichello/godot-ci:4.6
+      image: barichello/godot-ci:4.7
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

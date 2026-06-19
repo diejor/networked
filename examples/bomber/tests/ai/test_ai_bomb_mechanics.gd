@@ -12,9 +12,9 @@ func test_bomb_rate_limit_holds_with_four_bombers() -> void:
 	await run_until(ais, ticks)
 	var settled := await tick_until(
 		func() -> bool:
-			var host_bombs := count_bombs(game.host)
+			var _host_bombs := count_bombs(game.host)
 			for r in runners:
-				if count_bombs(r) != host_bombs:
+				if count_bombs(r) != _host_bombs:
 					return false
 			return true,
 		60,

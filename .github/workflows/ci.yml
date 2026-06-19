@@ -20,9 +20,14 @@ concurrency:
 
 jobs:
   unit-test:
-    name: "GdUnit4 Tests"
+    name: "GdUnit4 Tests (${{ matrix.godot-version }})"
     runs-on: 'ubuntu-22.04'
     timeout-minutes: 15
+    continue-on-error: ${{ matrix.godot-version != '4.7' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        godot-version: ['4.4', '4.5', '4.6', '4.7']
     permissions:
       actions: write
       checks: write
@@ -39,7 +44,7 @@ jobs:
       - name: Run GdUnit4 Tests
         uses: MikeSchulze/gdUnit4-action@v1.0.2
         with:
-          godot-version: '4.6'
+          godot-version: ${{ matrix.godot-version }}
           # Use the repo's vendored addons/gdUnit4 (6.0.0) instead of cloning
           # gdUnit4 'latest' at run time, so CI runs the same gdUnit as local.
           version: 'installed'
@@ -47,4 +52,4 @@ jobs:
             res://tests/
             res://examples/
           timeout: 10
-          report-name: test_report.xml
+          report-name: test_report_${{ matrix.godot-version }}.xml

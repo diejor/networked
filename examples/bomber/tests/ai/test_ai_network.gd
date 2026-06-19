@@ -63,9 +63,9 @@ func _views_converged(runners: Array[NetwSceneRunner], epsilon: float) -> bool:
 		for other in runners:
 			if r == other:
 				continue
-			var name := StringName(other.username)
-			var host_view := game.host.find_player(name) as Node2D
-			var peer_view := r.find_player(name) as Node2D
+			var _name := StringName(other.username)
+			var host_view := game.host.find_player(_name) as Node2D
+			var peer_view := r.find_player(_name) as Node2D
 			if not is_instance_valid(host_view) \
 					or not is_instance_valid(peer_view):
 				return false

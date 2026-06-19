@@ -13,9 +13,10 @@ config_version=5
 config/name="networked"
 config/tags=PackedStringArray("addon", "multiplayer", "networked")
 run/main_scene="uid://bi445hl7e416b"
-config/features=PackedStringArray("4.6", "GL Compatibility")
-boot_splash/show_image=false
-config/icon="res://icon.svg"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/image="uid://b8cn2fun55jsg"
+config/icon="uid://cv7fmxmauvaxo"
+config/macos_native_icon="res://assets/networked.icns"
 
 [autoload]
 

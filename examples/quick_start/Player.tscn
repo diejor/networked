@@ -1,13 +1,13 @@
 [gd_scene format=3 uid="uid://bo5hexvshy77x"]
 
 [ext_resource type="Script" uid="uid://d3hydnehhflk" path="res://examples/quick_start/player.gd" id="1_kne1u"]
-[ext_resource type="Texture2D" uid="uid://dbb6gk33m6anl" path="res://icon.svg" id="2_kpjcp"]
 [ext_resource type="Script" uid="uid://c4gt8tvkmcals" path="res://addons/networked/nodes/tp/tp_component.gd" id="4_e80uo"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="5_cxr5p"]
 [ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="5_dgaqa"]
 [ext_resource type="Script" uid="uid://c72wanrudisxw" path="res://addons/networked/nodes/persistent/save_component.gd" id="7_0cf0o"]
 [ext_resource type="Resource" uid="uid://yv4uuygdxogs" path="res://examples/quick_start/quick_start_database.tres" id="8_dgaqa"]
 [ext_resource type="Script" uid="uid://cwf8sf34fk0ib" path="res://addons/networked/nodes/input/move_input_component.gd" id="9_5h0xu"]
+[ext_resource type="Texture2D" uid="uid://b8cn2fun55jsg" path="res://assets/networked.png" id="9_u2lnn"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_wi0c6"]
 
 [sub_resource type="Resource" id="Resource_tdg3f"]
@@ -41,8 +41,9 @@ func _ready() -> void:
 	make_current()
 "
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_tdg3f"]
-size = Vector2(84, 20)
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_u845s"]
+radius = 8.0
+height = 45.0
 
 [node name="Player" type="CharacterBody2D" unique_id=551400704]
 motion_mode = 1
@@ -100,8 +101,11 @@ script = SubResource("GDScript_tdg3f")
 
 [node name="Icon" type="Sprite2D" parent="." unique_id=1849231106]
 physics_interpolation_mode = 2
-texture = ExtResource("2_kpjcp")
+scale = Vector2(0.17578126, 0.17578131)
+texture = ExtResource("9_u2lnn")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1992514444]
-position = Vector2(2, 60)
-shape = SubResource("RectangleShape2D_tdg3f")
+position = Vector2(0.5, 41)
+rotation = -1.5707964
+shape = SubResource("CapsuleShape2D_u845s")
+disabled = true

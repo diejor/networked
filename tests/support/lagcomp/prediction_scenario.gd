@@ -73,6 +73,8 @@ func setup(
 	server = inner.server()
 	server_clock = await inner.add_clock(tickrate, display_offset)
 	client_clock = client.get_service(MultiplayerClock) as MultiplayerClock
+	server_clock.manual_tick = true
+	client_clock.manual_tick = true
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
 	# The service auto-registers on each tree, so resolve it rather than mounting one.
