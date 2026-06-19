@@ -29,4 +29,5 @@
 
 ## Credits
 
+- **netfox:** The lag compensation architecture was inspired by the [netfox](https://github.com/foxssake/netfox) Godot addon. The original creator is [Tamás Gálffy](https://github.com/foxssake).
 - **Tube:** The WebRTC tracker signaling architecture and user-friendly room code concepts were inspired by and adapted from the [Tube](https://github.com/koopmyers/tube) Godot addon created by [koopmyers](https://github.com/koopmyers).
