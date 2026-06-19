@@ -24,9 +24,30 @@ extends StampedSynchronizer
 ## Virtual name of the ack-bounded input redundancy window.
 const INPUT_WINDOW := &"__input_window"
 
+## Peer audience for controller-authored input.
+enum Audience {
+	## Replicate input only to server authority.
+	SERVER_ONLY,
+	## Replicate input to every visible peer.
+	PUBLIC,
+}
+
 ## Invoked on the server after an input packet is flushed, with the packet's
 ## [code](tick, input)[/code].
 var on_input_received: Callable = Callable()
+
+## Visibility policy for controller-authored input.
+##
+## [constant Audience.SERVER_ONLY] keeps raw input on the controller to server
+## stream. [constant Audience.PUBLIC] leaves [member public_visibility] enabled
+## for projects that intentionally let peers consume other peers' input.
+## [codeblock]
+## input.audience = InputSynchronizer.Audience.SERVER_ONLY
+## [/codeblock]
+@export var audience: Audience = Audience.SERVER_ONLY:
+	set(value):
+		audience = value
+		_apply_audience()
 
 ## Window size policy. [code]0[/code] derives the size from cadence (see
 ## [method redundancy_packets]). A positive value is an explicit sample count.
@@ -115,6 +136,7 @@ func _ordered_virtual_names() -> Array[StringName]:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PARENTED:
+		_apply_audience()
 		var entity := NetwEntity.of(self)
 		if entity:
 			entity.input = self
@@ -141,6 +163,16 @@ func _on_control_changed(_previous_peer: int, _peer: int) -> void:
 func _bind_authority(entity: NetwEntity) -> void:
 	var controller := entity.controller
 	set_multiplayer_authority(controller if controller != 0 else 1)
+
+
+func _apply_audience() -> void:
+	if audience == Audience.PUBLIC:
+		public_visibility = true
+		update_visibility()
+		return
+	public_visibility = false
+	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
+	update_visibility()
 
 
 func _record_one(tick: int, payload: Dictionary) -> void:

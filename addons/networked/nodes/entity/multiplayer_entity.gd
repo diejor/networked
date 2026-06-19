@@ -155,6 +155,8 @@ var _pending_entity_id: StringName = &""
 var _pending_peer_id := 0
 var _pending_controller := 0
 var _pending_controller_binding_set := false
+var _action_spawn_hidden := false
+var _action_spawn_original_visible := true
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -213,6 +215,14 @@ var controller_binding_set := false:
 		return _pending_controller_binding_set
 	set(value):
 		_pending_controller_binding_set = value
+
+## Logical tick that produced this spawned action result.
+##
+## [code]-1[/code] means the entity did not come from [NetwAction].
+var action_spawn_tick: int = -1
+
+## Peer that requested the [NetwAction] result, or [code]0[/code].
+var action_requester: int = 0
 
 
 func _get_entity_record() -> NetwEntity:
@@ -299,6 +309,8 @@ func _notification(what: int) -> void:
 	_ensure_replication_config()
 	entity.contribute_spawn_property(self, &"controller")
 	entity.contribute_spawn_property(self, &"controller_binding_set")
+	entity.contribute_spawn_property(self, &"action_spawn_tick")
+	entity.contribute_spawn_property(self, &"action_requester")
 	_hydrate_identity_once(entity)
 	_hydrate_controller_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
@@ -335,6 +347,9 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	var clock := MultiplayerClock.for_node(self)
+	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.disconnect(_on_action_reveal_tick)
 	if _is_local_represented_peer():
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.local_player == owner:
@@ -362,6 +377,7 @@ func _on_owner_tree_entered() -> void:
 		_hydrate_controller_once(entity)
 	_sanitize_replication_config()
 	_apply_control()
+	_apply_action_spawn_visibility()
 	if is_template:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
@@ -421,6 +437,73 @@ func _apply_control() -> void:
 		var entity := _get_entity_record()
 		if entity:
 			entity.control_changed.emit(previous_controller, peer)
+
+
+# Hides remote action results until the local display playhead reaches the
+# action tick. The requester keeps its immediate predicted presentation.
+func _apply_action_spawn_visibility() -> void:
+	if action_spawn_tick < 0:
+		return
+	if _is_local_action_requester():
+		return
+	var clock := MultiplayerClock.for_node(self)
+	if not clock:
+		return
+	if _action_display_reached(clock):
+		return
+	if not _set_owner_visible(false):
+		return
+	_action_spawn_hidden = true
+	if not clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.connect(_on_action_reveal_tick)
+
+
+func _on_action_reveal_tick(_delta: float, tick: int) -> void:
+	var clock := MultiplayerClock.for_node(self)
+	if not clock:
+		_reveal_action_spawn()
+		return
+	var display_tick := maxi(0, tick - clock.display_offset)
+	if display_tick >= action_spawn_tick:
+		_reveal_action_spawn()
+
+
+func _reveal_action_spawn() -> void:
+	var clock := MultiplayerClock.for_node(self)
+	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.disconnect(_on_action_reveal_tick)
+	if not _action_spawn_hidden:
+		return
+	_set_owner_visible(_action_spawn_original_visible)
+	_action_spawn_hidden = false
+
+
+func _action_display_reached(clock: MultiplayerClock) -> bool:
+	return clock.display_tick >= action_spawn_tick
+
+
+func _is_local_action_requester() -> bool:
+	if action_requester == 0:
+		return false
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	return action_requester == multiplayer.get_unique_id()
+
+
+func _set_owner_visible(value: bool) -> bool:
+	if owner is CanvasItem:
+		var item := owner as CanvasItem
+		if not _action_spawn_hidden:
+			_action_spawn_original_visible = item.visible
+		item.visible = value
+		return true
+	if owner is Node3D:
+		var spatial := owner as Node3D
+		if not _action_spawn_hidden:
+			_action_spawn_original_visible = spatial.visible
+		spatial.visible = value
+		return true
+	return false
 
 
 func _effective_controller() -> int:

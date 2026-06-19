@@ -5,7 +5,6 @@ const GHOST_BOMB = preload("uid://qtc6lu84omhi")
 const TILE_SIZE := 48.0
 const BOMB_CELL_TOLERANCE := TILE_SIZE * 1.5
 
-
 ## The player's movement speed (in pixels per second).
 const MOTION_SPEED = 90.0
 
@@ -31,18 +30,22 @@ var current_anim: String = ""
 
 func _ready() -> void:
 	stunned = false
+	bomb_action.timing_mode = \
+	NetwAction.TimingMode.TICK_ALIGNED_STATE_READY
 	bomb_action.predict = func() -> Node:
 		var ghost := GHOST_BOMB.instantiate()
 		ghost.position = position
 		add_sibling(ghost)
 		return ghost
 
+
 ## The simulation contract, run by the server (authoritative), the owning client
 ## (prediction), and the owning client again during replay (is_fresh = false).
 ## Input is on the live [code]inputs[/code] node, applied by the framework.
 func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	last_bomb_time += delta
-	if is_fresh and entity.is_controlled_locally and not stunned and inputs.bombing:
+	if is_fresh and entity.is_controlled_locally \
+			and not stunned and inputs.bombing:
 		if last_bomb_time < BOMB_RATE:
 			return
 		bomb_action.request(tick, position)
@@ -69,7 +72,8 @@ func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
 	if not past.has_value(&"position"):
 		action_context.deny()
 		return
-	if past.get_value(&"position").distance_to(pos) > BOMB_CELL_TOLERANCE:
+	var past_position := past.get_value(&"position") as Vector2
+	if past_position.distance_to(pos) > BOMB_CELL_TOLERANCE:
 		action_context.deny()
 		return
 	last_bomb_time = 0.0

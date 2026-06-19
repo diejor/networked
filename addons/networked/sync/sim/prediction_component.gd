@@ -253,6 +253,32 @@ func order_key() -> String:
 	return str(_entity.entity_id) if _entity else ""
 
 
+## Returns the [NetwTimeline] state key for the latest authoritative snapshot.
+##
+## Remote client input applies at its authored input tick, and the resulting
+## state belongs to the following state tick. Server rewind history uses that
+## input-backed tick so [method LagCompensationService.sample] answers the same
+## timeline the predicting client records.
+## [codeblock]
+## input tick t -> authoritative state tick t + 1
+## [/codeblock]
+func history_record_tick(fallback_tick: int) -> int:
+	if _role == Role.CONSUME and _ack >= 0:
+		return _ack + 1
+	return fallback_tick
+
+
+## Returns true when this component has consumed through [param state_tick].
+##
+## Server-side state-ready actions use this to wait for recorded state, not just
+## received input. Non-consume roles do not trail a remote input stream, so they
+## are considered ready.
+func has_consumed_state_tick(state_tick: int) -> bool:
+	if _role != Role.CONSUME:
+		return true
+	return _ack >= 0 and _ack + 1 >= state_tick
+
+
 func _on_control_changed(_previous_peer: int, _peer: int) -> void:
 	_rewire()
 

@@ -28,4 +28,7 @@ func record(registry: TimelineRegistry, tick: int) -> void:
 			continue
 		var state := entity.state
 		if state:
-			timelines[entity].record_state(tick, state.snapshot_payload())
+			var record_tick := tick
+			if entity.prediction:
+				record_tick = entity.prediction.history_record_tick(tick)
+			timelines[entity].record_state(record_tick, state.snapshot_payload())

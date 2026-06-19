@@ -88,6 +88,14 @@ var missing: int:
 	get:
 		return server_prediction.missing_count
 
+## Last input tick the server acknowledged to the predicting client.
+var latest_ack: int:
+	get:
+		if observer.divergence_log.is_empty():
+			return -1
+		var entry: Dictionary = observer.divergence_log.back()
+		return int(entry.get(&"ack", -1))
+
 
 # Binds the matched root pair and resolves their entity records.
 func _bind(server_node: LagCompSimBody, client_node: LagCompSimBody) -> void:
@@ -120,6 +128,21 @@ func peak_divergence() -> float:
 ## Worst finite divergence over the last [param n] receives.
 func tail_divergence(n: int) -> float:
 	return observer.tail_divergence(n)
+
+
+## Returns the predicting client's recorded state at [param tick].
+func predicted_state_at(tick: int) -> Dictionary:
+	if not client_entity or not client_entity.timeline:
+		return { }
+	return client_entity.timeline.latest_state_at_or_before(tick)
+
+
+## Returns the server lag-compensation sample for this entity at [param tick].
+func server_sample_at(tick: int) -> NetwSnapshot:
+	var scenario := _scenario as PredictionScenario
+	if not scenario or not scenario.server:
+		return NetwSnapshot.new()
+	return scenario.server.lag_compensation.sample(server_entity, tick)
 
 
 ## Runs the scenario past RTT with no input and asserts the client body

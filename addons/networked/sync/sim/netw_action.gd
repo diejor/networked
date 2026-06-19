@@ -28,6 +28,33 @@
 class_name NetwAction
 extends RefCounted
 
+## Server execution policy for the authoritative action.
+enum TimingMode {
+	## Execute on the server when [member NetwAction.Context.view_tick] arrives.
+	TICK_ALIGNED,
+	## Execute after server history records
+	## [member NetwAction.Context.view_tick].
+	##
+	## This mode is owner-anchored. It guarantees only that the action owner's
+	## recorded state is ready at the view tick. It does not gate other entities.
+	## Cross-entity validation must use [method NetwLagCompensation.sample] or
+	## [method NetwLagCompensation.rewind] for those targets.
+	##
+	## Determinism is a precondition, not a toggle. The placement agrees with the
+	## client only when consuming the same input yields the same state. Resolution
+	## is deferred until that state exists, so remote peers see the result later.
+	## Use [constant IMMEDIATE] when the action must not wait.
+	##
+	## Under loss, the consume policy may fill a missing input slot. This mode
+	## guarantees a recorded state exists, not that it came from the real input.
+	## [codeblock]
+	## action.timing_mode = NetwAction.TimingMode.TICK_ALIGNED_STATE_READY
+	## [/codeblock]
+	TICK_ALIGNED_STATE_READY,
+	## Execute as soon as the request reaches the server.
+	IMMEDIATE,
+}
+
 ## Emitted when the authoritative result adopts the optimistic effect.
 signal confirmed
 
@@ -43,6 +70,10 @@ var revert: Callable = Callable()
 ## Number of ticks before an unresolved request reverts. [code]0[/code] derives
 ## a conservative default from [LagCompensationService].
 var timeout_ticks: int = 0
+
+## Server execution policy. Defaults to arrival-time execution with no readiness
+## assumptions. Opt into stricter modes per action.
+var timing_mode := TimingMode.IMMEDIATE
 
 var _lag: NetwLagCompensation
 var _authority: Callable
@@ -102,7 +133,14 @@ func request(view_tick: int, data: Variant = null) -> void:
 			_emit_confirmed(),
 		_emit_denied,
 	)
-	service._send_action_request(_target_path, _method, view_tick, data, key)
+	service._send_action_request(
+		_target_path,
+		_method,
+		view_tick,
+		data,
+		key,
+		timing_mode,
+	)
 
 
 func _revert_callable(ghost: Node) -> Callable:
@@ -156,6 +194,12 @@ class Context extends RefCounted:
 	## Tick used for server validation.
 	var view_tick: int = 0
 
+	## Tick the requester originally asked the server to evaluate.
+	var requested_tick: int = 0
+
+	## Server tick that ran the authority method.
+	var execution_tick: int = 0
+
 	var _key: StringName = &""
 	var _service_ref: WeakRef
 	var _denied := false
@@ -166,11 +210,15 @@ class Context extends RefCounted:
 			service: LagCompensationService,
 			p_requester: int,
 			p_view_tick: int,
+			p_requested_tick: int,
+			p_execution_tick: int,
 			p_key: StringName,
 	) -> void:
 		_service_ref = weakref(service) if service else null
 		requester = p_requester
 		view_tick = p_view_tick
+		requested_tick = p_requested_tick
+		execution_tick = p_execution_tick
 		_key = p_key
 
 
@@ -178,6 +226,10 @@ class Context extends RefCounted:
 	## action when the authoritative spawn arrives.
 	func bind(node: Node) -> void:
 		NetwEntity.bind(node, _key, 0)
+		var mp_entity := MultiplayerEntity.unwrap(node)
+		if mp_entity:
+			mp_entity.action_spawn_tick = view_tick
+			mp_entity.action_requester = requester
 		_bound = true
 
 

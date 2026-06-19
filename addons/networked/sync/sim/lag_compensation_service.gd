@@ -35,6 +35,34 @@ extends Node
 # any clock exists, so the bind retries until it appears.
 const _MAX_BIND_ATTEMPTS := 600
 const _DEFAULT_EFFECT_TIMEOUT_TICKS := 120
+# Tri-state result of the action readiness check, shared by admission and drain.
+enum _Readiness { NOT_READY, READY, READY_BY_DEADLINE }
+
+## Maximum number of ticks a player action may be scheduled ahead of the
+## server clock before it is denied.
+@export_custom(0, "suffix:ticks") var max_future_action_ticks: int = 8
+
+## Ticks a [constant NetwAction.TimingMode.TICK_ALIGNED_STATE_READY] action waits
+## for input-backed state at its view tick before it resolves best-effort.
+##
+## A state-ready action queues from the tick the server admits it. It resolves the
+## moment the server has consumed and recorded authoritative state for the view
+## tick, the input-backed slot [method sample] reads. Lost or late input can mean
+## that slot never arrives, so this bound stops the wait from lasting forever. Once
+## the wait reaches it the action resolves against the best available history and
+## [signal action_gate_fallback] fires.
+## [codeblock]
+## queued_at                              state recorded at view_tick -> resolve (input-backed)
+## queued_at + input_gate_deadline_ticks  still no state at view_tick -> resolve best-effort
+## [/codeblock]
+## Set it above the input arrival lag in ticks, about
+## [member MultiplayerClock.recommended_display_offset] for the network and jitter
+## part plus the input send cadence. A value below that resolves state-ready actions
+## best-effort under normal latency, the artifact the gate exists to prevent.
+@export_custom(0, "suffix:ticks") var input_gate_deadline_ticks: int = 12
+
+## Emitted when a state-ready action resolves through its deadline fallback.
+signal action_gate_fallback(key: StringName, view_tick: int)
 
 var _clock: MultiplayerClock
 var _bind_attempts: int = 0
@@ -44,8 +72,10 @@ var _runner: SimulationRunner = SimulationRunner.new()
 var _queries: RewindQueries
 var _effects: Dictionary[StringName, Dictionary] = { }
 var _effect_watchers: Dictionary[StringName, Dictionary] = { }
+var _pending_actions: Array[_PendingAction] = []
 var _action_slots: Dictionary[String, int] = { }
 var _observed_entities: Dictionary[NetwEntity, bool] = { }
+var _gate_fallbacks: int = 0
 
 ## Keyed optimistic effects for [NetwAction] and custom transports.
 var effects: NetwEffects:
@@ -123,7 +153,9 @@ func unregister_timeline(entity: NetwEntity) -> void:
 ## Returns aggregate simulation counters for the debug overlay. See
 ## [method SimulationRunner.metrics].
 func metrics() -> Dictionary:
-	return _runner.metrics()
+	var result := _runner.metrics()
+	result[&"gate_fallbacks"] = _gate_fallbacks
+	return result
 
 
 ## Returns [param entity]'s recorded state at or before [param tick] as a detached
@@ -218,6 +250,7 @@ func _send_action_request(
 		view_tick: int,
 		data: Variant,
 		key: StringName,
+		timing_mode: int,
 ) -> void:
 	if multiplayer and multiplayer.multiplayer_peer and not multiplayer.is_server():
 		_request_action.rpc_id(
@@ -227,9 +260,10 @@ func _send_action_request(
 			view_tick,
 			data,
 			key,
+			timing_mode,
 		)
 		return
-	_request_action(target_path, method, view_tick, data, key)
+	_request_action(target_path, method, view_tick, data, key, timing_mode)
 
 
 func _deny_action_to(requester: int, key: StringName) -> void:
@@ -277,6 +311,7 @@ func _unbind_clock() -> void:
 
 
 func _on_tick(delta: float, tick: int) -> void:
+	_drain_pending_actions(tick)
 	_runner.step(delta, tick)
 	_sweep_effect_timeouts(tick)
 	# The server holds the truth, so only it records authoritative history.
@@ -291,22 +326,36 @@ func _request_action(
 		view_tick: int,
 		data: Variant,
 		key: StringName,
+		timing_mode: int = NetwAction.TimingMode.IMMEDIATE,
 ) -> void:
 	if multiplayer and not multiplayer.is_server():
 		return
 	var requester := multiplayer.get_remote_sender_id() if multiplayer else 0
 	if requester == 0 and multiplayer and multiplayer.multiplayer_peer:
 		requester = multiplayer.get_unique_id()
-	var target := _node_from_tree_path(target_path)
-	if not target or not target.has_method(method):
+	var request := _PendingAction.new(
+		target_path,
+		method,
+		view_tick,
+		data,
+		key,
+		requester,
+		timing_mode,
+		_current_tick(),
+	)
+	if not _can_resolve_action(request):
 		_deny_action_to(requester, key)
 		return
-	var clamped_tick := mini(view_tick, _current_tick())
-	var ctx := NetwAction.Context.new(self, requester, clamped_tick, key)
-	if data == null:
-		target.call(method, ctx)
-	else:
-		target.call(method, ctx, data)
+	var current_tick := _current_tick()
+	var readiness := _action_readiness(request, current_tick)
+	if readiness != _Readiness.NOT_READY:
+		_execute_ready_action(request, current_tick, readiness)
+		return
+	# Not ready yet, so queue it, unless it is scheduled too far ahead to wait for.
+	if view_tick > current_tick + max_future_action_ticks:
+		_deny_action_to(requester, key)
+		return
+	_pending_actions.append(request)
 
 
 @rpc("authority", "reliable")
@@ -321,6 +370,91 @@ func _node_from_tree_path(path: NodePath) -> Node:
 	return mt.get_node_or_null(path)
 
 
+func _can_resolve_action(request: _PendingAction) -> bool:
+	var target := _node_from_tree_path(request.target_path)
+	return target != null and target.has_method(request.method)
+
+
+func _drain_pending_actions(tick: int) -> void:
+	if _pending_actions.is_empty():
+		return
+	var waiting: Array[_PendingAction] = []
+	for request in _pending_actions:
+		if not _can_resolve_action(request):
+			_deny_action_to(request.requester, request.key)
+			continue
+		var readiness := _action_readiness(request, tick)
+		if readiness == _Readiness.NOT_READY:
+			waiting.append(request)
+			continue
+		_execute_ready_action(request, tick, readiness)
+	_pending_actions = waiting
+
+
+func _input_readiness(request: _PendingAction, tick: int) -> _Readiness:
+	if tick - request.queued_at_tick >= input_gate_deadline_ticks:
+		return _Readiness.READY_BY_DEADLINE
+	var target := _node_from_tree_path(request.target_path)
+	var entity := NetwEntity.of(target) if target else null
+	if not entity:
+		return _Readiness.NOT_READY
+	if entity.prediction and not entity.prediction.has_consumed_state_tick(
+		request.view_tick,
+	):
+		return _Readiness.NOT_READY
+	var timeline := timeline_of(entity)
+	if not timeline:
+		return _Readiness.NOT_READY
+	if timeline.state_at(request.view_tick).is_empty():
+		return _Readiness.NOT_READY
+	return _Readiness.READY
+
+
+func _execute_ready_action(
+		request: _PendingAction,
+		execution_tick: int,
+		readiness: _Readiness,
+) -> void:
+	if readiness == _Readiness.READY_BY_DEADLINE:
+		_gate_fallbacks += 1
+		action_gate_fallback.emit(request.key, request.view_tick)
+	_execute_action(request, execution_tick)
+
+
+# Single mode dispatch shared by admission and the drain, so both stay mode agnostic.
+func _action_readiness(request: _PendingAction, tick: int) -> _Readiness:
+	match request.timing_mode:
+		NetwAction.TimingMode.IMMEDIATE:
+			return _Readiness.READY
+		NetwAction.TimingMode.TICK_ALIGNED:
+			return _Readiness.READY if request.view_tick <= tick else _Readiness.NOT_READY
+		NetwAction.TimingMode.TICK_ALIGNED_STATE_READY:
+			if request.view_tick > tick:
+				return _Readiness.NOT_READY
+			return _input_readiness(request, tick)
+	return _Readiness.READY
+
+
+func _execute_action(request: _PendingAction, execution_tick: int) -> void:
+	var target := _node_from_tree_path(request.target_path)
+	if not target or not target.has_method(request.method):
+		_deny_action_to(request.requester, request.key)
+		return
+	var clamped_tick := mini(request.view_tick, execution_tick)
+	var ctx := NetwAction.Context.new(
+		self,
+		request.requester,
+		clamped_tick,
+		request.view_tick,
+		execution_tick,
+		request.key,
+	)
+	if request.data == null:
+		target.call(request.method, ctx)
+	else:
+		target.call(request.method, ctx, request.data)
+
+
 func _sweep_effect_timeouts(tick: int) -> void:
 	var expired: Array[StringName] = []
 	for key: StringName in _effects:
@@ -333,6 +467,37 @@ func _sweep_effect_timeouts(tick: int) -> void:
 
 func _current_tick() -> int:
 	return _clock.tick if is_instance_valid(_clock) else 0
+
+
+class _PendingAction extends RefCounted:
+	var target_path: NodePath
+	var method: StringName
+	var view_tick: int
+	var data: Variant
+	var key: StringName
+	var requester: int
+	var timing_mode: int
+	var queued_at_tick: int
+
+
+	func _init(
+			p_target_path: NodePath,
+			p_method: StringName,
+			p_view_tick: int,
+			p_data: Variant,
+			p_key: StringName,
+			p_requester: int,
+			p_timing_mode: int,
+			p_queued_at_tick: int,
+	) -> void:
+		target_path = p_target_path
+		method = p_method
+		view_tick = p_view_tick
+		data = p_data
+		key = p_key
+		requester = p_requester
+		timing_mode = p_timing_mode
+		queued_at_tick = p_queued_at_tick
 
 
 func _on_node_added(node: Node) -> void:
