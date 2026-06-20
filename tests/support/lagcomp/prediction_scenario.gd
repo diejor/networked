@@ -1,7 +1,7 @@
 ## Real-node lag-comp scenario rig: host, one client, and predicted entities.
 ##
-## Wraps [NetwTestHarness] with a [MultiplayerClock] and the auto-created
-## [LagCompensationService] on both peers, then composes matched [LagCompSimBody]
+## Wraps [NetwTestHarness] with a [MultiplayerClock] and a mounted [LagCompensation]
+## node on both peers, then composes matched [LagCompSimBody]
 ## pairs through
 ## [PlayerBuilder] so the real [StateSynchronizer], [InputSynchronizer], and
 ## [PredictionComponent] run end to end. A [LockstepStepper] drives both clocks
@@ -30,8 +30,8 @@ var server: MultiplayerTree
 var client: MultiplayerTree
 var server_clock: MultiplayerClock
 var client_clock: MultiplayerClock
-var server_sim: LagCompensationService
-var client_sim: LagCompensationService
+var server_sim: LagCompensation
+var client_sim: LagCompensation
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -77,9 +77,9 @@ func setup(
 	client_clock.manual_tick = true
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
-	# The service auto-registers on each tree, so resolve it rather than mounting one.
-	server_sim = server.get_service(LagCompensationService) as LagCompensationService
-	client_sim = client.get_service(LagCompensationService) as LagCompensationService
+	# The service is no longer auto-created, so mount the node on both peers.
+	server_sim = await inner.add_lag_compensation()
+	client_sim = client.get_service(LagCompensation) as LagCompensation
 	await _tree.process_frame
 
 	# Freeze both clocks under lockstep so every tick is driven by run(), with no

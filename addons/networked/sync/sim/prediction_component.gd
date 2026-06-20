@@ -120,11 +120,11 @@
 ## [br]Wires onto [NetwEntity] like the save component. On the controlling client it
 ## owns a local predicted [NetwTimeline] and keeps [member StampedSynchronizer.write_through]
 ## false so the network never snaps the predicted body. On the server it reads the
-## registry timeline that [LagCompensationService] records authoritative state into,
+## registry timeline that [LagCompensation] records authoritative state into,
 ## so this component only consumes input and never writes server history itself.
 ## [member simulate] holds the single
 ## [code]_network_tick(delta, tick, is_fresh)[/code] callable, defaulting to
-## the entity root. [method simulate_tick] is driven by [LagCompensationService] in
+## the entity root. [method simulate_tick] is driven by [LagCompensation] in
 ## deterministic order, and reconciliation is event driven off
 ## [member StateSynchronizer.on_state_received].
 class_name PredictionComponent
@@ -167,18 +167,18 @@ var simulate: Callable = Callable()
 var is_reconciling: bool = false
 
 ## Total corrections applied since spawn. Surfaced through
-## [method LagCompensationService.metrics].
+## [method LagCompensation.metrics].
 var corrections: int = 0
 
 ## Deepest replay window walked by any correction.
 var max_replay_depth: int = 0
 
 ## Inputs the server consumed into authoritative state. Surfaced through
-## [method LagCompensationService.metrics].
+## [method LagCompensation.metrics].
 var consumed_count: int = 0
 
 ## Input ticks the server stepped over as lost. Surfaced through
-## [method LagCompensationService.metrics].
+## [method LagCompensation.metrics].
 var missing_count: int = 0
 
 ## Emitted after a correction, with the divergence that triggered it.
@@ -194,7 +194,7 @@ var _entity: NetwEntity
 var _role: Role = Role.REMOTE
 var _timeline: NetwTimeline
 var _clock: MultiplayerClock
-var _sim: LagCompensationService
+var _sim: LagCompensation
 var _tick_delta: float = 1.0 / 60.0
 
 # Predict cursor.
@@ -237,7 +237,7 @@ func _exit_tree() -> void:
 
 
 ## Steps prediction or consumption for [param tick]. Called by
-## [LagCompensationService] in deterministic order.
+## [LagCompensation] in deterministic order.
 func simulate_tick(delta: float, tick: int) -> void:
 	match _role:
 		Role.PREDICT:
@@ -257,7 +257,7 @@ func order_key() -> String:
 ##
 ## Remote client input applies at its authored input tick, and the resulting
 ## state belongs to the following state tick. Server rewind history uses that
-## input-backed tick so [method LagCompensationService.sample] answers the same
+## input-backed tick so [method LagCompensation.sample] answers the same
 ## timeline the predicting client records.
 ## [codeblock]
 ## input tick t -> authoritative state tick t + 1
@@ -305,7 +305,11 @@ func _rewire() -> void:
 	_clock = get_multiplayer_clock()
 	if _clock:
 		_tick_delta = _clock.ticktime
-	_sim = get_service(LagCompensationService) as LagCompensationService
+	# Prediction is meaningless without the tree's rewind substrate, so resolve it
+	# through the required guard: it logs a clear error when this component sits
+	# under a MultiplayerTree with no LagCompensation node, yet stays quiet for a
+	# scene run standalone (no enclosing tree, e.g. pressing F6 to test in isolation).
+	_sim = LagCompensation.resolve_required(self)
 	if not simulate.is_valid():
 		var root := _entity.owner
 		if root and root.has_method(&"_network_tick"):
@@ -422,7 +426,7 @@ func _host_local_step(delta: float, tick: int) -> void:
 	var state_sync := _entity.state
 	state_sync.authored_tick = tick
 	state_sync.server_ack = tick
-	# Authoritative state is recorded by LagCompensationService after the tick.
+	# Authoritative state is recorded by LagCompensation after the tick.
 
 # ---------------------------------------------------------------------------
 # Consume (server)
@@ -442,7 +446,7 @@ func _consume_step(delta: float, server_tick: int) -> void:
 	var state_sync := _entity.state
 	state_sync.authored_tick = server_tick
 	state_sync.server_ack = _ack
-	# Authoritative state is recorded by LagCompensationService after the tick.
+	# Authoritative state is recorded by LagCompensation after the tick.
 
 
 func _consume_one(delta: float) -> void:

@@ -1,4 +1,4 @@
-## Integration tests for the [LagCompensationService] timeline registry + recorder.
+## Integration tests for the [LagCompensation] timeline registry + recorder.
 ##
 ## Proves Decision 3 / 4: an entity with a server-authoritative [StateSynchronizer]
 ## and no [PredictionComponent] is registered by state-sync presence alone, and the

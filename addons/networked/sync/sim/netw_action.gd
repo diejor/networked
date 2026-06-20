@@ -68,7 +68,7 @@ var predict: Callable
 var revert: Callable = Callable()
 
 ## Number of ticks before an unresolved request reverts. [code]0[/code] derives
-## a conservative default from [LagCompensationService].
+## a conservative default from [LagCompensation].
 var timeout_ticks: int = 0
 
 ## Server execution policy. Defaults to arrival-time execution with no readiness
@@ -158,7 +158,7 @@ func _revert_callable(ghost: Node) -> Callable:
 			node.queue_free()
 
 
-func _service() -> LagCompensationService:
+func _service() -> LagCompensation:
 	return _lag._service() if _lag else null
 
 
@@ -214,7 +214,7 @@ class Context extends RefCounted:
 
 
 	func _init(
-			service: LagCompensationService,
+			service: LagCompensation,
 			p_requester: int,
 			p_view_tick: int,
 			p_requested_tick: int,
@@ -250,8 +250,8 @@ class Context extends RefCounted:
 			service._deny_action_to(requester, _key)
 
 
-	func _service() -> LagCompensationService:
+	func _service() -> LagCompensation:
 		return (
-				_service_ref.get_ref() as LagCompensationService
+				_service_ref.get_ref() as LagCompensation
 				if _service_ref else null
 		)

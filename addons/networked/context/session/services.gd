@@ -59,12 +59,12 @@ func get_interest_service() -> InterestService:
 	return mt.get_service(InterestService) as InterestService
 
 
-## Returns the [LagCompensationService] service, or [code]null[/code].
-func get_lag_compensation() -> LagCompensationService:
+## Returns the [LagCompensation] service, or [code]null[/code].
+func get_lag_compensation() -> LagCompensation:
 	var mt: MultiplayerTree = _tree_ref.get_ref()
 	if not mt:
 		return null
-	return mt.get_service(LagCompensationService) as LagCompensationService
+	return mt.get_service(LagCompensation) as LagCompensation
 
 
 ## Returns the [MultiplayerClock] service, or [code]null[/code].

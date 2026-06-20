@@ -53,9 +53,14 @@ func _ready() -> void:
 		return
 	if multiplayer and multiplayer.is_server():
 		var entity := NetwEntity.of(self)
-		var sim := _simulation()
-		if entity and sim:
-			sim.register_timeline(entity)
+		# State-sync presence is the rewind trigger, so an entity-bound synchronizer
+		# needs the tree's LagCompensation node. The required guard logs a clear error
+		# when this synchronizer sits under a MultiplayerTree with no node mounted, yet
+		# stays quiet for a scene run standalone (no enclosing tree, e.g. pressing F6).
+		if entity:
+			var sim := LagCompensation.resolve_required(self)
+			if sim:
+				sim.register_timeline(entity)
 
 
 func _exit_tree() -> void:
@@ -67,11 +72,11 @@ func _exit_tree() -> void:
 		sim.unregister_timeline(entity)
 
 
-func _simulation() -> LagCompensationService:
+func _simulation() -> LagCompensation:
 	var mt := MultiplayerTree.resolve(self)
 	if not mt:
 		return null
-	return mt.get_service(LagCompensationService) as LagCompensationService
+	return mt.get_service(LagCompensation) as LagCompensation
 
 
 func _ordered_virtual_names() -> Array[StringName]:

@@ -1,6 +1,6 @@
 ## Keyed optimistic effect ledger for predicted actions.
 ##
-## [LagCompensationService] owns the pending state so one [MultiplayerTree]
+## [LagCompensation] owns the pending state so one [MultiplayerTree]
 ## resolves every [method arm], [method adopt], and [method discard] through the
 ## same tick clock. [NetwAction] uses this ledger for command prediction, while
 ## custom transports can use the keyed primitive directly.
@@ -13,7 +13,7 @@
 ## lag.effects.adopt(key)
 ## [/codeblock]
 ##
-## When no [LagCompensationService] is mounted, the methods degrade to safe
+## When no [LagCompensation] is mounted, the methods degrade to safe
 ## no-ops and [method key_for] still returns a deterministic [StringName].
 class_name NetwEffects
 extends RefCounted
@@ -21,7 +21,7 @@ extends RefCounted
 var _service_ref: WeakRef
 
 
-func _init(service: LagCompensationService = null) -> void:
+func _init(service: LagCompensation = null) -> void:
 	_service_ref = weakref(service) if service else null
 
 
@@ -58,5 +58,5 @@ func discard(key: StringName) -> void:
 		service._effect_discard(key)
 
 
-func _service() -> LagCompensationService:
-	return _service_ref.get_ref() as LagCompensationService if _service_ref else null
+func _service() -> LagCompensation:
+	return _service_ref.get_ref() as LagCompensation if _service_ref else null

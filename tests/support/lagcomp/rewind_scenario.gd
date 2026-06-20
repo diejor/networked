@@ -1,10 +1,10 @@
-## Server-only lag-comp rewind rig: host, a clock, the auto-created
-## [LagCompensationService], and a [LockstepStepper].
+## Server-only lag-comp rewind rig: host, a clock, a mounted [LagCompensation]
+## node, and a [LockstepStepper].
 ##
 ## A server-authoritative [StateSynchronizer]-only entity is recorded every tick,
 ## so it is rewindable by default and a scene rewind can read where a target was.
 ## This rig owns the server-only ritual the sim-integration suites used to
-## hand-roll (host, add the clock, resolve the [LagCompensationService], drive the
+## hand-roll (host, add the clock, mount the [LagCompensation] node, drive the
 ## [LockstepStepper], spawn a rewindable entity) so a test reads as the rewind
 ## claim, not the setup. Sample and rewind access stays on
 ## [member MultiplayerTree.lag_compensation].
@@ -26,7 +26,7 @@ const DISPLAY_OFFSET := 3
 var inner: NetwTestHarness
 var server: MultiplayerTree
 var clock: MultiplayerClock
-var sim: LagCompensationService
+var sim: LagCompensation
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -53,8 +53,8 @@ func setup(
 	server = inner.server()
 	clock = await inner.add_clock(tickrate, display_offset)
 
-	# The service auto-registers on the tree, so resolve it rather than mounting one.
-	sim = server.get_service(LagCompensationService) as LagCompensationService
+	# The service is no longer auto-created, so mount the node explicitly.
+	sim = await inner.add_lag_compensation()
 	await _tree.process_frame
 
 	# Freeze the clock under lockstep so every tick is driven by run() / move_along().
