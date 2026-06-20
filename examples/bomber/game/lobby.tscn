@@ -54,13 +54,17 @@ offset_right = 341.0
 offset_bottom = 221.0
 backend_templates = Array[ExtResource("12_backend")]([SubResource("Resource_ws"), SubResource("Resource_steam"), SubResource("Resource_mss8j"), SubResource("Resource_pbhs4")])
 
-[node name="TextureRect" type="TextureRect" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="0" unique_id=422029099]
+[node name="Control" type="Control" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="0" unique_id=1596872246]
+custom_minimum_size = Vector2(16, 0)
+layout_mode = 2
+
+[node name="TextureRect" type="TextureRect" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="1" unique_id=422029099]
 layout_mode = 2
 texture = ExtResource("2_mss8j")
 expand_mode = 2
 
-[node name="TitleLabel" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="1" unique_id=1146132509]
-text = "Bomber Example"
+[node name="TitleLabel" parent="ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(341697971, 522198391) index="2" unique_id=1146132509]
+text = "Bomber Demo"
 
 [node name="StatusLabel" type="Label" parent="." unique_id=1887354777]
 unique_name_in_owner = true

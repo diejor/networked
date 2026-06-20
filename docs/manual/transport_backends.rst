@@ -71,7 +71,7 @@ lobby and let peers in" semantics.
    when web-hosted rooms must stay reachable in the background.
 
 WebRTC signaling
----------------
+----------------
 
 The WebRTC transport keeps two jobs apart. The
 :ref:`WebRTCSession <class_WebRTCSession>` owns the peer machinery and speaks

@@ -36,14 +36,13 @@ func spawn_joined_players(joined_players: Array[ResolvedJoin]) -> void:
 		spawn(NetwEntity.decorate_spawn(data, rj))
 
 
-func _spawn_player(data: Variant) -> Node:
-	var spawn_data: Dictionary = data if data is Dictionary else { }
-	var spawn_identity := NetwEntity.spawn_identity(spawn_data)
+func _spawn_player(data: Dictionary) -> Node:
+	var spawn_identity := NetwEntity.spawn_identity(data)
 
 	var player := PLAYER_SCENE.instantiate()
 	spawn_identity.bind(player)
 	var username := str(spawn_identity.entity_id)
-	var spawn_index := int(spawn_data.get("spawn_index", 0))
+	var spawn_index := int(data.spawn_index)
 
 	var world := ctx.scene.get_level()
 	var score := world.get_node("Score")

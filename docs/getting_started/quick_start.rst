@@ -208,9 +208,10 @@ control with no extra wiring.
 
 To replicate that movement back to the other peer, add a sibling
 :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` to the player
-scene and register the body's :godot:`position <Node2D#class_node2d_property_position>` with replication mode :button:`On Change`
-and the :button:`Sync` flag enabled. Run the project again. Both players can now
-walk around, and each peer sees the other in real time.
+scene and register the body's
+:godot:`position <Node2D#class_node2d_property_position>`. Run the project
+again. Both players can now walk around, and each peer sees the other in
+real time.
 
 Where to go next
 ----------------

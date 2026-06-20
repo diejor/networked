@@ -66,7 +66,7 @@ through the synchronizer and the
 on the level.
 
 The MultiplayerEntity
---------------------
+---------------------
 
 The :ref:`MultiplayerEntity <class_MultiplayerEntity>` is the one piece of
 the addon every gameplay scene touches. It extends
@@ -89,13 +89,13 @@ trouble surviving.
 Authority modes
 ~~~~~~~~~~~~~~~
 
-The component's :ref:`AuthorityMode <class_MultiplayerEntity_property_authority_mode>`
-controls who is in charge of the entity's :godot:`owner <Node#class_node_property_owner>` node:
+The component's :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>`
+controls who is in charge of the entity's :godot:`owner <Node#class_node_property_owner>` node at spawn:
 
 - :ref:`SERVER <class_MultiplayerEntity_constant_SERVER>`: the server peer (id 1) is the multiplayer authority. Use
   this for NPCs, level props, and anything that should remain
   server-authoritative.
-- :ref:`CLIENT <class_MultiplayerEntity_constant_CLIENT>`: the represented peer (parsed from the entity's name in the
+- :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>`: the represented peer (parsed from the entity's name in the
   form ``entity_id|peer_id``) is the multiplayer authority. This is the
   setting for player avatars where the owning client reads input and the
   server only validates.
@@ -183,8 +183,8 @@ contains:
 
 - A :godot:`CharacterBody2D <CharacterBody2D>` (or 3D equivalent) with the
   movement script.
-- A :ref:`MultiplayerEntity <class_MultiplayerEntity>` with :ref:`AuthorityMode <class_MultiplayerEntity_property_authority_mode>`
-  set to :ref:`CLIENT <class_MultiplayerEntity_constant_CLIENT>` and the body's position listed as a spawn property.
+- A :ref:`MultiplayerEntity <class_MultiplayerEntity>` with :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>`
+  set to :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>` and the body's position listed as a spawn property.
 - A sibling :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` for
   continuous state (position, animation frame, weapon held).
 - Optionally, a :ref:`SaveComponent <class_SaveComponent>` so the player's

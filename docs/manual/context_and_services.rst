@@ -6,7 +6,7 @@ Context and services
 The :ref:`Netw <class_Netw>` static class is the public surface most user
 code interacts with day to day. Its centerpiece is
 :ref:`Netw.ctx() <class_Netw_method_ctx>`, a single call that resolves a
-node's session, services, scene, and entity facades in one go. Once you
+node's session, services, scene, and entity facades in one go for the give :godot:`Node <Node>`. Once you
 get used to reaching for :ref:`Netw.ctx(self) <class_Netw_method_ctx>` first, the rest of the addon
 stops feeling like four separate libraries and starts feeling like one.
 
@@ -39,7 +39,7 @@ may independently be ``null`` depending on where in the tree you called it:
 
 The split is intentional. Tree and services need an enclosing
 :ref:`MultiplayerTree <class_MultiplayerTree>`. Scene needs an enclosing
-:ref:`MultiplayerScene <class_MultiplayerScene>`; entity needs only a
+:ref:`MultiplayerScene <class_MultiplayerScene>`, entity needs only a
 parent chain. Code that reads only what it needs stays usable in more
 contexts. A component that resolves :ref:`ctx.entity <class_NetwContext_property_entity>` works in editor
 tests, in headless integration tests, and in unspawned templates without

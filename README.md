@@ -16,16 +16,18 @@
 
 ### Notable Features
 
-- **`MultiplayerInterpolator`:** Smooths network snapshots with smart dilation to minimize jitter.
-- **`MultiplayerSceneManager`:** Built on top of an in-house [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
-- **`TPComponent`:** Connects scenes and handles teleport transitions between levels without dropping synchronization.
+- **`LagCompensation`:** CS-style client prediction and server reconcilation.
+- **`MultiplayerInterpolator`:** Smooth network snapshots with time dilation to minimize jitter.
+- **`MultiplayerSceneManager`:** Built on top of a robust and extensible [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
+- **`TPComponent`:** Move players between scenes and handle teleport transitions between levels.
+- **`ConnectBrowser`:** Connect multiple lobby providers and backends in a single UI and [Pre-Game Connection Model](https://networked.readthedocs.io/en/latest/manual/pre_game_connection.html).
 - **`SaveComponent`:** Real-time state persistence and writes for player data.
 
 ## Supported Architectures & Integrations
 
-- **Flexible Architectures:** Supports listen-server and dedicated server, easily swap between Client-Server and P2P all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
-- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and native Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)).
-- **Robust Integration Testing:** Full end-to-end integration tests are supported using the custom in-process [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
+- **Flexible Architectures:** Supports listen-server, dedicated server, local play and P2P (through host-relay) all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
+- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)). Host everywhere design a single UI.
+- **Robust Integration Testing:** Full end-to-end integration tests are supported using the in-process peer [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
 
 ## Credits
 
