@@ -54,7 +54,7 @@
 ## [br][br]
 ## [b]Probing[/b]
 ## [br][method refresh] (all targets) and [method probe] (one) ask
-## each target for a [ServerInfoResult] containing status, player count, and latency. The
+## each target for a [BackendPeer.ProbeResult] containing status, player count, and latency. The
 ## result is cached per target and pushed to you via [signal target_updated].
 ## [method get_result] returns the latest, or [code]null[/code] before the
 ## first one arrives.
@@ -73,11 +73,11 @@ signal target_added(target: JoinTarget)
 ## A target was removed from the live list.
 signal target_removed(target: JoinTarget)
 ## A new probe result or live lobby snapshot landed for [param target].
-signal target_updated(target: JoinTarget, result: ServerInfoResult)
+signal target_updated(target: JoinTarget, result: BackendPeer.ProbeResult)
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
 		directory_id: StringName,
-		lobbies: Array[LobbyInfo],
+		lobbies: Array[LobbyDirectory.LobbyInfo],
 )
 ## A registered directory reported that its transport is unavailable.
 signal directory_unavailable(directory_id: StringName, reason: String)
@@ -164,7 +164,7 @@ func refresh() -> void:
 		s.refresh()
 
 
-## Probes a single [param target] for its [ServerInfoResult], delivered via
+## Probes a single [param target] for its [BackendPeer.ProbeResult], delivered via
 ## [signal target_updated]. Useful after adding one target instead of
 ## re-probing the whole list with [method refresh].
 func probe(target: JoinTarget) -> void:
@@ -212,10 +212,10 @@ func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 	return s.get_discovered_targets(directory_id) if s else []
 
 
-## Returns the latest [ServerInfoResult] cached for [param target], or
+## Returns the latest [BackendPeer.ProbeResult] cached for [param target], or
 ## [code]null[/code] if it has not been probed yet. Refreshed by
 ## [method refresh] / [method probe] and pushed via [signal target_updated].
-func get_result(target: JoinTarget) -> ServerInfoResult:
+func get_result(target: JoinTarget) -> BackendPeer.ProbeResult:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_result(target) if s else null
 

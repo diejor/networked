@@ -189,16 +189,15 @@ ones you need:
   :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`'s
   host on demand fallback. Most transports return ``true``. Managed-lobby
   backends (Steam) return ``false``.
-- :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`:
+- :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`:
   the default returns
-  :ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>` -
+  :ref:`BackendPeer.ProbeResult.unsupported() <class_BackendPeer_ProbeResult_method_unsupported>` -
   probing is opt-in. Cheap direct
   :godot:`SceneMultiplayer <SceneMultiplayer>` transports (ENet, WebSocket)
   override it to delegate to
-  :ref:`AuthProbeClient.query() <class_AuthProbeClient_method_query>`, which
-  rides the ``NPRB`` auth handshake on the same port (see
-  :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC trackers)
-  discover through their own mechanisms and stay unsupported.
+  the auth probe client, which rides the ``NPRB`` auth handshake on the same
+  port (see :doc:`pre_game_connection`). Brokered transports (Steam, WebRTC
+  trackers) discover through their own mechanisms and stay unsupported.
 - :ref:`is_available() <class_BackendPeer_method_is_available>`: the default
   returns ``true``. Override it when the transport cannot run on every platform
   so the browser hides it where it would fail. ENet and Steam have no web

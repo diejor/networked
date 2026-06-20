@@ -88,7 +88,7 @@ func test_linger_keeps_target_rewindable_until_freed() -> void:
 	tl.record_state(5, { &"position": Vector2(40.0, 0.0) })
 
 	# Despawn with linger: the target dies but stays rewindable for the window.
-	var opts := DespawnOpts.new(&"killed")
+	var opts := MultiplayerEntity.DespawnOpts.new(&"killed")
 	opts.linger = true
 	opts.linger_seconds = 0.15
 	MultiplayerEntity.unwrap(node).despawn(opts)

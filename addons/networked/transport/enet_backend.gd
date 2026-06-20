@@ -56,20 +56,20 @@ func create_join_peer(
 	return peer
 
 
-## Implements [method BackendPeer.query_server_info] with [AuthProbeClient].
+## Implements [method BackendPeer.probe_server_info] with [AuthProtocol.Client].
 ##
 ## ENet can probe the same host and port that [method create_join_peer] uses.
-func query_server_info(
+func probe_server_info(
 		address: String,
 		timeout: float = 2.0,
-) -> ServerInfoResult:
-	var probe := AuthProbeClient.new(self)
+) -> BackendPeer.ProbeResult:
+	var probe := AuthProtocol.Client.new(self)
 	return await probe.query(address, timeout)
 
 
-## Returns a probed [code]"Server IP"[/code] [AddressHint].
-func get_address_hint() -> AddressHint:
-	return AddressHint.make(
+## Returns a probed [code]"Server IP"[/code] [BackendPeer.AddressHint].
+func get_address_hint() -> BackendPeer.AddressHint:
+	return BackendPeer.AddressHint.make(
 		"Server IP",
 		"localhost",
 		"Empty or 'localhost' connects to a local host. Use host:port or an "

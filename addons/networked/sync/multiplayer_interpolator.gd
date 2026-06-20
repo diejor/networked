@@ -9,7 +9,7 @@
 ## body, this owns only what the body looks like.
 ##
 ## [br][br][b]The playhead[/b]
-## [br]Each tracked property keeps a [HistoryBuffer] of recorded snapshots keyed by
+## [br]Each tracked property keeps a [NetwRingBuffer] of recorded snapshots keyed by
 ## tick, exposed through [method get_buffer]. A playhead reads that buffer behind
 ## the newest entry, lands between two recorded ticks, and the displayed value is
 ## the interpolation between them. [member display_lag] is how far behind the newest
@@ -314,9 +314,9 @@ func displayed_authoring_tick() -> int:
 	return _strategy.displayed_authoring_tick(self) if _strategy else -1
 
 
-## Returns the [HistoryBuffer] for the given [param property], or [code]null[/code]
+## Returns the [NetwRingBuffer] for the given [param property], or [code]null[/code]
 ## if not found.
-func get_buffer(property: StringName) -> HistoryBuffer:
+func get_buffer(property: StringName) -> NetwRingBuffer:
 	return _strategy.get_buffer(self, property) if _strategy else null
 
 
@@ -1049,7 +1049,7 @@ class _Strategy extends RefCounted:
 	func get_buffer(
 			_host: MultiplayerInterpolator,
 			_property: StringName,
-	) -> HistoryBuffer:
+	) -> NetwRingBuffer:
 		return null
 
 
@@ -1126,7 +1126,7 @@ class _RemoteStrategy extends _Strategy:
 	func get_buffer(
 			host: MultiplayerInterpolator,
 			property: StringName,
-	) -> HistoryBuffer:
+	) -> NetwRingBuffer:
 		for state in host._states:
 			if state.name == property:
 				return state.history
@@ -1368,7 +1368,7 @@ class _PropertyState:
 	var interpolator: MultiplayerInterpolator
 	var name: StringName
 	var mode: Mode
-	var history := HistoryBuffer.new(16)
+	var history := NetwRingBuffer.new(16)
 
 	var source_obj: Object
 	var source_prop: StringName

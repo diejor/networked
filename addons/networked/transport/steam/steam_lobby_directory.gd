@@ -192,7 +192,7 @@ func get_local_member_name() -> String:
 
 func list_lobbies() -> void:
 	if not _guard_ready("list_lobbies"):
-		lobby_list_updated.emit([] as Array[LobbyInfo])
+		lobby_list_updated.emit([] as Array[LobbyDirectory.LobbyInfo])
 		return
 	_pending_list = true
 	Netw.dbg.debug(
@@ -221,7 +221,7 @@ func leave_lobby() -> void:
 	_peer = null
 
 
-func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	var target := JoinTarget.new()
 	target.display_name = lobby.lobby_name
 	target.address = str(lobby.id)
@@ -455,7 +455,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 		return
 	_pending_list = false
 
-	var out: Array[LobbyInfo] = []
+	var out: Array[LobbyDirectory.LobbyInfo] = []
 	for raw_id in lobbies:
 		var id := int(raw_id)
 		if reject_own_lobbies and _is_own_lobby(id):
@@ -473,7 +473,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				and uid != browser_filter_uid
 		):
 			continue
-		var info := LobbyInfo.make(
+		var info := LobbyDirectory.LobbyInfo.make(
 			id,
 			_wrapper.get_lobby_data(id, "name"),
 			_wrapper.get_num_lobby_members(id),

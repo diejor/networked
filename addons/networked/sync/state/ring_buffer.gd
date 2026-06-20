@@ -1,8 +1,15 @@
 ## Pre-allocated ring buffer that stores values keyed by tick number.
 ##
-## Uses power-of-two capacity for fast bitwise indexing and optimized 
-## searching to minimize GDScript overhead in hot loops.
-class_name HistoryBuffer
+## [NetwRingBuffer] rounds [param capacity] up to a power of two so
+## [method record], [method get_at], and [method bracketing_ticks] can stay
+## cheap in interpolation and rollback hot paths.
+## [codeblock]
+## var history := NetwRingBuffer.new(32)
+## history.record(tick, snapshot)
+## var exact := history.get_at(tick)
+## var pair := history.bracketing_ticks(render_tick)
+## [/codeblock]
+class_name NetwRingBuffer
 extends RefCounted
 
 var _slots: Array
@@ -14,7 +21,7 @@ var _mask: int
 
 
 func _init(capacity: int = 16) -> void:
-	# Force power-of-two for bitwise optimization
+	# Keep index wrapping cheap in hot paths.
 	_capacity = 1
 	while _capacity < capacity:
 		_capacity <<= 1
@@ -70,16 +77,21 @@ func bracketing_ticks(tick: int) -> Vector2i:
 	return Vector2i(prev_tick, next_tick)
 
 
-# perf: no-alloc variant for the interpolation hot path.
-func find_bracketing_ticks(tick: int, _hint_tick: int, out_pair: PackedInt32Array) -> void:
+# No-alloc variant for the interpolation hot path.
+func find_bracketing_ticks(
+		tick: int,
+		_hint_tick: int,
+		out_pair: PackedInt32Array,
+) -> void:
 	var pair := bracketing_ticks(tick)
 	out_pair[0] = pair.x
 	out_pair[1] = pair.y
 
 
-## Returns [code]true[/code] if there is at least one entry recorded strictly after [param tick].
+## Returns [code]true[/code] if there is at least one entry recorded strictly
+## after [param tick].
 func has_tick_after(tick: int) -> bool:
-	# Optimization: Since ticks are chronological, we only need to check the newest one.
+	# Chronological ticks make the newest entry authoritative.
 	return newest_tick() > tick
 
 

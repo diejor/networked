@@ -84,7 +84,7 @@ func spawn_state_entity(
 
 
 ## Spawns a state-synced entity that also carries a [MultiplayerEntity], so it can
-## be despawned with [member DespawnOpts.linger].
+## be despawned with [member MultiplayerEntity.DespawnOpts.linger].
 func spawn_despawnable_entity(
 		entity_name: String = "Linger",
 		props: Array[StringName] = [&"position"],

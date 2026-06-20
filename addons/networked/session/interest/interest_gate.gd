@@ -139,7 +139,7 @@ func has_viewer(peer_id: int) -> bool:
 
 ## Returns this gate's admission verdict for [param peer_id].
 func verdict_for(peer_id: int) -> bool:
-	return InterestPolicy.verdict(policy, _viewers_as_dict(), peer_id)
+	return NetwInterestLayer.InterestPolicy.verdict(policy, _viewers_as_dict(), peer_id)
 
 
 ## Applies the server's current bound-layer snapshot.
@@ -179,7 +179,7 @@ func apply_admission_visibility_to(peer_ids: Array) -> void:
 		return
 	var v_dict := _viewers_as_dict()
 	for peer_id: int in peer_ids:
-		var verdict := InterestPolicy.verdict(policy, v_dict, peer_id)
+		var verdict := NetwInterestLayer.InterestPolicy.verdict(policy, v_dict, peer_id)
 		set_visibility_for(peer_id, verdict)
 
 
@@ -192,7 +192,7 @@ func _apply_admission_visibility() -> void:
 		return
 	var v_dict := _viewers_as_dict()
 	for peer_id: int in multiplayer.get_peers():
-		var verdict := InterestPolicy.verdict(policy, v_dict, peer_id)
+		var verdict := NetwInterestLayer.InterestPolicy.verdict(policy, v_dict, peer_id)
 		set_visibility_for(peer_id, verdict)
 
 

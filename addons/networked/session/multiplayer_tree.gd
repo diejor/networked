@@ -79,7 +79,7 @@ signal api_swapped(
 )
 
 # Internal signal to relay connection failure outcomes.
-signal _connect_failed(result: ConnectResult)
+signal _connect_failed(result: BackendPeer.ConnectResult)
 
 ## Session lifecycle state for this tree.
 ## [codeblock]
@@ -245,7 +245,7 @@ func _warn_if_role_unset() -> void:
 			_auth.prepare()
 
 ## Outcome of the last connection handshake.
-var last_connect_result: ConnectResult = null
+var last_connect_result: BackendPeer.ConnectResult = null
 
 @export_group("Session")
 
@@ -268,21 +268,21 @@ var last_connect_result: ConnectResult = null
 @export_tool_button("Generate app id") var _generate_app_id := func() -> void:
 	app_id = _random_app_id()
 
-## Builds [ServerInfo] for [method BackendPeer.query_server_info]. When this
-## member is [code]null[/code], [AuthProbeResponder] creates a
-## [DefaultServerInfoSource] while answering a probe.
+## Builds [ServerDescriptor.Info] for [method BackendPeer.probe_server_info]. When this
+## member is [code]null[/code], [AuthProtocol.Responder] creates a
+## [DefaultServerDescriptor] while answering a probe.
 ##
-## [DefaultServerInfoSource] derives live values from this tree.
+## [DefaultServerDescriptor] derives live values from this tree.
 ## [codeblock]
-##     func build_server_info(tree: MultiplayerTree) -> ServerInfo:
-##         var info := ServerInfo.new()
+##     func build_server_info(tree: MultiplayerTree) -> ServerDescriptor.Info:
+##         var info := ServerDescriptor.Info.new()
 ##         info.players = tree.get_joined_players().size()
 ##         info.app_id = tree.app_id
 ##         return info
 ## [/codeblock]
-## Read [ServerInfoSource] and [DefaultServerInfoSource] before assigning a
+## Read [ServerDescriptor] a`nd [DefaultServerDescriptor] before assigning a
 ## custom source.
-@export var server_info_source: ServerInfoSource:
+@export var server_info_source: ServerDescriptor:
 	set(value):
 		server_info_source = value
 		if _auth:
@@ -635,7 +635,7 @@ func _ensure_host_scene_view() -> void:
 ## Returns the session [ConnectSession], creating it on first access.
 ##
 ## Prefer [member NetwContext.connect] for browser flows. Dedicated and
-## headless sessions pay no [ConnectSession], [ProbeManager], or
+## headless sessions pay no [ConnectSession], probe manager, or
 ## [ProviderRegistry] cost until this method is called.
 func get_connect_session() -> ConnectSession:
 	if Engine.is_editor_hint():
@@ -867,14 +867,14 @@ func _open_join_transport(
 	)
 	if _join_aborted:
 		_transition(State.OFFLINE)
-		last_connect_result = ConnectResult.aborted("Connection aborted by user")
+		last_connect_result = BackendPeer.ConnectResult.aborted("Connection aborted by user")
 		return ERR_CANT_CONNECT
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
 	if peer == null and not api_was_adopted:
 		_transition(State.OFFLINE)
-		last_connect_result = ConnectResult.error("Failed to join: backend produced no peer.")
+		last_connect_result = BackendPeer.ConnectResult.error("Failed to join: backend produced no peer.")
 		if not quiet:
 			Netw.dbg.error(
 				"Failed to join: backend produced no peer.",
@@ -888,11 +888,11 @@ func _open_join_transport(
 	if (peer != null or api_was_adopted) and backend:
 		backend.begin_connect_progress(timeout)
 
-	var on_backend_failed := func(res: ConnectResult) -> void:
+	var on_backend_failed := func(res: BackendPeer.ConnectResult) -> void:
 		_connect_failed.emit(res)
 	var on_api_failed := func() -> void:
 		_connect_failed.emit(
-			ConnectResult.unreachable(
+			BackendPeer.ConnectResult.unreachable(
 				&"PEER_CONNECT_FAILED",
 				"Could not reach the server.",
 			),
@@ -922,14 +922,14 @@ func _open_join_transport(
 	var did_timeout := String(connect_result.get("result", "")) == "timeout"
 	var did_fail := String(connect_result.get("result", "")) == "failure"
 	if did_timeout:
-		last_connect_result = ConnectResult.timed_out("Connection timed out")
+		last_connect_result = BackendPeer.ConnectResult.timed_out("Connection timed out")
 	elif _join_aborted:
-		last_connect_result = ConnectResult.aborted("Connection aborted by user")
+		last_connect_result = BackendPeer.ConnectResult.aborted("Connection aborted by user")
 	elif did_fail:
-		if failed_reason_obj is ConnectResult:
+		if failed_reason_obj is BackendPeer.ConnectResult:
 			last_connect_result = failed_reason_obj
 		else:
-			last_connect_result = ConnectResult.error(str(failed_reason_obj))
+			last_connect_result = BackendPeer.ConnectResult.error(str(failed_reason_obj))
 
 	if did_timeout or did_fail or _join_aborted:
 		_transition(State.OFFLINE)
@@ -947,7 +947,7 @@ func _open_join_transport(
 			)
 		return ERR_CANT_CONNECT
 
-	last_connect_result = ConnectResult.ok()
+	last_connect_result = BackendPeer.ConnectResult.ok()
 	if backend:
 		last_connect_result.diagnostics = (
 				backend.get_connection_diagnostics(1)
@@ -959,7 +959,7 @@ func _open_join_transport(
 
 ## Joins [param target], or hosts when no listener replies.
 ##
-## [method BackendPeer.query_server_info] decides between [method join] and
+## [method BackendPeer.probe_server_info] decides between [method join] and
 ## [method host_player]. Backends where
 ## [method BackendPeer.supports_embedded_server] returns [code]false[/code]
 ## always use [method host_player].
@@ -999,7 +999,7 @@ func join_or_host(
 			submit_join(join_payload)
 		return host_err
 
-	var result: ServerInfoResult = await self.backend.query_server_info(
+	var result: BackendPeer.ProbeResult = await self.backend.probe_server_info(
 		target.address,
 		0.2,
 	)

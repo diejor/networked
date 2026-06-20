@@ -6,7 +6,7 @@ Pre-game connection
 This page covers the gap between "I have a configured
 :ref:`BackendPeer <class_BackendPeer>`" and "I am in a session". It
 explains the four entry methods on
-:ref:`MultiplayerTree <class_MultiplayerTree>`, the :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
+:ref:`MultiplayerTree <class_MultiplayerTree>`, the :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
 probe used to discover live servers on cheap direct transports, the auth
 protocol that carries both probes and normal hellos, and the lifecycle
 limits that protect a host from probe storms.
@@ -59,18 +59,18 @@ Discovering live servers
 A pre-game UI, such as a server browser, a "join localhost or host?" prompt,
 or a recent-servers list, needs to know whether an address has a live
 server *without* opening a full session. That is what
-:ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
+:ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
 does on cheap direct transports (ENet, WebSocket): the backend opens a
-transient peer via :ref:`AuthProbeClient <class_AuthProbeClient>`, sends one
+transient peer via :ref:`AuthProtocol.Client <class_AuthProtocol_Client>`, sends one
 auth-phase packet on the same port a real join would use, decodes the reply,
 and tears down. It is *not* a universal probe - brokered transports (Steam,
-WebRTC trackers) override :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
+WebRTC trackers) override :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
 with their own discovery or return
-:ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`.
+:ref:`BackendPeer.ProbeResult.unsupported() <class_BackendPeer_ProbeResult_method_unsupported>`.
 
 .. code-block:: gdscript
 
-    var result: ServerInfoResult = await backend.query_server_info(
+    var result: BackendPeer.ProbeResult = await backend.probe_server_info(
         "203.0.113.42", 2.0
     )
     if result.is_ok():
@@ -80,27 +80,27 @@ with their own discovery or return
     else:
         print("not reachable: ", result.status)
 
-The reply is a :ref:`ServerInfoResult <class_ServerInfoResult>` whose
-:ref:`status <class_ServerInfoResult_property_status>` is one of :ref:`OK <class_ServerInfoResult_constant_OK>`,
-:ref:`UNREACHABLE <class_ServerInfoResult_constant_UNREACHABLE>`, :ref:`TIMEOUT <class_ServerInfoResult_constant_TIMEOUT>`, :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>`, :ref:`BUSY <class_ServerInfoResult_constant_BUSY>`, or :ref:`ERROR <class_ServerInfoResult_constant_ERROR>`. On
-:ref:`OK <class_ServerInfoResult_constant_OK>`, :ref:`info <class_ServerInfoResult_property_info>` is a populated
-:ref:`ServerInfo <class_ServerInfo>` (player count, motd, game mode, a
+The reply is a :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>` whose
+:ref:`status <class_BackendPeer_ProbeResult_property_status>` is one of :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`,
+:ref:`UNREACHABLE <class_BackendPeer_ProbeResult_constant_UNREACHABLE>`, :ref:`TIMEOUT <class_BackendPeer_ProbeResult_constant_TIMEOUT>`, :ref:`UNSUPPORTED <class_BackendPeer_ProbeResult_constant_UNSUPPORTED>`, :ref:`BUSY <class_BackendPeer_ProbeResult_constant_BUSY>`, or :ref:`ERROR <class_BackendPeer_ProbeResult_constant_ERROR>`. On
+:ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`, :ref:`info <class_BackendPeer_ProbeResult_property_info>` is a populated
+:ref:`ServerDescriptor.Info <class_ServerDescriptor_ServerInfo>` (player count, motd, game mode, a
 metadata bag for custom fields).
 
 Hosts customize what gets reported by assigning a
-:ref:`ServerInfoSource <class_ServerInfoSource>` to
+:ref:`ServerDescriptor <class_ServerDescriptor>` to
 :ref:`server_info_source <class_MultiplayerTree_property_server_info_source>`
 on the tree. The default
-(:ref:`DefaultServerInfoSource <class_DefaultServerInfoSource>`) reports a
-live player count and marks :ref:`ServerInfo.is_local_listener <class_ServerInfo_property_is_local_listener>` as ``true`` so callers can
+(:ref:`DefaultServerDescriptor <class_DefaultServerDescriptor>`) reports a
+live player count and marks :ref:`ServerDescriptor.Info.is_local_listener <class_ServerDescriptor_ServerInfo_property_is_local_listener>` as ``true`` so callers can
 tell a live local host from a closed port. Override for richer metadata:
 
 .. code-block:: gdscript
 
-    class_name BomberServerInfoSource extends ServerInfoSource
+    class_name BomberServerInfoSource extends ServerDescriptor
 
-    func build_server_info(tree: MultiplayerTree) -> ServerInfo:
-        var info := ServerInfo.new()
+    func build_server_info(tree: MultiplayerTree) -> ServerDescriptor.Info:
+        var info := ServerDescriptor.Info.new()
         info.is_local_listener = true
         info.players = tree.get_joined_players().size()
         info.max_players = 8
@@ -110,15 +110,15 @@ tell a live local host from a closed port. Override for richer metadata:
 
 The same-port probe is opt-in: only cheap direct transports (ENet,
 WebSocket) enable it by delegating to
-:ref:`AuthProbeClient <class_AuthProbeClient>`. The
+:ref:`AuthProtocol.Client <class_AuthProtocol_Client>`. The
 :ref:`BackendPeer <class_BackendPeer>` default returns
-:ref:`ServerInfoResult.unsupported() <class_ServerInfoResult_method_unsupported>`,
+:ref:`BackendPeer.ProbeResult.unsupported() <class_BackendPeer_ProbeResult_method_unsupported>`,
 so session-id/lobby transports (Steam, in-process Local) and WebRTC (whose
 auth handshake requires a full, expensive ICE round trip) stay unsupported
 unless they implement their own discovery.
 :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>`
-treats any non-:ref:`OK <class_ServerInfoResult_constant_OK>` result
-(including :ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>`) as
+treats any non-:ref:`OK <class_BackendPeer_ProbeResult_constant_OK>` result
+(including :ref:`UNSUPPORTED <class_BackendPeer_ProbeResult_constant_UNSUPPORTED>`) as
 "no listener available" and falls through to hosting.
 
 Platform availability
@@ -134,11 +134,11 @@ apart:
 - **Reachability** - is *this specific server* up right now?
 
 Only reachability lives on
-:ref:`ServerInfoResult <class_ServerInfoResult>`. Availability is a separate
+:ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>`. Availability is a separate
 axis answered by
 :ref:`is_available() <class_BackendPeer_method_is_available>`, queried directly
 and never routed through a result status. This matters because
-:ref:`UNSUPPORTED <class_ServerInfoResult_constant_UNSUPPORTED>` already means
+:ref:`UNSUPPORTED <class_BackendPeer_ProbeResult_constant_UNSUPPORTED>` already means
 "this backend skips probing" (Steam, Local, WebRTC) - a backend that is
 unsupported for probing still connects fine. A backend that is *unavailable*
 cannot connect at all, which is a different thing.
@@ -192,11 +192,11 @@ The probe lifecycle is **client-owned**:
 1. Client opens a transient peer and connects.
 2. Client sends :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` in the :godot:`peer_authenticating <SceneMultiplayer>` callback.
 3. Server's :godot:`auth_callback <SceneMultiplayer>` decodes the magic and
-   dispatches ``NPRB`` to :ref:`AuthProbeResponder <class_AuthProbeResponder>`,
-   which builds a :ref:`ServerInfo <class_ServerInfo>` from the configured
-   :ref:`ServerInfoSource <class_ServerInfoSource>` and sends the reply.
+   dispatches ``NPRB`` to :ref:`AuthProtocol.Responder <class_AuthProtocol_Responder>`,
+   which builds a :ref:`ServerDescriptor.Info <class_ServerDescriptor_ServerInfo>` from the configured
+   :ref:`ServerDescriptor <class_ServerDescriptor>` and sends the reply.
 4. Client decodes the reply, returns the
-   :ref:`ServerInfoResult <class_ServerInfoResult>`, and closes its peer.
+   :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>`, and closes its peer.
 5. Server sees the peer disconnect (or :godot:`auth_timeout <SceneMultiplayer>` reaps it) and
    releases the pending slot.
 
@@ -207,11 +207,11 @@ probe.
 
 Two limits protect the host from misbehaving probers:
 
-- :ref:`PROBE_RATE_LIMIT <class_AuthProbeResponder_constant_PROBE_RATE_LIMIT>` (10/sec by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a rolling cap on probe
-  replies per second. Excess probes get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>` until the window
+- :ref:`PROBE_RATE_LIMIT <class_AuthProtocol_Responder_constant_PROBE_RATE_LIMIT>` (10/sec by default on :ref:`AuthProtocol.Responder <class_AuthProtocol_Responder>`): a rolling cap on probe
+  replies per second. Excess probes get :ref:`BUSY <class_BackendPeer_ProbeResult_constant_BUSY>` until the window
   reopens.
-- :ref:`MAX_ACTIVE_PROBES <class_AuthProbeResponder_constant_MAX_ACTIVE_PROBES>` (32 by default on :ref:`AuthProbeResponder <class_AuthProbeResponder>`): a cap on concurrent pending
-  probes tracked by the responder. Excess probes also get :ref:`BUSY <class_ServerInfoResult_constant_BUSY>`.
+- :ref:`MAX_ACTIVE_PROBES <class_AuthProtocol_Responder_constant_MAX_ACTIVE_PROBES>` (32 by default on :ref:`AuthProtocol.Responder <class_AuthProtocol_Responder>`): a cap on concurrent pending
+  probes tracked by the responder. Excess probes also get :ref:`BUSY <class_BackendPeer_ProbeResult_constant_BUSY>`.
 
 Stragglers (clients that crash before closing, or that never close on
 purpose) are cleaned up by
@@ -231,7 +231,7 @@ Server browser recipe
 
 The ``addons/networked/connect/`` subtree ships the primitives needed
 to build a Minecraft-style server browser on top of
-``query_server_info``:
+``probe_server_info``:
 
 - :ref:`JoinTarget <class_JoinTarget>` - one row in the list. It bundles a
   :ref:`BackendPeer <class_BackendPeer>` template and an
@@ -240,25 +240,23 @@ to build a Minecraft-style server browser on top of
   :ref:`JoinTarget.backend <class_JoinTarget_property_backend>` field is a template, and
   :ref:`JoinTarget.make_backend_instance() <class_JoinTarget_method_make_backend_instance>` returns a fresh duplicate so probe and
   join paths do not share runtime state.
-- :ref:`ServerList <class_ServerList>` - a typed array of targets
-  persisted to ``user://servers.tres``. :ref:`ServerList.load_or_new() <class_ServerList_method_load_or_new>` is empty on
-  first run, and :ref:`ServerList.save() <class_ServerList_method_save>` writes the current list back.
-- :ref:`ProbeSession <class_ProbeSession>` - thin wrapper that calls
-  :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` on a fresh backend instance and emits the
-  result.
-- :ref:`ProbeManager <class_ProbeManager>` - a :godot:`Node <Node>` that caps
-  concurrent sessions (:ref:`ProbeManager.max_concurrent <class_ProbeManager_property_max_concurrent>`, default 6) below the
-  server-side :ref:`MAX_ACTIVE_PROBES <class_AuthProbeResponder_constant_MAX_ACTIVE_PROBES>` cap on :ref:`AuthProbeResponder <class_AuthProbeResponder>`. :ref:`ProbeManager.cancel_all() <class_ProbeManager_method_cancel_all>` suppresses
-  pending callbacks but does not abort the inner
-  :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` - transient peers tear themselves down on
-  their own timeout/completion path.
-- :ref:`DirectoryRegistry <class_DirectoryRegistry>` - a :godot:`Node <Node>`
-  mapping :godot:`StringName <StringName>` ids to :ref:`LobbyDirectory <class_LobbyDirectory>` instances.
+- :ref:`ConnectSession <class_ConnectSession>` persists saved targets to
+  ``user://servers.tres`` by default. Use
+  :ref:`load_server_list() <class_ConnectSession_method_load_server_list>` and
+  :ref:`save_server_list() <class_ConnectSession_method_save_server_list>` to
+  read or write the current saved target list.
+- :ref:`ConnectSession <class_ConnectSession>` runs capped probe work through
+  fresh backend instances. Pending callbacks are suppressed when a refresh is
+  cancelled, while transient peers tear themselves down on their own timeout
+  or completion path.
+- :ref:`ConnectSession <class_ConnectSession>` keeps a private directory
+  registry mapping :godot:`StringName <StringName>` ids to
+  :ref:`LobbyDirectory <class_LobbyDirectory>` instances.
 
 The reference scene at
 ``addons/networked/connect/ui/connect_browser.tscn`` wires these together:
 it loads the persisted list, fires one probe per saved target through
-a :ref:`ProbeManager <class_ProbeManager>`, and renders rows grouped by provenance.
+:ref:`ConnectSession <class_ConnectSession>`, and renders rows grouped by provenance.
 All rows dispatch uniformly through :ref:`MultiplayerTree.join() <class_MultiplayerTree_method_join>`
 regardless of the underlying transport backend.
 

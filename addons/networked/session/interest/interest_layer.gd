@@ -369,5 +369,268 @@ func unbind_gate() -> void:
 
 
 ## Returns the bound [InterestGate], or [code]null[/code].
+## Returns the bound [InterestGate], or [code]null[/code].
 func bound_gate() -> Object:
 	return _bound_gate_ref.get_ref() if _bound_gate_ref else null
+
+
+## Pure transition computer for [NetwInterestLayer].
+##
+## Holds the per-(entity, peer) verdict cache. [method compute] takes
+## the current entity set, peer list, and policy state, returns the
+## transitions that would land the cache in the new state, and leaves
+## the cache untouched until [method commit] is called. Splitting
+## compute from commit lets the caller apply engine-side effects
+## (filter updates, signal emission) in the right order before the
+## cached state advances.
+##
+## [b]Engine-free:[/b] depends only on [NetwEntity] and
+## [InterestPolicy]. Unit tests construct a driver directly without
+## any multiplayer peer.
+##
+## [codeblock]
+##     var driver := InterestDriver.new()
+##     var result := driver.compute(entities, peers, kind, viewers)
+##     emit_transitions(result.hide_transitions, result.show_transitions)
+##     driver.commit(result)
+## [/codeblock]
+class InterestDriver:
+	extends RefCounted
+
+	## One per-entity visibility change emitted by [method compute].
+	##
+	## [member entity] and [member peer] identify the exact visibility edge.
+	## [NetwInterestLayer] emits [signal interest_enter] or
+	## [signal interest_exit] from these values after [method compute].
+	## [codeblock]
+	## var transition := result.show_transitions[0]
+	## transition.entity.interest_enter.emit(transition.peer)
+	## [/codeblock]
+	class Transition:
+		extends RefCounted
+		## Entity whose visibility changed.
+		var entity: NetwEntity
+		## Peer id whose visibility changed.
+		var peer: int
+
+
+		func _init(e: NetwEntity = null, p: int = 0) -> void:
+			entity = e
+			peer = p
+
+
+	## Output of one [method compute] pass.
+	##
+	## [member hide_transitions] and [member show_transitions] are sorted for
+	## engine-safe application. [member new_state] is adopted by
+	## [method commit] after [NetwInterestLayer] emits signals.
+	## [codeblock]
+	## var result := driver.compute(entities, peers, policy, viewers)
+	## emit_transitions(result.hide_transitions, result.show_transitions)
+	## driver.commit(result)
+	## [/codeblock]
+	class Result:
+		extends RefCounted
+		## Per-(entity, peer) hide transitions, deep-first.
+		var hide_transitions: Array[Transition] = []
+		## Per-(entity, peer) show transitions, shallow-first.
+		var show_transitions: Array[Transition] = []
+		## Full new visibility state: [code]{entity: {peer: bool}}[/code].
+		var new_state: Dictionary = { }
+
+
+	var _state: Dictionary = { }
+
+
+	## Returns the cached verdict for [param entity] under [param peer_id]
+	## without recomputing.
+	func cached_verdict(entity: NetwEntity, peer_id: int) -> bool:
+		var per_entity: Dictionary = _state.get(entity, { })
+		return per_entity.get(peer_id, false)
+
+
+	## Returns every peer currently cached as visible for [param entity].
+	## Used to emit exit transitions before the entity leaves its layer.
+	func cached_view_for(entity: NetwEntity) -> Dictionary:
+		return _state.get(entity, { }).duplicate()
+
+
+	## Drops the cache entry for [param entity]. Returns the previous
+	## per-peer dict.
+	func forget(entity: NetwEntity) -> Dictionary:
+		var prev: Dictionary = _state.get(entity, { })
+		_state.erase(entity)
+		return prev
+
+
+	## Returns the peer ids the driver has ever cached a verdict for.
+	## Used to drive hide transitions for peers removed from the viewer set.
+	func cached_peers() -> Array[int]:
+		var seen: Dictionary[int, bool] = { }
+		for entity in _state:
+			var per_entity: Dictionary = _state[entity]
+			for p: int in per_entity:
+				seen[p] = true
+		var out: Array[int] = []
+		out.assign(seen.keys())
+		return out
+
+
+	## Computes the transitions that would result from re-evaluating
+	## [param entities] against [param peers] under
+	## [code](kind, viewers)[/code]. Does not mutate the driver state;
+	## call [method commit] to advance.
+	func compute(
+			entities: Dictionary,
+			peers: Array[int],
+			kind: NetwInterestLayer.Policy,
+			viewers: Dictionary,
+	) -> Result:
+		var result := Result.new()
+		# Policy verdict depends only on (kind, viewers, peer), not on the
+		# entity. Compute it once per peer and reuse across the layer.
+		var verdict_by_peer: Dictionary = { }
+		for peer: int in peers:
+			verdict_by_peer[peer] = InterestPolicy.verdict(kind, viewers, peer)
+		for entity: NetwEntity in entities:
+			if not is_instance_valid(entity) \
+					or not is_instance_valid(entity.owner):
+				continue
+			_compute_entity(entity, verdict_by_peer, result)
+		result.hide_transitions.sort_custom(_transition_deeper_first)
+		result.show_transitions.sort_custom(_transition_shallower_first)
+		return result
+
+
+	func _compute_entity(
+			entity: NetwEntity,
+			verdict_by_peer: Dictionary,
+			result: Result,
+	) -> void:
+		# Off-tree owners and syncs cannot be ordered by [method
+		# Node.get_path] (which the comparators call), and an off-tree
+		# sync cannot be the target of [method
+		# MultiplayerSynchronizer.update_visibility] anyway. Skip both so
+		# the binding-apply phase only sees nodes the engine can act on.
+		if not entity.owner.is_inside_tree():
+			return
+		var prev: Dictionary = _state.get(entity, { })
+		var per_entity: Dictionary = { }
+		result.new_state[entity] = per_entity
+		for peer: int in verdict_by_peer:
+			var now: bool = verdict_by_peer[peer]
+			per_entity[peer] = now
+			var was: bool = prev.get(peer, false)
+			if was == now:
+				continue
+			var transition := Transition.new(entity, peer)
+			if now:
+				result.show_transitions.append(transition)
+			else:
+				result.hide_transitions.append(transition)
+
+
+	## Adopts the new state from [param result] as the current cache. Call after
+	## engine-side effects and signals have been applied.
+	func commit(result: Result) -> void:
+		_state = result.new_state
+
+
+	## Returns a shallow copy of the visibility cache for inspection.
+	## Structure: [code]{NetwEntity: {peer_id: bool}}[/code].
+	func dump() -> Dictionary:
+		return _state.duplicate(true)
+
+	# Sort comparators. Depth is measured via Node path name count so a
+	# scripted scene tree and a runtime-built tree compare consistently.
+
+
+	func _transition_deeper_first(a: Transition, b: Transition) -> bool:
+		return a.entity.owner.get_path().get_name_count() \
+				> b.entity.owner.get_path().get_name_count()
+
+
+	func _transition_shallower_first(a: Transition, b: Transition) -> bool:
+		return a.entity.owner.get_path().get_name_count() \
+				< b.entity.owner.get_path().get_name_count()
+
+
+## Stateless verdict resolver for [NetwInterestLayer].
+##
+## Given a [enum NetwInterestLayer.Policy] and a viewer set, returns
+## the per-peer visibility verdict. Every gate in the system - layer
+## verdicts, per-entity filters, anchor admission - routes through
+## this function so disagreement is a single-source bug.
+##
+## [method explain] returns a human-readable reason and is the first
+## tool to reach for when a peer is visible or hidden when it should
+## not be.
+##
+## [codeblock]
+##     var k := NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS
+##     InterestPolicy.verdict(k, viewers, peer_id)
+##     print(InterestPolicy.explain(k, viewers, peer_id))
+## [/codeblock]
+class InterestPolicy:
+	extends RefCounted
+
+	## Returns the per-peer visibility verdict.
+	##
+	## [param kind] is one of [enum NetwInterestLayer.Policy].
+	## [param viewers] is the layer's viewer set. Server peer
+	## ([constant MultiplayerPeer.TARGET_PEER_SERVER]) is always admitted;
+	## peer id [code]0[/code] is always rejected.
+	static func verdict(
+			kind: NetwInterestLayer.Policy,
+			viewers: Dictionary,
+			peer_id: int,
+	) -> bool:
+		if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+			return true
+		if peer_id == 0:
+			return false
+		match kind:
+			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
+				return viewers.has(peer_id)
+			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
+				return not viewers.has(peer_id)
+		return true
+
+
+	## Returns a one-line description of why [param peer_id] resolved the
+	## way it did. Intended for log lines and debugger inspection.
+	static func explain(
+			kind: NetwInterestLayer.Policy,
+			viewers: Dictionary,
+			peer_id: int,
+	) -> String:
+		if peer_id == MultiplayerPeer.TARGET_PEER_SERVER:
+			return "ADMIT peer=SERVER (always admitted)"
+		if peer_id == 0:
+			return "REJECT peer=0 (no peer context)"
+		var in_viewers := viewers.has(peer_id)
+		var label := _kind_label(kind)
+		match kind:
+			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
+				if in_viewers:
+					return "ADMIT peer=%d in viewers under %s" \
+							% [peer_id, label]
+				return "REJECT peer=%d not in viewers under %s" \
+						% [peer_id, label]
+			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
+				if in_viewers:
+					return "REJECT peer=%d in viewers under %s" \
+							% [peer_id, label]
+				return "ADMIT peer=%d not in viewers under %s" \
+						% [peer_id, label]
+		return "ADMIT peer=%d (unknown kind=%d defaults true)" \
+				% [peer_id, kind]
+
+
+	static func _kind_label(kind: NetwInterestLayer.Policy) -> String:
+		match kind:
+			NetwInterestLayer.Policy.HIDE_FROM_OUTSIDERS:
+				return "HIDE_FROM_OUTSIDERS"
+			NetwInterestLayer.Policy.HIDE_FROM_INSIDERS:
+				return "HIDE_FROM_INSIDERS"
+		return "kind=%d" % kind

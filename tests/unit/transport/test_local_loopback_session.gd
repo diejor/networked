@@ -149,9 +149,9 @@ func test_backend_query_reports_live_server() -> void:
 	backend.session = session
 
 	@warning_ignore("redundant_await")
-	var result: ServerInfoResult = await backend.query_server_info("")
+	var result: BackendPeer.ProbeResult = await backend.probe_server_info("")
 
-	assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+	assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.OK)
 	assert_that(result.info.is_local_listener).is_true()
 	assert_that(result.info.players).is_equal(1)
 	assert_that(result.info.app_id).is_equal(&"test-app")
@@ -162,9 +162,9 @@ func test_backend_query_without_live_server_is_unsupported() -> void:
 	backend.session = session
 
 	@warning_ignore("redundant_await")
-	var result: ServerInfoResult = await backend.query_server_info("")
+	var result: BackendPeer.ProbeResult = await backend.probe_server_info("")
 
-	assert_int(result.status).is_equal(ServerInfoResult.Status.UNSUPPORTED)
+	assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.UNSUPPORTED)
 
 
 func test_link_delay_releases_on_due_poll() -> void:

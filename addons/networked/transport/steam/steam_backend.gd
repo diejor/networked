@@ -37,7 +37,7 @@ func peer_reset_state() -> void:
 
 
 func _on_dir_peer_connect_failed(_reason: String) -> void:
-	connect_failed.emit(ConnectResult.unreachable(&"STEAM_P2P_FAILED", "Steam peer connection failed."))
+	connect_failed.emit(BackendPeer.ConnectResult.unreachable(&"STEAM_P2P_FAILED", "Steam peer connection failed."))
 
 
 ## Implements [method BackendPeer.create_host_peer] by creating a Steam lobby.
@@ -80,21 +80,21 @@ func is_available() -> bool:
 	return not OS.has_feature("web")
 
 
-## Keeps [method BackendPeer.query_server_info] unsupported for saved targets.
+## Keeps [method BackendPeer.probe_server_info] unsupported for saved targets.
 ##
-## Steam lobby browser rows carry [ServerInfo] from
+## Steam lobby browser rows carry [ServerDescriptor.Info] from
 ## [method LobbyDirectory.list_lobbies], so this backend does not open a
 ## separate probe connection.
-func query_server_info(
+func probe_server_info(
 		_address: String,
 		_timeout: float = 2.0,
-) -> ServerInfoResult:
-	return ServerInfoResult.unsupported()
+) -> BackendPeer.ProbeResult:
+	return BackendPeer.ProbeResult.unsupported()
 
 
-## Returns a [code]"Lobby ID"[/code] [AddressHint].
-func get_address_hint() -> AddressHint:
-	return AddressHint.make(
+## Returns a [code]"Lobby ID"[/code] [BackendPeer.AddressHint].
+func get_address_hint() -> BackendPeer.AddressHint:
+	return BackendPeer.AddressHint.make(
 		"Lobby ID",
 		"",
 		"Steam lobby IDs are discovered through the server browser.",

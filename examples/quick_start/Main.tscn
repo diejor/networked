@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_7ue45"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
-[ext_resource type="Script" uid="uid://bo5uh52f6sln5" path="res://addons/networked/session/default_server_info_source.gd" id="3_k3bnk"]
+[ext_resource type="Script" uid="uid://c23dshrfms8i3" path="res://addons/networked/session/spawn/entity_spawn_policy.gd" id="3_873qn"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://pnt2d2aysp0s" path="res://addons/networked/session/debug_join_config.gd" id="5_y6djk"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_03owx"]
@@ -13,7 +13,6 @@
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="10_xg3i6"]
-[ext_resource type="Script" uid="uid://dwa0bhinxigbm" path="res://addons/networked/session/spawn/entity_spawn_policy.gd" id="11_spwn"]
 [ext_resource type="Script" uid="uid://bp177r3yltt54" path="res://addons/networked/transport/local/local_backend.gd" id="13_7ehqo"]
 
 [sub_resource type="Resource" id="Resource_csjse"]
@@ -24,26 +23,23 @@ one_way_delay_max = 25.0
 lag_packet_loss_percent = 5.0
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
-[sub_resource type="Resource" id="Resource_xoeqs"]
-script = ExtResource("3_k3bnk")
-metadata/_custom_type_script = "uid://bo5uh52f6sln5"
+[sub_resource type="Resource" id="Resource_433w5"]
+script = ExtResource("3_873qn")
+metadata/_custom_type_script = "uid://c23dshrfms8i3"
 
-[sub_resource type="Resource" id="Resource_spwn"]
-script = ExtResource("11_spwn")
-
-[sub_resource type="Resource" id="Resource_k10si"]
+[sub_resource type="Resource" id="Resource_873qn"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
 node_path = "Player/Components/MultiplayerEntity"
 
-[sub_resource type="Resource" id="Resource_3ma5l"]
-script = ExtResource("11_spwn")
-spawn_point = SubResource("Resource_k10si")
-metadata/_custom_type_script = "uid://dwa0bhinxigbm"
+[sub_resource type="Resource" id="Resource_p4ss6"]
+script = ExtResource("3_873qn")
+spawn_point = SubResource("Resource_873qn")
+metadata/_custom_type_script = "uid://c23dshrfms8i3"
 
 [sub_resource type="Resource" id="Resource_lfwvc"]
 script = ExtResource("5_y6djk")
-spawn = SubResource("Resource_3ma5l")
+spawn = SubResource("Resource_p4ss6")
 metadata/_custom_type_script = "uid://pnt2d2aysp0s"
 
 [sub_resource type="Resource" id="Resource_k3bnk"]
@@ -78,8 +74,7 @@ node_path = "Player/Components/MultiplayerEntity"
 script = ExtResource("2_r0du0")
 backend = SubResource("Resource_csjse")
 app_id = &"6fd508jx9fxvnyf"
-server_info_source = SubResource("Resource_xoeqs")
-spawn_policy = SubResource("Resource_spwn")
+spawn_policy = SubResource("Resource_433w5")
 debug_join = SubResource("Resource_lfwvc")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 

@@ -1,10 +1,10 @@
 ## End-to-end tests for [method MultiplayerTree.auto_connect_player] driving
-## the [method BackendPeer.query_server_info] decision.
+## the [method BackendPeer.probe_server_info] decision.
 ##
 ## Verifies the host-vs-join branch on a real ENet transport: a successful
 ## query (live local listener) joins, anything else (timeout, unreachable,
 ## unsupported) hosts.
-class_name TestAutoConnectQueryPath
+class_name TestAutoConnectProbePath
 extends NetwTestSuite
 
 func _make_payload(username: String) -> JoinPayload:

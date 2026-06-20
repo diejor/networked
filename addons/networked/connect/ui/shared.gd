@@ -55,19 +55,19 @@ static func format_spawner_label(path: SceneNodePath) -> String:
 ## Returns a user-friendly error string for [param result].
 ##
 ## Maps the [ConnectResult] status and details to friendly descriptions.
-static func format_connect_error(result: ConnectResult) -> String:
+static func format_connect_error(result: BackendPeer.ConnectResult) -> String:
 	if result == null:
 		return "Unknown error."
 	match result.status:
-		ConnectResult.Status.OK:
+		BackendPeer.ConnectResult.Status.OK:
 			return "Success."
-		ConnectResult.Status.TIMED_OUT:
+		BackendPeer.ConnectResult.Status.TIMED_OUT:
 			return "Connection timed out."
-		ConnectResult.Status.REFUSED:
+		BackendPeer.ConnectResult.Status.REFUSED:
 			return "Connection refused."
-		ConnectResult.Status.ABORTED:
+		BackendPeer.ConnectResult.Status.ABORTED:
 			return "Connection aborted by user."
-		ConnectResult.Status.UNREACHABLE:
+		BackendPeer.ConnectResult.Status.UNREACHABLE:
 			match result.detail:
 				&"TURN_UNREACHABLE":
 					return "Relay server unreachable."
@@ -92,7 +92,7 @@ static func format_connect_error(result: ConnectResult) -> String:
 
 
 ## Returns an optional second line for useful [ConnectResult] diagnostics.
-static func format_connect_detail(result: ConnectResult) -> String:
+static func format_connect_detail(result: BackendPeer.ConnectResult) -> String:
 	if result == null:
 		return ""
 	var stats: Dictionary = result.diagnostics.get("candidates", { })

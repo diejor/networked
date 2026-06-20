@@ -1,15 +1,15 @@
-## Unit tests for [HistoryBuffer].
+## Unit tests for [NetwRingBuffer].
 ##
 ## Contract examples cover record/retrieve, bracketing search, and eviction
 ## under a fixed capacity. The fuzz-driven oracle tests cross-check those
 ## same invariants against a brute-force dictionary model.
-class_name TestHistoryBuffer
+class_name TestNetwRingBuffer
 extends NetwTestSuite
 
 #region Contract examples
 
 func test_empty_buffer_state() -> void:
-	var buf := HistoryBuffer.new(4)
+	var buf := NetwRingBuffer.new(4)
 	assert_that(buf.is_empty()).is_true()
 	assert_that(buf.size()).is_equal(0)
 	assert_that(buf.oldest_tick()).is_equal(-1)
@@ -30,7 +30,7 @@ func test_record_then_get_at(
 			[1000, { &"k": &"v" }],
 		],
 ) -> void:
-	var buf := HistoryBuffer.new(4)
+	var buf := NetwRingBuffer.new(4)
 	buf.record(tick, value)
 
 	assert_that(buf.is_empty()).is_false()
@@ -61,14 +61,14 @@ func test_bracketing_ticks(
 			[[5, 10, 20, 30], 17, Vector2i(10, 20)],
 		],
 ) -> void:
-	var buf := HistoryBuffer.new(8)
+	var buf := NetwRingBuffer.new(8)
 	for t: int in recorded:
 		buf.record(t, t)
 	assert_that(buf.bracketing_ticks(query)).is_equal(expected)
 
 
 func test_has_tick_after() -> void:
-	var buf := HistoryBuffer.new(4)
+	var buf := NetwRingBuffer.new(4)
 	buf.record(10, "a")
 	assert_that(buf.has_tick_after(5)).is_true()
 	assert_that(buf.has_tick_after(10)).is_false()
@@ -80,7 +80,7 @@ func test_has_tick_after() -> void:
 
 func test_capacity_normalized_to_power_of_two() -> void:
 	# Requested capacity 3 -> internal capacity 4.
-	var buf := HistoryBuffer.new(3)
+	var buf := NetwRingBuffer.new(3)
 	for tick in range(1, 5):
 		buf.record(tick, "v%d" % tick)
 
@@ -104,7 +104,7 @@ func test_buffer_view_matches_oracle(
 ) -> void:
 	var capacity := 4
 	var insert_count := 12
-	var buf := HistoryBuffer.new(capacity)
+	var buf := NetwRingBuffer.new(capacity)
 	var oracle: Array = []
 
 	var base_tick: int = fuzzer.next_value()
@@ -132,7 +132,7 @@ func test_evicted_ticks_return_null(
 ) -> void:
 	var capacity := 4
 	var insert_count := 12
-	var buf := HistoryBuffer.new(capacity)
+	var buf := NetwRingBuffer.new(capacity)
 
 	var base_tick: int = fuzzer.next_value()
 	for i in insert_count:
@@ -151,7 +151,7 @@ func test_bracketing_matches_linear_oracle(
 		fuzzer_iterations := 20,
 ) -> void:
 	var capacity := 8
-	var buf := HistoryBuffer.new(capacity)
+	var buf := NetwRingBuffer.new(capacity)
 	var ticks: PackedInt32Array = []
 
 	var t := 0

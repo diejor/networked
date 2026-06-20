@@ -38,6 +38,9 @@ extends Resource
 func to_payload() -> JoinPayload:
 	var payload := JoinPayload.new()
 	payload.username = username
-	payload.spawn = spawn.to_dict() if spawn else { }
+	if spawn:
+		payload.spawn = spawn.to_dict()
+	else:
+		payload.spawn = { }
 	payload.is_debug = true
 	return payload

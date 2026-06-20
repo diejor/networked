@@ -152,7 +152,7 @@ func test_buffer_records_network_value_not_interpolated_value() -> void:
 	_network_update(P1)
 	_tick() # buf should record P1 at tick 2, NOT whatever _process last wrote
 
-	var buf: HistoryBuffer = _interpolator.get_buffer(&"position")
+	var buf: NetwRingBuffer = _interpolator.get_buffer(&"position")
 	assert_that(buf.get_at(2)).is_equal(P1)
 
 

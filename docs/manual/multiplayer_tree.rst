@@ -121,8 +121,8 @@ A typical local flow looks like this:
    :ref:`auth_provider <class_MultiplayerTree_property_auth_provider>` is
    assigned.
 3. (:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` only) call
-   :ref:`query_server_info() <class_BackendPeer_method_query_server_info>`
-   against the address. An :ref:`OK <class_ServerInfoResult_constant_OK>`
+   :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
+   against the address. An :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`
    reply means a server is listening, so join; anything else means host.
 4. After the transport hand-off, send the resolved payload to the server
    via :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`.
@@ -131,7 +131,7 @@ A typical local flow looks like this:
    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`
    everywhere, including locally on the new peer.
 
-For the protocol behind :ref:`query_server_info() <class_BackendPeer_method_query_server_info>` and probe isolation, see
+For the protocol behind :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>` and probe isolation, see
 :doc:`pre_game_connection`.
 
 Matches from external matchmaking and lobby systems (like Steam lobbies) are

@@ -68,7 +68,7 @@ func test_control_request_can_be_denied() -> void:
 	var server_entity := _mp(server_player)
 	server_entity.transfer = MultiplayerEntity.Transfer.REQUESTABLE
 	server_entity.control_requested.connect(
-		func(_peer_id: int, request: ControlRequest) -> void:
+		func(_peer_id: int, request: MultiplayerEntity.ControlRequest) -> void:
 			request.deny()
 	)
 

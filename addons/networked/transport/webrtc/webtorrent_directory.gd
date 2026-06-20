@@ -89,7 +89,7 @@ var _advertise_acc := 0.0
 var _collecting := false
 var _collect_left := 0.0
 var _query_acc := 0.0
-var _collected: Dictionary = { } # room_hash -> LobbyInfo
+var _collected: Dictionary = { } # room_hash -> LobbyDirectory.LobbyInfo
 var _id_to_hash: Dictionary = { } # synthetic int id -> room_hash
 var _next_id := 1
 
@@ -212,7 +212,7 @@ func leave_lobby() -> void:
 	_collecting = false
 
 
-func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	var target := JoinTarget.new()
 	target.display_name = lobby.lobby_name
 	target.address = String(lobby.metadata.get("room_hash", ""))
@@ -449,7 +449,7 @@ func _collect_room(card: Dictionary) -> void:
 	var room_name := String(card.get("name", ""))
 
 	if _collected.has(room_hash):
-		var existing: LobbyInfo = _collected[room_hash]
+		var existing: LobbyDirectory.LobbyInfo = _collected[room_hash]
 		var changed := existing.players != players \
 				or existing.max_players != max_players \
 				or existing.lobby_name != room_name
@@ -476,7 +476,7 @@ func _collect_room(card: Dictionary) -> void:
 		"WebTorrentDirectory: discovered room %s (%d/%d) app_id='%s'.",
 		[room_hash, players, max_players, String(card.get("app_id", ""))],
 	)
-	_collected[room_hash] = LobbyInfo.make(
+	_collected[room_hash] = LobbyDirectory.LobbyInfo.make(
 		id,
 		room_name,
 		players,
@@ -486,7 +486,7 @@ func _collect_room(card: Dictionary) -> void:
 
 
 func _emit_collected() -> void:
-	var out: Array[LobbyInfo] = []
+	var out: Array[LobbyDirectory.LobbyInfo] = []
 	for room_hash in _collected:
 		out.append(_collected[room_hash])
 	Netw.dbg.debug(

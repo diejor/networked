@@ -315,18 +315,16 @@ should be explicit. The arguments are ordered as sender, then receiver.
     game.path(alice, bob).latency_ms(200)
 
 Most game tests should set conditions in milliseconds or use a
-:ref:`NetwLink.Profile <enum_NetwLink_Profile>`. Use
-:ref:`exact() <class_NetwLink_method_exact>` only when the test needs an exact
-deterministic plan. Exact plans expose
-:ref:`LocalLoopbackSession.LinkPlan <class_LocalLoopbackSession_LinkPlan>`
-in milliseconds.
+:ref:`NetwLink.Profile <enum_NetwLink_Profile>`. Chain the
+:ref:`NetwLink <class_NetwLink>` setters when the test needs an exact
+deterministic path. Link conditions are expressed in milliseconds.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    game.path(alice, bob).exact() \
-            .loss_prob(0.5) \
-            .delay_ms(66.0) \
+    game.path(alice, bob) \
+            .loss(0.5) \
+            .latency_ms(66.0) \
             .seed(1)
 
 Real transports
@@ -336,13 +334,12 @@ Real transports
 :ref:`LocalLoopbackBackend <class_LocalLoopbackBackend>` because it is fast
 and deterministic. That also means it cannot test behavior that only exists
 on real sockets, such as ENet addressing, bound ports, or the pre-game
-:ref:`BackendPeer.query_server_info()
-<class_BackendPeer_method_query_server_info>`
+:ref:`BackendPeer.probe_server_info()
+<class_BackendPeer_method_probe_server_info>`
 probe.
 
-Use :ref:`EnetTestSupport <class_EnetTestSupport>` when the test needs real
-UDP. It starts a host tree on an actual port and returns the address data a
-client backend can probe.
+Use ``EnetTestSupport`` when the test needs real UDP. It starts a host tree
+on an actual port and returns the address data a client backend can probe.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -351,12 +348,12 @@ client backend can probe.
         var host := await EnetTestSupport.start_host(self)
         var client_backend := EnetTestSupport.make_client_backend(host.port)
 
-        var result: ServerInfoResult = await client_backend.query_server_info(
+        var result: BackendPeer.ProbeResult = await client_backend.probe_server_info(
             "127.0.0.1",
             2.0
         )
 
-        assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+        assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.OK)
         await EnetTestSupport.stop_tree(host.tree)
 
 

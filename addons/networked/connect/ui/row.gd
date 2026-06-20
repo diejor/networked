@@ -1,5 +1,5 @@
 ## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
-## latest [ServerInfoResult].
+## latest [BackendPeer.ProbeResult].
 class_name ConnectBrowserRow
 extends PanelContainer
 
@@ -12,7 +12,7 @@ signal context_requested(
 signal activated(target: JoinTarget, row: ConnectBrowserRow)
 
 var target: JoinTarget
-var result: ServerInfoResult
+var result: BackendPeer.ProbeResult
 
 @onready var _name_label: Label = %NameLabel
 @onready var _badge_label: Label = %BadgeLabel
@@ -40,7 +40,7 @@ func bind_target(p_target: JoinTarget) -> void:
 	_refresh()
 
 
-func set_result(p_result: ServerInfoResult) -> void:
+func set_result(p_result: BackendPeer.ProbeResult) -> void:
 	result = p_result
 	_refresh()
 
@@ -114,7 +114,7 @@ func _render_metrics() -> void:
 		return
 
 	match result.status:
-		ServerInfoResult.Status.OK:
+		BackendPeer.ProbeResult.Status.OK:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]
@@ -124,23 +124,23 @@ func _render_metrics() -> void:
 					"%d ms" % result.latency_ms
 					if result.latency_ms >= 0 else "."
 			)
-		ServerInfoResult.Status.BUSY:
+		BackendPeer.ProbeResult.Status.BUSY:
 			_players_label.text = "FULL"
 			_ping_label.text = "-"
-		ServerInfoResult.Status.UNREACHABLE:
+		BackendPeer.ProbeResult.Status.UNREACHABLE:
 			_players_label.text = "-"
 			_ping_label.text = "-"
-		ServerInfoResult.Status.TIMEOUT:
+		BackendPeer.ProbeResult.Status.TIMEOUT:
 			_players_label.text = "-"
 			_ping_label.text = "-"
-		ServerInfoResult.Status.UNSUPPORTED:
+		BackendPeer.ProbeResult.Status.UNSUPPORTED:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]
 					if info else "-"
 			)
 			_ping_label.text = "."
-		ServerInfoResult.Status.INCOMPATIBLE:
+		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]

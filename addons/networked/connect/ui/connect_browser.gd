@@ -69,7 +69,7 @@ var spawner_options: Array[SceneNodePath] = []
 @export var hide_when_session_active: bool = true
 
 ## Path used to load and persist saved targets shown by this browser.
-@export var server_list_path: String = ServerList.DEFAULT_PATH
+@export var server_list_path: String = ConnectSession.DEFAULT_SERVER_LIST_PATH
 
 var _add_popup: AddPopup
 var _host_popup: HostPopup
@@ -279,7 +279,7 @@ func _on_target_removed(target: JoinTarget) -> void:
 	_update_counter()
 
 
-func _on_target_updated(target: JoinTarget, result: ServerInfoResult) -> void:
+func _on_target_updated(target: JoinTarget, result: BackendPeer.ProbeResult) -> void:
 	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.set_result(result)
@@ -505,8 +505,8 @@ func _on_session_left() -> void:
 		show()
 
 
-func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
-	if result != null and result.status == ConnectResult.Status.ABORTED:
+func _on_join_failed(target: JoinTarget, result: BackendPeer.ConnectResult) -> void:
+	if result != null and result.status == BackendPeer.ConnectResult.Status.ABORTED:
 		_hide_connecting_overlay()
 		return
 	var msg := ConnectUiShared.format_connect_error(result)
@@ -549,7 +549,7 @@ func _join_with_preflight(
 		_show_banner("This transport is not available on this platform.")
 		return
 	var result := _connect.get_result(target)
-	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
+	if result != null and result.status == BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
@@ -580,27 +580,27 @@ func _hide_banner() -> void:
 		_banner.visible = false
 
 
-func _status_text(result: ServerInfoResult) -> String:
+func _status_text(result: BackendPeer.ProbeResult) -> String:
 	if result == null:
 		return "..."
 	match result.status:
-		ServerInfoResult.Status.OK:
+		BackendPeer.ProbeResult.Status.OK:
 			return "OK"
-		ServerInfoResult.Status.BUSY:
+		BackendPeer.ProbeResult.Status.BUSY:
 			return "BUSY"
-		ServerInfoResult.Status.UNREACHABLE:
+		BackendPeer.ProbeResult.Status.UNREACHABLE:
 			return "UNREACHABLE"
-		ServerInfoResult.Status.TIMEOUT:
+		BackendPeer.ProbeResult.Status.TIMEOUT:
 			return "TIMEOUT"
-		ServerInfoResult.Status.UNSUPPORTED:
+		BackendPeer.ProbeResult.Status.UNSUPPORTED:
 			return "UNSUPPORTED"
-		ServerInfoResult.Status.INCOMPATIBLE:
+		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 			return "INCOMPATIBLE"
 		_:
 			return "ERROR"
 
 
-func _players_text(result: ServerInfoResult) -> String:
+func _players_text(result: BackendPeer.ProbeResult) -> String:
 	if result == null or result.info == null:
 		return "-"
 	return "%d/%d" % [result.info.players, result.info.max_players]

@@ -61,21 +61,21 @@ func create_join_peer(
 	return peer
 
 
-## Implements [method BackendPeer.query_server_info] with [AuthProbeClient].
+## Implements [method BackendPeer.probe_server_info] with [AuthProtocol.Client].
 ##
 ## [method build_url] normalizes [param address] before the probe opens a
 ## temporary WebSocket connection.
-func query_server_info(
+func probe_server_info(
 		address: String,
 		timeout: float = 2.0,
-) -> ServerInfoResult:
-	var probe := AuthProbeClient.new(self)
+) -> BackendPeer.ProbeResult:
+	var probe := AuthProtocol.Client.new(self)
 	return await probe.query(address, timeout)
 
 
-## Returns a probed [code]"Server URL"[/code] [AddressHint].
-func get_address_hint() -> AddressHint:
-	var hint := AddressHint.make(
+## Returns a probed [code]"Server URL"[/code] [BackendPeer.AddressHint].
+func get_address_hint() -> BackendPeer.AddressHint:
+	var hint := BackendPeer.AddressHint.make(
 		"Server URL",
 		"ws://localhost:%d" % port,
 		"Empty -> wss://%s. Use localhost or ws[s]:// URLs." % public_host,

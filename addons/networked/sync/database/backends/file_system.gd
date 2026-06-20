@@ -1,4 +1,4 @@
-## [NetwBackend] that stores records as [DictionaryRecord] files on disk.
+## [NetwDatabaseBackend] that stores records as [DictionaryRecord] files on disk.
 ##
 ## Records are written to [code]<base_dir>/<table>/<id><extension>[/code].
 ## By default files use the compact binary [code].dict[/code] format.
@@ -10,7 +10,7 @@
 ## reported as a ghost table via [method @GlobalScope.push_warning]. No data is
 ## ever deleted automatically.
 class_name FileSystemBackend
-extends NetwBackend
+extends NetwDatabaseBackend
 
 # Static registry mapping globalized base_dir -> WeakRef(FileSystemBackend).
 # Used to catch multiple instances trying to manage the same directory.
@@ -45,7 +45,7 @@ func _path_for(table: StringName, id: StringName) -> String:
 func _table_dir(table: StringName) -> String:
 	return base_dir.path_join(String(table))
 
-# ── NetwBackend overrides ────────────────────────────────────────────────
+# ── NetwDatabaseBackend overrides ────────────────────────────────────────
 
 
 # Initializes the storage directory and validates the schema.

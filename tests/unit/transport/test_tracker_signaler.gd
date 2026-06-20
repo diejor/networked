@@ -63,19 +63,19 @@ func test_webrtc_backend_properties() -> void:
 
 	# Default empty namespace should give 20-char hex hint.
 	backend.signaling_namespace = ""
-	var hint1: AddressHint = backend.get_address_hint()
+	var hint1: BackendPeer.AddressHint = backend.get_address_hint()
 	assert_str(hint1.placeholder).is_equal("20-char hex")
 
 	# Non-empty namespace should give 5-char code hint.
 	backend.signaling_namespace = "test_ns"
-	var hint2: AddressHint = backend.get_address_hint()
+	var hint2: BackendPeer.AddressHint = backend.get_address_hint()
 	assert_str(hint2.placeholder).is_equal("5-char code")
 
 
 func test_webtorrent_directory_propagates_properties() -> void:
 	var dir: WebTorrentDirectory = auto_free(WebTorrentDirectory.new())
 
-	var lobby1: LobbyInfo = LobbyInfo.make(
+	var lobby1: LobbyDirectory.LobbyInfo = LobbyDirectory.LobbyInfo.make(
 		1,
 		"Test Lobby 1",
 		2,
@@ -94,7 +94,7 @@ func test_webtorrent_directory_propagates_properties() -> void:
 	assert_str(webrtc1.signaling_namespace).is_empty()
 
 	# If lobby has custom signaling_namespace, it propagates that.
-	var lobby2: LobbyInfo = LobbyInfo.make(
+	var lobby2: LobbyDirectory.LobbyInfo = LobbyDirectory.LobbyInfo.make(
 		2,
 		"Test Lobby 2",
 		2,

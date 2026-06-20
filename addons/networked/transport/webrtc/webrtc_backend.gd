@@ -405,11 +405,11 @@ func _on_session_failed(id: int, reason: String) -> void:
 	_connect_started_ms = 0
 	var diags := _session.connection_diagnostics(id)
 	var code := StringName(reason)
-	var status := ConnectResult.Status.UNREACHABLE
+	var status := BackendPeer.ConnectResult.Status.UNREACHABLE
 	if reason == "HOST_UNRESPONSIVE":
-		status = ConnectResult.Status.TIMED_OUT
+		status = BackendPeer.ConnectResult.Status.TIMED_OUT
 
-	var result := ConnectResult.unreachable(code, "", diags)
+	var result := BackendPeer.ConnectResult.unreachable(code, "", diags)
 	result.status = status
 	connect_failed.emit(result)
 
@@ -426,7 +426,7 @@ func _on_signaling_disconnected() -> void:
 	signaling_disconnected.emit()
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		var res := ConnectResult.unreachable(
+		var res := BackendPeer.ConnectResult.unreachable(
 			&"SIGNALING_UNAVAILABLE",
 			"Could not reach signaling.",
 		)
@@ -437,7 +437,7 @@ func _on_signaling_unreachable() -> void:
 	_signaling_ready = false
 	if not _is_server and _session and not _session._connected_ids.has(1):
 		_connect_started_ms = 0
-		var res := ConnectResult.unreachable(
+		var res := BackendPeer.ConnectResult.unreachable(
 			&"SIGNALING_UNREACHABLE",
 			"Could not reach any signaling server.",
 		)
@@ -464,7 +464,7 @@ func _poll_signaling_check() -> void:
 			var threshold := connect_timeout_hint() - 0.1
 			if elapsed >= threshold and not _signaling_ready:
 				_connect_started_ms = 0 # trigger once
-				var res := ConnectResult.unreachable(
+				var res := BackendPeer.ConnectResult.unreachable(
 					&"SIGNALING_UNAVAILABLE",
 					"Could not reach signaling.",
 				)
@@ -478,14 +478,14 @@ func get_join_address() -> String:
 	return super.get_join_address()
 
 
-## Returns a [code]"Room ID"[/code] [AddressHint].
-func get_address_hint() -> AddressHint:
+## Returns a [code]"Room ID"[/code] [BackendPeer.AddressHint].
+func get_address_hint() -> BackendPeer.AddressHint:
 	var placeholder := (
 			"5-char code"
 			if not signaling_namespace.is_empty()
 			else "20-char hex"
 	)
-	return AddressHint.make(
+	return BackendPeer.AddressHint.make(
 		"Room ID",
 		placeholder,
 		"Room identifier copied from the host (also auto-copied to clipboard "
@@ -493,17 +493,15 @@ func get_address_hint() -> AddressHint:
 		false,
 		false,
 	)
-## Keeps [method BackendPeer.query_server_info] unsupported for room ids.
-
-
+## Keeps [method BackendPeer.probe_server_info] unsupported for room ids.
 ##
-## WebRTC discovery uses signaling. An [AuthProbeClient] probe would need a full
+## WebRTC discovery uses signaling. An [AuthProtocol.Client] probe would need a full
 ## ICE handshake, which is too expensive for browser refresh.
-func query_server_info(
+func probe_server_info(
 		_address: String,
 		_timeout: float = 2.0,
-) -> ServerInfoResult:
-	return ServerInfoResult.unsupported()
+) -> BackendPeer.ProbeResult:
+	return BackendPeer.ProbeResult.unsupported()
 
 
 ## Budgets the connect timeout for the retry-aware WebRTC join, covering the

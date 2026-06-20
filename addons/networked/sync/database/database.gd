@@ -72,7 +72,7 @@ enum SchemaMismatchPolicy {
 
 ## The storage backend. Must be set before the first schema registration call
 ## triggers [method _initialize_backend].
-@export var backend: NetwBackend
+@export var backend: NetwDatabaseBackend
 
 ## What to do when a loaded record has columns absent from the current schema.
 @export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.PURGE
@@ -436,7 +436,7 @@ class TransactionContext:
 
 	## Flushes all queued operations to [param backend].
 	## Returns the first error encountered, or [constant OK].
-	func _commit(backend: NetwBackend) -> Error:
+	func _commit(backend: NetwDatabaseBackend) -> Error:
 		for entry in _queue:
 			var err := backend.upsert(entry.table, entry.id, entry.data)
 			if err != OK:

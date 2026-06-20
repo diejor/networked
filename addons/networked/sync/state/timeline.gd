@@ -16,7 +16,7 @@
 ##
 ## Snapshots are whole-entity [Dictionary] values keyed by a tick number, with
 ## each entry mapping a [ProxySynchronizer] virtual name to its value. Two
-## [HistoryBuffer] rings back the store, one for state and one for input, so a
+## [NetwRingBuffer] rings back the store, one for state and one for input, so a
 ## restore is a single atomic [method state_at] read rather than a per-property
 ## walk.
 class_name NetwTimeline
@@ -28,10 +28,10 @@ extends RefCounted
 const DEFAULT_LIMIT := 64
 
 ## Tick → [code]{virtual_name: value}[/code] authoritative state snapshots.
-var state: HistoryBuffer
+var state: NetwRingBuffer
 
 ## Tick → [code]{virtual_name: value}[/code] input snapshots.
-var input: HistoryBuffer
+var input: NetwRingBuffer
 
 # Logical GC watermark. Entries recorded strictly before this tick are treated
 # as absent by every read, so trimming needs no physical eviction (the ring
@@ -40,8 +40,8 @@ var _floor_tick: int = -1
 
 
 func _init(limit: int = DEFAULT_LIMIT) -> void:
-	state = HistoryBuffer.new(limit)
-	input = HistoryBuffer.new(limit)
+	state = NetwRingBuffer.new(limit)
+	input = NetwRingBuffer.new(limit)
 
 
 ## Records an authoritative whole-entity state [param snapshot] at [param tick].
@@ -115,7 +115,7 @@ func trim_before(tick: int) -> void:
 	_floor_tick = maxi(_floor_tick, tick)
 
 
-func _exact(buffer: HistoryBuffer, tick: int) -> Dictionary:
+func _exact(buffer: NetwRingBuffer, tick: int) -> Dictionary:
 	if tick < _floor_tick:
 		return { }
 	var value: Variant = buffer.get_at(tick)
