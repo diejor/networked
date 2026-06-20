@@ -111,6 +111,12 @@ def _is_allowed(root: ET.Element, allowed_names: set[str], allowed_auto: set[str
         quoted_path = name.strip('"')
         return quoted_path in allowed_auto
 
+    # Private inner classes (any nested segment starting with '_', e.g.
+    # "MultiplayerInterpolator._PredictedStrategy") are implementation detail
+    # and must not appear in the reference at all.
+    if any(segment.startswith("_") for segment in name.split(".")[1:]):
+        return False
+
     # Explicit class_name or inner class (e.g. "TubeBackend.TubeWrapper")
     if name in allowed_names:
         return True

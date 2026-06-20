@@ -1779,6 +1779,116 @@ def make_link(url: str, title: str) -> str:
     return f"`{url} <{url}>`__"
 
 
+# ---------------------------------------------------------------------------
+# Folder-driven class index (Networked).
+#
+# Upstream groups the class index by base type (Nodes / Resources / Other
+# objects / Variant types). We instead group by where each script lives under
+# addons/, with curated labels and ordering. Edit FOLDER_GROUPS below to rename,
+# reorder, or merge folders. Anything not matched falls back to an auto-derived
+# group from the source directory, so new files are never silently dropped.
+# See tools/patches/README.md.
+# ---------------------------------------------------------------------------
+
+# Ordered list of (label, [path prefixes]). First matching prefix wins, so list
+# more specific prefixes before their parents. Prefixes are repo-relative POSIX
+# paths under addons/.
+FOLDER_GROUPS: list[tuple[str, list[str]]] = [
+    ("Components", ["addons/networked/nodes"]),
+    (
+        "Session",
+        [
+            "addons/networked/session",
+            "addons/networked/sync/clock",
+            "addons/networked/context/session",
+        ],
+    ),
+    ("Synchronization", ["addons/networked/sync"]),
+    ("Connect & Lobby", ["addons/networked/connect"]),
+    ("Transport", ["addons/networked/transport"]),
+    (
+        "Debug & Telemetry",
+        [
+            "addons/networked/debug",
+            "addons/networked/context/debug",
+        ],
+    ),
+    (
+        "Context & Services",
+        [
+            "addons/networked/context",
+            "addons/networked/data",
+            "addons/networked/utils",
+        ],
+    ),
+    ("Scene Node Path (editor)", ["addons/networked/addons/scene_node_path"]),
+    ("Testing", ["addons/networked_test"]),
+]
+
+# Label for classes whose source path could not be resolved.
+FOLDER_GROUP_FALLBACK = "Other classes"
+
+
+def build_class_source_paths() -> dict[str, str]:
+    """Map ``class_name`` to its repo-relative POSIX source path.
+
+    The doctool XML carries no source path for named classes, so we recover it
+    by scanning addon GDScript for ``class_name`` declarations. Unnamed scripts
+    are resolved by the caller (their doc name is the path itself) and nested
+    classes resolve through their outer class.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    mapping: dict[str, str] = {}
+    decl = re.compile(r"^\s*class_name\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
+    for addon in ("addons/networked", "addons/networked_test"):
+        base = os.path.join(repo_root, addon)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _dirnames, filenames in os.walk(base):
+            for filename in filenames:
+                if not filename.endswith(".gd"):
+                    continue
+                full = os.path.join(dirpath, filename)
+                try:
+                    with open(full, "r", encoding="utf-8", errors="replace") as gd:
+                        match = decl.search(gd.read())
+                except OSError:
+                    continue
+                if not match:
+                    continue
+                rel = os.path.relpath(full, repo_root).replace("\\", "/")
+                mapping[match.group(1)] = rel
+    return mapping
+
+
+def folder_group_for(class_name: str, source_paths: dict[str, str]) -> str:
+    # Unnamed scripts: the doc name is the quoted source path.
+    bare = class_name.strip('"')
+    if bare.endswith(".gd"):
+        path = bare
+    else:
+        # Nested classes (Foo.Bar) resolve through their outer class.
+        path = source_paths.get(bare.split(".", 1)[0], "")
+    if not path:
+        return FOLDER_GROUP_FALLBACK
+
+    for label, prefixes in FOLDER_GROUPS:
+        for prefix in prefixes:
+            if path == prefix or path.startswith(prefix + "/"):
+                return label
+
+    # Auto-derive a group from the source directory so new code lands somewhere.
+    # e.g. addons/networked/foo/bar.gd -> "Foo".
+    parts = path.split("/")
+    if len(parts) >= 4 and parts[0] == "addons":
+        return parts[2].replace("_", " ").title()
+    return FOLDER_GROUP_FALLBACK
+
+
+def folder_group_slug(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+
+
 def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_dir: str) -> None:
     with open(
         os.devnull if dry_run else os.path.join(output_dir, "index.rst"), "w", encoding="utf-8", newline="\n"
@@ -1801,27 +1911,45 @@ def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_
 
         f.write(make_heading("All classes", "="))
 
-        for group_name in CLASS_GROUPS:
-            if group_name in grouped_classes:
-                f.write(make_heading(CLASS_GROUPS[group_name], "="))
+        # Reassign every class to a folder-driven group. A class may appear in
+        # more than one upstream type bucket (e.g. editor duplicates), so dedupe
+        # per folder group while sorting each group alphabetically.
+        source_paths = build_class_source_paths()
+        folder_grouped: dict[str, list[str]] = {}
+        for class_names in grouped_classes.values():
+            for class_name in class_names:
+                label = folder_group_for(class_name, source_paths)
+                folder_grouped.setdefault(label, []).append(class_name)
+        for label, names in folder_grouped.items():
+            folder_grouped[label] = sorted(dict.fromkeys(names), key=str.lower)
 
-                f.write(".. toctree::\n")
-                f.write("    :maxdepth: 1\n")
-                f.write(f"    :name: toc-class-ref-{group_name}s\n")
-                f.write("\n")
+        # Emit curated groups first in configured order, then any auto-derived
+        # groups alphabetically, then the unresolved fallback last.
+        ordered_labels = [label for label, _ in FOLDER_GROUPS]
+        extra_labels = sorted(
+            label
+            for label in folder_grouped
+            if label not in ordered_labels and label != FOLDER_GROUP_FALLBACK
+        )
+        emit_order = ordered_labels + extra_labels
+        if FOLDER_GROUP_FALLBACK in folder_grouped:
+            emit_order.append(FOLDER_GROUP_FALLBACK)
 
-                if group_name in CLASS_GROUPS_BASE and CLASS_GROUPS_BASE[group_name] in grouped_classes[group_name]:
-                    f.write(f"    class_{sanitize_class_name(CLASS_GROUPS_BASE[group_name], True)}\n")
+        for label in emit_order:
+            if label not in folder_grouped:
+                continue
 
-                for class_name in grouped_classes[group_name]:
-                    if group_name in CLASS_GROUPS_BASE and sanitize_class_name(
-                        CLASS_GROUPS_BASE[group_name], True
-                    ) == sanitize_class_name(class_name, True):
-                        continue
+            f.write(make_heading(label, "="))
 
-                    f.write(f"    class_{sanitize_class_name(class_name, True)}\n")
+            f.write(".. toctree::\n")
+            f.write("    :maxdepth: 1\n")
+            f.write(f"    :name: toc-class-ref-{folder_group_slug(label)}\n")
+            f.write("\n")
 
-                f.write("\n")
+            for class_name in folder_grouped[label]:
+                f.write(f"    class_{sanitize_class_name(class_name, True)}\n")
+
+            f.write("\n")
 
 
 # Formatting helpers.
