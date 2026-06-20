@@ -82,7 +82,7 @@
 ##     _timeline.trim_before(ack)
 ## [/codeblock]
 ##
-## [br][b]Why [code]ack + 1[/code][/b]
+## [br][b]Why ack + 1[/b]
 ## [br]Applying the input gathered at [code]t[/code] produces the state recorded at
 ## [code]t + 1[/code], so an [constant StateSynchronizer.ACK] of [code]t[/code]
 ## means the resulting state is the [code]t + 1[/code] entry, which the client looks

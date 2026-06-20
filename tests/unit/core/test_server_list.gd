@@ -7,14 +7,14 @@ func _temp_path() -> String:
 
 
 func _make_target(
-		name: String,
+		_name: String,
 		address: String,
 		port: int,
 ) -> JoinTarget:
 	var backend := ENetBackend.new()
 	backend.port = port
 	var target := JoinTarget.new()
-	target.display_name = name
+	target.display_name = _name
 	target.address = address
 	target.backend = backend
 	return target

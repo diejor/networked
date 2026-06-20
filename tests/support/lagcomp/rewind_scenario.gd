@@ -54,7 +54,7 @@ func setup(
 	clock = await inner.add_clock(tickrate, display_offset)
 
 	# The service is no longer auto-created, so mount the node explicitly.
-	sim = await inner.add_lag_compensation()
+	sim = inner.add_lag_compensation()
 	await _tree.process_frame
 
 	# Freeze the clock under lockstep so every tick is driven by run() / move_along().

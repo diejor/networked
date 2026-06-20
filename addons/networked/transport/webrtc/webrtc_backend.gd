@@ -493,6 +493,8 @@ func get_address_hint() -> BackendPeer.AddressHint:
 		false,
 		false,
 	)
+
+
 ## Keeps [method BackendPeer.probe_server_info] unsupported for room ids.
 ##
 ## WebRTC discovery uses signaling. An [AuthProtocol.Client] probe would need a full

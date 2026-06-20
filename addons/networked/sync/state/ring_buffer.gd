@@ -1,6 +1,6 @@
 ## Pre-allocated ring buffer that stores values keyed by tick number.
 ##
-## [NetwRingBuffer] rounds [param capacity] up to a power of two so
+## [NetwRingBuffer] rounds [code]capacity[/code] up to a power of two so
 ## [method record], [method get_at], and [method bracketing_ticks] can stay
 ## cheap in interpolation and rollback hot paths.
 ## [codeblock]

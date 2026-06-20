@@ -951,4 +951,3 @@ class ControlRequest:
 	## Rejects this request.
 	func deny() -> void:
 		denied = true
-

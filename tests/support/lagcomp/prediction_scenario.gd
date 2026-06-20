@@ -78,7 +78,7 @@ func setup(
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
 	# The service is no longer auto-created, so mount the node on both peers.
-	server_sim = await inner.add_lag_compensation()
+	server_sim = inner.add_lag_compensation()
 	client_sim = client.get_service(LagCompensation) as LagCompensation
 	await _tree.process_frame
 

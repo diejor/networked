@@ -170,7 +170,7 @@ Despawning is symmetric:
 :ref:`SaveComponent <class_SaveComponent>` (unless you ask it not to),
 forces authority back to the server so visibility updates settle cleanly,
 and frees the owner. The reason string you pass through
-:ref:`DespawnOpts <class_DespawnOpts>` shows up in logs and in the
+``MultiplayerEntity.DespawnOpts`` shows up in logs and in the
 :ref:`despawning <class_MultiplayerEntity_signal_despawning>` signal, so
 custom systems (achievements, death cams, kill feeds) can pivot on it
 without parsing strings out of the engine.
