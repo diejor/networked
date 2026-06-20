@@ -153,7 +153,8 @@ enum PredictedMode {
 	set(v):
 		display_role = v
 		if is_inside_tree() and not Engine.is_editor_hint():
-			_resolve_strategy()
+			_role_dirty = true
+			_resolve_strategy(true)
 
 ## Dictionary mapping property names to their [enum MultiplayerInterpolator.Mode].
 @export var property_modes: Dictionary[StringName, Mode] = { }:
@@ -358,6 +359,10 @@ var _display_tick: int = -1
 var _peer_batcher: _Batcher
 var _strategy: _Strategy
 var _strategy_role: DisplayRole = DisplayRole.DISABLED
+# Set when the resolved display role may be stale. The role only changes on
+# control transfer or an explicit display_role override, so steady-state frames
+# skip resolution and reuse the cached _strategy.
+var _role_dirty: bool = true
 var _entity: NetwEntity
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -413,6 +418,8 @@ func _exit_tree() -> void:
 		_strategy.exit(self)
 		_strategy = null
 	_strategy_role = DisplayRole.DISABLED
+	# Leaving the tree drops the strategy, so re-entry must re-resolve the role.
+	_role_dirty = true
 
 	if _entity and _entity.control_changed.is_connected(_on_control_changed):
 		_entity.control_changed.disconnect(_on_control_changed)
@@ -427,6 +434,7 @@ func _process(delta: float) -> void:
 #region ── Internal Logic ──────────────────────────────────────────────────────
 
 func _on_control_changed(_previous_peer: int, _peer: int) -> void:
+	_role_dirty = true
 	_resolve_strategy(true)
 
 
@@ -437,10 +445,15 @@ func _record_tick(tick: int) -> void:
 
 
 func _resolve_strategy(force: bool = false) -> void:
-	var role := _resolve_display_role()
-	if not force and _strategy and role == _strategy_role:
+	# Skip the per-frame role derivation (control/authority getters) unless the
+	# role was marked stale. _on_control_changed and the display_role setter set
+	# _role_dirty; everything else reuses the cached strategy.
+	if not force and not _role_dirty:
 		return
-	if not force and not _strategy and role == _strategy_role:
+	_role_dirty = false
+
+	var role := _resolve_display_role()
+	if not force and role == _strategy_role:
 		return
 
 	if _strategy:

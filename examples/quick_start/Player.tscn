@@ -108,4 +108,3 @@ texture = ExtResource("9_u2lnn")
 position = Vector2(0.5, 41)
 rotation = -1.5707964
 shape = SubResource("CapsuleShape2D_u845s")
-disabled = true

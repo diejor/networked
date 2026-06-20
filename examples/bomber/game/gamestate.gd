@@ -45,13 +45,10 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	if is_instance_valid(world):
-		if multiplayer.is_server():
-			var _name: String = players.get(id, "Peer %d" % id)
-			game_error.emit("Player " + _name + " disconnected")
-			end_game()
-	else:
-		unregister_player(id)
+	# A client leaving never ends the match. The framework despawns its player
+	# entity and the survivors play on. Only the host leaving ends the session,
+	# which reaches clients as server_disconnected (see _on_server_disconnected).
+	unregister_player(id)
 
 
 func _on_connected_ok() -> void:

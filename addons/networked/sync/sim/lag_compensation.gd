@@ -616,19 +616,27 @@ class _TimelineRegistry extends RefCounted:
 # in the component; this owns only ordering and metric aggregation.
 class _SimulationRunner extends RefCounted:
 	var _components: Array[PredictionComponent] = []
+	# Sorted view of _components, rebuilt only when the set changes. The order is
+	# stable by entity id, so re-sorting a duplicate every tick was pure waste.
+	var _sorted: Array[PredictionComponent] = []
+	var _sort_dirty: bool = true
 
 
 	func register(pc: PredictionComponent) -> void:
 		if pc not in _components:
 			_components.append(pc)
+			_sort_dirty = true
 
 
 	func unregister(pc: PredictionComponent) -> void:
 		_components.erase(pc)
+		_sort_dirty = true
 
 
 	func step(delta: float, tick: int) -> void:
-		for pc in _ordered():
+		if _sort_dirty:
+			_rebuild_sorted()
+		for pc in _sorted:
 			if is_instance_valid(pc):
 				pc.simulate_tick(delta, tick)
 
@@ -655,15 +663,15 @@ class _SimulationRunner extends RefCounted:
 
 
 	# Stable order by entity id so the server consumes every entity identically each
-	# run. The set is small, so a per-tick sort of a copy is cheap and keeps the
-	# registry insertion-order free.
-	func _ordered() -> Array[PredictionComponent]:
-		var out := _components.duplicate()
-		out.sort_custom(
+	# run. Rebuilt only when a component registers or unregisters, since entity ids
+	# are fixed once spawned.
+	func _rebuild_sorted() -> void:
+		_sorted = _components.duplicate()
+		_sorted.sort_custom(
 			func(a: PredictionComponent, b: PredictionComponent) -> bool:
 				return a.order_key() < b.order_key()
 		)
-		return out
+		_sort_dirty = false
 
 
 # Records every registered entity's authoritative state snapshot after a tick. The

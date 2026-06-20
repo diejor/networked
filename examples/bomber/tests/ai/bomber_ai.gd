@@ -33,6 +33,12 @@ var _waypoint_cell: Variant = null
 var _prev_dir := Vector2i.ZERO
 var _prev_bomb := false
 
+# Walls are static for a match, so the wall grid is built once per tilemap and
+# reused instead of re-walking every used cell each tick.
+var _walls_tilemap_id: int = 0
+var _walls_cache: Dictionary = { }
+var _grid_bounds_cache := Rect2i()
+
 
 ## Creates an AI that will drive [param runner]'s player named
 ## [param player_name].
@@ -122,14 +128,21 @@ func _scan_world() -> WorldSnapshot:
 
 	var level: Node = world.level
 
-	# Walls from TileMapLayer.
+	# Walls from TileMapLayer. Cached by tilemap instance: the wall set never
+	# changes during a match, so it is built once and shared (read-only) across
+	# snapshots instead of re-walked every tick.
 	var tilemap := level.get_node_or_null("Layer0") as TileMapLayer
 	if tilemap:
-		for cell: Vector2i in tilemap.get_used_cells():
-			var atlas := tilemap.get_cell_atlas_coords(cell)
-			if atlas == Vector2i(0, 0):
-				snap.wall_set[cell] = true
-		snap.grid_bounds = tilemap.get_used_rect()
+		var tid := tilemap.get_instance_id()
+		if tid != _walls_tilemap_id:
+			_walls_tilemap_id = tid
+			_walls_cache = { }
+			for cell: Vector2i in tilemap.get_used_cells():
+				if tilemap.get_cell_atlas_coords(cell) == Vector2i(0, 0):
+					_walls_cache[cell] = true
+			_grid_bounds_cache = tilemap.get_used_rect()
+		snap.wall_set = _walls_cache
+		snap.grid_bounds = _grid_bounds_cache
 
 	# Rocks.
 	var rocks := level.get_node_or_null("Rocks")

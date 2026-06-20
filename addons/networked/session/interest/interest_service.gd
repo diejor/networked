@@ -502,13 +502,14 @@ func _drive_dirty_entity_layers() -> void:
 
 
 func _flush_entity_visibility() -> void:
-	# tree_exiting eviction guarantees entries refer to live owners.
+	# tree_exiting eviction normally keeps entries pointing at live owners, but a
+	# bulk teardown (e.g. session end) can free an owner before its per-node
+	# eviction runs, so skip a freed owner instead of asserting. Mirrors the same
+	# guard in _drive_dirty_entity_layers.
 	var still_dirty: Dictionary[NetwEntity, bool] = { }
 	for entity: NetwEntity in _dirty_entities.keys():
-		assert(
-			is_instance_valid(entity.owner),
-			"InterestService: dirty entity outlived its owner",
-		)
+		if not is_instance_valid(entity.owner):
+			continue
 		if not entity.owner.is_inside_tree():
 			still_dirty[entity] = true
 			continue
