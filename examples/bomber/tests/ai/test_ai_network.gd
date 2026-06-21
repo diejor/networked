@@ -8,10 +8,16 @@ func test_full_match_under_rough_link() -> void:
 
 	var ais := make_ais(runners, BomberAI.Goal.score())
 	var rocks_before := rocks_left(game.host)
-	await run_until(ais, 400)
+	# Reliable bomb spawns punch through the lossy link, so the AIs clear the
+	# board. Exit as soon as a rock falls instead of grinding a fixed budget; the
+	# cap is generous game time for the first clear under the degraded link.
+	await run_until(
+		ais,
+		game.seconds_to_ticks(27.0),
+		func() -> bool: return rocks_left(game.host) < rocks_before,
+	)
 
-	# Reliable bomb spawns punch through the lossy link, so the AIs make
-	# progress clearing the board.
+	# The AIs made progress clearing the board.
 	assert_int(rocks_left(game.host)).is_less(rocks_before)
 
 	# Once the link clears, the board replication converges across peers.
@@ -31,8 +37,9 @@ func test_positions_converge_after_ai_stops_on_rough_link() -> void:
 
 	var ais := make_ais(runners, BomberAI.Goal.wander())
 
-	# Active phase: AIs wander under rough link.
-	await run_until(ais, 200)
+	# Active phase: AIs wander under rough link long enough to diverge the
+	# unreliable position streams across peers before they stop.
+	await run_until(ais, game.seconds_to_ticks(10.0))
 
 	# Stop all AIs and let the network settle.
 	for ai in ais:

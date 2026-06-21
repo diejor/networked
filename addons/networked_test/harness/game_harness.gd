@@ -8,6 +8,11 @@ extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
+## Wall-clock ceiling for one test's cumulative stepping, a runaway guard. The
+## harness steps deterministically, so a budget is a hang catcher, not a pace
+## limit. Override with the NETW_TEST_WALL_CLOCK_MS environment variable for
+## slower CI.
+const DEFAULT_WALL_CLOCK_BUDGET_MS := 60_000
 const PARTICIPANT_WINDOW_SCENE := preload(
 	"res://addons/networked/session/view/ParticipantWindow.tscn"
 )
@@ -24,6 +29,7 @@ var _display_viewport: ParticipantViewport
 var host: NetwSceneRunner
 
 var _torn_down := false
+var _wall_deadline_ms := 0
 
 
 func _init(scene: PackedScene = null) -> void:
@@ -127,6 +133,7 @@ func sync_ticks(n: int) -> void:
 	assert(n >= 0, "NetwGameHarness.sync_ticks: n must be non-negative.")
 	if n == 0:
 		return
+	_guard_wall_clock()
 
 	var clocks: Array[MultiplayerClock] = []
 	for runner in _runners:
@@ -144,6 +151,56 @@ func sync_ticks(n: int) -> void:
 
 	var stepper := FrameLockstepStepper.new(get_tree(), clocks)
 	await stepper.sync_ticks(n)
+
+
+## Game ticks spanning [param game_seconds] of game time at the host clock's
+## [member MultiplayerClock.tickrate].
+##
+## Stepping is deterministic, so a budget can only be expressed in ticks, never
+## in real seconds. Sizing the budget from game seconds keeps a test's intent
+## legible and portable across games whose [MultiplayerClock] runs a different
+## tickrate.
+## [codeblock]
+## # Run roughly eight seconds of game time, tickrate-agnostic.
+## await run_until(ais, game.seconds_to_ticks(8.0))
+## [/codeblock]
+func seconds_to_ticks(game_seconds: float) -> int:
+	return maxi(1, ceili(game_seconds * float(_tickrate())))
+
+
+func _tickrate() -> int:
+	if host and host.tree:
+		var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock
+		if clock:
+			return clock.tickrate
+	return DEFAULT_TICKRATE
+
+
+# Fails fast when a test's cumulative stepping blows past the wall-clock ceiling
+# so a runaway sim or a never-settling early-exit predicate surfaces as a legible
+# failure instead of a silent hang. The deadline starts on the first step after
+# setup, so connection and roster waits do not count against it.
+func _guard_wall_clock() -> void:
+	var now := Time.get_ticks_msec()
+	if _wall_deadline_ms == 0:
+		_wall_deadline_ms = now + _wall_clock_budget_ms()
+		return
+	assert(
+		now < _wall_deadline_ms,
+		(
+			"NetwGameHarness: test exceeded %d ms of stepping. Likely a " \
+			% _wall_clock_budget_ms()
+		) + (
+			"non-settling early-exit predicate or an oversized tick budget. " +
+			"Bound the run with seconds_to_ticks() and an early-exit " +
+			"predicate, or raise NETW_TEST_WALL_CLOCK_MS."
+		),
+	)
+
+
+func _wall_clock_budget_ms() -> int:
+	var raw := OS.get_environment("NETW_TEST_WALL_CLOCK_MS")
+	return int(raw) if raw.is_valid_int() else DEFAULT_WALL_CLOCK_BUDGET_MS
 
 
 ## Waits for a transition animation ([TPLayerAPI]) to finish on a specific

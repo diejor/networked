@@ -24,7 +24,9 @@ func test_eight_players_mixed_goals_no_crash() -> void:
 		ai.goal = goals[i]
 		ais.append(ai)
 
-	await run_until(ais, 600)
+	# A no-crash smoke needs a representative slice of mixed activity, not forty
+	# game-seconds. Eight game-seconds spans several bomb cycles at any tickrate.
+	await run_until(ais, game.seconds_to_ticks(8.0))
 
 	# Every player node still exists on every peer.
 	for r in runners:
@@ -42,7 +44,27 @@ func test_four_scorers_final_scores_consistent() -> void:
 		ai.goal = BomberAI.Goal.score()
 		ais.append(ai)
 
-	await run_until(ais, 400)
+	# Exit as soon as a score has landed and every peer agrees, rather than
+	# grinding a fixed budget. The cap is generous game time for the first bomb
+	# cycle to score and replicate; reaching it means the scenario never settled.
+	var scored_and_consistent := func() -> bool:
+		var host_total := 0
+		for r in runners:
+			host_total += get_score(game.host, r.peer_id)
+		if host_total <= 0:
+			return false
+		for r in runners:
+			for other in runners:
+				if get_score(r, other.peer_id) \
+						!= get_score(game.host, other.peer_id):
+					return false
+		return true
+	var settled := await run_until(
+		ais,
+		game.seconds_to_ticks(20.0),
+		scored_and_consistent,
+	)
+	assert_int(settled).is_less(game.seconds_to_ticks(20.0))
 
 	# Every peer agrees on every player's score.
 	for r in runners:
