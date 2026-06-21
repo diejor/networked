@@ -151,8 +151,43 @@ enum MissingInput {
 	REPEAT_LAST,
 }
 
+## How a reconciliation correction is applied to the body.
+enum CorrectionMode {
+	## Resolve from the body type: [constant REPLAY] for a kinematic body,
+	## [constant SNAP] for a dynamic one. The tier emerges from the body.
+	AUTO,
+	## Restore authoritative state, then replay every unacked input over it. For
+	## kinematic bodies, whose step is a plain callable (move_and_slide), so N
+	## ticks can be re-run in one frame.
+	REPLAY,
+	## Restore authoritative state and stop, with no replay. For dynamic bodies,
+	## whose solver cannot be stepped per input without a physics fork, so the
+	## predicted body resumes forward from truth and the display chase absorbs the
+	## snap.
+	SNAP,
+}
+
 ## Divergence above which a state receive triggers a correction.
+##
+## A single scalar mixes units badly for a 3D body, whose state spans meters,
+## a unit quaternion, and m·s⁻¹, so [member divergence_epsilon_overrides] sets a
+## per-property threshold where one is needed.
 @export var divergence_epsilon: float = 0.01
+
+## Per-property divergence thresholds overriding [member divergence_epsilon].
+##
+## Edited per property in the inspector under [code]Reconciliation Deadzones[/code],
+## one row per [StateSynchronizer] payload property, typed by the property so a
+## rotation row reads in radians and a position row in units. A row left at
+## [member divergence_epsilon] inherits it (the inspector revert arrow clears the
+## override). This dictionary is the backing store, also settable from code for
+## programmatically registered state. Keyed by the virtual property name.
+@export var divergence_epsilon_overrides: Dictionary[StringName, float] = { }
+
+## How a correction is applied. See [enum CorrectionMode]. [constant CorrectionMode.AUTO]
+## resolves [constant CorrectionMode.REPLAY] for a kinematic body and
+## [constant CorrectionMode.SNAP] for a dynamic one.
+@export var correction_mode: CorrectionMode = CorrectionMode.AUTO
 
 ## Server policy for a missing input tick. See [enum MissingInput].
 @export var missing_policy: MissingInput = MissingInput.STALL
@@ -192,6 +227,8 @@ signal state_evaluated(recv_tick: int, ack: int, divergence: float, corrected: b
 
 var _entity: NetwEntity
 var _role: Role = Role.REMOTE
+# Correction mode resolved from correction_mode and the body type at _rewire.
+var _correction: CorrectionMode = CorrectionMode.REPLAY
 var _timeline: NetwTimeline
 var _clock: MultiplayerClock
 var _sim: LagCompensation
@@ -208,6 +245,19 @@ var _last_input: Dictionary = { }
 func _init() -> void:
 	name = "PredictionComponent"
 	unique_name_in_owner = true
+
+
+func _get_configuration_warnings() -> PackedStringArray:
+	var warnings := PackedStringArray()
+	var root := get_parent()
+	if root is RigidBody2D or root is RigidBody3D:
+		warnings.append(
+			"Predicting a RigidBody (Tier 2, SNAP correction). Replicate linear "
+			+ "and angular velocity on the StateSynchronizer, not just the "
+			+ "transform, or the solver re-derives momentum wrong after every "
+			+ "correction and the post-collision settle repeats."
+		)
+	return warnings
 
 
 func _notification(what: int) -> void:
@@ -279,6 +329,14 @@ func has_consumed_state_tick(state_tick: int) -> bool:
 	return _ack >= 0 and _ack + 1 >= state_tick
 
 
+## Returns the [enum CorrectionMode] resolved from [member correction_mode] and
+## the body type, after wiring. [constant CorrectionMode.AUTO] never leaks out:
+## this is the concrete [constant CorrectionMode.REPLAY] or
+## [constant CorrectionMode.SNAP] the reconcile path uses.
+func resolved_correction_mode() -> CorrectionMode:
+	return _correction
+
+
 func _on_control_changed(_previous_peer: int, _peer: int) -> void:
 	_rewire()
 
@@ -316,6 +374,7 @@ func _rewire() -> void:
 			simulate = Callable(root, &"_network_tick")
 
 	_role = _resolve_role()
+	_correction = _resolve_correction_mode()
 	match _role:
 		Role.PREDICT:
 			# Owning client owns a local predicted timeline. The server's
@@ -363,6 +422,28 @@ func _resolve_role() -> Role:
 		return Role.CONSUME
 	return Role.REMOTE
 
+
+func _resolve_correction_mode() -> CorrectionMode:
+	return resolve_correction_mode_for(_entity.owner if _entity else null, correction_mode)
+
+
+## Resolves [param mode] against [param body]'s type.
+##
+## [constant CorrectionMode.AUTO] picks [constant CorrectionMode.SNAP] for a
+## dynamic body (a [RigidBody2D] or [RigidBody3D], whose solver cannot be stepped
+## per input) and [constant CorrectionMode.REPLAY] otherwise (a kinematic body's
+## step is a plain callable). An explicit mode passes through. Static so tooling
+## and tests can resolve without a wired entity.
+static func resolve_correction_mode_for(
+		body: Node,
+		mode: CorrectionMode,
+) -> CorrectionMode:
+	if mode != CorrectionMode.AUTO:
+		return mode
+	if body is RigidBody2D or body is RigidBody3D:
+		return CorrectionMode.SNAP
+	return CorrectionMode.REPLAY
+
 # ---------------------------------------------------------------------------
 # Predict (owning client)
 # ---------------------------------------------------------------------------
@@ -382,11 +463,14 @@ func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 		return
 	_entity.input.acknowledged_tick = ack
 	var predicted := _timeline.latest_state_at_or_before(ack + 1)
+	# An empty prediction (nothing recorded at or before the ack) forces a
+	# correction; otherwise the per-property thresholds decide.
 	var divergence := INF
+	var corrected := true
 	if not predicted.is_empty():
 		divergence = _divergence(predicted, payload)
+		corrected = _diverged(predicted, payload)
 
-	var corrected := divergence > divergence_epsilon
 	if corrected:
 		is_reconciling = true
 		corrections += 1
@@ -397,13 +481,18 @@ func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 		# server is input starved and re-sends the same ack) re-triggers this
 		# correction every tick until the ack advances past the stale entry.
 		_timeline.record_state(ack + 1, payload)
-		var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
-		max_replay_depth = maxi(max_replay_depth, window.size())
-		var live_input := _entity.input.snapshot_payload()
-		for entry in window:
-			_run(entry["input"], _tick_delta, entry["tick"], false)
-			_timeline.record_state(entry["tick"] + 1, _capture())
-		_entity.input.apply_payload(live_input)
+		# REPLAY re-runs unacked inputs over the restored state (kinematic). SNAP
+		# stops at the restore (dynamic): the predicted body resumes forward from
+		# truth next tick and the display chase absorbs the snap, since a solver
+		# body cannot be stepped per input without a physics fork.
+		if _correction == CorrectionMode.REPLAY:
+			var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
+			max_replay_depth = maxi(max_replay_depth, window.size())
+			var live_input := _entity.input.snapshot_payload()
+			for entry in window:
+				_run(entry["input"], _tick_delta, entry["tick"], false)
+				_timeline.record_state(entry["tick"] + 1, _capture())
+			_entity.input.apply_payload(live_input)
 		reconciled.emit(divergence)
 		is_reconciling = false
 
@@ -489,7 +578,8 @@ func _restore(payload: Dictionary) -> void:
 
 
 # Largest per-property error between a predicted and an authoritative snapshot.
-# A missing key or a non-numeric mismatch forces a correction.
+# A missing key or a non-numeric mismatch forces a correction. Reported on the
+# reconciled / state_evaluated signals; the correction decision is _diverged.
 func _divergence(predicted: Dictionary, authoritative: Dictionary) -> float:
 	var worst := 0.0
 	for key: StringName in authoritative:
@@ -499,6 +589,23 @@ func _divergence(predicted: Dictionary, authoritative: Dictionary) -> float:
 	return worst
 
 
+# True when any property exceeds its own threshold. Per-property because a 3D
+# body mixes units (meters, radians, m·s⁻¹) that no single epsilon can serve.
+func _diverged(predicted: Dictionary, authoritative: Dictionary) -> bool:
+	for key: StringName in authoritative:
+		if not predicted.has(key):
+			return true
+		if _value_error(predicted[key], authoritative[key]) > _epsilon_for(key):
+			return true
+	return false
+
+
+func _epsilon_for(key: StringName) -> float:
+	return divergence_epsilon_overrides.get(key, divergence_epsilon)
+
+
+# Per-property error. Rotations return radians (Quaternion / Basis angle), so a
+# rotation property wants its own threshold in divergence_epsilon_overrides.
 func _value_error(a: Variant, b: Variant) -> float:
 	if a is Vector2 and b is Vector2:
 		return (a - b).length()
@@ -506,6 +613,24 @@ func _value_error(a: Variant, b: Variant) -> float:
 		return (a - b).length()
 	if (a is float or a is int) and (b is float or b is int):
 		return absf(float(a) - float(b))
+	if a is Quaternion and b is Quaternion:
+		return absf((a as Quaternion).angle_to(b))
+	if a is Basis and b is Basis:
+		return absf(
+			(a as Basis).get_rotation_quaternion().angle_to(
+				(b as Basis).get_rotation_quaternion()
+			)
+		)
+	# A whole transform combines position and rotation error; thresholds live per
+	# property, so this heuristic only feeds the correction decision.
+	if a is Transform3D and b is Transform3D:
+		return (a.origin - b.origin).length() + absf(
+			a.basis.get_rotation_quaternion().angle_to(b.basis.get_rotation_quaternion())
+		)
+	if a is Transform2D and b is Transform2D:
+		return (a.origin - b.origin).length() + absf(
+			angle_difference(a.get_rotation(), b.get_rotation())
+		)
 	return 0.0 if a == b else INF
 
 
@@ -518,3 +643,112 @@ func _unregister_from_sim() -> void:
 	if is_instance_valid(_sim):
 		_sim.unregister(self)
 	_sim = null
+
+# ---------------------------------------------------------------------------
+# Inspector: per-property deadzone rows
+# ---------------------------------------------------------------------------
+
+# One editor row per StateSynchronizer payload property, backed by
+# divergence_epsilon_overrides. Mirrors MultiplayerInterpolator's per-property
+# inspector so a deadzone is set by name, typed by the property (radians for a
+# rotation, units for a position), instead of hand-editing an opaque dictionary.
+const _DEADZONE_PREFIX := "deadzone/"
+
+
+func _validate_property(property: Dictionary) -> void:
+	# The dictionary is the backing store. The per-property rows are the surface.
+	if property.name == "divergence_epsilon_overrides":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+
+
+func _get_property_list() -> Array[Dictionary]:
+	var props: Array[Dictionary] = []
+	if not Engine.is_editor_hint() or not owner:
+		return props
+
+	var rows := _deadzone_rows()
+	if rows.is_empty():
+		return props
+
+	props.append({
+		"name": "Reconciliation Deadzones",
+		"type": TYPE_NIL,
+		"usage": PROPERTY_USAGE_GROUP,
+		"hint_string": _DEADZONE_PREFIX,
+	})
+	for clean_name: StringName in rows:
+		props.append({
+			"name": _DEADZONE_PREFIX + clean_name,
+			"type": TYPE_FLOAT,
+			"usage": PROPERTY_USAGE_EDITOR,
+			"hint": PROPERTY_HINT_RANGE,
+			"hint_string": _deadzone_hint(rows[clean_name]),
+		})
+	return props
+
+
+func _get(property: StringName) -> Variant:
+	if property.begins_with(_DEADZONE_PREFIX):
+		var key := StringName(property.trim_prefix(_DEADZONE_PREFIX))
+		return divergence_epsilon_overrides.get(key, divergence_epsilon)
+	return null
+
+
+func _set(property: StringName, value: Variant) -> bool:
+	if not property.begins_with(_DEADZONE_PREFIX):
+		return false
+	var key := StringName(property.trim_prefix(_DEADZONE_PREFIX))
+	# Storing the global default means "inherit it", so drop the override. This is
+	# also what the inspector revert arrow lands on.
+	if is_equal_approx(float(value), divergence_epsilon):
+		divergence_epsilon_overrides.erase(key)
+	else:
+		divergence_epsilon_overrides[key] = float(value)
+	return true
+
+
+func _property_can_revert(property: StringName) -> bool:
+	if property.begins_with(_DEADZONE_PREFIX):
+		return divergence_epsilon_overrides.has(
+			StringName(property.trim_prefix(_DEADZONE_PREFIX))
+		)
+	return false
+
+
+func _property_get_revert(property: StringName) -> Variant:
+	if property.begins_with(_DEADZONE_PREFIX):
+		return divergence_epsilon
+	return null
+
+
+# Maps each state property name to its Variant type for the editor rows. State
+# props only, since reconciliation compares the StateSynchronizer payload. The
+# type is read off the entity root (owner.get), which resolves at edit time,
+# unlike the proxy's virtual map. Existing overrides are unioned in so a
+# code-registered threshold stays visible and revertable.
+func _deadzone_rows() -> Dictionary:
+	var rows: Dictionary = { }
+	for sync in SynchronizersCache.get_client_synchronizers(owner):
+		if not (sync is StateSynchronizer) or not sync.replication_config:
+			continue
+		for path: NodePath in sync.replication_config.get_properties():
+			if path.get_subname_count() == 0:
+				continue
+			var clean := path.get_subname(path.get_subname_count() - 1)
+			if clean in [StampedSynchronizer.TICK, StateSynchronizer.ACK]:
+				continue
+			rows[clean] = typeof(owner.get(clean))
+	for key: StringName in divergence_epsilon_overrides:
+		if not rows.has(key):
+			rows[key] = TYPE_NIL
+	return rows
+
+
+func _deadzone_hint(value_type: int) -> String:
+	var suffix := ""
+	match value_type:
+		TYPE_QUATERNION, TYPE_BASIS, TYPE_TRANSFORM2D, TYPE_TRANSFORM3D:
+			suffix = ",suffix:rad"
+		TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
+			suffix = ",suffix:u"
+	return "0.0,100.0,0.0001,or_greater" + suffix

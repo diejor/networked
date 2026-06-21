@@ -364,6 +364,9 @@ var _strategy_role: DisplayRole = DisplayRole.DISABLED
 # skip resolution and reuse the cached _strategy.
 var _role_dirty: bool = true
 var _entity: NetwEntity
+# Saved freeze intent of a RigidBody owner auto-frozen while it is displayed
+# remotely, restored on control transfer. Empty when not managing the body.
+var _saved_freeze: Dictionary = { }
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 # Persists the visual_root's design-time local offset so it survives _ready
@@ -461,6 +464,7 @@ func _resolve_strategy(force: bool = false) -> void:
 		_strategy = null
 
 	_strategy_role = role
+	_apply_body_freeze(role)
 	match role:
 		DisplayRole.REMOTE:
 			_strategy = _RemoteStrategy.new()
@@ -481,6 +485,28 @@ func _resolve_display_role() -> DisplayRole:
 	if owner and owner.is_multiplayer_authority():
 		return DisplayRole.DISABLED
 	return DisplayRole.REMOTE
+
+
+func _apply_body_freeze(role: DisplayRole) -> void:
+	if not (owner is RigidBody2D or owner is RigidBody3D):
+		return
+	# A remote dynamic body integrates under gravity regardless of network writes,
+	# so its collision pose drifts between snapshots. Freeze it kinematic while it
+	# is displayed remotely so network writes place it, and restore the original
+	# intent the moment this peer simulates (PREDICTED) or owns (DISABLED) it.
+	if role == DisplayRole.REMOTE:
+		if _saved_freeze.is_empty():
+			_saved_freeze = {
+				&"freeze": owner.get(&"freeze"),
+				&"mode": owner.get(&"freeze_mode"),
+			}
+		# FREEZE_MODE_KINEMATIC has the same value on RigidBody2D and RigidBody3D.
+		owner.set(&"freeze_mode", RigidBody2D.FREEZE_MODE_KINEMATIC)
+		owner.set(&"freeze", true)
+	elif not _saved_freeze.is_empty():
+		owner.set(&"freeze", _saved_freeze[&"freeze"])
+		owner.set(&"freeze_mode", _saved_freeze[&"mode"])
+		_saved_freeze = { }
 
 
 func _has_prediction_component() -> bool:

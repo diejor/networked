@@ -60,6 +60,10 @@ var _pending_tick: int = -1
 # delta carrying only changed props still flushes a complete snapshot: unsent
 # props carry forward from the previous packet.
 var _pending_payload: Dictionary = { }
+# Strategy that writes a restored payload onto the live body. The default writes
+# every property straight through SynchronizersCache; a future physics impl swaps
+# in to route the spatial subset through the PhysicsServer RID.
+var _applicator := _BodyStateApplicator.new()
 
 
 func _ready() -> void:
@@ -116,10 +120,7 @@ func apply_payload(snapshot: Dictionary) -> void:
 	var root := get_node_or_null(root_path)
 	if not root:
 		return
-	for vname: StringName in snapshot:
-		if not has_virtual_property(vname):
-			continue
-		SynchronizersCache.assign_value(root, get_real_path(vname), snapshot[vname])
+	_applicator.apply(self, root, snapshot)
 
 
 ## Registers [param vname] as a stamp on the stream implied by [param mode].
@@ -175,3 +176,49 @@ func _on_synchronized() -> void:
 		return
 	var snapshot := _pending_payload.duplicate()
 	record(_pending_tick, snapshot)
+
+
+# Writes a restored payload onto the live body. The split between the spatial
+# subset (transform, rotation, velocity) and the rest lives here so the future
+# RID impl, which must route the spatial writes through the PhysicsServer so the
+# solver cannot stomp the restored pose, is a drop-in with no call-site change.
+# The default makes no distinction: every property is a plain property write.
+class _BodyStateApplicator extends RefCounted:
+	# Real-path leaf names that name a body's spatial state. The RID impl routes
+	# these through PhysicsServer; the default treats them like any property.
+	const SPATIAL: Array[StringName] = [
+		&"position", &"global_position", &"transform", &"global_transform",
+		&"rotation", &"global_rotation", &"quaternion", &"basis",
+		&"linear_velocity", &"angular_velocity",
+	]
+
+
+	func apply(
+			sync: StampedSynchronizer,
+			root: Node,
+			snapshot: Dictionary,
+	) -> void:
+		for vname: StringName in snapshot:
+			if not sync.has_virtual_property(vname):
+				continue
+			var path := sync.get_real_path(vname)
+			if _is_spatial(path):
+				_apply_spatial(root, path, snapshot[vname])
+			else:
+				_apply_property(root, path, snapshot[vname])
+
+
+	func _is_spatial(path: NodePath) -> bool:
+		var count := path.get_subname_count()
+		if count == 0:
+			return false
+		return path.get_subname(count - 1) in SPATIAL
+
+
+	# Default spatial write is a plain property write. The RID impl overrides this.
+	func _apply_spatial(root: Node, path: NodePath, value: Variant) -> void:
+		_apply_property(root, path, value)
+
+
+	func _apply_property(root: Node, path: NodePath, value: Variant) -> void:
+		SynchronizersCache.assign_value(root, path, value)
