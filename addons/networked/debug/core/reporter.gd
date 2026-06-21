@@ -58,6 +58,8 @@ var _last_manifest_min_msec: Dictionary = { }
 
 var _is_sending_manifest: bool = false
 var _clock_monitor: MultiplayerClockMonitor = null
+var _lagcomp_monitor: LagCompensationMonitor = null
+var _interest_monitor: InterestMonitor = null
 var _pending_zombie_checks: Array[SceneTreeTimer] = []
 var _trace_sink: Callable
 var _window_pin: NetWindowPin
@@ -175,6 +177,14 @@ func _enter_tree() -> void:
 	_clock_monitor.name = "MultiplayerClockMonitor"
 	add_child(_clock_monitor)
 
+	if ProjectSettings.get_setting("debug/networked/performance_monitors", true):
+		_lagcomp_monitor = LagCompensationMonitor.new()
+		_lagcomp_monitor.name = "LagCompensationMonitor"
+		add_child(_lagcomp_monitor)
+		_interest_monitor = InterestMonitor.new()
+		_interest_monitor.name = "InterestMonitor"
+		add_child(_interest_monitor)
+
 	_watchdog = ErrorWatchdog.new()
 	add_child(_watchdog)
 	_watchdog.cpp_error_caught.connect(_on_cpp_error_caught)
@@ -230,6 +240,11 @@ func register_tree(mt: MultiplayerTree) -> void:
 	mt.add_child(ctx)
 	_debug_contexts[mt] = ctx
 
+	if _lagcomp_monitor:
+		_lagcomp_monitor.register_tree(mt)
+	if _interest_monitor:
+		_interest_monitor.register_tree(mt)
+
 	report_session_registered(mt)
 
 
@@ -261,6 +276,10 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 		return
 
 	_trees.erase(mt)
+	if _lagcomp_monitor:
+		_lagcomp_monitor.unregister_tree(mt)
+	if _interest_monitor:
+		_interest_monitor.unregister_tree(mt)
 	var ctx: DebugMultiplayerTreeContext = _debug_contexts.get(mt)
 	if is_instance_valid(ctx):
 		ctx.free()

@@ -183,6 +183,42 @@ func all_layers() -> Array[NetwInterestLayer]:
 	return out
 
 
+## Returns tree-wide interest occupancy counters for [InterestMonitor].
+##
+## [code]visible_edges[/code] is the count of admitted (entity, peer) pairs across
+## every layer, the matrix occupancy that drives replication bandwidth.
+## [code]transitions_total[/code] sums the per-layer
+## [method NetwInterestLayer.monitor_snapshot] churn since creation, so the monitor
+## reads it as a delta over an interval.
+## [codeblock]
+## {
+##   ┠╴ layers: int             # active layers
+##   ┠╴ entities_filtered: int  # entities with a visibility filter installed
+##   ┠╴ visible_edges: int      # admitted (entity, peer) pairs, all layers
+##   ┠╴ dirty_entities: int     # entities pending a visibility recompute
+##   ┠╴ relay_backlog: int      # unbound-layer transitions awaiting reconcile
+##   ┖╴ transitions_total: int  # summed per-layer churn since creation
+## }
+## [/codeblock]
+func monitor_snapshot() -> Dictionary:
+	var visible_edges := 0
+	for entity: NetwEntity in _admit_count:
+		visible_edges += (_admit_count[entity] as Dictionary).size()
+	var transitions_total := 0
+	for layer_id: StringName in _layers:
+		transitions_total += int(
+			_layers[layer_id].monitor_snapshot()[&"transitions_total"]
+		)
+	return {
+		&"layers": _layers.size(),
+		&"entities_filtered": _entity_filters.size(),
+		&"visible_edges": visible_edges,
+		&"dirty_entities": _dirty_entities.size(),
+		&"relay_backlog": _pending_visibility_events.size(),
+		&"transitions_total": transitions_total,
+	}
+
+
 ## Returns [code]true[/code] if any layer admits [param peer_id] to
 ## [param entity].
 func can_peer_see_entity(peer_id: int, entity: NetwEntity) -> bool:

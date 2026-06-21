@@ -179,18 +179,28 @@ func unregister_timeline(entity: NetwEntity) -> void:
 
 ## Returns aggregate simulation counters for the debug overlay.
 ##
+## The cumulative counters ([code]corrections[/code], [code]consumed[/code],
+## [code]missing[/code], [code]max_replay_depth[/code]) sum since spawn, so a live
+## monitor like [LagCompensationMonitor] reads them as deltas over an interval. The
+## remaining keys are instantaneous occupancy.
 ## [codeblock]
 ## {
 ##   ┠╴ entities: int          # registered components stepped this tick
+##   ┠╴ timelines: int         # rewindable entities recorded this tick
 ##   ┠╴ corrections: int       # summed reconciliation snaps since spawn
 ##   ┠╴ max_replay_depth: int  # worst replay window walked
 ##   ┠╴ consumed: int          # summed inputs the server consumed
 ##   ┠╴ missing: int           # summed input ticks stepped over as lost
+##   ┠╴ pending_actions: int   # actions queued awaiting readiness
+##   ┠╴ effects_armed: int     # optimistic effects awaiting confirm or deny
 ##   ┖╴ gate_fallbacks: int    # state-ready actions resolved best-effort
 ## }
 ## [/codeblock]
 func metrics() -> Dictionary:
 	var result := _runner.metrics()
+	result[&"timelines"] = _registry.size()
+	result[&"pending_actions"] = _pending_actions.size()
+	result[&"effects_armed"] = _effects.size()
 	result[&"gate_fallbacks"] = _gate_fallbacks
 	return result
 
@@ -599,6 +609,11 @@ class _TimelineRegistry extends RefCounted:
 
 	func unregister(entity: NetwEntity) -> void:
 		_timelines.erase(entity)
+
+
+	# Count of registered rewindable entities, read by the debug monitor.
+	func size() -> int:
+		return _timelines.size()
 
 
 	# The live NetwEntity to NetwTimeline map, iterated by the recorder each tick.

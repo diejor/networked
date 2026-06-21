@@ -107,6 +107,9 @@ var driver: InterestDriver = InterestDriver.new()
 
 var _service_ref: WeakRef
 var _bound_gate_ref: WeakRef
+# Cumulative show plus hide transitions emitted by this layer, read as a delta by
+# the debug monitor to surface per-layer visibility churn.
+var _transition_count: int = 0
 
 
 func _init(id: StringName = &"", service: Object = null) -> void:
@@ -299,6 +302,29 @@ func verdict_for(peer_id: int) -> bool:
 	return InterestPolicy.verdict(policy, viewers, peer_id)
 
 
+## Returns aggregate occupancy counters for [InterestMonitor].
+##
+## [code]transitions_total[/code] is cumulative since this layer was created, so
+## the monitor reads it as a delta over an interval to surface churn.
+## [code]visible_edges[/code] is the count of admitted (entity, peer) pairs cached
+## by the [InterestDriver].
+## [codeblock]
+## {
+##   ┠╴ viewers: int            # size of viewers
+##   ┠╴ entities: int           # size of entities
+##   ┠╴ visible_edges: int      # admitted (entity, peer) pairs
+##   ┖╴ transitions_total: int  # summed show plus hide since creation
+## }
+## [/codeblock]
+func monitor_snapshot() -> Dictionary:
+	return {
+		&"viewers": viewers.size(),
+		&"entities": _entities.size(),
+		&"visible_edges": driver.visible_edge_count(),
+		&"transitions_total": _transition_count,
+	}
+
+
 ## Returns a structured snapshot for debugging.
 func debug_dump(peer_id: int = 0) -> Dictionary:
 	return {
@@ -330,6 +356,8 @@ func viewers_packed() -> PackedInt32Array:
 
 
 func _emit_transitions(result: InterestDriver.Result) -> void:
+	_transition_count += result.hide_transitions.size() \
+			+ result.show_transitions.size()
 	for t in result.hide_transitions:
 		interest_exit.emit(t.entity, t.peer)
 		t.entity.interest_exit.emit(t.peer)
@@ -437,9 +465,16 @@ class InterestDriver:
 		var show_transitions: Array[Transition] = []
 		## Full new visibility state: [code]{entity: {peer: bool}}[/code].
 		var new_state: Dictionary = { }
+		## Count of admitted (entity, peer) pairs in [member new_state], tallied
+		## during [method compute] so [method visible_edge_count] stays O(1).
+		var visible_count: int = 0
 
 
 	var _state: Dictionary = { }
+	# Running count of admitted (entity, peer) pairs in _state, kept in step with
+	# commit and forget so the debug monitor reads occupancy without walking the
+	# matrix.
+	var _visible_count: int = 0
 
 
 	## Returns the cached verdict for [param entity] under [param peer_id]
@@ -459,6 +494,9 @@ class InterestDriver:
 	## per-peer dict.
 	func forget(entity: NetwEntity) -> Dictionary:
 		var prev: Dictionary = _state.get(entity, { })
+		for peer: int in prev:
+			if prev[peer]:
+				_visible_count -= 1
 		_state.erase(entity)
 		return prev
 
@@ -520,6 +558,8 @@ class InterestDriver:
 		for peer: int in verdict_by_peer:
 			var now: bool = verdict_by_peer[peer]
 			per_entity[peer] = now
+			if now:
+				result.visible_count += 1
 			var was: bool = prev.get(peer, false)
 			if was == now:
 				continue
@@ -534,12 +574,22 @@ class InterestDriver:
 	## engine-side effects and signals have been applied.
 	func commit(result: Result) -> void:
 		_state = result.new_state
+		_visible_count = result.visible_count
 
 
 	## Returns a shallow copy of the visibility cache for inspection.
 	## Structure: [code]{NetwEntity: {peer_id: bool}}[/code].
 	func dump() -> Dictionary:
 		return _state.duplicate(true)
+
+
+	## Returns the count of admitted (entity, peer) pairs in the cache, the
+	## per-layer visibility matrix occupancy read by [InterestMonitor].
+	##
+	## O(1): the count is tallied in [method compute] and kept in step by
+	## [method commit] and [method forget], so a monitor never walks the matrix.
+	func visible_edge_count() -> int:
+		return _visible_count
 
 	# Sort comparators. Depth is measured via Node path name count so a
 	# scripted scene tree and a runtime-built tree compare consistently.
