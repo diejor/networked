@@ -43,45 +43,50 @@ func is_valid() -> bool:
 	return is_instance_valid(_tree_ref.get_ref())
 
 
-## Returns the [MultiplayerSceneManager] service, or [code]null[/code].
-func get_scene_manager() -> MultiplayerSceneManager:
-	var mt: MultiplayerTree = _tree_ref.get_ref()
-	if not mt:
-		return null
-	return mt.get_service(MultiplayerSceneManager)
+## The [MultiplayerSceneManager] service, or [code]null[/code].
+var scene_manager: MultiplayerSceneManager:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(MultiplayerSceneManager)
 
 
-## Returns the [InterestService] service, or [code]null[/code].
-func get_interest_service() -> InterestService:
-	var mt: MultiplayerTree = _tree_ref.get_ref()
-	if not mt:
-		return null
-	return mt.get_service(InterestService) as InterestService
+## The [InterestService] service, or [code]null[/code].
+var interest_service: InterestService:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(InterestService) as InterestService
 
 
-## Returns the [LagCompensation] service, or [code]null[/code].
-func get_lag_compensation() -> LagCompensation:
-	var mt: MultiplayerTree = _tree_ref.get_ref()
-	if not mt:
-		return null
-	return mt.get_service(LagCompensation) as LagCompensation
+## The [LagCompensation] service, or [code]null[/code].
+var lag_compensation: LagCompensation:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(LagCompensation) as LagCompensation
 
 
-## Returns the [MultiplayerClock] service, or [code]null[/code].
-func get_clock() -> MultiplayerClock:
-	var mt: MultiplayerTree = _tree_ref.get_ref()
-	if not mt:
-		return null
-	return mt.get_service(MultiplayerClock)
+## The [MultiplayerClock] service, or [code]null[/code].
+var clock: MultiplayerClock:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(MultiplayerClock)
 
 
-## Returns the [TPLayerAPI] for visual teleport transitions on the local
+## The [TPLayerAPI] for visual teleport transitions on the local
 ## client, or [code]null[/code].
-func get_tp_layer() -> TPLayerAPI:
-	var mt: MultiplayerTree = _tree_ref.get_ref()
-	if not mt:
-		return null
-	return mt.get_service(TPLayerAPI)
+var tp_layer: TPLayerAPI:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(TPLayerAPI)
 
 
 ## Returns the [NetwPeerContext] for [param peer_id].

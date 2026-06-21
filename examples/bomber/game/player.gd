@@ -20,7 +20,7 @@ var current_anim: String = ""
 @onready var label: Label = %label
 
 @onready var ctx := Netw.ctx(self)
-@onready var clock := ctx.services.get_clock()
+@onready var clock := ctx.services.clock
 @onready var lag := ctx.lag_compensation
 @onready var entity := ctx.entity
 @onready var bomb_action := lag.action(_place_bomb)

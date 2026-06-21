@@ -36,7 +36,7 @@ func get_multiplayer_tree() -> MultiplayerTree:
 ## Returns the [MultiplayerSceneManager] for this session.
 func get_scene_manager() -> MultiplayerSceneManager:
 	var ctx := get_context()
-	return ctx.services.get_scene_manager() if ctx else null
+	return ctx.services.scene_manager if ctx else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local
@@ -58,7 +58,7 @@ func get_tp_layer() -> TPLayerAPI:
 ## Returns the [MultiplayerClock] for this session.
 func get_multiplayer_clock() -> MultiplayerClock:
 	var ctx := get_context()
-	return ctx.services.get_clock() if ctx else null
+	return ctx.services.clock if ctx else null
 
 
 ## Returns the session service registered for [param type], or

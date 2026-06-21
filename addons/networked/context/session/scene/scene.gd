@@ -88,21 +88,23 @@ func unwrap() -> MultiplayerScene:
 	return _scene_ref.get_ref() as MultiplayerScene
 
 
-## Returns the scene level root, or [code]null[/code].
-func get_level() -> Node:
-	var scene := unwrap()
-	if not is_instance_valid(scene):
-		return null
-	return scene.level
+## The scene level root, or [code]null[/code].
+var level: Node:
+	get:
+		var scene := unwrap()
+		if not is_instance_valid(scene):
+			return null
+		return scene.level
 
 
-## Returns the level scene root name for this scene.
+## The level scene root name for this scene.
 ## Returns [code]""[/code] if the scene or its level is not valid.
-func get_scene_name() -> StringName:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene) or not is_instance_valid(scene.level):
-		return &""
-	return StringName(scene.level.name)
+var scene_name: StringName:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+			return &""
+		return StringName(scene.level.name)
 
 
 ## Returns the [NetwTree] that owns this scene, or [code]null[/code].
@@ -119,52 +121,56 @@ func tree() -> NetwTree:
 	return _tree
 
 
-## Returns the peer IDs currently connected to this scene.
+## The peer IDs currently connected to this scene.
 ##
 ## Use this to enumerate peers when sending custom broadcast RPCs:
 ## [codeblock]
-## for peer_id in ctx.scene.get_peers():
+## for peer_id in ctx.scene.peers:
 ##     _rpc_notify.rpc_id(peer_id, message)
 ## [/codeblock]
-func get_peers() -> Array[int]:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return []
-	var result: Array[int] = []
-	result.assign(scene.connected_peers.keys())
-	return result
+var peers: Array[int]:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return []
+		var result: Array[int] = []
+		result.assign(scene.connected_peers.keys())
+		return result
 
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
 
 
-## Returns all player nodes currently in this scene.
-func get_players() -> Array[Node]:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return []
-	return scene.get_players()
+## All player nodes currently in this scene.
+var players: Array[Node]:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return []
+		return scene.get_players()
 
 
-## Returns the number of players currently in this scene.
-func get_player_count() -> int:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return 0
-	return scene.get_players().size()
+## The number of players currently in this scene.
+var player_count: int:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return 0
+		return scene.get_players().size()
 
 
-## Returns the player node owned by the local peer, or [code]null[/code].
-func get_local_player() -> Node:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
+## The player node owned by the local peer, or [code]null[/code].
+var local_player: Node:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return null
+		var local_id := scene.multiplayer.get_unique_id()
+		for player: Node in scene.get_players():
+			if _get_peer_id(player) == local_id:
+				return player
 		return null
-	var local_id := scene.multiplayer.get_unique_id()
-	for player: Node in scene.get_players():
-		if _get_peer_id(player) == local_id:
-			return player
-	return null
 
 
 ## Returns the player node owned by [param peer_id], or [code]null[/code].
@@ -181,7 +187,7 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 ## Suspends until at least [param n] players are present.
 ## Safe to [operator await].
 func wait_for_players(n: int) -> void:
-	while get_player_count() < n:
+	while player_count < n:
 		await player_entered
 
 # ---------------------------------------------------------------------------
@@ -475,9 +481,10 @@ class Countdown:
 		return _running
 
 
-	## Returns the number of seconds remaining.
-	func get_seconds_left() -> int:
-		return _seconds_left
+	## The number of seconds remaining.
+	var seconds_left: int:
+		get:
+			return _seconds_left
 
 
 	## Cancels the countdown and emits [signal cancelled].

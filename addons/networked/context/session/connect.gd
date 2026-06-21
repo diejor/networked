@@ -41,7 +41,7 @@
 ## [br]The session holds an in-memory list of targets: the
 ## [i]saved[/i] ones you add or load from disk (a [member JoinTarget.address]
 ## reached through a [BackendPeer]), plus lobbies that registered directories
-## discover. [method get_targets] returns the whole list. [method get_saved_targets]
+## discover. [member targets] returns the whole list. [member saved_targets]
 ## and [method get_discovered_targets] return each half.
 ##
 ## [br][br]
@@ -191,18 +191,20 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 		s.remove_target(target, persist)
 
 
-## Returns the whole live list, with saved targets first, then each directory's
+## The whole live list, with saved targets first, then each directory's
 ## discovered lobbies.
-func get_targets() -> Array[JoinTarget]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_targets() if s else []
+var targets: Array[JoinTarget]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_targets() if s else []
 
 
-## Returns only the saved (address-based) targets (the ones you added or
+## Only the saved (address-based) targets (the ones you added or
 ## loaded, not directory lobbies).
-func get_saved_targets() -> Array[JoinTarget]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_saved_targets() if s else []
+var saved_targets: Array[JoinTarget]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_saved_targets() if s else []
 
 
 ## Returns the lobbies the directory registered under [param directory_id]
@@ -243,10 +245,11 @@ func get_directory(id: StringName) -> LobbyDirectory:
 	return s.get_directory(id) if s else null
 
 
-## Returns the ids of all registered directories, in registration order.
-func get_directory_ids() -> Array[StringName]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_directory_ids() if s else []
+## The ids of all registered directories, in registration order.
+var directory_ids: Array[StringName]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_directory_ids() if s else []
 
 # -- Persistence ------------------------------------------------------------
 

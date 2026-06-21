@@ -21,7 +21,7 @@ var world: MultiplayerScene:
 	get:
 		if not ctx or not ctx.services:
 			return null
-		var sm := ctx.services.get_scene_manager()
+		var sm := ctx.services.scene_manager
 		if not sm:
 			return null
 		return sm.active_scenes.get(&"World") as MultiplayerScene
@@ -62,7 +62,7 @@ func join_game(ip: String, _player_name: String) -> void:
 	jp.username = _player_name
 
 	var target := JoinTarget.new()
-	target.backend = ctx.tree.get_backend()
+	target.backend = ctx.tree.backend
 	target.address = ip
 	ctx.tree.join(target, jp)
 
@@ -95,7 +95,7 @@ func get_player_list() -> Array:
 ## through each player's [MultiplayerEntity] as bomber's spawner fires.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	var sm := ctx.services.get_scene_manager()
+	var sm := ctx.services.scene_manager
 	sm.activate_scene(&"World")
 	_rpc_match_started.rpc()
 
@@ -107,7 +107,7 @@ func _rpc_match_started() -> void:
 
 func end_game() -> void:
 	if is_instance_valid(world):
-		var sm := ctx.services.get_scene_manager()
+		var sm := ctx.services.scene_manager
 		if sm:
 			sm.retire_scene(&"World")
 		else:

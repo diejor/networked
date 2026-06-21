@@ -5,7 +5,7 @@
 ## Obtain via [method Netw.ctx] or [method for_node].
 ## [codeblock]
 ## var ctx := Netw.ctx(self)
-## ctx.services.get_scene_manager()
+## ctx.services.scene_manager
 ## if ctx.has_scene():
 ##     await ctx.scene.wait_for_players(4)
 ## ctx.entity.spawning.connect(_on_spawning)

@@ -55,7 +55,7 @@ func test_forwards_add_target_round_trip() -> void:
 	var target := _make_target("10.0.0.1")
 	facade.add_target(target)
 
-	var targets := facade.get_targets()
+	var targets := facade.targets
 	assert_int(targets.size()).is_equal(1)
 	assert_that(targets[0]).is_same(target)
 	session.queue_free()

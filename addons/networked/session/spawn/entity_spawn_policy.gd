@@ -44,7 +44,7 @@ func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 	if target_scene_name.is_empty():
 		return null
 
-	var mgr := ctx.services.get_scene_manager()
+	var mgr := ctx.services.scene_manager
 	var scene := await mgr.activate_scene(target_scene_name)
 	assert(scene, "activate_scene must guarantee scene presence")
 

@@ -244,7 +244,7 @@ func _rebuild_from_session() -> void:
 	if _connect == null:
 		_update_counter()
 		return
-	for target in _connect.get_targets():
+	for target in _connect.targets:
 		_add_row(target)
 	_update_counter()
 
@@ -320,7 +320,7 @@ func _update_details() -> void:
 
 	var t := _selected_row.target
 	var r := _selected_row.result
-	var is_saved := _connect.get_saved_targets().has(t)
+	var is_saved := _connect.saved_targets.has(t)
 	var unavailable := t.backend != null and not t.backend.is_available()
 
 	# Update the Header elements
@@ -384,7 +384,7 @@ func _on_row_context_requested(
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
 
-	var is_saved := _connect.get_saved_targets().has(row.target)
+	var is_saved := _connect.saved_targets.has(row.target)
 	_row_menu.show_for_target(is_saved, screen_position)
 
 
@@ -443,7 +443,7 @@ func _open_join_for_selected() -> void:
 func _open_edit_for_selected() -> void:
 	if _selected_row == null:
 		return
-	var is_saved := _connect.get_saved_targets().has(
+	var is_saved := _connect.saved_targets.has(
 		_selected_row.target,
 	)
 	if not is_saved:
@@ -453,13 +453,13 @@ func _open_edit_for_selected() -> void:
 
 
 func _remove_selected() -> void:
-	if _selected_row == null or not _connect.get_saved_targets().has(_selected_row.target):
+	if _selected_row == null or not _connect.saved_targets.has(_selected_row.target):
 		return
 	_connect.remove_target(_selected_row.target, true)
 
 
 func _on_target_submitted(target: JoinTarget) -> void:
-	if not _connect.get_saved_targets().has(target):
+	if not _connect.saved_targets.has(target):
 		_connect.add_target(target, true)
 	else:
 		_connect.save_server_list(server_list_path)

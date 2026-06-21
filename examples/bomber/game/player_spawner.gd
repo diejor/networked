@@ -15,7 +15,7 @@ func _ready() -> void:
 
 
 func _on_match_started() -> void:
-	spawn_joined_players(ctx.tree.get_joined_players())
+	spawn_joined_players(ctx.tree.joined_players)
 
 
 ## Server-only. Spawns one player for each accepted join data.
@@ -44,7 +44,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	var username := str(spawn_identity.entity_id)
 	var spawn_index := int(data.spawn_index)
 
-	var world := ctx.scene.get_level()
+	var world := ctx.scene.level
 	var score := world.get_node("Score")
 	score.add_player(spawn_identity.peer_id, username)
 
@@ -62,7 +62,7 @@ func _has_player(rj: ResolvedJoin) -> bool:
 
 
 func _get_spawn_position(spawn_index: int) -> Vector2:
-	var world := ctx.scene.get_level()
+	var world := ctx.scene.level
 
 	var spawn_points := world.get_node("SpawnPoints")
 

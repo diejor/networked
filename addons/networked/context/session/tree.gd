@@ -70,17 +70,18 @@ func is_valid() -> bool:
 	return is_instance_valid(_tree_ref.get_ref())
 
 
-## Returns an array of all active player nodes across all scenes or the
-## sceneless world.
-func get_all_players() -> Array[Node]:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.get_all_players() if mt else []
+## All active player nodes across all scenes or the sceneless world.
+var all_players: Array[Node]:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.get_all_players() if mt else []
 
 
-## Returns accepted player join data known by this peer.
-func get_joined_players() -> Array[ResolvedJoin]:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.get_joined_players() if mt else []
+## Accepted player join data known by this peer.
+var joined_players: Array[ResolvedJoin]:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.get_joined_players() if mt else []
 
 
 ## Returns the accepted player data for [param peer_id], or
@@ -105,10 +106,11 @@ func is_listen_server() -> bool:
 	return mt.role == MultiplayerTree.Role.LISTEN_SERVER if mt else false
 
 
-## Returns the original name of the [MultiplayerTree] node.
-func get_tree_name() -> String:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.get_tree_name() if mt else ""
+## The original name of the [MultiplayerTree] node.
+var tree_name: String:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.get_tree_name() if mt else ""
 
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
@@ -155,32 +157,36 @@ func join_or_host(
 	return await mt.join_or_host(target, join_payload)
 
 
-## Returns the tree's configured [BackendPeer], or [code]null[/code].
+## The tree's configured [BackendPeer], or [code]null[/code].
 ##
 ## Exposed so callers can pass the existing backend to [method join]
 ## or [method join_or_host] without holding a direct
 ## [MultiplayerTree] reference.
-func get_backend() -> BackendPeer:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.backend if mt else null
+var backend: BackendPeer:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.backend if mt else null
 
 
-## Returns the current connection state.
-func get_state() -> MultiplayerTree.State:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.state if mt else MultiplayerTree.State.OFFLINE
+## The current connection state.
+var state: MultiplayerTree.State:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.state if mt else MultiplayerTree.State.OFFLINE
 
 
-## Returns the current role in the session.
-func get_role() -> MultiplayerTree.Role:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.role if mt else MultiplayerTree.Role.NONE
+## The current role in the session.
+var role: MultiplayerTree.Role:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.role if mt else MultiplayerTree.Role.NONE
 
 
-## Returns the local player node for this tree, or [code]null[/code].
-func get_local_player() -> Node:
-	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.local_player if mt else null
+## The local player node for this tree, or [code]null[/code].
+var local_player: Node:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.local_player if mt else null
 
 
 ## Resolves the correct spawn location and causal token for a new player.
