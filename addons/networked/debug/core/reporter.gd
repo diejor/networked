@@ -79,7 +79,7 @@ static func _get_username(node: Node) -> String:
 
 ## Resets all debug registries, history, and telemetry.
 ## [br][br]
-## This performs a deep reset, freeing all internal [NetDebugTreeContext]
+## This performs a deep reset, freeing all internal [DebugMultiplayerTreeContext]
 ## instances and clearing the [NetTrace] history.
 func reset_state() -> void:
 	_unregister_capture()
@@ -218,7 +218,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 
 	_trees.append(mt)
 
-	var ctx := NetDebugTreeContext.new(mt, self)
+	var ctx := DebugMultiplayerTreeContext.new(mt, self)
 	ctx.name = "NetDebugContext"
 	ctx.clock_pong_captured.connect(
 		func(d: Dictionary) -> void:
@@ -235,7 +235,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 
 ## Emits a session registration event for the given [param mt].
 ## [br][br]
-## Called by [NetDebugTreeContext] when the tree's authority client changes.
+## Called by [DebugMultiplayerTreeContext] when the tree's authority client changes.
 func report_session_registered(mt: MultiplayerTree) -> void:
 	if not is_instance_valid(mt):
 		return
@@ -261,7 +261,7 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 		return
 
 	_trees.erase(mt)
-	var ctx: NetDebugTreeContext = _debug_contexts.get(mt)
+	var ctx: DebugMultiplayerTreeContext = _debug_contexts.get(mt)
 	if is_instance_valid(ctx):
 		ctx.free()
 	_debug_contexts.erase(mt)
@@ -322,7 +322,7 @@ func _on_cpp_error_caught(timestamp: int, error_text: String) -> void:
 	m.error_text = error_text
 
 	if is_instance_valid(mt) and mt in _debug_contexts:
-		var ctx := _debug_contexts[mt] as NetDebugTreeContext
+		var ctx := _debug_contexts[mt] as DebugMultiplayerTreeContext
 		m.node_snapshot = ctx.build_crash_snapshot(active)
 
 	_send_manifest(m, mt)
@@ -429,7 +429,7 @@ func _check_zombie_player(peer_id: int, mt: MultiplayerTree) -> void:
 	_send_manifest(m, mt)
 
 
-## Called by [NetDebugTreeContext] when a scene spawns.
+## Called by [DebugMultiplayerTreeContext] when a scene spawns.
 func _on_scene_spawned_logic(
 		scene: MultiplayerScene,
 		mt: MultiplayerTree,
@@ -461,7 +461,7 @@ func _on_scene_spawned_logic(
 	return scene_token
 
 
-## Called by [NetDebugTreeContext] when a player spawns inside a scene.
+## Called by [DebugMultiplayerTreeContext] when a player spawns inside a scene.
 func _on_player_spawned_logic(
 		player: Node,
 		mt: MultiplayerTree,
@@ -489,7 +489,7 @@ func _on_player_spawned_logic(
 		_check_player_topology_validation(player, mt, spawn_span)
 
 
-## Called by [NetDebugTreeContext] when a scene despawns.
+## Called by [DebugMultiplayerTreeContext] when a scene despawns.
 func _on_scene_despawned_logic(scene: MultiplayerScene, mt: MultiplayerTree) -> void:
 	var tree_name := mt.get_tree_name()
 	var event := NetSceneEvent.new()
@@ -610,7 +610,7 @@ func _check_player_topology_validation(
 	m.in_tree = player.is_inside_tree()
 
 	if is_instance_valid(mt) and mt in _debug_contexts:
-		var ctx := _debug_contexts[mt] as NetDebugTreeContext
+		var ctx := _debug_contexts[mt] as DebugMultiplayerTreeContext
 		m.node_snapshot = ctx.build_crash_snapshot(span)
 	else:
 		m.node_snapshot = NetNodeSnapshot.from_node(player)
@@ -623,7 +623,7 @@ func _send_topology_snapshot(player: Node, mt: MultiplayerTree) -> void:
 	if not _debug_build():
 		return
 
-	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	var ctx := _debug_contexts.get(mt) as DebugMultiplayerTreeContext
 
 	# Clients only emit topology for their 'owned' player.
 	# Servers emit for everyone (to populate the server's topology view).
@@ -733,7 +733,7 @@ func _emit_current_state() -> void:
 		mt.multiplayer_api else 0
 		_queue("networked:session_registered", event.to_dict(), mt)
 
-		var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+		var ctx := _debug_contexts.get(mt) as DebugMultiplayerTreeContext
 		if not is_instance_valid(ctx):
 			continue
 
@@ -1167,7 +1167,7 @@ func _fill_base(
 	m.frame = Engine.get_process_frames()
 	m.timestamp_usec = Time.get_ticks_usec()
 
-	var ctx := _debug_contexts.get(mt) as NetDebugTreeContext
+	var ctx := _debug_contexts.get(mt) as DebugMultiplayerTreeContext
 	m.active_scene = ctx.get_active_scene_path() if ctx else "?"
 
 	m.network_state = {

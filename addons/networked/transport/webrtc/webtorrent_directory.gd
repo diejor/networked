@@ -102,31 +102,24 @@ var _is_test_env := false
 const BOARD_RECONNECT_COOLDOWN := 5.0
 
 
-func _enter_tree() -> void:
-	if Engine.is_editor_hint():
-		return
+func should_register() -> bool:
 	# A node re-initializes its process flag after _enter_tree, so a
 	# set_process(false) here would not stick. Latch the test flag and gate the
 	# board work in _process so the directory never opens live tracker sockets
 	# under a test runner.
 	_is_test_env = Netw.is_test_env()
-	if _is_test_env:
-		return
+	return not _is_test_env
+
+
+func service_entered(mt: MultiplayerTree) -> void:
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
-	NetwServices.register(self)
-	var mt := MultiplayerTree.resolve(self)
-	if mt:
-		_bind_tree_signals(mt)
+	_bind_tree_signals(mt)
 	# Keep the board connection warm so browse and advertise are instant.
 	_ensure_tracker()
 
 
-func _exit_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-	NetwServices.unregister(self)
-	NetwServices.unregister(self, LobbyDirectory)
+func service_exiting(_mt: MultiplayerTree) -> void:
 	if _tracker:
 		_release_tracker()
 

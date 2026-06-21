@@ -33,7 +33,7 @@
 ## and [InterestService], so several trees in one [SceneTree] each get their own
 ## loop. Mount it as a sibling of the clock under the session root.
 class_name LagCompensation
-extends Node
+extends NetwService
 
 # Caps the per-frame clock-bind retry so a tree that never mounts a clock stops
 # polling. The clock can register after this service, so the bind retries until it
@@ -118,12 +118,11 @@ func _init() -> void:
 	_queries = _RewindQueries.new(_registry)
 
 
-func _enter_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-	var mt := NetwServices.register(self, LagCompensation)
-	if not is_instance_valid(mt):
-		return
+func service_type() -> Script:
+	return LagCompensation
+
+
+func service_entered(mt: MultiplayerTree) -> void:
 	if not mt.session_entered.is_connected(_on_session_entered):
 		mt.session_entered.connect(_on_session_entered)
 	if mt.is_online():
@@ -133,14 +132,11 @@ func _enter_tree() -> void:
 		tree.node_added.connect(_on_node_added)
 
 
-func _exit_tree() -> void:
-	if Engine.is_editor_hint():
-		return
+func service_exiting(_mt: MultiplayerTree) -> void:
 	var tree := get_tree()
 	if tree and tree.node_added.is_connected(_on_node_added):
 		tree.node_added.disconnect(_on_node_added)
 	_unbind_clock()
-	NetwServices.unregister(self, LagCompensation)
 
 
 ## Registers [param pc] so it is stepped each tick. Idempotent.

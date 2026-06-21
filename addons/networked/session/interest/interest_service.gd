@@ -26,7 +26,7 @@
 ## visibility under an already-admitted scene, not reveal scene roots by
 ## themselves.
 class_name InterestService
-extends Node
+extends NetwService
 
 var _layers: Dictionary[StringName, NetwInterestLayer] = { }
 var _gates: Dictionary[StringName, InterestGate] = { }
@@ -107,22 +107,20 @@ var _pending_attempts: Array[int] = []
 var _pending_visibility_flush_scheduled: bool = false
 
 
-func _enter_tree() -> void:
-	NetwServices.register(self, InterestService)
-	var mt := _tree()
-	if is_instance_valid(mt):
-		mt.peer_disconnected.connect(_on_peer_disconnected)
-		mt.session_ended.connect(_on_session_ended)
+func service_type() -> Script:
+	return InterestService
 
 
-func _exit_tree() -> void:
-	var mt := _tree()
-	if is_instance_valid(mt):
-		if mt.peer_disconnected.is_connected(_on_peer_disconnected):
-			mt.peer_disconnected.disconnect(_on_peer_disconnected)
-		if mt.session_ended.is_connected(_on_session_ended):
-			mt.session_ended.disconnect(_on_session_ended)
-	NetwServices.unregister(self, InterestService)
+func service_entered(mt: MultiplayerTree) -> void:
+	mt.peer_disconnected.connect(_on_peer_disconnected)
+	mt.session_ended.connect(_on_session_ended)
+
+
+func service_exiting(mt: MultiplayerTree) -> void:
+	if mt.peer_disconnected.is_connected(_on_peer_disconnected):
+		mt.peer_disconnected.disconnect(_on_peer_disconnected)
+	if mt.session_ended.is_connected(_on_session_ended):
+		mt.session_ended.disconnect(_on_session_ended)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

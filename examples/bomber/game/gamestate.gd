@@ -1,5 +1,5 @@
 class_name BomberGamestate
-extends Node
+extends NetwService
 ## Manages the bomber game state as a session service.
 
 const DEFAULT_PORT = 10567
@@ -25,14 +25,6 @@ var world: MultiplayerScene:
 		if not sm:
 			return null
 		return sm.active_scenes.get(&"World") as MultiplayerScene
-
-
-func _enter_tree() -> void:
-	NetwServices.register(self)
-
-
-func _exit_tree() -> void:
-	NetwServices.unregister(self)
 
 
 func _ready() -> void:

@@ -151,7 +151,6 @@ func _exit_tree() -> void:
 		_lobby_id = 0
 
 	NetwServices.unregister(self)
-	NetwServices.unregister(self, LobbyDirectory)
 
 
 func _process(_dt: float) -> void:

@@ -7,17 +7,15 @@
 ##
 ## [br][br]
 ## A directory dropped under the [MultiplayerTree] is discovered automatically.
-## [method NetwServices.register] under its own concrete script is enough.
-## [ConnectSession] collects every [LobbyDirectory] through
-## [method MultiplayerTree.get_services], so there is no per directory wiring in
-## the browser. Implementations must:
-## [br]- Register via [code]NetwServices.register(self)[/code] on
-##   [code]_enter_tree[/code].
+## [LobbyDirectory] extends [NetwService], so a subclass registers itself under
+## its own concrete script with no boilerplate. [ConnectSession] collects every
+## [LobbyDirectory] through [method MultiplayerTree.get_services], so there is no
+## per directory wiring in the browser. Implementations must:
 ## [br]- Implement [method host_lobby] and [method join_lobby_peer] to return
 ##   a live, connected [MultiplayerPeer] (or [code]null[/code] on failure).
 @abstract
 class_name LobbyDirectory
-extends Node
+extends NetwService
 
 ## Plain data describing a single discoverable lobby.
 ##
