@@ -18,7 +18,7 @@
 
 - **`LagCompensation`:** CS-style client prediction and server reconcilation.
 - **`MultiplayerInterpolator`:** Smooth network snapshots with time dilation to minimize jitter.
-- **`MultiplayerSceneManager`:** Built on top of a robust and extensible [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), allowing you to host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
+- **`MultiplayerSceneManager`:** Built on top of a robust and extensible [Interest Management System](https://networked.readthedocs.io/en/latest/manual/interest_management.html), host, spawn, and swap multiple scenes concurrently within the same `SceneTree`.
 - **`TPComponent`:** Move players between scenes and handle teleport transitions between levels.
 - **`ConnectBrowser`:** Connect multiple lobby providers and backends in a single UI and [Pre-Game Connection Model](https://networked.readthedocs.io/en/latest/manual/pre_game_connection.html).
 - **`SaveComponent`:** Real-time state persistence and writes for player data.
@@ -31,5 +31,5 @@
 
 ## Credits
 
-- **netfox:** The lag compensation architecture was inspired by the [netfox](https://github.com/foxssake/netfox) Godot addon. The original creator is [Tamás Gálffy](https://github.com/foxssake).
+- **netfox:** The lag compensation architecture was inspired by the [netfox](https://github.com/foxssake/netfox) created by [elementbound](https://github.com/elementbound).
 - **Tube:** The WebRTC tracker signaling architecture and user-friendly room code concepts were inspired by and adapted from the [Tube](https://github.com/koopmyers/tube) Godot addon created by [koopmyers](https://github.com/koopmyers).
