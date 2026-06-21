@@ -5,10 +5,13 @@
 [ext_resource type="FontFile" uid="uid://bqb7l2e05u3j0" path="res://examples/bomber/game/montserrat.otf" id="3"]
 [ext_resource type="Script" uid="uid://d0ol1xc3anaea" path="res://examples/bomber/game/player_controls.gd" id="4_k1vfr"]
 [ext_resource type="Script" uid="uid://v7vt4mokcyxu" path="res://addons/networked/sync/state/state_synchronizer.gd" id="5_state"]
+[ext_resource type="Script" uid="uid://burgi7ks1mpwd" path="res://addons/networked/sync/state/quantize.gd" id="6_clpg1"]
 [ext_resource type="Script" uid="uid://bfffoa7sb2tv2" path="res://addons/networked/sync/state/input_synchronizer.gd" id="6_input"]
 [ext_resource type="Script" uid="uid://cgyly1efa3m53" path="res://addons/networked/nodes/entity/multiplayer_entity.gd" id="7_p4qid"]
 [ext_resource type="Script" uid="uid://crm8bn0yry6g8" path="res://addons/networked/sync/sim/prediction_component.gd" id="8_pred"]
 [ext_resource type="Script" uid="uid://b21bbqt166ive" path="res://addons/networked/sync/multiplayer_interpolator.gd" id="9_3dwf2"]
+[ext_resource type="Script" uid="uid://bg0k64vhjiad3" path="res://addons/networked/sync/state/quantize_fixed.gd" id="10_qfix"]
+[ext_resource type="Script" uid="uid://bp4kncakts1pq" path="res://addons/networked/sync/state/quantize_bits.gd" id="11_qbit"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_spawn"]
 properties/0/path = NodePath(".:position")
@@ -167,6 +170,17 @@ properties/1/path = NodePath(".:velocity")
 properties/1/spawn = false
 properties/1/replication_mode = 2
 
+[sub_resource type="Resource" id="Quant_position"]
+script = ExtResource("10_qfix")
+step = 5.0
+min_value = -500.0
+max_value = 1500.0
+
+[sub_resource type="Resource" id="Quant_velocity"]
+script = ExtResource("11_qbit")
+min_value = -90.0
+max_value = 90.0
+
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_input"]
 properties/0/path = NodePath("Inputs:motion")
 properties/0/spawn = true
@@ -174,6 +188,10 @@ properties/0/replication_mode = 1
 properties/1/path = NodePath("Inputs:bombing")
 properties/1/spawn = true
 properties/1/replication_mode = 1
+
+[sub_resource type="Resource" id="Quant_motion"]
+script = ExtResource("11_qbit")
+bits = 16
 
 [node name="player" type="CharacterBody2D" unique_id=1262329161]
 z_index = 10
@@ -220,6 +238,11 @@ replication_interval = 0.25
 delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_state")
 script = ExtResource("5_state")
+bundle_payload = true
+property_codecs = Dictionary[StringName, ExtResource("6_clpg1")]({
+&"position": SubResource("Quant_position"),
+&"velocity": SubResource("Quant_velocity")
+})
 
 [node name="Inputs" type="Node" parent="." unique_id=531290523]
 script = ExtResource("4_k1vfr")
@@ -227,14 +250,22 @@ tick_mode = true
 
 [node name="InputSync" type="MultiplayerSynchronizer" parent="Inputs" unique_id=1701054962]
 root_path = NodePath("../..")
+replication_interval = 0.25
 delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_input")
 public_visibility = false
 script = ExtResource("6_input")
+property_codecs = Dictionary[StringName, ExtResource("6_clpg1")]({
+&"motion": SubResource("Quant_motion")
+})
 
 [node name="PredictionComponent" type="Node" parent="." unique_id=1650089842]
 unique_name_in_owner = true
 script = ExtResource("8_pred")
+divergence_epsilon_overrides = Dictionary[StringName, float]({
+&"position": 4.0,
+&"velocity": 1.5
+})
 
 [node name="MultiplayerInterpolator" type="Node" parent="." unique_id=1650089841]
 script = ExtResource("9_3dwf2")

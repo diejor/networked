@@ -23,6 +23,29 @@
 class_name ProxySynchronizer
 extends MultiplayerSynchronizer
 
+## Chainable handle returned by [method register_property] for code-driven codec
+## assignment.
+##
+## It only remembers the property it was made for, so [method quantize] routes
+## straight to [method ProxySynchronizer.set_property_codec].
+## [codeblock]
+## register_property(&"position", NodePath(".:position")).quantize(codec)
+## [/codeblock]
+class PropConfig extends RefCounted:
+	var _sync: ProxySynchronizer
+	var _vname: StringName
+
+	func _init(sync: ProxySynchronizer, vname: StringName) -> void:
+		_sync = sync
+		_vname = vname
+
+	## Assigns [param quantizer] as the codec for this property and returns
+	## [code]self[/code] for chaining.
+	func quantize(quantizer: NetwQuantize) -> PropConfig:
+		_sync.set_property_codec(_vname, quantizer)
+		return self
+
+
 # Deferred node-property registration. Resolved during finalize().
 class _NodePropEntry extends RefCounted:
 	var vname: StringName
@@ -55,7 +78,11 @@ var _accessor_sub: Dictionary = { }
 ## [param real_path] relative to the entity root.
 ##
 ## Must be called before [method finalize]. Idempotent on duplicate
-## [param virtual_name].
+## [param virtual_name]. Returns a [ProxySynchronizer.PropConfig] handle so a
+## codec can be chained on with [method PropConfig.quantize].
+## [codeblock]
+## register_property(&"position", NodePath(".:position")).quantize(codec)
+## [/codeblock]
 func register_property(
 		virtual_name: StringName,
 		real_path: NodePath,
@@ -63,15 +90,24 @@ func register_property(
 		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
-) -> void:
+) -> PropConfig:
 	if _properties.has(virtual_name):
-		return
+		return PropConfig.new(self, virtual_name)
 	_properties[virtual_name] = real_path
 	_prop_options[virtual_name] = {
 		"mode": mode,
 		"spawn": spawn,
 		"watch": _filter_watch(virtual_name, watch),
 	}
+	return PropConfig.new(self, virtual_name)
+
+
+## Assigns [param quantizer] as the wire codec for payload [param vname].
+##
+## Base is a no-op. [StampedSynchronizer] overrides it to record the assignment
+## in [member StampedSynchronizer.property_codecs].
+func set_property_codec(_vname: StringName, _quantizer: NetwQuantize) -> void:
+	pass
 
 
 ## Defers registration of [param property] on [param source] as

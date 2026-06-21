@@ -28,6 +28,28 @@ func _make_state_sync() -> StampedSynchronizer:
 	return sync
 
 
+func _pos_codec() -> NetwQuantizeFixed:
+	var q := NetwQuantizeFixed.new()
+	q.step = 0.5
+	q.min_value = -512.0
+	q.max_value = 512.0
+	return q
+
+
+# Bundled blob carrier with a fixed-grid position codec.
+func _make_bundled_state_sync() -> StampedSynchronizer:
+	var sync := StateSynchronizer.new()
+	sync.bundle_payload = true
+	sync.register_property(
+		&"position",
+		NodePath(".:position"),
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		false,
+		true,
+	).quantize(_pos_codec())
+	return sync
+
+
 func test_stamp_coherent_under_jitter() -> void:
 	rig = SyncLoopbackRig.new()
 	await rig.setup(self, _make_state_sync)
@@ -70,6 +92,68 @@ func test_stamp_coherent_under_jitter() -> void:
 
 	assert_int(checked).is_greater(0)
 	assert_int(torn).is_equal(0)
+
+
+func test_bundled_blob_stays_coherent_and_smaller() -> void:
+	rig = SyncLoopbackRig.new()
+	await rig.setup(self, _make_bundled_state_sync)
+
+	var server_sync := rig.server_sync as StateSynchronizer
+	rig.server_clock.on_tick.connect(
+		func(_d: float, t: int) -> void:
+			server_sync.authored_tick = t
+			server_sync.server_ack = t - 3
+			rig.server_node.position = _pos(t),
+	)
+
+	var captures: Array[Dictionary] = []
+	(rig.client_sync as StateSynchronizer).on_state_received = (
+			func(tick: int, ack: int, payload: Dictionary) -> void:
+				captures.append(
+					{
+						&"tick": tick,
+						&"ack": ack,
+						&"position": payload.get(&"position", Vector2.ZERO),
+					},
+				)
+	)
+
+	# Same jitter/loss preset as the unbundled coherence test.
+	rig.delay_server_to_client(4, 3, 6, 0.08)
+	rig.sync_ticks(150)
+
+	# Integer positions land exactly on the 0.5 grid, so the ack must still pair
+	# with the right position the way the unbundled delta does.
+	var torn := 0
+	var checked := 0
+	for c in captures:
+		var tick: int = c.tick
+		if tick < 0:
+			continue
+		checked += 1
+		if not (c.position as Vector2).is_equal_approx(_pos(tick)):
+			torn += 1
+		elif int(c.ack) != tick - 3:
+			torn += 1
+
+	assert_int(checked).is_greater(0)
+	assert_int(torn).is_equal(0)
+
+	# The coded blob is smaller than the same blob with no codec (raw Vector2).
+	rig.server_node.position = _pos(100)
+	server_sync.authored_tick = 100
+	var coded: PackedByteArray = server_sync._read_property(
+		StateSynchronizer.STATE,
+		NodePath(""),
+	)
+	var raw := NetwCodec.encode_snapshot(
+		100,
+		server_sync.server_ack,
+		{ &"position": _pos(100) },
+		[&"position"] as Array[StringName],
+		[],
+	)
+	assert_int(coded.size()).is_less(raw.size())
 
 
 func test_owner_client_records_into_injected_timeline() -> void:

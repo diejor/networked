@@ -40,7 +40,9 @@ func test_window_is_ack_bounded_and_capped() -> void:
 		InputSynchronizer.INPUT_WINDOW,
 		NodePath(""),
 	) as PackedByteArray
-	var window := SampleWindowCodec.decode(bytes, [&"motion"] as Array[StringName])
+	var window := NetwCodec.decode_window(
+		bytes, [&"motion"] as Array[StringName], [], [],
+	)
 
 	assert_int(window.size()).is_equal(3)
 	assert_int(window[0].tick).is_equal(13)
@@ -63,7 +65,9 @@ func test_window_uses_newest_cap_when_ack_lags() -> void:
 		InputSynchronizer.INPUT_WINDOW,
 		NodePath(""),
 	) as PackedByteArray
-	var window := SampleWindowCodec.decode(bytes, [&"motion"] as Array[StringName])
+	var window := NetwCodec.decode_window(
+		bytes, [&"motion"] as Array[StringName], [], [],
+	)
 
 	assert_int(window.size()).is_equal(4)
 	assert_int(window[0].tick).is_equal(12)
@@ -94,7 +98,7 @@ func test_receiver_records_window_samples_once() -> void:
 		{ &"tick": 14, &"input": { &"motion": Vector2(14, -14) } },
 		{ &"tick": 15, &"input": { &"motion": Vector2(15, -15) } },
 	]
-	var bytes := SampleWindowCodec.encode(samples, [&"motion"] as Array[StringName])
+	var bytes := NetwCodec.encode_window(samples, [&"motion"] as Array[StringName], [])
 
 	_sync._write_property(StampedSynchronizer.TICK, NodePath(""), 15)
 	_sync._write_property(InputSynchronizer.INPUT_WINDOW, NodePath(""), bytes)
@@ -131,7 +135,9 @@ func test_codec_roundtrip() -> void:
 		},
 	]
 
-	var decoded := SampleWindowCodec.decode(SampleWindowCodec.encode(samples, keys), keys)
+	var decoded := NetwCodec.decode_window(
+		NetwCodec.encode_window(samples, keys, []), keys, [], [],
+	)
 
 	assert_int(decoded.size()).is_equal(2)
 	assert_int(decoded[0].tick).is_equal(100)
@@ -149,9 +155,9 @@ func test_codec_roundtrip() -> void:
 func test_codec_empty_window_roundtrips_empty() -> void:
 	var keys: Array[StringName] = [&"motion"]
 	var empty: Array[Dictionary] = []
-	var bytes := SampleWindowCodec.encode(empty, keys)
+	var bytes := NetwCodec.encode_window(empty, keys, [])
 	assert_int(bytes.size()).is_equal(0)
-	assert_int(SampleWindowCodec.decode(bytes, keys).size()).is_equal(0)
+	assert_int(NetwCodec.decode_window(bytes, keys, [], []).size()).is_equal(0)
 
 
 func test_window_sole_carrier_when_enabled() -> void:

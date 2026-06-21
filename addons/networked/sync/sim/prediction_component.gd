@@ -257,7 +257,42 @@ func _get_configuration_warnings() -> PackedStringArray:
 			+ "transform, or the solver re-derives momentum wrong after every "
 			+ "correction and the post-collision settle repeats."
 		)
+	warnings.append_array(_quantization_deadzone_warnings())
 	return warnings
+
+
+# The one reconciliation invariant that is always wrong: a deadzone below a
+# property's quantization error corrects on quant noise every packet. Both sides
+# are static config (the codec on the bundled StateSynchronizer, the threshold
+# here), so this stays editor-only with no runtime cost.
+func _quantization_deadzone_warnings() -> PackedStringArray:
+	var out := PackedStringArray()
+	if not owner:
+		return out
+	for sync in SynchronizersCache.get_client_synchronizers(owner):
+		if not (sync is StateSynchronizer) or not sync.bundle_payload:
+			continue
+		if not sync.replication_config:
+			continue
+		for path: NodePath in sync.replication_config.get_properties():
+			if path.get_subname_count() == 0:
+				continue
+			var clean := StringName(path.get_subname(path.get_subname_count() - 1))
+			if clean in [StampedSynchronizer.TICK, StateSynchronizer.ACK]:
+				continue
+			var codec: NetwQuantize = sync.property_codecs.get(clean)
+			if not codec:
+				continue
+			var floor_error := codec.max_error(typeof(owner.get(clean)) as Variant.Type)
+			var epsilon := _epsilon_for(clean)
+			if epsilon < floor_error:
+				out.append((
+					"Reconciliation deadzone for \"%s\" (%.4f) is below its codec's "
+					+ "quantization error (%.4f). The predicted body corrects every "
+					+ "packet from quantization noise alone. Raise the deadzone to at "
+					+ "least %.4f."
+				) % [clean, epsilon, floor_error, floor_error])
+	return out
 
 
 func _notification(what: int) -> void:

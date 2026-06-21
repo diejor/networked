@@ -55,6 +55,18 @@ var authored_tick: int = -1
 ## its history by the displayed authoring tick instead of the receive tick.
 var last_received_tick: int = -1
 
+## Maps a payload virtual name to the [NetwQuantize] that bit-packs it on the
+## wire.
+##
+## A property absent from this map byte-aligns and writes a self-describing raw
+## value, so quantization is purely additive over the stock path. The inspector
+## exposes one [code]codec/<prop>[/code] slot per payload property and stores the
+## choice here. The same [NetwQuantize] may back several properties by reference.
+## [codeblock]
+## state.set_property_codec(&"position", NetwQuantizeFixed.new())
+## [/codeblock]
+@export var property_codecs: Dictionary[StringName, NetwQuantize] = { }
+
 var _pending_tick: int = -1
 # Last-known value per payload virtual name. Never cleared, so an ON_CHANGE
 # delta carrying only changed props still flushes a complete snapshot: unsent
@@ -176,6 +188,106 @@ func _on_synchronized() -> void:
 		return
 	var snapshot := _pending_payload.duplicate()
 	record(_pending_tick, snapshot)
+
+
+func set_property_codec(vname: StringName, quantizer: NetwQuantize) -> void:
+	if quantizer == null:
+		property_codecs.erase(vname)
+	else:
+		property_codecs[vname] = quantizer
+
+
+# Ordered payload virtual names (non-stamp virtuals) in config order, so both
+# peers agree on the codec layout.
+func _payload_keys() -> Array[StringName]:
+	var stamps := _ordered_virtual_names()
+	var out: Array[StringName] = []
+	for vname: StringName in get_virtual_properties():
+		if vname in stamps:
+			continue
+		out.append(vname)
+	return out
+
+
+# Per-key quantizers parallel to [param keys], null where unconfigured.
+func _payload_quantizers(keys: Array[StringName]) -> Array:
+	var out: Array = []
+	for key: StringName in keys:
+		out.append(property_codecs.get(key, null))
+	return out
+
+
+# Per-key live Variant types parallel to [param keys]. A decoder needs them
+# because the wire omits the type tag for a quantized value.
+func _payload_types(keys: Array[StringName]) -> Array:
+	var out: Array = []
+	for key: StringName in keys:
+		out.append(typeof(_read_property(key, get_real_path(key))))
+	return out
+
+
+func _get_property_list() -> Array[Dictionary]:
+	var result := super._get_property_list()
+	if not Engine.is_editor_hint():
+		return result
+	var keys := _editor_codec_keys()
+	if keys.is_empty():
+		return result
+	result.append({
+		"name": "Codecs",
+		"type": TYPE_NIL,
+		"usage": PROPERTY_USAGE_GROUP,
+		"hint_string": "codec/",
+	})
+	for key: StringName in keys:
+		result.append({
+			"name": "codec/" + key,
+			"type": TYPE_OBJECT,
+			"usage": PROPERTY_USAGE_EDITOR,
+			"hint": PROPERTY_HINT_RESOURCE_TYPE,
+			"hint_string": "NetwQuantize",
+		})
+	return result
+
+
+func _get(property: StringName) -> Variant:
+	if property.begins_with("codec/"):
+		return property_codecs.get(StringName(property.trim_prefix("codec/")), null)
+	return super._get(property)
+
+
+func _set(property: StringName, value: Variant) -> bool:
+	if property.begins_with("codec/"):
+		set_property_codec(
+			StringName(property.trim_prefix("codec/")),
+			value as NetwQuantize,
+		)
+		notify_property_list_changed()
+		return true
+	return super._set(property, value)
+
+
+func _validate_property(property: Dictionary) -> void:
+	if property.name == "property_codecs":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+
+
+# Payload property leaf names from the inspector replication_config, the
+# edit-time analog of _payload_keys() (runtime registration has not run yet).
+func _editor_codec_keys() -> Array[StringName]:
+	var out: Array[StringName] = []
+	if not replication_config:
+		return out
+	var stamps := _ordered_virtual_names()
+	for path: NodePath in replication_config.get_properties():
+		var sub := path.get_subname_count()
+		if sub == 0:
+			continue
+		var leaf := StringName(path.get_subname(sub - 1))
+		if leaf in stamps or leaf in out:
+			continue
+		out.append(leaf)
+	return out
 
 
 # Writes a restored payload onto the live body. The split between the spatial

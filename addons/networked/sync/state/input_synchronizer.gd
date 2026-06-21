@@ -16,7 +16,7 @@
 ## Input never carries forward in the timeline: a missing tick is a deliberate
 ## no-action, not a stale repeat. [constant INPUT_WINDOW] carries recent unacked
 ## samples on the same volatile lane as a compact [PackedByteArray] encoded by
-## [SampleWindowCodec], sized by [method input_window_size] and sourced from the
+## [NetwCodec], sized by [method input_window_size] and sourced from the
 ## owning peer's predicted [NetwTimeline].
 class_name InputSynchronizer
 extends StampedSynchronizer
@@ -122,8 +122,13 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if name == TICK:
 		_pending_window.clear()
 	if name == INPUT_WINDOW:
-		_pending_window = SampleWindowCodec.decode(value, _payload_keys()) \
-		if value is PackedByteArray else []
+		if value is PackedByteArray:
+			var keys := _payload_keys()
+			_pending_window = NetwCodec.decode_window(
+				value, keys, _payload_quantizers(keys), _payload_types(keys),
+			)
+		else:
+			_pending_window = []
 		return
 	super._write_property(name, path, value)
 
@@ -199,7 +204,8 @@ func _build_input_window() -> PackedByteArray:
 		samples = timeline.inputs_in_range(from, newest)
 	if samples.is_empty():
 		samples = [{ &"tick": newest, &"input": snapshot_payload() }]
-	return SampleWindowCodec.encode(samples, _payload_keys())
+	var keys := _payload_keys()
+	return NetwCodec.encode_window(samples, keys, _payload_quantizers(keys))
 
 
 # The window is on unless input_window_size explicitly requests single-sample
@@ -218,18 +224,6 @@ func _effective_window_size() -> int:
 	if clock:
 		return maxi(2, ceili(replication_interval * clock.tickrate) * redundancy_packets)
 	return 4
-
-
-# Ordered payload virtual names (every virtual property that is not a stamp),
-# preserving config insertion order so both peers agree on the codec layout.
-func _payload_keys() -> Array[StringName]:
-	var stamps := _ordered_virtual_names()
-	var out: Array[StringName] = []
-	for vname: StringName in get_virtual_properties():
-		if vname in stamps:
-			continue
-		out.append(vname)
-	return out
 
 
 func _warn_if_undersized() -> void:
