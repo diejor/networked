@@ -100,7 +100,8 @@ var join_aborted_flag: bool = false
 var _tree: MultiplayerTree
 var _probes: _ProbeManager
 var _directories: _DirectoryRegistry
-var _server_list: _ServerList = null
+## The saved server list resource.
+var server_list: ServerList = null
 var _saved_targets: Array[JoinTarget] = []
 var _discovered: Dictionary = { } # StringName -> Array[JoinTarget]
 var _directories_order: Array[StringName] = []
@@ -302,8 +303,8 @@ func load_server_list(path: String = server_list_path) -> void:
 		if not path.contains("_test_"):
 			path = "user://servers_test.tres"
 	server_list_path = path
-	var loaded := _ServerList.load_or_new(path)
-	_server_list = loaded
+	var loaded := ServerList.load_or_new(path)
+	server_list = loaded
 	Netw.dbg.info(
 		"ConnectSession loaded %d saved target(s) from %s.",
 		[loaded.targets.size(), path],
@@ -318,10 +319,10 @@ func save_server_list(path: String = server_list_path) -> Error:
 		if not path.contains("_test_"):
 			path = "user://servers_test.tres"
 	server_list_path = path
-	if _server_list == null:
-		_server_list = _ServerList.new()
-	_server_list.targets = _saved_targets.duplicate()
-	var err := _ServerList.save(_server_list, path)
+	if server_list == null:
+		server_list = ServerList.new()
+	server_list.targets = _saved_targets.duplicate()
+	var err := ServerList.save(server_list, path)
 	if err == OK:
 		Netw.dbg.info(
 			"ConnectSession saved %d saved target(s) to %s.",
@@ -771,46 +772,6 @@ func _ensure_internals() -> void:
 	if _directories == null:
 		_directories = _DirectoryRegistry.new()
 
-
-# Persisted saved-target resource used by [ConnectSession].
-class _ServerList:
-	extends Resource
-
-	@export var targets: Array[JoinTarget] = []
-
-
-	static func load_or_new(path: String = DEFAULT_SERVER_LIST_PATH) -> _ServerList:
-		var list := _ServerList.new()
-		if not FileAccess.file_exists(path):
-			return list
-
-		var file := FileAccess.open(path, FileAccess.READ)
-		if file == null:
-			return list
-
-		var stored := file.get_var(true)
-		if stored is Array:
-			list.targets.assign(stored)
-		return list
-
-
-	static func save(list: _ServerList, path: String = DEFAULT_SERVER_LIST_PATH) -> Error:
-		if list == null:
-			return ERR_INVALID_PARAMETER
-		var base_dir := path.get_base_dir()
-		if not DirAccess.dir_exists_absolute(base_dir):
-			var err := DirAccess.make_dir_recursive_absolute(base_dir)
-			if err != OK:
-				Netw.dbg.error(
-					"ConnectSession saved target list failed to create %s: %s.",
-					[base_dir, error_string(err)],
-				)
-				return err
-		var file := FileAccess.open(path, FileAccess.WRITE)
-		if file == null:
-			return FileAccess.get_open_error()
-		file.store_var(list.targets, true)
-		return OK
 
 
 ## Caps concurrent probe sessions for one browser.

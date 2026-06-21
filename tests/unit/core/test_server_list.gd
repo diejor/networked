@@ -20,6 +20,7 @@ func _make_target(
 	return target
 
 
+## Verifies that loading a server list from a missing path returns an empty list.
 func test_load_server_list_returns_empty_on_missing_path() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
@@ -30,6 +31,7 @@ func test_load_server_list_returns_empty_on_missing_path() -> void:
 	session.queue_free()
 
 
+## Verifies that saving and loading targets successfully roundtrips all properties.
 func test_save_then_load_roundtrips_targets() -> void:
 	var path := _temp_path()
 	var session := ConnectSession.new()
@@ -55,3 +57,45 @@ func test_save_then_load_roundtrips_targets() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	session.queue_free()
 	loaded.queue_free()
+
+
+## Verifies that loading a legacy text resource (.tres) file does not crash
+## and returns an empty/new server list.
+func test_load_legacy_text_resource_does_not_crash_and_returns_empty() -> void:
+	var path := _temp_path()
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	assert_object(file).is_not_null()
+	file.store_string(
+		"[gd_resource type=\"Resource\" script_class=\"ServerList\" format=3]\n"
+		+ "[ext_resource type=\"Script\" path=\"res://addons/networked/connect/server_list.gd\" id=\"1_y3nq2\"]\n"
+		+ "[resource]\n"
+		+ "script = ExtResource(\"1_y3nq2\")\n"
+		+ "targets = []\n"
+	)
+	file.close()
+
+	var session := ConnectSession.new()
+	add_child(session)
+	session.load_server_list(path)
+
+	assert_object(session.server_list).is_not_null()
+	assert_that(session.get_saved_targets()).is_empty()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	session.queue_free()
+
+
+## Verifies that ServerList resource can be saved and loaded directly.
+func test_server_list_direct_serialization() -> void:
+	var path := _temp_path()
+	var list := ServerList.new()
+	list.targets.append(_make_target("Direct Dusk", "192.168.1.100", 8000))
+
+	var save_err := ServerList.save(list, path)
+	assert_int(save_err).is_equal(OK)
+
+	var loaded := ServerList.load_or_new(path)
+	assert_object(loaded).is_not_null()
+	assert_int(loaded.targets.size()).is_equal(1)
+	assert_that(loaded.targets[0].display_name).is_equal("Direct Dusk")
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
