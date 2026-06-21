@@ -96,6 +96,7 @@ var _next_id := 1
 var _reconnect_acc := 0.0
 var _idle_acc := 0.0
 var _provider_unavailable_latched := false
+var _is_test_env := false
 
 ## Seconds to wait before reconnecting a board whose sockets all dropped.
 const BOARD_RECONNECT_COOLDOWN := 5.0
@@ -104,8 +105,12 @@ const BOARD_RECONNECT_COOLDOWN := 5.0
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	if Netw.is_test_env():
-		set_process(false)
+	# A node re-initializes its process flag after _enter_tree, so a
+	# set_process(false) here would not stick. Latch the test flag and gate the
+	# board work in _process so the directory never opens live tracker sockets
+	# under a test runner.
+	_is_test_env = Netw.is_test_env()
+	if _is_test_env:
 		return
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
@@ -127,7 +132,7 @@ func _exit_tree() -> void:
 
 
 func _process(dt: float) -> void:
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or _is_test_env:
 		return
 
 	if _tracker:
