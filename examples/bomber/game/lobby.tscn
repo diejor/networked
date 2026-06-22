@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" path="res://examples/bomber/game/in_lobby.tscn" id="11_in"]
 [ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="12_backend"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="13_ws"]
-[ext_resource type="Script" uid="uid://b8xpp6r4y1ku2" path="res://addons/networked/transport/steam/steam_backend.gd" id="14_steam"]
+[ext_resource type="Script" uid="uid://b8xpp6r4y1ku2" path="res://addons/networked/addons/steam/steam_backend.gd" id="14_steam"]
 
 [sub_resource type="Resource" id="Resource_ws"]
 script = ExtResource("13_ws")
