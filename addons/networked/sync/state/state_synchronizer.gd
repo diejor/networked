@@ -24,18 +24,15 @@ extends StampedSynchronizer
 ## Virtual name of the reconciliation ack (last consumed input tick).
 const ACK := &"__ack"
 
-## Virtual name of the bundled snapshot carrier used when [member bundle_payload]
-## is on.
-const STATE := &"__state"
-
-## When true, the tick, ack, and every payload property ride one [constant STATE]
-## blob on the volatile ALWAYS lane instead of separate ON_CHANGE stamps.
+## Virtual name of the bundled snapshot carrier used when
+## [member PackedSynchronizer.bundle_payload] is on.
 ##
-## Bundling makes the stamp atomic with its values (no cross-stream tear) and is
-## the layer where [member StampedSynchronizer.property_codecs] quantization pays
-## off, since the blob is one opaque property. Off by default, which preserves the
-## per-property ON_CHANGE delta shape.
-@export var bundle_payload: bool = false
+## It frames [constant StampedSynchronizer.TICK] and [constant ACK] ahead of the
+## [method PackedSynchronizer.encode_carrier] payload core, so the whole snapshot
+## is one atomic [NetwCodec] blob on the volatile ALWAYS lane instead of separate
+## ON_CHANGE stamps. Bundling is where [member PackedSynchronizer.property_codecs]
+## quantization pays off, since the blob is one opaque property.
+const STATE := &"__state"
 
 ## Last consumed input tick surfaced to the owning client as [constant ACK].
 ## Phase 1's consume step sets this; Phase 0 leaves it at -1.
@@ -56,26 +53,6 @@ func configure() -> void:
 		return
 	register_stamp(TICK, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
 	register_stamp(ACK, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
-
-
-# When the blob carries state, the standalone payload props are redundant, so
-# suppress their replication. They stay registered so the codec can still read
-# them. Mirrors InputSynchronizer.finalize().
-func finalize() -> void:
-	super.finalize()
-	if not bundle_payload or not replication_config:
-		return
-	var payload := _payload_keys()
-	for path: NodePath in replication_config.get_properties():
-		var sub := path.get_subname_count()
-		if sub == 0:
-			continue
-		var vname := StringName(path.get_subname(sub - 1))
-		if vname in payload:
-			replication_config.property_set_replication_mode(
-				path,
-				SceneReplicationConfig.REPLICATION_MODE_NEVER,
-			)
 
 
 # State-sync presence is the rewind trigger: on the server, register the entity
@@ -115,6 +92,12 @@ func _simulation() -> LagCompensation:
 	return mt.get_service(LagCompensation) as LagCompensation
 
 
+## Overrides [method PackedSynchronizer.carrier_name] to return
+## [constant STATE].
+func carrier_name() -> StringName:
+	return STATE
+
+
 func _ordered_virtual_names() -> Array[StringName]:
 	if bundle_payload:
 		return [STATE]
@@ -123,7 +106,7 @@ func _ordered_virtual_names() -> Array[StringName]:
 
 func _read_property(name: StringName, path: NodePath) -> Variant:
 	if name == STATE:
-		return _build_state_snapshot()
+		return encode_carrier()
 	if name == ACK:
 		return server_ack
 	return super._read_property(name, path)
@@ -131,7 +114,7 @@ func _read_property(name: StringName, path: NodePath) -> Variant:
 
 func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if name == STATE:
-		_write_state_snapshot(value)
+		decode_carrier(value)
 		return
 	if name == ACK:
 		_pending_ack = int(value)
@@ -139,9 +122,9 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	super._write_property(name, path, value)
 
 
-# Encodes tick, ack, and the payload into one snapshot blob, bit-packed by the
-# per-property codecs.
-func _build_state_snapshot() -> PackedByteArray:
+## Overrides [method PackedSynchronizer.encode_carrier] to frame tick
+## and ack ahead of the bit-packed payload core into one snapshot blob.
+func encode_carrier() -> PackedByteArray:
 	var keys := _payload_keys()
 	return NetwCodec.encode_snapshot(
 		_authoring_tick(),
@@ -152,10 +135,13 @@ func _build_state_snapshot() -> PackedByteArray:
 	)
 
 
-# Decodes a snapshot blob and primes the receive path: the stamp, the pending
-# ack, and each payload value (routed through the base so write_through and
-# _pending_payload behave exactly as the unbundled path).
-func _write_state_snapshot(value: Variant) -> void:
+## Overrides [method PackedSynchronizer.decode_carrier] to decode a
+## snapshot blob and prime the receive path.
+##
+## This updates the stamp, the pending ack, and each payload value (routed
+## through the stamp layer so write_through and _pending_payload behave
+## exactly as the unbundled path).
+func decode_carrier(value: Variant) -> void:
 	if not (value is PackedByteArray):
 		return
 	var keys := _payload_keys()

@@ -104,8 +104,8 @@ func register_property(
 
 ## Assigns [param quantizer] as the wire codec for payload [param vname].
 ##
-## Base is a no-op. [StampedSynchronizer] overrides it to record the assignment
-## in [member StampedSynchronizer.property_codecs].
+## Base is a no-op. [PackedSynchronizer] overrides it to record the assignment
+## in [member PackedSynchronizer.property_codecs].
 func set_property_codec(_vname: StringName, _quantizer: NetwQuantize) -> void:
 	pass
 

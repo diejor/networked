@@ -74,25 +74,12 @@ func configure() -> void:
 		register_stamp(INPUT_WINDOW, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 
 
-# When the window carries input, the standalone payload props are redundant (the
-# newest tick already rides inside the window), so suppress their replication.
-# They stay registered so snapshot_payload() and the codec can still read them.
+# The base suppresses the windowed payload props to NEVER (the newest tick
+# already rides inside the window). This only adds the cadence sizing warning.
 func finalize() -> void:
 	super.finalize()
-	if not _window_enabled() or not replication_config:
-		return
-	var payload := _payload_keys()
-	for path: NodePath in replication_config.get_properties():
-		var sub := path.get_subname_count()
-		if sub == 0:
-			continue
-		var vname := StringName(path.get_subname(sub - 1))
-		if vname in payload:
-			replication_config.property_set_replication_mode(
-				path,
-				SceneReplicationConfig.REPLICATION_MODE_NEVER,
-			)
-	_warn_if_undersized()
+	if _window_enabled():
+		_warn_if_undersized()
 
 
 func record(tick: int, payload: Dictionary) -> void:
@@ -110,11 +97,21 @@ func record(tick: int, payload: Dictionary) -> void:
 	_pending_window.clear()
 
 
+## Overrides [method PackedSynchronizer.carrier_enabled] to gate the
+## bundled carrier by checking whether the input window is enabled.
+func carrier_enabled() -> bool:
+	return _window_enabled()
+
+
+## Overrides [method PackedSynchronizer.carrier_name] to return
+## [constant INPUT_WINDOW].
+func carrier_name() -> StringName:
+	return INPUT_WINDOW
+
+
 func _read_property(name: StringName, path: NodePath) -> Variant:
-	if name == TICK:
-		return _authoring_tick()
 	if name == INPUT_WINDOW:
-		return _build_input_window()
+		return encode_carrier()
 	return super._read_property(name, path)
 
 
@@ -122,13 +119,7 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if name == TICK:
 		_pending_window.clear()
 	if name == INPUT_WINDOW:
-		if value is PackedByteArray:
-			var keys := _payload_keys()
-			_pending_window = NetwCodec.decode_window(
-				value, keys, _payload_quantizers(keys), _payload_types(keys),
-			)
-		else:
-			_pending_window = []
+		decode_carrier(value)
 		return
 	super._write_property(name, path, value)
 
@@ -187,12 +178,15 @@ func _record_one(tick: int, payload: Dictionary) -> void:
 		on_input_received.call(tick, payload)
 
 
-# Encodes the unacked tail of the predicted timeline (capped to the effective
-# window) into a compact PackedByteArray. With no timeline (or none recorded yet)
-# it falls back to a single live sample at the authored tick, so the window is
-# always a sole carrier even without prediction wiring. Empty only when the
-# window is off or no tick has been authored.
-func _build_input_window() -> PackedByteArray:
+## Overrides [method PackedSynchronizer.encode_carrier] to pack the
+## unacked tail of the predicted timeline (capped to the effective
+## window) into a compact [PackedByteArray].
+##
+## With no timeline (or none recorded yet) it falls back to a single live
+## sample at the authored tick, so the window is always a sole carrier
+## even without prediction wiring. Empty only when the window is off or
+## no tick has been authored.
+func encode_carrier() -> PackedByteArray:
 	if not _window_enabled():
 		return PackedByteArray()
 	var newest := _authoring_tick()
@@ -206,6 +200,19 @@ func _build_input_window() -> PackedByteArray:
 		samples = [{ &"tick": newest, &"input": snapshot_payload() }]
 	var keys := _payload_keys()
 	return NetwCodec.encode_window(samples, keys, _payload_quantizers(keys))
+
+
+## Overrides [method PackedSynchronizer.decode_carrier] to decode a
+## received window blob into the pending samples that [method record]
+## flushes.
+func decode_carrier(value: Variant) -> void:
+	if value is PackedByteArray:
+		var keys := _payload_keys()
+		_pending_window = NetwCodec.decode_window(
+			value, keys, _payload_quantizers(keys), _payload_types(keys),
+		)
+	else:
+		_pending_window = []
 
 
 # The window is on unless input_window_size explicitly requests single-sample
