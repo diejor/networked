@@ -25,15 +25,19 @@ var _stepper: LockstepStepper
 
 ## Builds the rig: host, one client, clocks on both, and a matched node pair each
 ## carrying the synchronizer [param factory] returns.
+##
+## Pass [code]managed = false[/code] to own teardown explicitly (e.g. a test that
+## builds several rigs in one case).
 func setup(
 		suite: NetwTestSuite,
 		factory: Callable,
 		tickrate: int = 60,
 		display_offset: int = 3,
+		managed: bool = true,
 ) -> void:
 	_tree = Engine.get_main_loop() as SceneTree
 	_tickrate = tickrate
-	inner = suite.make_harness()
+	inner = suite.make_harness() if managed else suite.make_unmanaged_harness()
 	await inner.setup()
 	client = await inner.add_client()
 	server_clock = await inner.add_clock(tickrate, display_offset)
@@ -48,6 +52,21 @@ func setup(
 	client.add_child(client_node)
 
 	await _tree.process_frame
+
+
+## Tears the underlying harness down. Only needed for an unmanaged setup.
+func teardown() -> void:
+	await inner.teardown()
+	_stepper = null
+	inner = null
+	client = null
+	server_clock = null
+	client_clock = null
+	server_node = null
+	client_node = null
+	server_sync = null
+	client_sync = null
+	_tree = null
 
 
 ## Advances both clocks by [param n] network ticks in-process, no real frames.
@@ -65,14 +84,14 @@ func sync_ticks(n: int) -> void:
 ## Installs an inbound delay (in polls) from the server onto the client.
 func delay_server_to_client(
 		delay_polls: int,
-		seed: int = 1,
+		_seed: int = 1,
 		jitter_polls: int = 0,
 		loss: float = 0.0,
 ) -> void:
 	var peer := client.multiplayer_peer as LocalMultiplayerPeer
 	inner.session().set_link_conditions(
 		peer,
-		_conditions(delay_polls, seed, jitter_polls, loss),
+		_conditions(delay_polls, _seed, jitter_polls, loss),
 		1,
 	)
 
@@ -94,11 +113,11 @@ func delay_client_to_server(
 
 func _conditions(
 		delay_polls: int,
-		seed: int,
+		_seed: int,
 		jitter_polls: int,
 		loss: float,
 ) -> LocalLoopbackSession.LinkConditions:
-	var conditions := LocalLoopbackSession.LinkConditions.new(seed)
+	var conditions := LocalLoopbackSession.LinkConditions.new(_seed)
 	var period := 1000.0 / float(Engine.get_physics_ticks_per_second())
 	conditions.latency_ms = float(delay_polls) * period
 	conditions.jitter_ms = float(jitter_polls) * period

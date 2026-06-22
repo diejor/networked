@@ -163,7 +163,7 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 
 # Losing a player mid-match is fatal to the round: the server reports the error
 # and tears the world down rather than playing on a peer short.
-func test_disconnect_during_match_ends_the_game() -> void:
+func test_client_disconnect_keeps_match_running() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
 	_begin_game(valeria)
@@ -175,11 +175,20 @@ func test_disconnect_during_match_ends_the_game() -> void:
 	var errored: Array[bool] = [false]
 	gamestate.game_error.connect(func(_what: String) -> void: errored[0] = true)
 
+	# A client leaving drops only that player; the match continues for the host.
 	await game.disconnect_runner(jose)
-	await game.sync_ticks(4)
+	var dropped := false
+	for i in 60:
+		await game.sync_ticks(1)
+		if valeria.find_player(&"jose") == null:
+			dropped = true
+			break
 
-	assert_bool(errored[0]).is_true()
-	assert_that(gamestate.world).is_null()
+	assert_bool(dropped).is_true()
+	assert_bool(errored[0]).is_false()
+	assert_that(gamestate.world).is_not_null()
+	assert_that(valeria.find_player(&"valeria")).is_not_null()
+	await drain_frames(get_tree(), 10)
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
@@ -189,11 +198,8 @@ func _begin_game(host: NetwSceneRunner) -> void:
 
 
 func _count_bombs(world: MultiplayerScene) -> int:
-	var count := 0
-	for child in world.level.get_children():
-		if child is Area2D:
-			count += 1
-	return count
+	var bombs := world.level.get_node_or_null("Bombs")
+	return bombs.get_child_count() if bombs else 0
 
 
 func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
@@ -205,7 +211,10 @@ func _wait_for_bomb(world: MultiplayerScene, ticks: int) -> bool:
 
 
 func _first_bomb(world: MultiplayerScene) -> Area2D:
-	for child in world.level.get_children():
+	var bombs := world.level.get_node_or_null("Bombs")
+	if not bombs:
+		return null
+	for child in bombs.get_children():
 		if child is Area2D:
 			return child
 	return null

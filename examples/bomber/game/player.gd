@@ -1,5 +1,10 @@
 extends CharacterBody2D
 
+const BOMB = preload("uid://3uxvvsya0q1t")
+const GHOST_BOMB = preload("uid://qtc6lu84omhi")
+const TILE_SIZE := 48.0
+const BOMB_CELL_TOLERANCE := TILE_SIZE * 1.5
+
 ## The player's movement speed (in pixels per second).
 const MOTION_SPEED = 90.0
 
@@ -12,42 +17,72 @@ var last_bomb_time := BOMB_RATE
 var current_anim: String = ""
 
 @onready var inputs: Node = $Inputs
-@onready var player_entity := MultiplayerEntity.unwrap(self)
 @onready var label: Label = %label
 
 @onready var ctx := Netw.ctx(self)
-@onready var clock := ctx.services.get_clock()
+@onready var clock := ctx.services.clock
+@onready var lag := ctx.lag_compensation
+@onready var entity := ctx.entity
+@onready var bomb_action := lag.action(_place_bomb)
 @onready var gamestate: BomberGamestate = \
-	ctx.services.get_service(BomberGamestate)
+		ctx.services.get_service(BomberGamestate)
 
 
 func _ready() -> void:
 	stunned = false
+	bomb_action.timing_mode = \
+	NetwAction.TimingMode.TICK_ALIGNED_STATE_READY
+	bomb_action.predict = func() -> Node:
+		var ghost := GHOST_BOMB.instantiate()
+		ghost.position = position
+		add_sibling(ghost)
+		return ghost
 
 
 ## The simulation contract, run by the server (authoritative), the owning client
 ## (prediction), and the owning client again during replay (is_fresh = false).
-func _network_tick(input: Dictionary, delta: float, _tick: int, is_fresh: bool) -> void:
+## Input is on the live [code]inputs[/code] node, applied by the framework.
+func _network_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	last_bomb_time += delta
+	if is_fresh and entity.is_controlled_locally \
+			and not stunned and inputs.bombing:
+		if last_bomb_time < BOMB_RATE:
+			return
+		bomb_action.request(tick, position)
+		if not multiplayer or not multiplayer.is_server():
+			last_bomb_time = 0.0
+
 	if stunned:
 		velocity = Vector2.ZERO
 	else:
-		velocity = input.get(&"motion", Vector2.ZERO) * MOTION_SPEED
+		velocity = inputs.motion * MOTION_SPEED
 
 	velocity *= clock.physics_factor
 	move_and_slide()
 	velocity /= clock.physics_factor
 
-	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
-		last_bomb_time += delta
-		if is_fresh and not stunned and input.get(&"bombing", false):
-			_try_place_bomb()
 
-
-func _try_place_bomb() -> void:
+# Validates and spawns a bomb on the server.
+func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
+	if not multiplayer or not multiplayer.is_server():
+		return
 	if last_bomb_time < BOMB_RATE:
+		action_context.deny()
+		return
+	var past := lag.sample(entity, action_context.view_tick)
+	if not past.has_value(&"position"):
+		action_context.deny()
+		return
+	var past_position := past.get_value(&"position") as Vector2
+	if past_position.distance_to(pos) > BOMB_CELL_TOLERANCE:
+		action_context.deny()
 		return
 	last_bomb_time = 0.0
-	$"../../BombSpawner".spawn([position, player_entity.peer_id])
+	var real := BOMB.instantiate() as Area2D
+	real.position = pos
+	real.from_player = entity.peer_id
+	action_context.bind(real)
+	$"../../Bombs".add_child(real)
 
 
 func _process(_delta: float) -> void:

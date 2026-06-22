@@ -8,6 +8,11 @@ extends Node
 
 const DEFAULT_TIMEOUT := 1.0
 const DEFAULT_TICKRATE := 30
+## Wall-clock ceiling for one test's cumulative stepping, a runaway guard. The
+## harness steps deterministically, so a budget is a hang catcher, not a pace
+## limit. Override with the NETW_TEST_WALL_CLOCK_MS environment variable for
+## slower CI.
+const DEFAULT_WALL_CLOCK_BUDGET_MS := 60_000
 const PARTICIPANT_WINDOW_SCENE := preload(
 	"res://addons/networked/session/view/ParticipantWindow.tscn"
 )
@@ -23,9 +28,8 @@ var _display_viewport: ParticipantViewport
 ## The listen server host participant.
 var host: NetwSceneRunner
 
-var _saved_time_scale := 1.0
-var _saved_physics_ticks := 60
 var _torn_down := false
+var _wall_deadline_ms := 0
 
 
 func _init(scene: PackedScene = null) -> void:
@@ -36,12 +40,6 @@ func _init(scene: PackedScene = null) -> void:
 func setup() -> void:
 	assert(_main_scene != null, "NetwGameHarness.setup: scene is required.")
 	_loopback = NetwHarnessSession.new()
-	_saved_time_scale = Engine.time_scale
-	_saved_physics_ticks = Engine.get_physics_ticks_per_second()
-
-	if DisplayServer.get_name() == "headless":
-		Engine.time_scale = 10.0
-		Engine.set_physics_ticks_per_second(_saved_physics_ticks * 10)
 
 	# Skip noisy resource tracking in test session hook.
 	# Game harnesses trigger Godot's resource cache.
@@ -128,26 +126,81 @@ func disconnect_runner(runner: NetwSceneRunner) -> void:
 	assert(not timed_out, "Timed out waiting for server to drop peer.")
 
 
-## Advances the shared scene tree by [param n] network ticks.
+## Advances every participant by exactly [param n] network ticks through a
+## [FrameLockstepStepper]. The tick count is exact with no dependence on
+## wall-clock accumulation or [member Engine.time_scale].
 func sync_ticks(n: int) -> void:
 	assert(n >= 0, "NetwGameHarness.sync_ticks: n must be non-negative.")
 	if n == 0:
 		return
+	_guard_wall_clock()
 
-	var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock \
-	if host else null
-	if not clock:
+	var clocks: Array[MultiplayerClock] = []
+	for runner in _runners:
+		if not runner or not runner.tree:
+			continue
+		var clock := runner.tree.get_service(MultiplayerClock) \
+				as MultiplayerClock
+		if clock:
+			clocks.append(clock)
+
+	if clocks.is_empty():
 		for i in n:
 			await get_tree().process_frame
 		return
 
-	var stepper := MultiplayerClockStepper.new(
-		get_tree(),
-		clock,
-		_saved_physics_ticks,
-		DEFAULT_TICKRATE,
-	)
+	var stepper := FrameLockstepStepper.new(get_tree(), clocks)
 	await stepper.sync_ticks(n)
+
+
+## Game ticks spanning [param game_seconds] of game time at the host clock's
+## [member MultiplayerClock.tickrate].
+##
+## Stepping is deterministic, so a budget can only be expressed in ticks, never
+## in real seconds. Sizing the budget from game seconds keeps a test's intent
+## legible and portable across games whose [MultiplayerClock] runs a different
+## tickrate.
+## [codeblock]
+## # Run roughly eight seconds of game time, tickrate-agnostic.
+## await run_until(ais, game.seconds_to_ticks(8.0))
+## [/codeblock]
+func seconds_to_ticks(game_seconds: float) -> int:
+	return maxi(1, ceili(game_seconds * float(_tickrate())))
+
+
+func _tickrate() -> int:
+	if host and host.tree:
+		var clock := host.tree.get_service(MultiplayerClock) as MultiplayerClock
+		if clock:
+			return clock.tickrate
+	return DEFAULT_TICKRATE
+
+
+# Fails fast when a test's cumulative stepping blows past the wall-clock ceiling
+# so a runaway sim or a never-settling early-exit predicate surfaces as a legible
+# failure instead of a silent hang. The deadline starts on the first step after
+# setup, so connection and roster waits do not count against it.
+func _guard_wall_clock() -> void:
+	var now := Time.get_ticks_msec()
+	if _wall_deadline_ms == 0:
+		_wall_deadline_ms = now + _wall_clock_budget_ms()
+		return
+	assert(
+		now < _wall_deadline_ms,
+		(
+			"NetwGameHarness: test exceeded %d ms of stepping. Likely a " \
+			% _wall_clock_budget_ms()
+		) + (
+			"non-settling early-exit predicate or an oversized tick budget. " +
+			"Bound the run with seconds_to_ticks() and an early-exit " +
+			"predicate, or raise NETW_TEST_WALL_CLOCK_MS."
+		),
+	)
+
+
+func _wall_clock_budget_ms() -> int:
+	var raw := OS.get_environment("NETW_TEST_WALL_CLOCK_MS")
+	return int(raw) if raw.is_valid_int() else DEFAULT_WALL_CLOCK_BUDGET_MS
 
 
 ## Waits for a transition animation ([TPLayerAPI]) to finish on a specific
@@ -185,13 +238,6 @@ func watch_frames(n: int) -> void:
 	assert(n >= 0, "NetwGameHarness.watch_frames: n must be non-negative.")
 	for i in n:
 		await get_tree().process_frame
-
-
-## Sets global simulation speed for this harness session.
-func set_time_factor(factor: float) -> void:
-	assert(factor > 0.0, "NetwGameHarness.set_time_factor: factor > 0.")
-	Engine.time_scale = factor
-	Engine.set_physics_ticks_per_second(int(_saved_physics_ticks * factor))
 
 
 ## Displays every participant window in one window.
@@ -267,9 +313,6 @@ func teardown() -> void:
 	if _torn_down:
 		return
 	_torn_down = true
-
-	Engine.time_scale = _saved_time_scale
-	Engine.set_physics_ticks_per_second(_saved_physics_ticks)
 
 	if is_instance_valid(_display_viewport):
 		_display_viewport.queue_free()

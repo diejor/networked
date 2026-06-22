@@ -1,7 +1,7 @@
 # Downgrade unresolved [method/member/signal/...] refs to warnings and emit external :godot: links instead of broken :ref: anchors; @GlobalScope guard.
 --- a/make_rst.py
 +++ b/make_rst.py
-@@ -2124,39 +2205,66 @@
+@@ -2124,39 +2333,66 @@
                          # but method, member, and theme_item have special cases.
                          ref_type = "_{}".format(tag_state.name)
  
@@ -88,7 +88,7 @@
  
                                  elif class_def.properties[target_name].overrides is not None:
                                      print_error(
-@@ -2164,24 +2272,32 @@
+@@ -2164,24 +2400,32 @@
                                          state,
                                      )
  
@@ -136,7 +136,7 @@
                                  else:
                                      # Needs theme data type to be properly linked, which we cannot get without a class.
                                      name = class_def.theme_items[target_name].data_name
-@@ -2195,7 +2311,8 @@
+@@ -2195,7 +2439,8 @@
  
                                  if link_target.find(".") == -1:
                                      # Also search in @GlobalScope as a last resort if no class was specified
@@ -146,7 +146,7 @@
  
                                  for search_class_def in search_class_defs:
                                      if target_name in search_class_def.constants:
-@@ -2210,23 +2327,74 @@
+@@ -2210,23 +2455,74 @@
                                                  break
  
                                  if not found:
@@ -236,7 +236,7 @@
                          escape_pre = True
                          escape_post = True
  
-@@ -2250,7 +2418,7 @@
+@@ -2250,7 +2546,7 @@
                                      found = True
                                      break
                              if not found:
@@ -245,7 +245,7 @@
                                      f'{state.current_class}.xml: Unresolved argument reference "{link_target}" in {context_name}.',
                                      state,
                                  )
-@@ -2280,6 +2448,12 @@
+@@ -2280,6 +2576,12 @@
                          )
                          break
                      link_title = text[endq_pos + 1 : endurl_pos]

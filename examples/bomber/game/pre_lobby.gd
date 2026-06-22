@@ -73,7 +73,7 @@ func _on_list_item_activated(idx: int) -> void:
 	_directory.join_lobby_peer(id)
 
 
-func _on_list_updated(lobbies: Array[LobbyInfo]) -> void:
+func _on_list_updated(lobbies: Array[LobbyDirectory.LobbyInfo]) -> void:
 	_list.clear()
 	for info in lobbies:
 		var display := info.lobby_name if not info.lobby_name.is_empty() \

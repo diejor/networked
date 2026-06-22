@@ -5,7 +5,7 @@
 ## Obtain via [method Netw.ctx] or [method for_node].
 ## [codeblock]
 ## var ctx := Netw.ctx(self)
-## ctx.services.get_scene_manager()
+## ctx.services.scene_manager
 ## if ctx.has_scene():
 ##     await ctx.scene.wait_for_players(4)
 ## ctx.entity.spawning.connect(_on_spawning)
@@ -61,6 +61,11 @@ var connect: NetwConnect:
 ## found. See [NetwInterest] for the public API.
 var interest: NetwInterest
 
+## Lag-compensation query facade for the enclosing [MultiplayerTree].
+## [code]null[/code] when no enclosing tree is found. See
+## [NetwLagCompensation] for the public API.
+var lag_compensation: NetwLagCompensation
+
 ## Scene-level facade for the current [MultiplayerScene], if any.
 ## [code]null[/code] when the node is not inside an active scene.
 var scene: NetwScene
@@ -91,6 +96,7 @@ func _init(
 		tree = NetwTree.new(mt)
 		services = NetwServices.new(mt)
 		interest = mt.interest
+		lag_compensation = mt.lag_compensation
 	scene = scene_ctx
 	_origin = origin
 
@@ -101,7 +107,7 @@ func _init(
 
 ## Returns [code]true[/code] if every facade present on this context is
 ## still valid. A context whose facades are individually [code]null[/code]
-## (e.g. orphan node, no scene) is still considered valid -- callers
+## (e.g. orphan node, no scene) is still considered valid. Callers
 ## null-check the specific member they need.
 func is_valid() -> bool:
 	if tree and not tree.is_valid():
@@ -124,7 +130,7 @@ func has_scene() -> bool:
 
 ## Returns a [NetwContext] for [param node].
 ##
-## Always returns a non-null context; individual facade members may be
+## Always returns a non-null context. Individual facade members may be
 ## [code]null[/code] when their underlying source is unreachable from
 ## [param node]. See class docs for per-member rules.
 static func for_node(node: Node) -> NetwContext:

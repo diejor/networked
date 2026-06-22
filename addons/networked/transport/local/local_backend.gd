@@ -52,28 +52,28 @@ func poll(_dt: float) -> void:
 		session.poll_frame_scoped()
 
 
-## Implements [method BackendPeer.query_server_info] from [member session].
+## Implements [method BackendPeer.probe_server_info] from [member session].
 ##
 ## No probe connection is needed because loopback clients and servers share
 ## [LocalLoopbackSession].
-func query_server_info(
+func probe_server_info(
 		_address: String,
 		_timeout: float = 2.0,
-) -> ServerInfoResult:
+) -> BackendPeer.ProbeResult:
 	if not session:
 		session = LocalLoopbackSession.get_shared_session()
 	if session.has_live_server():
-		var info := ServerInfo.new()
+		var info := ServerDescriptor.Info.new()
 		info.is_local_listener = true
 		info.players = session.server_peer.linked_peers.size()
 		info.app_id = session.server_app_id
-		return ServerInfoResult.ok(info)
-	return ServerInfoResult.unsupported()
+		return BackendPeer.ProbeResult.ok(info)
+	return BackendPeer.ProbeResult.unsupported()
 
 
-## Returns an [AddressHint] that hides address input.
-func get_address_hint() -> AddressHint:
-	var hint := AddressHint.make(
+## Returns an [BackendPeer.AddressHint] that hides address input.
+func get_address_hint() -> BackendPeer.AddressHint:
+	var hint := BackendPeer.AddressHint.make(
 		"",
 		"",
 		"In-process loopback. No address required.",

@@ -78,7 +78,7 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 		else:
 			username = data.get("tree_name", "Unknown")
 
-	return "MultiplayerClock %s" % username
+	return "Netw Clock %s" % username
 
 
 func _update_data_and_register(category: String, data: Dictionary) -> void:

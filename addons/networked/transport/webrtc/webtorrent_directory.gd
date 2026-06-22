@@ -89,45 +89,43 @@ var _advertise_acc := 0.0
 var _collecting := false
 var _collect_left := 0.0
 var _query_acc := 0.0
-var _collected: Dictionary = { } # room_hash -> LobbyInfo
+var _collected: Dictionary = { } # room_hash -> LobbyDirectory.LobbyInfo
 var _id_to_hash: Dictionary = { } # synthetic int id -> room_hash
 var _next_id := 1
 
 var _reconnect_acc := 0.0
 var _idle_acc := 0.0
 var _provider_unavailable_latched := false
+var _is_test_env := false
 
 ## Seconds to wait before reconnecting a board whose sockets all dropped.
 const BOARD_RECONNECT_COOLDOWN := 5.0
 
 
-func _enter_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-	if Netw.is_test_env():
-		set_process(false)
-		return
+func should_register() -> bool:
+	# A node re-initializes its process flag after _enter_tree, so a
+	# set_process(false) here would not stick. Latch the test flag and gate the
+	# board work in _process so the directory never opens live tracker sockets
+	# under a test runner.
+	_is_test_env = Netw.is_test_env()
+	return not _is_test_env
+
+
+func service_entered(mt: MultiplayerTree) -> void:
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
-	NetwServices.register(self)
-	var mt := MultiplayerTree.resolve(self)
-	if mt:
-		_bind_tree_signals(mt)
+	_bind_tree_signals(mt)
 	# Keep the board connection warm so browse and advertise are instant.
 	_ensure_tracker()
 
 
-func _exit_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-	NetwServices.unregister(self)
-	NetwServices.unregister(self, LobbyDirectory)
+func service_exiting(_mt: MultiplayerTree) -> void:
 	if _tracker:
 		_release_tracker()
 
 
 func _process(dt: float) -> void:
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or _is_test_env:
 		return
 
 	if _tracker:
@@ -212,7 +210,7 @@ func leave_lobby() -> void:
 	_collecting = false
 
 
-func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	var target := JoinTarget.new()
 	target.display_name = lobby.lobby_name
 	target.address = String(lobby.metadata.get("room_hash", ""))
@@ -449,7 +447,7 @@ func _collect_room(card: Dictionary) -> void:
 	var room_name := String(card.get("name", ""))
 
 	if _collected.has(room_hash):
-		var existing: LobbyInfo = _collected[room_hash]
+		var existing: LobbyDirectory.LobbyInfo = _collected[room_hash]
 		var changed := existing.players != players \
 				or existing.max_players != max_players \
 				or existing.lobby_name != room_name
@@ -476,7 +474,7 @@ func _collect_room(card: Dictionary) -> void:
 		"WebTorrentDirectory: discovered room %s (%d/%d) app_id='%s'.",
 		[room_hash, players, max_players, String(card.get("app_id", ""))],
 	)
-	_collected[room_hash] = LobbyInfo.make(
+	_collected[room_hash] = LobbyDirectory.LobbyInfo.make(
 		id,
 		room_name,
 		players,
@@ -486,7 +484,7 @@ func _collect_room(card: Dictionary) -> void:
 
 
 func _emit_collected() -> void:
-	var out: Array[LobbyInfo] = []
+	var out: Array[LobbyDirectory.LobbyInfo] = []
 	for room_hash in _collected:
 		out.append(_collected[room_hash])
 	Netw.dbg.debug(

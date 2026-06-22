@@ -1,7 +1,7 @@
 ## The engine behind the server browser: holds the live server list and runs
 ## host / join.
 ##
-## Most games never touch this directly -- they go through [NetwConnect]
+## Most games never touch this directly. Instead, they go through [NetwConnect]
 ## ([code]Netw.ctx(self).connect[/code]), which wraps the one canonical
 ## session the [MultiplayerTree] owns. Reach for [ConnectSession] when you are
 ## building a [b]custom browser UI[/b] and want the raw node: it keeps the list
@@ -22,11 +22,13 @@
 ## [/codeblock]
 ##
 ## [br][br]
-## [b]Tree binding:[/b] host and join need a [MultiplayerTree]. A session added
-## under a tree binds to it automatically; otherwise call [method bind_tree].
+## [b]Tree Binding[/b]
+## [br]Host and join need a [MultiplayerTree]. A session added
+## under a tree binds to it automatically. Otherwise, call [method bind_tree].
 ##
 ## [br][br]
-## [b]Persistence is opt-in:[/b] targets live in memory until you
+## [b]Persistence Opt-In[/b]
+## [br]Targets live in memory until you
 ## [method load_server_list] / [method save_server_list] (or pass
 ## [code]persist = true[/code] to [method add_target] /
 ## [method remove_target]). Directory lobbies are always ephemeral.
@@ -41,12 +43,12 @@ signal target_added(target: JoinTarget)
 signal target_removed(target: JoinTarget)
 
 ## A new probe result or live lobby snapshot landed for [param target].
-signal target_updated(target: JoinTarget, result: ServerInfoResult)
+signal target_updated(target: JoinTarget, result: BackendPeer.ProbeResult)
 
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
 		directory_id: StringName,
-		lobbies: Array[LobbyInfo],
+		lobbies: Array[LobbyDirectory.LobbyInfo],
 )
 
 ## A registered directory reported that its transport is unavailable.
@@ -56,14 +58,14 @@ signal directory_unavailable(directory_id: StringName, reason: String)
 signal join_started(target: JoinTarget)
 
 ## A join attempt failed. [param result] is the [ConnectResult] outcome.
-signal join_failed(target: JoinTarget, result: ConnectResult)
+signal join_failed(target: JoinTarget, result: BackendPeer.ConnectResult)
 
 ## A join attempt advanced through transport-specific progress.
 signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
 
 ## A connection succeeded. [param result] is the [ConnectResult] containing
 ## happy-path diagnostics.
-signal connection_diagnostics(result: ConnectResult)
+signal connection_diagnostics(result: BackendPeer.ConnectResult)
 
 ## A host attempt began.
 signal host_started()
@@ -83,27 +85,27 @@ signal session_left()
 ## buggy backend can never wedge a join open forever.
 const SELF_MANAGED_TIMEOUT_CEILING := 30.0
 
-## Path used for [ServerList] persistence by
+## Default path used by [method load_server_list] and
+## [method save_server_list].
+const DEFAULT_SERVER_LIST_PATH := "user://servers.tres"
+
+## Path used for saved target persistence by
 ## [method load_server_list] / [method save_server_list] when no
 ## explicit path is supplied.
-@export var server_list_path: String = ServerList.DEFAULT_PATH
+@export var server_list_path: String = DEFAULT_SERVER_LIST_PATH
 
 ## True if the active join handshake was explicitly aborted.
 var join_aborted_flag: bool = false
 
-## Optional persistence handle. Null until [method load_server_list]
-## assigns one (or a caller sets it directly). When set,
-## [method save_server_list] writes the current saved targets back
-## through it.
-var server_list: ServerList = null
-
 var _tree: MultiplayerTree
-var _probes: ProbeManager
-var _directories: DirectoryRegistry
+var _probes: _ProbeManager
+var _directories: _DirectoryRegistry
+## The saved server list resource.
+var server_list: ServerList = null
 var _saved_targets: Array[JoinTarget] = []
 var _discovered: Dictionary = { } # StringName -> Array[JoinTarget]
 var _directories_order: Array[StringName] = []
-var _results: Dictionary = { } # JoinTarget -> ServerInfoResult
+var _results: Dictionary = { } # JoinTarget -> BackendPeer.ProbeResult
 var _tree_signals_bound: bool = false
 
 
@@ -113,7 +115,6 @@ func _init() -> void:
 
 func _ready() -> void:
 	_ensure_internals()
-	_parent_internals()
 	if _tree == null:
 		var tree := MultiplayerTree.resolve(self)
 		if tree:
@@ -210,8 +211,8 @@ func get_directory_ids() -> Array[StringName]:
 
 
 ## Appends [param target] to the live list. When [param persist] is
-## [code]true[/code] and a [member server_list] is loaded, the
-## change is written to disk immediately.
+## [code]true[/code], the change is written immediately through
+## [method save_server_list].
 ##
 ## Directory-discovered targets arrive via
 ## [signal LobbyDirectory.lobby_list_updated]. Call this only for
@@ -285,15 +286,15 @@ func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 	return out
 
 
-## Returns the latest [ServerInfoResult] for [param target], or
+## Returns the latest [BackendPeer.ProbeResult] for [param target], or
 ## [code]null[/code] when nothing has been observed yet.
-func get_result(target: JoinTarget) -> ServerInfoResult:
+func get_result(target: JoinTarget) -> BackendPeer.ProbeResult:
 	return _results.get(target, null)
 
 # -- Persistence ------------------------------------------------------------
 
 
-## Loads the persisted [ServerList] at [param path], replacing the
+## Loads the persisted saved target list at [param path], replacing the
 ## current saved target list. Directory-discovered targets are not
 ## affected. Emits [signal target_removed] for the prior set and
 ## [signal target_added] for the loaded set.
@@ -311,10 +312,8 @@ func load_server_list(path: String = server_list_path) -> void:
 	_replace_saved_targets(loaded.targets)
 
 
-## Persists the current saved targets through
-## [member server_list], creating a fresh [ServerList] when none is
-## loaded. Returns the [enum @GlobalScope.Error] from
-## [ResourceSaver.save].
+## Persists the current saved targets. Returns the
+## [enum @GlobalScope.Error] from the storage write.
 func save_server_list(path: String = server_list_path) -> Error:
 	if Netw.is_test_env() and path.begins_with("user://"):
 		if not path.contains("_test_"):
@@ -443,14 +442,14 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	if target == null:
 		Netw.dbg.warn("ConnectSession join failed: target is null.")
-		join_failed.emit(null, ConnectResult.error("target is null"))
+		join_failed.emit(null, BackendPeer.ConnectResult.error("target is null"))
 		return ERR_INVALID_PARAMETER
 	if payload == null:
 		Netw.dbg.warn(
 			"ConnectSession join failed for %s: payload is null.",
 			[_target_summary(target)],
 		)
-		join_failed.emit(target, ConnectResult.error("join payload is null"))
+		join_failed.emit(target, BackendPeer.ConnectResult.error("join payload is null"))
 		return ERR_INVALID_PARAMETER
 	var tree := get_tree_bound()
 	if tree == null:
@@ -460,7 +459,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		)
 		join_failed.emit(
 			target,
-			ConnectResult.error(
+			BackendPeer.ConnectResult.error(
 				"no MultiplayerTree bound; call bind_tree first",
 			),
 		)
@@ -498,9 +497,9 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		var result := tree.last_connect_result
 		if result == null:
 			if join_aborted_flag:
-				result = ConnectResult.aborted("Connection aborted by user")
+				result = BackendPeer.ConnectResult.aborted("Connection aborted by user")
 			else:
-				result = ConnectResult.error(
+				result = BackendPeer.ConnectResult.error(
 					"connect failed (%s)" % error_string(err),
 				)
 		join_failed.emit(target, result)
@@ -508,7 +507,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 
 	var result := tree.last_connect_result
 	if result == null:
-		result = ConnectResult.ok()
+		result = BackendPeer.ConnectResult.ok()
 	if tree.backend:
 		result.diagnostics = tree.backend.get_connection_diagnostics(1)
 	connection_diagnostics.emit(result)
@@ -614,7 +613,7 @@ func _apply_host_config(
 		webrtc.server_name = config.server_name
 
 
-func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
+func _on_probe_result(result: BackendPeer.ProbeResult, target: JoinTarget) -> void:
 	if result != null and result.is_ok() and result.info != null \
 			and _local_app_id() != String(result.info.app_id):
 		Netw.dbg.debug(
@@ -626,7 +625,7 @@ func _on_probe_result(result: ServerInfoResult, target: JoinTarget) -> void:
 				String(result.info.app_id),
 			],
 		)
-		result = ServerInfoResult.incompatible(result.info)
+		result = BackendPeer.ProbeResult.incompatible(result.info)
 	_results[target] = result
 	Netw.dbg.debug(
 		"ConnectSession probe result for %s: %s.",
@@ -648,19 +647,19 @@ func _local_app_id() -> String:
 # Flags a discovered server incompatible when its build tag differs from the
 # local one, so the browser can warn before a join the auth handshake would
 # reject. An empty tag on either side means the gate is off, so it stays OK.
-func _classify_discovered(info: ServerInfo) -> ServerInfoResult:
+func _classify_discovered(info: ServerDescriptor.Info) -> BackendPeer.ProbeResult:
 	if _local_app_id() != String(info.app_id):
 		Netw.dbg.debug(
 			"ConnectSession discovered incompatible lobby: local app_id='%s' "
 			+ "remote app_id='%s'.",
 			[_local_app_id(), String(info.app_id)],
 		)
-		return ServerInfoResult.incompatible(info)
-	return ServerInfoResult.ok(info, -1)
+		return BackendPeer.ProbeResult.incompatible(info)
+	return BackendPeer.ProbeResult.ok(info, -1)
 
 
 func _on_directory_list_updated(
-		lobbies: Array[LobbyInfo],
+		lobbies: Array[LobbyDirectory.LobbyInfo],
 		id: StringName,
 ) -> void:
 	var prior: Array[JoinTarget] = []
@@ -678,7 +677,7 @@ func _on_directory_list_updated(
 			if t == null:
 				continue
 			fresh.append(t)
-			var info := ServerInfo.new()
+			var info := ServerDescriptor.Info.new()
 			info.players = lobby.players
 			info.max_players = lobby.max_players
 			info.metadata = lobby.metadata.duplicate()
@@ -769,16 +768,182 @@ func _target_summary(target: JoinTarget) -> String:
 
 func _ensure_internals() -> void:
 	if _probes == null:
-		_probes = ProbeManager.new()
+		_probes = _ProbeManager.new()
 	if _directories == null:
-		_directories = DirectoryRegistry.new()
-	_parent_internals()
+		_directories = _DirectoryRegistry.new()
 
 
-func _parent_internals() -> void:
-	if not is_inside_tree():
-		return
-	if _probes.get_parent() == null:
-		add_child(_probes)
-	if _directories.get_parent() == null:
-		add_child(_directories)
+
+## Caps concurrent probe sessions for one browser.
+##
+## [member max_concurrent] stays below
+## [constant AuthProtocol.Responder.MAX_ACTIVE_PROBES]. The browser receives
+## each [BackendPeer.ProbeResult] unchanged and decides how to render it.
+class _ProbeManager:
+	extends RefCounted
+
+	## Maximum number of probe sessions allowed at once.
+	@export_range(1, 32, 1) var max_concurrent: int = 6
+
+	## Default per-probe timeout in seconds.
+	@export_range(0.1, 5.0, 0.1, "suffix:s") var default_timeout: float = 2.0
+
+	var _active: Array[_ProbeSession] = []
+	var _queue: Array[_PendingQuery] = []
+
+
+	## Enqueues a probe for [param target].
+	func query(
+			target: JoinTarget,
+			on_done: Callable,
+			timeout: float = -1.0,
+	) -> void:
+		var pending := _PendingQuery.new()
+		pending.target = target
+		pending.on_done = on_done
+		pending.timeout = timeout if timeout > 0.0 else default_timeout
+		_queue.append(pending)
+		_pump()
+
+
+	## Cancels every in-flight session and clears the pending queue.
+	func cancel_all() -> void:
+		_queue.clear()
+		for session in _active:
+			session.cancel()
+
+
+	## Number of probes currently running.
+	func active_count() -> int:
+		return _active.size()
+
+
+	## Number of probes waiting for a slot.
+	func queued_count() -> int:
+		return _queue.size()
+
+
+	func _pump() -> void:
+		while _queue.size() > 0 and _active.size() < max_concurrent:
+			var pending: _PendingQuery = _queue.pop_front()
+			_start(pending)
+
+
+	func _start(pending: _PendingQuery) -> void:
+		var session := _ProbeSession.new(pending.target, pending.timeout)
+		_active.append(session)
+		_run_session(session, pending.on_done)
+
+
+	func _run_session(session: _ProbeSession, on_done: Callable) -> void:
+		var result: BackendPeer.ProbeResult = await session.run()
+		_active.erase(session)
+		if not session._cancelled and on_done.is_valid():
+			on_done.call(result)
+		_pump()
+
+
+	class _PendingQuery:
+		var target: JoinTarget
+		var on_done: Callable
+		var timeout: float
+
+
+## One probe in flight against a [JoinTarget].
+##
+## [method run] builds a fresh backend through
+## [method JoinTarget.make_backend_instance] and returns the
+## [BackendPeer.ProbeResult].
+class _ProbeSession:
+	extends RefCounted
+
+	## Emitted exactly once per [method run] call unless cancelled first.
+	signal completed(result: BackendPeer.ProbeResult)
+
+	var target: JoinTarget
+	var timeout: float
+
+	var _cancelled: bool = false
+	var _finished: bool = false
+
+
+	func _init(
+			p_target: JoinTarget,
+			p_timeout: float = 2.0,
+	) -> void:
+		target = p_target
+		timeout = p_timeout
+
+
+	## Runs the probe and emits [signal completed].
+	func run() -> BackendPeer.ProbeResult:
+		if target == null:
+			var bad := BackendPeer.ProbeResult.error(
+				"ConnectSession.ProbeSession: null target",
+			)
+			_emit(bad)
+			return bad
+
+		var backend := target.make_backend_instance()
+		if backend == null:
+			var bad := BackendPeer.ProbeResult.error(
+				"ConnectSession.ProbeSession: target has no backend",
+			)
+			_emit(bad)
+			return bad
+
+		var result: BackendPeer.ProbeResult = await backend.probe_server_info(
+			target.address,
+			timeout,
+		)
+		_emit(result)
+		return result
+
+
+	## Suppresses a late [signal completed] from [method run].
+	func cancel() -> void:
+		_cancelled = true
+
+
+	## Returns [code]true[/code] once [method run] has resolved.
+	func is_finished() -> bool:
+		return _finished
+
+
+	func _emit(result: BackendPeer.ProbeResult) -> void:
+		_finished = true
+		if _cancelled:
+			return
+		completed.emit(result)
+
+
+# Private mapping from directory ids to [LobbyDirectory] instances.
+class _DirectoryRegistry:
+	extends RefCounted
+
+	var _directories: Dictionary = { }
+
+
+	func register(id: StringName, directory: LobbyDirectory) -> void:
+		if directory == null:
+			return
+		_directories[id] = directory
+
+
+	func unregister(id: StringName) -> void:
+		_directories.erase(id)
+
+
+	func get_directory(id: StringName) -> LobbyDirectory:
+		return _directories.get(id, null)
+
+
+	func list_directories() -> Array[StringName]:
+		var out: Array[StringName] = []
+		for key in _directories.keys():
+			out.append(key)
+		return out
+
+
+	func has_directory(id: StringName) -> bool:
+		return _directories.has(id)

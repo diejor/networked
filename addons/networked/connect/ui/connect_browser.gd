@@ -1,4 +1,4 @@
-## A drop-in server browser UI -- server list, Add / Host / Refresh, and a
+## A drop-in server browser UI containing a server list, Add / Host / Refresh, and a
 ## join flow, ready to use.
 ##
 ## Drop this scene into your lobby, point it at your [MultiplayerTree], and
@@ -69,7 +69,7 @@ var spawner_options: Array[SceneNodePath] = []
 @export var hide_when_session_active: bool = true
 
 ## Path used to load and persist saved targets shown by this browser.
-@export var server_list_path: String = ServerList.DEFAULT_PATH
+@export var server_list_path: String = ConnectSession.DEFAULT_SERVER_LIST_PATH
 
 var _add_popup: AddPopup
 var _host_popup: HostPopup
@@ -244,7 +244,7 @@ func _rebuild_from_session() -> void:
 	if _connect == null:
 		_update_counter()
 		return
-	for target in _connect.get_targets():
+	for target in _connect.targets:
 		_add_row(target)
 	_update_counter()
 
@@ -279,7 +279,7 @@ func _on_target_removed(target: JoinTarget) -> void:
 	_update_counter()
 
 
-func _on_target_updated(target: JoinTarget, result: ServerInfoResult) -> void:
+func _on_target_updated(target: JoinTarget, result: BackendPeer.ProbeResult) -> void:
 	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.set_result(result)
@@ -320,7 +320,7 @@ func _update_details() -> void:
 
 	var t := _selected_row.target
 	var r := _selected_row.result
-	var is_saved := _connect.get_saved_targets().has(t)
+	var is_saved := _connect.saved_targets.has(t)
 	var unavailable := t.backend != null and not t.backend.is_available()
 
 	# Update the Header elements
@@ -384,7 +384,7 @@ func _on_row_context_requested(
 	_on_row_selected(row.target, row)
 	row.button_pressed = true
 
-	var is_saved := _connect.get_saved_targets().has(row.target)
+	var is_saved := _connect.saved_targets.has(row.target)
 	_row_menu.show_for_target(is_saved, screen_position)
 
 
@@ -443,7 +443,7 @@ func _open_join_for_selected() -> void:
 func _open_edit_for_selected() -> void:
 	if _selected_row == null:
 		return
-	var is_saved := _connect.get_saved_targets().has(
+	var is_saved := _connect.saved_targets.has(
 		_selected_row.target,
 	)
 	if not is_saved:
@@ -453,13 +453,13 @@ func _open_edit_for_selected() -> void:
 
 
 func _remove_selected() -> void:
-	if _selected_row == null or not _connect.get_saved_targets().has(_selected_row.target):
+	if _selected_row == null or not _connect.saved_targets.has(_selected_row.target):
 		return
 	_connect.remove_target(_selected_row.target, true)
 
 
 func _on_target_submitted(target: JoinTarget) -> void:
-	if not _connect.get_saved_targets().has(target):
+	if not _connect.saved_targets.has(target):
 		_connect.add_target(target, true)
 	else:
 		_connect.save_server_list(server_list_path)
@@ -505,8 +505,8 @@ func _on_session_left() -> void:
 		show()
 
 
-func _on_join_failed(target: JoinTarget, result: ConnectResult) -> void:
-	if result != null and result.status == ConnectResult.Status.ABORTED:
+func _on_join_failed(target: JoinTarget, result: BackendPeer.ConnectResult) -> void:
+	if result != null and result.status == BackendPeer.ConnectResult.Status.ABORTED:
 		_hide_connecting_overlay()
 		return
 	var msg := ConnectUiShared.format_connect_error(result)
@@ -549,7 +549,7 @@ func _join_with_preflight(
 		_show_banner("This transport is not available on this platform.")
 		return
 	var result := _connect.get_result(target)
-	if result != null and result.status == ServerInfoResult.Status.INCOMPATIBLE:
+	if result != null and result.status == BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
@@ -580,27 +580,27 @@ func _hide_banner() -> void:
 		_banner.visible = false
 
 
-func _status_text(result: ServerInfoResult) -> String:
+func _status_text(result: BackendPeer.ProbeResult) -> String:
 	if result == null:
 		return "..."
 	match result.status:
-		ServerInfoResult.Status.OK:
+		BackendPeer.ProbeResult.Status.OK:
 			return "OK"
-		ServerInfoResult.Status.BUSY:
+		BackendPeer.ProbeResult.Status.BUSY:
 			return "BUSY"
-		ServerInfoResult.Status.UNREACHABLE:
+		BackendPeer.ProbeResult.Status.UNREACHABLE:
 			return "UNREACHABLE"
-		ServerInfoResult.Status.TIMEOUT:
+		BackendPeer.ProbeResult.Status.TIMEOUT:
 			return "TIMEOUT"
-		ServerInfoResult.Status.UNSUPPORTED:
+		BackendPeer.ProbeResult.Status.UNSUPPORTED:
 			return "UNSUPPORTED"
-		ServerInfoResult.Status.INCOMPATIBLE:
+		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 			return "INCOMPATIBLE"
 		_:
 			return "ERROR"
 
 
-func _players_text(result: ServerInfoResult) -> String:
+func _players_text(result: BackendPeer.ProbeResult) -> String:
 	if result == null or result.info == null:
 		return "-"
 	return "%d/%d" % [result.info.players, result.info.max_players]

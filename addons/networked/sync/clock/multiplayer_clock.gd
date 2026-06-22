@@ -18,7 +18,7 @@
 @icon("res://addons/networked/assets/MultiplayerClock.svg")
 @tool
 class_name MultiplayerClock
-extends Node
+extends NetwService
 
 #region ── Signals ─────────────────────────────────────────────────────────────
 
@@ -264,14 +264,11 @@ var _drift_timer: float = 0.0
 
 #region ── Lifecycle ───────────────────────────────────────────────────────────
 
-func _enter_tree() -> void:
-	if Engine.is_editor_hint():
-		return
+func service_type() -> Script:
+	return MultiplayerClock
 
-	var mt := NetwServices.register(self, MultiplayerClock)
-	if not is_instance_valid(mt):
-		return
 
+func service_entered(mt: MultiplayerTree) -> void:
 	if not mt.session_entered.is_connected(_on_tree_configured):
 		mt.session_entered.connect(_on_tree_configured)
 
@@ -282,18 +279,7 @@ func _enter_tree() -> void:
 		_on_tree_configured.call_deferred()
 
 
-func _ready() -> void:
-	pass
-
-
-func _exit_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-
-	var mt := NetwServices.unregister(self, MultiplayerClock)
-	if not is_instance_valid(mt):
-		return
-
+func service_exiting(mt: MultiplayerTree) -> void:
 	if mt.session_entered.is_connected(_on_tree_configured):
 		mt.session_entered.disconnect(_on_tree_configured)
 

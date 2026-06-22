@@ -1,9 +1,9 @@
-## In-memory [NetwBackend] fake for backend contract tests.
+## In-memory [NetwDatabaseBackend] fake for backend contract tests.
 ##
 ## It stores records by table and id, merges upserts like the persistence
 ## backends, and records calls for tests that need spy assertions.
 class_name TestMemoryBackend
-extends NetwBackend
+extends NetwDatabaseBackend
 
 var init_calls: Array[Dictionary] = []
 var upsert_calls: Array[Dictionary] = []

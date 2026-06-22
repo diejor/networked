@@ -84,10 +84,12 @@ html_theme_options = {
     "collapse_navigation": False,
     "flyout_display": "attached",
     "prev_next_buttons_location": "bottom",
-    "logo_only": False,
+    "logo_only": True,
     "version_selector": True,
     "language_selector": False,
 }
+
+html_logo = "img/networked.svg"
 
 html_title = f"Networked {version} documentation"
 

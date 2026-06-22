@@ -7,21 +7,59 @@
 ##
 ## [br][br]
 ## A directory dropped under the [MultiplayerTree] is discovered automatically.
-## [method NetwServices.register] under its own concrete script is enough.
-## [ConnectSession] collects every [LobbyDirectory] through
-## [method MultiplayerTree.get_services], so there is no per directory wiring in
-## the browser. Implementations must:
-## [br]- Register via [code]NetwServices.register(self)[/code] on
-##   [code]_enter_tree[/code].
+## [LobbyDirectory] extends [NetwService], so a subclass registers itself under
+## its own concrete script with no boilerplate. [ConnectSession] collects every
+## [LobbyDirectory] through [method MultiplayerTree.get_services], so there is no
+## per directory wiring in the browser. Implementations must:
 ## [br]- Implement [method host_lobby] and [method join_lobby_peer] to return
 ##   a live, connected [MultiplayerPeer] (or [code]null[/code] on failure).
 @abstract
 class_name LobbyDirectory
-extends Node
+extends NetwService
+
+## Plain data describing a single discoverable lobby.
+##
+## [signal lobby_list_updated] emits batches of [LobbyDirectory.LobbyInfo]
+## values. UIs render one entry per [LobbyDirectory.LobbyInfo] without caring
+## about the underlying transport.
+class LobbyInfo:
+	extends Resource
+
+	## Transport-specific lobby identifier.
+	@export var id: int = 0
+
+	## Human-readable lobby name as advertised by the host.
+	@export var lobby_name: String = ""
+
+	## Current member count, including the host.
+	@export var players: int = 0
+
+	## Maximum member count the host configured.
+	@export var max_players: int = 0
+
+	## Free-form provider-specific metadata.
+	@export var metadata: Dictionary = { }
+
+
+	## Creates a [LobbyDirectory.LobbyInfo] from provider data.
+	static func make(
+			id: int,
+			lobby_name: String,
+			players: int,
+			max_players: int,
+			metadata: Dictionary = { },
+	) -> LobbyInfo:
+		var info := LobbyInfo.new()
+		info.id = id
+		info.lobby_name = lobby_name
+		info.players = players
+		info.max_players = max_players
+		info.metadata = metadata
+		return info
 
 ## Emitted after a browse request resolves. UIs should replace their list
 ## with [param lobbies] (clear-then-fill).
-signal lobby_list_updated(lobbies: Array[LobbyInfo])
+signal lobby_list_updated(lobbies: Array[LobbyDirectory.LobbyInfo])
 
 ## Emitted when an external invite is received (e.g. Steam overlay).
 signal invite_received(lobby_id: int, sender_id: int)
@@ -59,7 +97,7 @@ func get_local_member_name() -> String:
 ## Returns a configured [JoinTarget] pointing at the given [param lobby],
 ## stamped with the directory's own [BackendPeer] template.
 @abstract
-func make_join_target(lobby: LobbyInfo) -> JoinTarget
+func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget
 
 
 ## Creates a new lobby and builds a hosting [MultiplayerPeer].

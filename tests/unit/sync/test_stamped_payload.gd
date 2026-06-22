@@ -52,5 +52,5 @@ func test_apply_payload_writes_through_even_when_write_through_is_false() -> voi
 
 
 func test_apply_payload_ignores_unregistered_keys() -> void:
-	_sync.apply_payload({&"position": Vector2(3, 4), &"unknown": 99})
+	_sync.apply_payload({ &"position": Vector2(3, 4), &"unknown": 99 })
 	assert_vector(_root.position).is_equal(Vector2(3, 4))

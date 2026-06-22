@@ -1,7 +1,7 @@
 # Track BBCode tag depth, warn on illegal nesting, recognise unknown uppercase tags as engine classes.
 --- a/make_rst.py
 +++ b/make_rst.py
-@@ -1869,7 +1928,20 @@
+@@ -1869,7 +2056,20 @@
  
      pos = 0
      tag_depth = 0
@@ -22,7 +22,7 @@
          pos = text.find("[", pos)
          if pos == -1:
              break
-@@ -1886,7 +1958,10 @@
+@@ -1886,7 +2086,10 @@
          escape_post = False
  
          # Tag is a reference to a class.
@@ -34,7 +34,7 @@
              if tag_text == state.current_class:
                  # Don't create a link to the same class, format it as strong emphasis.
                  tag_text = f"**{tag_text}**"
-@@ -1908,6 +1983,7 @@
+@@ -1908,6 +2111,7 @@
                      if is_in_tagset(tag_state.name, RESERVED_CODEBLOCK_TAGS):
                          tag_text = ""
                          tag_depth -= 1
@@ -42,7 +42,7 @@
                          inside_code = False
                          ignore_code_warnings = False
                          # Strip newline if the tag was alone on one
-@@ -1917,6 +1993,7 @@
+@@ -1917,6 +2121,7 @@
                      elif is_in_tagset(tag_state.name, ["code"]):
                          tag_text = "``"
                          tag_depth -= 1
@@ -50,7 +50,7 @@
                          inside_code = False
                          ignore_code_warnings = False
                          escape_post = True
-@@ -1946,15 +2023,18 @@
+@@ -1946,15 +2151,18 @@
                      has_codeblocks_csharp = False
  
                      tag_depth -= 1
@@ -69,7 +69,7 @@
  
                  if tag_state.name == "gdscript":
                      if not inside_code_tabs:
-@@ -1994,6 +2074,7 @@
+@@ -1994,6 +2202,7 @@
              elif is_in_tagset(tag_state.name, ["code"]):
                  tag_text = "``"
                  tag_depth += 1

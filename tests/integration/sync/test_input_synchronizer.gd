@@ -52,11 +52,13 @@ func test_server_records_received_input_coherently() -> void:
 
 	var captures: Array[Dictionary] = []
 	(rig.server_sync as InputSynchronizer).on_input_received = (
-		func(tick: int, payload: Dictionary) -> void:
-			captures.append({
-				&"tick": tick,
-				&"motion": payload.get(&"motion", Vector2.ZERO),
-			})
+			func(tick: int, payload: Dictionary) -> void:
+				captures.append(
+					{
+						&"tick": tick,
+						&"motion": payload.get(&"motion", Vector2.ZERO),
+					},
+				)
 	)
 
 	rig.delay_client_to_server(4, 2, 6, 0.08)
@@ -83,3 +85,23 @@ func test_server_records_received_input_coherently() -> void:
 	assert_vector(
 		timeline.input_at(sample_tick).get(&"motion"),
 	).is_equal(_motion(sample_tick))
+
+
+func test_server_only_audience_limits_input_visibility() -> void:
+	var sync := InputSynchronizer.new()
+	add_child(sync)
+	auto_free(sync)
+
+	assert_bool(sync.public_visibility).is_false()
+	assert_bool(sync.get_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER)) \
+			.is_true()
+	assert_bool(sync.get_visibility_for(42)).is_false()
+
+
+func test_public_audience_keeps_default_input_visibility() -> void:
+	var sync := InputSynchronizer.new()
+	sync.audience = InputSynchronizer.Audience.PUBLIC
+	add_child(sync)
+	auto_free(sync)
+
+	assert_bool(sync.public_visibility).is_true()

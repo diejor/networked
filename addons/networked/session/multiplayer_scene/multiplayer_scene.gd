@@ -51,7 +51,7 @@ signal player_spawned(node: Node)
 ## Legacy alias for [signal despawned].
 signal player_despawned(node: Node)
 
-## Emitted when [NetwSceneReadiness] marks a player ready.
+## Emitted when [NetwScene.Readiness] marks a player ready.
 ##
 ## This is a manual readiness signal. Use [signal spawned] for scene entry.
 signal player_ready(rj: ResolvedJoin)
@@ -438,7 +438,7 @@ func _flush_gate_now() -> void:
 
 
 # Registers a readiness gate to receive peer updates.
-func _register_readiness_gate(readiness_gate: NetwSceneReadiness) -> void:
+func _register_readiness_gate(readiness_gate: NetwScene.Readiness) -> void:
 	_cleanup_dead_gates()
 	_readiness_gates.append(weakref(readiness_gate))
 
@@ -454,7 +454,7 @@ func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 # Notifies all registered gates that a player entered the scene.
 func _notify_gates_player_added(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwSceneReadiness
+		var readiness_gate := wr.get_ref() as NetwScene.Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._add_peer(peer_id)
 
@@ -462,7 +462,7 @@ func _notify_gates_player_added(peer_id: int) -> void:
 # Notifies all registered gates that a player left the scene.
 func _notify_gates_player_removed(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwSceneReadiness
+		var readiness_gate := wr.get_ref() as NetwScene.Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._remove_peer(peer_id)
 	_cleanup_dead_gates()
@@ -553,7 +553,7 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwSceneReadiness
+		var readiness_gate := wr.get_ref() as NetwScene.Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._receive_ready_changed(peer_id, is_ready)
 	_cleanup_dead_gates()

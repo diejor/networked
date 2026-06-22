@@ -64,7 +64,7 @@ func after_test() -> void:
 
 
 func test_scene_reports_current_players() -> void:
-	var players := server_ctx.scene.get_players()
+	var players := server_ctx.scene.players
 	assert_that(players.size()).is_equal(2)
 	assert_that(players.has(player0)).is_true()
 	assert_that(players.has(player1)).is_true()

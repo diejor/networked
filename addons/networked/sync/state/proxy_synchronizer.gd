@@ -23,6 +23,29 @@
 class_name ProxySynchronizer
 extends MultiplayerSynchronizer
 
+## Chainable handle returned by [method register_property] for code-driven codec
+## assignment.
+##
+## It only remembers the property it was made for, so [method quantize] routes
+## straight to [method ProxySynchronizer.set_property_codec].
+## [codeblock]
+## register_property(&"position", NodePath(".:position")).quantize(codec)
+## [/codeblock]
+class PropConfig extends RefCounted:
+	var _sync: ProxySynchronizer
+	var _vname: StringName
+
+	func _init(sync: ProxySynchronizer, vname: StringName) -> void:
+		_sync = sync
+		_vname = vname
+
+	## Assigns [param quantizer] as the codec for this property and returns
+	## [code]self[/code] for chaining.
+	func quantize(quantizer: NetwQuantize) -> PropConfig:
+		_sync.set_property_codec(_vname, quantizer)
+		return self
+
+
 # Deferred node-property registration. Resolved during finalize().
 class _NodePropEntry extends RefCounted:
 	var vname: StringName
@@ -43,12 +66,23 @@ var _prop_options: Dictionary = { }
 ## [method finalize] (root must be stable first).
 var _deferred_node_props: Array = []
 
+# Cached (object, remaining-path) accessor per virtual name. Reads and writes go
+# through a single resolved object instead of re-walking the node path every call,
+# the dominant cost when snapshots are captured every tick. Rebuilt lazily when a
+# cached object is freed (e.g. a teleport that reinstantiates the target).
+var _accessor_obj: Dictionary = { }
+var _accessor_sub: Dictionary = { }
+
 
 ## Registers [param virtual_name] as a replicated property backed by
 ## [param real_path] relative to the entity root.
 ##
 ## Must be called before [method finalize]. Idempotent on duplicate
-## [param virtual_name].
+## [param virtual_name]. Returns a [ProxySynchronizer.PropConfig] handle so a
+## codec can be chained on with [method PropConfig.quantize].
+## [codeblock]
+## register_property(&"position", NodePath(".:position")).quantize(codec)
+## [/codeblock]
 func register_property(
 		virtual_name: StringName,
 		real_path: NodePath,
@@ -56,15 +90,24 @@ func register_property(
 		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
-) -> void:
+) -> PropConfig:
 	if _properties.has(virtual_name):
-		return
+		return PropConfig.new(self, virtual_name)
 	_properties[virtual_name] = real_path
 	_prop_options[virtual_name] = {
 		"mode": mode,
 		"spawn": spawn,
 		"watch": _filter_watch(virtual_name, watch),
 	}
+	return PropConfig.new(self, virtual_name)
+
+
+## Assigns [param quantizer] as the wire codec for payload [param vname].
+##
+## Base is a no-op. [PackedSynchronizer] overrides it to record the assignment
+## in [member PackedSynchronizer.property_codecs].
+func set_property_codec(_vname: StringName, _quantizer: NetwQuantize) -> void:
+	pass
 
 
 ## Defers registration of [param property] on [param source] as
@@ -257,19 +300,47 @@ func _get_property_list() -> Array[Dictionary]:
 ##
 ## Default resolves [param path] against the entity root
 ## ([member MultiplayerSynchronizer.root_path]).
-func _read_property(_name: StringName, path: NodePath) -> Variant:
-	var root := get_node_or_null(root_path)
-	return SynchronizersCache.resolve_value(root, path) if root else null
+func _read_property(name: StringName, path: NodePath) -> Variant:
+	if Engine.is_editor_hint():
+		var root := get_node_or_null(root_path)
+		return SynchronizersCache.resolve_value(root, path) if root else null
+	var obj := _resolve_accessor(name, path)
+	return obj.get_indexed(_accessor_sub[name]) if obj else null
 
 
 ## Override to redirect writes.
 ##
 ## Default resolves [param path] against the entity root
 ## ([member MultiplayerSynchronizer.root_path]).
-func _write_property(_name: StringName, path: NodePath, value: Variant) -> void:
+func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
+	if Engine.is_editor_hint():
+		var root := get_node_or_null(root_path)
+		if root:
+			SynchronizersCache.assign_value(root, path, value)
+		return
+	var obj := _resolve_accessor(name, path)
+	if obj:
+		obj.set_indexed(_accessor_sub[name], value)
+
+
+# Returns the cached real object backing [param name], resolving and caching it on
+# a miss or after the cached object is freed. Returns null when the root or target
+# cannot be resolved, in which case the caller skips the read or write.
+func _resolve_accessor(name: StringName, path: NodePath) -> Object:
+	var obj: Object = _accessor_obj.get(name)
+	if obj and is_instance_valid(obj):
+		return obj
 	var root := get_node_or_null(root_path)
-	if root:
-		SynchronizersCache.assign_value(root, path, value)
+	if not root:
+		return null
+	var res := root.get_node_and_resource(path)
+	obj = res[0]
+	var sub: NodePath = res[2]
+	if not obj or sub.is_empty():
+		return null
+	_accessor_obj[name] = obj
+	_accessor_sub[name] = sub
+	return obj
 
 
 func _import_from_config(config: SceneReplicationConfig, root: Node) -> void:

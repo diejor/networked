@@ -25,7 +25,7 @@ signal player_entered(player: Node)
 ## Emitted when a player's node is despawned from this scene.
 signal player_left(player: Node)
 ## Emitted when a player toggles their ready state to [code]true[/code] via
-## [NetwSceneReadiness].[br][br]This is a manual ready-state signal, not an
+## [NetwScene.Readiness].[br][br]This is a manual ready-state signal, not an
 ## automatic join event. See [signal player_entered] for spawn detection.
 signal player_ready(rj: ResolvedJoin)
 
@@ -63,7 +63,7 @@ signal countdown_cancelled()
 
 var _scene_ref: WeakRef
 # Held strongly while the countdown is running so the timer stays alive.
-var _active_countdown: NetwSceneCountdown
+var _active_countdown: Countdown
 var _tree: NetwTree
 
 
@@ -88,21 +88,23 @@ func unwrap() -> MultiplayerScene:
 	return _scene_ref.get_ref() as MultiplayerScene
 
 
-## Returns the scene level root, or [code]null[/code].
-func get_level() -> Node:
-	var scene := unwrap()
-	if not is_instance_valid(scene):
-		return null
-	return scene.level
+## The scene level root, or [code]null[/code].
+var level: Node:
+	get:
+		var scene := unwrap()
+		if not is_instance_valid(scene):
+			return null
+		return scene.level
 
 
-## Returns the level scene root name for this scene.
+## The level scene root name for this scene.
 ## Returns [code]""[/code] if the scene or its level is not valid.
-func get_scene_name() -> StringName:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene) or not is_instance_valid(scene.level):
-		return &""
-	return StringName(scene.level.name)
+var scene_name: StringName:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
+			return &""
+		return StringName(scene.level.name)
 
 
 ## Returns the [NetwTree] that owns this scene, or [code]null[/code].
@@ -119,52 +121,56 @@ func tree() -> NetwTree:
 	return _tree
 
 
-## Returns the peer IDs currently connected to this scene.
+## The peer IDs currently connected to this scene.
 ##
 ## Use this to enumerate peers when sending custom broadcast RPCs:
 ## [codeblock]
-## for peer_id in ctx.scene.get_peers():
+## for peer_id in ctx.scene.peers:
 ##     _rpc_notify.rpc_id(peer_id, message)
 ## [/codeblock]
-func get_peers() -> Array[int]:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return []
-	var result: Array[int] = []
-	result.assign(scene.connected_peers.keys())
-	return result
+var peers: Array[int]:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return []
+		var result: Array[int] = []
+		result.assign(scene.connected_peers.keys())
+		return result
 
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
 
 
-## Returns all player nodes currently in this scene.
-func get_players() -> Array[Node]:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return []
-	return scene.get_players()
+## All player nodes currently in this scene.
+var players: Array[Node]:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return []
+		return scene.get_players()
 
 
-## Returns the number of players currently in this scene.
-func get_player_count() -> int:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return 0
-	return scene.get_players().size()
+## The number of players currently in this scene.
+var player_count: int:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return 0
+		return scene.get_players().size()
 
 
-## Returns the player node owned by the local peer, or [code]null[/code].
-func get_local_player() -> Node:
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
+## The player node owned by the local peer, or [code]null[/code].
+var local_player: Node:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return null
+		var local_id := scene.multiplayer.get_unique_id()
+		for player: Node in scene.get_players():
+			if _get_peer_id(player) == local_id:
+				return player
 		return null
-	var local_id := scene.multiplayer.get_unique_id()
-	for player: Node in scene.get_players():
-		if _get_peer_id(player) == local_id:
-			return player
-	return null
 
 
 ## Returns the player node owned by [param peer_id], or [code]null[/code].
@@ -181,7 +187,7 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 ## Suspends until at least [param n] players are present.
 ## Safe to [operator await].
 func wait_for_players(n: int) -> void:
-	while get_player_count() < n:
+	while player_count < n:
 		await player_entered
 
 # ---------------------------------------------------------------------------
@@ -279,7 +285,7 @@ func resume() -> void:
 
 ## Starts a server-driven countdown of [param seconds] seconds.
 ##
-## Returns a [NetwSceneCountdown] you can [code]await[/code]. Clients receive
+## Returns a [NetwScene.Countdown] you can [code]await[/code]. Clients receive
 ## [signal countdown_started] followed by [signal countdown_tick] each second,
 ## and finally [signal countdown_finished] (or [signal countdown_cancelled] if
 ## [method cancel_countdown] is called first). Any previously running
@@ -289,7 +295,7 @@ func resume() -> void:
 func start_countdown(
 		seconds: int,
 		tick_interval: float = 1.0,
-) -> NetwSceneCountdown:
+) -> Countdown:
 	assert(seconds > 0, "NetwScene.start_countdown(): seconds must be > 0.")
 	assert(
 		tick_interval > 0.0,
@@ -305,7 +311,7 @@ func start_countdown(
 
 	cancel_countdown()
 
-	var cd := NetwSceneCountdown.new(scene, seconds, tick_interval)
+	var cd := Countdown.new(scene, seconds, tick_interval)
 	_active_countdown = cd
 
 	cd.tick.connect(_on_countdown_tick)
@@ -344,16 +350,16 @@ func cancel_countdown() -> void:
 # ---------------------------------------------------------------------------
 
 
-## Creates and returns a new [NetwSceneReadiness] gate for this scene.
+## Creates and returns a new [NetwScene.Readiness] gate for this scene.
 ##
 ## The gate is pre-populated with all currently connected players (all marked
 ## not-ready). Players that join or leave after creation are tracked
 ## automatically. Multiple independent gates can be active simultaneously.
-func create_readiness_gate() -> NetwSceneReadiness:
+func create_readiness_gate() -> Readiness:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return null
-	var gate := NetwSceneReadiness.new(scene)
+	var gate := Readiness.new(scene)
 	scene._register_readiness_gate(gate)
 	for player: Node in scene.get_players():
 		gate._add_peer(_get_peer_id(player))
@@ -424,3 +430,193 @@ func _get_peer_id(node: Node) -> int:
 	if entity and entity.peer_id != 0:
 		return entity.peer_id
 	return NetwEntity.parse_peer(node.name)
+
+
+## Server-driven countdown that ticks once per second.
+##
+## Obtain via [method NetwScene.start_countdown] - do not construct directly.
+## Clients do not receive a return value; they listen to
+## [signal NetwScene.countdown_started] and the subsequent
+## [signal NetwScene.countdown_tick] / [signal NetwScene.countdown_finished]
+## signals, which are broadcast automatically.
+## [codeblock]
+## # Server:
+## var cd := ctx.scene.start_countdown(10)
+## await cd.finished
+## start_match()
+##
+## # Client (connect before the server starts the countdown):
+## ctx.scene.countdown_started.connect(func(n): $Timer.text = str(n))
+## ctx.scene.countdown_tick.connect(func(n): $Timer.text = str(n))
+## ctx.scene.countdown_finished.connect(start_match)
+## [/codeblock]
+class Countdown:
+	extends RefCounted
+
+	## Emitted each second with the remaining seconds (including 0 at the very end).
+	signal tick(seconds_left: int)
+	## Emitted when the countdown reaches zero.
+	signal finished()
+	## Emitted when [method cancel] is called before the countdown reaches zero.
+	signal cancelled()
+
+	var _scene_ref: WeakRef
+	var _seconds_left: int
+	var _tick_interval: float
+	var _running: bool = false
+
+
+	func _init(
+			scene: MultiplayerScene,
+			seconds: int,
+			tick_interval: float = 1.0,
+	) -> void:
+		_scene_ref = weakref(scene)
+		_seconds_left = seconds
+		_tick_interval = tick_interval
+
+
+	## Returns [code]true[/code] if the countdown is actively ticking.
+	func is_running() -> bool:
+		return _running
+
+
+	## The number of seconds remaining.
+	var seconds_left: int:
+		get:
+			return _seconds_left
+
+
+	## Cancels the countdown and emits [signal cancelled].
+	## Does nothing if the countdown is not running.
+	func cancel() -> void:
+		if not _running:
+			return
+		_running = false
+		cancelled.emit()
+
+
+	## Starts ticking. Called internally by [method NetwScene.start_countdown].
+	func _start() -> void:
+		_running = true
+		_schedule_tick()
+
+
+	func _schedule_tick() -> void:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene) or not scene.is_inside_tree():
+			_running = false
+			return
+		scene.get_tree().create_timer(_tick_interval).timeout.connect(
+			_on_tick,
+			CONNECT_ONE_SHOT,
+		)
+
+
+	func _on_tick() -> void:
+		if not _running:
+			return
+		_seconds_left -= 1
+		tick.emit(_seconds_left)
+		if _seconds_left <= 0:
+			_running = false
+			finished.emit()
+		else:
+			_schedule_tick()
+
+
+## Per-scene readiness gate tracks which players have confirmed ready.
+##
+## Obtain via [method NetwScene.create_readiness_gate].
+## Clients call [method set_ready]. The server broadcasts the change to all peers.
+## [codeblock]
+## # Game scene screen (runs on all peers):
+## var gate := ctx.scene.create_readiness_gate()
+## gate.player_ready_changed.connect(_refresh_ready_ui)
+## gate.all_ready.connect(_on_everyone_ready)
+##
+## # Player clicks "Ready":
+## gate.set_ready(true)
+## [/codeblock]
+class Readiness:
+	extends RefCounted
+
+	## Emitted on all peers when a player's readiness state changes.
+	signal player_ready_changed(peer_id: int, is_ready: bool)
+	## Emitted when every tracked player is ready.
+	##
+	## This also emits when a not-ready player leaves, if the remaining
+	## players are all ready.
+	signal all_ready()
+
+	var _scene_ref: WeakRef
+	## Peer ID -> ready state. Populated as players enter/leave the scene.
+	var _readiness: Dictionary[int, bool] = { }
+
+
+	func _init(scene: MultiplayerScene) -> void:
+		_scene_ref = weakref(scene)
+
+
+	## Returns [code]true[/code] while the underlying [Scene] is still alive.
+	func is_valid() -> bool:
+		return is_instance_valid(_scene_ref.get_ref())
+
+
+	## Returns [code]true[/code] if [param peer_id] has confirmed ready.
+	func is_peer_ready(peer_id: int) -> bool:
+		return _readiness.get(peer_id, false)
+
+
+	## Returns all peer IDs that have confirmed ready.
+	func get_ready_peers() -> Array[int]:
+		var result: Array[int] = []
+		for id: int in _readiness:
+			if _readiness[id]:
+				result.append(id)
+		return result
+
+
+	## Returns [code]true[/code] when every tracked player is ready and there is at
+	## least one player.
+	func are_all_ready() -> bool:
+		if _readiness.is_empty():
+			return false
+		for v: bool in _readiness.values():
+			if not v:
+				return false
+		return true
+
+
+	## Marks the local player as ready (or not ready).
+	##
+	## On a client this sends an RPC to the server. On the server/host it applies
+	## the change directly. The update is broadcast to all peers automatically.
+	func set_ready(ready: bool = true) -> void:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return
+		if scene.multiplayer.is_server():
+			scene._handle_set_ready(scene.multiplayer.get_unique_id(), ready)
+		else:
+			scene._rpc_request_set_ready.rpc_id(1, ready)
+
+
+	# Called internally by [Scene] when the server broadcasts a readiness update.
+	func _receive_ready_changed(peer_id: int, is_ready: bool) -> void:
+		_readiness[peer_id] = is_ready
+		player_ready_changed.emit(peer_id, is_ready)
+		if are_all_ready():
+			all_ready.emit()
+
+
+	# Called internally when a player enters the scene (starts as not-ready).
+	func _add_peer(peer_id: int) -> void:
+		if peer_id not in _readiness:
+			_readiness[peer_id] = false
+
+
+	# Called internally when a player leaves the scene (removes their entry).
+	func _remove_peer(peer_id: int) -> void:
+		if _readiness.erase(peer_id) and are_all_ready():
+			all_ready.emit()

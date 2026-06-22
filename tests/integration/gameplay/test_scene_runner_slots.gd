@@ -121,7 +121,7 @@ func test_scene_runner_reports_harness_owned_time_footguns() -> void:
 		func(): return runner.simulate_frames(1),
 	)
 
-	assert_that(time_factor_error).contains("use NetwGameHarness.set_time_factor")
+	assert_that(time_factor_error).contains("time scaling is unsupported")
 	assert_that(simulate_frames_error).contains("use NetwGameHarness.sync_ticks")
 
 

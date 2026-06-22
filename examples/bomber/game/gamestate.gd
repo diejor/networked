@@ -1,5 +1,5 @@
 class_name BomberGamestate
-extends Node
+extends NetwService
 ## Manages the bomber game state as a session service.
 
 const DEFAULT_PORT = 10567
@@ -21,18 +21,10 @@ var world: MultiplayerScene:
 	get:
 		if not ctx or not ctx.services:
 			return null
-		var sm := ctx.services.get_scene_manager()
+		var sm := ctx.services.scene_manager
 		if not sm:
 			return null
 		return sm.active_scenes.get(&"World") as MultiplayerScene
-
-
-func _enter_tree() -> void:
-	NetwServices.register(self)
-
-
-func _exit_tree() -> void:
-	NetwServices.unregister(self)
 
 
 func _ready() -> void:
@@ -45,12 +37,10 @@ func _on_player_joined(rj: ResolvedJoin) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	if is_instance_valid(world):
-		if multiplayer.is_server():
-			game_error.emit("Player " + players[id] + " disconnected")
-			end_game()
-	else:
-		unregister_player(id)
+	# A client leaving never ends the match. The framework despawns its player
+	# entity and the survivors play on. Only the host leaving ends the session,
+	# which reaches clients as server_disconnected (see _on_server_disconnected).
+	unregister_player(id)
 
 
 func _on_connected_ok() -> void:
@@ -72,7 +62,7 @@ func join_game(ip: String, _player_name: String) -> void:
 	jp.username = _player_name
 
 	var target := JoinTarget.new()
-	target.backend = ctx.tree.get_backend()
+	target.backend = ctx.tree.backend
 	target.address = ip
 	ctx.tree.join(target, jp)
 
@@ -105,7 +95,7 @@ func get_player_list() -> Array:
 ## through each player's [MultiplayerEntity] as bomber's spawner fires.
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	var sm := ctx.services.get_scene_manager()
+	var sm := ctx.services.scene_manager
 	sm.activate_scene(&"World")
 	_rpc_match_started.rpc()
 
@@ -117,7 +107,11 @@ func _rpc_match_started() -> void:
 
 func end_game() -> void:
 	if is_instance_valid(world):
-		world.queue_free()
+		var sm := ctx.services.scene_manager
+		if sm:
+			sm.retire_scene(&"World")
+		else:
+			world.queue_free()
 
 	game_ended.emit()
 	players.clear()

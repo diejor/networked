@@ -3,7 +3,7 @@
 ## Add as a child of [MultiplayerTree]. Owns the [SteamWrapper], drives Steam
 ## callbacks each frame, and translates Steam signals into directory signals.
 ## [br][br]
-## Only one instance may exist per process; duplicates queue themselves for
+## Only one instance may exist per process. Duplicates queue themselves for
 ## deletion. [member browser_filter_uid] tags hosted lobbies so the browser
 ## only returns lobbies created with the same game id.
 class_name SteamLobbyDirectory
@@ -151,7 +151,6 @@ func _exit_tree() -> void:
 		_lobby_id = 0
 
 	NetwServices.unregister(self)
-	NetwServices.unregister(self, LobbyDirectory)
 
 
 func _process(_dt: float) -> void:
@@ -192,7 +191,7 @@ func get_local_member_name() -> String:
 
 func list_lobbies() -> void:
 	if not _guard_ready("list_lobbies"):
-		lobby_list_updated.emit([] as Array[LobbyInfo])
+		lobby_list_updated.emit([] as Array[LobbyDirectory.LobbyInfo])
 		return
 	_pending_list = true
 	Netw.dbg.debug(
@@ -221,7 +220,7 @@ func leave_lobby() -> void:
 	_peer = null
 
 
-func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	var target := JoinTarget.new()
 	target.display_name = lobby.lobby_name
 	target.address = str(lobby.id)
@@ -455,7 +454,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 		return
 	_pending_list = false
 
-	var out: Array[LobbyInfo] = []
+	var out: Array[LobbyDirectory.LobbyInfo] = []
 	for raw_id in lobbies:
 		var id := int(raw_id)
 		if reject_own_lobbies and _is_own_lobby(id):
@@ -473,7 +472,7 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				and uid != browser_filter_uid
 		):
 			continue
-		var info := LobbyInfo.make(
+		var info := LobbyDirectory.LobbyInfo.make(
 			id,
 			_wrapper.get_lobby_data(id, "name"),
 			_wrapper.get_num_lobby_members(id),

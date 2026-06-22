@@ -83,6 +83,19 @@ func _register_settings() -> void:
 		},
 	)
 
+	var perf_monitors_setting := "debug/networked/performance_monitors"
+	if not ProjectSettings.has_setting(perf_monitors_setting):
+		ProjectSettings.set_setting(perf_monitors_setting, true)
+
+	ProjectSettings.set_initial_value(perf_monitors_setting, true)
+	ProjectSettings.add_property_info(
+		{
+			"name": perf_monitors_setting,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+		},
+	)
+
 	var turn_credentials_setting := "networked/webrtc/turn_credentials_url"
 	if not ProjectSettings.has_setting(turn_credentials_setting):
 		ProjectSettings.set_setting(turn_credentials_setting, "")

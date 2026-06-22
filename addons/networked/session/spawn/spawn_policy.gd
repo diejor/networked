@@ -26,7 +26,7 @@ extends Resource
 ##
 ## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 ##     var point: StringName = rj.spawn.get("point", &"")
-##     var mgr := ctx.services.get_scene_manager()
+##     var mgr := ctx.services.scene_manager
 ##     var scene := await mgr.activate_scene(&"Arena")
 ##     # ...add the player to scene at point...
 ##     return scene
@@ -41,7 +41,7 @@ extends Resource
 ## [codeblock]
 ## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 ##     var point: StringName = rj.spawn.get("point", &"")
-##     var mgr := ctx.services.get_scene_manager()
+##     var mgr := ctx.services.scene_manager
 ##     var scene := await mgr.activate_scene(&"Arena")
 ##     # ...add the player to scene at point...
 ##     return scene

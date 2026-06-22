@@ -42,7 +42,7 @@ func refresh() -> void:
 		return
 	var mp := multiplayer
 	var local_id: int = mp.get_unique_id() if mp.multiplayer_peer else 0
-	var joined_players := _ctx.tree.get_joined_players()
+	var joined_players := _ctx.tree.joined_players
 	joined_players.sort_custom(
 		func(a: ResolvedJoin, b: ResolvedJoin) -> bool:
 			return a.peer_id < b.peer_id

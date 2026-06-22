@@ -5,7 +5,7 @@ extends MultiplayerSynchronizer
 ## [member replication_config] bundles properties into the spawn packet
 ## so initial state arrives with the entity. Sibling components contribute
 ## paths through [method NetwEntity.contribute_spawn_property] from their
-## own [constant Node.NOTIFICATION_PARENTED]; the inspector's Replication
+## own [constant Node.NOTIFICATION_PARENTED]. The inspector's Replication
 ## panel can also pre-populate the list (its flags are coerced to
 ## spawn-only at runtime).
 ##
@@ -155,6 +155,8 @@ var _pending_entity_id: StringName = &""
 var _pending_peer_id := 0
 var _pending_controller := 0
 var _pending_controller_binding_set := false
+var _action_spawn_hidden := false
+var _action_spawn_original_visible := true
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -214,6 +216,14 @@ var controller_binding_set := false:
 	set(value):
 		_pending_controller_binding_set = value
 
+## Logical tick that produced this spawned action result.
+##
+## [code]-1[/code] means the entity did not come from [NetwAction].
+var action_spawn_tick: int = -1
+
+## Peer that requested the [NetwAction] result, or [code]0[/code].
+var action_requester: int = 0
+
 
 func _get_entity_record() -> NetwEntity:
 	if not is_instance_valid(owner):
@@ -226,8 +236,8 @@ func _get_entity_record() -> NetwEntity:
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 ## [code]true[/code] when [member entity_id] is empty or authority
-## is unresolved. Templates are editor-placed factory scenes;
-## they skip the spawning lifecycle. Read-only.
+## is unresolved. Templates are editor-placed factory scenes.
+## They skip the spawning lifecycle. Read-only.
 var is_template: bool:
 	get:
 		return entity_id.is_empty() or not _has_authority_binding()
@@ -299,6 +309,8 @@ func _notification(what: int) -> void:
 	_ensure_replication_config()
 	entity.contribute_spawn_property(self, &"controller")
 	entity.contribute_spawn_property(self, &"controller_binding_set")
+	entity.contribute_spawn_property(self, &"action_spawn_tick")
+	entity.contribute_spawn_property(self, &"action_requester")
 	_hydrate_identity_once(entity)
 	_hydrate_controller_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
@@ -335,6 +347,9 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	var clock := MultiplayerClock.for_node(self)
+	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.disconnect(_on_action_reveal_tick)
 	if _is_local_represented_peer():
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.local_player == owner:
@@ -362,6 +377,7 @@ func _on_owner_tree_entered() -> void:
 		_hydrate_controller_once(entity)
 	_sanitize_replication_config()
 	_apply_control()
+	_apply_action_spawn_visibility()
 	if is_template:
 		# Template-state setup (process disable, sync visibility) needs
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
@@ -421,6 +437,73 @@ func _apply_control() -> void:
 		var entity := _get_entity_record()
 		if entity:
 			entity.control_changed.emit(previous_controller, peer)
+
+
+# Hides remote action results until the local display playhead reaches the
+# action tick. The requester keeps its immediate predicted presentation.
+func _apply_action_spawn_visibility() -> void:
+	if action_spawn_tick < 0:
+		return
+	if _is_local_action_requester():
+		return
+	var clock := MultiplayerClock.for_node(self)
+	if not clock:
+		return
+	if _action_display_reached(clock):
+		return
+	if not _set_owner_visible(false):
+		return
+	_action_spawn_hidden = true
+	if not clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.connect(_on_action_reveal_tick)
+
+
+func _on_action_reveal_tick(_delta: float, tick: int) -> void:
+	var clock := MultiplayerClock.for_node(self)
+	if not clock:
+		_reveal_action_spawn()
+		return
+	var display_tick := maxi(0, tick - clock.display_offset)
+	if display_tick >= action_spawn_tick:
+		_reveal_action_spawn()
+
+
+func _reveal_action_spawn() -> void:
+	var clock := MultiplayerClock.for_node(self)
+	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.disconnect(_on_action_reveal_tick)
+	if not _action_spawn_hidden:
+		return
+	_set_owner_visible(_action_spawn_original_visible)
+	_action_spawn_hidden = false
+
+
+func _action_display_reached(clock: MultiplayerClock) -> bool:
+	return clock.display_tick >= action_spawn_tick
+
+
+func _is_local_action_requester() -> bool:
+	if action_requester == 0:
+		return false
+	if not multiplayer or multiplayer.multiplayer_peer == null:
+		return false
+	return action_requester == multiplayer.get_unique_id()
+
+
+func _set_owner_visible(value: bool) -> bool:
+	if owner is CanvasItem:
+		var item := owner as CanvasItem
+		if not _action_spawn_hidden:
+			_action_spawn_original_visible = item.visible
+		item.visible = value
+		return true
+	if owner is Node3D:
+		var spatial := owner as Node3D
+		if not _action_spawn_hidden:
+			_action_spawn_original_visible = spatial.visible
+		spatial.visible = value
+		return true
+	return false
 
 
 func _effective_controller() -> int:
@@ -492,7 +575,7 @@ func _apply_template_state() -> void:
 ## (replication mode [constant SceneReplicationConfig.REPLICATION_MODE_NEVER],
 ## spawn flag set, sync/watch off).
 ##
-## Intended for use during spawn-property contributions. Idempotent --
+## Intended for use during spawn-property contributions. This is idempotent:
 ## adding the same path twice is a no-op.
 func add_spawn_property(prop: NodePath) -> void:
 	if not replication_config:
@@ -774,7 +857,97 @@ func despawn(opts: DespawnOpts = null) -> void:
 		owner.set_multiplayer_authority(
 			MultiplayerPeer.TARGET_PEER_SERVER,
 		)
+	if opts.linger:
+		_linger_then_free(opts)
+		return
 	if opts.defer_free:
 		owner.queue_free.call_deferred()
 	else:
 		owner.queue_free()
+
+
+# Keeps a despawned entity rewindable for opts.linger_seconds, then frees it.
+# The node deactivates immediately through the same moves a template uses, so it
+# stops processing, replicating, and being recorded. Its NetwTimeline freezes at
+# the despawn boundary, so a late server rewind still finds where it was, and
+# freeing later runs the StateSynchronizer's unregister so the timeline expires.
+func _linger_then_free(opts: DespawnOpts) -> void:
+	_apply_template_state()
+	var tree := owner.get_tree()
+	if not tree:
+		owner.queue_free()
+		return
+	await tree.create_timer(opts.linger_seconds).timeout
+	if is_instance_valid(owner):
+		owner.queue_free()
+
+
+## Options bag for [method MultiplayerEntity.despawn].
+##
+## Carries the knobs that control teardown behavior. Built as a
+## [RefCounted] so future options (e.g., delayed-free for death
+## animations) can be added without breaking call sites.
+class DespawnOpts:
+	extends RefCounted
+
+	## Recorded on the despawn span and forwarded to the
+	## [signal MultiplayerEntity.despawning] signal so user code can branch
+	## on the cause. Common values: [code]&"peer_disconnected"[/code],
+	## [code]&"killed"[/code], [code]&"collected"[/code],
+	## [code]&"timeout"[/code].
+	var reason: StringName
+
+	## When [code]true[/code] (default), [SaveComponent.flush] is called
+	## on the despawning node before authority revert and queue_free. A
+	## non-OK return is logged at error level and the despawn proceeds -
+	## from the caller's perspective despawn is infallible.
+	var flush_save: bool = true
+
+	## When [code]true[/code] (default), the [method Node.queue_free] call
+	## is deferred. This guarantees the engine's next process step sees
+	## the authority change before the node leaves the tree, which fixes
+	## the race where a [MultiplayerSynchronizer] tries to push state
+	## from a freed authority peer.
+	var defer_free: bool = true
+
+	## When [code]true[/code], the entity deactivates now but is freed only after
+	## [member linger_seconds], so a late shooter can still validate against where it
+	## was. Its [NetwTimeline] freezes at the despawn boundary and expires when the
+	## node frees. Default [code]false[/code] keeps the cheap rule: you cannot be shot
+	## after the server saw you die.
+	var linger: bool = false
+
+	## Seconds a lingering entity stays rewindable before it frees. Sized to the server
+	## rewind retention window, roughly one second of ticks. Ignored unless
+	## [member linger] is [code]true[/code].
+	var linger_seconds: float = 1.0
+
+
+	func _init(p_reason: StringName = &"") -> void:
+		reason = p_reason
+
+
+## Server decision object for a controller request.
+##
+## [MultiplayerEntity] emits [signal MultiplayerEntity.control_requested]
+## with one [MultiplayerEntity.ControlRequest] per request. Gameplay code may inspect
+## [member requester] and call [method deny] before the default grant path
+## runs.
+## [codeblock]
+## func _on_control_requested(peer_id: int, request: MultiplayerEntity.ControlRequest) -> void:
+##     if not can_carry(peer_id):
+##         request.deny()
+## [/codeblock]
+class ControlRequest:
+	extends RefCounted
+
+	## Peer id reported by [method MultiplayerAPI.get_remote_sender_id].
+	var requester: int = 0
+
+	## Whether the request should be rejected.
+	var denied := false
+
+
+	## Rejects this request.
+	func deny() -> void:
+		denied = true

@@ -6,7 +6,7 @@
 ## [br][br]
 ## State is isolated to this instance to support multi-window Embedded Server.
 @tool
-class_name NetDebugTreeContext
+class_name DebugMultiplayerTreeContext
 extends Node
 
 ## Emitted when the tree has finished initial debug wiring.
@@ -242,7 +242,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_disconnect_all()
-	NetwServices.unregister(self, NetDebugTreeContext)
+	NetwServices.unregister(self, DebugMultiplayerTreeContext)
 	for scene: MultiplayerScene in _hooked_scenes.keys():
 		_unhook_synchronizer(scene)
 	_hooked_scenes.clear()
@@ -297,7 +297,7 @@ func _on_configured() -> void:
 	if not mt or not reporter or _scene_wired:
 		return
 
-	NetwServices.register(self, NetDebugTreeContext)
+	NetwServices.register(self, DebugMultiplayerTreeContext)
 	_scene_wired = true
 
 	var clock: MultiplayerClock = mt.get_service(MultiplayerClock)

@@ -39,6 +39,7 @@ var _extra_sessions: Array[LocalLoopbackSession] = []
 var _clock_enabled: bool = false
 var _clock_tickrate: int = 30
 var _clock_display_offset: int = 3
+var _lag_comp_enabled: bool = false
 var _torn_down := false
 
 #region Lifecycle
@@ -231,6 +232,18 @@ func add_clock(
 				"client clock synchronization",
 			)
 	return server_clock
+
+
+## Mounts a [LagCompensation] node on [method server] and every client.
+##
+## The node is no longer auto-created, so a rewind or prediction test must mount it
+## explicitly. Clients created after this call receive one before joining.
+func add_lag_compensation() -> LagCompensation:
+	_lag_comp_enabled = true
+	var server_node := _ensure_lag_compensation(_server)
+	for client in _clients:
+		_ensure_lag_compensation(client)
+	return server_node
 
 
 ## Holds inbound packets to [param client] until
@@ -789,6 +802,9 @@ func _make_service_tree(
 	if _clock_enabled:
 		_add_clock_node(tree)
 
+	if _lag_comp_enabled:
+		_add_lag_comp_node(tree)
+
 	return tree
 
 
@@ -806,6 +822,22 @@ func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
 	clock.display_offset = _clock_display_offset
 	mt.add_child(clock)
 	return clock
+
+
+func _ensure_lag_compensation(mt: MultiplayerTree) -> LagCompensation:
+	var existing := mt.get_service(LagCompensation) as LagCompensation
+	if not existing:
+		existing = mt.find_service_node(LagCompensation) as LagCompensation
+	if existing:
+		return existing
+	return _add_lag_comp_node(mt)
+
+
+func _add_lag_comp_node(mt: MultiplayerTree) -> LagCompensation:
+	var node := LagCompensation.new()
+	node.name = "LagCompensation"
+	mt.add_child(node)
+	return node
 
 
 func _setup_server() -> void:

@@ -29,11 +29,11 @@ func test_probes_do_not_register_peers() -> void:
 
 	var client_backend := EnetTestSupport.make_client_backend(host.port)
 	for i in 5:
-		var result: ServerInfoResult = await client_backend.query_server_info(
+		var result: BackendPeer.ProbeResult = await client_backend.probe_server_info(
 			"127.0.0.1",
 			1.0,
 		)
-		assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+		assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.OK)
 		assert_array(host_api.get_peers()).is_empty()
 
 	@warning_ignore("redundant_await")
@@ -51,7 +51,7 @@ func test_probes_do_not_register_peers() -> void:
 # Helper method to run a single probe query as a regular method. This avoids
 # GDScript lambda capture/closure GC bugs with concurrent asynchronous awaits.
 func _run_probe(backend: ENetBackend, results: Array, state: Dictionary) -> void:
-	var r: ServerInfoResult = await backend.query_server_info("127.0.0.1", 2.0)
+	var r: BackendPeer.ProbeResult = await backend.probe_server_info("127.0.0.1", 2.0)
 	results.append(r)
 	state.pending -= 1
 
@@ -65,7 +65,7 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 
 	var client_backend := EnetTestSupport.make_client_backend(host.port)
 	var probe_count := 20
-	var results: Array[ServerInfoResult] = []
+	var results: Array[BackendPeer.ProbeResult] = []
 	var state := { pending = probe_count }
 
 	for i in probe_count:
@@ -81,9 +81,9 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	var busy_count := 0
 	for r in results:
 		match r.status:
-			ServerInfoResult.Status.OK:
+			BackendPeer.ProbeResult.Status.OK:
 				ok_count += 1
-			ServerInfoResult.Status.BUSY:
+			BackendPeer.ProbeResult.Status.BUSY:
 				busy_count += 1
 	# Beyond the rate window, the rest are answered BUSY.
 	assert_int(ok_count).is_greater(0)

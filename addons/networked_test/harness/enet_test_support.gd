@@ -9,8 +9,8 @@
 ## in-process custom peer and do not generalize to real transports.
 ## [br][br]
 ## This helper covers the complementary case: tests that need real UDP
-## sockets to exercise transport-specific behavior -- the auth-phase
-## handshake behind [method BackendPeer.query_server_info], ENet-level
+## sockets to exercise transport-specific behavior: the auth-phase
+## handshake behind [method BackendPeer.probe_server_info], ENet-level
 ## disconnect/reconnect semantics, and so on. The two are not meant to
 ## compose; pick the one whose contract matches the unit under test.
 class_name EnetTestSupport
@@ -33,7 +33,7 @@ const _PORT_RANGE_SIZE := 100
 ## host's [ENetBackend], duplicated by the tree's setter).
 static func start_host(
 		parent: Node,
-		source: ServerInfoSource = null,
+		source: ServerDescriptor = null,
 		auth_timeout: float = -1.0,
 ) -> Dictionary:
 	var port_range_end := _PORT_RANGE_START + _PORT_RANGE_SIZE
@@ -69,7 +69,7 @@ static func start_host(
 ## Builds a client-side [ENetBackend] configured to talk to [param port].
 ##
 ## Returned backend is not attached to any tree; pass it directly to
-## [method BackendPeer.query_server_info] or to
+## [method BackendPeer.probe_server_info] or to
 ## [method MultiplayerTree.join].
 static func make_client_backend(port: int) -> ENetBackend:
 	var backend := ENetBackend.new()

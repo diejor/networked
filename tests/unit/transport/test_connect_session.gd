@@ -45,7 +45,7 @@ class _ProgressBackend:
 class _MockDirectory:
 	extends LobbyDirectory
 
-	var canned_lobbies: Array[LobbyInfo] = []
+	var canned_lobbies: Array[LobbyDirectory.LobbyInfo] = []
 	var list_calls: int = 0
 	var host_called_with: String = ""
 	var join_called_with: int = 0
@@ -60,7 +60,7 @@ class _MockDirectory:
 		pass
 
 
-	func make_join_target(lobby: LobbyInfo) -> JoinTarget:
+	func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 		var target := JoinTarget.new()
 		target.address = str(lobby.id)
 		target.backend = ENetBackend.new()
@@ -124,18 +124,24 @@ func test_add_target_persist_true_writes_to_disk() -> void:
 	session.add_target(_make_target("10.0.0.1"), true)
 	assert_bool(FileAccess.file_exists(path)).is_true()
 
-	var loaded := ServerList.load_or_new(path)
-	assert_int(loaded.targets.size()).is_equal(1)
-	assert_that(loaded.targets[0].address).is_equal("10.0.0.1")
+	var loaded_session := ConnectSession.new()
+	add_child(loaded_session)
+	loaded_session.load_server_list(path)
+	var loaded_targets := loaded_session.get_saved_targets()
+	assert_int(loaded_targets.size()).is_equal(1)
+	assert_that(loaded_targets[0].address).is_equal("10.0.0.1")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	session.queue_free()
+	loaded_session.queue_free()
 
 
 func test_load_server_list_emits_target_added_per_entry() -> void:
 	var path := _temp_path()
-	var seed_list := ServerList.new()
-	seed_list.targets = [_make_target("a"), _make_target("b")]
-	ServerList.save(seed_list, path)
+	var seed_session := ConnectSession.new()
+	add_child(seed_session)
+	seed_session.add_target(_make_target("a"))
+	seed_session.add_target(_make_target("b"))
+	seed_session.save_server_list(path)
 
 	var session := ConnectSession.new()
 	add_child(session)
@@ -146,6 +152,7 @@ func test_load_server_list_emits_target_added_per_entry() -> void:
 	assert_int(added.size()).is_equal(2)
 	assert_int(session.get_saved_targets().size()).is_equal(2)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	seed_session.queue_free()
 	session.queue_free()
 
 
@@ -171,7 +178,7 @@ func test_register_directory_and_refresh_dispatches_targets() -> void:
 
 	var directory := _MockDirectory.new()
 	add_child(directory)
-	var info := LobbyInfo.make(42, "Mock Lobby", 2, 8, { })
+	var info := LobbyDirectory.LobbyInfo.make(42, "Mock Lobby", 2, 8, { })
 	directory.canned_lobbies = [info]
 
 	var directory_emitted: Array = []

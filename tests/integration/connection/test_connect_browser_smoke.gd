@@ -14,9 +14,9 @@ const _BROWSER_SCENE := preload(
 
 
 class _SmokeSource:
-	extends ServerInfoSource
-	func build_server_info(_tree: MultiplayerTree) -> ServerInfo:
-		var info := ServerInfo.new()
+	extends ServerDescriptor
+	func build_server_info(_tree: MultiplayerTree) -> ServerDescriptor.Info:
+		var info := ServerDescriptor.Info.new()
 		info.players = 1
 		info.max_players = 8
 		info.is_local_listener = true
@@ -39,9 +39,10 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 	client_backend.port = host.port
 	target.backend = client_backend
 
-	var list := ServerList.new()
-	list.targets = [target]
-	ServerList.save(list, temp_path)
+	var seed_session := ConnectSession.new()
+	add_child(seed_session)
+	seed_session.add_target(target)
+	seed_session.save_server_list(temp_path)
 
 	var tree := MultiplayerTree.new()
 	add_child(tree)
@@ -65,10 +66,11 @@ func test_session_reports_ok_for_probed_direct_target() -> void:
 
 	var result := session.get_result(loaded_target)
 	assert_that(result).is_not_null()
-	assert_int(result.status).is_equal(ServerInfoResult.Status.OK)
+	assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.OK)
 	assert_int(result.info.players).is_equal(1)
 
 	browser.queue_free()
+	seed_session.queue_free()
 	tree.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
 	await EnetTestSupport.stop_tree(host.tree)
@@ -80,7 +82,9 @@ func test_browser_resolves_tree_canonical_session() -> void:
 	var temp_path := "user://_test_connect_browser_%d.tres" % (
 			Time.get_ticks_usec()
 	)
-	ServerList.save(ServerList.new(), temp_path)
+	var seed_session := ConnectSession.new()
+	add_child(seed_session)
+	seed_session.save_server_list(temp_path)
 
 	var tree := MultiplayerTree.new()
 	add_child(tree)
@@ -107,5 +111,6 @@ func test_browser_resolves_tree_canonical_session() -> void:
 	assert_int(list_box.get_child_count()).is_equal(1)
 
 	browser.queue_free()
+	seed_session.queue_free()
 	tree.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))

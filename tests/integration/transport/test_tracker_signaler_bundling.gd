@@ -206,35 +206,35 @@ func test_same_sdp_with_new_candidates_reports_as_topup() -> void:
 
 
 func test_connect_result_helpers_and_mapping() -> void:
-	var r_ok := ConnectResult.ok()
+	var r_ok := BackendPeer.ConnectResult.ok()
 	assert_bool(r_ok.is_ok()).is_true()
-	assert_int(r_ok.status).is_equal(ConnectResult.Status.OK)
+	assert_int(r_ok.status).is_equal(BackendPeer.ConnectResult.Status.OK)
 
-	var r_timeout := ConnectResult.timed_out("failed timeout")
+	var r_timeout := BackendPeer.ConnectResult.timed_out("failed timeout")
 	assert_bool(r_timeout.is_ok()).is_false()
-	assert_int(r_timeout.status).is_equal(ConnectResult.Status.TIMED_OUT)
+	assert_int(r_timeout.status).is_equal(BackendPeer.ConnectResult.Status.TIMED_OUT)
 	assert_str(r_timeout.message).is_equal("failed timeout")
 
-	var r_unreachable := ConnectResult.unreachable(
+	var r_unreachable := BackendPeer.ConnectResult.unreachable(
 		&"TURN_UNREACHABLE",
 		"unreachable msg",
 	)
 	assert_int(r_unreachable.status).is_equal(
-		ConnectResult.Status.UNREACHABLE,
+		BackendPeer.ConnectResult.Status.UNREACHABLE,
 	)
 	assert_str(r_unreachable.detail).is_equal("TURN_UNREACHABLE")
 	assert_str(r_unreachable.message).is_equal("unreachable msg")
 
-	var r_refused := ConnectResult.refused("refused msg")
-	assert_int(r_refused.status).is_equal(ConnectResult.Status.REFUSED)
+	var r_refused := BackendPeer.ConnectResult.refused("refused msg")
+	assert_int(r_refused.status).is_equal(BackendPeer.ConnectResult.Status.REFUSED)
 	assert_str(r_refused.message).is_equal("refused msg")
 
-	var r_aborted := ConnectResult.aborted("aborted msg")
-	assert_int(r_aborted.status).is_equal(ConnectResult.Status.ABORTED)
+	var r_aborted := BackendPeer.ConnectResult.aborted("aborted msg")
+	assert_int(r_aborted.status).is_equal(BackendPeer.ConnectResult.Status.ABORTED)
 	assert_str(r_aborted.message).is_equal("aborted msg")
 
-	var r_error := ConnectResult.error("error msg")
-	assert_int(r_error.status).is_equal(ConnectResult.Status.ERROR)
+	var r_error := BackendPeer.ConnectResult.error("error msg")
+	assert_int(r_error.status).is_equal(BackendPeer.ConnectResult.Status.ERROR)
 	assert_str(r_error.message).is_equal("error msg")
 
 	assert_bool(str(r_ok).contains("ok")).is_true()
@@ -249,7 +249,7 @@ func test_signaling_unavailable_on_lost() -> void:
 
 	var failed_results: Array = []
 	backend.connect_failed.connect(
-		func(result: ConnectResult):
+		func(result: BackendPeer.ConnectResult):
 			failed_results.append(result)
 	)
 
@@ -259,8 +259,8 @@ func test_signaling_unavailable_on_lost() -> void:
 	backend._signaler.lost.emit()
 
 	assert_int(failed_results.size()).is_equal(1)
-	var res: ConnectResult = failed_results[0]
-	assert_int(res.status).is_equal(ConnectResult.Status.UNREACHABLE)
+	var res: BackendPeer.ConnectResult = failed_results[0]
+	assert_int(res.status).is_equal(BackendPeer.ConnectResult.Status.UNREACHABLE)
 	assert_str(res.detail).is_equal("SIGNALING_UNAVAILABLE")
 
 	backend.peer_reset_state()
@@ -274,7 +274,7 @@ func test_signaling_unavailable_on_timeout() -> void:
 
 	var failed_results: Array = []
 	backend.connect_failed.connect(
-		func(result: ConnectResult):
+		func(result: BackendPeer.ConnectResult):
 			failed_results.append(result)
 	)
 
@@ -289,9 +289,9 @@ func test_signaling_unavailable_on_timeout() -> void:
 	backend.poll(0.001)
 
 	assert_int(failed_results.size()).is_equal(1)
-	var res: ConnectResult = failed_results[0]
+	var res: BackendPeer.ConnectResult = failed_results[0]
 	assert_int(res.status).is_equal(
-		ConnectResult.Status.UNREACHABLE,
+		BackendPeer.ConnectResult.Status.UNREACHABLE,
 	)
 	assert_str(res.detail).is_equal("SIGNALING_UNAVAILABLE")
 

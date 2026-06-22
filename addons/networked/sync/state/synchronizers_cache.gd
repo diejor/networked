@@ -1,6 +1,6 @@
 ## Cached lookup helpers for [MultiplayerSynchronizer] nodes.
 ##
-## Tree traversals are expensive; results are stored on the target node's
+## Tree traversals are expensive. Results are stored on the target node's
 ## metadata under [code]"cached_synchronizers"[/code] and reused until
 ## explicitly invalidated.
 class_name SynchronizersCache

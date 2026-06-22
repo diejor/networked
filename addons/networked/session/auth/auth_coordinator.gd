@@ -12,7 +12,7 @@ var _api: SceneMultiplayer
 var _auth_provider: NetwAuthProvider
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
-var _probe_responder := AuthProbeResponder.new()
+var _probe_responder := AuthProtocol.Responder.new()
 var _app_tag: int = 0
 
 
@@ -52,16 +52,16 @@ func set_client_join_payload(payload: JoinPayload) -> void:
 	_client_join_payload = payload
 
 
-## Stores the owning tree so probe replies can build a [ServerInfo] from
-## live session state. Delegates to [AuthProbeResponder].
+## Stores the owning tree so probe replies can build a [ServerDescriptor.Info] from
+## live session state. Delegates to [AuthProtocol.Responder].
 func set_tree(tree: MultiplayerTree) -> void:
 	_probe_responder.set_tree(tree)
 
 
-## Sets the [ServerInfoSource] used to build probe replies. When
-## [code]null[/code], a [DefaultServerInfoSource] is created on first use.
-## Delegates to [AuthProbeResponder].
-func set_server_info_source(source: ServerInfoSource) -> void:
+## Sets the [ServerDescriptor] used to build probe replies. When
+## [code]null[/code], a [DefaultServerDescriptor] is created on first use.
+## Delegates to [AuthProtocol.Responder].
+func set_server_info_source(source: ServerDescriptor) -> void:
 	_probe_responder.set_server_info_source(source)
 
 

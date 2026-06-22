@@ -123,6 +123,19 @@ func test_destroy_frees_and_spawn_recreates_scene() -> void:
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
+func test_retire_removes_active_lookup_before_free() -> void:
+	var scene := server_mgr.active_scenes[level_builder.scene_name]
+
+	server_mgr.retire_scene(level_builder.scene_name, 2)
+
+	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
+	assert_that(is_instance_valid(scene)).is_true()
+
+	await drain_frames(get_tree(), 3)
+
+	assert_that(is_instance_valid(scene)).is_false()
+
+
 func test_freeze_empty_action_disables_level_on_despawn() -> void:
 	@warning_ignore("redundant_await")
 	await server_mgr.activate_scene(level_builder.scene_name)

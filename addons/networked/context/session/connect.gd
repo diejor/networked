@@ -37,27 +37,31 @@
 ## [signal session_entered] fires once you are in.
 ##
 ## [br][br]
-## [b]The live list.[/b] The session holds an in-memory list of targets: the
+## [b]The Live List[/b]
+## [br]The session holds an in-memory list of targets: the
 ## [i]saved[/i] ones you add or load from disk (a [member JoinTarget.address]
 ## reached through a [BackendPeer]), plus lobbies that registered directories
-## discover. [method get_targets] returns the whole list; [method get_saved_targets]
+## discover. [member targets] returns the whole list. [member saved_targets]
 ## and [method get_discovered_targets] return each half.
 ##
 ## [br][br]
-## [b]Directories.[/b] A [LobbyDirectory] is a platform lobby integration (Steam,
+## [b]Directories[/b]
+## [br]A [LobbyDirectory] is a platform lobby integration (Steam,
 ## etc.) you [method register_directory] under an id like [code]&"steam"[/code].
 ## On [method refresh] each directory reports its current lobbies, which fold
 ## into the live list as directory targets.
 ##
 ## [br][br]
-## [b]Probing.[/b] [method refresh] (all targets) and [method probe] (one) ask
-## each target for a [ServerInfoResult] -- status, player count, latency. The
-## result is cached per target and pushed to you via [signal target_updated];
+## [b]Probing[/b]
+## [br][method refresh] (all targets) and [method probe] (one) ask
+## each target for a [BackendPeer.ProbeResult] containing status, player count, and latency. The
+## result is cached per target and pushed to you via [signal target_updated].
 ## [method get_result] returns the latest, or [code]null[/code] before the
 ## first one arrives.
 ##
 ## [br][br]
-## [b]Entering a session.[/b] [method host] and [method join] are where the
+## [b]Entering a Session[/b]
+## [br][method host] and [method join] are where the
 ## connect layer hands off to the [MultiplayerTree]: a target sets the
 ## tree's [BackendPeer] and opens transport. [signal session_entered] fires on
 ## success, and [signal session_left] when the tree later goes offline.
@@ -69,11 +73,11 @@ signal target_added(target: JoinTarget)
 ## A target was removed from the live list.
 signal target_removed(target: JoinTarget)
 ## A new probe result or live lobby snapshot landed for [param target].
-signal target_updated(target: JoinTarget, result: ServerInfoResult)
+signal target_updated(target: JoinTarget, result: BackendPeer.ProbeResult)
 ## A directory's lobby list refreshed.
 signal directory_list_updated(
 		directory_id: StringName,
-		lobbies: Array[LobbyInfo],
+		lobbies: Array[LobbyDirectory.LobbyInfo],
 )
 ## A registered directory reported that its transport is unavailable.
 signal directory_unavailable(directory_id: StringName, reason: String)
@@ -128,7 +132,7 @@ func is_session_active() -> bool:
 
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the
-## transport and the server name; [param payload] is the local player's identity.
+## transport and the server name. [param payload] is the local player's identity.
 ## On failure also emits [signal host_failed], on success [signal session_entered].
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
@@ -136,7 +140,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 
 ## Joins [param target] on the bound [MultiplayerTree]. [param payload] is the
-## local player's identity. Returns [code]OK[/code] or an [enum Error]; on
+## local player's identity. Returns [code]OK[/code] or an [enum Error]. On
 ## failure also emits [signal join_failed], on success [signal session_entered].
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
@@ -160,7 +164,7 @@ func refresh() -> void:
 		s.refresh()
 
 
-## Probes a single [param target] for its [ServerInfoResult], delivered via
+## Probes a single [param target] for its [BackendPeer.ProbeResult], delivered via
 ## [signal target_updated]. Useful after adding one target instead of
 ## re-probing the whole list with [method refresh].
 func probe(target: JoinTarget) -> void:
@@ -187,18 +191,20 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 		s.remove_target(target, persist)
 
 
-## Returns the whole live list -- saved targets first, then each directory's
+## The whole live list, with saved targets first, then each directory's
 ## discovered lobbies.
-func get_targets() -> Array[JoinTarget]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_targets() if s else []
+var targets: Array[JoinTarget]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_targets() if s else []
 
 
-## Returns only the saved (address-based) targets -- the ones you added or
-## loaded, not directory lobbies.
-func get_saved_targets() -> Array[JoinTarget]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_saved_targets() if s else []
+## Only the saved (address-based) targets (the ones you added or
+## loaded, not directory lobbies).
+var saved_targets: Array[JoinTarget]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_saved_targets() if s else []
 
 
 ## Returns the lobbies the directory registered under [param directory_id]
@@ -208,10 +214,10 @@ func get_discovered_targets(directory_id: StringName) -> Array[JoinTarget]:
 	return s.get_discovered_targets(directory_id) if s else []
 
 
-## Returns the latest [ServerInfoResult] cached for [param target], or
+## Returns the latest [BackendPeer.ProbeResult] cached for [param target], or
 ## [code]null[/code] if it has not been probed yet. Refreshed by
 ## [method refresh] / [method probe] and pushed via [signal target_updated].
-func get_result(target: JoinTarget) -> ServerInfoResult:
+func get_result(target: JoinTarget) -> BackendPeer.ProbeResult:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_result(target) if s else null
 
@@ -239,10 +245,11 @@ func get_directory(id: StringName) -> LobbyDirectory:
 	return s.get_directory(id) if s else null
 
 
-## Returns the ids of all registered directories, in registration order.
-func get_directory_ids() -> Array[StringName]:
-	var s := _ref.get_ref() as ConnectSession
-	return s.get_directory_ids() if s else []
+## The ids of all registered directories, in registration order.
+var directory_ids: Array[StringName]:
+	get:
+		var s := _ref.get_ref() as ConnectSession
+		return s.get_directory_ids() if s else []
 
 # -- Persistence ------------------------------------------------------------
 

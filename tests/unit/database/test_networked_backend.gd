@@ -1,4 +1,4 @@
-## Verifies the [NetwBackend] abstract contract via a minimal stub.
+## Verifies the [NetwDatabaseBackend] abstract contract via a minimal stub.
 class_name TestNetwBackend
 extends NetwTestSuite
 

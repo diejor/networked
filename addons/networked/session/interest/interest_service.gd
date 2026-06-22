@@ -1,7 +1,7 @@
 ## Applies [NetwInterestLayer] state to Godot replication.
 ##
-## One service lives under each [MultiplayerTree]. Layers are pure state;
-## this service installs entity visibility filters, drives server-side
+## One service lives under each [MultiplayerTree]. Layers are pure state.
+## This service installs entity visibility filters, drives server-side
 ## transition signals, updates bound [InterestGate] snapshots, and relays
 ## optional owner-side observer events.
 ##
@@ -12,7 +12,7 @@
 ## [br]- Bound layers: [InterestGate] admits local entities as they appear
 ## under the gated subtree.
 ## [br]- Unbound layers: the server relays transitions over the network.
-## Relay and entity spawn can race during same-tick admit storms; a bounded
+## Relay and entity spawn can race during same-tick admit storms. A bounded
 ## retry reconciles them.
 ##
 ## [br][br]
@@ -26,7 +26,7 @@
 ## visibility under an already-admitted scene, not reveal scene roots by
 ## themselves.
 class_name InterestService
-extends Node
+extends NetwService
 
 var _layers: Dictionary[StringName, NetwInterestLayer] = { }
 var _gates: Dictionary[StringName, InterestGate] = { }
@@ -107,22 +107,20 @@ var _pending_attempts: Array[int] = []
 var _pending_visibility_flush_scheduled: bool = false
 
 
-func _enter_tree() -> void:
-	NetwServices.register(self, InterestService)
-	var mt := _tree()
-	if is_instance_valid(mt):
-		mt.peer_disconnected.connect(_on_peer_disconnected)
-		mt.session_ended.connect(_on_session_ended)
+func service_type() -> Script:
+	return InterestService
 
 
-func _exit_tree() -> void:
-	var mt := _tree()
-	if is_instance_valid(mt):
-		if mt.peer_disconnected.is_connected(_on_peer_disconnected):
-			mt.peer_disconnected.disconnect(_on_peer_disconnected)
-		if mt.session_ended.is_connected(_on_session_ended):
-			mt.session_ended.disconnect(_on_session_ended)
-	NetwServices.unregister(self, InterestService)
+func service_entered(mt: MultiplayerTree) -> void:
+	mt.peer_disconnected.connect(_on_peer_disconnected)
+	mt.session_ended.connect(_on_session_ended)
+
+
+func service_exiting(mt: MultiplayerTree) -> void:
+	if mt.peer_disconnected.is_connected(_on_peer_disconnected):
+		mt.peer_disconnected.disconnect(_on_peer_disconnected)
+	if mt.session_ended.is_connected(_on_session_ended):
+		mt.session_ended.disconnect(_on_session_ended)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -183,6 +181,42 @@ func all_layers() -> Array[NetwInterestLayer]:
 	var out: Array[NetwInterestLayer] = []
 	out.assign(_layers.values())
 	return out
+
+
+## Returns tree-wide interest occupancy counters for [InterestMonitor].
+##
+## [code]visible_edges[/code] is the count of admitted (entity, peer) pairs across
+## every layer, the matrix occupancy that drives replication bandwidth.
+## [code]transitions_total[/code] sums the per-layer
+## [method NetwInterestLayer.monitor_snapshot] churn since creation, so the monitor
+## reads it as a delta over an interval.
+## [codeblock]
+## {
+##   ┠╴ layers: int             # active layers
+##   ┠╴ entities_filtered: int  # entities with a visibility filter installed
+##   ┠╴ visible_edges: int      # admitted (entity, peer) pairs, all layers
+##   ┠╴ dirty_entities: int     # entities pending a visibility recompute
+##   ┠╴ relay_backlog: int      # unbound-layer transitions awaiting reconcile
+##   ┖╴ transitions_total: int  # summed per-layer churn since creation
+## }
+## [/codeblock]
+func monitor_snapshot() -> Dictionary:
+	var visible_edges := 0
+	for entity: NetwEntity in _admit_count:
+		visible_edges += (_admit_count[entity] as Dictionary).size()
+	var transitions_total := 0
+	for layer_id: StringName in _layers:
+		transitions_total += int(
+			_layers[layer_id].monitor_snapshot()[&"transitions_total"]
+		)
+	return {
+		&"layers": _layers.size(),
+		&"entities_filtered": _entity_filters.size(),
+		&"visible_edges": visible_edges,
+		&"dirty_entities": _dirty_entities.size(),
+		&"relay_backlog": _pending_visibility_events.size(),
+		&"transitions_total": transitions_total,
+	}
 
 
 ## Returns [code]true[/code] if any layer admits [param peer_id] to
@@ -502,13 +536,14 @@ func _drive_dirty_entity_layers() -> void:
 
 
 func _flush_entity_visibility() -> void:
-	# tree_exiting eviction guarantees entries refer to live owners.
+	# tree_exiting eviction normally keeps entries pointing at live owners, but a
+	# bulk teardown (e.g. session end) can free an owner before its per-node
+	# eviction runs, so skip a freed owner instead of asserting. Mirrors the same
+	# guard in _drive_dirty_entity_layers.
 	var still_dirty: Dictionary[NetwEntity, bool] = { }
 	for entity: NetwEntity in _dirty_entities.keys():
-		assert(
-			is_instance_valid(entity.owner),
-			"InterestService: dirty entity outlived its owner",
-		)
+		if not is_instance_valid(entity.owner):
+			continue
 		if not entity.owner.is_inside_tree():
 			still_dirty[entity] = true
 			continue

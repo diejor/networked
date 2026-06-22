@@ -1,7 +1,17 @@
 extends Area2D
 
 var in_area: Array = []
-var from_player: int
+var from_player: int = 0
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED:
+		return
+	var entity := Netw.ctx(self).entity
+	if not entity:
+		return
+	entity.contribute_spawn_property(self, &"position")
+	entity.contribute_spawn_property(self, &"from_player")
 
 
 # Called from the animation.

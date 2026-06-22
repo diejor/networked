@@ -70,7 +70,7 @@ func _ready() -> void:
 	if not ctx or not ctx.tree:
 		return
 
-	for rj: ResolvedJoin in ctx.tree.get_joined_players():
+	for rj: ResolvedJoin in ctx.tree.joined_players:
 		add_player(rj.peer_id, str(rj.username))
 
 

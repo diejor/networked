@@ -5,9 +5,9 @@ extends Panel
 var _pulse_tween: Tween
 
 
-## Binds this status dot directly to a [ServerInfoResult] or sets it as
+## Binds this status dot directly to a [BackendPeer.ProbeResult] or sets it as
 ## pending (probing) if [param result] is [code]null[/code].
-func bind_result(result: ServerInfoResult) -> void:
+func bind_result(result: BackendPeer.ProbeResult) -> void:
 	if result == null:
 		tooltip_text = "Checking"
 		_update_status_style(Color(0.6, 0.6, 0.6))
@@ -16,22 +16,22 @@ func bind_result(result: ServerInfoResult) -> void:
 
 	_stop_pulse_tween()
 	match result.status:
-		ServerInfoResult.Status.OK:
+		BackendPeer.ProbeResult.Status.OK:
 			tooltip_text = "OK"
 			_update_status_style(Color(0.24, 0.81, 0.44))
-		ServerInfoResult.Status.BUSY:
+		BackendPeer.ProbeResult.Status.BUSY:
 			tooltip_text = "Busy"
 			_update_status_style(Color(0.95, 0.77, 0.06))
-		ServerInfoResult.Status.UNREACHABLE, ServerInfoResult.Status.TIMEOUT:
+		BackendPeer.ProbeResult.Status.UNREACHABLE, BackendPeer.ProbeResult.Status.TIMEOUT:
 			tooltip_text = "Unreachable"
 			_update_status_style(Color(0.91, 0.3, 0.24))
-		ServerInfoResult.Status.UNSUPPORTED:
+		BackendPeer.ProbeResult.Status.UNSUPPORTED:
 			tooltip_text = "Unsupported"
 			var info := result.info
 			_update_status_style(
 				Color(0.24, 0.81, 0.44) if info else Color(0.95, 0.77, 0.06),
 			)
-		ServerInfoResult.Status.INCOMPATIBLE:
+		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
 			tooltip_text = "Incompatible game build"
 			_update_status_style(Color(0.6, 0.35, 0.85))
 		_:
@@ -42,7 +42,7 @@ func bind_result(result: ServerInfoResult) -> void:
 ## Marks this dot as a transport that cannot run on the current platform.
 ##
 ## Availability is distinct from a probe result, so this never routes through
-## [method bind_result] or [ServerInfoResult].
+## [method bind_result] or [BackendPeer.ProbeResult].
 func bind_unavailable() -> void:
 	_stop_pulse_tween()
 	tooltip_text = "Not available on this platform"
