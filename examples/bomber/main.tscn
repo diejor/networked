@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_p4o8j"]
 [ext_resource type="PackedScene" uid="uid://ca6gwo0u2m4y2" path="res://examples/bomber/game/lobby.tscn" id="9_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/addons/steam/steam_lobby_directory.gd" id="9_p4o8j"]
+[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://7rlemmqrhvw7" path="res://addons/networked/sync/sim/lag_compensation.gd" id="10_lagcomp"]
 
 [sub_resource type="Resource" id="Resource_ytyuk"]
@@ -57,5 +58,11 @@ allow_spacewar_fallback = true
 script = ExtResource("8_p4o8j")
 browser_filter_uid = "networked-example-bomber"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
+
+[node name="NakamaLobbyDirectory" type="Node" parent="MultiplayerTree" unique_id=592217180]
+script = ExtResource("10_ej8d4")
+device_id = "bomber-host-diego-001"
+local_member_name = "diegote"
+metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]

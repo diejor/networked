@@ -44,6 +44,17 @@ $env:NAKAMA_TEST_HOST = "127.0.0.1"
 Unset it and the live tests early-return (no-op), so the suite stays green on
 machines without Docker.
 
+Run the live tier directly:
+
+```powershell
+godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless `
+  --ignoreHeadlessMode --ignore-error-breaks -c -rc 1 -rd res://reports `
+  -a res://tests/live
+```
+
+The default `-a res://tests` run discovers `tests/live/nakama`, but the suite
+skips before probing the network when `NAKAMA_TEST_HOST` is unset.
+
 ## Two-client / two-instance testing
 
 `authenticate_device_async` keys an account by device id. Two game instances on

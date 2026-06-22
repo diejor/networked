@@ -33,6 +33,11 @@ extends LobbyDirectory
 ## two-client testing.
 @export var device_id: String = ""
 
+## Local Nakama username used for device authentication.
+##
+## Empty falls back to [method LobbyDirectory.get_local_member_name].
+@export var local_member_name: String = ""
+
 ## Seconds to wait for a match to fully join before failing.
 @export_range(1.0, 30.0, 0.5, "suffix:s") var connect_timeout: float = 10.0
 
@@ -122,6 +127,13 @@ func get_member_name(peer_id: int) -> String:
 		return super.get_member_name(peer_id)
 	var name := _wrapper.username_for_peer(peer_id)
 	return name if not name.is_empty() else super.get_member_name(peer_id)
+
+
+## Returns [member local_member_name] when configured.
+func get_local_member_name() -> String:
+	if not local_member_name.is_empty():
+		return local_member_name
+	return super.get_local_member_name()
 
 
 func _ensure_connected() -> bool:

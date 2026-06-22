@@ -4,7 +4,7 @@
 ## Every Nakama type is reached through [method load] by path, never named
 ## directly, so the networked addon still parses when the Nakama addon is
 ## absent. [method is_addon_present] gates all other calls. The wrapper owns the
-## authenticated socket and the [code]NakamaMultiplayerBridge[/code] that turns
+## authenticated socket and the [code]NakamaRelayBridge[/code] that turns
 ## Nakama match data into a working [MultiplayerPeer], and it re-emits the two
 ## bridge lifecycle signals as its own.
 ## [codeblock]
@@ -22,8 +22,10 @@
 class_name NakamaWrapper
 
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
+const _PRESENCE_PROBE_PATH := _FACADE_PATH
 const _BRIDGE_PATH := \
-		"res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd"
+		"res://addons/networked/addons/nakama/nakama_relay_bridge.gd"
+const _NAKAMA_LOG_LEVEL_WARNING := 2
 
 ## Emitted once the local peer id is granted and the match is fully joined.
 ##
@@ -53,7 +55,7 @@ var _bridge
 ## [method SteamWrapper.is_available]. Both the backend availability gate and the
 ## directory bootstrap defer to this.
 static func is_addon_present() -> bool:
-	return ResourceLoader.exists(_BRIDGE_PATH)
+	return ResourceLoader.exists(_PRESENCE_PROBE_PATH)
 
 
 ## Authenticates a device session and opens the realtime socket under
@@ -82,6 +84,7 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 		int(config.get("port", 7350)),
 		client_scheme,
 		int(config.get("timeout", 3)),
+		_NAKAMA_LOG_LEVEL_WARNING,
 	)
 
 	var device_id := String(config.get("device_id", ""))
