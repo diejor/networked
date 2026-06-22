@@ -190,9 +190,18 @@ func finalize() -> void:
 		}
 	_deferred_node_props.clear()
 
+	var ordered_first: Array[StringName] = _ordered_virtual_names()
+
+	# Warn on payload properties with empty/unresolvable paths.
+	for vname: StringName in _properties:
+		if vname not in ordered_first and _properties[vname].is_empty():
+			push_warning(
+				"ProxySynchronizer: Property '%s' has an empty real path."
+				% [vname]
+			)
+
 	# Build the config in insertion order, respecting ordering overrides.
 	var config := SceneReplicationConfig.new()
-	var ordered_first: Array[StringName] = _ordered_virtual_names()
 	for vname: StringName in ordered_first:
 		if _properties.has(vname):
 			_add_property_to_config(config, vname, root)

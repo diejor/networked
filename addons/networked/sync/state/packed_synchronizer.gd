@@ -187,7 +187,9 @@ func decode_carrier(value: Variant) -> void:
 
 
 func _ordered_virtual_names() -> Array[StringName]:
-	return [carrier_name()] if carrier_enabled() else []
+	if carrier_enabled():
+		return [carrier_name()]
+	return []
 
 
 func _read_property(name: StringName, path: NodePath) -> Variant:

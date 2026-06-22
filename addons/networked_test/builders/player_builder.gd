@@ -26,6 +26,7 @@ var _interest_report: bool = false
 
 var _has_state: bool = false
 var _state_props: Array[StringName] = []
+var _state_bundled: bool = false
 var _has_input: bool = false
 var _input_props: Array[StringName] = []
 var _has_prediction: bool = false
@@ -158,10 +159,17 @@ func with_interest(
 ## Attaches the server-authoritative state slot and registers each of
 ## [param props] as an ON_CHANGE payload property at [code].:prop[/code] on the
 ## entity root, so a predicting client compares against and a server records the
-## same whole-entity snapshot.
-func with_state(props: Array[StringName]) -> PlayerBuilder:
+## same whole-entity snapshot. Set [param bundled] to ride the payload as one
+## packed blob (the props are then suppressed to NEVER on the wire but stay
+## resolvable through [method ProxySynchronizer.get_real_path]).
+##
+## The payload is baked into the synchronizer's [code]replication_config[/code]
+## with real paths, so it survives [method pack] / instantiate, not just
+## [method build].
+func with_state(props: Array[StringName], bundled: bool = false) -> PlayerBuilder:
 	_has_state = true
 	_state_props = props
+	_state_bundled = bundled
 	return self
 
 
@@ -192,6 +200,26 @@ func with_prediction(
 	_prediction_missing_policy = missing_policy
 	_prediction_epsilon = epsilon
 	return self
+
+
+# Builds a real-path [SceneReplicationConfig] for [param props] at [code].:prop[/code]
+# on the entity root. Baking real paths (rather than relying on register_property's
+# in-memory _properties map, which is not serialized) is what lets a payload
+# survive pack()/instantiate: finalize -> _import_from_config rebuilds the virtual
+# map from this config on every peer.
+func _payload_config(
+		props: Array[StringName],
+		mode: SceneReplicationConfig.ReplicationMode,
+		watch: bool,
+) -> SceneReplicationConfig:
+	var cfg := SceneReplicationConfig.new()
+	for prop in props:
+		var path := NodePath(".:" + prop)
+		cfg.add_property(path)
+		cfg.property_set_replication_mode(path, mode)
+		cfg.property_set_spawn(path, false)
+		cfg.property_set_watch(path, watch)
+	return cfg
 
 
 ## Composes and returns a live player node tree.
@@ -249,6 +277,11 @@ func build() -> Node:
 	if _has_state:
 		var state := StateSynchronizer.new()
 		state.name = "StateSync"
+		state.bundle_payload = _state_bundled
+		# register_property populates _properties for the build() path (callers
+		# inspect it pre-tree). The baked replication_config carries the same real
+		# paths so finalize -> _import_from_config reconstructs the payload on the
+		# pack()/instantiate path too, where _properties is not serialized.
 		for prop in _state_props:
 			state.register_property(
 				prop,
@@ -257,6 +290,11 @@ func build() -> Node:
 				false,
 				true,
 			)
+		state.replication_config = _payload_config(
+			_state_props,
+			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+			true,
+		)
 		var _a6: Node = SceneAssembly.attach(root, state, root)
 		state.root_path = state.get_path_to(root)
 
@@ -266,6 +304,8 @@ func build() -> Node:
 		var _a7: Node = SceneAssembly.attach(root, inputs, root)
 		var input := InputSynchronizer.new()
 		input.name = "InputSync"
+		# Same dual registration as state: _properties for build(), baked config
+		# for pack().
 		for prop in _input_props:
 			input.register_property(
 				prop,
@@ -274,6 +314,11 @@ func build() -> Node:
 				false,
 				false,
 			)
+		input.replication_config = _payload_config(
+			_input_props,
+			SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
+			false,
+		)
 		var _a8: Node = SceneAssembly.attach(inputs, input, root)
 		input.root_path = input.get_path_to(root)
 
