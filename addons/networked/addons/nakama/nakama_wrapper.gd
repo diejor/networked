@@ -56,6 +56,12 @@ var _session
 var _socket
 var _bridge
 
+# Single-flight guard for connect_async. While a connect is in flight, late
+# callers await _connect_finished instead of starting a second connect that
+# would clobber the shared handles and orphan the first one's pending await.
+var _connecting := false
+signal _connect_finished(result: Dictionary)
+
 
 ## Returns [code]true[/code] when the Nakama addon scripts are installed.
 ##
@@ -80,6 +86,25 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 	if not is_instance_valid(host):
 		return { "ok": false, "error": "Invalid host node" }
 
+	# Already connected: hand back the live session without rebuilding it.
+	if is_ready():
+		return { "ok": true, "error": "" }
+
+	# A connect is already running: wait for it rather than starting a second
+	# one. Concurrent callers (the host path and a lobby-browse refresh) would
+	# otherwise both build a facade and overwrite each other's handles, leaving
+	# the first caller awaiting an orphaned client forever.
+	if _connecting:
+		return await _connect_finished
+
+	_connecting = true
+	var result := await _perform_connect(host, config)
+	_connecting = false
+	_connect_finished.emit(result)
+	return result
+
+
+func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 	var facade_script: Variant = load(_FACADE_PATH)
 	_facade = facade_script.new()
 	_facade.name = "NakamaFacade"

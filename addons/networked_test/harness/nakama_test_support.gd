@@ -61,9 +61,12 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()
-	var dir := _directory(tree)
+	var dir := directory(tree)
 	if dir != null:
-		dir.leave_lobby()
+		# leave_lobby is a coroutine when it deletes a hosted browse card, so
+		# await it before freeing the tree or the storage delete races the
+		# facade teardown.
+		await dir.leave_lobby()
 	tree.queue_free()
 	if scene_tree:
 		await NetwTestSuite.drain_frames(scene_tree, 5)
@@ -145,7 +148,7 @@ static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
 
 
 static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
-	var dir := _directory(tree)
+	var dir := directory(tree)
 	if dir == null:
 		dir = NakamaLobbyDirectory.new()
 		dir.name = &"NakamaLobbyDirectory"
@@ -157,7 +160,11 @@ static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
 	dir.local_member_name = "%s-%s" % [_run_prefix(), username]
 
 
-static func _directory(tree: MultiplayerTree) -> NakamaLobbyDirectory:
+## Returns the [NakamaLobbyDirectory] attached to [param tree].
+##
+## [method MultiplayerTree.find_service_node] only matches scene-owned nodes, so
+## a directory added with [code].new()[/code] falls back to a lookup by node name.
+static func directory(tree: MultiplayerTree) -> NakamaLobbyDirectory:
 	var dir := tree.find_service_node(NakamaLobbyDirectory) as NakamaLobbyDirectory
 	if dir != null:
 		return dir
