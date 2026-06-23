@@ -77,6 +77,19 @@ enum SchemaMismatchPolicy {
 ## What to do when a loaded record has columns absent from the current schema.
 @export var mismatch_policy: SchemaMismatchPolicy = SchemaMismatchPolicy.PURGE
 
+## Save-slot selector. Choose a slot with [method NetwDatabase.SlotEngine.open]
+## before the first schema registration locks the backend.
+var slots: SlotEngine
+
+## Per-table cache-warming strategy applied at backend init. Defaults to
+## [EagerWarmPolicy] (warm everything). Clear it to [code]null[/code] to leave
+## every table to lazy fetch-on-miss. Synchronous backends ignore it.
+@export var warm_policy: WarmPolicy = EagerWarmPolicy.new()
+
+
+func _init() -> void:
+	slots = SlotEngine.new(self)
+
 # table -> Array[StringName] of declared column names
 var _schema: Dictionary[StringName, Array] = { }
 var _initialized: bool = false
@@ -147,20 +160,20 @@ func declare_table(
 # ── Dynamic property proxy ────────────────────────────────────────────────────
 
 
-## Exposes registered tables as properties for ergonomic access.
-##
-## Any registered table name resolves to its [NetwDatabase.TableRepository]:
-## [codeblock lang=gdscript]
-## var record := db.players.fetch(username)
-## [/codeblock]
+# Exposes registered tables as properties for ergonomic access.
+#
+# Any registered table name resolves to its [NetwDatabase.TableRepository]:
+# [codeblock lang=gdscript]
+# var record := db.players.fetch(username)
+# [/codeblock]
 func _get(property: StringName) -> Variant:
 	if _schema.has(property):
 		return table(property)
 	return null
 
 
-## Makes registered table names visible to the GDScript autocomplete and
-## property inspector.
+# Makes registered table names visible to the GDScript autocomplete and
+# property inspector.
 func _get_property_list() -> Array[Dictionary]:
 	var props: Array[Dictionary] = []
 	for tname: StringName in _schema:
@@ -212,6 +225,7 @@ func _initialize_backend() -> void:
 	if _initialized:
 		return
 	_initialized = true
+	slots._lock()
 	if not backend:
 		Netw.dbg.error(
 			"NetwDatabase: no backend assigned. " +
@@ -219,7 +233,8 @@ func _initialize_backend() -> void:
 			func(m): push_error(m)
 		)
 		return
-	var err := backend.initialize(_schema)
+	@warning_ignore("redundant_await")
+	var err := await backend.initialize(_schema, String(slots.current()))
 	if err != OK:
 		Netw.dbg.error(
 			"NetwDatabase: backend initialization failed. " +
@@ -227,6 +242,36 @@ func _initialize_backend() -> void:
 			[error_string(err)],
 			func(m): push_error(m)
 		)
+		return
+
+	@warning_ignore("redundant_await")
+	await backend.warm(_build_warm_directives())
+
+
+## Warms [param table] into the backend cache per [param request] at runtime.
+##
+## The escape hatch for driving warming from your own hooks (a scene load, a
+## menu) instead of relying on [member warm_policy] at init. Synchronous backends
+## no-op. Returns [constant OK] on success.
+func warm(table: StringName, request: WarmRequest) -> Error:
+	if not backend:
+		return ERR_UNCONFIGURED
+	@warning_ignore("redundant_await")
+	return await backend.warm([{ table = table, request = request }])
+
+
+# Asks the policy for one directive per registered table. Returns an empty batch
+# when no policy is set, leaving every table to lazy fetch-on-miss.
+func _build_warm_directives() -> Array:
+	var directives: Array = []
+	if not warm_policy:
+		return directives
+	for table: StringName in _schema:
+		var columns: Array[StringName] = _schema[table]
+		var request := warm_policy.plan_table(table, columns)
+		if request and request.kind != WarmRequest.Kind.NONE:
+			directives.append({ table = table, request = request })
+	return directives
 
 # ── Schema diffing ────────────────────────────────────────────────────────────
 
@@ -322,7 +367,8 @@ func transaction(body: Callable) -> Error:
 
 	var ctx := TransactionContext.new()
 	body.call(ctx)
-	var err := ctx._commit(backend)
+	@warning_ignore("redundant_await")
+	var err := await ctx._commit(backend)
 
 	if err == OK:
 		var tables: Dictionary = { }
@@ -362,7 +408,8 @@ func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> 
 		out_error[0] = ERR_UNCONFIGURED
 		return { }
 
-	var record := backend.find_by_id(table, id)
+	@warning_ignore("redundant_await")
+	var record := await backend.find_by_id(table, id)
 	var hit := not record.is_empty()
 	record_loaded.emit(table, id, hit)
 
@@ -398,12 +445,14 @@ func _find_all(table: StringName, filter: Dictionary = { }) -> Array[Dictionary]
 			func(m): push_error(m)
 		)
 		return []
-	return backend.find_all(table, filter)
+	@warning_ignore("redundant_await")
+	return await backend.find_all(table, filter)
 
 
 ## Permanently removes [param id] from [param table].
 func delete(table: StringName, id: StringName) -> Error:
-	return _delete_internal(table, id)
+	@warning_ignore("redundant_await")
+	return await _delete_internal(table, id)
 
 
 # Deletes a record from the backend.
@@ -414,7 +463,74 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 			func(m): push_error(m)
 		)
 		return ERR_UNCONFIGURED
-	return backend.delete(table, id)
+	@warning_ignore("redundant_await")
+	return await backend.delete(table, id)
+
+# ── SlotEngine ────────────────────────────────────────────────────────────────
+
+
+## Selects which save slot the database opens and enumerates the others.
+##
+## A slot is a namespace prefix that isolates one independent save of the game.
+## The choice is startup-only. [method open] must run before the first schema
+## registration triggers [method NetwDatabase._initialize_backend], which locks
+## the engine. [method list] and [method delete] still work with no slot open, so
+## a save-select menu can browse slots before init.
+## [codeblock]
+## # Before any SaveComponent registers its schema:
+## db.slots.open(&"slot_2")
+##
+## # From a save-select menu, no slot opened yet:
+## for slot in await db.slots.list():
+##     print(slot)
+## await db.slots.delete(&"slot_1")
+## [/codeblock]
+class SlotEngine:
+	var _db: NetwDatabase
+	var _slot: StringName = &"default"
+	var _locked: bool = false
+
+
+	func _init(db: NetwDatabase) -> void:
+		_db = db
+
+
+	## Opens [param slot] as the active save. Callable only before the backend
+	## locks at init.
+	func open(slot: StringName) -> void:
+		assert(
+			not _locked,
+			"NetwDatabase.SlotEngine: slot is startup-only and the backend is " +
+			"already initialized. Open a slot before any SaveComponent registers.",
+		)
+		_slot = slot
+
+
+	## Returns the active slot, [code]&"default"[/code] when none was opened.
+	func current() -> StringName:
+		return _slot
+
+
+	## Returns every save slot the backend holds. Works with no slot open.
+	func list() -> Array[StringName]:
+		if not _db.backend:
+			return [] as Array[StringName]
+		@warning_ignore("redundant_await")
+		return await _db.backend.list_namespaces()
+
+
+	## Permanently removes [param slot] and all its records. Works with no slot
+	## open. Returns [constant OK] on success.
+	func delete(slot: StringName) -> Error:
+		if not _db.backend:
+			return ERR_UNCONFIGURED
+		@warning_ignore("redundant_await")
+		return await _db.backend.delete_namespace(String(slot))
+
+
+	# Freezes the slot choice once the backend initializes.
+	func _lock() -> void:
+		_locked = true
 
 # ── TransactionContext ────────────────────────────────────────────────────────
 
@@ -434,14 +550,11 @@ class TransactionContext:
 		_queue.append({ table = table, id = id, data = data })
 
 
-	## Flushes all queued operations to [param backend].
+	## Flushes all queued operations to [param backend] as one batch.
 	## Returns the first error encountered, or [constant OK].
 	func _commit(backend: NetwDatabaseBackend) -> Error:
-		for entry in _queue:
-			var err := backend.upsert(entry.table, entry.id, entry.data)
-			if err != OK:
-				return err
-		return OK
+		@warning_ignore("redundant_await")
+		return await backend.commit(_queue)
 
 
 ## A typed read/write interface for a single database table.
@@ -502,7 +615,8 @@ class TableRepository:
 	## [/codeblock]
 	func fetch(id: StringName) -> NetwRecord:
 		var out_error: Array[int] = [OK]
-		var record: Dictionary = _db._find_by_id(_table, id, out_error)
+		@warning_ignore("redundant_await")
+		var record: Dictionary = await _db._find_by_id(_table, id, out_error)
 		if out_error[0] != OK or record.is_empty():
 			return null
 		var loaded_record: NetwRecord = _make_record()
@@ -518,7 +632,8 @@ class TableRepository:
 	## var err := db.table(&"players").put(username, save_comp.record)
 	## [/codeblock]
 	func put(id: StringName, record: NetwRecord) -> Error:
-		return _db.transaction(
+		@warning_ignore("redundant_await")
+		return await _db.transaction(
 			func(tx: NetwDatabase.TransactionContext) -> void:
 				tx.queue_upsert(_table, id, record.to_dict())
 		)
@@ -527,7 +642,8 @@ class TableRepository:
 	## Permanently removes [param id] from the table.
 	## Idempotent. Returns [constant OK] even when the record does not exist.
 	func delete(id: StringName) -> Error:
-		return _db.delete(_table, id)
+		@warning_ignore("redundant_await")
+		return await _db.delete(_table, id)
 
 
 	## Returns every [NetwRecord] in the table matching [param filter].
@@ -538,7 +654,8 @@ class TableRepository:
 	## [/codeblock]
 	func fetch_all(filter: Dictionary = { }) -> Array[NetwRecord]:
 		var results: Array[NetwRecord] = []
-		for record in _db._find_all(_table, filter):
+		@warning_ignore("redundant_await")
+		for record in await _db._find_all(_table, filter):
 			var loaded_record: NetwRecord = _make_record()
 			loaded_record.from_dict(record)
 			results.append(loaded_record)

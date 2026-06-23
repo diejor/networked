@@ -57,7 +57,7 @@ func test_flush_and_hydrate_round_trip_via_database() -> void:
 	save_comp.record.set_value(&"health", 100)
 	db._register_schema(&"players", [&"health"])
 
-	var err: Error = save_comp._flush()
+	var err: Error = await save_comp._flush()
 	assert_that(err).is_equal(OK)
 
 	var raw: Dictionary = backend.find_by_id(&"players", &"valeria")
@@ -121,7 +121,7 @@ func test_flush_persists_all_entity_values() -> void:
 	save_comp.record.set_value(&"score", 999)
 	save_comp.record.set_value(&"level", 5)
 	db._register_schema(&"players", [&"score", &"level"])
-	save_comp._flush()
+	await save_comp._flush()
 
 	var raw: Dictionary = backend.find_by_id(&"players", &"jose")
 	assert_that(raw.get(&"score")).is_equal(999)
@@ -132,19 +132,19 @@ func test_table_repository_fetch_and_put_round_trip_entities() -> void:
 	db._register_schema(&"players", [&"score"])
 	await get_tree().process_frame
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"carol", { &"score": 42 })
 	)
 
-	var entity: NetwRecord = db.table(&"players").fetch(&"carol")
+	var entity: NetwRecord = await db.table(&"players").fetch(&"carol")
 	assert_that(entity).is_not_null()
 	assert_that(entity.get_value(&"score")).is_equal(42)
 
 	var dave: DictionaryRecord = DictionaryRecord.new()
 	dave.set_value(&"score", 77)
 
-	var err: Error = db.table(&"players").put(&"dave", dave)
+	var err: Error = await db.table(&"players").put(&"dave", dave)
 	assert_that(err).is_equal(OK)
 
 	var raw: Dictionary = backend.find_by_id(&"players", &"dave")
@@ -220,12 +220,12 @@ func test_fetch_reflects_record_existence() -> void:
 
 	db._register_schema(&"players", [&"created"])
 
-	assert_that(db.table(&"players").fetch(&"Dave")).is_null()
+	assert_that(await db.table(&"players").fetch(&"Dave")).is_null()
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(&"players", &"Dave", { &"created": true })
 	)
 	await get_tree().process_frame
 
-	assert_that(db.table(&"players").fetch(&"Dave")).is_not_null()
+	assert_that(await db.table(&"players").fetch(&"Dave")).is_not_null()

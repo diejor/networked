@@ -538,7 +538,8 @@ func _get_entity_id() -> StringName:
 
 ## Flushes the current [member record] to [member database] immediately.
 func flush() -> Error:
-	return _flush()
+	@warning_ignore("redundant_await")
+	return await _flush()
 
 
 # Internal flush implementation.
@@ -550,7 +551,8 @@ func _flush() -> Error:
 		)
 		return ERR_UNCONFIGURED
 	var entity_id := _get_entity_id()
-	var db_err := database.transaction(
+	@warning_ignore("redundant_await")
+	var db_err := await database.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(table_name, entity_id, record.to_dict())
 	)
@@ -607,7 +609,8 @@ func _flush_keys(keys: Array[StringName]) -> Error:
 	if subset.is_empty():
 		return OK
 	var entity_id := _get_entity_id()
-	return database.transaction(
+	@warning_ignore("redundant_await")
+	return await database.transaction(
 		func(tx: NetwDatabase.TransactionContext) -> void:
 			tx.queue_upsert(table_name, entity_id, subset)
 	)
@@ -622,7 +625,8 @@ func hydrate_from_db() -> void:
 		return
 	if not _initialized:
 		_instantiate_sync()
-	var stored_record := database.table(table_name).fetch(_get_entity_id())
+	@warning_ignore("redundant_await")
+	var stored_record := await database.table(table_name).fetch(_get_entity_id())
 	hydrate(stored_record.to_dict() if stored_record else { })
 
 
@@ -832,5 +836,16 @@ func _handle_shutdown() -> void:
 		mt.notify_shutdown("Server is shutting down.")
 		await get_tree().create_timer(shutdown_notify_delay).timeout
 	SaveComponent._save_all_in(get_peer_context())
+	await _drain_database()
 	_dbg.info("All states saved. Quitting.")
 	(Engine.get_main_loop() as SceneTree).quit()
+
+
+# Drains a write-behind backend (e.g. NakamaDatabase) so its last flush window
+# is not lost on quit. Synchronous backends have no drain and this is a no-op.
+func _drain_database() -> void:
+	if not database or not database.backend:
+		return
+	if database.backend.has_method("drain"):
+		@warning_ignore("redundant_await")
+		await database.backend.drain()

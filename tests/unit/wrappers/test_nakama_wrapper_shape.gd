@@ -129,6 +129,40 @@ func test_storage_helper_shapes_match_wrapper_usage() -> void:
 	assert_bool(write.has_method("as_write")).is_true()
 
 
+func test_wrapper_exposes_generic_storage_helpers() -> void:
+	# Pins the parse-safe storage surface NakamaDatabase calls through the wrapper.
+	var wrapper := NakamaWrapper.new()
+	for method_name in [
+		"write_storage_objects",
+		"read_storage_objects",
+		"list_storage_objects",
+		"delete_storage_objects",
+		"use_session",
+	]:
+		assert_bool(wrapper.has_method(method_name)) \
+				.override_failure_message(
+					"NakamaWrapper is missing '%s'." % method_name,
+				).is_true()
+
+
+func test_session_service_exposes_auth_surface() -> void:
+	# Pins the shared-account API both NakamaLobbyDirectory and NakamaDatabase use.
+	var service: NakamaSessionService = auto_free(NakamaSessionService.new())
+	for method_name in [
+		"configure",
+		"connect_async",
+		"is_authenticated",
+		"client",
+		"session",
+		"create_socket",
+		"leave",
+	]:
+		assert_bool(service.has_method(method_name)) \
+				.override_failure_message(
+					"NakamaSessionService is missing '%s'." % method_name,
+				).is_true()
+
+
 func _script_has_method(script: Script, method_name: String) -> bool:
 	for method in script.get_script_method_list():
 		if method.name == method_name:

@@ -141,8 +141,11 @@ var _wrapper: NakamaWrapper
 var _peer: MultiplayerPeer
 var _hosted_match_id: String = ""
 var _id_to_match: Dictionary = { } # synthetic int id -> match id
+var _session_bound: bool = false # shared session resolved lazily on first connect
 
 
+## Overrides [method NetwService.service_entered] to initialize the internal
+## [NakamaWrapper] and connect matching error/close signals.
 func service_entered(_mt: MultiplayerTree) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
@@ -153,6 +156,8 @@ func service_entered(_mt: MultiplayerTree) -> void:
 	_wrapper.socket_closed.connect(_on_socket_closed)
 
 
+## Overrides [method NetwService.service_exiting] to clean up the hosted match,
+## leave the Nakama socket, and clear the multiplayer peer.
 func service_exiting(_mt: MultiplayerTree) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
@@ -321,6 +326,14 @@ func _ensure_connected() -> bool:
 		return false
 	if _wrapper.is_ready():
 		return true
+	# Bind the shared account lazily, after tree setup. add_child inside the
+	# service_entered window fails while the tree is still building its children,
+	# so this mirrors get_connect_session's lazy resolution.
+	if not _session_bound:
+		_session_bound = true
+		var mt := MultiplayerTree.resolve(self)
+		if mt:
+			_wrapper.use_session(mt.get_nakama_session())
 	var res := await _wrapper.connect_async(self, {
 		"server_key": server_key,
 		"host": host,

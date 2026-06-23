@@ -654,6 +654,29 @@ func get_connect_session() -> ConnectSession:
 	return session
 
 
+## Returns the session [NakamaSessionService], creating it on first access.
+##
+## Mirrors [method get_connect_session]: a registered service wins, else a
+## dropped-in node is adopted, else a fresh node is created and registered. Both
+## [NakamaLobbyDirectory] and [NakamaDatabase] resolve this one node so the relay
+## lobby and the save store share a single Nakama account.
+func get_nakama_session() -> NakamaSessionService:
+	if Engine.is_editor_hint():
+		return null
+	var registered := get_service(NakamaSessionService) as NakamaSessionService
+	if is_instance_valid(registered):
+		return registered
+	var existing := find_service_node(NakamaSessionService) as NakamaSessionService
+	if existing:
+		register_service(existing)
+		return existing
+	var session := NakamaSessionService.new()
+	session.name = &"NakamaSession"
+	add_child(session)
+	register_service(session)
+	return session
+
+
 static func _has_multiplayer_entity(node: Node) -> bool:
 	if node is MultiplayerEntity:
 		return true

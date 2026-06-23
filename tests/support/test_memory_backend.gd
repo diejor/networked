@@ -12,8 +12,8 @@ var delete_calls: Array[Dictionary] = []
 var _store: Dictionary = { }
 
 
-func initialize(schema: Dictionary) -> Error:
-	init_calls.append({ schema = schema })
+func initialize(schema: Dictionary, slot: String = "") -> Error:
+	init_calls.append({ schema = schema, slot = slot })
 	return OK
 
 

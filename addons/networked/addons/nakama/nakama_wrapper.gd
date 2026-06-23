@@ -49,12 +49,25 @@ signal match_join_error(message: String)
 ## transport drop.
 signal socket_closed()
 
-# Nakama handles.
+# Nakama handles. When _shared_session is set, _facade/_client/_session belong
+# to it and are read, not owned, by this wrapper.
 var _facade
 var _client
 var _session
 var _socket
 var _bridge
+
+# Optional shared authentication. When present, auth and storage route through
+# this session's account and the relay socket is built from its client. When
+# null, the wrapper self-authenticates (the standalone, pre-session path).
+var _shared_session: NakamaSessionService
+
+
+## Binds this wrapper to a shared [NakamaSessionService] so auth and storage
+## reuse one account. Call before [method connect_async]. A wrapper with no
+## shared session self-authenticates as before.
+func use_session(session: NakamaSessionService) -> void:
+	_shared_session = session
 
 # Single-flight guard for connect_async. While a connect is in flight, late
 # callers await _connect_finished instead of starting a second connect that
@@ -105,6 +118,22 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 
 
 func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
+	# Shared-session path: auth and socket come from the one account.
+	if _shared_session != null:
+		_shared_session.configure(config)
+		var auth := await _shared_session.connect_async()
+		if not auth.ok:
+			return auth
+		_facade = null # owned by the shared session, not freed by leave()
+		_client = _shared_session.client()
+		_session = _shared_session.session()
+		_socket = _shared_session.create_socket()
+		await _socket.connect_async(_session)
+		if not _socket.is_connected_to_host():
+			return { "ok": false, "error": "Nakama socket failed to connect" }
+		_build_bridge()
+		return { "ok": true, "error": "" }
+
 	var facade_script: Variant = load(_FACADE_PATH)
 	_facade = facade_script.new()
 	_facade.name = "NakamaFacade"
@@ -138,13 +167,18 @@ func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 	if not _socket.is_connected_to_host():
 		return { "ok": false, "error": "Nakama socket failed to connect" }
 
+	_build_bridge()
+	return { "ok": true, "error": "" }
+
+
+# Wires the relay bridge over the open socket and re-emits its lifecycle signals.
+func _build_bridge() -> void:
 	# NakamaRelayBridge is a networked class that names no Nakama type, so the
 	# wrapper references it directly instead of loading it by path.
 	_bridge = NakamaRelayBridge.new(_socket)
 	_bridge.match_joined.connect(func() -> void: match_joined.emit())
 	_bridge.match_join_error.connect(_on_bridge_join_error)
 	_socket.closed.connect(func() -> void: socket_closed.emit())
-	return { "ok": true, "error": "" }
 
 
 ## Returns [code]true[/code] once [method connect_async] has an open socket and
@@ -264,6 +298,140 @@ func delete_lobby_card(match_id: String) -> void:
 		return
 	var id: Variant = id_script.new(LOBBY_COLLECTION, match_id, "", "")
 	await _client.delete_storage_objects_async(_session, [id])
+
+# ── Generic storage objects ───────────────────────────────────────────────────
+
+
+## Writes a batch of storage [param objects] in one call, returning success.
+##
+## Each entry is a [Dictionary] with [code]collection[/code], [code]key[/code],
+## and [code]value[/code] (a JSON string), plus optional [code]read[/code] and
+## [code]write[/code] permissions (default owner-private). Resolves the client
+## from the shared [NakamaSessionService] when bound, so a storage-only wrapper never
+## opens a match socket.
+func write_storage_objects(objects: Array) -> bool:
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or objects.is_empty():
+		return false
+	var write_script: Variant = _nakama_class("NakamaWriteStorageObject")
+	if write_script == null:
+		return false
+	var payload: Array = []
+	for entry in objects:
+		payload.append(write_script.new(
+			String(entry.get("collection", "")),
+			String(entry.get("key", "")),
+			int(entry.get("read", 1)),
+			int(entry.get("write", 1)),
+			String(entry.get("value", "")),
+			"",
+		))
+	var res = await client.write_storage_objects_async(session, payload)
+	return res != null and not res.is_exception()
+
+
+## Reads a batch of storage objects named by [param ids].
+##
+## Each id is a [Dictionary] with [code]collection[/code] and [code]key[/code],
+## plus an optional [code]user_id[/code] (defaults to the session user). Returns
+## an [Array] of [code]{ collection, key, value }[/code] with [code]value[/code]
+## parsed from JSON. Empty before the session is authenticated.
+func read_storage_objects(ids: Array) -> Array:
+	var out: Array = []
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or ids.is_empty():
+		return out
+	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
+	if id_script == null:
+		return out
+	var own := _own_user_id()
+	var query: Array = []
+	for entry in ids:
+		query.append(id_script.new(
+			String(entry.get("collection", "")),
+			String(entry.get("key", "")),
+			String(entry.get("user_id", own)),
+			"",
+		))
+	var res = await client.read_storage_objects_async(session, query)
+	if res == null or res.is_exception():
+		return out
+	for object in res.objects:
+		out.append({
+			"collection": String(object.collection),
+			"key": String(object.key),
+			"value": JSON.parse_string(String(object.value)),
+		})
+	return out
+
+
+## Lists every storage object under [param collection] for the session user.
+##
+## Returns [code]{ objects: Array, cursor: String }[/code] where each object is
+## [code]{ key, value }[/code] with a JSON-parsed value. Pass [param cursor] to
+## page. Empty before the session is authenticated.
+func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dictionary:
+	var out := { "objects": [], "cursor": "" }
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null:
+		return out
+	var res = await client.list_storage_objects_async(
+		session, collection, _own_user_id(), limit, cursor,
+	)
+	if res == null or res.is_exception():
+		return out
+	var objects: Array = []
+	for object in res.objects:
+		objects.append({
+			"key": String(object.key),
+			"value": JSON.parse_string(String(object.value)),
+		})
+	out["objects"] = objects
+	out["cursor"] = String(res.cursor) if res.cursor != null else ""
+	return out
+
+
+## Deletes a batch of storage objects named by [param ids], returning success.
+##
+## Each id is a [Dictionary] with [code]collection[/code] and [code]key[/code].
+## Idempotent on the server side.
+func delete_storage_objects(ids: Array) -> bool:
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or ids.is_empty():
+		return false
+	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
+	if id_script == null:
+		return false
+	var payload: Array = []
+	for entry in ids:
+		payload.append(id_script.new(
+			String(entry.get("collection", "")),
+			String(entry.get("key", "")),
+			"",
+			"",
+		))
+	var res = await client.delete_storage_objects_async(session, payload)
+	return res != null and not res.is_exception()
+
+
+# Resolves the active client, preferring the shared session when bound.
+func _resolve_client():
+	return _shared_session.client() if _shared_session != null else _client
+
+
+# Resolves the active session, preferring the shared session when bound.
+func _resolve_session():
+	return _shared_session.session() if _shared_session != null else _session
+
+
+# Returns the authenticated user's id, or an empty string before auth.
+func _own_user_id() -> String:
+	var session = _resolve_session()
+	return String(session.user_id) if session != null else ""
 
 
 # Resolves a Nakama API class by its global name through the engine class

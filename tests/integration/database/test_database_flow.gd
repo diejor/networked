@@ -36,7 +36,7 @@ func _register_and_wait(table: StringName, columns: Array[StringName]) -> void:
 func test_save_flow_writes_to_backend() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
@@ -48,7 +48,7 @@ func test_save_flow_writes_to_backend() -> void:
 			)
 	)
 
-	var record: Dictionary = db._find_by_id(&"players", &"valeria")
+	var record: Dictionary = await db._find_by_id(&"players", &"valeria")
 	assert_that(record.get(&"position")).is_equal(Vector2(10, 20))
 	assert_that(record.get(&"health")).is_equal(100)
 
@@ -56,7 +56,7 @@ func test_save_flow_writes_to_backend() -> void:
 func test_load_flow_reads_from_disk() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
@@ -80,7 +80,7 @@ func test_load_flow_reads_from_disk() -> void:
 	db2._register_schema(&"players", [&"position", &"health"])
 	await get_tree().process_frame
 
-	var record: Dictionary = db2._find_by_id(&"players", &"jose")
+	var record: Dictionary = await db2._find_by_id(&"players", &"jose")
 	assert_that(record.get(&"position")).is_equal(Vector2(5, 15))
 	assert_that(record.get(&"health")).is_equal(80)
 
@@ -88,7 +88,7 @@ func test_load_flow_reads_from_disk() -> void:
 func test_two_entities_isolated() -> void:
 	await _register_and_wait(&"players", [&"position", &"health"])
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(
 				&"players",
@@ -108,8 +108,8 @@ func test_two_entities_isolated() -> void:
 			)
 	)
 
-	var valeria: Dictionary = db._find_by_id(&"players", &"valeria")
-	var jose: Dictionary = db._find_by_id(&"players", &"jose")
+	var valeria: Dictionary = await db._find_by_id(&"players", &"valeria")
+	var jose: Dictionary = await db._find_by_id(&"players", &"jose")
 
 	assert_that(valeria.get(&"position")).is_equal(Vector2(1, 2))
 	assert_that(jose.get(&"position")).is_equal(Vector2(9, 8))
@@ -136,7 +136,7 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	db_v1._register_schema(&"players", [&"health", &"gold"])
 	await get_tree().process_frame
 
-	db_v1.transaction(
+	await db_v1.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"players", &"charlie", { &"health": 70, &"gold": 99 })
 	)
@@ -155,14 +155,14 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	await get_tree().process_frame
 
 	var out_err: Array[int] = [OK]
-	var record: Dictionary = db_v2._find_by_id(&"players", &"charlie", out_err)
+	var record: Dictionary = await db_v2._find_by_id(&"players", &"charlie", out_err)
 
 	# PURGE policy signals ERR_FILE_NOT_FOUND to indicate a clean slate.
 	assert_that(out_err[0]).is_equal(ERR_FILE_NOT_FOUND)
 	assert_that(record.is_empty()).is_true()
 
 	var out2: Array[int] = [OK]
-	var after_purge: Dictionary = db_v2._find_by_id(
+	var after_purge: Dictionary = await db_v2._find_by_id(
 		&"players",
 		&"charlie",
 		out2,
@@ -187,7 +187,7 @@ func test_schema_mismatch_load_partial_preserves_known_columns() -> void:
 
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL
 
-	var record: Dictionary = db._find_by_id(&"items", &"sword")
+	var record: Dictionary = await db._find_by_id(&"items", &"sword")
 	assert_that(record.get(&"damage")).is_equal(15)
 	assert_that(record.get(&"rarity")).is_equal(3)
 	assert_that(record.has(&"old_stat")).is_false()
@@ -201,7 +201,7 @@ func test_schema_mismatch_fail_returns_err_and_keeps_record() -> void:
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.FAIL
 
 	var out_err: Array[int] = [OK]
-	var record: Dictionary = db._find_by_id(&"items", &"axe", out_err)
+	var record: Dictionary = await db._find_by_id(&"items", &"axe", out_err)
 
 	assert_that(out_err[0]).is_equal(ERR_UNCONFIGURED)
 	assert_that(record.is_empty()).is_true()
@@ -214,7 +214,7 @@ func test_schema_mismatch_fail_returns_err_and_keeps_record() -> void:
 func test_record_loaded_signal_fires_on_find_by_id() -> void:
 	await _register_and_wait(&"players", [&"health"])
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"players", &"diana", { &"health": 60 })
 	)
@@ -227,7 +227,7 @@ func test_record_loaded_signal_fires_on_find_by_id() -> void:
 			hit_value[0] = hit
 	)
 
-	db._find_by_id(&"players", &"diana")
+	await db._find_by_id(&"players", &"diana")
 
 	assert_that(fired[0]).is_true()
 	assert_that(hit_value[0]).is_true()
@@ -239,7 +239,7 @@ func test_record_loaded_hit_false_on_miss() -> void:
 	var hit_value := [true]
 	db.record_loaded.connect(func(_t, _id, hit: bool): hit_value[0] = hit)
 
-	db._find_by_id(&"players", &"nobody")
+	await db._find_by_id(&"players", &"nobody")
 
 	assert_that(hit_value[0]).is_false()
 
@@ -253,7 +253,7 @@ func test_schema_mismatch_signal_fires_during_load() -> void:
 	db.schema_mismatch.connect(func(_t, _id, _m, _u): mismatch_fired[0] = true)
 	db.mismatch_policy = NetwDatabase.SchemaMismatchPolicy.LOAD_PARTIAL
 
-	db._find_by_id(&"players", &"eve")
+	await db._find_by_id(&"players", &"eve")
 
 	assert_that(mismatch_fired[0]).is_true()
 
@@ -264,7 +264,7 @@ func test_transaction_committed_signal_fires_after_commit() -> void:
 	var record_count := [0]
 	db.transaction_committed.connect(func(_tc, rc: int): record_count[0] = rc)
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"players", &"frank", { &"health": 30 })
 			tx.queue_upsert(&"players", &"grace", { &"health": 25 })
@@ -276,18 +276,18 @@ func test_transaction_committed_signal_fires_after_commit() -> void:
 func test_unregistered_table_read_does_not_purge_existing_record() -> void:
 	await _register_and_wait(&"items", [&"damage"])
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"items", &"sword", { &"damage": 15 })
 	)
 
-	var raw: Dictionary = db._find_by_id(&"items", &"sword")
+	var raw: Dictionary = await db._find_by_id(&"items", &"sword")
 	assert_that(raw.is_empty()).is_false()
 
 	# Erase schema to simulate a read on an unregistered table.
 	db._schema.erase(&"items")
 
-	var fetched := db.table(&"items").fetch(&"sword")
+	var fetched := await db.table(&"items").fetch(&"sword")
 	assert_that(fetched).is_null()
 
 	# Record should still be on disk.
