@@ -1,28 +1,13 @@
-## SPIKE — DELETE AFTER READING THE FINDING.
+## Regression test for the overlap primitives behind the [SaveComponent] lint.
 ##
-## Throwaway probe for the SaveComponent security refactor (per-property trust).
-## It answers the one question that source-reading could not settle: at the
-## candidate overlap-detection point (post-[code]_ready[/code]), are sibling
-## [ProxySynchronizer] real paths populated so overlap detection can see that a
-## save-tracked property is ALSO governed by another synchronizer — AND does that
-## still hold after a teleport reparent re-fires [code]_ready[/code] on the whole
-## subtree via [code]TPComponent._request_ready_recursive[/code]?
-##
-## What reading already settled (NOT re-proved here):
-##   - Bundling does not hide payload columns: get_real_path/get_virtual_properties
-##     still expose them (PackedSynchronizer.finalize only flips the WIRE config to
-##     NEVER). So overlap detection reads get_real_path, not the config.
-##   - `spawning` is too early: MultiplayerEntity emits it inside
-##     _on_owner_tree_entered, BEFORE sibling synchronizers' _ready (where
-##     ProxySynchronizer.finalize runs). Detection must be a post-_ready pass.
-##
-## What this spike pins at runtime:
-##   - Overlap resolves at a post-_ready point and survives a teleport reparent.
-##   - The authority divergence that makes "read the source node's authority"
-##     unsafe: the StateSynchronizer governing `position` is authority 1 (server),
-##     while the body node carries the controller's (client) authority. A
-##     source-node check would misclassify a server-owned property as client-owned.
-class_name TestSaveOverlapDetectionSpike
+## [method SynchronizersCache.governed_targets] and
+## [method NetwEntity.governs_property] must see that a save-tracked property is
+## ALSO governed by another synchronizer, at a post-[code]_ready[/code] point and
+## after a teleport reparent re-fires [code]_ready[/code] on the whole subtree via
+## [code]TPComponent._request_ready_recursive[/code]. The lint is non-load-bearing
+## (the config is frozen from the declaration), so this pins only the detection
+## primitives, not warning emission.
+class_name TestSaveOverlapLint
 extends NetwTestSuite
 
 const SPAWNER_PATH := "OverlapPlayer/MultiplayerEntity"
@@ -46,7 +31,7 @@ func before_test() -> void:
 	var level_2_path := NetwPathNamespace.next_path("level", "TestLevel2")
 
 	# SaveComponent tracks `position`; the StateSynchronizer ALSO governs
-	# `position` (authority 1) — the overlap case. with_state now bakes a packable
+	# `position` (authority 1) -- the overlap case. with_state bakes a packable
 	# real-path config, so the payload survives the harness join (pack/instantiate).
 	player_builder = PlayerBuilder.new("OverlapPlayer") \
 			.with_root(Node2D) \
@@ -98,35 +83,23 @@ func _spawn_player(scene_path: String) -> Node2D:
 	return await harness.join_player(client0, scene_path, SPAWNER_PATH) as Node2D
 
 
-# Resolves a ProxySynchronizer's virtual property to its live [object, sub_path].
-# This is the candidate overlap key: two synchronizers overlap when they resolve
-# to the same object instance and the same sub-path.
-func _resolve_target(sync: ProxySynchronizer, vname: StringName) -> Array:
-	var root := sync.get_node_or_null(sync.root_path)
-	if not root:
-		return []
-	var path := sync.get_real_path(vname)
-	if path.is_empty():
-		return []
-	var rr := root.get_node_and_resource(path)
-	return [rr[0], rr[2]]
-
-
 func _assert_overlap(player: Node) -> void:
 	var save: SaveComponent = player.get_node("%SaveComponent")
 	var state := player.get_node("StateSync") as StateSynchronizer
+	var entity := NetwEntity.of(player)
 
 	# Both siblings finalized: real paths are populated post-_ready.
-	assert_bool(save.get_real_path(&"position").is_empty()).is_false()
+	var save_path := save.get_real_path(&"position")
+	assert_bool(save_path.is_empty()).is_false()
 	assert_bool(state.get_real_path(&"position").is_empty()).is_false()
 
-	# Overlap resolves: same object instance + same sub-path.
-	var save_t := _resolve_target(save, &"position")
-	var state_t := _resolve_target(state, &"position")
-	assert_bool(save_t.is_empty()).is_false()
-	assert_bool(state_t.is_empty()).is_false()
-	assert_object(save_t[0]).is_same(state_t[0])
-	assert_that(save_t[1]).is_equal(state_t[1])
+	# StateSync governs the same live target as the save property.
+	var state_targets := SynchronizersCache.governed_targets(state, player)
+	assert_array(state_targets).is_not_empty()
+
+	# The entity-level accessor the lint runs on (excluding the SaveComponent
+	# itself) still finds the StateSync that governs the same target.
+	assert_bool(entity.governs_property(save_path, save)).is_true()
 
 
 func test_overlap_resolves_at_post_ready() -> void:

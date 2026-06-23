@@ -13,6 +13,31 @@
 class_name SaveComponent
 extends ProxySynchronizer
 
+## Per-property persistence trust, frozen in the scene declaration.
+##
+## The mode is a pure function of the scene declaration, so it is computed once
+## at setup and never recomputed when control transfers. This is what lets a
+## server-authoritative save resist forgery: the trust does not follow the
+## recursive authority stomp.
+## [codeblock]
+## # position is produced by a governing synchronizer; never trust the client.
+## entity.contribute_save_property(self, &"position", &"position")
+## # a save-only cosmetic the client genuinely owns.
+## entity.contribute_save_property(
+##     self, &"title", &"title", SaveComponent.SaveMode.CLIENT
+## )
+## [/codeblock]
+enum SaveMode {
+	## The server reads the live value from the scene and flushes it. The
+	## property is [constant SceneReplicationConfig.REPLICATION_MODE_NEVER] on
+	## the wire, so there is no client to server channel to forge.
+	SNAPSHOT,
+	## SaveComponent replicates the property client to server
+	## ([constant SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE]). The
+	## deliberate, declared client-authoritative-save case.
+	CLIENT,
+}
+
 ## Emitted after sync setup completes and the synchronizer is ready.
 signal instantiated
 ## Emitted after a save state is loaded (even if the record was not found).
@@ -29,11 +54,82 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 var _initialized: bool = false
 var _state_changed: bool = false
 
+# Per-property SaveMode declaration. Persisted (storage) but hidden from the
+# inspector via _validate_property; edited through the mode/<prop> widgets.
+@export var _save_modes: Dictionary[StringName, SaveMode] = { }
+
+# Per-property snapshot interval in seconds (0 inherits delta_interval). Same
+# storage/visibility treatment as _save_modes; edited through interval/<prop>.
+@export var _save_intervals: Dictionary[StringName, float] = { }
+
+# Runtime persistence engine built once from the frozen declaration in
+# _setup_sync. Drives snapshot/client classification and per-prop snapshot timers.
+var _model: _SaveModel
+
 
 # Per-peer storage bucket for SaveComponent.
 class Bucket extends RefCounted:
 	var registered: Array[SaveComponent] = []
 	var shutting_down: bool = false
+
+
+# Captures the frozen per-property declaration and the server-side snapshot
+# timers. Built once at setup so classification never recomputes on control
+# transfer.
+class _SaveModel extends RefCounted:
+	var _modes: Dictionary[StringName, int] = { }
+	var _intervals: Dictionary[StringName, float] = { }
+	var _accum: Dictionary[StringName, float] = { }
+
+
+	func _init(
+			modes: Dictionary,
+			intervals: Dictionary,
+			props: Array[StringName],
+	) -> void:
+		for v in props:
+			_modes[v] = modes.get(v, SaveComponent.SaveMode.SNAPSHOT)
+			_intervals[v] = intervals.get(v, 0.0)
+			_accum[v] = 0.0
+
+
+	func mode_of(v: StringName) -> int:
+		return _modes.get(v, SaveComponent.SaveMode.SNAPSHOT)
+
+
+	func interval_of(v: StringName, fallback: float) -> float:
+		var i: float = _intervals.get(v, 0.0)
+		return i if i > 0.0 else fallback
+
+
+	func client_props() -> Array[StringName]:
+		return _props_of(SaveComponent.SaveMode.CLIENT)
+
+
+	func snapshot_props() -> Array[StringName]:
+		return _props_of(SaveComponent.SaveMode.SNAPSHOT)
+
+
+	func _props_of(mode: int) -> Array[StringName]:
+		var out: Array[StringName] = []
+		for v: StringName in _modes:
+			if _modes[v] == mode:
+				out.append(v)
+		return out
+
+
+	# Advances per-prop accumulators by [param delta] and returns the SNAPSHOT
+	# props whose interval elapsed this step.
+	func due(delta: float, fallback_interval: float) -> Array[StringName]:
+		var out: Array[StringName] = []
+		for v: StringName in _modes:
+			if _modes[v] != SaveComponent.SaveMode.SNAPSHOT:
+				continue
+			_accum[v] += delta
+			if _accum[v] >= interval_of(v, fallback_interval):
+				_accum[v] = 0.0
+				out.append(v)
+		return out
 
 ## The [NetwRecord] whose data is tracked and persisted.
 var record: NetwRecord = DictionaryRecord.new()
@@ -97,6 +193,10 @@ func _ready() -> void:
 		delta_synchronized.connect(client_synchronized.emit)
 	set_visibility_for(MultiplayerPeer.TARGET_PEER_SERVER, true)
 
+	# Only the server runs the snapshot loop; clients leave SNAPSHOT props inert.
+	set_process(multiplayer.is_server())
+	_run_overlap_lint.call_deferred()
+
 
 func _exit_tree() -> void:
 	if not Engine.is_editor_hint():
@@ -118,7 +218,79 @@ func _get_property_list() -> Array[Dictionary]:
 	for entity_key: StringName in _properties:
 		var value: Variant = record.get_value(entity_key, null)
 		properties.append({ "name": entity_key, "type": typeof(value) })
+
+	if not Engine.is_editor_hint():
+		return properties
+
+	var keys := _editor_save_keys()
+	if keys.is_empty():
+		return properties
+	properties.append({
+		"name": "Save Modes",
+		"type": TYPE_NIL,
+		"usage": PROPERTY_USAGE_GROUP,
+		"hint_string": "mode/,interval/",
+	})
+	for key: StringName in keys:
+		properties.append({
+			"name": "mode/" + key,
+			"type": TYPE_INT,
+			"usage": PROPERTY_USAGE_EDITOR,
+			"hint": PROPERTY_HINT_ENUM,
+			"hint_string": "Snapshot,Client",
+		})
+		properties.append({
+			"name": "interval/" + key,
+			"type": TYPE_FLOAT,
+			"usage": PROPERTY_USAGE_EDITOR,
+			"hint": PROPERTY_HINT_RANGE,
+			"hint_string": "0,60,0.1,or_greater,suffix:s",
+		})
 	return properties
+
+
+func _get(property: StringName) -> Variant:
+	if property.begins_with("mode/"):
+		return _save_modes.get(
+			StringName(property.trim_prefix("mode/")), SaveMode.SNAPSHOT,
+		)
+	if property.begins_with("interval/"):
+		return _save_intervals.get(
+			StringName(property.trim_prefix("interval/")), 0.0,
+		)
+	return super._get(property)
+
+
+func _set(property: StringName, value: Variant) -> bool:
+	if property.begins_with("mode/"):
+		_save_modes[StringName(property.trim_prefix("mode/"))] = int(value)
+		return true
+	if property.begins_with("interval/"):
+		_save_intervals[StringName(property.trim_prefix("interval/"))] = float(value)
+		return true
+	return super._set(property, value)
+
+
+func _validate_property(property: Dictionary) -> void:
+	if property.name == "_save_modes" or property.name == "_save_intervals":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+
+
+# Tracked virtual leaf names from the inspector replication_config, the
+# edit-time analog of get_virtual_properties() (runtime registration has not
+# run yet in the editor).
+func _editor_save_keys() -> Array[StringName]:
+	var out: Array[StringName] = []
+	if not replication_config:
+		return out
+	for path: NodePath in replication_config.get_properties():
+		var sub := path.get_subname_count()
+		if sub == 0:
+			continue
+		var leaf := StringName(path.get_subname(sub - 1))
+		if leaf not in out:
+			out.append(leaf)
+	return out
 
 # Internal sync setup.
 
@@ -144,6 +316,10 @@ func _setup_sync() -> void:
 
 	finalize()
 
+	# Freeze the declaration into the runtime engine after finalize populates
+	# every virtual name (deferred contributions and imported config alike).
+	_model = _SaveModel.new(_save_modes, _save_intervals, get_virtual_properties())
+
 	for entity_key: StringName in _properties:
 		var scene_path: NodePath = _properties[entity_key]
 		if scene_path.is_empty():
@@ -155,6 +331,29 @@ func _setup_sync() -> void:
 				record.set_value(entity_key, value)
 
 	notify_property_list_changed()
+
+
+## Suppresses every [constant SaveMode.SNAPSHOT] property to
+## [constant SceneReplicationConfig.REPLICATION_MODE_NEVER] after
+## [method ProxySynchronizer.finalize] builds the config.
+##
+## A SNAPSHOT property has no client to server channel: the server reads its
+## authoritative value from the live scene through the snapshot loop. Only
+## [constant SaveMode.CLIENT] props keep their registered ON_CHANGE wire.
+func finalize() -> void:
+	super.finalize()
+	if not replication_config:
+		return
+	for path: NodePath in replication_config.get_properties():
+		var sub := path.get_subname_count()
+		if sub == 0:
+			continue
+		var vname := StringName(path.get_subname(sub - 1))
+		if _save_modes.get(vname, SaveMode.SNAPSHOT) == SaveMode.SNAPSHOT:
+			replication_config.property_set_replication_mode(
+				path,
+				SceneReplicationConfig.REPLICATION_MODE_NEVER,
+			)
 
 
 # Seeds record from the live scene for any key not yet populated.
@@ -195,17 +394,23 @@ func get_value(key: StringName, default: Variant = null) -> Variant:
 
 ## Adds a tracked property from [param source].
 ##
-## The real path is resolved by [ProxySynchronizer] relative to this
-## component, so callers do not need to account for scene nesting.
-## Idempotent on duplicate [param virtual_name].
+## [param save_mode] declares the persistence trust (see [enum SaveMode]) and
+## [param interval] the per-property snapshot cadence in seconds ([code]0[/code]
+## inherits [member delta_interval]). The real path is resolved by
+## [ProxySynchronizer] relative to this component, so callers do not need to
+## account for scene nesting. Idempotent on duplicate [param virtual_name].
 func add_save_property(
 		virtual_name: StringName,
 		source: Node,
 		property: StringName,
+		save_mode: SaveMode = SaveMode.SNAPSHOT,
+		interval: float = 0.0,
 		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = true,
 		watch: bool = true,
 ) -> void:
+	_save_modes[virtual_name] = save_mode
+	_save_intervals[virtual_name] = interval
 	register_node_property(virtual_name, source, property, mode, spawn, watch)
 
 # Scene to record transfer.
@@ -257,14 +462,27 @@ func _save_once() -> void:
 
 ## Sends the current [member record] state to [param peer_id].
 ##
-## When [param ack] is [code]true[/code], [signal push_acknowledged]
+## Only [constant SaveMode.CLIENT] properties ride the push. [constant
+## SaveMode.SNAPSHOT] columns are server-owned and never travel client to
+## server. When [param ack] is [code]true[/code], [signal push_acknowledged]
 ## fires after the remote peer applies the state.
 func push_to(peer_id: int, ack: bool = false) -> void:
 	pull_from_scene()
-	_request_push.rpc_id(peer_id, record.serialize(), ack)
+	_request_push.rpc_id(peer_id, var_to_bytes(_client_payload()), ack)
 
 
-# RPC called by a client to push its serialized record state to this peer.
+# Builds a {vname: value} dict of CLIENT-mode props pulled from record.
+func _client_payload() -> Dictionary:
+	var out: Dictionary = { }
+	if not _model:
+		return out
+	for key in _model.client_props():
+		if record.has_value(key):
+			out[key] = record.get_value(key)
+	return out
+
+
+# RPC called by a client to push its CLIENT-mode state to this peer.
 @rpc("any_peer", "call_local", "reliable")
 func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 	# Reject a peer pushing state into an object it does not own.
@@ -276,8 +494,15 @@ func _request_push(bytes: PackedByteArray, ack: bool = false) -> void:
 			func(m): push_warning(m)
 		)
 		return
-	record.deserialize(bytes)
-	push_to_scene()
+	# Defense in depth: apply only CLIENT keys, ignoring any server-owned column
+	# a client tries to forge into the persisted record.
+	var payload: Variant = bytes_to_var(bytes)
+	if payload is Dictionary:
+		for key: StringName in payload:
+			if not _model or _model.mode_of(key) != SaveMode.CLIENT:
+				continue
+			record.set_value(key, payload[key])
+			_write_scene(key, payload[key])
 	_on_state_changed()
 	if ack:
 		if sender_id == multiplayer.get_unique_id():
@@ -340,6 +565,54 @@ func _flush() -> Error:
 	return db_err
 
 
+# Server-only snapshot loop: pulls each due SNAPSHOT property from the live
+# scene and flushes the changed subset. Disabled on clients via set_process.
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint() or not _model or not multiplayer.is_server():
+		return
+	var due := _model.due(delta, delta_interval)
+	if not due.is_empty():
+		_snapshot_flush(due)
+
+
+# Pulls [param keys] from the live scene into record and flushes the changed
+# subset as one merged upsert.
+func _snapshot_flush(keys: Array[StringName]) -> void:
+	if not database or table_name.is_empty():
+		return
+	var changed := false
+	for key in keys:
+		var path: NodePath = _properties.get(key, NodePath(""))
+		if path.is_empty():
+			continue
+		var value := _read_property(key, path)
+		if value == null:
+			continue
+		if record.get_value(key) != value:
+			changed = true
+		record.set_value(key, value)
+	if changed:
+		_flush_keys(keys)
+
+
+# Flushes only [param keys] from record. The backend upsert merges, so this is a
+# subset write that leaves other persisted columns untouched.
+func _flush_keys(keys: Array[StringName]) -> Error:
+	if not database or table_name.is_empty():
+		return ERR_UNCONFIGURED
+	var subset: Dictionary = { }
+	for key in keys:
+		if record.has_value(key):
+			subset[key] = record.get_value(key)
+	if subset.is_empty():
+		return OK
+	var entity_id := _get_entity_id()
+	return database.transaction(
+		func(tx: NetwDatabase.TransactionContext) -> void:
+			tx.queue_upsert(table_name, entity_id, subset)
+	)
+
+
 ## Loads the database row for the current scene object.
 ##
 ## The loaded data is passed to [method hydrate]. [signal loaded] is emitted
@@ -397,6 +670,35 @@ func _on_state_changed() -> void:
 	_flush()
 	state_changed.emit()
 	client_synchronized.emit()
+
+
+# Deferred diagnostic: warns when a CLIENT property is also governed by another
+# synchronizer on the entity (double authority, likely meant to be SNAPSHOT).
+# Non-load-bearing. The config is already frozen from the declaration, so a late
+# or imperfect lint has no security impact.
+func _run_overlap_lint() -> void:
+	if not is_inside_tree() or not _model:
+		return
+	var clients := _model.client_props()
+	if clients.is_empty():
+		return
+	var root := get_node_or_null(root_path)
+	if not root:
+		return
+	var entity := NetwEntity.of(root)
+	if not entity:
+		return
+	for key in clients:
+		var path := get_real_path(key)
+		if path.is_empty():
+			continue
+		if entity.governs_property(path, self):
+			_dbg.warn(
+				"CLIENT save property '%s' is also governed by another "
+				+ "synchronizer (double authority). Did you mean SNAPSHOT?",
+				[key],
+				func(m): push_warning(m),
+			)
 
 
 # Initializes the synchronizer and registers the record schema.

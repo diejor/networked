@@ -155,6 +155,43 @@ static func _extract_clean_name(path: NodePath) -> StringName:
 	return path.get_subname(path.get_subname_count() - 1)
 
 
+## Returns the normalized [code][object, sub_path][/code] targets [param sync]
+## governs, resolved against [param root].
+##
+## A [ProxySynchronizer] reports each [method ProxySynchronizer.get_real_path]
+## that resolves, skipping empty real paths (stamps). A plain synchronizer
+## reports each [code]replication_config[/code] path. Two synchronizers overlap
+## when they share an entry, the key used by overlap detection.
+static func governed_targets(
+		sync: MultiplayerSynchronizer,
+		root: Node,
+) -> Array:
+	var out: Array = []
+	if not is_instance_valid(sync) or not is_instance_valid(root):
+		return out
+	if sync is ProxySynchronizer:
+		var proxy := sync as ProxySynchronizer
+		for vname: StringName in proxy.get_virtual_properties():
+			var path := proxy.get_real_path(vname)
+			if path.is_empty():
+				continue
+			_append_target(out, root, path)
+	elif sync.replication_config:
+		for path: NodePath in sync.replication_config.get_properties():
+			if path.is_empty():
+				continue
+			_append_target(out, root, path)
+	return out
+
+
+static func _append_target(out: Array, root: Node, path: NodePath) -> void:
+	var res := root.get_node_and_resource(path)
+	var obj: Object = res[0]
+	var sub: NodePath = res[2]
+	if obj and not sub.is_empty():
+		out.append([obj, sub])
+
+
 ## Restricts all synchronizers on [param target_node] to only send data
 ## to the server peer.
 static func sync_only_server(target_node: Node) -> void:

@@ -88,15 +88,20 @@ func with_tp(
 ## The path [code]NodePath(".:" + property)[/code] is baked into the
 ## [SaveComponent] replication config before [method pack], so
 ## [method ProxySynchronizer.finalize] can process it without a post-spawn
-## contribution call.
+## contribution call. [param save_mode] and [param interval] bake the per-property
+## persistence trust and snapshot cadence into the component's declaration maps.
 func with_save_property(
 		property: StringName,
+		save_mode: SaveComponent.SaveMode = SaveComponent.SaveMode.SNAPSHOT,
+		interval: float = 0.0,
 		spawn: bool = false,
 		watch: bool = true,
 ) -> PlayerBuilder:
 	_save_properties.append(
 		{
 			"property": property,
+			"save_mode": save_mode,
+			"interval": interval,
 			"spawn": spawn,
 			"watch": watch,
 		},
@@ -240,7 +245,8 @@ func build() -> Node:
 		save_comp.set("table_name", _save_table)
 		var cfg := SceneReplicationConfig.new()
 		for entry: Dictionary in _save_properties:
-			var path := NodePath(".:" + entry["property"])
+			var prop: StringName = entry["property"]
+			var path := NodePath(".:" + prop)
 			cfg.add_property(path)
 			cfg.property_set_replication_mode(
 				path,
@@ -248,6 +254,10 @@ func build() -> Node:
 			)
 			cfg.property_set_spawn(path, entry.get("spawn", false))
 			cfg.property_set_watch(path, entry.get("watch", true))
+			save_comp._save_modes[prop] = entry.get(
+				"save_mode", SaveComponent.SaveMode.SNAPSHOT,
+			)
+			save_comp._save_intervals[prop] = entry.get("interval", 0.0)
 		save_comp.replication_config = cfg
 		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
 		save_comp.root_path = save_comp.get_path_to(root)

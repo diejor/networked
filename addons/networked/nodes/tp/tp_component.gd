@@ -84,10 +84,13 @@ func _notification(what: int) -> void:
 		return
 
 	entity.contribute_spawn_property(self, &"current_scene_path")
+	# current_scene_path is server-owned: a forged client value is a teleport
+	# exploit, so it must never ride a client to server channel.
 	entity.contribute_save_property(
 		self,
 		&"current_scene_path",
 		&"current_scene_path",
+		SaveComponent.SaveMode.SNAPSHOT,
 	)
 
 
