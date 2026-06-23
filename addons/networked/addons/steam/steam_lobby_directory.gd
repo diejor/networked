@@ -18,10 +18,6 @@ static var _instance: WeakRef = weakref(null)
 @export_range(1, 250, 1, "or_greater", "suffix:players") \
 		var max_clients: int = 8
 
-## Default visibility used by [method host_lobby].
-@export var default_lobby_type: SteamWrapper.LobbyType = \
-		SteamWrapper.LobbyType.PUBLIC
-
 ## Tag stored under the [code]uid[/code] lobby key. Browser filters on this so
 ## different games don't pollute each other's lobby lists.
 @export var browser_filter_uid: String = "networked"
@@ -47,6 +43,9 @@ var _lobby_id: int = 0
 var _peer: MultiplayerPeer
 var _pending_list: bool = false
 var _pending_create_name: String = ""
+var _pending_lobby_type: SteamWrapper.LobbyType = SteamWrapper.LobbyType.PUBLIC
+var _pending_visibility: LobbyDirectory.Visibility = LobbyDirectory.Visibility.PUBLIC
+var _pending_max: int = 0
 var _pending_join_lobby_id: int = 0
 var _init_ok: bool = false
 var _joining: bool = false
@@ -163,6 +162,35 @@ func is_ready() -> bool:
 	return _init_ok
 
 
+## Steam backs every lobby tier: browse, friends-only visibility, overlay
+## invites, and persona resolution.
+func capabilities() -> int:
+	return (
+		LobbyDirectory.Capability.BROWSE
+		| LobbyDirectory.Capability.FRIENDS_ONLY
+		| LobbyDirectory.Capability.INVITES
+		| LobbyDirectory.Capability.FRIEND_NAMES
+	)
+
+
+# Maps a directory visibility tier onto the Steam lobby type.
+func _map_visibility(v: LobbyDirectory.Visibility) -> SteamWrapper.LobbyType:
+	match v:
+		LobbyDirectory.Visibility.FRIENDS_ONLY:
+			return SteamWrapper.LobbyType.FRIENDS_ONLY
+		LobbyDirectory.Visibility.PRIVATE:
+			return SteamWrapper.LobbyType.PRIVATE
+		_:
+			return SteamWrapper.LobbyType.PUBLIC
+
+
+# Reads the visibility tier advertised on a lobby's data, defaulting to PUBLIC.
+func _parse_visibility(raw: String) -> LobbyDirectory.Visibility:
+	if raw.is_empty():
+		return LobbyDirectory.Visibility.PUBLIC
+	return int(raw) as LobbyDirectory.Visibility
+
+
 ## Returns the active lobby ID, or [code]0[/code] when no lobby is joined.
 func get_lobby_id() -> int:
 	return _lobby_id
@@ -230,7 +258,7 @@ func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	return target
 
 
-func host_lobby(server_name: String) -> MultiplayerPeer:
+func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	if not _guard_ready("host_lobby"):
 		return null
 	if _lobby_id != 0:
@@ -239,8 +267,11 @@ func host_lobby(server_name: String) -> MultiplayerPeer:
 			[_lobby_id],
 		)
 		return null
-	_pending_create_name = server_name
-	_wrapper.create_lobby(int(default_lobby_type), max_clients)
+	_pending_create_name = options.server_name
+	_pending_visibility = options.visibility
+	_pending_lobby_type = _map_visibility(options.visibility)
+	_pending_max = options.max_players if options.max_players > 0 else max_clients
+	_wrapper.create_lobby(int(_pending_lobby_type), _pending_max)
 
 	var timer := get_tree().create_timer(10.0)
 	var timed_out := await Async.timeout(_lobby_created_internal, timer)
@@ -381,7 +412,8 @@ func _on_lobby_created(connect_result: int, lobby_id: int) -> void:
 	_wrapper.set_lobby_data(lobby_id, "app_id", _local_app_id())
 	_wrapper.set_lobby_data(lobby_id, "host", _wrapper.get_persona_name())
 	_wrapper.set_lobby_data(lobby_id, "players", "1")
-	_wrapper.set_lobby_data(lobby_id, "max", str(max_clients))
+	_wrapper.set_lobby_data(lobby_id, "max", str(_pending_max))
+	_wrapper.set_lobby_data(lobby_id, "visibility", str(int(_pending_visibility)))
 	Netw.dbg.debug(
 		"SteamLobbyDirectory: advertising lobby %d with app_id='%s'.",
 		[lobby_id, _local_app_id()],
@@ -482,6 +514,8 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 				"uid": _wrapper.get_lobby_data(id, "uid"),
 				"app_id": _wrapper.get_lobby_data(id, "app_id"),
 			},
+			_wrapper.get_lobby_data(id, "host"),
+			_parse_visibility(_wrapper.get_lobby_data(id, "visibility")),
 		)
 		Netw.dbg.debug(
 			"SteamLobbyDirectory: discovered lobby %d with app_id='%s'.",

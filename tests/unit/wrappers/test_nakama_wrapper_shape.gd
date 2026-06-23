@@ -22,6 +22,9 @@ const REQUIRED_CLIENT_METHODS: PackedStringArray = [
 	"authenticate_device_async",
 	"read_storage_objects_async",
 	"write_storage_objects_async",
+	"list_storage_objects_async",
+	"delete_storage_objects_async",
+	"list_matches_async",
 	"rpc_async",
 ]
 

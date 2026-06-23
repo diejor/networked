@@ -63,6 +63,7 @@ metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 script = ExtResource("10_ej8d4")
 device_id = "bomber-host-diego-001"
 local_member_name = "diegote"
+browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]

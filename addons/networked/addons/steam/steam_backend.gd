@@ -45,7 +45,7 @@ func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
 	Netw.dbg.trace("SteamBackend: create_host_peer called.")
 	if _dir == null:
 		return null
-	return await _dir.host_lobby(server_name)
+	return await _dir.host_lobby(LobbyDirectory.HostOptions.make(server_name))
 
 
 ## Implements [method BackendPeer.create_join_peer] with a Steam lobby id.

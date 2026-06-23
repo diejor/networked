@@ -1,12 +1,13 @@
 ## Parse-safe boundary around the optional [code]com.heroiclabs.nakama[/code]
 ## addon.
 ##
-## Every Nakama type is reached through [method load] by path, never named
-## directly, so the networked addon still parses when the Nakama addon is
+## No Nakama addon type is named at parse time. The facade is loaded by its
+## script path, and addon API classes are resolved at runtime by their global
+## class name, so the networked addon still parses when the Nakama addon is
 ## absent. [method is_addon_present] gates all other calls. The wrapper owns the
-## authenticated socket and the [code]NakamaRelayBridge[/code] that turns
-## Nakama match data into a working [MultiplayerPeer], and it re-emits the two
-## bridge lifecycle signals as its own.
+## authenticated socket and the [NakamaRelayBridge] that turns Nakama match data
+## into a working [MultiplayerPeer], and it re-emits the two bridge lifecycle
+## signals as its own.
 ## [codeblock]
 ## var wrapper := NakamaWrapper.new()
 ## if not NakamaWrapper.is_addon_present():
@@ -21,11 +22,18 @@
 ## [/codeblock]
 class_name NakamaWrapper
 
+# The facade has no class_name and is not an autoload, so it is the one Nakama
+# script the wrapper must reach by path. Every other addon type resolves by
+# global class name through _nakama_class.
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
-const _PRESENCE_PROBE_PATH := _FACADE_PATH
-const _BRIDGE_PATH := \
-		"res://addons/networked/addons/nakama/nakama_relay_bridge.gd"
 const _NAKAMA_LOG_LEVEL_WARNING := 2
+
+## Nakama storage collection the relay lobby browse cards are written under.
+const LOBBY_COLLECTION := "lobbies"
+
+# Global class name -> resolved Script (or null when absent), memoized across
+# every wrapper instance so the class registry is scanned at most once per name.
+static var _class_cache: Dictionary = {}
 
 ## Emitted once the local peer id is granted and the match is fully joined.
 ##
@@ -41,7 +49,7 @@ signal match_join_error(message: String)
 ## transport drop.
 signal socket_closed()
 
-# Nakama handles, all kept as Variant so this file parses without the addon.
+# Nakama handles.
 var _facade
 var _client
 var _session
@@ -51,11 +59,11 @@ var _bridge
 
 ## Returns [code]true[/code] when the Nakama addon scripts are installed.
 ##
-## A self-contained platform check, mirroring
-## [method SteamWrapper.is_available]. Both the backend availability gate and the
-## directory bootstrap defer to this.
+## Probes the global class registry for a core Nakama class instead of a file
+## path, mirroring [method SteamWrapper.is_available]. Both the backend
+## availability gate and the directory bootstrap defer to this.
 static func is_addon_present() -> bool:
-	return ResourceLoader.exists(_PRESENCE_PROBE_PATH)
+	return _nakama_class("NakamaClient") != null
 
 
 ## Authenticates a device session and opens the realtime socket under
@@ -105,8 +113,9 @@ func connect_async(host: Node, config: Dictionary) -> Dictionary:
 	if not _socket.is_connected_to_host():
 		return { "ok": false, "error": "Nakama socket failed to connect" }
 
-	var bridge_script: Variant = load(_BRIDGE_PATH)
-	_bridge = bridge_script.new(_socket)
+	# NakamaRelayBridge is a networked class that names no Nakama type, so the
+	# wrapper references it directly instead of loading it by path.
+	_bridge = NakamaRelayBridge.new(_socket)
 	_bridge.match_joined.connect(func() -> void: match_joined.emit())
 	_bridge.match_join_error.connect(_on_bridge_join_error)
 	_socket.closed.connect(func() -> void: socket_closed.emit())
@@ -165,6 +174,87 @@ func username_for_peer(peer_id: int) -> String:
 	if presence == null:
 		return ""
 	return String(presence.username)
+
+
+## Lists active relay matches, returning match handles that expose
+## [code]match_id[/code] and [code]size[/code].
+##
+## Browses with [code]authoritative = false[/code], which is the listing path
+## relay matches fall under. Returns an empty array before the session is open.
+func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
+	if _client == null or _session == null:
+		return []
+	var res = await _client.list_matches_async(
+		_session, min_size, max_size, limit, false, "", "",
+	)
+	if res == null or res.is_exception():
+		return []
+	return res.matches
+
+
+## Writes a public-read lobby card keyed by [param match_id] under
+## [constant LOBBY_COLLECTION] and returns [code]true[/code] on success.
+##
+## Relay matches carry no metadata, so the host stores the browse card (name,
+## host, capacity, tag) here for [method read_lobby_cards] to resolve. The
+## object is public read and owner write.
+func write_lobby_card(match_id: String, card: Dictionary) -> bool:
+	if _client == null or _session == null or match_id.is_empty():
+		return false
+	var write_script: Variant = _nakama_class("NakamaWriteStorageObject")
+	if write_script == null:
+		return false
+	# permission_read 2 = public, permission_write 1 = owner only.
+	var obj: Variant = write_script.new(
+		LOBBY_COLLECTION, match_id, 2, 1, JSON.stringify(card), "",
+	)
+	var res = await _client.write_storage_objects_async(_session, [obj])
+	return res != null and not res.is_exception()
+
+
+## Reads every public lobby card under [constant LOBBY_COLLECTION] into a
+## [code]{ match_id: card_dict }[/code] map. Empty before the session is open.
+func read_lobby_cards(limit := 100) -> Dictionary:
+	var out := { }
+	if _client == null or _session == null:
+		return out
+	var res = await _client.list_storage_objects_async(
+		_session, LOBBY_COLLECTION, "", limit,
+	)
+	if res == null or res.is_exception():
+		return out
+	for object in res.objects:
+		var parsed: Variant = JSON.parse_string(String(object.value))
+		if typeof(parsed) == TYPE_DICTIONARY:
+			out[String(object.key)] = parsed
+	return out
+
+
+## Best-effort delete of the local lobby card keyed by [param match_id].
+func delete_lobby_card(match_id: String) -> void:
+	if _client == null or _session == null or match_id.is_empty():
+		return
+	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
+	if id_script == null:
+		return
+	var id: Variant = id_script.new(LOBBY_COLLECTION, match_id, "", "")
+	await _client.delete_storage_objects_async(_session, [id])
+
+
+# Resolves a Nakama API class by its global name through the engine class
+# registry, so the wrapper never hard-codes addon-internal script paths or names
+# a Nakama type at parse time. Returns null when the addon is absent. Memoized in
+# _class_cache, including the null miss, so the registry scan runs once per name.
+static func _nakama_class(global_name: String) -> Variant:
+	if _class_cache.has(global_name):
+		return _class_cache[global_name]
+	var resolved: Variant = null
+	for entry in ProjectSettings.get_global_class_list():
+		if String(entry.get("class", "")) == global_name:
+			resolved = load(String(entry.get("path", "")))
+			break
+	_class_cache[global_name] = resolved
+	return resolved
 
 
 ## Leaves the match and tears down the socket and facade node.

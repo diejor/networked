@@ -68,8 +68,8 @@ class _MockDirectory:
 		return target
 
 
-	func host_lobby(server_name: String) -> MultiplayerPeer:
-		host_called_with = server_name
+	func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+		host_called_with = options.server_name
 		return null
 
 
