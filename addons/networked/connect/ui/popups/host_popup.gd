@@ -43,7 +43,7 @@ func open_host(
 func _populate_backend_picker() -> void:
 	_backend_picker.clear()
 	for backend in _templates:
-		_backend_picker.add_item(ConnectUiShared.format_backend_label(backend))
+		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
@@ -51,7 +51,7 @@ func _populate_backend_picker() -> void:
 func _populate_spawner_picker() -> void:
 	_spawner_picker.clear()
 	for path in _spawner_options:
-		_spawner_picker.add_item(ConnectUiShared.format_spawner_label(path))
+		_spawner_picker.add_item(ConnectBrowser.format_spawner_label(path))
 	if _spawner_picker.item_count > 0:
 		_spawner_picker.selected = 0
 
@@ -80,7 +80,9 @@ func _on_confirm() -> void:
 		return
 	var config := ConnectHostConfig.new()
 	config.backend = template
-	config.server_name = _name_edit.text
+	var typed_name := _name_edit.text.strip_edges()
+	config.server_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
+
 
 	var payload := JoinPayload.new()
 	var typed := _username_edit.text.strip_edges()

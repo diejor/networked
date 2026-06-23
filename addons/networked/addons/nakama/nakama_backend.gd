@@ -14,9 +14,6 @@
 class_name NakamaBackend
 extends BackendPeer
 
-## Display name advertised for the hosted match.
-@export var server_name: String = ""
-
 var _dir: NakamaLobbyDirectory
 
 
@@ -34,11 +31,15 @@ func setup(tree: MultiplayerTree) -> Error:
 
 
 ## Implements [method BackendPeer.create_host_peer] by creating a relay match.
-func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+func create_host_peer(
+		_tree: MultiplayerTree,
+		options: LobbyDirectory.HostOptions = null,
+) -> MultiplayerPeer:
 	Netw.dbg.trace("NakamaBackend: create_host_peer called.")
 	if _dir == null:
 		return null
-	return await _dir.host_lobby(LobbyDirectory.HostOptions.make(server_name))
+	var opts := options if options != null else LobbyDirectory.HostOptions.new()
+	return await _dir.host_lobby(opts)
 
 
 ## Implements [method BackendPeer.create_join_peer] with a relay match id.
@@ -98,8 +99,7 @@ func get_address_hint() -> BackendPeer.AddressHint:
 
 ## Preserves authored settings after [method Resource.duplicate].
 func copy_from(source: BackendPeer) -> void:
-	if source is NakamaBackend:
-		server_name = source.server_name
+	pass
 
 
 ## Returns the display name for this backend.

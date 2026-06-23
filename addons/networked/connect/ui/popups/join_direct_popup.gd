@@ -45,7 +45,7 @@ func open_join_direct(
 func _populate_backend_picker() -> void:
 	_backend_picker.clear()
 	for backend in _templates:
-		_backend_picker.add_item(ConnectUiShared.format_backend_label(backend))
+		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
@@ -53,7 +53,7 @@ func _populate_backend_picker() -> void:
 func _populate_spawner_picker() -> void:
 	_spawner_picker.clear()
 	for path in _spawner_options:
-		_spawner_picker.add_item(ConnectUiShared.format_spawner_label(path))
+		_spawner_picker.add_item(ConnectBrowser.format_spawner_label(path))
 	if _spawner_picker.item_count > 0:
 		_spawner_picker.selected = 0
 
@@ -98,7 +98,7 @@ func _on_confirm() -> void:
 	var target := JoinTarget.new()
 	target.address = _address_edit.text
 	target.backend = template
-	target.display_name = ConnectUiShared.format_address(target)
+	target.display_name = ConnectBrowser.format_address(target)
 
 	var payload := JoinPayload.new()
 	var typed := _username_edit.text.strip_edges()

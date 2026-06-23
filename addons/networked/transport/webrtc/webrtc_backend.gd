@@ -53,8 +53,6 @@ signal signaling_disconnected
 ## Emitted on the host when the room id is ready to share.
 signal room_created(room_id: String)
 
-## Display name advertised by [WebTorrentDirectory] for hosted rooms.
-@export var server_name: String = ""
 
 ## Optional namespace to isolate signaling and room codes on public networks.
 ## Non-empty values enable short, player-friendly room codes.
@@ -124,6 +122,12 @@ var _is_server := false
 var _signaling_ready := false
 var _connect_started_ms := 0
 var _connect_offer_progress_sent := false
+var _active_host_options: LobbyDirectory.HostOptions = null
+
+
+func get_active_host_options() -> LobbyDirectory.HostOptions:
+	return _active_host_options
+
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.
@@ -221,8 +225,12 @@ func setup(tree: MultiplayerTree) -> Error:
 
 
 ## Implements [method BackendPeer.create_host_peer] for a WebRTC room.
-func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+func create_host_peer(
+		_tree: MultiplayerTree,
+		options: LobbyDirectory.HostOptions = null,
+) -> MultiplayerPeer:
 	Netw.dbg.trace("WebRTCBackend: create_host_peer called.")
+	_active_host_options = options
 	_is_server = true
 	_build_session_and_signaler()
 
@@ -517,7 +525,6 @@ func connect_timeout_hint() -> float:
 func copy_from(source: BackendPeer) -> void:
 	if source is WebRTCBackend:
 		var other := source as WebRTCBackend
-		server_name = other.server_name
 		signaling_namespace = other.signaling_namespace
 		room_code_characters = other.room_code_characters
 		ice_servers = other.ice_servers.duplicate(true)

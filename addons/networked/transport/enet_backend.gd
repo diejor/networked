@@ -18,7 +18,11 @@ extends BackendPeer
 
 ## Implements [method BackendPeer.create_host_peer] with
 ## [method ENetMultiplayerPeer.create_server].
-func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+func create_host_peer(
+		_tree: MultiplayerTree,
+		_options: LobbyDirectory.HostOptions = null,
+) -> MultiplayerPeer:
+
 	Netw.dbg.trace("ENetBackend: create_host_peer called.")
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)

@@ -722,7 +722,7 @@ func _process(dt: float) -> void:
 ## if err == OK:
 ##     print(tree.role)
 ## [/codeblock]
-func host(quiet: bool = false) -> Error:
+func host(quiet: bool = false, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	if backend == null:
 		if not quiet:
@@ -749,7 +749,8 @@ func host(quiet: bool = false) -> Error:
 		return setup_err
 
 	_auth.prepare()
-	var peer: MultiplayerPeer = await backend.create_host_peer(self)
+	var peer: MultiplayerPeer = await backend.create_host_peer(self, options)
+
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
@@ -1079,7 +1080,7 @@ func disconnect_player() -> void:
 ##
 ## var err := await tree.host_player(payload)
 ## [/codeblock]
-func host_player(join_payload: JoinPayload) -> Error:
+func host_player(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	assert(
 		desired_role != Role.DEDICATED_SERVER,
@@ -1089,7 +1090,7 @@ func host_player(join_payload: JoinPayload) -> Error:
 	if err != OK:
 		return err
 
-	return await _host_player_logic(join_payload)
+	return await _host_player_logic(join_payload, options)
 
 
 func _prepare_session(join_payload: JoinPayload) -> Error:
@@ -1116,11 +1117,12 @@ func _prepare_session(join_payload: JoinPayload) -> Error:
 	return OK
 
 
-func _host_player_logic(join_payload: JoinPayload) -> Error:
+func _host_player_logic(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
 	# LISTEN_SERVER and NONE host on this tree; CLIENT spins up an embedded
 	# dedicated sibling and joins it.
 	if desired_role != Role.CLIENT:
-		var host_err := await host(true)
+		var host_err := await host(true, options)
+
 		if host_err == OK:
 			role = Role.LISTEN_SERVER
 			if get_service(MultiplayerSceneManager):

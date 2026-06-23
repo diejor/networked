@@ -423,10 +423,10 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 		host_failed.emit("host config has no backend template")
 		return ERR_INVALID_PARAMETER
 
-	_apply_host_config(backend, config)
-
 	tree.backend = backend
-	var err := await tree.host_player(payload)
+	var options := LobbyDirectory.HostOptions.make(config.server_name)
+	var err := await tree.host_player(payload, options)
+
 	if err != OK:
 		host_failed.emit(
 			"backend host_player failed (%s)" % error_string(err),
@@ -601,16 +601,6 @@ func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 		session_left.emit()
 
 
-func _apply_host_config(
-		backend: BackendPeer,
-		config: ConnectHostConfig,
-) -> void:
-	if backend is SteamBackend:
-		var steam := backend as SteamBackend
-		steam.server_name = config.server_name
-	elif backend is WebRTCBackend:
-		var webrtc := backend as WebRTCBackend
-		webrtc.server_name = config.server_name
 
 
 func _on_probe_result(result: BackendPeer.ProbeResult, target: JoinTarget) -> void:

@@ -10,9 +10,6 @@
 class_name SteamBackend
 extends BackendPeer
 
-## Display name for the Steam lobby created by [method create_host_peer].
-@export var server_name: String = ""
-
 var _dir: SteamLobbyDirectory
 
 
@@ -41,11 +38,15 @@ func _on_dir_peer_connect_failed(_reason: String) -> void:
 
 
 ## Implements [method BackendPeer.create_host_peer] by creating a Steam lobby.
-func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+func create_host_peer(
+		_tree: MultiplayerTree,
+		options: LobbyDirectory.HostOptions = null,
+) -> MultiplayerPeer:
 	Netw.dbg.trace("SteamBackend: create_host_peer called.")
 	if _dir == null:
 		return null
-	return await _dir.host_lobby(LobbyDirectory.HostOptions.make(server_name))
+	var opts := options if options != null else LobbyDirectory.HostOptions.new()
+	return await _dir.host_lobby(opts)
 
 
 ## Implements [method BackendPeer.create_join_peer] with a Steam lobby id.
@@ -105,8 +106,7 @@ func get_address_hint() -> BackendPeer.AddressHint:
 
 ## Preserves authored Steam lobby settings after [method Resource.duplicate].
 func copy_from(source: BackendPeer) -> void:
-	if source is SteamBackend:
-		server_name = source.server_name
+	pass
 
 
 ## Returns the display name for this backend.

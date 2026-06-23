@@ -361,8 +361,9 @@ func _on_tree_state_changed(
 			if _pending_visibility == LobbyDirectory.Visibility.PUBLIC:
 				var backend := mt.backend as WebRTCBackend
 				var room_name := _pending_room_name
-				if room_name.is_empty():
-					room_name = backend.server_name
+				if room_name.is_empty() and backend.get_active_host_options():
+					room_name = backend.get_active_host_options().server_name
+
 				var capacity := _pending_max if _pending_max > 0 else max_clients
 				advertise_room(
 					backend.get_join_address(),

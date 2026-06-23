@@ -57,7 +57,7 @@ func open_edit(target: JoinTarget) -> void:
 func _populate_backend_picker() -> void:
 	_backend_picker.clear()
 	for backend in _templates:
-		_backend_picker.add_item(ConnectUiShared.format_backend_label(backend))
+		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
@@ -106,9 +106,8 @@ func _on_confirm() -> void:
 	var target: JoinTarget = _editing if _editing else JoinTarget.new()
 	target.address = _address_edit.text
 	target.backend = template
-	target.display_name = (
-			_name_edit.text if not _name_edit.text.is_empty()
-			else ConnectUiShared.format_address(target)
-	)
+	var typed_name := _name_edit.text.strip_edges()
+	target.display_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
+
 	hide()
 	submitted.emit(target)
