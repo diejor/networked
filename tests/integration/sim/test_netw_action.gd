@@ -346,3 +346,37 @@ func test_adopted_action_frees_predicted_ghost() -> void:
 
 	assert_int(client_body.confirmed_count).is_equal(1)
 	assert_that(client_body.get_node_or_null("Ghost")).is_null()
+
+
+func test_adopted_action_custom_confirm_keeps_predicted_ghost() -> void:
+	var s := PredictionScenario.new()
+	s.body_type = ActionBody
+	await s.setup(self)
+	var p := await s.add_predicted_entity()
+	var client_body := p.client_root as ActionBody
+	var custom_confirm_called := [0]
+	
+	client_body.action.confirm = func(ghost: Node) -> void:
+		custom_confirm_called[0] += 1
+		# Do NOT free the ghost, just keep it.
+
+	var key := s.client.lag_compensation.effects.key_for(
+		p.client_entity,
+		s.client_clock.tick,
+		0,
+	)
+
+	client_body.fire(s.client_clock.tick)
+	assert_that(client_body.get_node_or_null("Ghost")).is_not_null()
+	s.client.lag_compensation.effects.adopt(key)
+	await get_tree().process_frame
+
+	assert_int(client_body.confirmed_count).is_equal(1)
+	assert_int(custom_confirm_called[0]).is_equal(1)
+	# The ghost must still be valid and inside the tree!
+	assert_that(client_body.get_node_or_null("Ghost")).is_not_null()
+	
+	# Clean up the ghost manually to avoid leaks in test suite
+	client_body.get_node("Ghost").queue_free()
+	await get_tree().process_frame
+
