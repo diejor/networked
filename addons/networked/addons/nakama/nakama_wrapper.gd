@@ -251,34 +251,44 @@ func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 	return res.matches
 
 
-## Writes a public-read lobby card keyed by [param match_id] under
-## [constant LOBBY_COLLECTION] and returns [code]true[/code] on success.
+## Writes a public-read object keyed by [param key] under [param collection] and
+## returns [code]true[/code] on success.
 ##
-## Relay matches carry no metadata, so the host stores the browse card (name,
-## host, capacity, tag) here for [method read_lobby_cards] to resolve. The
-## object is public read and owner write.
-func write_lobby_card(match_id: String, card: Dictionary) -> bool:
-	if _client == null or _session == null or match_id.is_empty():
+## The object is public read and owner write, so any session can read it back
+## through [method read_public_storage] while only the writer can overwrite it.
+## This is the cross-user shared-state primitive both the relay lobby cards and
+## the Discord rendezvous map are built on. There is no compare-and-set, so
+## concurrent writers race and the last write wins.
+func write_public_storage(collection: String, key: String, value: Dictionary) -> bool:
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or collection.is_empty() or key.is_empty():
 		return false
 	var write_script: Variant = _nakama_class("NakamaWriteStorageObject")
 	if write_script == null:
 		return false
 	# permission_read 2 = public, permission_write 1 = owner only.
 	var obj: Variant = write_script.new(
-		LOBBY_COLLECTION, match_id, 2, 1, JSON.stringify(card), "",
+		collection, key, 2, 1, JSON.stringify(value), "",
 	)
-	var res = await _client.write_storage_objects_async(_session, [obj])
+	var res = await client.write_storage_objects_async(session, [obj])
 	return res != null and not res.is_exception()
 
 
-## Reads every public lobby card under [constant LOBBY_COLLECTION] into a
-## [code]{ match_id: card_dict }[/code] map. Empty before the session is open.
-func read_lobby_cards(limit := 100) -> Dictionary:
+## Reads every public object under [param collection], across all owners, into a
+## [code]{ key: value_dict }[/code] map.
+##
+## Passes an empty owner id to the list call, which is Nakama's cross-user public
+## read. A later participant uses this to find a record an earlier participant
+## wrote without knowing its owner id. Empty before the session is open.
+func read_public_storage(collection: String, limit := 100) -> Dictionary:
 	var out := { }
-	if _client == null or _session == null:
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or collection.is_empty():
 		return out
-	var res = await _client.list_storage_objects_async(
-		_session, LOBBY_COLLECTION, "", limit,
+	var res = await client.list_storage_objects_async(
+		session, collection, "", limit,
 	)
 	if res == null or res.is_exception():
 		return out
@@ -289,15 +299,68 @@ func read_lobby_cards(limit := 100) -> Dictionary:
 	return out
 
 
-## Best-effort delete of the local lobby card keyed by [param match_id].
-func delete_lobby_card(match_id: String) -> void:
-	if _client == null or _session == null or match_id.is_empty():
+## Lists every public object under [param collection] across all owners as an
+## [Array] of [code]{ key, value, user_id }[/code], without collapsing objects
+## that share a key.
+##
+## Nakama scopes storage by [code](collection, key, owner)[/code], so several
+## users can each hold an object under the same key. [method read_public_storage]
+## keeps one per key; this returns every owner's object, which is what a
+## multi-writer rendezvous needs to see all candidates. Empty before the session
+## is open.
+func list_public_storage(collection: String, limit := 100) -> Array:
+	var out: Array = []
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or collection.is_empty():
+		return out
+	var res = await client.list_storage_objects_async(
+		session, collection, "", limit,
+	)
+	if res == null or res.is_exception():
+		return out
+	for object in res.objects:
+		out.append({
+			"key": String(object.key),
+			"value": JSON.parse_string(String(object.value)),
+			"user_id": String(object.user_id),
+		})
+	return out
+
+
+## Best-effort delete of the caller-owned object keyed by [param key] under
+## [param collection]. Idempotent on the server side.
+func delete_public_storage(collection: String, key: String) -> void:
+	var client = _resolve_client()
+	var session = _resolve_session()
+	if client == null or session == null or collection.is_empty() or key.is_empty():
 		return
 	var id_script: Variant = _nakama_class("NakamaStorageObjectId")
 	if id_script == null:
 		return
-	var id: Variant = id_script.new(LOBBY_COLLECTION, match_id, "", "")
-	await _client.delete_storage_objects_async(_session, [id])
+	var id: Variant = id_script.new(collection, key, "", "")
+	await client.delete_storage_objects_async(session, [id])
+
+
+## Writes a public-read lobby card keyed by [param match_id] under
+## [constant LOBBY_COLLECTION] and returns [code]true[/code] on success.
+##
+## Relay matches carry no metadata, so the host stores the browse card (name,
+## host, capacity, tag) here for [method read_lobby_cards] to resolve. Thin
+## [constant LOBBY_COLLECTION] alias over [method write_public_storage].
+func write_lobby_card(match_id: String, card: Dictionary) -> bool:
+	return await write_public_storage(LOBBY_COLLECTION, match_id, card)
+
+
+## Reads every public lobby card under [constant LOBBY_COLLECTION] into a
+## [code]{ match_id: card_dict }[/code] map. Empty before the session is open.
+func read_lobby_cards(limit := 100) -> Dictionary:
+	return await read_public_storage(LOBBY_COLLECTION, limit)
+
+
+## Best-effort delete of the local lobby card keyed by [param match_id].
+func delete_lobby_card(match_id: String) -> void:
+	await delete_public_storage(LOBBY_COLLECTION, match_id)
 
 # ── Generic storage objects ───────────────────────────────────────────────────
 

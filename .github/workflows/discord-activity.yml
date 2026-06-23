@@ -1,0 +1,111 @@
+name: Deploy Bomber Discord Activity
+
+# Push-to-deploy for the embedded Discord Activity. After CI passes on main,
+# export examples/bomber as a threads-off web build and deploy it to Cloudflare
+# Pages, then deploy the token Worker. The committed default main scene is left
+# untouched; this job swaps run/main_scene to Bomber in the runner checkout only.
+#
+# Required repo secrets/vars:
+#   secrets.CLOUDFLARE_API_TOKEN   - Pages + Workers deploy scope
+#   secrets.CLOUDFLARE_ACCOUNT_ID
+#   vars.CF_PAGES_PROJECT          - Cloudflare Pages project name
+#
+# NOTE: not yet run end to end; mirrors itch-demo.yml's verified export gate.
+
+on:
+  workflow_run:
+    workflows: ["CI"] # must match the `name:` in ci.yml
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: discord-activity
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7
+
+jobs:
+  deploy:
+    name: "Export Web and deploy to Cloudflare"
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.7
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup (relocate export templates + editor config)
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mkdir -v -p ~/.config/
+          mv /root/.config/godot ~/.config/godot
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
+             ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Install Godot runtime libraries
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libfontconfig1
+
+      - name: Swap main scene to Bomber
+        run: |
+          sed -i \
+            's#^run/main_scene=.*#run/main_scene="uid://3a3852p4fypv"#' \
+            project.godot
+          grep 'run/main_scene="uid://3a3852p4fypv"' project.godot
+
+      - name: Disable editor plugins for export
+        run: |
+          sed -i \
+            's#^enabled=PackedStringArray.*#enabled=PackedStringArray()#' \
+            project.godot
+          grep 'enabled=PackedStringArray()' project.godot
+
+      - name: Import resources
+        run: godot --headless --import || true
+
+      - name: Export Web (Bomber, threads off)
+        run: |
+          mkdir -v -p build/web
+          EXPORT_DIR="$(readlink -f build)"
+          # Threads must be off in the export preset for Discord. The
+          # artifact-on-disk gate tolerates the known Godot teardown segfault
+          # (godot#99284/#81030): the html/js/wasm and the data pack (index.pck)
+          # are written before the crash, so a non-empty index.pck proves the
+          # export completed even on a non-zero exit.
+          status=0
+          godot --headless --verbose --export-release \
+            "Web" "$EXPORT_DIR/web/index.html" > export.log 2>&1 || status=$?
+          cat export.log
+          ls -l build/web || true
+          if [ -s build/web/index.wasm ] && [ -s build/web/index.pck ]; then
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::Godot exited $status (known teardown crash) but export completed."
+            fi
+          else
+            echo "::error::Web export did not produce its artifacts (godot exit $status)."
+            if [ "$status" -eq 0 ]; then status=1; fi
+            exit "$status"
+          fi
+
+      - name: Deploy page to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=${{ vars.CF_PAGES_PROJECT }}
+
+      - name: Deploy token Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: addons/networked_activity/templates/token_worker
+          command: deploy

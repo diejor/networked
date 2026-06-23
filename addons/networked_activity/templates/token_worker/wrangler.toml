@@ -1,0 +1,15 @@
+# Cloudflare Worker config for the Discord Activity token proxy.
+#
+# Per-game template. Copy out of the addon, fill CLIENT_ID with your Discord
+# application id, then set the secret out of band:
+#
+#   wrangler secret put CLIENT_SECRET
+#   wrangler deploy
+#
+# CLIENT_SECRET is never committed. Only CLIENT_ID (public) lives here.
+name = "networked-activity-token"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[vars]
+CLIENT_ID = "your-discord-application-id"

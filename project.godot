@@ -33,7 +33,7 @@ window/stretch/mode="viewport"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg")
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/networked/plugin.cfg", "res://addons/networked_activity/plugin.cfg")
 
 [gdunit4]
 
