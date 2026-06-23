@@ -1,4 +1,4 @@
-## Integration tests for [NetwDatabase] and [FileSystemBackend].
+## Integration tests for [NetwDatabase] and [FileSystemDatabase].
 ##
 ## Exercises the full persistence stack including schema registration,
 ## transactions, and drift policy enforcement.
@@ -7,13 +7,13 @@ extends NetwTestSuite
 
 var test_dir: String
 var db: NetwDatabase
-var backend: FileSystemBackend
+var backend: FileSystemDatabase
 
 
 func before_test() -> void:
 	test_dir = create_temp_dir("database_flow_test")
 
-	backend = auto_free(FileSystemBackend.new())
+	backend = auto_free(FileSystemDatabase.new())
 	backend.base_dir = test_dir
 
 	db = auto_free(NetwDatabase.new())
@@ -23,7 +23,7 @@ func before_test() -> void:
 func after_test() -> void:
 	db = null
 	backend = null
-	FileSystemBackend._clear_path_registry()
+	FileSystemDatabase._clear_path_registry()
 	await get_tree().process_frame
 	await super.after_test()
 
@@ -71,10 +71,10 @@ func test_load_flow_reads_from_disk() -> void:
 	# Simulate restart by nulling out the current database and backend.
 	db = null
 	backend = null
-	FileSystemBackend._clear_path_registry()
+	FileSystemDatabase._clear_path_registry()
 
 	var db2: NetwDatabase = auto_free(NetwDatabase.new())
-	var backend2: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var backend2: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	backend2.base_dir = test_dir
 	db2.backend = backend2
 	db2._register_schema(&"players", [&"position", &"health"])
@@ -128,7 +128,7 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 	backend = null
 
 	# Save a record with 'gold' column.
-	var backend_v1: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var backend_v1: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	backend_v1.base_dir = test_dir
 	var db_v1: NetwDatabase = auto_free(NetwDatabase.new())
 	db_v1.backend = backend_v1
@@ -143,10 +143,10 @@ func test_schema_mismatch_purge_in_full_flow() -> void:
 
 	db_v1 = null
 	backend_v1 = null
-	FileSystemBackend._clear_path_registry()
+	FileSystemDatabase._clear_path_registry()
 
 	# Reload with 'gold' column removed.
-	var backend_v2: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var backend_v2: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	backend_v2.base_dir = test_dir
 	var db_v2: NetwDatabase = auto_free(NetwDatabase.new())
 	db_v2.backend = backend_v2

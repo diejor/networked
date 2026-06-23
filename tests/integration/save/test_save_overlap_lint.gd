@@ -22,7 +22,7 @@ var level_2_builder: LevelBuilder
 
 func before_test() -> void:
 	db = auto_free(NetwDatabase.new())
-	# Dict backend: no FileSystemBackend path-registry collision when the packed
+	# Dict backend: no FileSystemDatabase path-registry collision when the packed
 	# scene embeds (duplicates) the database resource.
 	db.backend = NetwDatabaseBackend.Dict.new()
 

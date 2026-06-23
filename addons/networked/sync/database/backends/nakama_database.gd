@@ -20,7 +20,7 @@
 ## JSON-only storage as a [JSON] envelope wrapping a [Marshalls] base64 of the
 ## record, so a [Vector2] or a [Color] survives the round trip. Queries filter
 ## the mirror locally instead of pushing the predicate to the server, the same
-## as [FileSystemBackend].
+## as [FileSystemDatabase].
 class_name NakamaDatabase
 extends NetwDatabaseBackend
 

@@ -8,7 +8,7 @@
 ## [codeblock]
 ## NetwDatabaseBackend
 ##  ┠╴ NetwDatabaseBackend.Dict   in-memory mirror, for tests
-##  ┠╴ FileSystemBackend          one DictionaryRecord file per record
+##  ┠╴ FileSystemDatabase          one DictionaryRecord file per record
 ##  ┖╴ NakamaDatabase             write-behind cache over Nakama storage
 ##
 ## # A concrete backend overrides the five @abstract methods:

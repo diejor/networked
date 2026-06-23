@@ -8,7 +8,7 @@
 ## it returns.
 ## [codeblock]
 ## var db := NetwDatabase.new()
-## var fs := FileSystemBackend.new()
+## var fs := FileSystemDatabase.new()
 ## fs.base_dir = "user://saves"
 ## fs.use_text_format = true   # readable .tdict instead of binary .dict
 ## db.backend = fs
@@ -17,10 +17,10 @@
 ## A subdirectory under the slot root that no registered table claims is a ghost
 ## table. [method initialize] reports each one through
 ## [method @GlobalScope.push_warning] and never deletes data on its own.
-class_name FileSystemBackend
+class_name FileSystemDatabase
 extends NetwDatabaseBackend
 
-# Static registry mapping globalized base_dir -> WeakRef(FileSystemBackend).
+# Static registry mapping globalized base_dir -> WeakRef(FileSystemDatabase).
 # Used to catch multiple instances trying to manage the same directory.
 static var _path_registry: Dictionary = { }
 
@@ -113,7 +113,7 @@ func initialize(schema: Dictionary, slot: String = "") -> Error:
 		if other and other != self:
 			assert(
 				false,
-				"FileSystemBackend: Multiple instances are pointing to the " +
+				"FileSystemDatabase: Multiple instances are pointing to the " +
 				"same slot root '%s'. This will cause data corruption and " % [_root] +
 				"ghost-table warnings. Consider using a shared NetwDatabase " +
 				"resource or a different base_dir if they are conceptually " +
@@ -126,7 +126,7 @@ func initialize(schema: Dictionary, slot: String = "") -> Error:
 		var err := DirAccess.make_dir_recursive_absolute(_root)
 		if err != OK:
 			Netw.dbg.error(
-				"FileSystemBackend: could not create slot root '%s'. Error: %s",
+				"FileSystemDatabase: could not create slot root '%s'. Error: %s",
 				[_root, error_string(err)],
 				func(m): push_error(m)
 			)
@@ -148,7 +148,7 @@ func initialize(schema: Dictionary, slot: String = "") -> Error:
 				var sn := StringName(entry)
 				if not schema.has(sn):
 					Netw.dbg.warn(
-						"FileSystemBackend: ghost table '%s' found at '%s'. " \
+						"FileSystemDatabase: ghost table '%s' found at '%s'. " \
 								+ "It is not in the current schema. Run a manual migration " \
 								+ "or delete the directory if it is no longer needed.",
 						[entry, _root.path_join(entry)],

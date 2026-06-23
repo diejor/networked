@@ -1,4 +1,4 @@
-## Tests for save-slot namespacing on [NetwDatabase] and [FileSystemBackend].
+## Tests for save-slot namespacing on [NetwDatabase] and [FileSystemDatabase].
 ##
 ## Covers the [NetwDatabase.SlotEngine] startup-only lock, slot path prefixing,
 ## per-slot isolation, and slot enumeration/deletion with no slot open.
@@ -13,13 +13,13 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	FileSystemBackend._clear_path_registry()
+	FileSystemDatabase._clear_path_registry()
 	await get_tree().process_frame
 	await super.after_test()
 
 
 func _make_db(slot: StringName) -> NetwDatabase:
-	var backend: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var backend: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	backend.base_dir = test_dir
 	var db: NetwDatabase = auto_free(NetwDatabase.new())
 	db.backend = backend
@@ -69,18 +69,18 @@ func test_slot_isolates_records() -> void:
 
 func test_list_and_delete_slots_with_no_slot_open() -> void:
 	# Seed two slots through direct backend writes.
-	var seed_a: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var seed_a: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_a.base_dir = test_dir
 	seed_a.initialize({ &"players": [] as Array[StringName] }, "slot_a")
 	seed_a.upsert(&"players", &"p1", { &"hp": 1 })
 
-	var seed_b: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var seed_b: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_b.base_dir = test_dir
 	seed_b.initialize({ &"players": [] as Array[StringName] }, "slot_b")
 	seed_b.upsert(&"players", &"p2", { &"hp": 2 })
 
 	# A backend with no slot open can still browse and delete slots.
-	var browser: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var browser: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	browser.base_dir = test_dir
 	var listed := browser.list_namespaces()
 	assert_array(listed).contains([&"slot_a", &"slot_b"])
@@ -92,13 +92,13 @@ func test_list_and_delete_slots_with_no_slot_open() -> void:
 
 
 func test_two_slots_coexist_without_registry_collision() -> void:
-	var be_a: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var be_a: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	be_a.base_dir = test_dir
 	assert_int(be_a.initialize({ &"players": [] as Array[StringName] }, "slot_a")) \
 			.is_equal(OK)
 
 	# Same base_dir, different slot: keyed on the slot root, so no collision.
-	var be_b: FileSystemBackend = auto_free(FileSystemBackend.new())
+	var be_b: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	be_b.base_dir = test_dir
 	assert_int(be_b.initialize({ &"players": [] as Array[StringName] }, "slot_b")) \
 			.is_equal(OK)

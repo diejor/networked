@@ -145,7 +145,7 @@ func _reset_global_test_state() -> void:
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
 
-	FileSystemBackend._clear_path_registry()
+	FileSystemDatabase._clear_path_registry()
 	WebTorrentTrackerClient.clear_shared_clients()
 
 

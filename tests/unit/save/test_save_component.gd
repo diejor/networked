@@ -5,13 +5,13 @@ class_name TestSaveComponent
 extends NetwTestSuite
 
 var test_dir: String
-var backend: FileSystemBackend
+var backend: FileSystemDatabase
 var db: NetwDatabase
 
 
 func before_test() -> void:
 	test_dir = create_temp_dir("save_component_test")
-	backend = auto_free(FileSystemBackend.new())
+	backend = auto_free(FileSystemDatabase.new())
 	backend.base_dir = test_dir
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend
