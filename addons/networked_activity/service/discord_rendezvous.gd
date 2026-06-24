@@ -21,6 +21,21 @@ class_name DiscordRendezvous
 extends Resource
 
 
+## Wires up any backend-specific seams this rendezvous owns, once the
+## [DiscordActivityService] has entered the [param tree].
+##
+## This is where a backend reaches into the core transport it drives, so the
+## service never names a concrete backend. [NakamaDiscordRendezvous] installs its
+## [member NakamaWrapper.proxy_base_resolver] here so the relay socket is rewritten
+## through Discord's iframe proxy. The default does nothing, which is correct for a
+## backend like [DedicatedDiscordRendezvous] that needs no core seam.
+## [codeblock]
+## DiscordActivityService.service_entered ──► rendezvous.bind(service, tree)
+## [/codeblock]
+func bind(_service: DiscordActivityService, _tree: MultiplayerTree) -> void:
+	pass
+
+
 ## Resolves [param instance_id] into a [JoinTarget], deciding host versus join.
 ##
 ## A returned target with an empty [member JoinTarget.address] means this

@@ -22,6 +22,11 @@
 ## reached through the same overridable [member host] / [member port] /
 ## [member use_ssl] the [NakamaLobbyDirectory] exposes, so the Discord proxy path
 ## is a config change, not a code change.
+##
+## This rendezvous owns the whole Nakama side of the Discord integration. It
+## installs [member NakamaWrapper.proxy_base_resolver] from [method bind] so the
+## relay client and socket route through Discord's iframe proxy, which is why the
+## [DiscordActivityService] itself never names Nakama.
 class_name NakamaDiscordRendezvous
 extends DiscordRendezvous
 
@@ -30,24 +35,72 @@ extends DiscordRendezvous
 ## up in a normal lobby browse.
 @export var collection: String = "discord_rendezvous"
 
+## Dev-portal URL-mapping prefix Nakama is reached at through Discord's iframe
+## proxy. Discord always serves the activity from
+## [code]<client_id>.discordsays.com[/code] and always prepends the fixed
+## [code]/.proxy/[/code] namespace, so only this trailing prefix is configurable.
+## The default matches a [code]/nakama[/code] dev-portal mapping, making the proxy
+## base [code]<client_id>.discordsays.com/.proxy/nakama[/code].
+@export var proxy_prefix: String = "nakama"
+
 ## Nakama server key, matching the server's [code]socket.server_key[/code].
 @export var server_key: String = "defaultkey"
 
-## Relay host name or address, without scheme. Behind the Discord proxy this is
-## the mapped [code]discordsays.com[/code] prefix host.
+## Relay host name or address, without scheme, for a [b]direct[/b] connection
+## (local Docker Nakama, a tunnel, a dedicated server). When embedded in Discord,
+## [method bind] rewrites the socket through the iframe proxy via
+## [member NakamaWrapper.proxy_base_resolver], so this value is ignored there and
+## the proxy path comes from [member proxy_prefix].
 @export var host: String = "127.0.0.1"
 
-## Relay port. Use [code]443[/code] behind a TLS terminating proxy or tunnel.
+## Relay port for a direct connection. Use [code]443[/code] behind a TLS
+## terminating proxy or tunnel. Ignored when embedded (see [member host]).
 @export var port: int = 7350
 
-## When [code]true[/code], connects over [code]https[/code] and [code]wss[/code].
-## Always [code]true[/code] on the Discord proxy path.
+## When [code]true[/code], connects over [code]https[/code] and [code]wss[/code]
+## for a direct connection. Ignored when embedded (see [member host]).
 @export var use_ssl: bool = false
 
 ## Device id used for Nakama authentication. Empty falls back to
 ## [method OS.get_unique_id]. Set distinct ids per instance for local
 ## two-client testing with fake instance ids.
 @export var device_id: String = ""
+
+
+## Installs the Nakama iframe-proxy seam so the relay client and socket route
+## through Discord's proxy when embedded.
+##
+## Sets [member NakamaWrapper.proxy_base_resolver] to a resolver that rewrites the
+## Nakama base to [code]<client_id>.discordsays.com/.proxy/<proxy_prefix>[/code].
+## The resolver looks the [DiscordActivityService] up lazily through the tree at
+## connect time, so [param service] and [param tree] are only the lifecycle
+## trigger and may be [code]null[/code] when wiring the seam by hand (the
+## standalone smoke scene does this). Off the embed path the resolver returns
+## [code]""[/code] and the direct connection is untouched.
+func bind(_service: DiscordActivityService, _tree: MultiplayerTree) -> void:
+	NakamaWrapper.proxy_base_resolver = _resolve_proxy_base
+
+
+# Resolves the Nakama proxy base for a Discord Activity, the NakamaWrapper seam
+# that keeps every discordsays.com string out of the core addon. Returns a
+# scheme-less "<client_id>.discordsays.com/.proxy/<proxy_prefix>" so the wrapper
+# rewrites the client and socket URIs, or "" to leave a direct connection alone.
+# It fires for a config_host already pointed at .discordsays.com (the smoke path,
+# no service), or for a registered DiscordActivityService that carries a client_id
+# (an embedded session) reachable from host_node. A service with no client_id
+# (a headless or test context) keeps the direct connection.
+func _resolve_proxy_base(host_node: Node, config_host: String) -> String:
+	if config_host.ends_with(".discordsays.com"):
+		return "%s.discordsays.com/.proxy/%s" % [config_host.split(".")[0], proxy_prefix]
+	if host_node == null:
+		return ""
+	var mt := MultiplayerTree.resolve(host_node)
+	if mt == null:
+		return ""
+	var svc := mt.get_service(DiscordActivityService) as DiscordActivityService
+	if svc == null or svc.client_id.is_empty():
+		return ""
+	return "%s.discordsays.com/.proxy/%s" % [svc.client_id, proxy_prefix]
 
 
 func resolve(instance_id: String, tree: MultiplayerTree) -> JoinTarget:
@@ -128,7 +181,7 @@ func _ready_wrapper(tree: MultiplayerTree) -> NakamaWrapper:
 		"host": host,
 		"port": port,
 		"use_ssl": use_ssl,
-		"device_id": device_id,
+		"device_id": _normalized_device_id(),
 	})
 	var auth := await session.connect_async()
 	if not auth.ok:
@@ -161,6 +214,18 @@ func _freshest_match(wrapper: NakamaWrapper, instance_id: String) -> String:
 			best_ts = ts
 			best_mid = mid
 	return best_mid
+
+
+# Normalizes device_id to Nakama's 10-128 byte requirement. An empty id is left
+# empty so the session falls back to OS.get_unique_id(). Discord user ids
+# (~18-digit snowflakes) pass through untouched; short ids like a fake "alice" are
+# given a stable prefix so they stay distinct and reconnect as the same user.
+func _normalized_device_id() -> String:
+	if device_id.is_empty():
+		return ""
+	if device_id.length() < 10:
+		return "netw-discord-" + device_id
+	return device_id.left(128)
 
 
 func _target_for(match_id: String) -> JoinTarget:

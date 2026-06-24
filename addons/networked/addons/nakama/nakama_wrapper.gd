@@ -35,6 +35,49 @@ const LOBBY_COLLECTION := "lobbies"
 # every wrapper instance so the class registry is scanned at most once per name.
 static var _class_cache: Dictionary = {}
 
+## Optional hook that lets an embedding addon route Nakama traffic through a
+## platform proxy without the core wrapper knowing the platform.
+##
+## When set, it is called as [code]resolver.call(host_node, config_host)[/code]
+## and must return a scheme-less base such as
+## [code]"<id>.example.com/.proxy/nakama"[/code], or [code]""[/code] to leave the
+## client and socket URIs untouched. [code]networked_activity[/code] sets this to
+## inject the Discord [code]discordsays.com[/code] proxy path, so no Discord
+## string lives in this core addon.
+static var proxy_base_resolver: Callable
+
+
+# Returns the proxy base for this connection, or "" when no resolver is set or it
+# declines. host_node anchors the resolver's tree/service lookup; config_host is
+# the configured Nakama host it may key off.
+static func _resolve_proxy_base(host_node: Node, config_host: String) -> String:
+	if proxy_base_resolver.is_valid():
+		return String(proxy_base_resolver.call(host_node, config_host))
+	return ""
+
+
+# Rewrites the _base_uri of a Nakama client api or socket to scheme://base. A
+# no-op when base is empty, so the default direct connection is untouched. This
+# is the one place that reaches into the vendor object's private _base_uri.
+static func _apply_proxy_base(target: Object, base: String, scheme: String) -> void:
+	if target != null and not base.is_empty():
+		target._base_uri = "%s://%s" % [scheme, base]
+
+
+# Workaround for Godot HTML5 export bug (godot#116574): the browser transparently
+# decompresses, so the SDK's own gzip decode double-decompresses and fails. Off
+# the web this is a no-op. Reaches into the vendor client's http adapter.
+static func _disable_web_gzip(client: Object) -> void:
+	if client == null:
+		return
+	if not (OS.has_feature("web") or OS.get_name() == "Web"):
+		return
+	client._api_client._http_adapter.child_entered_tree.connect(
+		func(node: Node) -> void:
+			if node is HTTPRequest:
+				node.accept_gzip = false
+	)
+
 ## Emitted once the local peer id is granted and the match is fully joined.
 ##
 ## For a host this fires right after [method create_match] resolves. For a
@@ -149,6 +192,10 @@ func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 		_NAKAMA_LOG_LEVEL_WARNING,
 	)
 
+	_disable_web_gzip(_client)
+	var proxy_base := _resolve_proxy_base(host, String(config.get("host", "127.0.0.1")))
+	_apply_proxy_base(_client._api_client, proxy_base, "https")
+
 	var device_id := String(config.get("device_id", ""))
 	if device_id.is_empty():
 		device_id = OS.get_unique_id()
@@ -163,6 +210,7 @@ func _perform_connect(host: Node, config: Dictionary) -> Dictionary:
 		return { "ok": false, "error": _session.get_exception().message }
 
 	_socket = _facade.create_socket_from(_client)
+	_apply_proxy_base(_socket, proxy_base, "wss")
 	await _socket.connect_async(_session)
 	if not _socket.is_connected_to_host():
 		return { "ok": false, "error": "Nakama socket failed to connect" }

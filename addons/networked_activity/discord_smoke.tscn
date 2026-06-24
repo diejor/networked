@@ -10,6 +10,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_smoke")
+client_id = "1519144648411447338"
+nakama_host = "1519144648411447338.discordsays.com"
+nakama_port = 443
+nakama_use_ssl = true
 
 [node name="Output" type="RichTextLabel" parent="." unique_id=750102185]
 layout_mode = 1

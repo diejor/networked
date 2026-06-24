@@ -20,10 +20,10 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.get("/", (c) => c.text("networked_activity token worker"));
 
-app.post("/token", async (c) => {
+const handleToken = async (c: any) => {
   const code = await c.req
     .json<{ code?: unknown }>()
-    .then((b) => b.code)
+    .then((b: any) => b.code)
     .catch(() => undefined);
 
   if (typeof code !== "string" || code.length === 0) {
@@ -48,6 +48,9 @@ app.post("/token", async (c) => {
 
   const { access_token } = (await response.json()) as { access_token: string };
   return c.json({ access_token });
-});
+};
+
+app.post("/", handleToken);
+app.post("/token", handleToken);
 
 export default app;

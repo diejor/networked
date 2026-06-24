@@ -13,7 +13,14 @@ func register_service(service: Node, type: Script = null) -> void:
 	if not type:
 		type = service.get_script()
 
-	if type in _services:
+	# Idempotent: re-registering the identical instance (e.g. NetwService's
+	# auto-register on _enter_tree followed by an explicit register_service from
+	# get_nakama_session) is a no-op, not an overwrite. Only a genuinely different
+	# instance under the same key is a conflict worth warning about.
+	var prior: Node = _services.get(type)
+	if prior == service:
+		return
+	if prior != null:
 		Netw.dbg.warn(
 			"Service %s already registered - overwriting.",
 			[type.get_global_name()],

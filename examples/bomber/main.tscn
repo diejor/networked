@@ -11,6 +11,8 @@
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/addons/steam/steam_lobby_directory.gd" id="9_p4o8j"]
 [ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://7rlemmqrhvw7" path="res://addons/networked/sync/sim/lag_compensation.gd" id="10_lagcomp"]
+[ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/service/discord_activity_service.gd" id="11_disc"]
+[ext_resource type="Script" uid="uid://xsdb520sm4wk" path="res://addons/networked_activity/service/nakama_discord_rendezvous.gd" id="12_rdv"]
 
 [sub_resource type="Resource" id="Resource_ytyuk"]
 script = ExtResource("2_3fkt7")
@@ -19,6 +21,10 @@ metadata/_custom_type_script = "uid://cgyucu72xh732"
 [sub_resource type="Resource" id="Resource_gbknk"]
 script = ExtResource("3_p4o8j")
 metadata/_custom_type_script = "uid://dp77sylvhe357"
+
+[sub_resource type="Resource" id="Resource_disc_rdv"]
+script = ExtResource("12_rdv")
+metadata/_custom_type_script = "uid://xsdb520sm4wk"
 
 [node name="Main" type="Node" unique_id=68306203]
 
@@ -65,5 +71,11 @@ device_id = "bomber-host-diego-001"
 local_member_name = "diegote"
 browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
+
+[node name="DiscordActivity" type="Node" parent="MultiplayerTree" unique_id=592217181]
+script = ExtResource("11_disc")
+client_id = "1519144648411447338"
+rendezvous = SubResource("Resource_disc_rdv")
+metadata/_custom_type_script = "uid://certc8teajoaj"
 
 [node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]

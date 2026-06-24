@@ -86,9 +86,9 @@ func test_list_and_delete_slots_with_no_slot_open() -> void:
 	assert_array(listed).contains([&"slot_a", &"slot_b"])
 
 	assert_int(browser.delete_namespace("slot_a")).is_equal(OK)
-	var after := browser.list_namespaces()
-	assert_array(after).not_contains([&"slot_a"])
-	assert_array(after).contains([&"slot_b"])
+	var _after := browser.list_namespaces()
+	assert_array(_after).not_contains([&"slot_a"])
+	assert_array(_after).contains([&"slot_b"])
 
 
 func test_two_slots_coexist_without_registry_collision() -> void:

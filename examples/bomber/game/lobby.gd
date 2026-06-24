@@ -45,7 +45,48 @@ func _ready() -> void:
 
 	_status.visible = false
 
+	# Embedded in a Discord Activity: skip the server browser and connect through
+	# the rendezvous. The service only registers when actually embedded, so a
+	# normal desktop or web build falls through to the usual pre-lobby browser.
+	var activity := _ctx.services.get_service(DiscordActivityService) as DiscordActivityService
+	if activity != null and activity.in_discord():
+		_enter_discord_activity(activity)
+		return
+
 	_set_state(State.PRE_LOBBY)
+
+
+# Drives the embedded-activity entry: handshake, best-effort identity, then
+# connect_activity. Success drives the tree online, so the existing
+# session_entered handler carries us into the in-lobby screen exactly like a
+# browser host/join. Failure surfaces as a status message (no browser to fall
+# back to inside Discord).
+func _enter_discord_activity(activity: DiscordActivityService) -> void:
+	_browser.visible = false
+	_in_lobby.visible = false
+	_set_status("Connecting to Discord Activity...")
+
+	if not await activity.start():
+		_set_status("Discord handshake failed.")
+		return
+	# A no-op when there is no SDK to authenticate against.
+	await activity.authenticate()
+
+	var payload := JoinPayload.new()
+	payload.username = _discord_username(activity)
+
+	var err := await activity.connect_activity(payload)
+	if err != OK:
+		_set_status("Activity connect failed: %s" % error_string(err))
+
+
+# Resolves the local player name from the Discord identity, falling back to the
+# device id and finally a placeholder.
+func _discord_username(activity: DiscordActivityService) -> String:
+	if activity.user != null and not activity.user.global_name.is_empty():
+		return activity.user.global_name
+	var did := activity.device_id()
+	return did if not did.is_empty() else "Player"
 
 
 # Transition to the InLobby screen when the server browser enters a session.

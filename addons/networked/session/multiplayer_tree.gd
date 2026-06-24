@@ -1641,6 +1641,9 @@ func _notification(what: int) -> void:
 	# the queued tree_exiting path did not already run.
 	if what == NOTIFICATION_PREDELETE:
 		_close_peer_on_delete()
+		if is_instance_valid(_interest_service) \
+				and _interest_service.get_parent() == null:
+			_interest_service.free()
 
 
 func _on_exiting() -> void:

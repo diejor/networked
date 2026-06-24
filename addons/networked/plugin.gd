@@ -70,19 +70,6 @@ func _get_plugin_icon() -> Texture2D:
 
 
 func _register_settings() -> void:
-	var setting_name := "networked/debug/auto_tile_instances"
-	if not ProjectSettings.has_setting(setting_name):
-		ProjectSettings.set_setting(setting_name, true)
-
-	ProjectSettings.set_initial_value(setting_name, true)
-	ProjectSettings.add_property_info(
-		{
-			"name": setting_name,
-			"type": TYPE_BOOL,
-			"hint": PROPERTY_HINT_NONE,
-		},
-	)
-
 	var perf_monitors_setting := "debug/networked/performance_monitors"
 	if not ProjectSettings.has_setting(perf_monitors_setting):
 		ProjectSettings.set_setting(perf_monitors_setting, true)

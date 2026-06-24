@@ -5,7 +5,7 @@ const _TIMEOUT := 10.0
 
 var _trees: Array = []
 
-
+@warning_ignore("unused_parameter")
 func before(
 		do_skip = NakamaTestServer.unavailable(),
 		skip_reason = NakamaTestServer.SKIP_REASON,

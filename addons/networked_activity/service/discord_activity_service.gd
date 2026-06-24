@@ -4,33 +4,32 @@
 ## lives here: detecting that the game is embedded, driving the Discord SDK
 ## handshake to ready, resolving the local player's Discord identity, and turning
 ## the shared [code]instance_id[/code] into a live session through a pluggable
-## [DiscordRendezvous]. The game owns only the deployment (a Nakama or WSS server,
-## a token Worker) and the choice of rendezvous backend.
+## [DiscordRendezvous]. The service owns the platform layer only and never names a
+## transport backend. The chosen [DiscordRendezvous] owns the backend, so the same
+## service drives a [NakamaDiscordRendezvous] relay or a
+## [DedicatedDiscordRendezvous] WSS server unchanged. The game owns only the
+## deployment (a relay or WSS server, a token Worker) and which rendezvous to use.
 ##
-## The service registers only when the game is actually embedded, so a normal
-## desktop or web build keeps its usual backends untouched. A fake instance-id
-## seam ([method in_discord] returns [code]true[/code] off a command-line flag)
-## runs the whole rendezvous and connect path outside Discord, so two local tabs
-## or builds exercise it without the proxy.
+## The service registers only when the game is actually embedded
+## ([method in_discord]), so a normal desktop or web build keeps its usual
+## backends untouched.
 ## [codeblock]
 ## MultiplayerTree
-## ├── NakamaSession            (shared account; the rendezvous and relay reuse it)
-## ├── NakamaLobbyDirectory     (relay match socket; host/port overridden for proxy)
-## └── DiscordActivityService   (client_id, rendezvous = NakamaDiscordRendezvous)
+## └── DiscordActivityService   (client_id, rendezvous = the pluggable backend)
+##         rendezvous installs its own transport seams from bind()
 ##
-## await service.start()                 # SDK init -> ready (no-op when faking)
-## await service.authenticate()          # OAuth -> DiscordUser (skipped when faking)
+## await service.start()                    # SDK handshake -> ready
+## await service.authenticate()             # OAuth -> DiscordUser
 ## await service.connect_activity(payload)  # resolve instance -> host or join
 ## [/codeblock]
-## Detection and identity run only inside the browser, so [method start] and
-## [method authenticate] short-circuit on the fake path. [method connect_activity]
-## works on both paths because the rendezvous only needs the
-## [member instance_id].
+## [method start] and [method authenticate] drive the browser Discord SDK, so they
+## are no-ops when no SDK is present. [method connect_activity] still runs because
+## the rendezvous only needs the [member instance_id].
 class_name DiscordActivityService
 extends NetwService
 
-## Emitted once the Discord SDK handshake reaches ready (or immediately on the
-## fake path). [method connect_activity] is safe to call after this.
+## Emitted once the Discord SDK handshake reaches ready (or immediately when there
+## is no SDK to handshake). [method connect_activity] is safe to call after this.
 signal activity_ready()
 
 ## Emitted after [method authenticate] resolves the local Discord identity,
@@ -47,9 +46,9 @@ signal activity_failed(reason: String)
 ## [method start] and by
 ## [signal DiscordSDK.dispatch_activity_instance_participants_update]. Reconcile
 ## it against networked peers through the shared device id (a participant's
-## [member DiscordSDK.DiscordSimpleUser.id] equals the Nakama user id set by
-## [method authenticate], so [method device_id] correlates the two). Empty on the
-## fake path. See [method participants].
+## [member DiscordSDK.DiscordSimpleUser.id] equals the backend user id set by
+## [method authenticate], so [method device_id] correlates the two). See
+## [method participants].
 signal roster_changed(participants: Array)
 
 ## Emitted when Discord changes the activity layout mode (focused, PIP, grid),
@@ -61,12 +60,6 @@ signal layout_changed(layout_mode: int)
 ## [param screen_orientation]. A thin pass-through of
 ## [signal DiscordSDK.dispatch_orientation_update].
 signal orientation_changed(screen_orientation: int)
-
-## Command-line flag that forces the Discord path off a fake instance id, for
-## local two-client testing without the Discord iframe. Value is either a bare
-## id ([code]--netw-discord-fake=test123[/code]) or [code]key=value[/code] pairs
-## ([code]--netw-discord-fake=instance_id=test123[/code]).
-const FAKE_FLAG := "--netw-discord-fake"
 
 ## Discord application (client) id. Required for the SDK handshake and OAuth.
 @export var client_id: String = ""
@@ -97,7 +90,6 @@ var _instance_id: String = ""
 var _channel_id: String = ""
 var _guild_id: String = ""
 var _device_id: String = ""
-var _fake: bool = false
 var _detected: bool = false
 var _started: bool = false
 
@@ -105,9 +97,17 @@ var _started: bool = false
 var _participants: Array = []
 
 
-## Returns [code]true[/code] only when the game is embedded in a Discord Activity
-## (or the fake seam is active), which is the same condition under which this
-## service registers.
+# Wires the core transport-restriction probe as soon as this script loads, which
+# (because a scene loads all its scripts before instancing any node) happens
+# before any directory checks should_register. So WebRTC/native directories see
+# the embed verdict and stay dormant in the iframe. A build that never references
+# this class never loads it, so a normal game pays nothing.
+static func _static_init() -> void:
+	NetwService.transport_restricted_probe = _detect_embedded
+
+
+## Returns [code]true[/code] only when the game is embedded in a Discord Activity,
+## which is the same condition under which this service registers.
 func in_discord() -> bool:
 	_detect()
 	return not _instance_id.is_empty()
@@ -120,38 +120,21 @@ func instance_id() -> String:
 	return _instance_id
 
 
-## Returns the Discord voice channel id, or an empty string off the real path.
+## Returns the Discord voice channel id, or an empty string outside a browser.
 func channel_id() -> String:
 	return _channel_id
 
 
-## Returns the Discord guild id, or an empty string in a DM or off the real path.
+## Returns the Discord guild id, or an empty string in a DM or outside a browser.
 func guild_id() -> String:
 	return _guild_id
 
 
-## Forces the fake Discord path with an explicit [param p_instance_id] and
-## optional [param p_device_id], bypassing the command-line flag.
+## Returns the stable participant id the local player authenticates with, pushed
+## onto the [member rendezvous] so each participant is a distinct backend user.
 ##
-## Call before the service enters the tree so [method should_register] sees it.
-## A command-line [constant FAKE_FLAG] still wins, so an editor-run demo can set
-## convenient defaults here while a two-window command-line run overrides them.
-## Intended for editor-run demos and tests where passing a flag is awkward.
-func set_fake_identity(p_instance_id: String, p_device_id: String = "") -> void:
-	_detect() # honor a command-line flag first
-	if _instance_id.is_empty():
-		_instance_id = p_instance_id
-		_device_id = p_device_id
-	_fake = true
-	_detected = true
-
-
-## Returns the device id used for Nakama authentication.
-##
-## On the fake path this is the [code]device_id[/code] from the
-## [constant FAKE_FLAG] (so two local instances are distinct Nakama users). On
-## the real path it is the resolved Discord user id after [method authenticate],
-## so the same Discord user reconnects as the same Nakama user.
+## Resolved from the Discord user id by [method authenticate], so the same Discord
+## user reconnects as the same backend user. Empty before authentication.
 func device_id() -> String:
 	return _device_id
 
@@ -162,34 +145,40 @@ func should_register() -> bool:
 	return in_discord()
 
 
-func service_entered(_mt: MultiplayerTree) -> void:
+func service_entered(mt: MultiplayerTree) -> void:
 	if rendezvous == null:
 		rendezvous = NakamaDiscordRendezvous.new()
+	# The rendezvous owns its transport, so it installs whatever core seams that
+	# backend needs (the Nakama relay rewrites its socket through the iframe proxy
+	# here). The service never reaches into a backend itself.
+	rendezvous.bind(self, mt)
 	_push_identity()
-	if not _fake:
-		_sdk = DiscordSDK.new()
+	_sdk = _create_sdk()
+	if _sdk != null:
 		_sdk.name = &"DiscordSDK"
 		add_child(_sdk)
 
 
 ## Drives the Discord SDK handshake to ready and returns whether it succeeded.
 ##
-## On the fake path there is no browser SDK to talk to, so this records the
-## started state and reports success immediately. On the real path it runs
+## With no SDK present there is nothing to handshake, so this records the started
+## state and reports success immediately. With an SDK it runs
 ## [method DiscordSDK.init] then awaits [method DiscordSDK.ready], optionally
-## encouraging hardware acceleration. Emits [signal activity_ready] on success
-## and [signal activity_failed] otherwise. Safe to call more than once.
+## encouraging hardware acceleration. Emits [signal activity_ready] on success and
+## [signal activity_failed] otherwise. Safe to call more than once.
 func start() -> bool:
 	if _started:
 		return true
 	_detect()
-	if _fake:
+	if _sdk == null:
+		# No browser SDK to handshake. The connect path still runs because the
+		# rendezvous only needs the instance id.
 		_started = true
-		Netw.dbg.info("DiscordActivityService: fake path ready (instance %s).", [_instance_id])
+		Netw.dbg.info("DiscordActivityService: ready, no SDK (instance %s).", [_instance_id])
 		activity_ready.emit()
 		return true
-	if _sdk == null or client_id.is_empty():
-		activity_failed.emit("Discord SDK unavailable or client_id unset")
+	if client_id.is_empty():
+		activity_failed.emit("Discord client_id unset")
 		return false
 	_sdk.init(client_id)
 	await _sdk.ready()
@@ -198,12 +187,10 @@ func start() -> bool:
 	_guild_id = _sdk.guild_id
 	if encourage_hw_accel:
 		await _sdk.command_encourage_hardware_acceleration()
-	_wire_sdk_events()
+	_connect_sdk_signals()
 	_started = true
 	Netw.dbg.info("DiscordActivityService: ready (instance %s).", [_instance_id])
 	activity_ready.emit()
-	# Fire-and-forget: the first roster arrives a frame later through roster_changed.
-	_refresh_roster()
 	return true
 
 
@@ -213,11 +200,11 @@ func start() -> bool:
 ## [member token_endpoint] for an access token, then
 ## [method DiscordSDK.command_authenticate]s to obtain the
 ## [DiscordSDK.DiscordUser]. Stores it on [member user] and emits
-## [signal identity_resolved]. The fake path has no Discord account, so this is a
-## no-op returning [code]false[/code]. Identity is client-claimed in v1 and is
-## not spoof-proof.
+## [signal identity_resolved]. With no SDK there is no Discord account to resolve,
+## so this is a no-op returning [code]false[/code]. Identity is client-claimed in
+## v1 and is not spoof-proof.
 func authenticate() -> bool:
-	if _fake or _sdk == null:
+	if _sdk == null:
 		return false
 	if not await start():
 		return false
@@ -234,12 +221,17 @@ func authenticate() -> bool:
 		activity_failed.emit("Discord authenticate failed")
 		return false
 	user = auth.user
-	# Stable Nakama identity: the same Discord user reconnects as the same user.
+	# Stable backend identity: the same Discord user reconnects as the same user.
 	if not user.id.is_empty():
 		_device_id = user.id
 		_push_identity()
 	Netw.dbg.info("DiscordActivityService: identity %s resolved.", [user.global_name])
 	identity_resolved.emit(user)
+	# Subscribe and fetch the roster now that the session is authenticated.
+	# Discord rejects both before authorize completes, so doing this in start()
+	# produced a wall of SUBSCRIBE errors.
+	_subscribe_activity_events()
+	_refresh_roster()
 	return true
 
 
@@ -304,9 +296,8 @@ func _host_and_commit(
 ## Returns the most recent Discord participant roster as an [Array] of
 ## [DiscordSDK.DiscordUser], newest update wins.
 ##
-## Updated by [signal roster_changed]. Empty before the first update and on the
-## fake path. Correlate an entry to a networked peer through the shared device id
-## (see [method device_id]).
+## Updated by [signal roster_changed]. Empty before the first update. Correlate an
+## entry to a networked peer through the shared device id (see [method device_id]).
 func participants() -> Array:
 	return _participants
 
@@ -314,46 +305,61 @@ func participants() -> Array:
 ## Sets the activity's Discord rich presence from a short [param state] and
 ## [param details] line.
 ##
-## A no-op on the fake path and before [method start] reaches ready, so a game
-## can call it unconditionally. A thin pass-through of
+## A no-op with no SDK and before [method start] reaches ready, so a game can call
+## it unconditionally. A thin pass-through of
 ## [method DiscordSDK.command_set_activity].
 func set_presence(state: String, details: String) -> void:
-	if _fake or _sdk == null or not _started:
+	if _sdk == null or not _started:
 		return
 	await _sdk.command_set_activity(state, details)
 
 
 ## Opens Discord's invite dialog so the local player can pull others into this
-## activity instance. A no-op on the fake path or before the SDK exists. A thin
-## pass-through of [method DiscordSDK.command_open_invite_dialog].
+## activity instance. A no-op with no SDK. A thin pass-through of
+## [method DiscordSDK.command_open_invite_dialog].
 func open_invite_dialog() -> void:
-	if _fake or _sdk == null:
+	if _sdk == null:
 		return
 	await _sdk.command_open_invite_dialog()
 
 
-## Opens Discord's share-moment dialog for [param media_url]. A no-op on the fake
-## path or before the SDK exists. A thin pass-through of
-## [method DiscordSDK.command_open_share_moment_dialog].
+## Opens Discord's share-moment dialog for [param media_url]. A no-op with no SDK.
+## A thin pass-through of [method DiscordSDK.command_open_share_moment_dialog].
 func share_moment(media_url: String) -> void:
-	if _fake or _sdk == null:
+	if _sdk == null:
 		return
 	await _sdk.command_open_share_moment_dialog(media_url)
 
 
 ## Opens [param url] in the player's external browser through Discord, which
-## blocks raw navigation out of the iframe. A no-op on the fake path or before
-## the SDK exists. A thin pass-through of
-## [method DiscordSDK.command_open_external_link].
+## blocks raw navigation out of the iframe. A no-op with no SDK. A thin
+## pass-through of [method DiscordSDK.command_open_external_link].
 func open_external_link(url: String) -> void:
-	if _fake or _sdk == null:
+	if _sdk == null:
 		return
 	await _sdk.command_open_external_link(url)
 
 
-# Connects the SDK dispatch signals this service surfaces and subscribes to the
-# event stream so participant, layout, and orientation updates arrive.
-func _wire_sdk_events() -> void:
+# Override point. Creates the Discord SDK node, or null when there is no browser
+# to host the postMessage handshake. A test fixture returns null to run the
+# connect path with no real SDK.
+func _create_sdk() -> DiscordSDK:
+	if _is_browser():
+		return DiscordSDK.new()
+	return null
+
+
+# Override point. Populates _instance_id (and channel/guild) for the embedded
+# session. The default reads Discord's browser query string; a test fixture
+# overrides it to inject an id so the connect path runs with no browser.
+func _resolve_instance() -> void:
+	if _is_browser():
+		_read_query_params()
+
+
+# Connects the SDK dispatch signals this service surfaces. Safe before auth: the
+# signals stay quiet until _subscribe_activity_events actually subscribes.
+func _connect_sdk_signals() -> void:
 	_sdk.dispatch_error.connect(_on_sdk_error)
 	_sdk.dispatch_activity_instance_participants_update.connect(_on_participants_update)
 	_sdk.dispatch_activity_layout_mode_update.connect(
@@ -364,7 +370,28 @@ func _wire_sdk_events() -> void:
 		func(data: DiscordSDK.OrientationUpdateData) -> void:
 			orientation_changed.emit(data.screen_orientation)
 	)
-	_sdk.subscribe_to_events()
+
+
+# Subscribes to only the events this service surfaces. The SDK's bulk
+# subscribe_to_events() also subscribes to voice/speaking/thermal/entitlement
+# events that need OAuth scopes we never request, so Discord rejects each one.
+func _subscribe_activity_events() -> void:
+	if _sdk == null:
+		return
+	_sdk.subscribe_event("ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE")
+	_sdk.subscribe_event("ACTIVITY_LAYOUT_MODE_UPDATE")
+	_sdk.subscribe_event("ORIENTATION_UPDATE")
+
+
+# Static, lazy embed detection backing NetwService.transport_restricted_probe, so
+# WebRTC/native directories (WebTorrent, Steam) stay dormant in the iframe. It
+# checks the browser instance_id query. Called when a directory checks
+# should_register at enter-tree, by which time JavaScriptBridge is live, so it
+# never runs JS at class-load time.
+static func _detect_embedded() -> bool:
+	if OS.has_feature("web") or OS.get_name() == "Web":
+		return "instance_id=" in String(JavaScriptBridge.eval("window.location.search", true))
+	return false
 
 
 # Fetches the current roster once and emits roster_changed. A failed fetch leaves
@@ -415,77 +442,43 @@ func _exchange_code(code: String) -> String:
 func _absolute_token_url() -> String:
 	if token_endpoint.begins_with("http"):
 		return token_endpoint
-	if OS.has_feature("web") or OS.get_name() == "Web":
+	if _is_browser():
 		var origin := String(JavaScriptBridge.eval("window.location.origin", true))
 		return origin + token_endpoint
 	return token_endpoint
 
 
-# Resolves the instance id once, from the fake command-line flag first, then from
-# the browser query string. Memoized so should_register and detection agree.
+func _is_browser() -> bool:
+	return OS.has_feature("web") or OS.get_name() == "Web"
+
+
+# Resolves the instance id once through _resolve_instance. Memoized so
+# should_register and the public getters agree.
 func _detect() -> void:
 	if _detected:
 		return
 	_detected = true
-	if _read_fake_flag():
-		_fake = true
-		return
-	if OS.has_feature("web") or OS.get_name() == "Web":
-		_read_query_params()
+	_resolve_instance()
 
 
-# Parses FAKE_FLAG into _instance_id and an optional _device_id. The value is a
-# bare id (--netw-discord-fake=room1) or ;-separated key=value pairs
-# (--netw-discord-fake=instance_id=room1;device_id=alice). Returns whether an
-# instance id was found.
-func _read_fake_flag() -> bool:
-	for arg in OS.get_cmdline_user_args() + OS.get_cmdline_args():
-		if not arg.begins_with(FAKE_FLAG):
-			continue
-		var value := arg.substr(arg.find("=") + 1) if "=" in arg else ""
-		if value.is_empty():
-			continue
-		if "=" in value:
-			for pair in value.split(";", false):
-				var kv := pair.split("=")
-				if kv.size() != 2:
-					continue
-				match kv[0]:
-					"instance_id": _instance_id = kv[1]
-					"device_id": _device_id = kv[1]
-		else:
-			_instance_id = value
-		if not _instance_id.is_empty():
-			return true
-	return false
-
-
-# Pushes the resolved device id onto the rendezvous so each local instance
-# authenticates to Nakama as a distinct user. Without this, two instances on one
-# machine both default to OS.get_unique_id() and collide as the same user, which
-# breaks the relay. A no-op for a backend with no device_id (the dedicated WSS
-# path) or when no device id was resolved.
+# Pushes the resolved participant id onto the rendezvous so each participant
+# authenticates to its backend as a distinct user. Without this, two instances on
+# one machine both default to the same backend user, which breaks the relay. The
+# raw id is pushed and the backend normalizes it (see
+# NakamaDiscordRendezvous._normalized_device_id). A no-op for a backend with no
+# device_id (the dedicated WSS path) or when no id was resolved.
 func _push_identity() -> void:
 	if rendezvous == null:
 		return
-	var did := _nakama_device_id()
-	if did.is_empty():
+	if _device_id.is_empty():
 		return
 	if "device_id" in rendezvous:
-		rendezvous.set("device_id", did)
+		rendezvous.set("device_id", _device_id)
 
 
-# Normalizes the device id to Nakama's 10-128 byte requirement. Discord user ids
-# (~18-digit snowflakes) pass through untouched; short fake ids like "alice" are
-# given a stable prefix so they stay distinct and reconnect as the same user.
-func _nakama_device_id() -> String:
-	if _device_id.is_empty():
-		return ""
-	if _device_id.length() < 10:
-		return "netw-discord-" + _device_id
-	return _device_id.left(128)
-
-
+# Reads instance_id (and channel/guild) from the browser query string. Real
+# Discord supplies all three; authenticate() resolves the device id from the
+# signed-in user afterward.
 func _read_query_params() -> void:
 	var search := String(JavaScriptBridge.eval("window.location.search", true))
 	for part in search.trim_prefix("?").split("&", false):

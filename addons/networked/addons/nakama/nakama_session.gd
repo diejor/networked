@@ -114,6 +114,10 @@ func _perform_auth() -> Dictionary:
 		server_key, host, port, scheme, timeout, _NAKAMA_LOG_LEVEL_WARNING,
 	)
 
+	NakamaWrapper._disable_web_gzip(_client)
+	var proxy_base := NakamaWrapper._resolve_proxy_base(self, host)
+	NakamaWrapper._apply_proxy_base(_client._api_client, proxy_base, "https")
+
 	var device := device_id if not device_id.is_empty() else OS.get_unique_id()
 	_session = await _client.authenticate_device_async(
 		device,
@@ -142,7 +146,10 @@ func session():
 func create_socket():
 	if _facade == null or _client == null:
 		return null
-	return _facade.create_socket_from(_client)
+	var socket = _facade.create_socket_from(_client)
+	var proxy_base := NakamaWrapper._resolve_proxy_base(self, host)
+	NakamaWrapper._apply_proxy_base(socket, proxy_base, "wss")
+	return socket
 
 
 ## Overrides [method NetwService.service_type] to register this node under

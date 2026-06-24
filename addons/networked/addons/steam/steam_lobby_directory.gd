@@ -60,6 +60,10 @@ func _enter_tree() -> void:
 		return
 	if Netw.is_test_env():
 		return
+	# Steam needs the native client, so it cannot work in a relay-only embed
+	# (a Discord iframe). Stay dormant there.
+	if NetwService.is_transport_restricted():
+		return
 
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:

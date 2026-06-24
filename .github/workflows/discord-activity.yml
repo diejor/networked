@@ -95,6 +95,20 @@ jobs:
             exit "$status"
           fi
 
+      - name: Compress wasm (Brotli) and write Cloudflare headers
+        run: |
+          # Godot's index.wasm (~37 MB) exceeds Cloudflare Pages' 25 MiB per-file
+          # limit, so ship only the Brotli copy. _redirects serves index.wasm.br
+          # at the /index.wasm path and _headers sets Content-Encoding: br so the
+          # browser gets a decodable WASM stream. Mirrors addons/networked_activity/cli.js for
+          # local builds; the brotli CLI avoids needing Node here.
+          apt-get update && apt-get install -y --no-install-recommends brotli
+          brotli -f -q 11 build/web/index.wasm
+          rm build/web/index.wasm
+          printf '/index.wasm /index.wasm.br 200\n' > build/web/_redirects
+          printf '/*\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: require-corp\n\n/index.wasm\n  Content-Encoding: br\n  Content-Type: application/wasm\n' > build/web/_headers
+          ls -l build/web
+
       - name: Deploy page to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

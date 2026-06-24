@@ -1067,16 +1067,22 @@ func _gen_nonce() -> String:
 func subscribe_to_events():
 	if subscribed: return
 	for event in _events:
-		sendMessage(1, {
-			"cmd": "SUBSCRIBE",
-			"evt": event,
-			"args": {
-				"channel_id": channel_id,
-				"guild_id": guild_id
-			},
-			"nonce": _gen_nonce()
-		})
+		subscribe_event(event)
 	subscribed = true
+
+## Subscribes to a single RPC [param event] (e.g. one of [member _events]) rather
+## than the whole set. Lets a caller pick only the events its OAuth scopes permit,
+## avoiding the ERROR responses Discord returns for unscoped subscriptions.
+func subscribe_event(event: String) -> void:
+	sendMessage(1, {
+		"cmd": "SUBSCRIBE",
+		"evt": event,
+		"args": {
+			"channel_id": channel_id,
+			"guild_id": guild_id
+		},
+		"nonce": _gen_nonce()
+	})
 
 func handshake():
 	print("Shaking hands")

@@ -356,7 +356,7 @@ func test_adopted_action_custom_confirm_keeps_predicted_ghost() -> void:
 	var client_body := p.client_root as ActionBody
 	var custom_confirm_called := [0]
 	
-	client_body.action.confirm = func(ghost: Node) -> void:
+	client_body.action.confirm = func(_ghost: Node) -> void:
 		custom_confirm_called[0] += 1
 		# Do NOT free the ghost, just keep it.
 
@@ -379,4 +379,3 @@ func test_adopted_action_custom_confirm_keeps_predicted_ghost() -> void:
 	# Clean up the ghost manually to avoid leaks in test suite
 	client_body.get_node("Ghost").queue_free()
 	await get_tree().process_frame
-

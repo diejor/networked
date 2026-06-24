@@ -53,7 +53,7 @@ const REQUIRED_SOCKET_SIGNALS := {
 	"closed": 0,
 }
 
-
+@warning_ignore("unused_parameter")
 func before(
 		do_skip = not NakamaWrapper.is_addon_present(),
 		skip_reason = "Nakama addon is not installed.",

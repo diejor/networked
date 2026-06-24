@@ -99,6 +99,7 @@ var _reconnect_acc := 0.0
 var _idle_acc := 0.0
 var _provider_unavailable_latched := false
 var _is_test_env := false
+var _restricted := false
 
 ## Seconds to wait before reconnecting a board whose sockets all dropped.
 const BOARD_RECONNECT_COOLDOWN := 5.0
@@ -106,11 +107,14 @@ const BOARD_RECONNECT_COOLDOWN := 5.0
 
 func should_register() -> bool:
 	# A node re-initializes its process flag after _enter_tree, so a
-	# set_process(false) here would not stick. Latch the test flag and gate the
-	# board work in _process so the directory never opens live tracker sockets
-	# under a test runner.
+	# set_process(false) here would not stick. Latch the flags and gate the board
+	# work in _process so the directory never opens live tracker sockets under a
+	# test runner or inside a relay-only embed (a Discord iframe: WebRTC trackers
+	# are CSP-blocked there). _process re-warms the board on its own, so gating
+	# registration alone is not enough.
 	_is_test_env = Netw.is_test_env()
-	return not _is_test_env
+	_restricted = NetwService.is_transport_restricted()
+	return not _is_test_env and not _restricted
 
 
 func service_entered(mt: MultiplayerTree) -> void:
@@ -127,7 +131,7 @@ func service_exiting(_mt: MultiplayerTree) -> void:
 
 
 func _process(dt: float) -> void:
-	if Engine.is_editor_hint() or _is_test_env:
+	if Engine.is_editor_hint() or _is_test_env or _restricted:
 		return
 
 	if _tracker:

@@ -30,6 +30,23 @@
 class_name NetwService
 extends Node
 
+
+## Optional probe an embedding addon sets when the runtime environment allows
+## only a WebSocket/HTTP relay, such as a Discord iframe that forbids WebRTC and
+## native SDKs. A transport service that needs peer-to-peer or a native client
+## consults [method is_transport_restricted] in [method should_register] (and
+## gates its own polling) to stay dormant there. Unset in a normal build, so
+## nothing pays for it. [code]networked_activity[/code] wires this to its embed
+## detection.
+static var transport_restricted_probe: Callable
+
+
+## Returns [code]true[/code] when [member transport_restricted_probe] reports the
+## environment forbids peer-to-peer and native transports. Returns
+## [code]false[/code] when no probe is set, which is the normal case.
+static func is_transport_restricted() -> bool:
+	return transport_restricted_probe.is_valid() and bool(transport_restricted_probe.call())
+
 # ---------------------------------------------------------------------------
 # Override points
 # ---------------------------------------------------------------------------

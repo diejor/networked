@@ -30,7 +30,18 @@ These match `NakamaLobbyDirectory` defaults (`server_key=defaultkey`,
 
 ## Pointing the tests at it
 
-The live tests gate on `NAKAMA_TEST_HOST`. With the container up:
+The live tests gate on the `networked/tests/nakama_host` project setting, with the
+`NAKAMA_TEST_HOST` environment variable as a fallback. The project setting wins
+when both are set. With the container up, set whichever you prefer:
+
+Project setting (persists in `project.godot`, editable under Project Settings ▸
+Advanced ▸ Networked ▸ Tests):
+
+```
+networked/tests/nakama_host = "127.0.0.1"
+```
+
+Environment variable (handy for CI, no commit):
 
 ```sh
 # bash
@@ -41,8 +52,9 @@ export NAKAMA_TEST_HOST=127.0.0.1
 $env:NAKAMA_TEST_HOST = "127.0.0.1"
 ```
 
-Unset it and the live tests early-return (no-op), so the suite stays green on
-machines without Docker.
+Leave both empty and the live tests early-return (no-op), so the suite stays
+green on machines without Docker. The setting and these suites are
+`export-ignore`d, so none of this reaches a game that installs the addon.
 
 Run the live tier directly:
 
@@ -53,7 +65,7 @@ godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless `
 ```
 
 The default `-a res://tests` run discovers `tests/live/nakama`, but the suite
-skips before probing the network when `NAKAMA_TEST_HOST` is unset.
+skips before probing the network when no host is configured.
 
 ## Two-client / two-instance testing
 

@@ -8,9 +8,11 @@
 #   - client API + socket : 127.0.0.1:7350   (server key "defaultkey")
 #   - developer console    : http://127.0.0.1:7351   (admin / password)
 #
-# The env-gated live tests look for NAKAMA_TEST_HOST. Point it here:
-#   NAKAMA_TEST_HOST=127.0.0.1  (PowerShell: $env:NAKAMA_TEST_HOST = "127.0.0.1")
-# When unset, the live tests early-return as a no-op so CI stays green.
+# The live tests read the networked/tests/nakama_host project setting first, then
+# fall back to the NAKAMA_TEST_HOST env var. Point either here:
+#   project.godot: networked/tests/nakama_host = "127.0.0.1"
+#   env: NAKAMA_TEST_HOST=127.0.0.1  (PowerShell: $env:NAKAMA_TEST_HOST = "127.0.0.1")
+# When neither is set, the live tests early-return as a no-op so CI stays green.
 
 services:
   postgres:
