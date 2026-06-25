@@ -58,7 +58,9 @@ func after_test() -> void:
 
 func _spawn_player() -> Node2D:
 	return await harness.join_player(
-		client0, level_builder.resource_path, SPAWNER_PATH,
+		client0,
+		level_builder.resource_path,
+		SPAWNER_PATH,
 	) as Node2D
 
 
@@ -85,7 +87,8 @@ func test_snapshot_prop_is_never_on_the_wire() -> void:
 func test_forged_snapshot_push_is_ignored_client_push_is_applied() -> void:
 	var server_player := await _spawn_player()
 	var client_player := await harness.wait_for_player(
-		client0, level_builder.scene_name,
+		client0,
+		level_builder.scene_name,
 	) as Node2D
 
 	# The server holds the authoritative position and snapshots it.
@@ -98,10 +101,12 @@ func test_forged_snapshot_push_is_ignored_client_push_is_applied() -> void:
 	# A malicious client (its own SaveComponent's authority, so it passes the
 	# ownership guard) forges a SNAPSHOT column and a legitimate CLIENT column.
 	var client_save: SaveComponent = client_player.get_node("%SaveComponent")
-	var forged := var_to_bytes({
-		&"position": Vector2(999, 999),
-		&"rotation": 3.0,
-	})
+	var forged := var_to_bytes(
+		{
+			&"position": Vector2(999, 999),
+			&"rotation": 3.0,
+		},
+	)
 	client_save._request_push.rpc_id(1, forged, false)
 
 	# CLIENT key lands (proves the RPC arrived); SNAPSHOT key is dropped.
@@ -115,7 +120,8 @@ func test_forged_snapshot_push_is_ignored_client_push_is_applied() -> void:
 func test_client_prop_round_trips_through_push_to() -> void:
 	var server_player := await _spawn_player()
 	var client_player := await harness.wait_for_player(
-		client0, level_builder.scene_name,
+		client0,
+		level_builder.scene_name,
 	) as Node2D
 
 	client_player.rotation = 1.25
@@ -149,7 +155,8 @@ func _model(modes: Dictionary, intervals: Dictionary) -> SaveComponent._SaveMode
 
 func test_save_model_due_honors_per_prop_interval() -> void:
 	var model := _model(
-		{ &"fast": SaveComponent.SaveMode.SNAPSHOT }, { &"fast": 1.0 },
+		{ &"fast": SaveComponent.SaveMode.SNAPSHOT },
+		{ &"fast": 1.0 },
 	)
 	assert_array(model.due(0.5, 5.0)).is_empty()
 	assert_array(model.due(0.6, 5.0)).contains_exactly([&"fast"])
@@ -157,7 +164,8 @@ func test_save_model_due_honors_per_prop_interval() -> void:
 
 func test_save_model_due_inherits_fallback_interval() -> void:
 	var model := _model(
-		{ &"inherit": SaveComponent.SaveMode.SNAPSHOT }, { &"inherit": 0.0 },
+		{ &"inherit": SaveComponent.SaveMode.SNAPSHOT },
+		{ &"inherit": 0.0 },
 	)
 	assert_array(model.due(3.0, 5.0)).is_empty()
 	assert_array(model.due(2.5, 5.0)).contains_exactly([&"inherit"])
@@ -165,7 +173,8 @@ func test_save_model_due_inherits_fallback_interval() -> void:
 
 func test_save_model_due_excludes_client_props() -> void:
 	var model := _model(
-		{ &"owned": SaveComponent.SaveMode.CLIENT }, { &"owned": 0.0 },
+		{ &"owned": SaveComponent.SaveMode.CLIENT },
+		{ &"owned": 0.0 },
 	)
 	assert_array(model.due(100.0, 1.0)).is_empty()
 	assert_array(model.client_props()).contains_exactly([&"owned"])

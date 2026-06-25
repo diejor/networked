@@ -9,7 +9,6 @@
 class_name TestDivergenceRotation
 extends NetwTestSuite
 
-
 func _component() -> PredictionComponent:
 	return auto_free(PredictionComponent.new())
 
@@ -50,7 +49,6 @@ func test_missing_key_forces_correction() -> void:
 	var auth := { &"position": Vector3.ZERO }
 
 	assert_bool(pc.call("_diverged", pred, auth)).is_true()
-
 
 # --- per-property deadzone inspector rows ---
 

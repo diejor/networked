@@ -10,9 +10,11 @@ extends NetwTestSuite
 class WarmSpyBackend extends TestMemoryBackend:
 	var warm_calls: Array = []
 
+
 	func warm(directives: Array) -> Error:
 		warm_calls.append(directives)
 		return OK
+
 
 # Warms only the players table, leaving every other table lazy.
 class PlayersOnlyPolicy extends WarmPolicy:

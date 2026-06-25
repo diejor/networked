@@ -53,6 +53,7 @@ extends LobbyDirectory
 ## games sharing a Nakama server do not pollute each other's lobby lists.
 @export var browser_filter_uid: String = "networked"
 
+
 ## Structured browse card a host publishes to Nakama storage so a browser can
 ## resolve a metadata-less relay match into a [LobbyDirectory.LobbyInfo].
 ##
@@ -117,8 +118,7 @@ class LobbyCard:
 		card.uid = String(data.get("uid", ""))
 		card.max_players = int(data.get("max", 0))
 		card.visibility = (
-			int(data.get("visibility", LobbyDirectory.Visibility.PUBLIC))
-			as LobbyDirectory.Visibility
+				int(data.get("visibility", LobbyDirectory.Visibility.PUBLIC)) as LobbyDirectory.Visibility
 		)
 		return card
 
@@ -136,6 +136,7 @@ class LobbyCard:
 			host,
 			visibility,
 		)
+
 
 var _wrapper: NakamaWrapper
 var _peer: MultiplayerPeer
@@ -299,6 +300,11 @@ func get_join_address() -> String:
 	return _wrapper.match_id() if _wrapper != null else ""
 
 
+## Returns the active [NakamaWrapper], or [code]null[/code] before connect.
+func wrapper() -> NakamaWrapper:
+	return _wrapper
+
+
 ## Resolves [param peer_id] to its Nakama username when known.
 func get_member_name(peer_id: int) -> String:
 	if _wrapper == null:
@@ -334,14 +340,17 @@ func _ensure_connected() -> bool:
 		var mt := MultiplayerTree.resolve(self)
 		if mt:
 			_wrapper.use_session(mt.get_nakama_session())
-	var res := await _wrapper.connect_async(self, {
-		"server_key": server_key,
-		"host": host,
-		"port": port,
-		"use_ssl": use_ssl,
-		"device_id": device_id,
-		"username": get_local_member_name(),
-	})
+	var res := await _wrapper.connect_async(
+		self,
+		{
+			"server_key": server_key,
+			"host": host,
+			"port": port,
+			"use_ssl": use_ssl,
+			"device_id": device_id,
+			"username": get_local_member_name(),
+		},
+	)
 	if not res.ok:
 		Netw.dbg.error("NakamaLobbyDirectory: connect failed: %s", [res.error])
 		provider_unavailable.emit(String(res.error))

@@ -21,7 +21,6 @@
 class_name NetwQuantize
 extends Resource
 
-
 ## Writes [param value] into [param w] using this quantizer's layout.
 ##
 ## A subclass encodes by type: a [Vector2] writes each axis, a scalar writes one.

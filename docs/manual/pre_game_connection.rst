@@ -167,7 +167,7 @@ Both probes and normal client hellos ride the same
 a 4-byte magic prefix on the first packet:
 
 - :ref:`NHEL <class_AuthProtocol_property_MAGIC_HELLO>` - *Networked Hello*. A normal client opening a session. The
-  configured :ref:`NetwAuthProvider <class_NetwAuthProvider>`'s payload (if
+  configured :ref:`NetwAuth <class_NetwAuth>`'s payload (if
   any) is wrapped inside.
 - :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` - *Networked Probe*. A transient browser/probe peer requesting
   server metadata.

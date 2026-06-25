@@ -42,7 +42,6 @@ func _init(mt: MultiplayerTree) -> void:
 func is_valid() -> bool:
 	return is_instance_valid(_tree_ref.get_ref())
 
-
 ## The [MultiplayerSceneManager] service, or [code]null[/code].
 var scene_manager: MultiplayerSceneManager:
 	get:
@@ -50,7 +49,6 @@ var scene_manager: MultiplayerSceneManager:
 		if not mt:
 			return null
 		return mt.get_service(MultiplayerSceneManager)
-
 
 ## The [InterestService] service, or [code]null[/code].
 var interest_service: InterestService:
@@ -60,7 +58,6 @@ var interest_service: InterestService:
 			return null
 		return mt.get_service(InterestService) as InterestService
 
-
 ## The [LagCompensation] service, or [code]null[/code].
 var lag_compensation: LagCompensation:
 	get:
@@ -69,7 +66,6 @@ var lag_compensation: LagCompensation:
 			return null
 		return mt.get_service(LagCompensation) as LagCompensation
 
-
 ## The [MultiplayerClock] service, or [code]null[/code].
 var clock: MultiplayerClock:
 	get:
@@ -77,7 +73,6 @@ var clock: MultiplayerClock:
 		if not mt:
 			return null
 		return mt.get_service(MultiplayerClock)
-
 
 ## The [TPLayerAPI] for visual teleport transitions on the local
 ## client, or [code]null[/code].

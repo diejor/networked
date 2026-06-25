@@ -83,7 +83,6 @@ func _on_confirm() -> void:
 	var typed_name := _name_edit.text.strip_edges()
 	config.server_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
 
-
 	var payload := JoinPayload.new()
 	var typed := _username_edit.text.strip_edges()
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"

@@ -13,8 +13,6 @@ func test_is_available_excludes_web() -> void:
 	assert_bool(backend.is_available()).is_equal(not OS.has_feature("web"))
 
 
-
-
 # Steam lobby status comes from the directory's lobby list, not a probe,
 # so probe_server_info is always unsupported.
 func test_query_is_unsupported() -> void:

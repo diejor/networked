@@ -48,7 +48,6 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Default server name used when none is provided.
 const PLACEHOLDER_SERVER_NAME := "My Server"
 
-
 ## The [MultiplayerTree] whose canonical [ConnectSession] this browser
 ## drives, accessed through a [NetwConnect] facade.
 ##
@@ -731,4 +730,3 @@ static func _backend_class_name(backend: BackendPeer) -> String:
 	if script and not script.get_global_name().is_empty():
 		return script.get_global_name()
 	return backend.get_class()
-

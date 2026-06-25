@@ -7,6 +7,5 @@
 class_name EagerWarmPolicy
 extends WarmPolicy
 
-
 func plan_table(_table: StringName, _columns: Array[StringName]) -> WarmRequest:
 	return WarmRequest.all()

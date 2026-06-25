@@ -2,7 +2,6 @@
 class_name TestNetwBitBuffer
 extends NetwTestSuite
 
-
 func test_bit_roundtrip_arbitrary_widths() -> void:
 	var w := NetwBitBuffer.Writer.new()
 	w.put_bits(5, 3)

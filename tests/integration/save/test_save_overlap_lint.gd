@@ -120,7 +120,8 @@ func test_overlap_resolves_at_post_ready() -> void:
 func test_overlap_survives_teleport_reparent() -> void:
 	var server_player := await _spawn_player(level_builder.resource_path)
 	var client_player := await harness.wait_for_player(
-		client0, level_builder.scene_name,
+		client0,
+		level_builder.scene_name,
 	) as Node2D
 
 	var target := SceneNodePath.new()

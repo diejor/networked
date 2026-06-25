@@ -130,9 +130,16 @@ class _BodyStateApplicator extends RefCounted:
 	# Real-path leaf names that name a body's spatial state. The RID impl routes
 	# these through PhysicsServer; the default treats them like any property.
 	const SPATIAL: Array[StringName] = [
-		&"position", &"global_position", &"transform", &"global_transform",
-		&"rotation", &"global_rotation", &"quaternion", &"basis",
-		&"linear_velocity", &"angular_velocity",
+		&"position",
+		&"global_position",
+		&"transform",
+		&"global_transform",
+		&"rotation",
+		&"global_rotation",
+		&"quaternion",
+		&"basis",
+		&"linear_velocity",
+		&"angular_velocity",
 	]
 
 

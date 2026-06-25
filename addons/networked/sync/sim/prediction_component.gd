@@ -255,7 +255,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 			"Predicting a RigidBody (Tier 2, SNAP correction). Replicate linear "
 			+ "and angular velocity on the StateSynchronizer, not just the "
 			+ "transform, or the solver re-derives momentum wrong after every "
-			+ "correction and the post-collision settle repeats."
+			+ "correction and the post-collision settle repeats.",
 		)
 	warnings.append_array(_quantization_deadzone_warnings())
 	return warnings
@@ -286,12 +286,14 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 			var floor_error := codec.max_error(typeof(owner.get(clean)) as Variant.Type)
 			var epsilon := _epsilon_for(clean)
 			if epsilon < floor_error:
-				out.append((
-					"Reconciliation deadzone for \"%s\" (%.4f) is below its codec's "
-					+ "quantization error (%.4f). The predicted body corrects every "
-					+ "packet from quantization noise alone. Raise the deadzone to at "
-					+ "least %.4f."
-				) % [clean, epsilon, floor_error, floor_error])
+				out.append(
+					(
+							"Reconciliation deadzone for \"%s\" (%.4f) is below its codec's "
+							+ "quantization error (%.4f). The predicted body corrects every "
+							+ "packet from quantization noise alone. Raise the deadzone to at "
+							+ "least %.4f."
+					) % [clean, epsilon, floor_error, floor_error],
+				)
 	return out
 
 
@@ -653,18 +655,18 @@ func _value_error(a: Variant, b: Variant) -> float:
 	if a is Basis and b is Basis:
 		return absf(
 			(a as Basis).get_rotation_quaternion().angle_to(
-				(b as Basis).get_rotation_quaternion()
-			)
+				(b as Basis).get_rotation_quaternion(),
+			),
 		)
 	# A whole transform combines position and rotation error; thresholds live per
 	# property, so this heuristic only feeds the correction decision.
 	if a is Transform3D and b is Transform3D:
 		return (a.origin - b.origin).length() + absf(
-			a.basis.get_rotation_quaternion().angle_to(b.basis.get_rotation_quaternion())
+			a.basis.get_rotation_quaternion().angle_to(b.basis.get_rotation_quaternion()),
 		)
 	if a is Transform2D and b is Transform2D:
 		return (a.origin - b.origin).length() + absf(
-			angle_difference(a.get_rotation(), b.get_rotation())
+			angle_difference(a.get_rotation(), b.get_rotation()),
 		)
 	return 0.0 if a == b else INF
 
@@ -705,20 +707,24 @@ func _get_property_list() -> Array[Dictionary]:
 	if rows.is_empty():
 		return props
 
-	props.append({
-		"name": "Reconciliation Deadzones",
-		"type": TYPE_NIL,
-		"usage": PROPERTY_USAGE_GROUP,
-		"hint_string": _DEADZONE_PREFIX,
-	})
+	props.append(
+		{
+			"name": "Reconciliation Deadzones",
+			"type": TYPE_NIL,
+			"usage": PROPERTY_USAGE_GROUP,
+			"hint_string": _DEADZONE_PREFIX,
+		},
+	)
 	for clean_name: StringName in rows:
-		props.append({
-			"name": _DEADZONE_PREFIX + clean_name,
-			"type": TYPE_FLOAT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_RANGE,
-			"hint_string": _deadzone_hint(rows[clean_name]),
-		})
+		props.append(
+			{
+				"name": _DEADZONE_PREFIX + clean_name,
+				"type": TYPE_FLOAT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_RANGE,
+				"hint_string": _deadzone_hint(rows[clean_name]),
+			},
+		)
 	return props
 
 
@@ -745,7 +751,7 @@ func _set(property: StringName, value: Variant) -> bool:
 func _property_can_revert(property: StringName) -> bool:
 	if property.begins_with(_DEADZONE_PREFIX):
 		return divergence_epsilon_overrides.has(
-			StringName(property.trim_prefix(_DEADZONE_PREFIX))
+			StringName(property.trim_prefix(_DEADZONE_PREFIX)),
 		)
 	return false
 

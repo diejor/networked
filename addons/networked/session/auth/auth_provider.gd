@@ -1,73 +1,62 @@
-## Abstract base class for authentication providers.
+## Base resource for [MultiplayerTree] peer authentication.
 ##
-## Three lifecycle hooks called by [MultiplayerTree]:
-## [br][br]
-## [b]Client side:[/b]
-## [br]1. [method prepare]: before transport opens. Populates
-##     [JoinPayload] with metadata. Returns [constant OK] to proceed,
-##     or an [enum Error] to abort the entry call
-##     ([method MultiplayerTree.join],
-##     [method MultiplayerTree.host_player], or
-##     [method MultiplayerTree.join_or_host]).
-## [br]2. [method get_credentials]: during Godot's auth phase.
-##     Returns proof bytes sent via [method SceneMultiplayer.send_auth].
+## [MultiplayerTree] calls [method prepare], [method get_credentials],
+## [method authenticate], and [method get_host_identity] around Godot's auth
+## phase so a provider can turn transport-specific proof into a
+## [NetwIdentity].
+## [codeblock]
+## Client:
+##     prepare(payload) -> OK
+##     get_credentials(payload) -> PackedByteArray
 ##
-## [br][br]
-## [b]Server side:[/b]
-## [br]3. [method authenticate]: when
-##     [member SceneMultiplayer.auth_callback] fires. Validates proof
-##     bytes. Returns [NetwIdentity] to accept, [code]null[/code] to
-##     reject. Set [member rejection_reason] on failure so the server can
-##     communicate why.
+## Server:
+##     authenticate(peer_id, data) -> NetwIdentity or null
 ##
-## [br][br]
-## [b]Listen-server host:[/b]
-## [br]4. [method get_host_identity]: after [method MultiplayerTree.host] for
-##     peer 1. Godot's auth callback never fires for the local host, so this
-##     provides a separate path. Returns [code]null[/code] to skip host auth.
-class_name NetwAuthProvider
+## Listen server:
+##     get_host_identity() -> NetwIdentity or null
+## [/codeblock]
+class_name NetwAuth
 extends Resource
 
 ## Human-readable reason for the last authentication rejection.
-## Set by [method authenticate] on failure so the server can
-## communicate why a peer was disconnected.
+##
+## [method authenticate] sets this member before returning [code]null[/code]
+## so [AuthCoordinator] can pass a useful rejection message through
+## [SessionRoster].
 var rejection_reason: String
 
 
-## Client-side. Called before the transport opens.
+## Prepares [param payload] before the transport opens.
 ##
-## Populates [param payload] with provider metadata. Return [constant OK]
-## to proceed, or an [enum Error] to abort the connection.
-##
-## Implementations may [code]await[/code] HTTP calls or browser flows.
-## The owning entry call awaits this method.
+## The owning [MultiplayerTree] entry call awaits this method before
+## [method get_credentials] can be used during Godot's auth phase.
 func prepare(payload: JoinPayload) -> Error:
 	return OK
 
 
-## Client-side. Called when [signal SceneMultiplayer.peer_authenticating]
-## fires for the server peer.
+## Builds proof bytes for [param payload].
 ##
-## Returns cryptographic proof bytes (ticket, token, JWT) to be sent
-## via [method SceneMultiplayer.send_auth]. Return non-empty bytes when
+## [AuthCoordinator] sends the returned bytes with
+## [method SceneMultiplayer.send_auth]. Return non-empty bytes when
 ## [member MultiplayerTree.auth_provider] is active.
 func get_credentials(payload: JoinPayload) -> PackedByteArray:
 	return PackedByteArray()
 
 
-## Server-side. Called when [member SceneMultiplayer.auth_callback] fires.
+## Validates [param data] for [param peer_id].
 ##
-## Validates [param data] for [param peer_id]. Return a [NetwIdentity]
-## to accept the peer, or [code]null[/code] to reject. Set
-## [member rejection_reason] on failure.
+## Return a [NetwIdentity] to accept the peer, or [code]null[/code] to reject.
+## Set [member rejection_reason] before rejecting.
+##
+## [br][br][b]Server Only.[/b]
 func authenticate(peer_id: int, data: PackedByteArray) -> NetwIdentity:
 	return null
 
 
-## Listen-server host. Called after [method MultiplayerTree.host] for peer 1.
+## Builds the listen-server host identity.
 ##
-## Returns a [NetwIdentity] for the host peer, or [code]null[/code] to
-## skip host authentication. Default implementations of real providers
-## (Steam, etc.) override this.
+## Godot does not run [member SceneMultiplayer.auth_callback] for peer
+## [constant MultiplayerPeer.TARGET_PEER_SERVER], so [AuthCoordinator] calls
+## this method after [method MultiplayerTree.host].
 func get_host_identity() -> NetwIdentity:
 	return null

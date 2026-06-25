@@ -15,8 +15,8 @@
 ## backends untouched.
 ## [codeblock]
 ## MultiplayerTree
-## └── DiscordActivityService   (client_id, rendezvous = the pluggable backend)
-##         rendezvous installs its own transport seams from bind()
+## +-- DiscordActivityService   (client_id, token_endpoint, rendezvous)
+##     +-- DiscordRendezvous installs its transport seams from bind()
 ##
 ## await service.start()                    # SDK handshake -> ready
 ## await service.authenticate()             # OAuth -> DiscordUser
@@ -102,21 +102,33 @@ var state: State = State.IDLE
 ## Discord application (client) id. Required for the SDK handshake and OAuth.
 @export var client_id: String = ""
 
-## Dev-portal URL-mapping path the OAuth [code]code[/code] is exchanged at for an
-## access token, matching the mapping for the token Worker. Discord always serves
-## the activity behind a fixed [code]/.proxy/[/code] namespace, so give the bare
-## mapped path (default [code]token[/code] for a [code]/token[/code] mapping) and
-## the service prepends [code]/.proxy/[/code] and the page origin itself. A full
-## [code]http(s)://[/code] URL is used verbatim.
+@export_group("OAuth")
+
+## URL mapping used by [method authenticate] to exchange a Discord OAuth code
+## for an access token.
+##
+## In Discord's developer portal, this should point to the Worker endpoint that
+## receives [code]{"code": "..."}[/code] and returns a Discord
+## [code]access_token[/code]. The default [code]token[/code] means the service
+## posts to the activity proxy path [code]/.proxy/token[/code]. Use an absolute
+## [code]http(s)://[/code] URL only for local testing or custom deployments that
+## do not use Discord URL mappings.
 @export var token_endpoint: String = "token"
 
 ## OAuth scopes requested by [method authenticate].
-@export var scopes: PackedStringArray = PackedStringArray([
-	"identify", "guilds", "rpc.activities.write",
-])
+##
+## [code]identify[/code] lets [method DiscordSDK.command_authenticate] resolve
+## [member user]. Keep it unless the activity does not need
+## [signal identity_resolved]. Add scopes only when the Worker and Discord
+## developer portal are configured for the extra permission.
+@export var scopes: Array[String] = ["identify", "rpc.activities.write"]
 
-## Resolves the shared [code]instance_id[/code] into a transport. Defaults to a
-## fresh [NakamaDiscordRendezvous] when left unset.
+@export_group("")
+
+## Resolves the shared [code]instance_id[/code] into a transport.
+##
+## Assign this explicitly. The service reports [constant ERR_UNCONFIGURED] from
+## [method connect_activity] when no rendezvous is configured.
 @export var rendezvous: DiscordRendezvous
 
 ## When [code]true[/code], asks Discord to encourage hardware acceleration right
@@ -193,24 +205,41 @@ func should_register() -> bool:
 
 func service_entered(mt: MultiplayerTree) -> void:
 	if rendezvous == null:
-		rendezvous = NakamaDiscordRendezvous.new()
-	# The rendezvous owns its transport, so it installs whatever core seams that
-	# backend needs (the Nakama relay rewrites its socket through the iframe proxy
-	# here). The service never reaches into a backend itself.
-	rendezvous.bind(self, mt)
+		Netw.dbg.warn("DiscordActivityService: rendezvous unset.")
+	else:
+		# The rendezvous owns its transport, so it installs whatever core seams
+		# that backend needs. The service never reaches into a backend itself.
+		rendezvous.bind(mt)
+	var nakama_auth := mt.auth_provider as NakamaAuth
+	if nakama_auth != null:
+		# get_nakama_session() add_childs the session node, which fails if the
+		# tree is still setting up its children when this service registers.
+		# Defer past setup; the bind only stores references used later at connect.
+		_bind_nakama_auth.call_deferred(mt, nakama_auth)
 	_push_identity()
 	# Bridge a dropped connection into the activity lifecycle so a host that leaves
 	# (or any transport drop) surfaces as session_lost while connected, the
 	# transition a game hangs its rematch policy on. server_disconnected fires only
 	# on an involuntary drop, never on a graceful local disconnect_player, so it is
 	# the precise loss signal; server_disconnecting carries the announced reason.
-	mt.server_disconnecting.connect(func(reason: String) -> void:
-		_disconnect_reason = reason)
+	mt.server_disconnecting.connect(
+		func(reason: String) -> void:
+			_disconnect_reason = reason
+	)
 	mt.server_disconnected.connect(_on_session_dropped)
+	# The SDK is parented in start(), not here: add_child during service setup
+	# fails ("parent busy"), and the SDK's _ready() must run (it sets up the JS
+	# bridge) before start() calls init(), or init() no-ops and ready() hangs.
 	_sdk = _create_sdk()
 	if _sdk != null:
 		_sdk.name = &"DiscordSDK"
-		add_child(_sdk)
+
+
+# Binds the verified-identity provider to the shared session and tree once the
+# tree has finished setting up, so get_nakama_session() can add_child safely.
+func _bind_nakama_auth(mt: MultiplayerTree, nakama_auth: NakamaAuth) -> void:
+	nakama_auth.bind_session(mt.get_nakama_session())
+	nakama_auth.bind_tree(mt)
 
 
 ## Drives the Discord SDK handshake to ready and returns whether it succeeded.
@@ -235,6 +264,10 @@ func start() -> bool:
 	if client_id.is_empty():
 		activity_failed.emit("Discord client_id unset")
 		return false
+	# Parent the SDK now (the service is settled in the tree, so add_child is
+	# synchronous) so its _ready() runs and sets up the JS bridge before init().
+	if not _sdk.is_inside_tree():
+		add_child(_sdk)
 	_sdk.init(client_id)
 	await _sdk.ready()
 	_instance_id = _sdk.instance_id
@@ -255,16 +288,16 @@ func start() -> bool:
 ## Runs [method DiscordSDK.command_authorize] for an OAuth code, exchanges it at
 ## [member token_endpoint] for an access token, then
 ## [method DiscordSDK.command_authenticate]s to obtain the
-## [DiscordSDK.DiscordUser]. Stores it on [member user] and emits
-## [signal identity_resolved]. With no SDK there is no Discord account to resolve,
-## so this is a no-op returning [code]false[/code]. Identity is client-claimed in
-## v1 and is not spoof-proof.
+## [DiscordSDK.DiscordUser]. [member scopes] controls what
+## [method DiscordSDK.command_authorize] asks Discord for. Stores the resolved
+## user on [member user] and emits [signal identity_resolved]. With no SDK there
+## is no Discord account to resolve, so this returns [code]false[/code].
 func authenticate() -> bool:
 	if _sdk == null:
 		return false
 	if not await start():
 		return false
-	var authorize := await _sdk.command_authorize("code", Array(scopes), "")
+	var authorize := await _sdk.command_authorize("code", scopes, "")
 	if authorize == null or authorize.code.is_empty():
 		activity_failed.emit("Discord authorize returned no code")
 		return false
@@ -308,6 +341,11 @@ func connect_activity(join_payload: JoinPayload) -> Error:
 		return ERR_UNAVAILABLE
 	var mt := MultiplayerTree.resolve(self)
 	if mt == null:
+		return ERR_UNCONFIGURED
+	if rendezvous == null:
+		var reason := "DiscordActivityService: rendezvous unset."
+		Netw.dbg.warn(reason)
+		activity_failed.emit(reason)
 		return ERR_UNCONFIGURED
 	_push_identity()
 	_last_payload = join_payload
@@ -461,9 +499,12 @@ func _on_sdk_error(data: DiscordSDK.ErrorEventData) -> void:
 # empty string on failure. The endpoint is resolved against the page origin so
 # the request hits the Discord-mapped Worker.
 func _exchange_code(code: String) -> String:
+	var url := _absolute_token_url()
+	if url.is_empty():
+		Netw.dbg.error("DiscordActivityService: oauth token endpoint unset.")
+		return ""
 	var request := HTTPRequest.new()
 	add_child(request)
-	var url := _absolute_token_url()
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var body := JSON.stringify({ "code": code })
 	var err := request.request(url, headers, HTTPClient.METHOD_POST, body)
@@ -482,6 +523,8 @@ func _exchange_code(code: String) -> String:
 
 
 func _absolute_token_url() -> String:
+	if token_endpoint.is_empty():
+		return ""
 	if token_endpoint.begins_with("http"):
 		return token_endpoint
 	var path := _proxied_path(token_endpoint)
@@ -562,6 +605,9 @@ func _read_query_params() -> void:
 		if kv.size() != 2:
 			continue
 		match kv[0]:
-			"instance_id": _instance_id = kv[1]
-			"channel_id": _channel_id = kv[1]
-			"guild_id": _guild_id = kv[1]
+			"instance_id":
+				_instance_id = kv[1]
+			"channel_id":
+				_channel_id = kv[1]
+			"guild_id":
+				_guild_id = kv[1]

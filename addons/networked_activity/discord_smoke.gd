@@ -101,7 +101,7 @@ func _check_nakama() -> void:
 	# through a rendezvous to route a .discordsays.com host through the iframe proxy.
 	# The Callable keeps the rendezvous alive, so no member ref is needed.
 	var rendezvous := NakamaDiscordRendezvous.new()
-	rendezvous.bind(null, null)
+	rendezvous.bind(null)
 	var wrapper := NakamaWrapper.new()
 	var res := await wrapper.connect_async(self, {
 		"host": nakama_host,

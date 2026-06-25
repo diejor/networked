@@ -33,7 +33,7 @@ const LOBBY_COLLECTION := "lobbies"
 
 # Global class name -> resolved Script (or null when absent), memoized across
 # every wrapper instance so the class registry is scanned at most once per name.
-static var _class_cache: Dictionary = {}
+static var _class_cache: Dictionary = { }
 
 ## Optional hook that lets an embedding addon route Nakama traffic through a
 ## platform proxy without the core wrapper knowing the platform.
@@ -283,6 +283,16 @@ func username_for_peer(peer_id: int) -> String:
 	return String(presence.username)
 
 
+## Resolves [param peer_id] to the joining Nakama user id, or an empty string.
+func user_id_for_peer(peer_id: int) -> String:
+	if _bridge == null:
+		return ""
+	var presence: Variant = _bridge.get_user_presence_for_peer(peer_id)
+	if presence == null:
+		return ""
+	return String(presence.user_id)
+
+
 ## Lists active relay matches, returning match handles that expose
 ## [code]match_id[/code] and [code]size[/code].
 ##
@@ -292,7 +302,13 @@ func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 	if _client == null or _session == null:
 		return []
 	var res = await _client.list_matches_async(
-		_session, min_size, max_size, limit, false, "", "",
+		_session,
+		min_size,
+		max_size,
+		limit,
+		false,
+		"",
+		"",
 	)
 	if res == null or res.is_exception():
 		return []
@@ -317,7 +333,12 @@ func write_public_storage(collection: String, key: String, value: Dictionary) ->
 		return false
 	# permission_read 2 = public, permission_write 1 = owner only.
 	var obj: Variant = write_script.new(
-		collection, key, 2, 1, JSON.stringify(value), "",
+		collection,
+		key,
+		2,
+		1,
+		JSON.stringify(value),
+		"",
 	)
 	var res = await client.write_storage_objects_async(session, [obj])
 	return res != null and not res.is_exception()
@@ -336,7 +357,10 @@ func read_public_storage(collection: String, limit := 100) -> Dictionary:
 	if client == null or session == null or collection.is_empty():
 		return out
 	var res = await client.list_storage_objects_async(
-		session, collection, "", limit,
+		session,
+		collection,
+		"",
+		limit,
 	)
 	if res == null or res.is_exception():
 		return out
@@ -363,16 +387,21 @@ func list_public_storage(collection: String, limit := 100) -> Array:
 	if client == null or session == null or collection.is_empty():
 		return out
 	var res = await client.list_storage_objects_async(
-		session, collection, "", limit,
+		session,
+		collection,
+		"",
+		limit,
 	)
 	if res == null or res.is_exception():
 		return out
 	for object in res.objects:
-		out.append({
-			"key": String(object.key),
-			"value": JSON.parse_string(String(object.value)),
-			"user_id": String(object.user_id),
-		})
+		out.append(
+			{
+				"key": String(object.key),
+				"value": JSON.parse_string(String(object.value)),
+				"user_id": String(object.user_id),
+			},
+		)
 	return out
 
 
@@ -430,14 +459,16 @@ func write_storage_objects(objects: Array) -> bool:
 		return false
 	var payload: Array = []
 	for entry in objects:
-		payload.append(write_script.new(
-			String(entry.get("collection", "")),
-			String(entry.get("key", "")),
-			int(entry.get("read", 1)),
-			int(entry.get("write", 1)),
-			String(entry.get("value", "")),
-			"",
-		))
+		payload.append(
+			write_script.new(
+				String(entry.get("collection", "")),
+				String(entry.get("key", "")),
+				int(entry.get("read", 1)),
+				int(entry.get("write", 1)),
+				String(entry.get("value", "")),
+				"",
+			),
+		)
 	var res = await client.write_storage_objects_async(session, payload)
 	return res != null and not res.is_exception()
 
@@ -460,21 +491,25 @@ func read_storage_objects(ids: Array) -> Array:
 	var own := _own_user_id()
 	var query: Array = []
 	for entry in ids:
-		query.append(id_script.new(
-			String(entry.get("collection", "")),
-			String(entry.get("key", "")),
-			String(entry.get("user_id", own)),
-			"",
-		))
+		query.append(
+			id_script.new(
+				String(entry.get("collection", "")),
+				String(entry.get("key", "")),
+				String(entry.get("user_id", own)),
+				"",
+			),
+		)
 	var res = await client.read_storage_objects_async(session, query)
 	if res == null or res.is_exception():
 		return out
 	for object in res.objects:
-		out.append({
-			"collection": String(object.collection),
-			"key": String(object.key),
-			"value": JSON.parse_string(String(object.value)),
-		})
+		out.append(
+			{
+				"collection": String(object.collection),
+				"key": String(object.key),
+				"value": JSON.parse_string(String(object.value)),
+			},
+		)
 	return out
 
 
@@ -490,16 +525,22 @@ func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dic
 	if client == null or session == null:
 		return out
 	var res = await client.list_storage_objects_async(
-		session, collection, _own_user_id(), limit, cursor,
+		session,
+		collection,
+		_own_user_id(),
+		limit,
+		cursor,
 	)
 	if res == null or res.is_exception():
 		return out
 	var objects: Array = []
 	for object in res.objects:
-		objects.append({
-			"key": String(object.key),
-			"value": JSON.parse_string(String(object.value)),
-		})
+		objects.append(
+			{
+				"key": String(object.key),
+				"value": JSON.parse_string(String(object.value)),
+			},
+		)
 	out["objects"] = objects
 	out["cursor"] = String(res.cursor) if res.cursor != null else ""
 	return out
@@ -519,12 +560,14 @@ func delete_storage_objects(ids: Array) -> bool:
 		return false
 	var payload: Array = []
 	for entry in ids:
-		payload.append(id_script.new(
-			String(entry.get("collection", "")),
-			String(entry.get("key", "")),
-			"",
-			"",
-		))
+		payload.append(
+			id_script.new(
+				String(entry.get("collection", "")),
+				String(entry.get("key", "")),
+				"",
+				"",
+			),
+		)
 	var res = await client.delete_storage_objects_async(session, payload)
 	return res != null and not res.is_exception()
 

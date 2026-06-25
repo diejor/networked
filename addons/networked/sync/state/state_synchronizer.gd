@@ -146,7 +146,10 @@ func decode_carrier(value: Variant) -> void:
 		return
 	var keys := _payload_keys()
 	var frame := NetwCodec.decode_snapshot(
-		value, keys, _payload_quantizers(keys), _payload_types(keys),
+		value,
+		keys,
+		_payload_quantizers(keys),
+		_payload_types(keys),
 	)
 	if frame.is_empty():
 		return

@@ -53,6 +53,7 @@ enum Capability {
 	FRIEND_NAMES = 8,
 }
 
+
 ## Plain data describing a single discoverable lobby.
 ##
 ## [signal lobby_list_updated] emits batches of [LobbyDirectory.LobbyInfo]
@@ -111,6 +112,7 @@ class LobbyInfo:
 		info.visibility = visibility
 		info.joinable = joinable
 		return info
+
 
 ## Inputs to [method host_lobby], so the host call carries visibility and
 ## capacity instead of a bare name.

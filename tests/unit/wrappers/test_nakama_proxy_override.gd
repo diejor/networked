@@ -7,15 +7,16 @@ const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
 # Held for the suite so the Callable it backs (proxy_base_resolver) stays valid.
 var _rendezvous: NakamaDiscordRendezvous
 
+
 @warning_ignore("unused_parameter")
 func before(
 		do_skip = not NakamaWrapper.is_addon_present(),
 		skip_reason = "Nakama addon is not installed.",
 ) -> void:
-	# The override is injected through the core seam by NakamaDiscordRendezvous.bind;
-	# wire it up for the suite and clear it after so it never leaks into other suites.
+	# The override is injected through NakamaDiscordRendezvous.bind. Wire it up
+	# for the suite and clear it after so it never leaks into other suites.
 	_rendezvous = NakamaDiscordRendezvous.new()
-	_rendezvous.bind(null, null)
+	_rendezvous.bind(null)
 
 
 func after() -> void:
@@ -42,7 +43,10 @@ func test_proxy_override_when_active() -> void:
 	auto_free(service._facade)
 
 	service._client = service._facade.create_client(
-		"defaultkey", "127.0.0.1", 7350, "http"
+		"defaultkey",
+		"127.0.0.1",
+		7350,
+		"http",
 	)
 
 	# Verify socket override during create_socket()
@@ -67,7 +71,10 @@ func test_proxy_override_via_host_name() -> void:
 	auto_free(service._facade)
 
 	service._client = service._facade.create_client(
-		"defaultkey", service.host, 7350, "http"
+		"defaultkey",
+		service.host,
+		7350,
+		"http",
 	)
 
 	# Verify socket override during create_socket()
@@ -96,7 +103,10 @@ func test_no_override_without_client_id() -> void:
 	auto_free(service._facade)
 
 	service._client = service._facade.create_client(
-		"defaultkey", "127.0.0.1", 7350, "http"
+		"defaultkey",
+		"127.0.0.1",
+		7350,
+		"http",
 	)
 
 	# Verify socket base URI remains untouched
@@ -119,7 +129,10 @@ func test_no_override_when_no_activity_service() -> void:
 	auto_free(service._facade)
 
 	service._client = service._facade.create_client(
-		"defaultkey", "127.0.0.1", 7350, "http"
+		"defaultkey",
+		"127.0.0.1",
+		7350,
+		"http",
 	)
 
 	# Verify base URIs remain untouched

@@ -7,7 +7,7 @@
 ## session. Its header carries a 4-byte app tag right after the version, so a
 ## peer running a different game build ([member MultiplayerTree.app_id]) is
 ## rejected before the provider payload is even read. The provider payload (if
-## any) is wrapped by this header so [NetwAuthProvider] implementations see only
+## any) is wrapped by this header so [NetwAuth] implementations see only
 ## their own bytes.
 ## [br][br]
 ## [code]"NPRB"[/code] (Networked Probe) - a transient browser/probe peer

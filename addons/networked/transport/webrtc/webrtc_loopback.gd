@@ -15,7 +15,6 @@ func create_host_peer(
 		_tree: MultiplayerTree,
 		_options: LobbyDirectory.HostOptions = null,
 ) -> MultiplayerPeer:
-
 	if not session.has_live_server():
 		session.reset()
 	elif session.pc_server \

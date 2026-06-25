@@ -2,7 +2,6 @@
 class_name TestNetwCodec
 extends NetwTestSuite
 
-
 func _bits(b: int, lo: float, hi: float) -> NetwQuantizeBits:
 	var q := NetwQuantizeBits.new()
 	q.bits = b
@@ -17,7 +16,10 @@ func test_raw_payload_roundtrip() -> void:
 	var quantizers: Array = []
 	var types: Array = []
 	var payload := {
-		&"flag": true, &"count": 7, &"motion": Vector2(1, 2), &"spin": 0.5,
+		&"flag": true,
+		&"count": 7,
+		&"motion": Vector2(1, 2),
+		&"spin": 0.5,
 	}
 
 	var w := NetwBitBuffer.Writer.new()

@@ -172,7 +172,6 @@ func create_host_peer(
 ) -> MultiplayerPeer
 
 
-
 ## Produces a [MultiplayerPeer] in client mode connecting to [param _address].
 ##
 ## May [code]await[/code]. Return [code]null[/code] to signal failure.

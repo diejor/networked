@@ -170,10 +170,10 @@ func is_ready() -> bool:
 ## invites, and persona resolution.
 func capabilities() -> int:
 	return (
-		LobbyDirectory.Capability.BROWSE
-		| LobbyDirectory.Capability.FRIENDS_ONLY
-		| LobbyDirectory.Capability.INVITES
-		| LobbyDirectory.Capability.FRIEND_NAMES
+			LobbyDirectory.Capability.BROWSE
+			| LobbyDirectory.Capability.FRIENDS_ONLY
+			| LobbyDirectory.Capability.INVITES
+			| LobbyDirectory.Capability.FRIEND_NAMES
 	)
 
 

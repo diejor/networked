@@ -225,38 +225,46 @@ func _get_property_list() -> Array[Dictionary]:
 	var keys := _editor_save_keys()
 	if keys.is_empty():
 		return properties
-	properties.append({
-		"name": "Save Modes",
-		"type": TYPE_NIL,
-		"usage": PROPERTY_USAGE_GROUP,
-		"hint_string": "mode/,interval/",
-	})
+	properties.append(
+		{
+			"name": "Save Modes",
+			"type": TYPE_NIL,
+			"usage": PROPERTY_USAGE_GROUP,
+			"hint_string": "mode/,interval/",
+		},
+	)
 	for key: StringName in keys:
-		properties.append({
-			"name": "mode/" + key,
-			"type": TYPE_INT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_ENUM,
-			"hint_string": "Snapshot,Client",
-		})
-		properties.append({
-			"name": "interval/" + key,
-			"type": TYPE_FLOAT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_RANGE,
-			"hint_string": "0,60,0.1,or_greater,suffix:s",
-		})
+		properties.append(
+			{
+				"name": "mode/" + key,
+				"type": TYPE_INT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_ENUM,
+				"hint_string": "Snapshot,Client",
+			},
+		)
+		properties.append(
+			{
+				"name": "interval/" + key,
+				"type": TYPE_FLOAT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_RANGE,
+				"hint_string": "0,60,0.1,or_greater,suffix:s",
+			},
+		)
 	return properties
 
 
 func _get(property: StringName) -> Variant:
 	if property.begins_with("mode/"):
 		return _save_modes.get(
-			StringName(property.trim_prefix("mode/")), SaveMode.SNAPSHOT,
+			StringName(property.trim_prefix("mode/")),
+			SaveMode.SNAPSHOT,
 		)
 	if property.begins_with("interval/"):
 		return _save_intervals.get(
-			StringName(property.trim_prefix("interval/")), 0.0,
+			StringName(property.trim_prefix("interval/")),
+			0.0,
 		)
 	return super._get(property)
 

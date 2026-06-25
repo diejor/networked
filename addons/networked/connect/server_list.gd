@@ -34,13 +34,13 @@ static func load_or_new(path: String = DEFAULT_PATH) -> ServerList:
 	if file.get_length() > 0:
 		var first_byte := file.get_8()
 		while (
-			(
-				first_byte == 32
-				or first_byte == 9
-				or first_byte == 10
-				or first_byte == 13
-			)
-			and file.get_position() < file.get_length()
+				(
+						first_byte == 32
+						or first_byte == 9
+						or first_byte == 10
+						or first_byte == 13
+				)
+				and file.get_position() < file.get_length()
 		):
 			first_byte = file.get_8()
 		if first_byte != 91: # ASCII '['

@@ -35,9 +35,11 @@ class PropConfig extends RefCounted:
 	var _sync: ProxySynchronizer
 	var _vname: StringName
 
+
 	func _init(sync: ProxySynchronizer, vname: StringName) -> void:
 		_sync = sync
 		_vname = vname
+
 
 	## Assigns [param quantizer] as the codec for this property and returns
 	## [code]self[/code] for chaining.
@@ -197,7 +199,7 @@ func finalize() -> void:
 		if vname not in ordered_first and _properties[vname].is_empty():
 			push_warning(
 				"ProxySynchronizer: Property '%s' has an empty real path."
-				% [vname]
+				% [vname],
 			)
 
 	# Build the config in insertion order, respecting ordering overrides.

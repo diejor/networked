@@ -3,19 +3,24 @@
 class_name TestLagCompensationMetrics
 extends NetwTestSuite
 
-
 func test_metrics_exposes_monitor_keys() -> void:
 	var r := RewindScenario.new()
 	await r.setup(self)
 
 	var metrics := r.sim.metrics()
 	for key in [
-		&"entities", &"timelines", &"corrections", &"max_replay_depth",
-		&"consumed", &"missing", &"pending_actions", &"effects_armed",
+		&"entities",
+		&"timelines",
+		&"corrections",
+		&"max_replay_depth",
+		&"consumed",
+		&"missing",
+		&"pending_actions",
+		&"effects_armed",
 		&"gate_fallbacks",
 	]:
 		assert_that(metrics.has(key)).override_failure_message(
-			"metrics() missing key '%s'" % key
+			"metrics() missing key '%s'" % key,
 		).is_true()
 
 

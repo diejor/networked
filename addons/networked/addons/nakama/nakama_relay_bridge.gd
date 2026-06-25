@@ -1,4 +1,5 @@
 extends RefCounted
+
 class_name NakamaRelayBridge
 
 enum MatchState {
@@ -16,20 +17,28 @@ enum MetaMessageType {
 # Read-only variables.
 var _nakama_socket
 var nakama_socket:
-	get: return _nakama_socket
-	set(_v): pass
+	get:
+		return _nakama_socket
+	set(_v):
+		pass
 var _match_state: int = MatchState.DISCONNECTED
 var match_state: int:
-	get: return _match_state
-	set(_v): pass
+	get:
+		return _match_state
+	set(_v):
+		pass
 var _match_id := ''
 var match_id: String:
-	get: return _match_id
-	set(_v): pass
+	get:
+		return _match_id
+	set(_v):
+		pass
 var _multiplayer_peer: NakamaRelayPeer = NakamaRelayPeer.new()
 var multiplayer_peer: NakamaRelayPeer:
-	get: return _multiplayer_peer
-	set(_v): pass
+	get:
+		return _multiplayer_peer
+	set(_v):
+		pass
 
 # Configuration that can be set by the developer.
 var meta_op_code: int = 9001
@@ -38,22 +47,27 @@ var rpc_op_code: int = 9002
 # Internal variables.
 var _my_session_id: String
 var _my_peer_id: int = 0
-var _id_map := {}
-var _users := {}
+var _id_map := { }
+var _users := { }
 var _matchmaker_ticket := ''
+
 
 class User extends RefCounted:
 	var presence
 	var peer_id: int = 0
 
+
 	func _init(p_presence) -> void:
 		presence = p_presence
 
-signal match_join_error (exception)
-signal match_joined ()
+
+signal match_join_error(exception)
+signal match_joined()
+
 
 func _set_readonly(_value) -> void:
 	pass
+
 
 func _init(p_nakama_socket) -> void:
 	_nakama_socket = p_nakama_socket
@@ -64,6 +78,7 @@ func _init(p_nakama_socket) -> void:
 
 	_multiplayer_peer.packet_generated.connect(self._on_multiplayer_peer_packet_generated)
 	_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_CONNECTING)
+
 
 func create_match() -> void:
 	if _match_state != MatchState.DISCONNECTED:
@@ -82,6 +97,7 @@ func create_match() -> void:
 	_setup_match(res)
 	_setup_host()
 
+
 func join_match(p_match_id: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])
@@ -97,6 +113,7 @@ func join_match(p_match_id: String) -> void:
 		return
 
 	_setup_match(res)
+
 
 func join_named_match(_match_name: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
@@ -116,6 +133,7 @@ func join_named_match(_match_name: String) -> void:
 	if res.size == 0 or (res.size == 1 and res.presences.size() == 0):
 		_setup_host()
 
+
 func start_matchmaking(ticket) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot start matchmaking when state is %s" % MatchState.keys()[_match_state])
@@ -128,6 +146,7 @@ func start_matchmaking(ticket) -> void:
 	multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_CONNECTING)
 
 	_matchmaker_ticket = ticket.ticket
+
 
 func _on_nakama_socket_received_matchmaker_matched(matchmaker_matched) -> void:
 	if _matchmaker_ticket != matchmaker_matched.ticket:
@@ -156,9 +175,11 @@ func _on_nakama_socket_received_matchmaker_matched(matchmaker_matched) -> void:
 			if presence.session_id != _my_session_id:
 				_host_add_peer(presence)
 
+
 func _on_nakama_socket_closed() -> void:
 	match_state = MatchState.SOCKET_CLOSED
 	_cleanup()
+
 
 func get_user_presence_for_peer(peer_id: int):
 	var session_id = _id_map.get(peer_id)
@@ -169,12 +190,14 @@ func get_user_presence_for_peer(peer_id: int):
 		return null
 	return user.presence
 
+
 func leave() -> void:
 	if _match_state == MatchState.DISCONNECTED:
 		return
 	_match_state = MatchState.DISCONNECTED
 
 	_cleanup()
+
 
 func _cleanup() -> void:
 	for peer_id in _id_map:
@@ -189,6 +212,7 @@ func _cleanup() -> void:
 
 	_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_DISCONNECTED)
 
+
 func _setup_match(res) -> void:
 	_match_id = res.match_id
 	_my_session_id = res.self_user.session_id
@@ -199,6 +223,7 @@ func _setup_match(res) -> void:
 		if not _users.has(presence.session_id):
 			_users[presence.session_id] = User.new(presence)
 
+
 func _setup_host() -> void:
 	# Claim id 1 and start the match.
 	_my_peer_id = 1
@@ -206,6 +231,7 @@ func _setup_host() -> void:
 	_match_state = MatchState.CONNECTED
 	_multiplayer_peer.initialize(_my_peer_id)
 	match_joined.emit()
+
 
 func _generate_id(session_id: String) -> int:
 	# Peer ids can only be positive 32-bit signed integers.
@@ -219,40 +245,63 @@ func _generate_id(session_id: String) -> int:
 
 	return peer_id
 
+
 func _map_id_to_session(peer_id: int, session_id: String) -> void:
 	if not _users.has(session_id):
 		_users[session_id] = User.new(null)
 	_id_map[peer_id] = session_id
 	_users[session_id].peer_id = peer_id
 
+
 func _host_add_peer(presence) -> void:
 	var peer_id = _generate_id(presence.session_id)
 	_map_id_to_session(peer_id, presence.session_id)
 
 	# Tell them we are the host.
-	_nakama_socket.send_match_state_async(_match_id, meta_op_code, JSON.stringify({
-		type = MetaMessageType.CLAIM_HOST,
-	}), [presence])
+	_nakama_socket.send_match_state_async(
+		_match_id,
+		meta_op_code,
+		JSON.stringify(
+			{
+				type = MetaMessageType.CLAIM_HOST,
+			},
+		),
+		[presence],
+	)
 
 	# Tell them about all the other connected peers.
 	for other_peer_id in _id_map:
 		var other_session_id = _id_map[other_peer_id]
 		if other_session_id == presence.session_id or other_session_id == _my_session_id:
 			continue
-		_nakama_socket.send_match_state_async(_match_id, meta_op_code, JSON.stringify({
-			type = MetaMessageType.ASSIGN_PEER_ID,
-			session_id = other_session_id,
-			peer_id = other_peer_id,
-		}), [presence])
+		_nakama_socket.send_match_state_async(
+			_match_id,
+			meta_op_code,
+			JSON.stringify(
+				{
+					type = MetaMessageType.ASSIGN_PEER_ID,
+					session_id = other_session_id,
+					peer_id = other_peer_id,
+				},
+			),
+			[presence],
+		)
 
 	# Assign them a peer_id (tell everyone about it).
-	_nakama_socket.send_match_state_async(_match_id, meta_op_code, JSON.stringify({
-		type = MetaMessageType.ASSIGN_PEER_ID,
-		session_id = presence.session_id,
-		peer_id = peer_id,
-	}))
+	_nakama_socket.send_match_state_async(
+		_match_id,
+		meta_op_code,
+		JSON.stringify(
+			{
+				type = MetaMessageType.ASSIGN_PEER_ID,
+				session_id = presence.session_id,
+				peer_id = peer_id,
+			},
+		),
+	)
 
 	_multiplayer_peer.register_peer(peer_id)
+
 
 func _on_nakama_socket_received_match_presence(event) -> void:
 	if _match_state == MatchState.DISCONNECTED:
@@ -284,6 +333,7 @@ func _on_nakama_socket_received_match_presence(event) -> void:
 		_users.erase(presence.session_id)
 		_id_map.erase(peer_id)
 
+
 func _parse_json(data: String):
 	var json = JSON.new()
 	if json.parse(data) != OK:
@@ -292,6 +342,7 @@ func _parse_json(data: String):
 	if not content is Dictionary:
 		return null
 	return content
+
 
 func _on_nakama_socket_received_match_state(data) -> void:
 	if _match_state == MatchState.DISCONNECTED:
@@ -324,11 +375,13 @@ func _on_nakama_socket_received_match_state(data) -> void:
 			var peer_id = content['peer_id']
 
 			if _users.has(session_id) and _users[session_id].peer_id != 0:
-				push_error("Attempting to assign peer id %s to %s which already has id %s" % [
-					peer_id,
-					session_id,
-					_users[session_id].peer_id,
-				])
+				push_error(
+					"Attempting to assign peer id %s to %s which already has id %s" % [
+						peer_id,
+						session_id,
+						_users[session_id].peer_id,
+					],
+				)
 				return
 
 			_map_id_to_session(peer_id, session_id)
@@ -351,6 +404,7 @@ func _on_nakama_socket_received_match_state(data) -> void:
 		var from_peer_id = _users[from_session_id].peer_id
 		_multiplayer_peer.deliver_packet(data.binary_data, from_peer_id)
 
+
 func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray) -> void:
 	if match_state == MatchState.CONNECTED:
 		var target_presences = null
@@ -358,7 +412,7 @@ func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray
 			if not _id_map.has(peer_id):
 				push_error("Attempting to send RPC to unknown peer id: %s" % peer_id)
 				return
-			target_presences = [ _users[_id_map[peer_id]].presence ]
+			target_presences = [_users[_id_map[peer_id]].presence]
 		_nakama_socket.send_match_state_raw_async(_match_id, rpc_op_code, buffer, target_presences)
 	else:
 		push_error("RPC sent while the NakamaMultiplayerBridge isn't connected!")

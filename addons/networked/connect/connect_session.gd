@@ -601,8 +601,6 @@ func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 		session_left.emit()
 
 
-
-
 func _on_probe_result(result: BackendPeer.ProbeResult, target: JoinTarget) -> void:
 	if result != null and result.is_ok() and result.info != null \
 			and _local_app_id() != String(result.info.app_id):
@@ -761,7 +759,6 @@ func _ensure_internals() -> void:
 		_probes = _ProbeManager.new()
 	if _directories == null:
 		_directories = _DirectoryRegistry.new()
-
 
 
 ## Caps concurrent probe sessions for one browser.

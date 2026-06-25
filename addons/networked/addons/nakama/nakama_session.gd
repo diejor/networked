@@ -31,9 +31,21 @@ const _NAKAMA_LOG_LEVEL_WARNING := 2
 ## When [code]true[/code], connects over [code]https[/code] and [code]wss[/code].
 @export var use_ssl: bool = false
 
-## Device id used for authentication. Empty falls back to
+## Authentication mode used by [method connect_async].
+##
+## [code]"device"[/code] uses [member device_id]. [code]"custom"[/code] uses
+## [member custom_id] and [member auth_vars] for server runtime hooks.
+@export_enum("device", "custom") var auth_mode: String = "device"
+
+## Device id used for device authentication. Empty falls back to
 ## [method OS.get_unique_id]. Set distinct ids per instance for local testing.
 @export var device_id: String = ""
+
+## Custom id used when [member auth_mode] is [code]"custom"[/code].
+@export var custom_id: String = ""
+
+## Variables sent with Nakama custom authentication.
+var auth_vars: Dictionary = { }
 
 ## Local Nakama username used for device authentication.
 @export var username: String = ""
@@ -61,8 +73,11 @@ static func is_addon_present() -> bool:
 ## Only keys present in [param config] are applied, so a caller can forward its
 ## own exports without clobbering unset fields. Keys: [code]server_key[/code],
 ## [code]host[/code], [code]port[/code], [code]use_ssl[/code],
-## [code]device_id[/code], [code]username[/code], [code]timeout[/code].
+## [code]auth_mode[/code], [code]device_id[/code], [code]custom_id[/code],
+## [code]auth_vars[/code], [code]username[/code], [code]timeout[/code].
 func configure(config: Dictionary) -> void:
+	if config.has("auth_mode"):
+		auth_mode = String(config["auth_mode"])
 	if config.has("server_key"):
 		server_key = String(config["server_key"])
 	if config.has("host"):
@@ -73,18 +88,23 @@ func configure(config: Dictionary) -> void:
 		use_ssl = bool(config["use_ssl"])
 	if config.has("device_id"):
 		device_id = String(config["device_id"])
+	if config.has("custom_id"):
+		custom_id = String(config["custom_id"])
+	if config.has("auth_vars"):
+		var vars: Variant = config["auth_vars"]
+		auth_vars = vars.duplicate() if typeof(vars) == TYPE_DICTIONARY else { }
 	if config.has("username"):
 		username = String(config["username"])
 	if config.has("timeout"):
 		timeout = int(config["timeout"])
 
 
-## Returns [code]true[/code] once a device session has authenticated.
+## Returns [code]true[/code] once a session has authenticated.
 func is_authenticated() -> bool:
 	return _client != null and _session != null
 
 
-## Authenticates the shared device session, reusing an open one.
+## Authenticates the shared Nakama session, reusing an open one.
 ##
 ## Returns [code]{ ok: bool, error: String }[/code]. Concurrent first callers
 ## await the same authentication instead of racing a second one.
@@ -111,19 +131,33 @@ func _perform_auth() -> Dictionary:
 
 	var scheme := "https" if use_ssl else "http"
 	_client = _facade.create_client(
-		server_key, host, port, scheme, timeout, _NAKAMA_LOG_LEVEL_WARNING,
+		server_key,
+		host,
+		port,
+		scheme,
+		timeout,
+		_NAKAMA_LOG_LEVEL_WARNING,
 	)
 
 	NakamaWrapper._disable_web_gzip(_client)
 	var proxy_base := NakamaWrapper._resolve_proxy_base(self, host)
 	NakamaWrapper._apply_proxy_base(_client._api_client, proxy_base, "https")
 
-	var device := device_id if not device_id.is_empty() else OS.get_unique_id()
-	_session = await _client.authenticate_device_async(
-		device,
-		username if not username.is_empty() else null,
-		true,
-	)
+	var auth_username = username if not username.is_empty() else null
+	if auth_mode == "custom":
+		_session = await _client.authenticate_custom_async(
+			custom_id,
+			auth_username,
+			true,
+			auth_vars,
+		)
+	else:
+		var device := device_id if not device_id.is_empty() else OS.get_unique_id()
+		_session = await _client.authenticate_device_async(
+			device,
+			auth_username,
+			true,
+		)
 	if _session.is_exception():
 		return { "ok": false, "error": _session.get_exception().message }
 	return { "ok": true, "error": "" }
@@ -139,6 +173,31 @@ func client():
 ## [method connect_async].
 func session():
 	return _session
+
+
+## Returns the authenticated Nakama user id, or an empty string before auth.
+func local_user_id() -> String:
+	return String(_session.user_id) if _session != null else ""
+
+
+## Returns the authenticated Nakama username, or an empty string before auth.
+func local_username() -> String:
+	return String(_session.username) if _session != null else ""
+
+
+## Calls a Nakama server runtime RPC as the authenticated session user.
+##
+## Returns [code]{ ok: bool, payload: String, error: String }[/code]. A missing
+## RPC (no runtime module loaded) surfaces as [code]ok == false[/code], so a
+## caller can fail closed rather than assume the server vouched for anything.
+func call_rpc_async(rpc_id: String, payload: String = "") -> Dictionary:
+	if not is_authenticated():
+		return { "ok": false, "payload": "", "error": "session not authenticated" }
+	var arg: Variant = payload if not payload.is_empty() else null
+	var res = await _client.rpc_async(_session, rpc_id, arg)
+	if res.is_exception():
+		return { "ok": false, "payload": "", "error": res.get_exception().message }
+	return { "ok": true, "payload": String(res.payload), "error": "" }
 
 
 ## Builds a fresh realtime socket from the shared client, or [code]null[/code]

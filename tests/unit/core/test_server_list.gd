@@ -70,7 +70,7 @@ func test_load_legacy_text_resource_does_not_crash_and_returns_empty() -> void:
 		+ "[ext_resource type=\"Script\" path=\"res://addons/networked/connect/server_list.gd\" id=\"1_y3nq2\"]\n"
 		+ "[resource]\n"
 		+ "script = ExtResource(\"1_y3nq2\")\n"
-		+ "targets = []\n"
+		+ "targets = []\n",
 	)
 	file.close()
 

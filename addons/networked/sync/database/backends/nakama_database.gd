@@ -215,6 +215,7 @@ func drain(timeout_s: float = 5.0) -> Error:
 			await _flush()
 	return OK if _queue_empty() else ERR_TIMEOUT
 
+
 ## Stops the debounced flush loop. Call after a final [method drain] when
 ## retiring the backend so the timer loop does not outlive it.
 func stop() -> void:
@@ -255,11 +256,13 @@ func _flush() -> void:
 		for id in _dirty[table]:
 			if not (_cache.has(table) and _cache[table].has(id)):
 				continue
-			writes.append({
-				collection = _collection(table),
-				key = String(id),
-				value = _encode(_cache[table][id]),
-			})
+			writes.append(
+				{
+					collection = _collection(table),
+					key = String(id),
+					value = _encode(_cache[table][id]),
+				},
+			)
 			_mark(pending_writes, table, id)
 
 	var removals: Array = []
@@ -341,11 +344,15 @@ func _read_slot_index() -> Array:
 
 
 func _write_slot_index(slots: Array) -> void:
-	await _wrapper.write_storage_objects([{
-		collection = _slot_index_collection(),
-		key = _SLOT_INDEX_KEY,
-		value = JSON.stringify({ "slots": slots }),
-	}])
+	await _wrapper.write_storage_objects(
+		[
+			{
+				collection = _slot_index_collection(),
+				key = _SLOT_INDEX_KEY,
+				value = JSON.stringify({ "slots": slots }),
+			},
+		],
+	)
 
 # ── Session + helpers ─────────────────────────────────────────────────────────
 

@@ -233,11 +233,11 @@ func _warn_if_role_unset() -> void:
 		desired_role = value
 		update_configuration_warnings()
 
-## Optional [NetwAuthProvider] for [method join] and [method join_or_host].
+## Optional [NetwAuth] for [method join] and [method join_or_host].
 ##
 ## A [code]null[/code] provider skips authentication. The server trusts the
 ## client supplied [member JoinPayload.username].
-@export var auth_provider: NetwAuthProvider:
+@export var auth_provider: NetwAuth:
 	set(value):
 		auth_provider = value
 		if _auth:

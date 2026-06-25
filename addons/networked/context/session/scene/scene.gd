@@ -87,7 +87,6 @@ func is_valid() -> bool:
 func unwrap() -> MultiplayerScene:
 	return _scene_ref.get_ref() as MultiplayerScene
 
-
 ## The scene level root, or [code]null[/code].
 var level: Node:
 	get:
@@ -95,7 +94,6 @@ var level: Node:
 		if not is_instance_valid(scene):
 			return null
 		return scene.level
-
 
 ## The level scene root name for this scene.
 ## Returns [code]""[/code] if the scene or its level is not valid.
@@ -120,7 +118,6 @@ func tree() -> NetwTree:
 				_tree = NetwTree.new(mt)
 	return _tree
 
-
 ## The peer IDs currently connected to this scene.
 ##
 ## Use this to enumerate peers when sending custom broadcast RPCs:
@@ -141,7 +138,6 @@ var peers: Array[int]:
 # Player queries
 # ---------------------------------------------------------------------------
 
-
 ## All player nodes currently in this scene.
 var players: Array[Node]:
 	get:
@@ -150,7 +146,6 @@ var players: Array[Node]:
 			return []
 		return scene.get_players()
 
-
 ## The number of players currently in this scene.
 var player_count: int:
 	get:
@@ -158,7 +153,6 @@ var player_count: int:
 		if not is_instance_valid(scene):
 			return 0
 		return scene.get_players().size()
-
 
 ## The player node owned by the local peer, or [code]null[/code].
 var local_player: Node:
@@ -479,7 +473,6 @@ class Countdown:
 	## Returns [code]true[/code] if the countdown is actively ticking.
 	func is_running() -> bool:
 		return _running
-
 
 	## The number of seconds remaining.
 	var seconds_left: int:

@@ -91,26 +91,32 @@ func _sample(elapsed: float) -> void:
 			continue
 		var tree_category := _tree_category(mt)
 		var snap := service.monitor_snapshot()
-		_store(tree_category, {
-			&"layers": snap.get(&"layers", 0),
-			&"entities_filtered": snap.get(&"entities_filtered", 0),
-			&"visible_edges": snap.get(&"visible_edges", 0),
-			&"transitions_rate": _rate(tree_category, int(snap.get(&"transitions_total", 0)), elapsed),
-			&"dirty_entities": snap.get(&"dirty_entities", 0),
-			&"relay_backlog": snap.get(&"relay_backlog", 0),
-		})
+		_store(
+			tree_category,
+			{
+				&"layers": snap.get(&"layers", 0),
+				&"entities_filtered": snap.get(&"entities_filtered", 0),
+				&"visible_edges": snap.get(&"visible_edges", 0),
+				&"transitions_rate": _rate(tree_category, int(snap.get(&"transitions_total", 0)), elapsed),
+				&"dirty_entities": snap.get(&"dirty_entities", 0),
+				&"relay_backlog": snap.get(&"relay_backlog", 0),
+			},
+		)
 
 		var live: Dictionary[String, bool] = { }
 		for layer in service.all_layers():
 			var layer_category := "%s · %s" % [tree_category, String(layer.layer_id)]
 			live[layer_category] = true
 			var lsnap := layer.monitor_snapshot()
-			_store(layer_category, {
-				&"viewers": lsnap.get(&"viewers", 0),
-				&"entities": lsnap.get(&"entities", 0),
-				&"visible_edges": lsnap.get(&"visible_edges", 0),
-				&"transitions_rate": _rate(layer_category, int(lsnap.get(&"transitions_total", 0)), elapsed),
-			})
+			_store(
+				layer_category,
+				{
+					&"viewers": lsnap.get(&"viewers", 0),
+					&"entities": lsnap.get(&"entities", 0),
+					&"visible_edges": lsnap.get(&"visible_edges", 0),
+					&"transitions_rate": _rate(layer_category, int(lsnap.get(&"transitions_total", 0)), elapsed),
+				},
+			)
 		_prune_layers(tree_category, live)
 
 

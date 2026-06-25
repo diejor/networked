@@ -209,7 +209,10 @@ func decode_carrier(value: Variant) -> void:
 	if value is PackedByteArray:
 		var keys := _payload_keys()
 		_pending_window = NetwCodec.decode_window(
-			value, keys, _payload_quantizers(keys), _payload_types(keys),
+			value,
+			keys,
+			_payload_quantizers(keys),
+			_payload_types(keys),
 		)
 	else:
 		_pending_window = []

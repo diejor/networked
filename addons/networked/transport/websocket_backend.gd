@@ -25,7 +25,6 @@ func create_host_peer(
 		_tree: MultiplayerTree,
 		_options: LobbyDirectory.HostOptions = null,
 ) -> MultiplayerPeer:
-
 	Netw.dbg.trace("WebSocketBackend: create_host_peer called.")
 	var peer := WebSocketMultiplayerPeer.new()
 	peer.set_outbound_buffer_size(1048576) # 1MB

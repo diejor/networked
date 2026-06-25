@@ -53,7 +53,6 @@ signal signaling_disconnected
 ## Emitted on the host when the room id is ready to share.
 signal room_created(room_id: String)
 
-
 ## Optional namespace to isolate signaling and room codes on public networks.
 ## Non-empty values enable short, player-friendly room codes.
 @export var signaling_namespace: String = ""
@@ -127,7 +126,6 @@ var _active_host_options: LobbyDirectory.HostOptions = null
 
 func get_active_host_options() -> LobbyDirectory.HostOptions:
 	return _active_host_options
-
 
 
 ## Builds the [WebRTCSignaler] this backend signals through.

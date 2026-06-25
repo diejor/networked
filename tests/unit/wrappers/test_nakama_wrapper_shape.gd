@@ -7,18 +7,14 @@ class_name TestNakamaWrapperShape
 extends NetwTestSuite
 
 const _FACADE_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
-const _BRIDGE_PATH := \
-		"res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd"
-const _CLIENT_PATH := \
-		"res://addons/com.heroiclabs.nakama/client/NakamaClient.gd"
-const _SOCKET_PATH := \
-		"res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd"
-const _STORAGE_ID_PATH := \
-		"res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd"
-const _WRITE_OBJECT_PATH := \
-		"res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd"
+const _BRIDGE_PATH := "res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd"
+const _CLIENT_PATH := "res://addons/com.heroiclabs.nakama/client/NakamaClient.gd"
+const _SOCKET_PATH := "res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd"
+const _STORAGE_ID_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd"
+const _WRITE_OBJECT_PATH := "res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd"
 
 const REQUIRED_CLIENT_METHODS: PackedStringArray = [
+	"authenticate_custom_async",
 	"authenticate_device_async",
 	"read_storage_objects_async",
 	"write_storage_objects_async",
@@ -52,6 +48,7 @@ const REQUIRED_BRIDGE_SIGNALS := {
 const REQUIRED_SOCKET_SIGNALS := {
 	"closed": 0,
 }
+
 
 @warning_ignore("unused_parameter")
 func before(
@@ -152,6 +149,8 @@ func test_session_service_exposes_auth_surface() -> void:
 		"configure",
 		"connect_async",
 		"is_authenticated",
+		"local_user_id",
+		"local_username",
 		"client",
 		"session",
 		"create_socket",

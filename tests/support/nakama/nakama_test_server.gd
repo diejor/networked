@@ -30,8 +30,7 @@ const HOST_SETTING := "networked/tests/nakama_host"
 const HOST_ENV := "NAKAMA_TEST_HOST"
 
 ## Human-readable reason surfaced by GdUnit when a live suite is skipped.
-const SKIP_REASON := \
-		"Live Nakama tests need a server: set the networked/tests/nakama_host " \
+const SKIP_REASON := "Live Nakama tests need a server: set the networked/tests/nakama_host " \
 		+ "project setting (or NAKAMA_TEST_HOST) and start " \
 		+ "tests/support/nakama/docker-compose.yml."
 

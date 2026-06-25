@@ -180,7 +180,10 @@ func decode_carrier(value: Variant) -> void:
 	var keys := _payload_keys()
 	var r := NetwBitBuffer.Reader.new(value)
 	var payload := NetwCodec.decode_payload(
-		r, keys, _payload_quantizers(keys), _payload_types(keys),
+		r,
+		keys,
+		_payload_quantizers(keys),
+		_payload_types(keys),
 	)
 	for k: StringName in payload:
 		super._write_property(k, get_real_path(k), payload[k])
@@ -241,20 +244,24 @@ func _get_property_list() -> Array[Dictionary]:
 	var keys := _editor_codec_keys()
 	if keys.is_empty():
 		return result
-	result.append({
-		"name": "Codecs",
-		"type": TYPE_NIL,
-		"usage": PROPERTY_USAGE_GROUP,
-		"hint_string": "codec/",
-	})
+	result.append(
+		{
+			"name": "Codecs",
+			"type": TYPE_NIL,
+			"usage": PROPERTY_USAGE_GROUP,
+			"hint_string": "codec/",
+		},
+	)
 	for key: StringName in keys:
-		result.append({
-			"name": "codec/" + key,
-			"type": TYPE_OBJECT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_RESOURCE_TYPE,
-			"hint_string": "NetwQuantize",
-		})
+		result.append(
+			{
+				"name": "codec/" + key,
+				"type": TYPE_OBJECT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_RESOURCE_TYPE,
+				"hint_string": "NetwQuantize",
+			},
+		)
 	return result
 
 

@@ -22,7 +22,6 @@ func create_host_peer(
 		_tree: MultiplayerTree,
 		_options: LobbyDirectory.HostOptions = null,
 ) -> MultiplayerPeer:
-
 	Netw.dbg.trace("ENetBackend: create_host_peer called.")
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, max_clients)

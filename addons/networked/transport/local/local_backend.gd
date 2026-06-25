@@ -17,7 +17,6 @@ func create_host_peer(
 		_tree: MultiplayerTree,
 		_options: LobbyDirectory.HostOptions = null,
 ) -> MultiplayerPeer:
-
 	Netw.dbg.trace("LocalLoopbackBackend: create_host_peer called.")
 	if not session:
 		session = LocalLoopbackSession.get_shared_session()

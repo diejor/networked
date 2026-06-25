@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_3fkt7"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
-[ext_resource type="Script" uid="uid://dp77sylvhe357" path="res://addons/networked/session/auth/dummy_auth_provider.gd" id="3_p4o8j"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_wto4k"]
@@ -18,10 +17,6 @@
 script = ExtResource("2_3fkt7")
 metadata/_custom_type_script = "uid://cgyucu72xh732"
 
-[sub_resource type="Resource" id="Resource_gbknk"]
-script = ExtResource("3_p4o8j")
-metadata/_custom_type_script = "uid://dp77sylvhe357"
-
 [sub_resource type="Resource" id="Resource_disc_rdv"]
 script = ExtResource("12_rdv")
 metadata/_custom_type_script = "uid://xsdb520sm4wk"
@@ -33,7 +28,6 @@ unique_name_in_owner = true
 script = ExtResource("2_wto4k")
 backend = SubResource("Resource_ytyuk")
 auto_host_headless = false
-auth_provider = SubResource("Resource_gbknk")
 app_id = &"7x283tsfmy1xpr4"
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="MultiplayerTree" unique_id=274629760]

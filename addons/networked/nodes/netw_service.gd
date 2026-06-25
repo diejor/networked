@@ -30,7 +30,6 @@
 class_name NetwService
 extends Node
 
-
 ## Optional probe an embedding addon sets when the runtime environment allows
 ## only a WebSocket/HTTP relay, such as a Discord iframe that forbids WebRTC and
 ## native SDKs. A transport service that needs peer-to-peer or a native client

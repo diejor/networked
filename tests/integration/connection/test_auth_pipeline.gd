@@ -1,4 +1,4 @@
-## Integration tests for the [NetwAuthProvider] and [NetwIdentityBucket] flow.
+## Integration tests for the [NetwAuth] and [NetwIdentityBucket] flow.
 class_name TestAuthPipeline
 extends NetwTestSuite
 
@@ -51,7 +51,7 @@ func test_prepare_failure_aborts_connect() -> void:
 func test_listen_server_host_gets_identity() -> void:
 	var tree := await harness.add_listen_server(
 		_join_payload("host"),
-		DummyAuthProvider.new(),
+		DummyAuth.new(),
 	)
 
 	var bucket := tree.get_peer_context(1).get_bucket(NetwIdentityBucket)
@@ -95,7 +95,7 @@ func _join_payload(username: String) -> JoinPayload:
 
 ## Auth provider whose prepare always fails.
 class _FailingPrepareAuth:
-	extends NetwAuthProvider
+	extends NetwAuth
 
 	func prepare(_payload: JoinPayload) -> Error:
 		return ERR_UNAUTHORIZED
