@@ -21,6 +21,10 @@ var _connect: NetwConnect
 var _state: State = State.PRE_LOBBY
 var _pending_title: String = ""
 
+# Set when embedded in a Discord Activity: the session_lost recovery owns the
+# host-left case, so the generic server-disconnect handlers stand down.
+var _activity: DiscordActivityService
+
 
 func _ready() -> void:
 	_connect = _ctx.connect
@@ -50,6 +54,7 @@ func _ready() -> void:
 	# normal desktop or web build falls through to the usual pre-lobby browser.
 	var activity := _ctx.services.get_service(DiscordActivityService) as DiscordActivityService
 	if activity != null and activity.in_discord():
+		_activity = activity
 		_enter_discord_activity(activity)
 		return
 
@@ -65,6 +70,11 @@ func _enter_discord_activity(activity: DiscordActivityService) -> void:
 	_browser.visible = false
 	_in_lobby.visible = false
 	_set_status("Connecting to Discord Activity...")
+
+	# Inside Discord there is no server browser to fall back to, so a dropped host
+	# is recovered in place: claim or rejoin the same instance. This is the default
+	# a game wires off the activity state machine; override it for richer UX.
+	activity.session_lost.connect(_on_activity_session_lost)
 
 	if not await activity.start():
 		_set_status("Discord handshake failed.")
@@ -122,11 +132,28 @@ func _on_start_requested() -> void:
 
 
 func _on_server_disconnecting(_reason: String) -> void:
+	# In Discord the session_lost recovery handles the drop; there is no pre-lobby
+	# browser to return to.
+	if _activity != null:
+		return
 	_back_to_pre_lobby()
 
 
 func _on_server_disconnected() -> void:
+	if _activity != null:
+		return
 	_back_to_pre_lobby()
+
+
+# The host left the Discord Activity, so every other participant dropped. Re-enter
+# the same instance: the freshest-record self-heal makes whoever reconnects first
+# the new host and the rest join them, so the match resumes without a browser.
+func _on_activity_session_lost(reason: String) -> void:
+	_set_status("Host left (%s). Reconnecting..." % reason)
+	show()
+	var err := await _activity.reconnect()
+	if err != OK:
+		_set_status("Reconnect failed: %s" % error_string(err))
 
 
 func _on_match_started() -> void:

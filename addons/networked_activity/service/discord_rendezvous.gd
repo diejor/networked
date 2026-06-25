@@ -1,17 +1,21 @@
-## Resolves a Discord [code]instance_id[/code] into a [JoinTarget] the session
-## can connect through.
+## Connects a [MultiplayerTree] into the session shared by one Discord Activity
+## instance.
 ##
 ## Every participant Discord places in one Activity instance sees the same
 ## [code]instance_id[/code], available before the SDK is even ready. That id is
 ## the only shared rendezvous key Discord hands us, so a [DiscordRendezvous]
-## turns it into a concrete transport: the first participant claims a room, every
-## later participant resolves the same id to that room and joins it. The
-## transport behind the room is pluggable, which is why this is an abstract base
-## and the game picks a concrete subclass.
+## turns it into a live session: the first participant claims a room and hosts,
+## every later participant finds the same id and joins. Crucially, [b]how[/b] that
+## happens is the backend's own business, not the service's. A relay races for a
+## shared storage record and elects a host client side. A dedicated server keys
+## rooms server side and every client just joins. So the whole host-versus-join
+## decision lives behind one operation, [method connect_session], and the
+## [DiscordActivityService] never learns which path ran.
 ## [codeblock]
-## instance_id ──► resolve(instance_id, tree) ──► JoinTarget(backend, address)
-##                                                      │
-##                            MultiplayerTree.join(target, payload)
+## instance_id ──► connect_session(instance_id, tree, payload) ──► Error
+##                       │
+##                       ├─ relay:     race a record, host or join the match
+##                       └─ dedicated: join wss://host/?instance=<id>
 ## [/codeblock]
 ## [NakamaDiscordRendezvous] maps the id to a relay match through Nakama storage.
 ## [DedicatedDiscordRendezvous] maps it to a room on a game-owned WSS server with
@@ -36,27 +40,17 @@ func bind(_service: DiscordActivityService, _tree: MultiplayerTree) -> void:
 	pass
 
 
-## Resolves [param instance_id] into a [JoinTarget], deciding host versus join.
+## Connects [param tree] into the session keyed by [param instance_id], hosting
+## when first and joining otherwise, and returns the resulting [enum Error].
 ##
-## A returned target with an empty [member JoinTarget.address] means this
-## participant should host a fresh room. A non-empty address means an existing
-## room was found and this participant should join it. Implementations await
-## network round-trips, so this is asynchronous. The [param tree] is supplied so
-## a backend that needs the shared [method MultiplayerTree.get_nakama_session]
-## account or other services can reach them. Returns [code]null[/code] when no
-## transport can be resolved.
+## This owns the entire host-or-join decision and any reconciliation a concurrent
+## launch needs, so the [DiscordActivityService] only awaits the result. An
+## implementation drives [method MultiplayerTree.host_player] or
+## [method MultiplayerTree.join] itself, with [param payload] carrying the local
+## player. Implementations await network round-trips, so this is asynchronous.
+## Returns [constant OK] once the tree is online, or an [enum Error] when no
+## session could be reached.
 @abstract
-func resolve(instance_id: String, tree: MultiplayerTree) -> JoinTarget
-
-
-## Reconciles the rendezvous record after this participant hosted a room, and
-## returns a [JoinTarget] to defer to when a concurrent host won the claim.
-##
-## Two participants can both find an empty record and both host. This runs right
-## after a successful host so the implementation can publish its room, read the
-## record back, and detect that another room won. Returning a non-[code]null[/code]
-## target tells the caller to tear its own room down and join the winner instead.
-## Returning [code]null[/code] (the default, and the only outcome for a backend
-## with no shared record) means this participant keeps hosting.
-func commit_host(_instance_id: String, _tree: MultiplayerTree) -> JoinTarget:
-	return null
+func connect_session(
+		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+) -> Error

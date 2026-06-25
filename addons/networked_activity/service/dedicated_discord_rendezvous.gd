@@ -27,24 +27,31 @@ extends DiscordRendezvous
 @export var port: int = 21253
 
 
-func resolve(instance_id: String, _tree: MultiplayerTree) -> JoinTarget:
+func connect_session(
+		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+) -> Error:
 	if instance_id.is_empty():
 		Netw.dbg.warn("DedicatedDiscordRendezvous: empty instance_id.")
-		return null
+		return ERR_INVALID_PARAMETER
 	if public_host.is_empty():
 		Netw.dbg.warn(
 			"DedicatedDiscordRendezvous: public_host unset; no server configured.",
 		)
-		return null
+		return ERR_UNCONFIGURED
+	# The server keys rooms by ?instance=, so there is no host election: every
+	# participant simply joins, and the server groups them into one room.
+	return await tree.join(_target_for(instance_id), payload)
 
+
+# Builds the join target for instance_id: a WebSocketBackend pointed at the
+# dedicated server with the instance carried in the query string.
+func _target_for(instance_id: String) -> JoinTarget:
 	var backend := WebSocketBackend.new()
 	backend.public_host = public_host
 	backend.port = port
 
 	var target := JoinTarget.new()
 	target.display_name = "Discord Activity"
-	# The server groups rooms by ?instance=, so every participant joins the same
-	# room. A non-empty address keeps the service on the join path, never host.
 	target.address = "wss://%s/?instance=%s" % [public_host, instance_id]
 	target.backend = backend
 	target.metadata = { "instance_id": instance_id }

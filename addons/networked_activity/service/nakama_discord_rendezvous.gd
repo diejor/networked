@@ -5,16 +5,17 @@
 ## carries the relay [code]match_id[/code]. The first participant finds no record
 ## and hosts a match. Every later participant reads the record, confirms the
 ## match is still live, and joins it. Claiming is last-write-wins with a
-## read-back in [method commit_host], not a compare-and-set, so two simultaneous
-## hosts reconcile to one rather than racing forever.
+## read-back, not a compare-and-set, so two simultaneous hosts reconcile to one
+## rather than racing forever.
 ## [codeblock]
 ## collection = "discord_rendezvous"
 ## key        = instance_id
-## value      = { "match_id": "<relay match id>" }
+## value      = { "match_id": "<relay match id>", "ts": <unix seconds> }
 ##
-## resolve():  record live  -> JoinTarget(NakamaBackend, address = match_id)
-##             no record    -> JoinTarget(NakamaBackend, address = "")  # host
-## commit_host(): publish my match_id, read back, defer to the winner if I lost
+## connect_session():
+##   freshest record live -> join the relay match
+##   no live record       -> host a relay match, publish the record, read it
+##                           back, and join the winner if a host raced us
 ## [/codeblock]
 ## The storage object goes through [method NakamaWrapper.write_public_storage]
 ## and [method NakamaWrapper.read_public_storage] on the shared
@@ -103,45 +104,88 @@ func _resolve_proxy_base(host_node: Node, config_host: String) -> String:
 	return "%s.discordsays.com/.proxy/%s" % [svc.client_id, proxy_prefix]
 
 
-func resolve(instance_id: String, tree: MultiplayerTree) -> JoinTarget:
+func connect_session(
+		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+) -> Error:
 	if instance_id.is_empty():
 		Netw.dbg.warn("NakamaDiscordRendezvous: empty instance_id.")
-		return null
+		return ERR_INVALID_PARAMETER
 	var wrapper := await _ready_wrapper(tree)
 	if wrapper == null:
-		return null
+		return ERR_UNAVAILABLE
 
 	# Pick the freshest record across all owners. Nakama scopes storage per
 	# (collection, key, owner), so several hosts can hold the same key. The
 	# freshest timestamped one is the most recently claimed match. A dead record
-	# is handled by a failed join falling back to host (see
-	# DiscordActivityService.connect_activity), not by a liveness gate, because
-	# list_matches does not reliably list relay matches.
+	# is handled below by a failed join falling back to host, not by a liveness
+	# gate, because list_matches does not reliably list relay matches.
 	var mid := await _freshest_match(wrapper, instance_id)
 	if not mid.is_empty():
 		Netw.dbg.info(
 			"NakamaDiscordRendezvous: joining recorded match %s for instance %s.",
 			[mid, instance_id],
 		)
-		return _target_for(mid)
+		var join_err := await tree.join(_target_for(mid), payload)
+		if join_err == OK:
+			return OK
+		# The recorded match is dead or unreachable. Become the new host and let
+		# _commit_host overwrite the stale record. join() leaves the tree OFFLINE
+		# on failure, so hosting is safe.
+		Netw.dbg.info(
+			"NakamaDiscordRendezvous: recorded match join failed (%s); hosting instead.",
+			[error_string(join_err)],
+		)
 
 	Netw.dbg.info(
-		"NakamaDiscordRendezvous: no record for instance %s; hosting.",
+		"NakamaDiscordRendezvous: no live record for instance %s; hosting.",
 		[instance_id],
 	)
-	return _target_for("")
+	return await _host_and_commit(instance_id, tree, payload, wrapper)
 
 
-func commit_host(instance_id: String, tree: MultiplayerTree) -> JoinTarget:
+# Hosts a private match, publishes the rendezvous record, and reconciles a
+# concurrent host race by deferring to the winner. host_player uses the tree's
+# backend (join sets it from the target, host does not), so seed it from the
+# target template. The match is PRIVATE so the Discord room never shows in a
+# lobby browse.
+func _host_and_commit(
+		instance_id: String,
+		tree: MultiplayerTree,
+		payload: JoinPayload,
+		wrapper: NakamaWrapper,
+) -> Error:
+	tree.backend = _target_for("").make_backend_instance()
+	var opts := LobbyDirectory.HostOptions.make(
+		"Discord Activity", LobbyDirectory.Visibility.PRIVATE,
+	)
+	var host_err := await tree.host_player(payload, opts)
+	if host_err != OK:
+		return host_err
+	var winner := await _commit_host(instance_id, tree, wrapper)
+	if winner.is_empty():
+		return OK
+	# Lost the race: drop our match and join the winner's.
+	Netw.dbg.info(
+		"NakamaDiscordRendezvous: lost host race for instance %s; joining %s.",
+		[instance_id, winner],
+	)
+	await tree.disconnect_player()
+	return await tree.join(_target_for(winner), payload)
+
+
+# Publishes this host's match_id under instance_id, reads the record back, and
+# returns the winning match_id when a near-simultaneous host committed fresher,
+# or an empty string when this host keeps hosting. Last-write-wins with a
+# read-back, not a compare-and-set, so two simultaneous hosts converge on one.
+func _commit_host(
+		instance_id: String, tree: MultiplayerTree, wrapper: NakamaWrapper,
+) -> String:
 	var dir := tree.get_service(NakamaLobbyDirectory) as NakamaLobbyDirectory
 	if dir == null:
-		return null
+		return ""
 	var my_match := dir.get_join_address()
 	if my_match.is_empty():
-		return null
-	var wrapper := await _ready_wrapper(tree)
-	if wrapper == null:
-		return null
+		return ""
 
 	var wrote := await wrapper.write_public_storage(
 		collection,
@@ -157,12 +201,8 @@ func commit_host(instance_id: String, tree: MultiplayerTree) -> JoinTarget:
 	# which case we defer to it so both ends converge on one match.
 	var winner := await _freshest_match(wrapper, instance_id)
 	if winner.is_empty() or winner == my_match:
-		return null
-	Netw.dbg.info(
-		"NakamaDiscordRendezvous: lost host race for instance %s; joining %s.",
-		[instance_id, winner],
-	)
-	return _target_for(winner)
+		return ""
+	return winner
 
 
 # Authenticates the shared Nakama session with this rendezvous's relay config

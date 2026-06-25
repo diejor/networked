@@ -25,7 +25,8 @@ npx wrangler deploy
 
 ## Discord dev portal
 
-Map this Worker behind a URL prefix (Activities → URL Mappings), e.g. `/token`
-or `/.proxy/token`, and point `DiscordActivityService.token_endpoint` at the
-same path. The client posts `{ "code": "..." }` and reads `{ "access_token":
-"..." }` back.
+Map this Worker behind a URL prefix (Activities → URL Mappings), e.g. `/token`,
+and set `DiscordActivityService.token_endpoint` to the bare mapped path
+(`token`). Discord serves the activity behind a fixed `/.proxy/` namespace, so
+the service prepends it for you (`/.proxy/token`). The client posts `{ "code":
+"..." }` and reads `{ "access_token": "..." }` back.

@@ -80,11 +80,11 @@ func test_dedicated_rendezvous_builds_instance_keyed_url() -> void:
 	var rdv := DedicatedDiscordRendezvous.new()
 	rdv.public_host = "game.example.com"
 
-	var target := rdv.resolve("room1", null)
+	# The dedicated server keys rooms by ?instance= and elects the host itself, so
+	# every participant joins the same instance-tagged WSS address.
+	var target := rdv._target_for("room1")
 	assert_object(target).is_not_null()
 	assert_str(target.address).is_equal("wss://game.example.com/?instance=room1")
-	# A non-empty address keeps the service on the join path; the dedicated server
-	# elects the host by keying rooms on ?instance=.
 	assert_object(target.backend).is_instanceof(WebSocketBackend)
 
 
@@ -92,5 +92,6 @@ func test_dedicated_rendezvous_refuses_without_host() -> void:
 	var rdv := DedicatedDiscordRendezvous.new()
 
 	# No server configured, so the seam refuses rather than inventing a target.
-	var target := rdv.resolve("room1", null)
-	assert_object(target).is_null()
+	# The refusal returns before any await, so this resolves synchronously.
+	var err: Error = await rdv.connect_session("room1", null, null)
+	assert_int(err).is_equal(ERR_UNCONFIGURED)

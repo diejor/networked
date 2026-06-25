@@ -61,13 +61,54 @@ signal layout_changed(layout_mode: int)
 ## [signal DiscordSDK.dispatch_orientation_update].
 signal orientation_changed(screen_orientation: int)
 
+## Emitted on every [enum State] transition, carrying the [param from] and
+## [param to] states. The single hook a game subscribes to in order to drive its
+## own UI off the activity lifecycle (showing a connecting spinner, a rematch
+## prompt, and so on). The finer-grained signals above fire alongside the matching
+## transition.
+signal state_changed(from: State, to: State)
+
+## Emitted when a [constant State.CONNECTED] session ends underneath the activity,
+## carrying a short [param reason] (the host left, the transport closed). The
+## state moves to [constant State.DISCONNECTED] just before this fires. The game
+## owns the policy: ignore it, show a prompt, or call [method reconnect] to claim
+## or rejoin the same [member instance_id]. A graceful local
+## [method MultiplayerTree.disconnect_player] does not emit this.
+signal session_lost(reason: String)
+
+## Lifecycle of the activity, from detecting the embed through a live session.
+## [method connect_activity] walks IDLE through [constant CONNECTED]; a session
+## that drops underneath a connected activity moves to [constant DISCONNECTED].
+enum State {
+	## Constructed, not yet handshaken. The state before [method start].
+	IDLE,
+	## The SDK handshake reached ready (or there was no SDK). [method start] done.
+	READY,
+	## OAuth resolved the local [DiscordSDK.DiscordUser]. [method authenticate] done.
+	AUTHENTICATED,
+	## A connect attempt is in flight inside [method connect_activity].
+	CONNECTING,
+	## The tree is online in the instance's shared session.
+	CONNECTED,
+	## A live session ended underneath the activity (host left, transport closed).
+	## [method reconnect] returns to [constant CONNECTING] from here.
+	DISCONNECTED,
+}
+
+## Current lifecycle [enum State]. Read it to branch without subscribing, or
+## subscribe to [signal state_changed] for transitions.
+var state: State = State.IDLE
+
 ## Discord application (client) id. Required for the SDK handshake and OAuth.
 @export var client_id: String = ""
 
-## URL the OAuth [code]code[/code] is exchanged at for an access token, relative
-## to the page origin. Matches the Discord dev-portal URL mapping for the token
-## Worker.
-@export var token_endpoint: String = "/.proxy/token"
+## Dev-portal URL-mapping path the OAuth [code]code[/code] is exchanged at for an
+## access token, matching the mapping for the token Worker. Discord always serves
+## the activity behind a fixed [code]/.proxy/[/code] namespace, so give the bare
+## mapped path (default [code]token[/code] for a [code]/token[/code] mapping) and
+## the service prepends [code]/.proxy/[/code] and the page origin itself. A full
+## [code]http(s)://[/code] URL is used verbatim.
+@export var token_endpoint: String = "token"
 
 ## OAuth scopes requested by [method authenticate].
 @export var scopes: PackedStringArray = PackedStringArray([
@@ -92,6 +133,11 @@ var _guild_id: String = ""
 var _device_id: String = ""
 var _detected: bool = false
 var _started: bool = false
+
+# Payload from the last connect_activity, replayed by reconnect().
+var _last_payload: JoinPayload
+# Reason from the most recent server_disconnecting, carried into session_lost.
+var _disconnect_reason: String = ""
 
 # Last roster reported by Discord, newest wins. Backs participants().
 var _participants: Array = []
@@ -153,6 +199,14 @@ func service_entered(mt: MultiplayerTree) -> void:
 	# here). The service never reaches into a backend itself.
 	rendezvous.bind(self, mt)
 	_push_identity()
+	# Bridge a dropped connection into the activity lifecycle so a host that leaves
+	# (or any transport drop) surfaces as session_lost while connected, the
+	# transition a game hangs its rematch policy on. server_disconnected fires only
+	# on an involuntary drop, never on a graceful local disconnect_player, so it is
+	# the precise loss signal; server_disconnecting carries the announced reason.
+	mt.server_disconnecting.connect(func(reason: String) -> void:
+		_disconnect_reason = reason)
+	mt.server_disconnected.connect(_on_session_dropped)
 	_sdk = _create_sdk()
 	if _sdk != null:
 		_sdk.name = &"DiscordSDK"
@@ -174,6 +228,7 @@ func start() -> bool:
 		# No browser SDK to handshake. The connect path still runs because the
 		# rendezvous only needs the instance id.
 		_started = true
+		_set_state(State.READY)
 		Netw.dbg.info("DiscordActivityService: ready, no SDK (instance %s).", [_instance_id])
 		activity_ready.emit()
 		return true
@@ -189,6 +244,7 @@ func start() -> bool:
 		await _sdk.command_encourage_hardware_acceleration()
 	_connect_sdk_signals()
 	_started = true
+	_set_state(State.READY)
 	Netw.dbg.info("DiscordActivityService: ready (instance %s).", [_instance_id])
 	activity_ready.emit()
 	return true
@@ -225,6 +281,7 @@ func authenticate() -> bool:
 	if not user.id.is_empty():
 		_device_id = user.id
 		_push_identity()
+	_set_state(State.AUTHENTICATED)
 	Netw.dbg.info("DiscordActivityService: identity %s resolved.", [user.global_name])
 	identity_resolved.emit(user)
 	# Subscribe and fetch the roster now that the session is authenticated.
@@ -235,17 +292,17 @@ func authenticate() -> bool:
 	return true
 
 
-## Resolves the instance into a session and connects, hosting when first and
-## joining otherwise.
+## Connects into the instance's shared session through the [member rendezvous].
 ##
-## Ensures [method start] ran, asks the [member rendezvous] to
-## [method DiscordRendezvous.resolve] the [member instance_id] into a
-## [JoinTarget], then hosts (empty address) or joins (match address). After a
-## host it runs [method DiscordRendezvous.commit_host] and defers to the winner
-## if a concurrent host won the claim. The hosted match is
-## [constant LobbyDirectory.Visibility.PRIVATE] so Discord rooms never appear in
-## a public lobby browse. Returns an [enum Error] from the underlying
-## [method MultiplayerTree.join] or [method MultiplayerTree.host_player].
+## Ensures [method start] ran, then hands the [member rendezvous] the
+## [member instance_id], the tree, and [param join_payload] through
+## [method DiscordRendezvous.connect_session]. The rendezvous owns the whole
+## host-versus-join decision and any concurrent-launch reconciliation, so this
+## only walks the [enum State] machine ([constant State.CONNECTING] then
+## [constant State.CONNECTED] on success) and surfaces a failure through
+## [signal activity_failed]. The payload is remembered so [method reconnect] can
+## reuse it after a [signal session_lost]. Returns the [enum Error] from the
+## rendezvous.
 func connect_activity(join_payload: JoinPayload) -> Error:
 	if not await start():
 		return ERR_UNAVAILABLE
@@ -253,44 +310,29 @@ func connect_activity(join_payload: JoinPayload) -> Error:
 	if mt == null:
 		return ERR_UNCONFIGURED
 	_push_identity()
-	var target := await rendezvous.resolve(_instance_id, mt)
-	if target == null:
-		activity_failed.emit("Rendezvous could not resolve a transport")
-		return ERR_CANT_RESOLVE
-
-	if not target.address.is_empty():
-		var join_err := await mt.join(target, join_payload)
-		if join_err == OK:
-			return OK
-		# The recorded match is dead or unreachable. Become the new host and let
-		# commit_host overwrite the stale record. join() leaves the tree OFFLINE
-		# on failure, so hosting is safe.
-		Netw.dbg.info(
-			"DiscordActivityService: recorded match join failed (%s); hosting instead.",
-			[error_string(join_err)],
-		)
-	return await _host_and_commit(mt, target, join_payload)
+	_last_payload = join_payload
+	_set_state(State.CONNECTING)
+	var err := await rendezvous.connect_session(_instance_id, mt, join_payload)
+	if err != OK:
+		activity_failed.emit("Activity connect failed: %s" % error_string(err))
+		_set_state(State.DISCONNECTED)
+		return err
+	_set_state(State.CONNECTED)
+	return OK
 
 
-# Hosts privately, publishes the rendezvous record, and reconciles a concurrent
-# host race by deferring to the winner. host_player uses the tree's backend (join
-# sets it from the target, host does not), so seed it from the target template.
-func _host_and_commit(
-		mt: MultiplayerTree, target: JoinTarget, join_payload: JoinPayload,
-) -> Error:
-	mt.backend = target.make_backend_instance()
-	var opts := LobbyDirectory.HostOptions.make(
-		"Discord Activity", LobbyDirectory.Visibility.PRIVATE,
-	)
-	var host_err := await mt.host_player(join_payload, opts)
-	if host_err != OK:
-		return host_err
-	var winner := await rendezvous.commit_host(_instance_id, mt)
-	if winner == null:
-		return OK
-	# Lost the race: drop our match and join the winner's.
-	await mt.disconnect_player()
-	return await mt.join(winner, join_payload)
+## Reconnects into the same [member instance_id] after a [signal session_lost],
+## reusing the payload from the last [method connect_activity].
+##
+## The default recovery a game can wire straight to a "rematch" button: it re-runs
+## [method connect_activity], so the freshest-record self-heal lets this
+## participant claim the instance as the new host when the old host is gone, or
+## join whoever already did. Returns [constant ERR_UNCONFIGURED] when no prior
+## connect supplied a payload to reuse.
+func reconnect() -> Error:
+	if _last_payload == null:
+		return ERR_UNCONFIGURED
+	return await connect_activity(_last_payload)
 
 
 ## Returns the most recent Discord participant roster as an [Array] of
@@ -442,14 +484,48 @@ func _exchange_code(code: String) -> String:
 func _absolute_token_url() -> String:
 	if token_endpoint.begins_with("http"):
 		return token_endpoint
+	var path := _proxied_path(token_endpoint)
 	if _is_browser():
 		var origin := String(JavaScriptBridge.eval("window.location.origin", true))
-		return origin + token_endpoint
-	return token_endpoint
+		return origin + path
+	return path
+
+
+# Maps a bare dev-portal path to the path Discord actually serves it at. Discord
+# serves the activity behind a fixed /.proxy/ namespace, so /token is reached at
+# /.proxy/token. Accepts a bare or slash-prefixed path and is idempotent when the
+# /.proxy/ prefix is already present.
+func _proxied_path(p: String) -> String:
+	var trimmed := p.trim_prefix("/")
+	if trimmed.begins_with(".proxy/"):
+		return "/" + trimmed
+	return "/.proxy/" + trimmed
 
 
 func _is_browser() -> bool:
 	return OS.has_feature("web") or OS.get_name() == "Web"
+
+
+# Records the new lifecycle state and announces the transition. A no-op when the
+# state is unchanged so a re-entrant start() never emits a spurious transition.
+func _set_state(to: State) -> void:
+	if to == state:
+		return
+	var from := state
+	state = to
+	state_changed.emit(from, to)
+
+
+# Bridges an involuntary connection drop into the activity lifecycle. Only a drop
+# underneath a live (CONNECTED) session is a loss the game should react to; a drop
+# reported from any other state is noise from an ordinary connect/leave flow.
+func _on_session_dropped() -> void:
+	if state != State.CONNECTED:
+		return
+	_set_state(State.DISCONNECTED)
+	var reason := _disconnect_reason if not _disconnect_reason.is_empty() else "host left"
+	_disconnect_reason = ""
+	session_lost.emit(reason)
 
 
 # Resolves the instance id once through _resolve_instance. Memoized so
