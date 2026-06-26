@@ -1,102 +1,77 @@
-## Session service that runs a [MultiplayerTree] as an embedded Discord Activity.
+## Discord Activity lifecycle service for a [MultiplayerTree].
 ##
-## Everything inside the Godot client that is identical across Discord Activities
-## lives here: detecting that the game is embedded, driving the Discord SDK
-## handshake to ready, resolving the local player's Discord identity, and turning
-## the shared [code]instance_id[/code] into a live session through a pluggable
-## [DiscordRendezvous]. The service owns the platform layer only and never names a
-## transport backend. The chosen [DiscordRendezvous] owns the backend, so the same
-## service drives a [NakamaDiscordRendezvous] relay or a
-## [DedicatedDiscordRendezvous] WSS server unchanged. The game owns only the
-## deployment (a relay or WSS server, a token Worker) and which rendezvous to use.
+## [method in_discord] is the registration gate. Normal desktop and web builds
+## keep their usual backends when no Discord [code]instance_id[/code] exists.
 ##
-## The service registers only when the game is actually embedded
-## ([method in_discord]), so a normal desktop or web build keeps its usual
-## backends untouched.
+## [br][br]
+## This service owns the platform lifecycle. [DiscordRendezvous] owns the
+## transport lifecycle.
 ## [codeblock]
 ## MultiplayerTree
-## +-- DiscordActivityService   (client_id, token_endpoint, rendezvous)
-##     +-- DiscordRendezvous installs its transport seams from bind()
+## └── DiscordActivityService
+##     ├── start()              # SDK ready.
+##     ├── authenticate()       # OAuth user.
+##     └── connect_activity()   # session through DiscordRendezvous.
 ##
-## await service.start()                    # SDK handshake -> ready
-## await service.authenticate()             # OAuth -> DiscordUser
-## await service.connect_activity(payload)  # resolve instance -> host or join
+## DiscordRendezvous
+## └── connect_session(instance_id, tree, payload)
+##     ├── DedicatedDiscordRendezvous -> join WSS room.
+##     └── NakamaDiscordRendezvous    -> join or claim relay match.
 ## [/codeblock]
-## [method start] and [method authenticate] drive the browser Discord SDK, so they
-## are no-ops when no SDK is present. [method connect_activity] still runs because
-## the rendezvous only needs the [member instance_id].
+## [method start] and [method authenticate] need the browser Discord SDK.
+## [method connect_activity] can still run without it when [method instance_id]
+## was resolved another way.
 class_name DiscordActivityService
 extends NetwService
 
-## Emitted once the Discord SDK handshake reaches ready (or immediately when there
-## is no SDK to handshake). [method connect_activity] is safe to call after this.
+## Emitted after [method start] reaches [constant State.READY].
 signal activity_ready()
 
-## Emitted after [method authenticate] resolves the local Discord identity,
-## carrying the [DiscordSDK.DiscordUser].
+## Emitted after [method authenticate] resolves [member user].
 signal identity_resolved(user: DiscordSDK.DiscordUser)
 
-## Emitted when a step fails in a way the game should surface rather than crash
-## on, carrying a short [param reason]. Also carries Discord-side errors relayed
-## from [signal DiscordSDK.dispatch_error].
+## Emitted for recoverable activity failures the game should surface.
 signal activity_failed(reason: String)
 
-## Emitted whenever the Discord participant roster changes, carrying the current
-## [Array] of [DiscordSDK.DiscordUser]. Driven by an initial fetch after
-## [method start] and by
-## [signal DiscordSDK.dispatch_activity_instance_participants_update]. Reconcile
-## it against networked peers through the shared device id (a participant's
-## [member DiscordSDK.DiscordSimpleUser.id] equals the backend user id set by
-## [method authenticate], so [method device_id] correlates the two). See
-## [method participants].
+## Emitted when the Discord participant roster changes.
+##
+## Correlate entries to networked peers through [method device_id]. The backend
+## user id is set from the Discord user id after [method authenticate].
 signal roster_changed(participants: Array)
 
-## Emitted when Discord changes the activity layout mode (focused, PIP, grid),
-## carrying the raw [param layout_mode]. A thin pass-through of
-## [signal DiscordSDK.dispatch_activity_layout_mode_update].
+## Emitted when Discord changes the activity layout mode.
 signal layout_changed(layout_mode: int)
 
-## Emitted when the device orientation changes, carrying the raw
-## [param screen_orientation]. A thin pass-through of
-## [signal DiscordSDK.dispatch_orientation_update].
+## Emitted when the device orientation changes.
 signal orientation_changed(screen_orientation: int)
 
-## Emitted on every [enum State] transition, carrying the [param from] and
-## [param to] states. The single hook a game subscribes to in order to drive its
-## own UI off the activity lifecycle (showing a connecting spinner, a rematch
-## prompt, and so on). The finer-grained signals above fire alongside the matching
-## transition.
+## Emitted on every [enum State] transition.
 signal state_changed(from: State, to: State)
 
-## Emitted when a [constant State.CONNECTED] session ends underneath the activity,
-## carrying a short [param reason] (the host left, the transport closed). The
-## state moves to [constant State.DISCONNECTED] just before this fires. The game
-## owns the policy: ignore it, show a prompt, or call [method reconnect] to claim
-## or rejoin the same [member instance_id]. A graceful local
-## [method MultiplayerTree.disconnect_player] does not emit this.
+## Emitted when a [constant State.CONNECTED] session drops underneath the
+## activity.
+##
+## The state has already moved to [constant State.DISCONNECTED]. Call
+## [method reconnect] to reuse the last [JoinPayload].
 signal session_lost(reason: String)
 
-## Lifecycle of the activity, from detecting the embed through a live session.
-## [method connect_activity] walks IDLE through [constant CONNECTED]; a session
-## that drops underneath a connected activity moves to [constant DISCONNECTED].
+## Activity lifecycle owned by this service.
 enum State {
 	## Constructed, not yet handshaken. The state before [method start].
 	IDLE,
-	## The SDK handshake reached ready (or there was no SDK). [method start] done.
+	## [method start] finished.
 	READY,
-	## OAuth resolved the local [DiscordSDK.DiscordUser]. [method authenticate] done.
+	## [method authenticate] resolved [member user].
 	AUTHENTICATED,
 	## A connect attempt is in flight inside [method connect_activity].
 	CONNECTING,
 	## The tree is online in the instance's shared session.
 	CONNECTED,
-	## A live session ended underneath the activity (host left, transport closed).
-	## [method reconnect] returns to [constant CONNECTING] from here.
+	## A live session ended underneath the activity.
 	DISCONNECTED,
 }
 
-## Current lifecycle [enum State]. Read it to branch without subscribing, or
-## subscribe to [signal state_changed] for transitions.
+## Current lifecycle [enum State].
 var state: State = State.IDLE
 
 ## Discord application (client) id. Required for the SDK handshake and OAuth.
@@ -104,28 +79,27 @@ var state: State = State.IDLE
 
 @export_group("OAuth")
 
-## URL mapping used by [method authenticate] to exchange a Discord OAuth code
-## for an access token.
+## Endpoint used by [method authenticate] to exchange a Discord OAuth code.
 ##
-## In Discord's developer portal, this should point to the Worker endpoint that
-## receives [code]{"code": "..."}[/code] and returns a Discord
-## [code]access_token[/code]. The default [code]token[/code] means the service
-## posts to the activity proxy path [code]/.proxy/token[/code]. Use an absolute
-## [code]http(s)://[/code] URL only for local testing or custom deployments that
-## do not use Discord URL mappings.
+## The default [code]token[/code] posts to [code]/.proxy/token[/code], which is
+## the Discord URL mapping for the token Worker.
+## [codeblock]
+## token_endpoint
+## ├── "token"              # Discord URL mapping.
+## ├── "/.proxy/token"      # Already proxied.
+## └── "http://127.0.0.1"   # Local testing.
+## [/codeblock]
 @export var token_endpoint: String = "token"
 
 ## OAuth scopes requested by [method authenticate].
 ##
-## [code]identify[/code] lets [method DiscordSDK.command_authenticate] resolve
-## [member user]. Keep it unless the activity does not need
-## [signal identity_resolved]. Add scopes only when the Worker and Discord
-## developer portal are configured for the extra permission.
+## [code]identify[/code] is required to resolve [member user]. Add scopes only
+## when the Worker and Discord developer portal are configured for them.
 @export var scopes: Array[String] = ["identify", "rpc.activities.write"]
 
 @export_group("")
 
-## Resolves the shared [code]instance_id[/code] into a transport.
+## Resolves [method instance_id] into a transport session.
 ##
 ## Assign this explicitly. The service reports [constant ERR_UNCONFIGURED] from
 ## [method connect_activity] when no rendezvous is configured.
@@ -135,7 +109,7 @@ var state: State = State.IDLE
 ## after the handshake reaches ready.
 @export var encourage_hw_accel: bool = true
 
-# Resolved local identity, set by authenticate(). Null until then.
+## Resolved local Discord user. [code]null[/code] before [method authenticate].
 var user: DiscordSDK.DiscordUser
 
 var _sdk: DiscordSDK
@@ -164,15 +138,16 @@ static func _static_init() -> void:
 	NetwService.transport_restricted_probe = _detect_embedded
 
 
-## Returns [code]true[/code] only when the game is embedded in a Discord Activity,
-## which is the same condition under which this service registers.
+## Returns [code]true[/code] when a Discord [code]instance_id[/code] exists.
 func in_discord() -> bool:
 	_detect()
 	return not _instance_id.is_empty()
 
 
-## Returns the shared Discord instance id, the rendezvous key every participant
-## sees. Available before the SDK is ready.
+## Returns the shared Discord Activity instance id.
+##
+## Every participant in the same Activity sees this value. [member rendezvous]
+## uses it as the session key.
 func instance_id() -> String:
 	_detect()
 	return _instance_id
@@ -188,11 +163,9 @@ func guild_id() -> String:
 	return _guild_id
 
 
-## Returns the stable participant id the local player authenticates with, pushed
-## onto the [member rendezvous] so each participant is a distinct backend user.
+## Returns the stable backend participant id for the local Discord user.
 ##
-## Resolved from the Discord user id by [method authenticate], so the same Discord
-## user reconnects as the same backend user. Empty before authentication.
+## Empty before [method authenticate].
 func device_id() -> String:
 	return _device_id
 
@@ -242,13 +215,11 @@ func _bind_nakama_auth(mt: MultiplayerTree, nakama_auth: NakamaAuth) -> void:
 	nakama_auth.bind_tree(mt)
 
 
-## Drives the Discord SDK handshake to ready and returns whether it succeeded.
+## Drives the Discord SDK handshake to [constant State.READY].
 ##
-## With no SDK present there is nothing to handshake, so this records the started
-## state and reports success immediately. With an SDK it runs
-## [method DiscordSDK.init] then awaits [method DiscordSDK.ready], optionally
-## encouraging hardware acceleration. Emits [signal activity_ready] on success and
-## [signal activity_failed] otherwise. Safe to call more than once.
+## Safe to call more than once. With no SDK present, it still marks the service
+## ready so [method connect_activity] can run from a test or injected
+## [method instance_id].
 func start() -> bool:
 	if _started:
 		return true
@@ -283,15 +254,19 @@ func start() -> bool:
 	return true
 
 
-## Resolves the local Discord identity through the OAuth token exchange.
+## Resolves [member user] through Discord OAuth.
 ##
-## Runs [method DiscordSDK.command_authorize] for an OAuth code, exchanges it at
-## [member token_endpoint] for an access token, then
-## [method DiscordSDK.command_authenticate]s to obtain the
-## [DiscordSDK.DiscordUser]. [member scopes] controls what
-## [method DiscordSDK.command_authorize] asks Discord for. Stores the resolved
-## user on [member user] and emits [signal identity_resolved]. With no SDK there
-## is no Discord account to resolve, so this returns [code]false[/code].
+## [member scopes] controls the authorize request. [member token_endpoint]
+## exchanges the code for an access token.
+##
+## [br][br]
+## [method DiscordSDK.command_authenticate] returns the verified
+## [DiscordSDK.DiscordUser] stored in [member user].
+## [codeblock]
+## authorize(scopes) -> code
+## token_endpoint    -> access_token
+## authenticate      -> user
+## [/codeblock]
 func authenticate() -> bool:
 	if _sdk == null:
 		return false
@@ -325,17 +300,19 @@ func authenticate() -> bool:
 	return true
 
 
-## Connects into the instance's shared session through the [member rendezvous].
+## Connects into the Activity session through [member rendezvous].
 ##
-## Ensures [method start] ran, then hands the [member rendezvous] the
-## [member instance_id], the tree, and [param join_payload] through
-## [method DiscordRendezvous.connect_session]. The rendezvous owns the whole
-## host-versus-join decision and any concurrent-launch reconciliation, so this
-## only walks the [enum State] machine ([constant State.CONNECTING] then
-## [constant State.CONNECTED] on success) and surfaces a failure through
-## [signal activity_failed]. The payload is remembered so [method reconnect] can
-## reuse it after a [signal session_lost]. Returns the [enum Error] from the
-## rendezvous.
+## [member rendezvous] owns all backend decisions.
+##
+## [br][br]
+## This service owns the [enum State] transition and remembers
+## [param join_payload] for [method reconnect].
+## [codeblock]
+## instance_id()
+## └── rendezvous.connect_session(instance_id, tree, join_payload)
+##     ├── OK    -> State.CONNECTED
+##     └── Error -> State.DISCONNECTED
+## [/codeblock]
 func connect_activity(join_payload: JoinPayload) -> Error:
 	if not await start():
 		return ERR_UNAVAILABLE
@@ -359,61 +336,57 @@ func connect_activity(join_payload: JoinPayload) -> Error:
 	return OK
 
 
-## Reconnects into the same [member instance_id] after a [signal session_lost],
-## reusing the payload from the last [method connect_activity].
+## Reconnects to [method instance_id] after [signal session_lost].
 ##
-## The default recovery a game can wire straight to a "rematch" button: it re-runs
-## [method connect_activity], so the freshest-record self-heal lets this
-## participant claim the instance as the new host when the old host is gone, or
-## join whoever already did. Returns [constant ERR_UNCONFIGURED] when no prior
-## connect supplied a payload to reuse.
+## Reuses the last [JoinPayload].
+##
+## [br][br]
+## Returns [constant ERR_UNCONFIGURED] before the first
+## [method connect_activity].
 func reconnect() -> Error:
 	if _last_payload == null:
 		return ERR_UNCONFIGURED
 	return await connect_activity(_last_payload)
 
 
-## Returns the most recent Discord participant roster as an [Array] of
-## [DiscordSDK.DiscordUser], newest update wins.
+## Returns the latest Discord participant roster.
 ##
-## Updated by [signal roster_changed]. Empty before the first update. Correlate an
-## entry to a networked peer through the shared device id (see [method device_id]).
+## Empty before the first [signal roster_changed].
 func participants() -> Array:
 	return _participants
 
 
-## Sets the activity's Discord rich presence from a short [param state] and
-## [param details] line.
+## Sets the Activity rich presence.
 ##
-## A no-op with no SDK and before [method start] reaches ready, so a game can call
-## it unconditionally. A thin pass-through of
-## [method DiscordSDK.command_set_activity].
+## No-op before [method start] reaches [constant State.READY] or when no SDK is
+## present.
 func set_presence(state: String, details: String) -> void:
 	if _sdk == null or not _started:
 		return
 	await _sdk.command_set_activity(state, details)
 
 
-## Opens Discord's invite dialog so the local player can pull others into this
-## activity instance. A no-op with no SDK. A thin pass-through of
-## [method DiscordSDK.command_open_invite_dialog].
+## Opens Discord's invite dialog for this Activity instance.
+##
+## No-op when no SDK is present.
 func open_invite_dialog() -> void:
 	if _sdk == null:
 		return
 	await _sdk.command_open_invite_dialog()
 
 
-## Opens Discord's share-moment dialog for [param media_url]. A no-op with no SDK.
-## A thin pass-through of [method DiscordSDK.command_open_share_moment_dialog].
+## Opens Discord's share-moment dialog for [param media_url].
+##
+## No-op when no SDK is present.
 func share_moment(media_url: String) -> void:
 	if _sdk == null:
 		return
 	await _sdk.command_open_share_moment_dialog(media_url)
 
 
-## Opens [param url] in the player's external browser through Discord, which
-## blocks raw navigation out of the iframe. A no-op with no SDK. A thin
-## pass-through of [method DiscordSDK.command_open_external_link].
+## Opens [param url] through Discord's external-link command.
+##
+## No-op when no SDK is present.
 func open_external_link(url: String) -> void:
 	if _sdk == null:
 		return

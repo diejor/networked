@@ -76,7 +76,8 @@ func should_register() -> bool:
 ## Override for per-service setup such as signal wiring or clock binding. It does
 ## not run in the editor, when [method should_register] returns
 ## [code]false[/code], or when the node is not under a [MultiplayerTree].
-func service_entered(_mt: MultiplayerTree) -> void:
+@warning_ignore("unused_parameter")
+func service_entered(mt: MultiplayerTree) -> void:
 	pass
 
 
@@ -84,7 +85,8 @@ func service_entered(_mt: MultiplayerTree) -> void:
 ##
 ## Override to tear down whatever [method service_entered] set up. Mirrors the
 ## conditions of [method service_entered].
-func service_exiting(_mt: MultiplayerTree) -> void:
+@warning_ignore("unused_parameter")
+func service_exiting(mt: MultiplayerTree) -> void:
 	pass
 
 # ---------------------------------------------------------------------------

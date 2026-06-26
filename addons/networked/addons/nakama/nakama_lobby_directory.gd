@@ -1,21 +1,19 @@
-## [LobbyDirectory] backed by a Nakama relay match.
+## [LobbyDirectory] backed by Nakama relay matches.
 ##
-## Add as a child of [MultiplayerTree]. Owns a [NakamaWrapper], lazily
-## authenticates on the first host or join, and returns the bridge-driven
-## [MultiplayerPeer] once the match lifecycle resolves. The relay never opens a
-## listening socket, so the host is just whoever claims peer id [code]1[/code].
-## That is why a web export can host through this directory.
+## Relay hosting does not open a listening socket. The host is the participant
+## that claims peer id [code]1[/code], so web exports can host through this
+## directory.
 ## [codeblock]
 ## MultiplayerTree
-## └── NakamaLobbyDirectory   (host = relay.example.com, use_ssl = true)
-##         owns NakamaWrapper ── socket ── relay match (peer 1 = host)
+## └── NakamaLobbyDirectory
+##     ├── NakamaWrapper
+##     ├── realtime socket
+##     └── relay match
+##         └── peer 1 = host
 ## [/codeblock]
-## Relay matches carry no metadata, so [method host_lobby] writes a browse card
-## to Nakama storage keyed by the match id, and [method list_lobbies] merges
-## those cards with [method NakamaWrapper.list_matches] for live member counts.
-## A [constant LobbyDirectory.Visibility.PRIVATE] host skips the card and stays
-## join-by-id only. [method make_join_target] carries the match id as the join
-## address.
+## [method host_lobby] writes browse metadata to Nakama storage because relay
+## matches only expose match ids and member counts. [method list_lobbies] merges
+## that storage with [method NakamaWrapper.list_matches].
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
 
@@ -54,19 +52,18 @@ extends LobbyDirectory
 @export var browser_filter_uid: String = "networked"
 
 
-## Structured browse card a host publishes to Nakama storage so a browser can
-## resolve a metadata-less relay match into a [LobbyDirectory.LobbyInfo].
+## Browse metadata for one relay match.
 ##
-## A relay match exposes only its id and member count, so the host serializes
-## the rest here. [method to_dict] is the body [method NakamaWrapper.write_lobby_card]
-## stores under the match id key, [method from_dict] rebuilds it from a browse
-## read, and [method to_lobby_info] owns the mapping onto
-## [LobbyDirectory.LobbyInfo], including the [code]app_id[/code] the browser
-## compatibility gate reads.
+## [method to_dict] is stored by [method NakamaWrapper.write_lobby_card].
+## [method to_lobby_info] creates the browse entry returned by
+## [method list_lobbies].
 ## [codeblock]
-## storage key  = match_id
-## storage value = LobbyCard.to_dict()
-## browse read  -> LobbyCard.from_dict(match_id, value).to_lobby_info(id, size)
+## Storage
+## └── match_id
+##     └── LobbyCard.to_dict()
+##
+## Browse
+## └── LobbyCard.from_dict(match_id, value).to_lobby_info(id, size)
 ## [/codeblock]
 class LobbyCard:
 	extends Resource
@@ -107,8 +104,7 @@ class LobbyCard:
 		}
 
 
-	## Rebuilds a [NakamaLobbyDirectory.LobbyCard] from a browse read, taking the
-	## [param match_id] from the storage key and the rest from [param data].
+	## Rebuilds a [NakamaLobbyDirectory.LobbyCard] from a browse read.
 	static func from_dict(match_id: String, data: Dictionary) -> LobbyCard:
 		var card := LobbyCard.new()
 		card.match_id = match_id
@@ -123,9 +119,7 @@ class LobbyCard:
 		return card
 
 
-	## Builds the [LobbyDirectory.LobbyInfo] for a browse entry, stamping the
-	## live [param players] count and the synthetic [param id], and threading
-	## [member match_id] and [member app_id] into the metadata the browser reads.
+	## Builds the [LobbyDirectory.LobbyInfo] for a browse entry.
 	func to_lobby_info(id: int, players: int) -> LobbyDirectory.LobbyInfo:
 		return LobbyDirectory.LobbyInfo.make(
 			id,
@@ -145,8 +139,7 @@ var _id_to_match: Dictionary = { } # synthetic int id -> match id
 var _session_bound: bool = false # shared session resolved lazily on first connect
 
 
-## Overrides [method NetwService.service_entered] to initialize the internal
-## [NakamaWrapper] and connect matching error/close signals.
+## Initializes the internal [NakamaWrapper].
 func service_entered(_mt: MultiplayerTree) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
@@ -157,8 +150,7 @@ func service_entered(_mt: MultiplayerTree) -> void:
 	_wrapper.socket_closed.connect(_on_socket_closed)
 
 
-## Overrides [method NetwService.service_exiting] to clean up the hosted match,
-## leave the Nakama socket, and clear the multiplayer peer.
+## Cleans up the hosted match and relay socket.
 func service_exiting(_mt: MultiplayerTree) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
@@ -168,9 +160,10 @@ func service_exiting(_mt: MultiplayerTree) -> void:
 	_peer = null
 
 
-## Implements [method LobbyDirectory.host_lobby] by creating a relay match and,
-## unless the host is [constant LobbyDirectory.Visibility.PRIVATE], publishing a
-## browse card to Nakama storage.
+## Creates a relay match and publishes its browse card.
+##
+## [constant LobbyDirectory.Visibility.PRIVATE] skips the card and stays
+## join-by-id only.
 func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	if not await _ensure_connected():
 		return null
@@ -211,10 +204,7 @@ func _publish_card(options: LobbyDirectory.HostOptions) -> void:
 		_hosted_match_id = ""
 
 
-## Joins the relay match named [param match_id] and returns its peer.
-##
-## Nakama match ids are strings, so [NakamaBackend] calls this directly instead
-## of the integer [method LobbyDirectory.join_lobby_peer].
+## Joins the relay match named by [param match_id].
 func join_match_peer(match_id: String) -> MultiplayerPeer:
 	if match_id.is_empty():
 		Netw.dbg.warn("NakamaLobbyDirectory: empty match id.")
@@ -225,9 +215,9 @@ func join_match_peer(match_id: String) -> MultiplayerPeer:
 	return await _await_match("join_match_peer")
 
 
-## Joins a browse-list entry by its synthetic id, resolving it to the relay
-## match id captured by the last [method list_lobbies]. For ids learned outside
-## a browse, call [method join_match_peer] with the string match id directly.
+## Joins a browse entry by the synthetic id from [method list_lobbies].
+##
+## Use [method join_match_peer] when the relay match id is already known.
 func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var mid := String(_id_to_match.get(lobby_id, ""))
 	if mid.is_empty():
@@ -240,9 +230,10 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	return await join_match_peer(mid)
 
 
-## Browses public lobbies by merging stored browse cards with the live relay
-## match list, so each entry carries its host's metadata and a current member
-## count. Cards whose match has ended are skipped.
+## Lists public relay lobbies.
+##
+## Stored browse cards provide metadata. [method NakamaWrapper.list_matches]
+## provides live member counts. Cards whose match has ended are skipped.
 func list_lobbies() -> void:
 	if not await _ensure_connected():
 		lobby_list_updated.emit([] as Array[LobbyDirectory.LobbyInfo])
@@ -274,8 +265,7 @@ func capabilities() -> int:
 	return LobbyDirectory.Capability.BROWSE | LobbyDirectory.Capability.FRIEND_NAMES
 
 
-## Implements [method LobbyDirectory.leave_lobby]. Deletes the host's browse
-## card before tearing the match down. Idempotent.
+## Deletes the host browse card and leaves the relay match.
 func leave_lobby() -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():

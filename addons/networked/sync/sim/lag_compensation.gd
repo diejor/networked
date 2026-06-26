@@ -1,3 +1,4 @@
+@icon("res://addons/networked/assets/lag-compensation.svg")
 @tool
 ## Session service that owns temporal networking infrastructure for one tree.
 ##

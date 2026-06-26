@@ -71,7 +71,7 @@ enum SchemaMismatchPolicy {
 }
 
 ## The storage backend. Must be set before the first schema registration call
-## triggers [method _initialize_backend].
+## triggers [code]_initialize_backend[/code].
 @export var backend: NetwDatabaseBackend
 
 ## What to do when a loaded record has columns absent from the current schema.
@@ -473,7 +473,7 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 ##
 ## A slot is a namespace prefix that isolates one independent save of the game.
 ## The choice is startup-only. [method open] must run before the first schema
-## registration triggers [method NetwDatabase._initialize_backend], which locks
+## registration triggers [code]_initialize_backend[/code], which locks
 ## the engine. [method list] and [method delete] still work with no slot open, so
 ## a save-select menu can browse slots before init.
 ## [codeblock]

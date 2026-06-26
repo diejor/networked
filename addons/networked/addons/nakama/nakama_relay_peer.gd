@@ -1,5 +1,18 @@
 extends MultiplayerPeerExtension
 
+## [MultiplayerPeerExtension] driven by [NakamaRelayBridge].
+##
+## The bridge owns peer registration and packet delivery. This peer exposes
+## those events through Godot's multiplayer peer API.
+## [codeblock]
+## NakamaRelayBridge
+## ├── register_peer()
+## ├── unregister_peer()
+## └── deliver_packet()
+##
+## MultiplayerAPI
+## └── _get_packet_script()
+## [/codeblock]
 class_name NakamaRelayPeer
 
 const MAX_PACKET_SIZE := 1 << 24
@@ -26,6 +39,7 @@ class Packet extends RefCounted:
 
 var _incoming_packets := []
 
+## Emitted when Godot writes a packet for the bridge to send to Nakama.
 signal packet_generated(peer_id, buffer)
 
 
@@ -120,6 +134,7 @@ func _get_connection_status() -> ConnectionStatus:
 	return _connection_status
 
 
+## Marks the local peer id assigned by the bridge.
 func initialize(p_self_id: int) -> void:
 	if _connection_status != CONNECTION_CONNECTING:
 		return
@@ -128,10 +143,12 @@ func initialize(p_self_id: int) -> void:
 		_connection_status = CONNECTION_CONNECTED
 
 
+## Sets the connection status reported through [MultiplayerPeer].
 func set_connection_status(p_connection_status: int) -> void:
 	_connection_status = p_connection_status
 
 
+## Registers [param p_peer_id] and schedules [signal peer_connected].
 func register_peer(p_peer_id: int) -> void:
 	if p_peer_id == _self_id or _connected_peers.has(p_peer_id):
 		return
@@ -139,6 +156,7 @@ func register_peer(p_peer_id: int) -> void:
 	_peers_to_emit_connected.append(p_peer_id)
 
 
+## Unregisters [param p_peer_id] and schedules [signal peer_disconnected].
 func unregister_peer(p_peer_id: int) -> void:
 	if not _connected_peers.has(p_peer_id):
 		return
@@ -148,6 +166,7 @@ func unregister_peer(p_peer_id: int) -> void:
 		_connection_status = CONNECTION_DISCONNECTED
 
 
+## Queues a packet received from Nakama for Godot to poll.
 func deliver_packet(p_data: PackedByteArray, p_from_peer_id: int) -> void:
 	var packet = Packet.new(p_data, p_from_peer_id)
 	_incoming_packets.push_back(packet)

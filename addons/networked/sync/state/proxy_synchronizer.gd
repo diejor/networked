@@ -108,7 +108,8 @@ func register_property(
 ##
 ## Base is a no-op. [PackedSynchronizer] overrides it to record the assignment
 ## in [member PackedSynchronizer.property_codecs].
-func set_property_codec(_vname: StringName, _quantizer: NetwQuantize) -> void:
+@warning_ignore("unused_parameter")
+func set_property_codec(vname: StringName, quantizer: NetwQuantize) -> void:
 	pass
 
 

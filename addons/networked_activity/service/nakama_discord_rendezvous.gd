@@ -1,18 +1,17 @@
 ## [DiscordRendezvous] that maps a Discord instance to a Nakama relay match.
 ##
-## The rendezvous record is one public-read storage object under
-## [member collection], keyed by the Discord [code]instance_id[/code]. The body
-## carries the relay [code]match_id[/code]. The first participant finds no
-## record and hosts a match. Later participants read the record, join it, and
-## fall back to hosting when the recorded match is stale.
+## [member collection] stores public records keyed by Discord
+## [code]instance_id[/code]. The freshest live record wins.
 ## [codeblock]
-## collection = "discord_rendezvous"
-## key        = instance_id
-## value      = { "match_id": "<relay match id>", "ts": <unix seconds> }
+## Storage
+## └── collection
+##     └── instance_id
+##         ├── match_id (String)
+##         └── ts (float)
 ##
-## connect_session():
-##     freshest record -> join the relay match
-##     no live record  -> host a relay match, publish, read back, converge
+## connect_session()
+## ├── freshest live record -> join relay match.
+## └── no live record       -> host, publish, read back, converge.
 ## [/codeblock]
 class_name NakamaDiscordRendezvous
 extends DiscordRendezvous
@@ -42,15 +41,16 @@ extends DiscordRendezvous
 @export var device_id: String = ""
 
 
-## Installs the Nakama iframe-proxy seam so the relay client and socket route
-## through Discord's proxy when embedded.
+## Installs the Discord iframe proxy seam for Nakama traffic.
 func bind(_tree: MultiplayerTree) -> void:
 	NakamaWrapper.proxy_base_resolver = _resolve_proxy_base
 
 
-## Connects [param tree] to the Nakama match keyed by [param instance_id].
+## Joins or claims the Nakama relay match keyed by [param instance_id].
 func connect_session(
-		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+		instance_id: String,
+		tree: MultiplayerTree,
+		payload: JoinPayload,
 ) -> Error:
 	if instance_id.is_empty():
 		Netw.dbg.warn("NakamaDiscordRendezvous: empty instance_id.")
@@ -105,7 +105,8 @@ func _host_and_commit(
 ) -> Error:
 	tree.backend = _target_for("").make_backend_instance()
 	var opts := LobbyDirectory.HostOptions.make(
-		"Discord Activity", LobbyDirectory.Visibility.PRIVATE,
+		"Discord Activity",
+		LobbyDirectory.Visibility.PRIVATE,
 	)
 	var host_err := await tree.host_player(payload, opts)
 	if host_err != OK:
@@ -123,7 +124,9 @@ func _host_and_commit(
 
 # Publishes this host's match id and returns a fresher winner if one exists.
 func _commit_host(
-		instance_id: String, tree: MultiplayerTree, wrapper: NakamaWrapper,
+		instance_id: String,
+		tree: MultiplayerTree,
+		wrapper: NakamaWrapper,
 ) -> String:
 	var dir := tree.get_service(NakamaLobbyDirectory) as NakamaLobbyDirectory
 	if dir == null:
@@ -155,19 +158,24 @@ func _ready_wrapper(tree: MultiplayerTree) -> NakamaWrapper:
 	var session := tree.get_nakama_session()
 	if session == null:
 		return null
-	session.configure({
-		"auth_mode": "device",
-		"server_key": server_key,
-		"host": host,
-		"port": port,
-		"use_ssl": use_ssl,
-		"device_id": _normalized_device_id(),
-	})
+	session.configure(
+		{
+			"auth_mode": "device",
+			"server_key": server_key,
+			"host": host,
+			"port": port,
+			"use_ssl": use_ssl,
+			"device_id": _normalized_device_id(),
+		},
+	)
 	var auth := await session.connect_async()
 	if not auth.ok:
-		Netw.dbg.error("NakamaDiscordRendezvous: session auth failed: %s", [
-			auth.error,
-		])
+		Netw.dbg.error(
+			"NakamaDiscordRendezvous: session auth failed: %s",
+			[
+				auth.error,
+			],
+		)
 		return null
 	var wrapper := NakamaWrapper.new()
 	wrapper.use_session(session)

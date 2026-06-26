@@ -1,16 +1,17 @@
 ## Session-global Nakama authentication shared by every Nakama consumer.
 ##
-## One authenticated account per session. [NakamaLobbyDirectory] and
-## [NakamaDatabase] both resolve the same node through
-## [method MultiplayerTree.get_nakama_session], so the relay lobby and the save
-## store talk to Nakama as the same user. The node owns the facade, client, and
-## device session. Realtime sockets are built per consumer from the shared
-## client through [method create_socket].
+## One [MultiplayerTree] has one authenticated Nakama account. Consumers resolve
+## it through [method MultiplayerTree.get_nakama_session], so relay matches and
+## storage calls use the same user.
 ## [codeblock]
 ## MultiplayerTree
-## ├── NakamaSessionService (host, port, server_key - the shared account)
-## ├── NakamaLobbyDirectory (relay match socket built from the session)
-## └── NakamaDatabase host  (storage objects written as the session user)
+## ├── NakamaSessionService
+## │   ├── client
+## │   └── session
+## ├── NakamaLobbyDirectory
+## │   └── create_socket()
+## └── NakamaDatabase
+##     └── session user storage
 ## [/codeblock]
 class_name NakamaSessionService
 extends NetwService
@@ -34,7 +35,7 @@ const _NAKAMA_LOG_LEVEL_WARNING := 2
 ## Authentication mode used by [method connect_async].
 ##
 ## [code]"device"[/code] uses [member device_id]. [code]"custom"[/code] uses
-## [member custom_id] and [member auth_vars] for server runtime hooks.
+## [member custom_id] and [member auth_vars].
 @export_enum("device", "custom") var auth_mode: String = "device"
 
 ## Device id used for device authentication. Empty falls back to
@@ -70,11 +71,20 @@ static func is_addon_present() -> bool:
 
 ## Overrides auth config from [param config] before [method connect_async].
 ##
-## Only keys present in [param config] are applied, so a caller can forward its
-## own exports without clobbering unset fields. Keys: [code]server_key[/code],
-## [code]host[/code], [code]port[/code], [code]use_ssl[/code],
-## [code]auth_mode[/code], [code]device_id[/code], [code]custom_id[/code],
-## [code]auth_vars[/code], [code]username[/code], [code]timeout[/code].
+## Only present keys are applied.
+## [codeblock skip-lint]
+## Dictionary
+## ├── auth_mode (String)
+## ├── server_key (String)
+## ├── host (String)
+## ├── port (int)
+## ├── use_ssl (bool)
+## ├── device_id (String)
+## ├── custom_id (String)
+## ├── auth_vars (Dictionary)
+## ├── username (String)
+## └── timeout (int)
+## [/codeblock]
 func configure(config: Dictionary) -> void:
 	if config.has("auth_mode"):
 		auth_mode = String(config["auth_mode"])
@@ -106,8 +116,12 @@ func is_authenticated() -> bool:
 
 ## Authenticates the shared Nakama session, reusing an open one.
 ##
-## Returns [code]{ ok: bool, error: String }[/code]. Concurrent first callers
-## await the same authentication instead of racing a second one.
+## Concurrent first callers await one authentication.
+## [codeblock]
+## Returns
+## ├── ok (bool)
+## └── error (String)
+## [/codeblock]
 func connect_async() -> Dictionary:
 	if not is_addon_present():
 		return { "ok": false, "error": "Nakama addon not present" }
@@ -187,9 +201,13 @@ func local_username() -> String:
 
 ## Calls a Nakama server runtime RPC as the authenticated session user.
 ##
-## Returns [code]{ ok: bool, payload: String, error: String }[/code]. A missing
-## RPC (no runtime module loaded) surfaces as [code]ok == false[/code], so a
-## caller can fail closed rather than assume the server vouched for anything.
+## A missing RPC returns [code]ok == false[/code]. Callers should fail closed.
+## [codeblock]
+## Returns
+## ├── ok (bool)
+## ├── payload (String)
+## └── error (String)
+## [/codeblock]
 func call_rpc_async(rpc_id: String, payload: String = "") -> Dictionary:
 	if not is_authenticated():
 		return { "ok": false, "payload": "", "error": "session not authenticated" }
@@ -200,8 +218,10 @@ func call_rpc_async(rpc_id: String, payload: String = "") -> Dictionary:
 	return { "ok": true, "payload": String(res.payload), "error": "" }
 
 
-## Builds a fresh realtime socket from the shared client, or [code]null[/code]
-## before authentication. The caller owns connecting and closing it.
+## Builds a fresh realtime socket from the shared client.
+##
+## Returns [code]null[/code] before [method connect_async]. The caller owns
+## connecting and closing the socket.
 func create_socket():
 	if _facade == null or _client == null:
 		return null
@@ -211,14 +231,12 @@ func create_socket():
 	return socket
 
 
-## Overrides [method NetwService.service_type] to register this node under
-## the [NakamaSessionService] key.
+## Registers this node under the [NakamaSessionService] key.
 func service_type() -> Script:
 	return NakamaSessionService
 
 
-## Overrides [method NetwService.service_exiting] to automatically call
-## [method leave] and clean up resources when the service exits the tree.
+## Calls [method leave] when the service exits the tree.
 func service_exiting(_mt: MultiplayerTree) -> void:
 	leave()
 

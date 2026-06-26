@@ -28,11 +28,17 @@
 - **`ConnectBrowser`:** Connect multiple lobby providers and backends in a single UI and [Pre-Game Connection Model](https://networked.readthedocs.io/en/latest/manual/pre_game_connection.html).
 - **`SaveComponent`:** Real-time state persistence and writes for player data.
 
-## Supported Architectures & Integrations
+## Supported Architectures
 
 - **Flexible Architectures:** Supports listen-server, dedicated server, local play and P2P (through host-relay) all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
-- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)). Host everywhere design a single UI.
-- **Robust Integration Testing:** Full end-to-end integration tests are supported using the in-process peer [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
+- **Transport Backends:** Modular support for WebSocket, WebRTC, and ENet (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)). Host everywhere design a single UI.
+
+## Integrations
+
+- **Nakama:** Relay matches, lobby browsing, persistence, and shared session support through the optional Nakama addon.
+- **Discord Activities:** Embedded Activity support with dedicated WSS and Nakama rendezvous options.
+- **Steam:** Steam matchmaking support through the transport backend model.
+- **GdUnit Testing:** End-to-end integration tests through [LocalMultiplayerPeer](addons/networked/transport/local/local_multiplayer_peer.gd) and the [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
 
 ## Credits
 

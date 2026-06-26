@@ -1,13 +1,12 @@
-## Parse-safe boundary around the optional [code]com.heroiclabs.nakama[/code]
-## addon.
+## Parse-safe boundary around the optional Nakama addon.
 ##
-## No Nakama addon type is named at parse time. The facade is loaded by its
-## script path, and addon API classes are resolved at runtime by their global
-## class name, so the networked addon still parses when the Nakama addon is
-## absent. [method is_addon_present] gates all other calls. The wrapper owns the
-## authenticated socket and the [NakamaRelayBridge] that turns Nakama match data
-## into a working [MultiplayerPeer], and it re-emits the two bridge lifecycle
-## signals as its own.
+## [method is_addon_present] is the availability gate. No vendor API type is
+## named before that gate, so projects still load when
+## [code]com.heroiclabs.nakama[/code] is absent.
+##
+## [br][br]
+## [method connect_async] creates or reuses a [NakamaSessionService] session, then
+## [NakamaRelayBridge] turns the realtime socket into a [MultiplayerPeer].
 ## [codeblock]
 ## var wrapper := NakamaWrapper.new()
 ## if not NakamaWrapper.is_addon_present():
@@ -35,15 +34,18 @@ const LOBBY_COLLECTION := "lobbies"
 # every wrapper instance so the class registry is scanned at most once per name.
 static var _class_cache: Dictionary = { }
 
-## Optional hook that lets an embedding addon route Nakama traffic through a
-## platform proxy without the core wrapper knowing the platform.
+## Optional hook that routes Nakama traffic through a platform proxy.
 ##
-## When set, it is called as [code]resolver.call(host_node, config_host)[/code]
-## and must return a scheme-less base such as
-## [code]"<id>.example.com/.proxy/nakama"[/code], or [code]""[/code] to leave the
-## client and socket URIs untouched. [code]networked_activity[/code] sets this to
-## inject the Discord [code]discordsays.com[/code] proxy path, so no Discord
-## string lives in this core addon.
+## [method connect_async] applies the returned base to both the HTTP client and
+## realtime socket. Return [code]""[/code] to keep the configured Nakama host.
+## [codeblock]
+## Callable
+## ├── host_node (Node)
+## ├── config_host (String)
+## └── return (String)
+##     ├── ""                                  # direct
+##     └── "app.discordsays.com/.proxy/nakama" # proxied
+## [/codeblock]
 static var proxy_base_resolver: Callable
 
 
@@ -106,9 +108,10 @@ var _bridge
 var _shared_session: NakamaSessionService
 
 
-## Binds this wrapper to a shared [NakamaSessionService] so auth and storage
-## reuse one account. Call before [method connect_async]. A wrapper with no
-## shared session self-authenticates as before.
+## Binds this wrapper to a shared [NakamaSessionService].
+##
+## Call before [method connect_async]. A bound wrapper reuses the shared account
+## for auth and storage. An unbound wrapper creates its own device session.
 func use_session(session: NakamaSessionService) -> void:
 	_shared_session = session
 
@@ -121,9 +124,8 @@ signal _connect_finished(result: Dictionary)
 
 ## Returns [code]true[/code] when the Nakama addon scripts are installed.
 ##
-## Probes the global class registry for a core Nakama class instead of a file
-## path, mirroring [method SteamWrapper.is_available]. Both the backend
-## availability gate and the directory bootstrap defer to this.
+## This is the only public availability gate. Call it before using other
+## [NakamaWrapper] methods in code that may run without the optional addon.
 static func is_addon_present() -> bool:
 	return _nakama_class("NakamaClient") != null
 
@@ -131,11 +133,22 @@ static func is_addon_present() -> bool:
 ## Authenticates a device session and opens the realtime socket under
 ## [param host].
 ##
-## [param config] keys: [code]server_key[/code], [code]host[/code],
-## [code]port[/code], [code]use_ssl[/code], [code]timeout[/code],
-## [code]device_id[/code], [code]username[/code]. Returns
-## [code]{ ok: bool, error: String }[/code]. The facade node is parented to
+## [param config] carries the connection fields. The facade node is parented to
 ## [param host] so the socket adapter self-polls inside the live tree.
+## [codeblock]
+## Dictionary
+## ├── server_key (String)
+## ├── host (String)
+## ├── port (int)
+## ├── use_ssl (bool)
+## ├── timeout (int)
+## ├── device_id (String)
+## └── username (String)
+##
+## Returns
+## ├── ok (bool)
+## └── error (String)
+## [/codeblock]
 func connect_async(host: Node, config: Dictionary) -> Dictionary:
 	if not is_addon_present():
 		return { "ok": false, "error": "Nakama addon not present" }
@@ -293,11 +306,16 @@ func user_id_for_peer(peer_id: int) -> String:
 	return String(presence.user_id)
 
 
-## Lists active relay matches, returning match handles that expose
-## [code]match_id[/code] and [code]size[/code].
+## Lists active relay matches.
 ##
-## Browses with [code]authoritative = false[/code], which is the listing path
-## relay matches fall under. Returns an empty array before the session is open.
+## Relay matches are listed with [code]authoritative = false[/code]. Returns an
+## empty [Array] before [method connect_async] opens a session.
+## [codeblock]
+## Array
+## └── match
+##     ├── match_id
+##     └── size
+## [/codeblock]
 func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 	if _client == null or _session == null:
 		return []
@@ -315,14 +333,21 @@ func list_matches(min_size := 0, max_size := 100, limit := 100) -> Array:
 	return res.matches
 
 
-## Writes a public-read object keyed by [param key] under [param collection] and
-## returns [code]true[/code] on success.
+## Writes a public-read object under [param collection] and [param key].
 ##
-## The object is public read and owner write, so any session can read it back
-## through [method read_public_storage] while only the writer can overwrite it.
-## This is the cross-user shared-state primitive both the relay lobby cards and
-## the Discord rendezvous map are built on. There is no compare-and-set, so
-## concurrent writers race and the last write wins.
+## Any session can read the object. Only the writer can overwrite it. Nakama
+## scopes storage by collection, key, and owner, so the same key can exist once
+## per user.
+## [codeblock]
+## Storage object
+## ├── collection = collection
+## ├── key = key
+## ├── owner = session user id
+## ├── read = public
+## └── write = owner only
+## [/codeblock]
+## [method list_public_storage] preserves every owner entry. Use it when
+## concurrent writers can publish the same key.
 func write_public_storage(collection: String, key: String, value: Dictionary) -> bool:
 	var client = _resolve_client()
 	var session = _resolve_session()
@@ -344,12 +369,15 @@ func write_public_storage(collection: String, key: String, value: Dictionary) ->
 	return res != null and not res.is_exception()
 
 
-## Reads every public object under [param collection], across all owners, into a
-## [code]{ key: value_dict }[/code] map.
+## Reads public objects under [param collection] across all owners.
 ##
-## Passes an empty owner id to the list call, which is Nakama's cross-user public
-## read. A later participant uses this to find a record an earlier participant
-## wrote without knowing its owner id. Empty before the session is open.
+## This collapses same-key objects to one value. Use [method list_public_storage]
+## when the owner matters. Empty before the session is open.
+## [codeblock]
+## Dictionary
+## └── key (String)
+##     └── value (Dictionary)
+## [/codeblock]
 func read_public_storage(collection: String, limit := 100) -> Dictionary:
 	var out := { }
 	var client = _resolve_client()
@@ -371,15 +399,17 @@ func read_public_storage(collection: String, limit := 100) -> Dictionary:
 	return out
 
 
-## Lists every public object under [param collection] across all owners as an
-## [Array] of [code]{ key, value, user_id }[/code], without collapsing objects
-## that share a key.
+## Lists public objects under [param collection] across all owners.
 ##
-## Nakama scopes storage by [code](collection, key, owner)[/code], so several
-## users can each hold an object under the same key. [method read_public_storage]
-## keeps one per key; this returns every owner's object, which is what a
-## multi-writer rendezvous needs to see all candidates. Empty before the session
-## is open.
+## Nakama scopes storage by collection, key, and owner. This preserves every
+## owner entry, including multiple objects with the same key.
+## [codeblock]
+## Array
+## └── Dictionary
+##     ├── key (String)
+##     ├── value (Variant)
+##     └── user_id (String)
+## [/codeblock]
 func list_public_storage(collection: String, limit := 100) -> Array:
 	var out: Array = []
 	var client = _resolve_client()
@@ -405,8 +435,9 @@ func list_public_storage(collection: String, limit := 100) -> Array:
 	return out
 
 
-## Best-effort delete of the caller-owned object keyed by [param key] under
-## [param collection]. Idempotent on the server side.
+## Deletes the caller-owned object under [param collection] and [param key].
+##
+## The operation is best effort and idempotent on the server side.
 func delete_public_storage(collection: String, key: String) -> void:
 	var client = _resolve_client()
 	var session = _resolve_session()
@@ -419,36 +450,47 @@ func delete_public_storage(collection: String, key: String) -> void:
 	await client.delete_storage_objects_async(session, [id])
 
 
-## Writes a public-read lobby card keyed by [param match_id] under
-## [constant LOBBY_COLLECTION] and returns [code]true[/code] on success.
+## Writes a public relay lobby card keyed by [param match_id].
 ##
-## Relay matches carry no metadata, so the host stores the browse card (name,
-## host, capacity, tag) here for [method read_lobby_cards] to resolve. Thin
-## [constant LOBBY_COLLECTION] alias over [method write_public_storage].
+## Relay matches do not carry browse metadata. The host stores that metadata in
+## [constant LOBBY_COLLECTION], and [method read_lobby_cards] reads it back.
+## [method write_lobby_card] is a typed alias over [method write_public_storage].
 func write_lobby_card(match_id: String, card: Dictionary) -> bool:
 	return await write_public_storage(LOBBY_COLLECTION, match_id, card)
 
 
-## Reads every public lobby card under [constant LOBBY_COLLECTION] into a
-## [code]{ match_id: card_dict }[/code] map. Empty before the session is open.
+## Reads public relay lobby cards from [constant LOBBY_COLLECTION].
+##
+## Empty before the session is open.
+## [codeblock]
+## Dictionary
+## └── match_id (String)
+##     └── card (Dictionary)
+## [/codeblock]
 func read_lobby_cards(limit := 100) -> Dictionary:
 	return await read_public_storage(LOBBY_COLLECTION, limit)
 
 
-## Best-effort delete of the local lobby card keyed by [param match_id].
+## Deletes the local lobby card keyed by [param match_id].
 func delete_lobby_card(match_id: String) -> void:
 	await delete_public_storage(LOBBY_COLLECTION, match_id)
 
-# ── Generic storage objects ───────────────────────────────────────────────────
+# Generic storage objects.
 
 
-## Writes a batch of storage [param objects] in one call, returning success.
+## Writes a batch of storage [param objects] in one call.
 ##
-## Each entry is a [Dictionary] with [code]collection[/code], [code]key[/code],
-## and [code]value[/code] (a JSON string), plus optional [code]read[/code] and
-## [code]write[/code] permissions (default owner-private). Resolves the client
-## from the shared [NakamaSessionService] when bound, so a storage-only wrapper never
-## opens a match socket.
+## Resolves the client from [NakamaSessionService] when bound, so a storage-only
+## wrapper never opens a match socket.
+## [codeblock]
+## Array
+## └── Dictionary
+##     ├── collection (String)
+##     ├── key (String)
+##     ├── value (String)   # JSON string.
+##     ├── read (int)       # Optional. Default 1.
+##     └── write (int)      # Optional. Default 1.
+## [/codeblock]
 func write_storage_objects(objects: Array) -> bool:
 	var client = _resolve_client()
 	var session = _resolve_session()
@@ -475,10 +517,21 @@ func write_storage_objects(objects: Array) -> bool:
 
 ## Reads a batch of storage objects named by [param ids].
 ##
-## Each id is a [Dictionary] with [code]collection[/code] and [code]key[/code],
-## plus an optional [code]user_id[/code] (defaults to the session user). Returns
-## an [Array] of [code]{ collection, key, value }[/code] with [code]value[/code]
-## parsed from JSON. Empty before the session is authenticated.
+## [code]user_id[/code] defaults to the session user. Empty before the session is
+## authenticated.
+## [codeblock]
+## ids (Array)
+## └── Dictionary
+##     ├── collection (String)
+##     ├── key (String)
+##     └── user_id (String)
+##
+## Returns (Array)
+## └── Dictionary
+##     ├── collection (String)
+##     ├── key (String)
+##     └── value (Variant)
+## [/codeblock]
 func read_storage_objects(ids: Array) -> Array:
 	var out: Array = []
 	var client = _resolve_client()
@@ -515,9 +568,15 @@ func read_storage_objects(ids: Array) -> Array:
 
 ## Lists every storage object under [param collection] for the session user.
 ##
-## Returns [code]{ objects: Array, cursor: String }[/code] where each object is
-## [code]{ key, value }[/code] with a JSON-parsed value. Pass [param cursor] to
-## page. Empty before the session is authenticated.
+## Pass [param cursor] to page. Empty before the session is authenticated.
+## [codeblock]
+## Dictionary
+## ├── objects (Array)
+## │   └── Dictionary
+## │       ├── key (String)
+## │       └── value (Variant)
+## └── cursor (String)
+## [/codeblock]
 func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dictionary:
 	var out := { "objects": [], "cursor": "" }
 	var client = _resolve_client()
@@ -546,10 +605,15 @@ func list_storage_objects(collection: String, limit := 100, cursor := "") -> Dic
 	return out
 
 
-## Deletes a batch of storage objects named by [param ids], returning success.
+## Deletes a batch of storage objects named by [param ids].
 ##
-## Each id is a [Dictionary] with [code]collection[/code] and [code]key[/code].
-## Idempotent on the server side.
+## The operation is idempotent on the server side.
+## [codeblock]
+## Array
+## └── Dictionary
+##     ├── collection (String)
+##     └── key (String)
+## [/codeblock]
 func delete_storage_objects(ids: Array) -> bool:
 	var client = _resolve_client()
 	var session = _resolve_session()

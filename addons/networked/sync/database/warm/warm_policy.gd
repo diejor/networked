@@ -18,7 +18,7 @@ extends Resource
 
 ## Returns the [WarmRequest] for [param table] given its declared [param columns].
 ##
-## Called once per registered table at [method NetwDatabase._initialize_backend].
+## Called once per registered table at [code]_initialize_backend[/code].
 ## Synchronous backends ignore the result, so a policy can never break a read.
 @abstract
 func plan_table(table: StringName, columns: Array[StringName]) -> WarmRequest

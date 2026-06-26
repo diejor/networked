@@ -1,8 +1,9 @@
 ## Drives clocked peers tick by tick, pumping real physics frames at each clock's
 ## natural physics-to-tick ratio.
 ##
-## Like [LockstepStepper] it owns ticking through [member MultiplayerClock.
-## manual_tick] and [method MultiplayerClock.force_step], so the tick count is
+## Like [LockstepStepper] it owns ticking through
+## [member MultiplayerClock.manual_tick] and
+## [method MultiplayerClock.force_step], so the tick count is
 ## exact with no dependence on wall-clock accumulation or [member Engine.
 ## time_scale]. Unlike [LockstepStepper] it runs real [signal SceneTree.
 ## physics_frame]s before each step, so frame coupled work still happens: input
@@ -50,8 +51,9 @@ func _init(p_tree: SceneTree, p_clocks: Array[MultiplayerClock]) -> void:
 ## Advances every clock by exactly [param ticks] ticks. Each clock force steps
 ## once every [code]physics_ticks_per_second / tickrate[/code] physics frames, so
 ## a low-tickrate clock advances at its real wall-clock pace while the shared
-## physics-frame stream keeps frame-coupled work moving. [member MultiplayerClock.
-## manual_tick] is held only for the duration of the call, so the real tick loop
+## physics-frame stream keeps frame-coupled work moving.
+## [member MultiplayerClock.manual_tick] is held only for the duration of
+## the call, so the real tick loop resumes between calls and connection-phase
 ## resumes between calls and connection-phase handshakes keep ticking.
 func sync_ticks(ticks: int) -> void:
 	assert(ticks >= 0, "FrameLockstepStepper.sync_ticks: ticks >= 0.")

@@ -688,7 +688,7 @@ func contribute_spawn_property(source: Node, property: StringName) -> void:
 ## with no client channel, while [constant SaveComponent.SaveMode.CLIENT]
 ## replicates it client to server. [param interval] sets the per-property
 ## snapshot cadence in seconds ([code]0[/code] inherits
-## [member SaveComponent.delta_interval]). Calls before [SaveComponent]
+## [member delta_interval]). Calls before [SaveComponent]
 ## registers are buffered.
 func contribute_save_property(
 		source: Node,

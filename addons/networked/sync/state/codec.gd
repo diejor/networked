@@ -20,8 +20,8 @@
 ## var s := NetwCodec.decode_window(w, keys, quantizers, types)
 ## [/codeblock]
 ##
-## [param quantizers] is a list parallel to [param keys] (null entries fall back to
-## raw). [param types] is the parallel [enum Variant.Type] list a decoder needs to
+## [code]quantizers[/code] is a list parallel to [code]keys[/code] (null entries fall back to
+## raw). [code]types[/code] is the parallel [enum Variant.Type] list a decoder needs to
 ## reconstruct a quantized value, derived from the live property type.
 class_name NetwCodec
 

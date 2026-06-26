@@ -1,10 +1,12 @@
 ## [DiscordRendezvous] that maps a Discord instance to a dedicated WSS room.
 ##
-## There is no shared store and no client-side host election. The client always
-## joins, and the server groups connections into rooms by the
-## [code]instance[/code] query parameter.
+## There is no shared store and no client-side host election. The client joins
+## the dedicated server, and the server groups rooms by [code]instance[/code].
 ## [codeblock]
-## address = "wss://<public_host>/?instance=<instance_id>"
+## JoinTarget
+## ├── address = "wss://<public_host>/?instance=<instance_id>"
+## ├── backend = WebSocketBackend
+## └── metadata.instance_id = instance_id
 ## [/codeblock]
 class_name DedicatedDiscordRendezvous
 extends DiscordRendezvous
@@ -16,9 +18,11 @@ extends DiscordRendezvous
 @export var port: int = 21253
 
 
-## Connects [param tree] to the dedicated room keyed by [param instance_id].
+## Joins the dedicated room keyed by [param instance_id].
 func connect_session(
-		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+		instance_id: String,
+		tree: MultiplayerTree,
+		payload: JoinPayload,
 ) -> Error:
 	if instance_id.is_empty():
 		Netw.dbg.warn("DedicatedDiscordRendezvous: empty instance_id.")

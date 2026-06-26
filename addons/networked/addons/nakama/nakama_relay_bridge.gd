@@ -1,5 +1,15 @@
 extends RefCounted
 
+## Adapts a Nakama realtime match socket into a [NakamaRelayPeer].
+##
+## Nakama sends match state by session id. The bridge assigns Godot peer ids and
+## forwards packets between the socket and [member multiplayer_peer].
+## [codeblock]
+## Nakama socket
+## ├── match presence -> peer id map
+## ├── match state    -> deliver_packet()
+## └── packet_generated() -> send_match_state_async()
+## [/codeblock]
 class_name NakamaRelayBridge
 
 enum MatchState {
@@ -60,8 +70,10 @@ class User extends RefCounted:
 	func _init(p_presence) -> void:
 		presence = p_presence
 
-
+## Emitted when creating or joining a match fails.
 signal match_join_error(exception)
+
+## Emitted after [member multiplayer_peer] is ready for the joined match.
 signal match_joined()
 
 
@@ -72,7 +84,9 @@ func _set_readonly(_value) -> void:
 func _init(p_nakama_socket) -> void:
 	_nakama_socket = p_nakama_socket
 	_nakama_socket.received_match_presence.connect(self._on_nakama_socket_received_match_presence)
-	_nakama_socket.received_matchmaker_matched.connect(self._on_nakama_socket_received_matchmaker_matched)
+	_nakama_socket.received_matchmaker_matched.connect(
+		self._on_nakama_socket_received_matchmaker_matched,
+	)
 	_nakama_socket.received_match_state.connect(self._on_nakama_socket_received_match_state)
 	_nakama_socket.closed.connect(self._on_nakama_socket_closed)
 
@@ -80,6 +94,7 @@ func _init(p_nakama_socket) -> void:
 	_multiplayer_peer.set_connection_status(MultiplayerPeer.CONNECTION_CONNECTING)
 
 
+## Creates a new relay match and claims host peer id [code]1[/code].
 func create_match() -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot create match when state is %s" % MatchState.keys()[_match_state])
@@ -98,6 +113,7 @@ func create_match() -> void:
 	_setup_host()
 
 
+## Joins the relay match named by [param p_match_id].
 func join_match(p_match_id: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])
@@ -115,6 +131,9 @@ func join_match(p_match_id: String) -> void:
 	_setup_match(res)
 
 
+## Creates or joins the named Nakama match.
+##
+## The first participant claims host peer id [code]1[/code].
 func join_named_match(_match_name: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot join match when state is %s" % MatchState.keys()[_match_state])
@@ -134,6 +153,7 @@ func join_named_match(_match_name: String) -> void:
 		_setup_host()
 
 
+## Starts Nakama matchmaking with [param ticket].
 func start_matchmaking(ticket) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error("Cannot start matchmaking when state is %s" % MatchState.keys()[_match_state])
@@ -181,6 +201,7 @@ func _on_nakama_socket_closed() -> void:
 	_cleanup()
 
 
+## Returns the Nakama presence mapped to [param peer_id].
 func get_user_presence_for_peer(peer_id: int):
 	var session_id = _id_map.get(peer_id)
 	if session_id == null:
@@ -191,6 +212,7 @@ func get_user_presence_for_peer(peer_id: int):
 	return user.presence
 
 
+## Leaves the match and resets the relay peer.
 func leave() -> void:
 	if _match_state == MatchState.DISCONNECTED:
 		return
@@ -360,14 +382,20 @@ func _on_nakama_socket_received_match_state(data) -> void:
 		if type == MetaMessageType.CLAIM_HOST:
 			if _id_map.has(1):
 				# @todo Can we mediate this dispute?
-				push_error("User %s claiming to be host, when user %s has already claimed it" % [data.presence.session_id, _id_map[1]])
+				push_error(
+					"User %s claiming to be host, when user %s has already claimed it"
+					% [data.presence.session_id, _id_map[1]],
+				)
 			else:
 				_map_id_to_session(1, data.presence.session_id)
 			return
 
 		# Ensure that any meta messages are coming from the host!
 		if data.presence.session_id != _id_map[1]:
-			push_error("Received meta message from user %s who isn't the host: %s" % [data.presence.session_id, content])
+			push_error(
+				"Received meta message from user %s who isn't the host: %s"
+				% [data.presence.session_id, content],
+			)
 			return
 
 		if type == MetaMessageType.ASSIGN_PEER_ID:

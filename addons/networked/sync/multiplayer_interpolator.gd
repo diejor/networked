@@ -297,7 +297,7 @@ func reset() -> void:
 ## [code]-1[/code] when it cannot be named.
 ##
 ## A firing client carries this in its fire request so the server can rewind to
-## the tick the shooter actually saw, the [param tick] argument of
+## the tick the shooter actually saw, the [code]tick[/code] argument of
 ## [method NetwLagCompensation.sample] and [method NetwLagCompensation.rewind]. It
 ## is the authoring [code]__tick[/code] of the snapshot under the interpolation
 ## playhead, which is half a round trip behind the live server state.

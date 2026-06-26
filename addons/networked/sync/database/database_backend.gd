@@ -81,7 +81,8 @@ func commit(operations: Array) -> Error:
 ## [code]request[/code] [WarmRequest] describing what to fetch. Synchronous
 ## backends have no cache and no-op. Write-behind backends use this as their
 ## readiness gate. Returns [constant OK] by default.
-func warm(_directives: Array) -> Error:
+@warning_ignore("unused_parameter")
+func warm(directives: Array) -> Error:
 	return OK
 
 
@@ -95,7 +96,8 @@ func list_namespaces() -> Array[StringName]:
 
 ## Permanently removes every record under [param slot]. Idempotent.
 ## The default backend has no namespaces and returns [constant OK].
-func delete_namespace(_slot: String) -> Error:
+@warning_ignore("unused_parameter")
+func delete_namespace(slot: String) -> Error:
 	return OK
 
 

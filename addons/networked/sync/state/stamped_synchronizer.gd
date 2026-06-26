@@ -67,7 +67,8 @@ func _ready() -> void:
 
 ## Override to record [param payload] at [param tick] on the correct timeline
 ## side. Runs only on the receiving peer.
-func record(_tick: int, _payload: Dictionary) -> void:
+@warning_ignore("unused_parameter")
+func record(tick: int, payload: Dictionary) -> void:
 	pass
 
 

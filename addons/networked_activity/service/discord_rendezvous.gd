@@ -1,31 +1,32 @@
-## Connects a [MultiplayerTree] into one Discord Activity instance's session.
+## Turns a Discord Activity instance id into a [MultiplayerTree] session.
 ##
-## Every participant in one Activity instance receives the same
-## [code]instance_id[/code]. A [DiscordRendezvous] turns that id into a live
-## session. The backend owns whether that means joining a dedicated room or
-## electing one relay host through storage.
+## Every participant in one Activity sees the same [code]instance_id[/code]. The
+## implementation decides whether that means joining a server room or resolving a
+## relay match.
 ## [codeblock]
-## instance_id -> connect_session(instance_id, tree, payload) -> Error
+## instance_id
+## └── connect_session(instance_id, tree, payload)
+##     ├── OK
+##     └── Error
 ## [/codeblock]
 @abstract
 class_name DiscordRendezvous
 extends Resource
 
-
 ## Wires backend-specific seams after [param tree] is available.
 ##
-## The default does nothing. [NakamaDiscordRendezvous] uses this to install the
-## Discord iframe proxy resolver.
+## Default implementation does nothing.
 func bind(_tree: MultiplayerTree) -> void:
 	pass
 
 
 ## Connects [param tree] into the session keyed by [param instance_id].
 ##
-## Implementations drive [method MultiplayerTree.host_player] or
-## [method MultiplayerTree.join] directly. Returns [constant OK] once the tree
-## is online, or an [enum Error] when no session could be reached.
+## Implementations call [method MultiplayerTree.host_player] or
+## [method MultiplayerTree.join]. Returns [constant OK] after the tree is online.
 @abstract
 func connect_session(
-		instance_id: String, tree: MultiplayerTree, payload: JoinPayload,
+		instance_id: String,
+		tree: MultiplayerTree,
+		payload: JoinPayload,
 ) -> Error
