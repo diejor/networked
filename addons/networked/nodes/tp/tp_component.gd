@@ -84,10 +84,13 @@ func _notification(what: int) -> void:
 		return
 
 	entity.contribute_spawn_property(self, &"current_scene_path")
+	# current_scene_path is server-owned: a forged client value is a teleport
+	# exploit, so it must never ride a client to server channel.
 	entity.contribute_save_property(
 		self,
 		&"current_scene_path",
 		&"current_scene_path",
+		SaveComponent.SaveMode.SNAPSHOT,
 	)
 
 
@@ -170,11 +173,23 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 
 ## Returns a [TPComponent.TeleportPromise] that resolves when the teleport
 ## completes. Safe to [operator await] across the delete+respawn cycle.
+##
+## If a teleport is already active or still settling, the request is ignored
+## and the promise resolves on the next frame.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	var promise := TeleportPromise.new()
+	if _tp_mutex.is_locked() or is_settling():
+		_complete_ignored_promise.call_deferred(promise)
+		return promise
 	_begin_tp_span(target_tp.scene_path, promise)
 	_do_teleport(target_tp, promise)
 	return promise
+
+
+# Resolves an ignored teleport after callers can connect to the signal.
+func _complete_ignored_promise(promise: TeleportPromise) -> void:
+	promise.is_completed = true
+	promise.completed.emit()
 
 
 func _do_teleport(target_tp: SceneNodePath, promise: TeleportPromise) -> void:
@@ -313,7 +328,6 @@ func _request_teleport(
 	if owns_guard:
 		server_guard.release()
 		tp_component._tp_guard = null
-		tp_component._reset_visual_smoothing(player)
 	span.end()
 
 
@@ -335,79 +349,66 @@ func _activate_destination(to_scene_path: String, span: NetSpan) -> MultiplayerS
 	return to_scene
 
 
-func _reparent_player(player: Node, from_scene: MultiplayerScene, to_scene: MultiplayerScene, tp_path: String) -> void:
+func _reparent_player(
+		player: Node,
+		_from_scene: MultiplayerScene,
+		to_scene: MultiplayerScene,
+		tp_path: String,
+) -> void:
 	var username := player.name
 	var to_scene_name := to_scene.level.name
 	var tp_component: TPComponent = player.get_node("%TPComponent")
+	var entity := MultiplayerEntity.unwrap(player)
 
 	_dbg.info("Reparenting player %s to scene %s" % [username, to_scene_name])
 
-	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
-		event.disconnect(from)
-		var bound := to.bind(player)
-		if not event.is_connected(bound):
-			event.connect(bound)
-		if event == player.tree_exiting:
-			# request_ready does NOT cascade to children, so child components
-			# whose _exit_tree unregistered them (e.g. MultiplayerInterpolator) would
-			# never re-init. Reset the ready flag for the whole subtree.
-			_request_ready_recursive(player)
-			to_scene.complete_player_transfer(player)
-			tp_component._teleported(to_scene.level, tp_path)
+	if not entity:
+		_dbg.error(
+			"Cannot reparent player %s. MultiplayerEntity is missing.",
+			[username],
+			func(m): push_error(m),
+		)
+		return
 
-	var from_spawn := from_scene._on_spawned
-	var to_spawn := to_scene._on_spawned
-	var from_despawn := from_scene._on_despawned
-	var to_despawn := to_scene._on_despawned
-
-	to_scene.prepare_player_transfer(player)
-	flip.call(player.tree_entered, from_spawn, to_spawn)
-	player.tree_entered.connect(flip.bind(player.tree_exiting, from_despawn, to_despawn))
-
-	player.reparent(to_scene.level)
-	player.tree_entered.disconnect(flip)
-
-
-static func _request_ready_recursive(node: Node) -> void:
-	node.request_ready()
-	for child in node.get_children():
-		_request_ready_recursive(child)
+	var opts := MultiplayerEntity.ReparentOpts.new()
+	opts.reason = &"teleport"
+	opts.target_global_position = tp_component._resolve_snap_pos(to_scene.level, tp_path)
+	entity.reparent_to(to_scene.level, opts)
+	tp_component._teleported(to_scene.level, tp_path)
 
 
 # Server-side callback invoked after the entity safely enters the destination scene.
-# Sets position on the server and forwards the snap coordinates to the client.
-func _teleported(scene: Node, _tp_path: String) -> void:
+# Flushes save state and forwards the snap coordinates to the client. The server
+# owner is already positioned by reparent_to (before reparented fired), so no
+# server-side re-snap or smoothing reset happens here.
+func _teleported(scene: Node, tp_path: String) -> void:
 	_dbg.trace("`_teleported` callback on server.")
 
-	# Snap synchronously: child _ready re-runs (triggered by the recursive
-	# request_ready in _reparent_player) fire AFTER this lambda returns but
-	# BEFORE any deferred call. Camera2D.reset_smoothing in particular reads
-	# owner.global_position; deferring the snap baselines smoothing on the
-	# pre-reparent position.
-	var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
-	if scene:
-		var tp_node: Node = scene.get_node_or_null(_tp_path)
-		if tp_node:
-			snap_pos = tp_node.get("global_position")
-	_dbg.debug("Teleport server-side complete. Snapping to %s" % [str(snap_pos)])
-	owner.set("global_position", snap_pos)
+	var snap_pos := _resolve_snap_pos(scene, tp_path)
+	_dbg.debug("Teleport server-side complete. Snapped to %s" % [str(snap_pos)])
 	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
 	if save:
 		save.pull_from_scene()
 		save.flush()
 
-	_reset_visual_smoothing(owner)
-
-	# Defer only the client notification - the original assert wanted to
-	# guarantee the player is fully in tree, which is now true synchronously.
+	# Defer only the client notification - the assert guarantees the player is
+	# fully in tree, which is true synchronously after reparent_to.
 	var notify_client := func() -> void:
 		assert(is_inside_tree(), "TPComponent: `_teleported` was called when `is_inside_tree = false`.")
-		owner.set("global_position", snap_pos)
-		_reset_visual_smoothing(owner)
 		var authority := owner.get_multiplayer_authority()
 		_rpc_teleport_committed.rpc_id(authority, snap_pos)
 
 	notify_client.call_deferred()
+
+
+# Resolves the destination world position from the target node at tp_path.
+func _resolve_snap_pos(scene: Node, tp_path: String) -> Variant:
+	var snap_pos: Variant = Vector3.ZERO if owner is Node3D else Vector2.ZERO
+	if scene:
+		var tp_node: Node = scene.get_node_or_null(tp_path)
+		if tp_node:
+			snap_pos = tp_node.get("global_position")
+	return snap_pos
 
 
 # Relays a push acknowledgment from the server back to the client's SaveComponent.
@@ -433,7 +434,6 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	_step("committed", { "snap_pos": str(snap_pos) })
 	_teleport_committed.emit()
 	owner.set("global_position", snap_pos)
-	_reset_visual_smoothing(owner)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
@@ -467,20 +467,6 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	# reveal and race against the in-flight commit.
 	_tp_mutex.unlock()
 	_end_tp_span()
-
-
-# Clears presentation state that survives the listen-server reparent path.
-func _reset_visual_smoothing(root: Node) -> void:
-	if not root:
-		return
-	if root is MultiplayerInterpolator:
-		(root as MultiplayerInterpolator).reset()
-	elif root is Camera2D:
-		(root as Camera2D).reset_smoothing()
-	elif root is Camera3D:
-		(root as Camera3D).reset_smoothing()
-	for child in root.get_children():
-		_reset_visual_smoothing(child)
 
 
 ## [code]true[/code] for [member settle_seconds] after the last

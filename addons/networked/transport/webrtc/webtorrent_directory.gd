@@ -84,6 +84,8 @@ var _room_name := ""
 var _room_max := 0
 var _players := 1
 var _pending_room_name := ""
+var _pending_visibility: LobbyDirectory.Visibility = LobbyDirectory.Visibility.PUBLIC
+var _pending_max := 0
 var _advertise_acc := 0.0
 
 var _collecting := false
@@ -97,6 +99,7 @@ var _reconnect_acc := 0.0
 var _idle_acc := 0.0
 var _provider_unavailable_latched := false
 var _is_test_env := false
+var _restricted := false
 
 ## Seconds to wait before reconnecting a board whose sockets all dropped.
 const BOARD_RECONNECT_COOLDOWN := 5.0
@@ -104,11 +107,14 @@ const BOARD_RECONNECT_COOLDOWN := 5.0
 
 func should_register() -> bool:
 	# A node re-initializes its process flag after _enter_tree, so a
-	# set_process(false) here would not stick. Latch the test flag and gate the
-	# board work in _process so the directory never opens live tracker sockets
-	# under a test runner.
+	# set_process(false) here would not stick. Latch the flags and gate the board
+	# work in _process so the directory never opens live tracker sockets under a
+	# test runner or inside a relay-only embed (a Discord iframe: WebRTC trackers
+	# are CSP-blocked there). _process re-warms the board on its own, so gating
+	# registration alone is not enough.
 	_is_test_env = Netw.is_test_env()
-	return not _is_test_env
+	_restricted = NetwService.is_transport_restricted()
+	return not _is_test_env and not _restricted
 
 
 func service_entered(mt: MultiplayerTree) -> void:
@@ -125,7 +131,7 @@ func service_exiting(_mt: MultiplayerTree) -> void:
 
 
 func _process(dt: float) -> void:
-	if Engine.is_editor_hint() or _is_test_env:
+	if Engine.is_editor_hint() or _is_test_env or _restricted:
 		return
 
 	if _tracker:
@@ -205,6 +211,12 @@ func list_lobbies() -> void:
 	)
 
 
+## The board only backs discovery: no identity graph means no friends-only,
+## invites, or persona resolution.
+func capabilities() -> int:
+	return LobbyDirectory.Capability.BROWSE
+
+
 func leave_lobby() -> void:
 	stop_advertising()
 	_collecting = false
@@ -222,14 +234,29 @@ func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 	return target
 
 
-func host_lobby(server_name: String) -> MultiplayerPeer:
+## Hosts a room per [param options]. A [constant LobbyDirectory.Visibility.PUBLIC]
+## room is advertised on the board once the tree reaches
+## [constant MultiplayerTree.ONLINE]. A
+## [constant LobbyDirectory.Visibility.PRIVATE] room is hosted but never
+## advertised, so it is reachable only by sharing its room hash.
+## [constant LobbyDirectory.Visibility.FRIENDS_ONLY] has no identity graph here,
+## so it warns and degrades to PRIVATE.
+func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	if Netw.is_test_env():
 		return null
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
 		Netw.dbg.warn("WebTorrentDirectory: host_lobby found no MultiplayerTree.")
 		return null
-	_pending_room_name = server_name
+	_pending_visibility = options.visibility
+	if _pending_visibility == LobbyDirectory.Visibility.FRIENDS_ONLY:
+		Netw.dbg.warn(
+			"WebTorrentDirectory: FRIENDS_ONLY has no identity backing, " +
+			"hosting PRIVATE (unlisted).",
+		)
+		_pending_visibility = LobbyDirectory.Visibility.PRIVATE
+	_pending_max = options.max_players if options.max_players > 0 else max_clients
+	_pending_room_name = options.server_name
 	tree.backend = _make_backend()
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
@@ -334,16 +361,22 @@ func _on_tree_state_changed(
 	if new_state == MultiplayerTree.State.ONLINE:
 		var mt := MultiplayerTree.resolve(self)
 		if mt and mt.is_host and mt.backend is WebRTCBackend:
-			var backend := mt.backend as WebRTCBackend
-			var room_name := _pending_room_name
-			if room_name.is_empty():
-				room_name = backend.server_name
-			advertise_room(
-				backend.get_join_address(),
-				room_name,
-				max_clients,
-			)
+			# A PRIVATE host stays off the board: unlisted, join-by-hash only.
+			if _pending_visibility == LobbyDirectory.Visibility.PUBLIC:
+				var backend := mt.backend as WebRTCBackend
+				var room_name := _pending_room_name
+				if room_name.is_empty() and backend.get_active_host_options():
+					room_name = backend.get_active_host_options().server_name
+
+				var capacity := _pending_max if _pending_max > 0 else max_clients
+				advertise_room(
+					backend.get_join_address(),
+					room_name,
+					capacity,
+				)
 			_pending_room_name = ""
+			_pending_visibility = LobbyDirectory.Visibility.PUBLIC
+			_pending_max = 0
 	elif new_state == MultiplayerTree.State.OFFLINE:
 		stop_advertising()
 
@@ -454,6 +487,7 @@ func _collect_room(card: Dictionary) -> void:
 		existing.players = players
 		existing.max_players = max_players
 		existing.lobby_name = room_name
+		existing.visibility = int(card.get("visibility", LobbyDirectory.Visibility.PUBLIC)) as LobbyDirectory.Visibility
 		existing.metadata = _room_metadata(card)
 		if changed:
 			Netw.dbg.trace(
@@ -480,6 +514,8 @@ func _collect_room(card: Dictionary) -> void:
 		players,
 		max_players,
 		_room_metadata(card),
+		"",
+		int(card.get("visibility", LobbyDirectory.Visibility.PUBLIC)) as LobbyDirectory.Visibility,
 	)
 
 
@@ -508,6 +544,8 @@ func _room_card() -> Dictionary:
 		"uid": browser_filter_uid,
 		"app_id": _local_app_id(),
 		"signaling_namespace": ns,
+		# Only PUBLIC rooms ever reach the board, but stamp it for the UI.
+		"visibility": int(LobbyDirectory.Visibility.PUBLIC),
 	}
 
 

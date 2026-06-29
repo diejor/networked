@@ -9,9 +9,9 @@ extends Node
 ## var player := MultiplayerEntity.instantiate_player(rj)
 ## scene.add_player(player)
 ##
-## scene.prepare_player_transfer(player)
+## scene.prepare_player_reparent(player)
 ## player.reparent(scene.level)
-## scene.complete_player_transfer(player)
+## scene.complete_player_reparent(player)
 ## [/codeblock]
 
 ## [InterestGate] carrying admission state for [member layer].
@@ -184,7 +184,7 @@ func scene_visibility_filter(peer_id: int) -> bool:
 
 ## Enrolls [param node]'s [NetwEntity] in [member layer].
 ##
-## [method track_node] is for explicit scene enrollment and transfer flows.
+## [method track_node] is for explicit scene enrollment and reparent flows.
 ## [codeblock]
 ## scene.track_node(projectile)
 ## scene.connect_peer(target_peer_id)
@@ -296,11 +296,11 @@ func add_player(player: Node) -> void:
 ## Call this before moving a player into [member level] so [member gate]
 ## visibility is flushed before spawn packets target the new scene.
 ## [codeblock]
-## scene.prepare_player_transfer(player)
+## scene.prepare_player_reparent(player)
 ## player.reparent(scene.level)
-## scene.complete_player_transfer(player)
+## scene.complete_player_reparent(player)
 ## [/codeblock]
-func prepare_player_transfer(player: Node) -> void:
+func prepare_player_reparent(player: Node) -> void:
 	var peer_id := _get_peer_id(player)
 	if peer_id == 0:
 		Netw.dbg.error(
@@ -314,11 +314,11 @@ func prepare_player_transfer(player: Node) -> void:
 	_flush_gate_now()
 
 
-## Completes a transfer after [param player] enters this scene.
+## Completes a reparent after [param player] enters this scene.
 ##
-## [method complete_player_transfer] calls [method register_player] and
+## [method complete_player_reparent] calls [method register_player] and
 ## flushes interest before follow up RPCs target the player subtree.
-func complete_player_transfer(player: Node) -> void:
+func complete_player_reparent(player: Node) -> void:
 	register_player(player)
 	_flush_interest_now()
 

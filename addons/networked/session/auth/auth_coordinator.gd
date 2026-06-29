@@ -2,14 +2,14 @@ class_name AuthCoordinator
 extends RefCounted
 ## Internal coordinator for [MultiplayerTree] authentication hooks.
 ##
-## Binds [SceneMultiplayer] auth callbacks to a [NetwAuthProvider] and stores
+## Binds [SceneMultiplayer] auth callbacks to a [NetwAuth] and stores
 ## accepted identities or rejection reasons in [SessionRoster]. Validates
 ## [code]NHEL[/code] client hellos; [code]NPRB[/code] server-browser probes
 ## that ride the same auth phase are dispatched to [AuthProbeResponder] so
 ## this class stays about authentication.
 
 var _api: SceneMultiplayer
-var _auth_provider: NetwAuthProvider
+var _auth_provider: NetwAuth
 var _roster: SessionRoster
 var _client_join_payload: JoinPayload
 var _probe_responder := AuthProtocol.Responder.new()
@@ -37,7 +37,7 @@ func bind_api(api: SceneMultiplayer) -> void:
 
 
 ## Sets the provider used by the auth handshake.
-func set_auth_provider(provider: NetwAuthProvider) -> void:
+func set_auth_provider(provider: NetwAuth) -> void:
 	_auth_provider = provider
 
 
@@ -78,9 +78,10 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 	)
 	var prepare_err := await _auth_provider.prepare(join_payload)
 	if prepare_err != OK:
+		var reason: String = _auth_provider.rejection_reason
 		Netw.dbg.error(
-			"Auth prepare failed: %s",
-			[error_string(prepare_err)],
+			"Auth prepare failed: %s%s",
+			[error_string(prepare_err), (" (%s)" % reason) if not reason.is_empty() else ""],
 			func(m): push_error(m)
 		)
 		return prepare_err
@@ -97,7 +98,7 @@ func prepare_join_payload(join_payload: JoinPayload) -> Error:
 ##
 ## The callback is installed unconditionally so the dispatcher can
 ## multiplex hello packets and probe requests. Whether a
-## [NetwAuthProvider] is configured only affects how HELLO bodies are
+## [NetwAuth] is configured only affects how HELLO bodies are
 ## validated.
 func prepare() -> void:
 	if not _api:

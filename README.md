@@ -1,4 +1,9 @@
+<p align="center">
+  <img src="assets/networked.svg" alt="networked logo" width="300">
+</p>
+
 # networked
+
 
 [![documentation](https://img.shields.io/badge/documentation-online-green?logo=readthedocs&logoColor=white&labelColor=CFC9C8&color=6BCD69)](https://networked.readthedocs.io/en/latest/?badge=latest)
 [![build](https://img.shields.io/github/actions/workflow/status/diejor/networked/ci.yml?label=build&logo=github&logoColor=white&labelColor=CFC9C8&color=DBDCB8)](https://github.com/diejor/networked/actions/workflows/ci.yml)
@@ -7,8 +12,8 @@
 
 ## Quick Reference
 
-- **Bomber Demo:** [`examples/bomber`](examples/bomber)
-- **Documentation:** [Quick Start Guide](https://networked.readthedocs.io/en/latest/getting_started/quick_start.html)
+- [`examples/bomber`](examples/bomber)
+- [Quick Start Guide](https://networked.readthedocs.io/en/latest/getting_started/quick_start.html)
 
 ## Addon Overview
 
@@ -23,11 +28,20 @@
 - **`ConnectBrowser`:** Connect multiple lobby providers and backends in a single UI and [Pre-Game Connection Model](https://networked.readthedocs.io/en/latest/manual/pre_game_connection.html).
 - **`SaveComponent`:** Real-time state persistence and writes for player data.
 
-## Supported Architectures & Integrations
+## Supported Architectures
 
 - **Flexible Architectures:** Supports listen-server, dedicated server, local play and P2P (through host-relay) all driven by [MultiplayerTree](https://networked.readthedocs.io/en/latest/manual/multiplayer_tree.html).
-- **Transport Backends & Steam:** Modular support for WebSocket, WebRTC, ENet, and Steam matchmaking (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)). Host everywhere design a single UI.
-- **Robust Integration Testing:** Full end-to-end integration tests are supported using the in-process peer [LocalMultiplayerPeer](file:///c:/Users/diejor/projects/networked/addons/networked/transport/local/local_multiplayer_peer.gd), test your games with [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
+- **Transport Backends:** Modular support for WebSocket, WebRTC, and ENet (see [Transport Backends Guide](https://networked.readthedocs.io/en/latest/manual/transport_backends.html)). Host everywhere design a single UI.
+
+## Integrations
+
+- **Nakama:** Relay matches, lobby browsing, persistence, and shared session support through the optional Nakama addon.
+- **Discord Activities:** Embedded Activity support through the Discord SDK
+  wrapper from [kuylar/discord-embedded-godot](https://github.com/kuylar/discord-embedded-godot),
+  with dedicated WSS and Nakama rendezvous options.
+- **Steam:** Steam matchmaking support through [GodotSteam](https://godotsteam.com/)
+  by [Gramps](https://codeberg.org/gramps).
+- **GdUnit Testing:** End-to-end integration tests through [LocalMultiplayerPeer](addons/networked/transport/local/local_multiplayer_peer.gd) and the [Testing API](https://networked.readthedocs.io/en/latest/manual/testing.html).
 
 ## Credits
 

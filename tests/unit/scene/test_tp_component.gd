@@ -60,6 +60,27 @@ func test_spawn_initializes_current_scene_path_from_starting_scene() -> void:
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
 
 
+func test_teleport_ignores_requests_while_active() -> void:
+	var tp: TPComponent = auto_free(TPComponent.new())
+	await tp._tp_mutex.lock()
+
+	var promise := tp.teleport(SceneNodePath.new(TEST_LEVEL + "::"))
+	await get_tree().process_frame
+
+	assert_that(promise.is_completed).is_true()
+	tp._tp_mutex.unlock()
+
+
+func test_teleport_ignores_requests_while_settling() -> void:
+	var tp: TPComponent = auto_free(TPComponent.new())
+	tp._settle_until_msec = Time.get_ticks_msec() + 1000
+
+	var promise := tp.teleport(SceneNodePath.new(TEST_LEVEL + "::"))
+	await get_tree().process_frame
+
+	assert_that(promise.is_completed).is_true()
+
+
 func test_parented_contributes_paths_without_node_owner() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"

@@ -2,7 +2,6 @@
 class_name TestNetwQuantize
 extends NetwTestSuite
 
-
 func _roundtrip(q: NetwQuantize, value: Variant, type: Variant.Type) -> Variant:
 	var w := NetwBitBuffer.Writer.new()
 	q.write(w, value)
@@ -19,7 +18,7 @@ func test_bits_scalar_and_vector() -> void:
 	# error bound is span / (2^bits - 1) ~= 0.0078
 	assert_float(_roundtrip(q, 0.5, TYPE_FLOAT)).is_equal_approx(0.5, 0.01)
 	assert_vector(_roundtrip(q, Vector2(0.25, -0.75), TYPE_VECTOR2)) \
-		.is_equal_approx(Vector2(0.25, -0.75), Vector2(0.01, 0.01))
+			.is_equal_approx(Vector2(0.25, -0.75), Vector2(0.01, 0.01))
 	assert_int(q.bit_width(TYPE_VECTOR2)).is_equal(16)
 	assert_int(q.bit_width(TYPE_FLOAT)).is_equal(8)
 
@@ -39,7 +38,7 @@ func test_fixed_is_exact_on_grid() -> void:
 
 	# multiples of step round-trip exactly
 	assert_vector(_roundtrip(q, Vector2(10.0, -20.5), TYPE_VECTOR2)) \
-		.is_equal(Vector2(10.0, -20.5))
+			.is_equal(Vector2(10.0, -20.5))
 	# off-grid value snaps within half a step
 	assert_float(_roundtrip(q, 3.3, TYPE_FLOAT)).is_equal_approx(3.5, 0.26)
 
@@ -50,7 +49,7 @@ func test_max_error_matches_resolution() -> void:
 	fixed.step = 0.5
 	assert_float(fixed.max_error(TYPE_FLOAT)).is_equal_approx(0.25, 0.0001)
 	assert_float(fixed.max_error(TYPE_VECTOR2)) \
-		.is_equal_approx(0.25 * sqrt(2.0), 0.0001)
+			.is_equal_approx(0.25 * sqrt(2.0), 0.0001)
 
 	# Bits: half the grid spacing (span / 2^bits) per axis.
 	var bits := NetwQuantizeBits.new()

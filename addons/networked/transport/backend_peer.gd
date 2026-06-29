@@ -15,6 +15,7 @@
 ##     peer.create_client(address, port)
 ##     return peer
 ## [/codeblock]
+@icon("res://addons/networked/assets/BackendPeer.svg")
 @tool
 @abstract
 class_name BackendPeer
@@ -166,7 +167,10 @@ func setup(_tree: MultiplayerTree) -> Error:
 ## Return [code]null[/code] to signal [code]ERR_CANT_CREATE[/code].
 ## [MultiplayerTree] mounts the returned peer on [member MultiplayerTree.api].
 @abstract
-func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer
+func create_host_peer(
+		_tree: MultiplayerTree,
+		_options: LobbyDirectory.HostOptions = null,
+) -> MultiplayerPeer
 
 
 ## Produces a [MultiplayerPeer] in client mode connecting to [param _address].

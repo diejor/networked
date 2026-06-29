@@ -1,0 +1,16 @@
+{
+  "name": "networked-activity-token-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Discord Activity OAuth token proxy Worker for networked_activity.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

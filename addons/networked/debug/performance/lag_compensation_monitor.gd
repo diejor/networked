@@ -33,7 +33,10 @@ const _SAMPLE_INTERVAL := 0.25
 
 # Cumulative counters delta-d into per-second rates.
 const _RATE_KEYS: Array[StringName] = [
-	&"corrections", &"consumed", &"missing", &"gate_fallbacks",
+	&"corrections",
+	&"consumed",
+	&"missing",
+	&"gate_fallbacks",
 ]
 
 var _trees: Array[MultiplayerTree] = []

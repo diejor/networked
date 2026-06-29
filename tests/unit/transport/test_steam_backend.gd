@@ -13,16 +13,6 @@ func test_is_available_excludes_web() -> void:
 	assert_bool(backend.is_available()).is_equal(not OS.has_feature("web"))
 
 
-func test_copy_from_preserves_server_name() -> void:
-	var source := SteamBackend.new()
-	source.server_name = "Lobby A"
-	var target := SteamBackend.new()
-
-	target.copy_from(source)
-
-	assert_that(target.server_name).is_equal("Lobby A")
-
-
 # Steam lobby status comes from the directory's lobby list, not a probe,
 # so probe_server_info is always unsupported.
 func test_query_is_unsupported() -> void:

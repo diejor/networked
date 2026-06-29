@@ -190,14 +190,12 @@ func remove_target(target: JoinTarget, persist: bool = false) -> void:
 	if s:
 		s.remove_target(target, persist)
 
-
 ## The whole live list, with saved targets first, then each directory's
 ## discovered lobbies.
 var targets: Array[JoinTarget]:
 	get:
 		var s := _ref.get_ref() as ConnectSession
 		return s.get_targets() if s else []
-
 
 ## Only the saved (address-based) targets (the ones you added or
 ## loaded, not directory lobbies).
@@ -243,7 +241,6 @@ func unregister_directory(id: StringName) -> void:
 func get_directory(id: StringName) -> LobbyDirectory:
 	var s := _ref.get_ref() as ConnectSession
 	return s.get_directory(id) if s else null
-
 
 ## The ids of all registered directories, in registration order.
 var directory_ids: Array[StringName]:

@@ -448,7 +448,7 @@ func make_join_payload(
 ## Creates a standalone listen server and connects its local player.
 func add_listen_server(
 		join_payload: JoinPayload,
-		auth_provider: NetwAuthProvider = null,
+		auth_provider: NetwAuth = null,
 ) -> MultiplayerTree:
 	var tree := _make_service_tree(
 		MultiplayerTree.Role.LISTEN_SERVER,
@@ -472,7 +472,7 @@ func add_listen_server(
 ## [method MultiplayerTree.join_or_host].
 func add_connect_player(
 		join_payload: JoinPayload,
-		auth_provider: NetwAuthProvider = null,
+		auth_provider: NetwAuth = null,
 ) -> MultiplayerTree:
 	var tree := await create_connect_player_tree(
 		"HarnessConnectPlayer",
@@ -493,7 +493,7 @@ func add_connect_player(
 ## Creates a client tree wired to the harness server without connecting it.
 func create_connect_player_tree(
 		tree_name: String = "HarnessConnectPlayer",
-		auth_provider: NetwAuthProvider = null,
+		auth_provider: NetwAuth = null,
 ) -> MultiplayerTree:
 	await _ensure_server_hosted()
 	var tree := _make_service_tree(
@@ -509,7 +509,7 @@ func create_connect_player_tree(
 ## [method MultiplayerTree.host_player].
 func add_host_player(
 		join_payload: JoinPayload,
-		auth_provider: NetwAuthProvider = null,
+		auth_provider: NetwAuth = null,
 ) -> MultiplayerTree:
 	var tree := _make_service_tree(
 		MultiplayerTree.Role.CLIENT,

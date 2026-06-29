@@ -12,8 +12,10 @@
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="8_lpgch"]
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
+[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_dgpls"]
 [ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="10_xg3i6"]
 [ext_resource type="Script" uid="uid://bp177r3yltt54" path="res://addons/networked/transport/local/local_backend.gd" id="13_7ehqo"]
+[ext_resource type="Script" uid="uid://wbpaoljt4w77" path="res://addons/networked/addons/nakama/nakama_backend.gd" id="15_bvhe8"]
 
 [sub_resource type="Resource" id="Resource_csjse"]
 script = ExtResource("2_7ue45")
@@ -63,6 +65,10 @@ metadata/_custom_type_script = "uid://covt80wkpucga"
 script = ExtResource("13_7ehqo")
 metadata/_custom_type_script = "uid://bp177r3yltt54"
 
+[sub_resource type="Resource" id="Resource_dgpls"]
+script = ExtResource("15_bvhe8")
+metadata/_custom_type_script = "uid://wbpaoljt4w77"
+
 [sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
 scene_path = "uid://bqi7mvxdnvgch"
@@ -99,6 +105,12 @@ script = ExtResource("8_xoeqs")
 browser_filter_uid = "networked-example-quick-start"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
+[node name="NakamaLobbyDirectory" type="Node" parent="Client" unique_id=1882001972]
+script = ExtResource("10_dgpls")
+device_id = "quickstart-host-diego-001"
+local_member_name = "diegote"
+metadata/_custom_type_script = "uid://d0u2yowat1s3u"
+
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
 
 [node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 node_paths=PackedStringArray("tree") instance=ExtResource("8_7ue45")]
@@ -112,6 +124,6 @@ offset_top = -247.0
 offset_right = 442.0
 offset_bottom = 247.0
 tree = NodePath("../../Client")
-backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo"), SubResource("Resource_y6djk")])
+backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo"), SubResource("Resource_y6djk"), SubResource("Resource_dgpls")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
 server_list_path = "user://quick_start/servers.tres"

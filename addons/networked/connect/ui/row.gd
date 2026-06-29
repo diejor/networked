@@ -87,11 +87,11 @@ func _refresh() -> void:
 		return
 
 	_name_label.text = _display_name()
-	_address_label.text = ConnectUiShared.format_address(target)
+	_address_label.text = ConnectBrowser.format_address(target)
 
 	var backend_label := "unknown"
 	if target.backend != null:
-		backend_label = ConnectUiShared.format_backend_label(target.backend)
+		backend_label = ConnectBrowser.format_backend_label(target.backend)
 	_badge_label.text = backend_label
 
 	if target.backend != null and not target.backend.is_available():
@@ -157,4 +157,4 @@ func _render_metrics() -> void:
 func _display_name() -> String:
 	if not target.display_name.strip_edges().is_empty():
 		return target.display_name
-	return ConnectUiShared.format_address(target)
+	return ConnectBrowser.format_address(target)

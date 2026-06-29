@@ -21,17 +21,17 @@ func test_layer_snapshot_counts_viewers_entities_edges_transitions() -> void:
 	layer.add_entity(entity)
 
 	# No drive yet: occupancy and churn are zero.
-	var before := layer.monitor_snapshot()
-	assert_that(before[&"viewers"]).is_equal(1)
-	assert_that(before[&"entities"]).is_equal(1)
-	assert_that(before[&"visible_edges"]).is_equal(0)
-	assert_that(before[&"transitions_total"]).is_equal(0)
+	var _before := layer.monitor_snapshot()
+	assert_that(_before[&"viewers"]).is_equal(1)
+	assert_that(_before[&"entities"]).is_equal(1)
+	assert_that(_before[&"visible_edges"]).is_equal(0)
+	assert_that(_before[&"transitions_total"]).is_equal(0)
 
 	layer.drive_now([7])
 
-	var after := layer.monitor_snapshot()
-	assert_that(after[&"visible_edges"]).is_equal(1)
-	assert_that(after[&"transitions_total"]).is_equal(1)
+	var _after := layer.monitor_snapshot()
+	assert_that(_after[&"visible_edges"]).is_equal(1)
+	assert_that(_after[&"transitions_total"]).is_equal(1)
 
 
 func test_visible_edge_count_drops_on_forget() -> void:

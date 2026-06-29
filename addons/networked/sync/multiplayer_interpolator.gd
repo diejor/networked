@@ -17,7 +17,6 @@
 ## [codeblock]
 ## history (one per property), keyed by tick:
 ##    9       12       15       18       21        newest received = 21
-##    ●        ●        ●        ●        ●
 ##                      |---- playhead ---|
 ##                      prev = 15   dt = 16.4   next = 18
 ##
@@ -297,7 +296,7 @@ func reset() -> void:
 ## [code]-1[/code] when it cannot be named.
 ##
 ## A firing client carries this in its fire request so the server can rewind to
-## the tick the shooter actually saw, the [param tick] argument of
+## the tick the shooter actually saw, the [code]tick[/code] argument of
 ## [method NetwLagCompensation.sample] and [method NetwLagCompensation.rewind]. It
 ## is the authoring [code]__tick[/code] of the snapshot under the interpolation
 ## playhead, which is half a round trip behind the live server state.
@@ -369,11 +368,10 @@ var _entity: NetwEntity
 var _saved_freeze: Dictionary = { }
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
-# Persists the visual_root's design-time local offset so it survives _ready
-# re-runs (e.g. after a teleport reparent that calls request_ready). Without
-# this, _refresh_property_states/reset would re-capture the visual_root's
-# current local position, which already contains the last frame's smoothing
-# correction, baking that correction into the new baseline.
+# Persists the visual_root's design-time local offset across reparenting.
+# Without this, _refresh_property_states/reset would re-capture the
+# visual_root's current local position, which already contains the last
+# frame's smoothing correction, baking that correction into the new baseline.
 var _cached_initial_offsets: Dictionary[StringName, Variant] = { }
 var _cached_initial_global_offsets: Dictionary[StringName, Variant] = { }
 
@@ -381,10 +379,28 @@ var _cached_initial_global_offsets: Dictionary[StringName, Variant] = { }
 
 #region ── Lifecycle ───────────────────────────────────────────────────────────
 
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PARENTED:
+		return
+	if Engine.is_editor_hint():
+		return
+	var entity := NetwEntity.of(self)
+	if not entity:
+		return
+	_entity = entity
+	if not entity.reparented.is_connected(_on_reparented):
+		entity.reparented.connect(_on_reparented)
+
+
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
+	_ensure_runtime_refs()
+	if not _entity:
+		_on_reparented(null)
 
+
+func _ensure_runtime_refs() -> void:
 	if not owner:
 		owner = get_parent()
 		if owner:
@@ -400,17 +416,28 @@ func _ready() -> void:
 	assert(owner, "MultiplayerInterpolator: owner is missing.")
 	assert(_clock, "MultiplayerInterpolator: Requires a MultiplayerClock on the multiplayer API.")
 
+	if not _entity:
+		_entity = NetwEntity.of(self)
+
+
+func _on_reparented(reparent: MultiplayerEntity.ReparentOpts) -> void:
+	if Engine.is_editor_hint():
+		return
+	_ensure_runtime_refs()
 	_peer_batcher = get_bucket(_Batcher) as _Batcher
 	if _peer_batcher:
 		_peer_batcher.register(self, _clock)
 
-	_entity = NetwEntity.of(self)
 	if _entity and not _entity.control_changed.is_connected(_on_control_changed):
 		_entity.control_changed.connect(_on_control_changed)
 
-	_refresh_property_states()
-	_resolve_strategy()
-	reset()
+	var preserve := reparent != null and reparent.preserve_history
+	if not preserve or _states.is_empty():
+		_refresh_property_states()
+	_role_dirty = true
+	_resolve_strategy(true)
+	if not preserve:
+		reset()
 
 
 func _exit_tree() -> void:

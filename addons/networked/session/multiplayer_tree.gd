@@ -233,11 +233,11 @@ func _warn_if_role_unset() -> void:
 		desired_role = value
 		update_configuration_warnings()
 
-## Optional [NetwAuthProvider] for [method join] and [method join_or_host].
+## Optional [NetwAuth] for [method join] and [method join_or_host].
 ##
 ## A [code]null[/code] provider skips authentication. The server trusts the
 ## client supplied [member JoinPayload.username].
-@export var auth_provider: NetwAuthProvider:
+@export var auth_provider: NetwAuth:
 	set(value):
 		auth_provider = value
 		if _auth:
@@ -247,7 +247,6 @@ func _warn_if_role_unset() -> void:
 ## Outcome of the last connection handshake.
 var last_connect_result: BackendPeer.ConnectResult = null
 
-@export_group("Session")
 
 ## Game-build tag that gates session admission, baked into every build.
 ##
@@ -654,6 +653,29 @@ func get_connect_session() -> ConnectSession:
 	return session
 
 
+## Returns the session [NakamaSessionService], creating it on first access.
+##
+## Mirrors [method get_connect_session]: a registered service wins, else a
+## dropped-in node is adopted, else a fresh node is created and registered. Both
+## [NakamaLobbyDirectory] and [NakamaDatabase] resolve this one node so the relay
+## lobby and the save store share a single Nakama account.
+func get_nakama_session() -> NakamaSessionService:
+	if Engine.is_editor_hint():
+		return null
+	var registered := get_service(NakamaSessionService) as NakamaSessionService
+	if is_instance_valid(registered):
+		return registered
+	var existing := find_service_node(NakamaSessionService) as NakamaSessionService
+	if existing:
+		register_service(existing)
+		return existing
+	var session := NakamaSessionService.new()
+	session.name = &"NakamaSession"
+	add_child(session)
+	register_service(session)
+	return session
+
+
 static func _has_multiplayer_entity(node: Node) -> bool:
 	if node is MultiplayerEntity:
 		return true
@@ -722,7 +744,7 @@ func _process(dt: float) -> void:
 ## if err == OK:
 ##     print(tree.role)
 ## [/codeblock]
-func host(quiet: bool = false) -> Error:
+func host(quiet: bool = false, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	if backend == null:
 		if not quiet:
@@ -749,7 +771,8 @@ func host(quiet: bool = false) -> Error:
 		return setup_err
 
 	_auth.prepare()
-	var peer: MultiplayerPeer = await backend.create_host_peer(self)
+	var peer: MultiplayerPeer = await backend.create_host_peer(self, options)
+
 	peer = backend.wrap_peer(peer)
 	var api_was_adopted := api != prior_api
 
@@ -1079,7 +1102,7 @@ func disconnect_player() -> void:
 ##
 ## var err := await tree.host_player(payload)
 ## [/codeblock]
-func host_player(join_payload: JoinPayload) -> Error:
+func host_player(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	assert(
 		desired_role != Role.DEDICATED_SERVER,
@@ -1089,7 +1112,7 @@ func host_player(join_payload: JoinPayload) -> Error:
 	if err != OK:
 		return err
 
-	return await _host_player_logic(join_payload)
+	return await _host_player_logic(join_payload, options)
 
 
 func _prepare_session(join_payload: JoinPayload) -> Error:
@@ -1116,11 +1139,12 @@ func _prepare_session(join_payload: JoinPayload) -> Error:
 	return OK
 
 
-func _host_player_logic(join_payload: JoinPayload) -> Error:
+func _host_player_logic(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
 	# LISTEN_SERVER and NONE host on this tree; CLIENT spins up an embedded
 	# dedicated sibling and joins it.
 	if desired_role != Role.CLIENT:
-		var host_err := await host(true)
+		var host_err := await host(true, options)
+
 		if host_err == OK:
 			role = Role.LISTEN_SERVER
 			if get_service(MultiplayerSceneManager):
@@ -1616,6 +1640,9 @@ func _notification(what: int) -> void:
 	# the queued tree_exiting path did not already run.
 	if what == NOTIFICATION_PREDELETE:
 		_close_peer_on_delete()
+		if is_instance_valid(_interest_service) \
+				and _interest_service.get_parent() == null:
+			_interest_service.free()
 
 
 func _on_exiting() -> void:

@@ -54,7 +54,12 @@ func _on_host_pressed() -> void:
 		lobby_name = "Bomber Lobby"
 	_set_pending_lobby_action(true)
 	status_message.emit("Creating lobby...")
-	_directory.host_lobby(lobby_name)
+	var opts := LobbyDirectory.HostOptions.make(
+		lobby_name,
+		LobbyDirectory.Visibility.PUBLIC,
+		int(_max_spin.value),
+	)
+	_directory.host_lobby(opts)
 
 
 func _on_refresh_pressed() -> void:

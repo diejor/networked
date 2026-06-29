@@ -12,7 +12,7 @@ var harness: NetwTestHarness
 var client0: MultiplayerTree
 var client1: MultiplayerTree
 var test_dir: String
-var backend: FileSystemBackend
+var backend: FileSystemDatabase
 var db: NetwDatabase
 var player_builder: PlayerBuilder
 var level_builder: LevelBuilder
@@ -21,7 +21,7 @@ var level_2_builder: LevelBuilder
 
 func before_test() -> void:
 	test_dir = create_temp_dir("tp_flow_test")
-	backend = auto_free(FileSystemBackend.new())
+	backend = auto_free(FileSystemDatabase.new())
 	backend.base_dir = test_dir
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend

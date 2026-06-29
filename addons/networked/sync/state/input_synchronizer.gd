@@ -109,18 +109,9 @@ func carrier_name() -> StringName:
 	return INPUT_WINDOW
 
 
-func _read_property(name: StringName, path: NodePath) -> Variant:
-	if name == INPUT_WINDOW:
-		return encode_carrier()
-	return super._read_property(name, path)
-
-
 func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if name == TICK:
 		_pending_window.clear()
-	if name == INPUT_WINDOW:
-		decode_carrier(value)
-		return
 	super._write_property(name, path, value)
 
 
@@ -209,7 +200,10 @@ func decode_carrier(value: Variant) -> void:
 	if value is PackedByteArray:
 		var keys := _payload_keys()
 		_pending_window = NetwCodec.decode_window(
-			value, keys, _payload_quantizers(keys), _payload_types(keys),
+			value,
+			keys,
+			_payload_quantizers(keys),
+			_payload_types(keys),
 		)
 	else:
 		_pending_window = []

@@ -8,7 +8,7 @@
 ## real run while the wall-clock cost collapses to CPU time.
 ##
 ## The stepper owns ticking: it sets [member MultiplayerClock.manual_tick] on
-## every clock so the real [method MultiplayerClock._physics_process] loop stops
+## every clock so the real [code]_physics_process[/code] loop stops
 ## advancing. The session is driven through
 ## [method LocalLoopbackSession.advance_time], not real physics frames, so
 ## latency stays expressed in milliseconds with no dependence on engine cadence.

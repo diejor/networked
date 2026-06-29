@@ -194,4 +194,28 @@ func test_finalize_applies_config_to_replication_config() -> void:
 	var vpath := proxy._virtual_path(&"score")
 	assert_that(proxy.replication_config.has_property(vpath)).is_true()
 
+
+@warning_ignore("missing_tool")
+class StubStampedProxy extends StubProxy:
+	func _ordered_virtual_names() -> Array[StringName]:
+		return [&"__tick"]
+
+
+func test_finalize_warns_on_empty_real_path_payload() -> void:
+	var proxy: StubProxy = auto_free(StubProxy.new())
+	proxy.register_property(&"score", NodePath(""))
+	proxy.finalize()
+	assert_that(proxy.replication_config).is_not_null()
+	var vpath: NodePath = proxy._virtual_path(&"score")
+	assert_that(proxy.replication_config.has_property(vpath)).is_true()
+
+
+func test_finalize_no_warning_on_empty_real_path_stamp() -> void:
+	var proxy: StubStampedProxy = auto_free(StubStampedProxy.new())
+	proxy.register_property(&"__tick", NodePath(""))
+	proxy.finalize()
+	assert_that(proxy.replication_config).is_not_null()
+	var vpath: NodePath = proxy._virtual_path(&"__tick")
+	assert_that(proxy.replication_config.has_property(vpath)).is_true()
+
 #endregion

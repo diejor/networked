@@ -2,7 +2,7 @@
 ##
 ## A gate binds to [member layer_id] when it enters the tree. The server
 ## writes [member viewers] and [member policy] through
-## [method apply_snapshot]; Godot spawn/on-change replication delivers
+## [method apply_snapshot]. Godot spawn/on-change replication delivers
 ## those fields to admitted clients before they query the layer.
 ##
 ## [br][br]

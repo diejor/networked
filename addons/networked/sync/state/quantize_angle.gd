@@ -16,16 +16,17 @@ extends NetwQuantize
 @export_range(1, 32, 1) var bits: int = 8
 
 
-## Implements [method NetwQuantize.write], wrapping the angle into
-## [code][0, TAU)[/code] before packing it into [member bits] bits.
+## Implements [method NetwQuantize.write], wrapping the angle from 0
+## to [constant @GDScript.TAU] before packing it into [member bits] bits.
 func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	var levels := 1 << bits
 	var f := fposmod(float(value), TAU) / TAU
 	w.put_bits(int(round(f * levels)) % levels, bits)
 
 
-## Implements [method NetwQuantize.read], decoding the angle back into
-## [code][0, TAU)[/code]. The angle is scalar, so [param _type] is unused.
+## Implements [method NetwQuantize.read], decoding the angle back
+## from 0 to [constant @GDScript.TAU]. The angle is scalar, so
+## [param _type] is unused.
 func read(r: NetwBitBuffer.Reader, _type: Variant.Type) -> Variant:
 	var q := r.get_bits(bits)
 	return (float(q) / float(1 << bits)) * TAU

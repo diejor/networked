@@ -49,6 +49,27 @@ var transport := Transport.STOCK
 ## per-property replication shape for existing synchronizers.
 @export var bundle_payload: bool = false
 
+@export_group("Compression", "compression_")
+
+## Compress the bundled payload byte array.
+##
+## The compressed payload reduces bandwidth usage for large state snapshots.
+## It defaults to false because compression overhead makes small payloads larger.
+## Set [member compression_enabled] on [PackedSynchronizer] to toggle it.
+@export var compression_enabled: bool = false
+
+## Compression algorithm used for the payload.
+##
+## The algorithm trades CPU cycles for smaller network payloads.
+## The value uses [enum FileAccess.CompressionMode] to configure the compressor.
+@export var compression_mode: FileAccess.CompressionMode = FileAccess.COMPRESSION_ZSTD
+
+## Maximum allowed decompressed size of a received payload.
+##
+## This acts as a safety limit to prevent memory-exhaustion exploits.
+## The receiving side discards decompressed packets exceeding [member compression_max_size].
+@export var compression_max_size: int = 65536
+
 ## Maps a payload virtual name to the [NetwQuantize] that bit-packs it on the
 ## wire.
 ##
@@ -180,25 +201,63 @@ func decode_carrier(value: Variant) -> void:
 	var keys := _payload_keys()
 	var r := NetwBitBuffer.Reader.new(value)
 	var payload := NetwCodec.decode_payload(
-		r, keys, _payload_quantizers(keys), _payload_types(keys),
+		r,
+		keys,
+		_payload_quantizers(keys),
+		_payload_types(keys),
 	)
 	for k: StringName in payload:
 		super._write_property(k, get_real_path(k), payload[k])
 
 
 func _ordered_virtual_names() -> Array[StringName]:
-	return [carrier_name()] if carrier_enabled() else []
+	if carrier_enabled():
+		return [carrier_name()]
+	return []
 
 
 func _read_property(name: StringName, path: NodePath) -> Variant:
 	if carrier_enabled() and name == carrier_name():
-		return encode_carrier()
+		var bytes := encode_carrier()
+		if compression_enabled and not bytes.is_empty():
+			var compressed := bytes.compress(int(compression_mode))
+			var output := PackedByteArray()
+			output.resize(4)
+			output.encode_u32(0, bytes.size())
+			output.append_array(compressed)
+			return output
+		return bytes
 	return super._read_property(name, path)
 
 
 func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if carrier_enabled() and name == carrier_name():
-		decode_carrier(value)
+		if not (value is PackedByteArray):
+			return
+		var bytes: PackedByteArray = value
+		if compression_enabled and not bytes.is_empty():
+			if bytes.size() < 4:
+				Netw.dbg.error(
+					"PackedSynchronizer: Received compressed packet under 4 bytes."
+				)
+				return
+			var decompressed_size := bytes.decode_u32(0)
+			if decompressed_size > compression_max_size:
+				Netw.dbg.error(
+					"PackedSynchronizer: Decompressed size exceeds safety limit."
+				)
+				return
+			var compressed_data := bytes.slice(4)
+			bytes = compressed_data.decompress(
+					decompressed_size,
+					int(compression_mode),
+			)
+			if bytes.is_empty():
+				Netw.dbg.error(
+					"PackedSynchronizer: Decompression failed."
+				)
+				return
+		decode_carrier(bytes)
 		return
 	super._write_property(name, path, value)
 
@@ -239,20 +298,24 @@ func _get_property_list() -> Array[Dictionary]:
 	var keys := _editor_codec_keys()
 	if keys.is_empty():
 		return result
-	result.append({
-		"name": "Codecs",
-		"type": TYPE_NIL,
-		"usage": PROPERTY_USAGE_GROUP,
-		"hint_string": "codec/",
-	})
+	result.append(
+		{
+			"name": "Codecs",
+			"type": TYPE_NIL,
+			"usage": PROPERTY_USAGE_GROUP,
+			"hint_string": "codec/",
+		},
+	)
 	for key: StringName in keys:
-		result.append({
-			"name": "codec/" + key,
-			"type": TYPE_OBJECT,
-			"usage": PROPERTY_USAGE_EDITOR,
-			"hint": PROPERTY_HINT_RESOURCE_TYPE,
-			"hint_string": "NetwQuantize",
-		})
+		result.append(
+			{
+				"name": "codec/" + key,
+				"type": TYPE_OBJECT,
+				"usage": PROPERTY_USAGE_EDITOR,
+				"hint": PROPERTY_HINT_RESOURCE_TYPE,
+				"hint_string": "NetwQuantize",
+			},
+		)
 	return result
 
 

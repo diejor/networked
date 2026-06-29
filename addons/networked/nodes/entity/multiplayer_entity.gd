@@ -1,3 +1,4 @@
+@icon("res://addons/networked/assets/MultiplayerEntity.svg")
 class_name MultiplayerEntity
 extends MultiplayerSynchronizer
 ## Orchestration point for a networked entity.
@@ -98,11 +99,25 @@ enum DisconnectRule {
 ## [MultiplayerEntity] reference.
 signal spawning
 
+## Mirrors [signal NetwEntity.spawned] for callers that already hold a
+## [MultiplayerEntity] reference.
+signal spawned
+
 ## Emitted right before [method despawn] runs, with the despawn reason.
 signal despawning(reason: StringName)
 
 ## Emitted after teardown when the node leaves the tree.
 signal despawned
+
+## Mirrors [signal NetwEntity.reparented] for callers that already hold a
+## [MultiplayerEntity] reference. Emitted post-settle (after the reparented
+## subtree is fully back in the tree), so it is safe to connect from the editor
+## and act on tree-dependent state such as [method Camera2D.make_current].
+signal reparented(reparent: ReparentOpts)
+
+## Mirrors [signal NetwEntity.view_activated] for callers that already hold a
+## [MultiplayerEntity] reference. Connectable from the editor.
+signal view_activated
 
 ## Emitted after [member controller] changes.
 signal control_changed(previous_peer: int, peer: int)
@@ -157,6 +172,7 @@ var _pending_controller := 0
 var _pending_controller_binding_set := false
 var _action_spawn_hidden := false
 var _action_spawn_original_visible := true
+var _reparented_once := false
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -325,6 +341,10 @@ func _enter_tree() -> void:
 	set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 	if controller_binding_set:
 		_apply_control()
+	if _reparented_once:
+		# On a reparent this runs mid-propagation (the subtree is still rebuilding),
+		# so defer the emit to post-settle when every node is back in the tree.
+		_emit_reparented_deferred()
 
 
 func _ready() -> void:
@@ -342,6 +362,8 @@ func _ready() -> void:
 			)
 	):
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	if not _reparented_once:
+		_emit_reparented()
 
 
 func _exit_tree() -> void:
@@ -389,6 +411,45 @@ func _on_owner_tree_entered() -> void:
 	_register_with_scene()
 	if entity:
 		entity.spawned.emit()
+	spawned.emit()
+
+
+func _emit_reparented() -> void:
+	_reparented_once = true
+	var entity := _get_entity_record()
+	var opts: ReparentOpts = entity.reparenting if entity else null
+	if entity:
+		entity.reparented.emit(opts)
+	reparented.emit(opts)
+
+
+# Schedules the reparent emit for after the subtree finishes re-entering the tree.
+# Captures reparenting now because reparent_to clears it before the deferred call
+# runs, and a deferred read would deliver null and lose preserve_history.
+func _emit_reparented_deferred() -> void:
+	_reparented_once = true
+	var entity := _get_entity_record()
+	var opts: ReparentOpts = entity.reparenting if entity else null
+	_do_emit_reparented.call_deferred(opts)
+
+
+func _do_emit_reparented(opts: ReparentOpts) -> void:
+	if not is_inside_tree():
+		return
+	var entity := _get_entity_record()
+	if entity:
+		entity.reparented.emit(opts)
+	reparented.emit(opts)
+
+
+## Announces that this entity's player is the locally displayed view. Emits on
+## both [signal view_activated] and [signal NetwEntity.view_activated]. Called by
+## the local display when it shows this player's scene.
+func notify_view_activated() -> void:
+	var entity := _get_entity_record()
+	if entity:
+		entity.view_activated.emit()
+	view_activated.emit()
 
 
 # Applies the effective controller to [member Node.owner].
@@ -828,6 +889,101 @@ func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
 	return copy
 
 
+## Moves [member Node.owner] under [param new_parent] as a networked reparent.
+##
+## The active [NetwEntity] remains alive across the move. Components can read
+## [member NetwEntity.reparenting] in [code]_exit_tree[/code] and
+## re-register from [signal NetwEntity.reparented] after the owner enters
+## its new parent.
+##
+## When the move crosses [MultiplayerScene] boundaries, this method performs the
+## scene admission and tracking handoff around [method Node.reparent].
+## [codeblock]
+## var opts := MultiplayerEntity.ReparentOpts.new()
+## opts.preserve_history = true
+## entity.reparent_to(vehicle_seat, opts)
+## [/codeblock]
+## [br][br][b]Server Only.[/b]
+func reparent_to(new_parent: Node, opts: ReparentOpts = null) -> void:
+	if not _ensure_server_action(&"reparent_to"):
+		return
+	assert(owner, "reparent_to requires an owner")
+	assert(is_instance_valid(new_parent), "reparent_to requires a parent")
+	if opts == null:
+		opts = ReparentOpts.new()
+
+	var entity := _get_entity_record()
+	assert(entity, "reparent_to requires a NetwEntity")
+	var source_scene := MultiplayerTree.scene_for_node(owner)
+	var destination_scene := MultiplayerTree.scene_for_node(new_parent)
+
+	entity.reparenting = opts
+	if _is_cross_scene_player_reparent(source_scene, destination_scene):
+		destination_scene.prepare_player_reparent(owner)
+
+	var disconnect_after_enter := _prepare_scene_signal_handoff(
+		source_scene,
+		destination_scene,
+	)
+	if opts.target_global_position != null:
+		owner.set(&"global_position", opts.target_global_position)
+	owner.request_ready()
+	owner.reparent(new_parent)
+	if disconnect_after_enter.is_valid() \
+			and owner.tree_entered.is_connected(disconnect_after_enter):
+		owner.tree_entered.disconnect(disconnect_after_enter)
+
+	if _is_cross_scene_player_reparent(source_scene, destination_scene):
+		destination_scene.complete_player_reparent(owner)
+	elif destination_scene:
+		destination_scene.track_node(owner)
+	entity.reparenting = null
+
+
+func _is_cross_scene_player_reparent(
+		source_scene: MultiplayerScene,
+		destination_scene: MultiplayerScene,
+) -> bool:
+	return (
+			source_scene
+			and destination_scene
+			and source_scene != destination_scene
+			and peer_id != 0
+	)
+
+
+func _prepare_scene_signal_handoff(
+		source_scene: MultiplayerScene,
+		destination_scene: MultiplayerScene,
+) -> Callable:
+	if (
+			not source_scene
+			or not destination_scene
+			or source_scene == destination_scene
+	):
+		return Callable()
+
+	var source_spawned := source_scene._on_spawned
+	var destination_spawned := destination_scene._on_spawned
+	var source_despawned := source_scene._on_despawned
+	var destination_despawned := destination_scene._on_despawned
+
+	var flip := func(event: Signal, from: Callable, to: Callable) -> void:
+		event.disconnect(from)
+		var bound := to.bind(owner)
+		if not event.is_connected(bound):
+			event.connect(bound)
+
+	flip.call(owner.tree_entered, source_spawned, destination_spawned)
+	var flip_exit := flip.bind(
+		owner.tree_exiting,
+		source_despawned,
+		destination_despawned,
+	)
+	owner.tree_entered.connect(flip_exit)
+	return flip_exit
+
+
 ## Frees [member Node.owner] after emitting
 ## [signal despawning] and flushing the [SaveComponent].
 ##
@@ -925,6 +1081,23 @@ class DespawnOpts:
 
 	func _init(p_reason: StringName = &"") -> void:
 		reason = p_reason
+
+
+## Options for one [method MultiplayerEntity.reparent_to].
+class ReparentOpts:
+	extends RefCounted
+
+	## Keeps [NetwTimeline] history across the reparent.
+	var preserve_history := false
+
+	## Optional gameplay label for the reparent.
+	var reason: StringName = &""
+
+	## Destination world pose applied to [member Node.owner] before the parent
+	## swap, so re-init driven by [signal NetwEntity.reparented] (interpolator
+	## reset, camera smoothing) baselines on the final position instead of the
+	## pre-move one. Unset ([code]null[/code]) leaves the owner where it is.
+	var target_global_position: Variant = null
 
 
 ## Server decision object for a controller request.

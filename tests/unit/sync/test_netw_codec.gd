@@ -2,7 +2,6 @@
 class_name TestNetwCodec
 extends NetwTestSuite
 
-
 func _bits(b: int, lo: float, hi: float) -> NetwQuantizeBits:
 	var q := NetwQuantizeBits.new()
 	q.bits = b
@@ -17,7 +16,10 @@ func test_raw_payload_roundtrip() -> void:
 	var quantizers: Array = []
 	var types: Array = []
 	var payload := {
-		&"flag": true, &"count": 7, &"motion": Vector2(1, 2), &"spin": 0.5,
+		&"flag": true,
+		&"count": 7,
+		&"motion": Vector2(1, 2),
+		&"spin": 0.5,
 	}
 
 	var w := NetwBitBuffer.Writer.new()
@@ -83,6 +85,24 @@ func test_snapshot_ack_negative_one() -> void:
 	var frame := NetwCodec.decode_snapshot(bytes, keys, quantizers, types)
 	assert_int(frame.ack).is_equal(-1)
 	assert_vector(frame.payload.position).is_equal(Vector2(3, 4))
+
+
+func test_new_raw_types_roundtrip() -> void:
+	var keys: Array[StringName] = [&"scalar_float", &"vector3"]
+	var quantizers: Array = []
+	var types: Array = []
+	var payload := {
+		&"scalar_float": 12.34,
+		&"vector3": Vector3(1, 2, 3),
+	}
+
+	var w := NetwBitBuffer.Writer.new()
+	NetwCodec.encode_payload(w, payload, keys, quantizers)
+	var r := NetwBitBuffer.Reader.new(w.to_bytes())
+	var got := NetwCodec.decode_payload(r, keys, quantizers, types)
+
+	assert_float(got.scalar_float).is_equal_approx(12.34, 0.001)
+	assert_vector(got.vector3).is_equal(Vector3(1, 2, 3))
 
 
 func test_empty_window_and_snapshot() -> void:

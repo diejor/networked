@@ -3,6 +3,7 @@
 ## Provides instance-method access to session services via
 ## [method get_context], which returns a [NetwContext] safe
 ## across node renames.
+@icon("res://addons/networked/assets/NetwComponent.svg")
 class_name NetwComponent
 extends Node
 

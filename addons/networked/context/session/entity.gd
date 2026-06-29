@@ -87,6 +87,8 @@ class _PropertyContribution extends RefCounted:
 	var source: Node
 	var virtual_name: StringName
 	var property: StringName
+	var save_mode: SaveComponent.SaveMode
+	var interval: float
 	var mode: SceneReplicationConfig.ReplicationMode
 	var spawn: bool
 	var watch: bool
@@ -96,6 +98,8 @@ class _PropertyContribution extends RefCounted:
 			p_source: Node,
 			p_virtual_name: StringName,
 			p_property: StringName,
+			p_save_mode: SaveComponent.SaveMode,
+			p_interval: float,
 			p_mode: SceneReplicationConfig.ReplicationMode,
 			p_spawn: bool,
 			p_watch: bool,
@@ -103,6 +107,8 @@ class _PropertyContribution extends RefCounted:
 		source = p_source
 		virtual_name = p_virtual_name
 		property = p_property
+		save_mode = p_save_mode
+		interval = p_interval
 		mode = p_mode
 		spawn = p_spawn
 		watch = p_watch
@@ -120,11 +126,13 @@ class _PropertyContribution extends RefCounted:
 		)
 
 
-	func register_with(proxy: ProxySynchronizer) -> void:
-		proxy.register_node_property(
+	func register_with(save_comp: SaveComponent) -> void:
+		save_comp.add_save_property(
 			virtual_name,
 			source,
 			property,
+			save_mode,
+			interval,
 			mode,
 			spawn,
 			watch,
@@ -175,8 +183,34 @@ signal observer_left(layer_id: StringName, peer_id: int)
 ## Emitted when [member controller] changes.
 signal control_changed(previous_peer: int, peer: int)
 
+## Emitted after [MultiplayerEntity] has authority settled.
+##
+## Fires on the initial spawn and on every
+## [method MultiplayerEntity.reparent_to].
+## Components that unregister in [code]_exit_tree[/code] reconnect their runtime
+## service registration here so reparenting self-heals without
+## [method Node.request_ready].
+##
+## [param reparent] is [code]null[/code] for a fresh spawn, or the in-flight
+## [MultiplayerEntity.ReparentOpts] for a reparent.
+signal reparented(reparent: MultiplayerEntity.ReparentOpts)
+
+## Announces that this entity's player is now the locally displayed view.
+##
+## Driven by the local display ([HostSceneView] on a listen-server host) whenever
+## this player's scene becomes the one shown on this peer, on the initial display
+## and on every return. Whatever owns the camera reacts here however it wants
+## ([method Camera2D.make_current], a custom rig, or a PhantomCamera host
+## priority), so the display system never needs to know the camera type.
+signal view_activated
+
 ## [member Node.owner] that holds this entity.
 var owner: Node
+## The active [method MultiplayerEntity.reparent_to], or [code]null[/code].
+##
+## Set before the reparent and cleared after reparenting so
+## [code]_exit_tree[/code] consumers can tell a reparent from a despawn.
+var reparenting: MultiplayerEntity.ReparentOpts = null
 ## Stable display/save/debug label for this entity.
 var entity_id: StringName = &""
 
@@ -526,6 +560,8 @@ func _handle_tree_entered() -> void:
 					c.source,
 					c.virtual_name,
 					c.property,
+					c.save_mode,
+					c.interval,
 					c.mode,
 					c.spawn,
 					c.watch,
@@ -673,11 +709,19 @@ func contribute_spawn_property(source: Node, property: StringName) -> void:
 
 ## Adds a property to the entity's save component.
 ##
-## Calls before [SaveComponent] registers are buffered.
+## [param save_mode] declares the persistence trust: [constant
+## SaveComponent.SaveMode.SNAPSHOT] (default) has the server read the live value
+## with no client channel, while [constant SaveComponent.SaveMode.CLIENT]
+## replicates it client to server. [param interval] sets the per-property
+## snapshot cadence in seconds ([code]0[/code] inherits
+## [member delta_interval]). Calls before [SaveComponent]
+## registers are buffered.
 func contribute_save_property(
 		source: Node,
 		virtual_name: StringName,
 		property: StringName,
+		save_mode: SaveComponent.SaveMode = SaveComponent.SaveMode.SNAPSHOT,
+		interval: float = 0.0,
 		mode: SceneReplicationConfig.ReplicationMode = SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
 		spawn: bool = false,
 		watch: bool = true,
@@ -688,6 +732,8 @@ func contribute_save_property(
 			source,
 			virtual_name,
 			property,
+			save_mode,
+			interval,
 			mode,
 			spawn,
 			watch,
@@ -700,6 +746,8 @@ func contribute_save_property(
 		source,
 		virtual_name,
 		property,
+		save_mode,
+		interval,
 		mode,
 		spawn,
 		watch,
@@ -738,6 +786,34 @@ func synchronizers() -> Array[MultiplayerSynchronizer]:
 			_synchronizers_dirty = _owner_exiting_tree \
 					and _synchronizers_cache.is_empty()
 	return _synchronizers_cache
+
+
+## Returns [code]true[/code] when a synchronizer other than [param exclude]
+## governs the same live target as [param real_path].
+##
+## [param real_path] is resolved against the entity root, then compared against
+## the [method SynchronizersCache.governed_targets] of every other synchronizer
+## on the entity. Used by [SaveComponent] to flag a [constant
+## SaveComponent.SaveMode.CLIENT] property that another synchronizer already
+## drives (a double-authority mistake).
+func governs_property(
+		real_path: NodePath,
+		exclude: MultiplayerSynchronizer = null,
+) -> bool:
+	if not is_instance_valid(owner) or real_path.is_empty():
+		return false
+	var res := owner.get_node_and_resource(real_path)
+	var target_obj: Object = res[0]
+	var target_sub: NodePath = res[2]
+	if not target_obj or target_sub.is_empty():
+		return false
+	for sync in synchronizers():
+		if sync == exclude:
+			continue
+		for t in SynchronizersCache.governed_targets(sync, owner):
+			if t[0] == target_obj and t[1] == target_sub:
+				return true
+	return false
 
 
 ## Invalidates the cached synchronizer list so the next call to

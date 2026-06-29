@@ -207,7 +207,7 @@ func monitor_snapshot() -> Dictionary:
 	var transitions_total := 0
 	for layer_id: StringName in _layers:
 		transitions_total += int(
-			_layers[layer_id].monitor_snapshot()[&"transitions_total"]
+			_layers[layer_id].monitor_snapshot()[&"transitions_total"],
 		)
 	return {
 		&"layers": _layers.size(),

@@ -26,9 +26,26 @@
 ## [MultiplayerSceneManager]) cannot adopt this base under GDScript single
 ## inheritance. They call [method NetwServices.register] and
 ## [method NetwServices.unregister] directly.
+@icon("res://addons/networked/assets/NetwService.svg")
 @abstract
 class_name NetwService
 extends Node
+
+## Optional probe an embedding addon sets when the runtime environment allows
+## only a WebSocket/HTTP relay, such as a Discord iframe that forbids WebRTC and
+## native SDKs. A transport service that needs peer-to-peer or a native client
+## consults [method is_transport_restricted] in [method should_register] (and
+## gates its own polling) to stay dormant there. Unset in a normal build, so
+## nothing pays for it. [code]networked_activity[/code] wires this to its embed
+## detection.
+static var transport_restricted_probe: Callable
+
+
+## Returns [code]true[/code] when [member transport_restricted_probe] reports the
+## environment forbids peer-to-peer and native transports. Returns
+## [code]false[/code] when no probe is set, which is the normal case.
+static func is_transport_restricted() -> bool:
+	return transport_restricted_probe.is_valid() and bool(transport_restricted_probe.call())
 
 # ---------------------------------------------------------------------------
 # Override points
@@ -60,7 +77,8 @@ func should_register() -> bool:
 ## Override for per-service setup such as signal wiring or clock binding. It does
 ## not run in the editor, when [method should_register] returns
 ## [code]false[/code], or when the node is not under a [MultiplayerTree].
-func service_entered(_mt: MultiplayerTree) -> void:
+@warning_ignore("unused_parameter")
+func service_entered(mt: MultiplayerTree) -> void:
 	pass
 
 
@@ -68,7 +86,8 @@ func service_entered(_mt: MultiplayerTree) -> void:
 ##
 ## Override to tear down whatever [method service_entered] set up. Mirrors the
 ## conditions of [method service_entered].
-func service_exiting(_mt: MultiplayerTree) -> void:
+@warning_ignore("unused_parameter")
+func service_exiting(mt: MultiplayerTree) -> void:
 	pass
 
 # ---------------------------------------------------------------------------

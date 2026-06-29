@@ -37,7 +37,10 @@ func _ready() -> void:
 	if not is_multiplayer_authority():
 		queue_free()
 		return
-	
+
+
+func _assert_current() -> void:
+	reset_smoothing()
 	make_current()
 "
 
@@ -108,3 +111,5 @@ texture = ExtResource("9_u2lnn")
 position = Vector2(0.5, 41)
 rotation = -1.5707964
 shape = SubResource("CapsuleShape2D_u845s")
+
+[connection signal="view_activated" from="Components/MultiplayerEntity" to="Camera2D" method="_assert_current"]

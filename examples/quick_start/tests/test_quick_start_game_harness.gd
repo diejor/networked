@@ -8,6 +8,7 @@ const PLAYER := preload("res://examples/quick_start/Player.tscn")
 const LEVEL_1_SPAWN := (
 		"uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
 )
+const LEVEL_2_TARGET := "uid://cthf7wjwb4n77::%Teleporter/Marker2D"
 
 var game: NetwGameHarness
 
@@ -139,6 +140,29 @@ func test_show_views_can_be_called_before_adding_participants() -> void:
 
 	assert_that(display.has_slot(valeria.slot)).is_true()
 	assert_that(display.has_slot(jose.slot)).is_true()
+
+
+func test_host_teleport_keeps_camera_current_and_snaps() -> void:
+	var valeria := await game.add_host("valeria", true, _level_1_spawn())
+	await game.wait_for_transition(valeria)
+
+	var player := valeria.local_player as Node2D
+	var camera := player.get_node("Camera2D") as Camera2D
+	assert_that(player).is_not_null()
+	assert_that(camera).is_not_null()
+	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
+
+	var tp := player.get_node("%TPComponent") as TPComponent
+	var promise := tp.teleport(SceneNodePath.new(LEVEL_2_TARGET))
+	for _i in 180:
+		if promise.is_completed:
+			break
+		await game.sync_ticks(1)
+	await game.wait_for_transition(valeria)
+
+	assert_that(promise.is_completed).is_true()
+	assert_that(player.global_position).is_equal(Vector2(379, 223))
+	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
 
 
 func _input_for(player: Node) -> MoveInputComponent:

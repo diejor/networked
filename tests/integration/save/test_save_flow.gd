@@ -7,7 +7,7 @@ const SPAWNER_PATH := "TestPlayerWithSave/MultiplayerEntity"
 var harness: NetwTestHarness
 var client0: MultiplayerTree
 var test_dir: String
-var backend: FileSystemBackend
+var backend: FileSystemDatabase
 var db: NetwDatabase
 var player_builder: PlayerBuilder
 var level_builder: LevelBuilder
@@ -15,7 +15,7 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	test_dir = create_temp_dir("save_flow_test")
-	backend = auto_free(FileSystemBackend.new())
+	backend = auto_free(FileSystemDatabase.new())
 	backend.base_dir = test_dir
 	db = auto_free(NetwDatabase.new())
 	db.backend = backend
@@ -104,7 +104,7 @@ func test_database_and_serialized_round_trips_restore_position() -> void:
 
 	var save_comp: SaveComponent = player.get_node("%SaveComponent")
 	save_comp.pull_from_scene()
-	var err: Error = save_comp._flush()
+	var err: Error = await save_comp._flush()
 	assert_that(err).is_equal(OK)
 
 	var entity_id := save_comp._get_entity_id()

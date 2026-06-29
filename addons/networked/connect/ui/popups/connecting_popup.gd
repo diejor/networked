@@ -20,7 +20,7 @@ func _ready() -> void:
 func open_connecting(target: JoinTarget) -> void:
 	_cancel_button.text = "Cancel"
 	_progress.visible = false
-	var backend_name := ConnectUiShared.format_backend_label(target.backend)
+	var backend_name := ConnectBrowser.format_backend_label(target.backend)
 	var display_addr := target.address.strip_edges()
 	if display_addr.is_empty():
 		_title.text = "Connecting to %s server..." % backend_name

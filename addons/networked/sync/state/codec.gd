@@ -20,8 +20,8 @@
 ## var s := NetwCodec.decode_window(w, keys, quantizers, types)
 ## [/codeblock]
 ##
-## [param quantizers] is a list parallel to [param keys] (null entries fall back to
-## raw). [param types] is the parallel [enum Variant.Type] list a decoder needs to
+## [code]quantizers[/code] is a list parallel to [code]keys[/code] (null entries fall back to
+## raw). [code]types[/code] is the parallel [enum Variant.Type] list a decoder needs to
 ## reconstruct a quantized value, derived from the live property type.
 class_name NetwCodec
 
@@ -32,6 +32,8 @@ enum {
 	T_BOOL = 1,
 	T_INT = 2,
 	T_VECTOR2 = 3,
+	T_FLOAT = 4,
+	T_VECTOR3 = 5,
 }
 
 
@@ -44,10 +46,8 @@ static func encode_snapshot(
 		quantizers: Array,
 ) -> PackedByteArray:
 	var w := NetwBitBuffer.Writer.new()
-	w.put_aligned_u32(tick)
-	var spb := StreamPeerBuffer.new()
-	spb.put_32(ack)
-	w.put_aligned_bytes(spb.data_array)
+	_put_varint(w, tick + 1)
+	_put_varint(w, ack + 1)
 	encode_payload(w, payload, keys, quantizers)
 	return w.to_bytes()
 
@@ -63,10 +63,14 @@ static func decode_snapshot(
 	if bytes.is_empty():
 		return { }
 	var r := NetwBitBuffer.Reader.new(bytes)
-	var tick := r.get_aligned_u32()
-	var spb := StreamPeerBuffer.new()
-	spb.data_array = r.get_aligned_bytes(4)
-	var ack := spb.get_32()
+	var tick_val := _get_safe_varint(r)
+	if tick_val < 0:
+		return { }
+	var ack_val := _get_safe_varint(r)
+	if ack_val < 0:
+		return { }
+	var tick := tick_val - 1
+	var ack := ack_val - 1
 	var payload := decode_payload(r, keys, quantizers, types)
 	return { &"tick": tick, &"ack": ack, &"payload": payload }
 
@@ -82,7 +86,7 @@ static func encode_window(
 		return PackedByteArray()
 	var w := NetwBitBuffer.Writer.new()
 	var base_tick := int(samples[samples.size() - 1].get(&"tick", 0))
-	w.put_aligned_u32(base_tick)
+	_put_varint(w, base_tick + 1)
 	w.put_aligned_u8(samples.size())
 	for sample: Dictionary in samples:
 		var tick := int(sample.get(&"tick", 0))
@@ -103,7 +107,10 @@ static func decode_window(
 	if bytes.is_empty():
 		return out
 	var r := NetwBitBuffer.Reader.new(bytes)
-	var base_tick := r.get_aligned_u32()
+	var base_tick_val := _get_safe_varint(r)
+	if base_tick_val < 0:
+		return out
+	var base_tick := base_tick_val - 1
 	var count := r.get_aligned_u8()
 	for s in count:
 		var tick := base_tick - r.get_aligned_u8()
@@ -161,6 +168,16 @@ static func _encode_value(
 			spb.put_float(value.x)
 			spb.put_float(value.y)
 			w.put_aligned_bytes(spb.data_array)
+		T_FLOAT:
+			var spb := StreamPeerBuffer.new()
+			spb.put_float(float(value))
+			w.put_aligned_bytes(spb.data_array)
+		T_VECTOR3:
+			var spb := StreamPeerBuffer.new()
+			spb.put_float(value.x)
+			spb.put_float(value.y)
+			spb.put_float(value.z)
+			w.put_aligned_bytes(spb.data_array)
 		_:
 			var packed := var_to_bytes(value)
 			w.put_aligned_u32(packed.size())
@@ -188,6 +205,17 @@ static func _decode_value(
 			var x := spb.get_float()
 			var y := spb.get_float()
 			return Vector2(x, y)
+		T_FLOAT:
+			var spb := StreamPeerBuffer.new()
+			spb.data_array = r.get_aligned_bytes(4)
+			return spb.get_float()
+		T_VECTOR3:
+			var spb := StreamPeerBuffer.new()
+			spb.data_array = r.get_aligned_bytes(12)
+			var x := spb.get_float()
+			var y := spb.get_float()
+			var z := spb.get_float()
+			return Vector3(x, y, z)
 		_:
 			var size := r.get_aligned_u32()
 			return bytes_to_var(r.get_aligned_bytes(size))
@@ -201,5 +229,31 @@ static func _type_byte(value: Variant) -> int:
 			return T_INT
 		TYPE_VECTOR2:
 			return T_VECTOR2
+		TYPE_FLOAT:
+			return T_FLOAT
+		TYPE_VECTOR3:
+			return T_VECTOR3
 		_:
 			return T_FALLBACK
+
+
+static func _put_varint(w: NetwBitBuffer.Writer, value: int) -> void:
+	for __ in 5:
+		var byte := value & 0x7F
+		value >>= 7
+		if value > 0:
+			w.put_aligned_u8(byte | 0x80)
+		else:
+			w.put_aligned_u8(byte)
+			break
+
+
+static func _get_safe_varint(r: NetwBitBuffer.Reader) -> int:
+	var value := 0
+	for i in 5:
+		var byte := r.get_aligned_u8()
+		value |= (byte & 0x7F) << (i * 7)
+		if (byte & 0x80) == 0:
+			return value
+	Netw.dbg.error("NetwCodec: Varint overflow/corrupt packet.")
+	return -1

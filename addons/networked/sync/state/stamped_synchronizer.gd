@@ -67,7 +67,8 @@ func _ready() -> void:
 
 ## Override to record [param payload] at [param tick] on the correct timeline
 ## side. Runs only on the receiving peer.
-func record(_tick: int, _payload: Dictionary) -> void:
+@warning_ignore("unused_parameter")
+func record(tick: int, payload: Dictionary) -> void:
 	pass
 
 
@@ -105,6 +106,9 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 		# set before any handler runs, regardless of connection order.
 		last_received_tick = _pending_tick
 		return
+	if carrier_enabled() and name == carrier_name():
+		super._write_property(name, path, value)
+		return
 	_pending_payload[name] = value
 	if write_through:
 		super._write_property(name, path, value)
@@ -130,9 +134,16 @@ class _BodyStateApplicator extends RefCounted:
 	# Real-path leaf names that name a body's spatial state. The RID impl routes
 	# these through PhysicsServer; the default treats them like any property.
 	const SPATIAL: Array[StringName] = [
-		&"position", &"global_position", &"transform", &"global_transform",
-		&"rotation", &"global_rotation", &"quaternion", &"basis",
-		&"linear_velocity", &"angular_velocity",
+		&"position",
+		&"global_position",
+		&"transform",
+		&"global_transform",
+		&"rotation",
+		&"global_rotation",
+		&"quaternion",
+		&"basis",
+		&"linear_velocity",
+		&"angular_velocity",
 	]
 
 

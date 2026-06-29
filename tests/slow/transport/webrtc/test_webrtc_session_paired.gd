@@ -31,7 +31,16 @@ func test_paired_signaler_reaches_native_connection() -> void:
 	assert_bool(res.is_ok()).is_true()
 	var diags := res.diagnostics
 	assert_bool(diags.get("relay_used", true)).is_false()
+	# Wait for ICE candidate stats to populate to prevent timing flakiness.
 	var stats: Dictionary = diags.get("candidates", { })
+	var deadline := get_tree().create_timer(1.5)
+	while int(stats.get("host", 0)) == 0 and deadline.time_left > 0.0:
+		await get_tree().process_frame
+		res = client.last_connect_result
+		if res:
+			diags = res.diagnostics
+			stats = diags.get("candidates", { })
+
 	assert_int(int(stats.get("host", 0))).is_greater(0)
 
 	# The host sees the client over the native WebRTC link.

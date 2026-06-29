@@ -1,13 +1,14 @@
-## Concrete [NetwAuthProvider] for testing and development.
+## Development [NetwAuth] that trusts the client supplied username.
 ##
-## Echoes the client-claimed username as the server-authoritative
-## identity. Service is set to [code]&"dummy"[/code].
-##
-## [b]Note:[/b] This provider does not perform any real authentication.
-## Use it to verify the auth pipeline wiring without depending on
-## external services.
-class_name DummyAuthProvider
-extends NetwAuthProvider
+## [method authenticate] turns the [JoinPayload] username mirrored by
+## [method get_credentials] into a [NetwIdentity]. It is only for tests,
+## examples, and local development.
+## [codeblock]
+## tree.auth_provider = DummyAuth.new()
+## await tree.join(target, payload)
+## [/codeblock]
+class_name DummyAuth
+extends NetwAuth
 
 func prepare(payload: JoinPayload) -> Error:
 	return OK

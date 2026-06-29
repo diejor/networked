@@ -67,6 +67,9 @@ var predict: Callable
 ## Reverts the optimistic effect. Defaults to [method Node.queue_free].
 var revert: Callable = Callable()
 
+## Confirms the optimistic effect. Defaults to [method Node.queue_free].
+var confirm: Callable = Callable()
+
 ## Number of ticks before an unresolved request reverts. [code]0[/code] derives
 ## a conservative default from [LagCompensation].
 var timeout_ticks: int = 0
@@ -125,13 +128,12 @@ func request(view_tick: int, data: Variant = null) -> void:
 		ghost = predict.call() as Node
 	var ghost_ref := weakref(ghost) if ghost else null
 	var revert_callable := _revert_callable(ghost)
+	var confirm_callable := _confirm_callable(ghost)
 	_lag.effects.arm(key, revert_callable, timeout_ticks)
 	service._watch_action(
 		key,
 		func() -> void:
-			var node := ghost_ref.get_ref() as Node if ghost_ref else null
-			if is_instance_valid(node):
-				node.queue_free()
+			confirm_callable.call()
 			_emit_confirmed(),
 		_emit_denied,
 	)
@@ -152,6 +154,19 @@ func _revert_callable(ghost: Node) -> Callable:
 			var node := ghost_ref.get_ref() as Node if ghost_ref else null
 			if is_instance_valid(node):
 				revert.call(node)
+	return func() -> void:
+		var node := ghost_ref.get_ref() as Node if ghost_ref else null
+		if is_instance_valid(node):
+			node.queue_free()
+
+
+func _confirm_callable(ghost: Node) -> Callable:
+	var ghost_ref := weakref(ghost) if ghost else null
+	if confirm.is_valid():
+		return func() -> void:
+			var node := ghost_ref.get_ref() as Node if ghost_ref else null
+			if is_instance_valid(node):
+				confirm.call(node)
 	return func() -> void:
 		var node := ghost_ref.get_ref() as Node if ghost_ref else null
 		if is_instance_valid(node):

@@ -24,7 +24,7 @@ func test_register_schema_stores_columns() -> void:
 	db._register_schema(&"rocks", [&"health", &"position"])
 	await get_tree().process_frame
 
-	var record := db._find_by_id(&"rocks", &"r1")
+	var record := await db._find_by_id(&"rocks", &"r1")
 	assert_that(record.is_empty()).is_true()
 
 
@@ -55,7 +55,7 @@ func test_transaction_upserts_batches_and_commits() -> void:
 
 	var committed := [false]
 	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 50 })
 			tx.queue_upsert(&"rocks", &"r2", { &"health": 20 })
@@ -73,7 +73,7 @@ func test_transaction_returns_ok_on_success() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var err := db.transaction(
+	var err := await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
@@ -86,7 +86,7 @@ func test_transaction_propagates_backend_error() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	var err := db.transaction(
+	var err := await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
@@ -101,7 +101,7 @@ func test_transaction_does_not_emit_committed_on_failure() -> void:
 
 	var committed := [false]
 	db.transaction_committed.connect(func(_tc, _rc): committed[0] = true)
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
@@ -113,18 +113,18 @@ func test_find_by_id_returns_record_and_loaded_signals() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 99 })
 	)
 
 	var hits: Array[bool] = []
 	db.record_loaded.connect(func(_t, _id, hit: bool): hits.append(hit))
-	var record := db._find_by_id(&"rocks", &"r1")
+	var record := await db._find_by_id(&"rocks", &"r1")
 	assert_that(record.get(&"health")).is_equal(99)
 
-	db._find_by_id(&"rocks", &"r1")
-	db._find_by_id(&"rocks", &"nonexistent")
+	await db._find_by_id(&"rocks", &"r1")
+	await db._find_by_id(&"rocks", &"nonexistent")
 	assert_that(hits).contains_exactly([true, true, false])
 
 
@@ -133,13 +133,13 @@ func test_find_all_delegates_to_backend() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 			tx.queue_upsert(&"rocks", &"r2", { &"health": 20 })
 	)
 
-	var all := db._find_all(&"rocks")
+	var all := await db._find_all(&"rocks")
 	assert_that(all.size()).is_equal(2)
 
 
@@ -148,15 +148,15 @@ func test_delete_delegates_to_backend() -> void:
 	db._register_schema(&"rocks", [&"health"])
 	await get_tree().process_frame
 
-	db.transaction(
+	await db.transaction(
 		func(tx: NetwDatabase.TransactionContext):
 			tx.queue_upsert(&"rocks", &"r1", { &"health": 10 })
 	)
 
-	db.delete(&"rocks", &"r1")
+	await db.delete(&"rocks", &"r1")
 	var backend := db.backend as TestMemoryBackend
 	assert_that(backend.delete_calls.size()).is_equal(1)
-	assert_that(db._find_by_id(&"rocks", &"r1").is_empty()).is_true()
+	assert_that((await db._find_by_id(&"rocks", &"r1")).is_empty()).is_true()
 
 
 func test_upsert_emits_record_upserted_signal() -> void:

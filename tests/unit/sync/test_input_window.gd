@@ -41,7 +41,10 @@ func test_window_is_ack_bounded_and_capped() -> void:
 		NodePath(""),
 	) as PackedByteArray
 	var window := NetwCodec.decode_window(
-		bytes, [&"motion"] as Array[StringName], [], [],
+		bytes,
+		[&"motion"] as Array[StringName],
+		[],
+		[],
 	)
 
 	assert_int(window.size()).is_equal(3)
@@ -66,7 +69,10 @@ func test_window_uses_newest_cap_when_ack_lags() -> void:
 		NodePath(""),
 	) as PackedByteArray
 	var window := NetwCodec.decode_window(
-		bytes, [&"motion"] as Array[StringName], [], [],
+		bytes,
+		[&"motion"] as Array[StringName],
+		[],
+		[],
 	)
 
 	assert_int(window.size()).is_equal(4)
@@ -136,7 +142,10 @@ func test_codec_roundtrip() -> void:
 	]
 
 	var decoded := NetwCodec.decode_window(
-		NetwCodec.encode_window(samples, keys, []), keys, [], [],
+		NetwCodec.encode_window(samples, keys, []),
+		keys,
+		[],
+		[],
 	)
 
 	assert_int(decoded.size()).is_equal(2)

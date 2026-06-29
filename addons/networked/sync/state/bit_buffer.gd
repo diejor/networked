@@ -25,12 +25,12 @@
 ## so a one-bit offset cannot drift between encoder and decoder.
 class_name NetwBitBuffer
 
-
 ## Accumulates bits and bytes into a [PackedByteArray].
 class Writer:
 	var _out: PackedByteArray = PackedByteArray()
 	var _acc: int = 0
 	var _nbits: int = 0
+
 
 	## Writes the low [param count] bits of [param value], LSB-first.
 	func put_bits(value: int, count: int) -> void:
@@ -44,6 +44,7 @@ class Writer:
 			_acc >>= 8
 			_nbits -= 8
 
+
 	## Flushes any partial byte (zero-padded) so the next write is byte-aligned.
 	func align() -> void:
 		if _nbits > 0:
@@ -51,10 +52,12 @@ class Writer:
 			_acc = 0
 			_nbits = 0
 
+
 	## Aligns, then writes one byte.
 	func put_aligned_u8(value: int) -> void:
 		align()
 		_out.append(value & 0xFF)
+
 
 	## Aligns, then writes a 32-bit little-endian value.
 	func put_aligned_u32(value: int) -> void:
@@ -64,10 +67,12 @@ class Writer:
 		_out.append((value >> 16) & 0xFF)
 		_out.append((value >> 24) & 0xFF)
 
+
 	## Aligns, then appends [param bytes] verbatim.
 	func put_aligned_bytes(bytes: PackedByteArray) -> void:
 		align()
 		_out.append_array(bytes)
+
 
 	## Flushes the partial final byte and returns the buffer.
 	func to_bytes() -> PackedByteArray:
@@ -83,8 +88,10 @@ class Reader:
 	var _acc: int = 0
 	var _nbits: int = 0
 
+
 	func _init(bytes: PackedByteArray) -> void:
 		_in = bytes
+
 
 	## Reads [param count] bits, LSB-first.
 	func get_bits(count: int) -> int:
@@ -101,6 +108,7 @@ class Reader:
 		_nbits -= count
 		return result
 
+
 	## Discards the leftover bits of the current byte so the next read is
 	## byte-aligned. The leftover is always under 8 bits, so the byte cursor is
 	## already at the next boundary.
@@ -108,12 +116,14 @@ class Reader:
 		_acc = 0
 		_nbits = 0
 
+
 	## Aligns, then reads one byte.
 	func get_aligned_u8() -> int:
 		align()
 		var v := _in[_pos] if _pos < _in.size() else 0
 		_pos += 1
 		return v
+
 
 	## Aligns, then reads a 32-bit little-endian value.
 	func get_aligned_u32() -> int:
@@ -124,6 +134,7 @@ class Reader:
 			_pos += 1
 			v |= b << (i * 8)
 		return v
+
 
 	## Aligns, then reads [param count] raw bytes.
 	func get_aligned_bytes(count: int) -> PackedByteArray:

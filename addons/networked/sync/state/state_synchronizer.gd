@@ -61,25 +61,17 @@ func configure() -> void:
 # through record(), so timeline stays null here (the server never receives its
 # own packets).
 func _ready() -> void:
+	# Replication config setup only. Timeline registration runs from
+	# NetwEntity.reparented (fired after authority settles, on spawn and reparent).
 	super._ready()
-	if Engine.is_editor_hint():
-		return
-	if multiplayer and multiplayer.is_server():
-		var entity := NetwEntity.of(self)
-		# State-sync presence is the rewind trigger, so an entity-bound synchronizer
-		# needs the tree's LagCompensation node. The required guard logs a clear error
-		# when this synchronizer sits under a MultiplayerTree with no node mounted, yet
-		# stays quiet for a scene run standalone (no enclosing tree, e.g. pressing F6).
-		if entity:
-			var sim := LagCompensation.resolve_required(self)
-			if sim:
-				sim.register_timeline(entity)
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	var entity := NetwEntity.of(self)
+	if entity and entity.reparenting and entity.reparenting.preserve_history:
+		return
 	var sim := _simulation()
 	if entity and sim:
 		sim.unregister_timeline(entity)
@@ -105,17 +97,12 @@ func _ordered_virtual_names() -> Array[StringName]:
 
 
 func _read_property(name: StringName, path: NodePath) -> Variant:
-	if name == STATE:
-		return encode_carrier()
 	if name == ACK:
 		return server_ack
 	return super._read_property(name, path)
 
 
 func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
-	if name == STATE:
-		decode_carrier(value)
-		return
 	if name == ACK:
 		_pending_ack = int(value)
 		return
@@ -146,7 +133,10 @@ func decode_carrier(value: Variant) -> void:
 		return
 	var keys := _payload_keys()
 	var frame := NetwCodec.decode_snapshot(
-		value, keys, _payload_quantizers(keys), _payload_types(keys),
+		value,
+		keys,
+		_payload_quantizers(keys),
+		_payload_types(keys),
 	)
 	if frame.is_empty():
 		return
@@ -178,6 +168,27 @@ func _notification(what: int) -> void:
 			entity.state = self
 			if not entity.control_changed.is_connected(_repin_authority):
 				entity.control_changed.connect(_repin_authority)
+			if not entity.reparented.is_connected(_on_reparented):
+				entity.reparented.connect(_on_reparented)
+
+
+func _on_reparented(_reparent: MultiplayerEntity.ReparentOpts) -> void:
+	if Engine.is_editor_hint():
+		return
+	_register_timeline()
+
+
+func _register_timeline() -> void:
+	if multiplayer and multiplayer.is_server():
+		var entity := NetwEntity.of(self)
+		# State-sync presence is the rewind trigger, so an entity-bound
+		# synchronizer needs the tree's LagCompensation node. The required guard
+		# logs a clear error when this synchronizer sits under a MultiplayerTree
+		# with no node mounted, yet stays quiet for a scene run standalone.
+		if entity:
+			var sim := LagCompensation.resolve_required(self)
+			if sim:
+				sim.register_timeline(entity)
 
 
 # Server Authority Protection: stay authority 1 regardless of the parent

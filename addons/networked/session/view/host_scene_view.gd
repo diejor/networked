@@ -76,3 +76,18 @@ func _on_display_source_changed(viewport: SubViewport) -> void:
 		set_target(null)
 		return
 	set_target(viewport)
+	_announce_view(viewport)
+
+
+# Tells the local player's entity it is now the displayed view, so its camera
+# (whatever implementation) can assert itself. Scoped to the player actually
+# under this viewport, so the spectator fallback never activates a stray view.
+func _announce_view(viewport: SubViewport) -> void:
+	if not is_instance_valid(viewport) or not _mt:
+		return
+	var player: Node = _mt.local_player
+	if not is_instance_valid(player) or not viewport.is_ancestor_of(player):
+		return
+	var entity := MultiplayerEntity.unwrap(player)
+	if entity:
+		entity.notify_view_activated()

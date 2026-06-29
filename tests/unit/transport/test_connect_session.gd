@@ -10,7 +10,10 @@ extends NetwTestSuite
 class _UnavailableBackend:
 	extends BackendPeer
 
-	func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	func create_host_peer(
+			_tree: MultiplayerTree,
+			_options: LobbyDirectory.HostOptions = null,
+	) -> MultiplayerPeer:
 		return null
 
 
@@ -29,7 +32,10 @@ class _UnavailableBackend:
 class _ProgressBackend:
 	extends BackendPeer
 
-	func create_host_peer(_tree: MultiplayerTree) -> MultiplayerPeer:
+	func create_host_peer(
+			_tree: MultiplayerTree,
+			_options: LobbyDirectory.HostOptions = null,
+	) -> MultiplayerPeer:
 		return null
 
 
@@ -68,8 +74,8 @@ class _MockDirectory:
 		return target
 
 
-	func host_lobby(server_name: String) -> MultiplayerPeer:
-		host_called_with = server_name
+	func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+		host_called_with = options.server_name
 		return null
 
 
