@@ -165,21 +165,21 @@ _data = {
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_state"]
 properties/0/path = NodePath(".:position")
 properties/0/spawn = false
-properties/0/replication_mode = 2
+properties/0/replication_mode = 1
 properties/1/path = NodePath(".:velocity")
 properties/1/spawn = false
-properties/1/replication_mode = 2
+properties/1/replication_mode = 1
 
 [sub_resource type="Resource" id="Quant_position"]
 script = ExtResource("10_qfix")
-step = 5.0
-min_value = -500.0
-max_value = 1500.0
+resolution_step = 5.0
+min_limit = -500.0
+max_limit = 1500.0
 
 [sub_resource type="Resource" id="Quant_velocity"]
 script = ExtResource("11_qbit")
-min_value = -90.0
-max_value = 90.0
+min_limit = -90.0
+max_limit = 90.0
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_input"]
 properties/0/path = NodePath("Inputs:motion")
@@ -191,7 +191,7 @@ properties/1/replication_mode = 1
 
 [sub_resource type="Resource" id="Quant_motion"]
 script = ExtResource("11_qbit")
-bits = 16
+bit_count = 16
 
 [node name="player" type="CharacterBody2D" unique_id=1262329161]
 z_index = 10
@@ -234,11 +234,9 @@ callback_mode_process = 0
 libraries/ = SubResource("AnimationLibrary_yb83i")
 
 [node name="StateSync" type="MultiplayerSynchronizer" parent="." unique_id=1095522834]
-replication_interval = 0.25
-delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_state")
 script = ExtResource("5_state")
-bundle_payload = true
+transport = 1
 property_codecs = Dictionary[StringName, ExtResource("6_clpg1")]({
 &"position": SubResource("Quant_position"),
 &"velocity": SubResource("Quant_velocity")
@@ -250,10 +248,10 @@ tick_mode = true
 
 [node name="InputSync" type="MultiplayerSynchronizer" parent="Inputs" unique_id=1701054962]
 root_path = NodePath("../..")
-replication_interval = 0.25
-delta_interval = 0.25
 replication_config = SubResource("SceneReplicationConfig_input")
+public_visibility = false
 script = ExtResource("6_input")
+transport = 1
 property_codecs = Dictionary[StringName, ExtResource("6_clpg1")]({
 &"motion": SubResource("Quant_motion")
 })

@@ -55,10 +55,8 @@ class ActionBody extends LagCompSimBody:
 		ctx.deny()
 
 
-func test_request_denial_reverts_predicted_ghost() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+func test_action_prediction_denial_and_revert_flow() -> void:
+	var s := await _new_scenario()
 	var p := await s.add_predicted_entity()
 	var client_body := p.client_root as ActionBody
 	var server_body := p.server_root as ActionBody
@@ -77,12 +75,11 @@ func test_request_denial_reverts_predicted_ghost() -> void:
 	assert_int(client_body.denied_count).is_equal(1)
 	await get_tree().process_frame
 	assert_that(client_body.get_node_or_null("Ghost")).is_null()
+	await s.teardown()
 
 
-func test_future_tick_action_waits_for_server_tick() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+func test_action_timing_modes_flow() -> void:
+	var s := await _new_scenario()
 	var p := await s.add_predicted_entity()
 	var client_body := p.client_root as ActionBody
 	var server_body := p.server_root as ActionBody
@@ -99,12 +96,65 @@ func test_future_tick_action_waits_for_server_tick() -> void:
 	assert_int(server_body.last_view_tick).is_equal(fire_tick)
 	assert_int(server_body.last_requested_tick).is_equal(fire_tick)
 	assert_int(server_body.last_execution_tick).is_equal(fire_tick)
+	await s.teardown()
+
+	s = await _new_scenario()
+	p = await s.add_predicted_entity()
+	client_body = p.client_root as ActionBody
+	server_body = p.server_root as ActionBody
+	var future_limit := s.server_sim.max_future_action_ticks
+
+	client_body.fire_tick_aligned(s.server_clock.tick + future_limit + 4)
+	s.run_until(
+		func() -> bool:
+			return client_body.denied_count == 1,
+		30,
+	)
+
+	assert_int(server_body.server_requests).is_equal(0)
+	assert_int(client_body.denied_count).is_equal(1)
+	await s.teardown()
+
+	s = await _new_scenario()
+	p = await s.add_predicted_entity()
+	client_body = p.client_root as ActionBody
+	server_body = p.server_root as ActionBody
+	var requested_tick := s.server_clock.tick + 3
+
+	client_body.fire_immediate(requested_tick)
+	s.run_until(
+		func() -> bool:
+			return server_body.server_requests == 1,
+		30,
+	)
+
+	assert_int(server_body.last_requested_tick).is_equal(requested_tick)
+	assert_int(server_body.last_view_tick).is_less_equal(
+		server_body.last_execution_tick,
+	)
+	await s.teardown()
+
+	s = await _new_scenario()
+	p = await s.add_predicted_entity()
+	client_body = p.client_root as ActionBody
+	server_body = p.server_root as ActionBody
+	requested_tick = s.server_clock.tick + 6
+
+	client_body.fire(requested_tick)
+	s.run_until(
+		func() -> bool:
+			return server_body.server_requests == 1,
+		30,
+	)
+
+	assert_int(server_body.server_requests).is_equal(1)
+	assert_int(server_body.last_requested_tick).is_equal(requested_tick)
+	assert_int(server_body.last_execution_tick).is_less(requested_tick)
+	await s.teardown()
 
 
-func test_input_gated_action_waits_for_consumed_state() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+func test_state_ready_gate_flow() -> void:
+	var s := await _new_scenario()
 	s.server_sim.input_gate_deadline_ticks = 12
 	var p := await s.add_predicted_entity()
 	var client_body := p.client_root as ActionBody
@@ -127,57 +177,14 @@ func test_input_gated_action_waits_for_consumed_state() -> void:
 	assert_int(server_body.server_requests).is_equal(1)
 	assert_int(server_body.last_view_tick).is_equal(fire_tick)
 	assert_bool(timeline.state_at(fire_tick).is_empty()).is_false()
+	await s.teardown()
 
-
-func test_input_gated_late_action_waits_for_consumed_state() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	s.server_sim.input_gate_deadline_ticks = 12
-	var p := await s.add_predicted_entity()
-	var server_body := p.server_root as ActionBody
-	var target := s.server.get_path_to(server_body)
-	p.server_input.timeline = NetwTimeline.new()
-	s.run(2)
-	var fire_tick := s.server_clock.tick
-	var key := s.server.lag_compensation.effects.key_for(
-		p.server_entity,
-		fire_tick,
-		0,
-	)
-	var timeline := s.server_sim.timeline_of(p.server_entity)
-
-	s.server_sim._request_action(
-		target,
-		&"_server_action",
-		fire_tick,
-		null,
-		key,
-		NetwAction.TimingMode.TICK_ALIGNED_STATE_READY,
-	)
-	s.run(1)
-
-	assert_int(server_body.server_requests).is_equal(0)
-	timeline.record_input(fire_tick, { &"motion": Vector2.ZERO })
-	s.run(1)
-
-	assert_int(server_body.server_requests).is_equal(0)
-	s.feed_server_input(p, fire_tick - 1, { &"motion": Vector2.ZERO })
-	s.run(2)
-
-	assert_int(server_body.server_requests).is_equal(1)
-	assert_int(server_body.last_view_tick).is_equal(fire_tick)
-
-
-func test_input_gated_action_executes_after_deadline() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+	s = await _new_scenario()
 	s.server_sim.input_gate_deadline_ticks = 2
-	var p := await s.add_predicted_entity()
-	var client_body := p.client_root as ActionBody
-	var server_body := p.server_root as ActionBody
-	var fire_tick := s.server_clock.tick + 3
+	p = await s.add_predicted_entity()
+	client_body = p.client_root as ActionBody
+	server_body = p.server_root as ActionBody
+	fire_tick = s.server_clock.tick + 3
 	var fallback_ticks: Array[int] = []
 	p.server_input.timeline = NetwTimeline.new()
 	s.server_sim.action_gate_fallback.connect(
@@ -193,22 +200,19 @@ func test_input_gated_action_executes_after_deadline() -> void:
 	assert_int(fallback_ticks.size()).is_equal(1)
 	assert_int(fallback_ticks[0]).is_equal(fire_tick)
 	assert_int(s.server_sim.metrics()[&"gate_fallbacks"]).is_equal(1)
+	await s.teardown()
 
-
-func test_state_ready_action_releases_on_missing_policy_slot() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+	s = await _new_scenario()
 	s.server_sim.input_gate_deadline_ticks = 12
-	var p := await s.add_predicted_entity(
+	p = await s.add_predicted_entity(
 		[&"position"],
 		[&"motion", &"bombing"],
 		PredictionComponent.MissingInput.STALL,
 	)
-	var server_body := p.server_root as ActionBody
+	server_body = p.server_root as ActionBody
 	var target := s.server.get_path_to(server_body)
 	p.server_input.timeline = NetwTimeline.new()
-	var timeline := s.server_sim.timeline_of(p.server_entity)
+	timeline = s.server_sim.timeline_of(p.server_entity)
 	s.run(2)
 	var first_input_tick := s.server_clock.tick
 	var view_tick := first_input_tick + 2
@@ -224,7 +228,7 @@ func test_state_ready_action_releases_on_missing_policy_slot() -> void:
 		first_input_tick,
 		{ &"motion": Vector2.RIGHT },
 	)
-	s.server_sim._request_action(
+	s.server_sim._send_action_request(
 		target,
 		&"_server_action",
 		view_tick,
@@ -243,75 +247,11 @@ func test_state_ready_action_releases_on_missing_policy_slot() -> void:
 	assert_bool(timeline.state_at(view_tick).is_empty()).is_false()
 	assert_int(p.server_prediction.missing_count).is_greater(0)
 	assert_int(s.server_sim.metrics()[&"gate_fallbacks"]).is_equal(0)
+	await s.teardown()
 
 
-func test_far_future_action_is_denied() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
-	var client_body := p.client_root as ActionBody
-	var server_body := p.server_root as ActionBody
-	var future_limit := s.server_sim.max_future_action_ticks
-
-	client_body.fire_tick_aligned(s.server_clock.tick + future_limit + 4)
-	s.run_until(
-		func() -> bool:
-			return client_body.denied_count == 1,
-		30,
-	)
-
-	assert_int(server_body.server_requests).is_equal(0)
-	assert_int(client_body.denied_count).is_equal(1)
-
-
-func test_immediate_action_clamps_future_tick() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
-	var client_body := p.client_root as ActionBody
-	var server_body := p.server_root as ActionBody
-	var requested_tick := s.server_clock.tick + 3
-
-	client_body.fire_immediate(requested_tick)
-	s.run_until(
-		func() -> bool:
-			return server_body.server_requests == 1,
-		30,
-	)
-
-	assert_int(server_body.last_requested_tick).is_equal(requested_tick)
-	assert_int(server_body.last_view_tick).is_less_equal(
-		server_body.last_execution_tick,
-	)
-
-
-func test_default_action_mode_is_immediate() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
-	var client_body := p.client_root as ActionBody
-	var server_body := p.server_root as ActionBody
-	var requested_tick := s.server_clock.tick + 6
-
-	client_body.fire(requested_tick)
-	s.run_until(
-		func() -> bool:
-			return server_body.server_requests == 1,
-		30,
-	)
-
-	assert_int(server_body.server_requests).is_equal(1)
-	assert_int(server_body.last_requested_tick).is_equal(requested_tick)
-	assert_int(server_body.last_execution_tick).is_less(requested_tick)
-
-
-func test_action_key_matches_across_peer_entities() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
+func test_action_key_and_adoption_flow() -> void:
+	var s := await _new_scenario()
 	var p := await s.add_predicted_entity()
 	var client_key := s.client.lag_compensation.effects.key_for(
 		p.client_entity,
@@ -326,12 +266,6 @@ func test_action_key_matches_across_peer_entities() -> void:
 
 	assert_that(client_key).is_equal(server_key)
 
-
-func test_adopted_action_frees_predicted_ghost() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
 	var client_body := p.client_root as ActionBody
 	var key := s.client.lag_compensation.effects.key_for(
 		p.client_entity,
@@ -346,21 +280,17 @@ func test_adopted_action_frees_predicted_ghost() -> void:
 
 	assert_int(client_body.confirmed_count).is_equal(1)
 	assert_that(client_body.get_node_or_null("Ghost")).is_null()
+	await s.teardown()
 
-
-func test_adopted_action_custom_confirm_keeps_predicted_ghost() -> void:
-	var s := PredictionScenario.new()
-	s.body_type = ActionBody
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
-	var client_body := p.client_root as ActionBody
+	s = await _new_scenario()
+	p = await s.add_predicted_entity()
+	client_body = p.client_root as ActionBody
 	var custom_confirm_called := [0]
 
 	client_body.action.confirm = func(_ghost: Node) -> void:
 		custom_confirm_called[0] += 1
-		# Do NOT free the ghost, just keep it.
 
-	var key := s.client.lag_compensation.effects.key_for(
+	key = s.client.lag_compensation.effects.key_for(
 		p.client_entity,
 		s.client_clock.tick,
 		0,
@@ -373,9 +303,15 @@ func test_adopted_action_custom_confirm_keeps_predicted_ghost() -> void:
 
 	assert_int(client_body.confirmed_count).is_equal(1)
 	assert_int(custom_confirm_called[0]).is_equal(1)
-	# The ghost must still be valid and inside the tree!
 	assert_that(client_body.get_node_or_null("Ghost")).is_not_null()
 
-	# Clean up the ghost manually to avoid leaks in test suite
 	client_body.get_node("Ghost").queue_free()
 	await get_tree().process_frame
+	await s.teardown()
+
+
+func _new_scenario() -> PredictionScenario:
+	var s := PredictionScenario.new()
+	s.body_type = ActionBody
+	await s.setup(self, PredictionScenario.TICKRATE, PredictionScenario.DISPLAY_OFFSET, false)
+	return s

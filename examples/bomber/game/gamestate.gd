@@ -13,7 +13,6 @@ signal connection_failed()
 signal connection_succeeded()
 signal game_ended()
 signal game_error(what: String)
-signal match_started()
 
 @onready var ctx: NetwContext = Netw.ctx(self)
 
@@ -26,14 +25,26 @@ var world: MultiplayerScene:
 			return null
 		return sm.active_scenes.get(&"World") as MultiplayerScene
 
+var lobby: MultiplayerScene:
+	get:
+		if not ctx or not ctx.services:
+			return null
+		var sm := ctx.services.scene_manager
+		if not sm:
+			return null
+		return sm.active_scenes.get(&"Lobby") as MultiplayerScene
+
 
 func _ready() -> void:
 	setup_connections()
 
 
-func _on_player_joined(rj: ResolvedJoin) -> void:
-	players[rj.peer_id] = rj.username
+func _on_participant_joined(participant: NetwParticipant) -> void:
+	players[participant.peer_id] = participant.username
 	player_list_changed.emit()
+	var lobby_scene := lobby
+	if ctx.tree.is_server() and is_instance_valid(lobby_scene):
+		lobby_scene.admit(participant)
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -72,7 +83,7 @@ func host_game(_player_name: String) -> void:
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 
-	ctx.tree.host_player(jp)
+	ctx.tree.host(jp)
 
 
 @rpc("any_peer", "call_local")
@@ -91,34 +102,37 @@ func get_player_list() -> Array:
 	return players.values()
 
 
-## Starts the match by activating [code]World[/code]; admission cascades
-## through each player's [MultiplayerEntity] as bomber's spawner fires.
+## Starts the match by moving lobby participants into [code]World[/code].
 func begin_game() -> void:
 	assert(multiplayer.is_server())
 	var sm := ctx.services.scene_manager
-	sm.activate_scene(&"World")
-	_rpc_match_started.rpc()
-
-
-@rpc("authority", "call_local", "reliable")
-func _rpc_match_started() -> void:
-	match_started.emit()
+	var world_scene := sm.activate_scene(&"World")
+	var lobby_scene := lobby
+	assert(is_instance_valid(world_scene))
+	assert(is_instance_valid(lobby_scene))
+	world_scene.move_participants(lobby_scene.participants)
 
 
 func end_game() -> void:
-	if is_instance_valid(world):
+	# A client reaching here through server_disconnected has a dead peer, so
+	# multiplayer.is_server() would query get_unique_id() on it and error. Only
+	# an active peer can be the server, so gate the server-side teardown on it.
+	var mp := multiplayer.multiplayer_peer
+	var peer_active := mp != null \
+			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	if peer_active and multiplayer.is_server() and is_instance_valid(world):
 		var sm := ctx.services.scene_manager
-		if sm:
-			sm.retire_scene(&"World")
-		else:
-			world.queue_free()
+		var lobby_scene := lobby
+		if is_instance_valid(lobby_scene):
+			lobby_scene.move_participants(world.participants)
+		sm.retire_scene(&"World")
 
 	game_ended.emit()
 	players.clear()
 
 
 func setup_connections() -> void:
-	ctx.tree.player_joined.connect(_on_player_joined)
+	ctx.tree.participant_joined.connect(_on_participant_joined)
 	ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
 	ctx.tree.connected_to_server.connect(_on_connected_ok)
 	ctx.tree.server_disconnected.connect(_on_server_disconnected)

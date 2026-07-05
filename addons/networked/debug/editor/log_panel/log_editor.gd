@@ -259,9 +259,9 @@ func _get_module_cache() -> Array:
 	return _module_cache
 
 
-## Recursively scans a directory and returns a list of entry dicts.
-## Each entry: {name: String, module_path: String, is_dir: bool, children: Array}
-## Dirs with no .gd files anywhere in their subtree are omitted.
+# Recursively scans a directory and returns a list of entry dicts.
+# Each entry: {name: String, module_path: String, is_dir: bool, children: Array}
+# Dirs with no .gd files anywhere in their subtree are omitted.
 func _scan_dir(path: String) -> Array:
 	var dir := DirAccess.open(path)
 	if not dir:
@@ -323,8 +323,8 @@ func _to_module_path(path: String) -> String:
 	return p.replace("/", ".")
 
 
-## Removes module_overrides entries whose paths no longer exist in the filesystem.
-## Called after every cache build so stale keys from renamed/deleted scripts are cleaned up.
+# Removes module_overrides entries whose paths no longer exist in the filesystem.
+# Called after every cache build so stale keys from renamed/deleted scripts are cleaned up.
 func _prune_stale_overrides(cache: Array) -> void:
 	if not _settings or _settings.module_overrides.is_empty():
 		return
@@ -350,7 +350,7 @@ func _prune_stale_overrides(cache: Array) -> void:
 		ResourceSaver.save(_settings, _settings.resource_path)
 
 
-## Flattens the cache into a set of all known module paths (dirs and files).
+# Flattens the cache into a set of all known module paths (dirs and files).
 func _collect_module_paths(entries: Array) -> Dictionary:
 	var result := { }
 	for entry: Dictionary in entries:

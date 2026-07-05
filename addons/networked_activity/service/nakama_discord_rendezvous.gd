@@ -108,7 +108,7 @@ func _host_and_commit(
 		"Discord Activity",
 		LobbyDirectory.Visibility.PRIVATE,
 	)
-	var host_err := await tree.host_player(payload, opts)
+	var host_err := await tree.host(payload, opts)
 	if host_err != OK:
 		return host_err
 	var winner := await _commit_host(instance_id, tree, wrapper)
@@ -118,7 +118,7 @@ func _host_and_commit(
 		"NakamaDiscordRendezvous: lost host race for instance %s. Joining %s.",
 		[instance_id, winner],
 	)
-	await tree.disconnect_player()
+	await tree.leave()
 	return await tree.join(_target_for(winner), payload)
 
 

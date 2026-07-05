@@ -49,7 +49,7 @@ signal client_synchronized
 ## Emitted when a [method push_to] acknowledgment arrives from the remote peer.
 signal push_acknowledged
 
-var _save_span: NetSpan
+var _save_span: NetwSpan
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 var _initialized: bool = false
 var _state_changed: bool = false

@@ -24,7 +24,7 @@ func _make_state_sync() -> StampedSynchronizer:
 	sync.register_property(
 		&"position",
 		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 		false,
 		true,
 	)

@@ -191,6 +191,27 @@ func test_client_disconnect_keeps_match_running() -> void:
 	await drain_frames(get_tree(), 10)
 
 
+# The lobby roster now ships inside the networked Lobby scene, so admitting the
+# host must (1) spawn that scene's UI and (2) populate its roster, while the
+# pre-session browser steps aside. On a listen server admission runs
+# synchronously inside participant_joined, so local_scene_changed has to be
+# relayed by then. Regression for binding local_participant after the emit, which
+# dropped the host's first scene change and left it stuck on the browser.
+func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
+	var valeria := await game.add_host("valeria", false)
+	await drain_frames(get_tree(), 5)
+
+	var in_lobby := valeria.scene().find_child("InLobby", true, false)
+	assert_that(in_lobby).is_not_null()
+	var member_list := in_lobby.find_child("MemberList", true, false) as ItemList
+	assert_int(member_list.item_count).is_equal(1)
+
+	var browser := valeria.scene().find_child("ConnectBrowser", true, false) as Control
+	assert_bool(browser.visible).is_false()
+	assert_that(valeria.tree.local_participant.current_scene.scene_name) \
+			.is_equal(&"Lobby")
+
+
 func _begin_game(host: NetwSceneRunner) -> void:
 	var gamestate := host.tree.get_service(BomberGamestate) as BomberGamestate
 	assert_that(gamestate).is_not_null()

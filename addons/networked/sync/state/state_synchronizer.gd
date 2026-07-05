@@ -1,41 +1,34 @@
 @tool
-## Server-authoritative state replication that records authoritative snapshots
-## into the entity [NetwTimeline].
+## Server-authoritative state replication that records snapshots into
+## [NetwTimeline].
 ##
-## Authority is always 1, so only the server stamps and writes state. The stamp
-## ([constant StampedSynchronizer.TICK]), the reconciliation ack
-## ([constant ACK]), and every payload property share one reliable, ordered
-## ON_CHANGE delta packet, so a client knows the authoring tick before applying
-## the values and the stamp can never tear away from them.
+## Authority is always [code]1[/code], so only the server stamps and writes
+## state. The payload rides [constant STATE], which frames
+## [constant StampedSynchronizer.TICK] and [constant ACK] with the encoded
+## [PackedSynchronizer] payload core.
 ##
 ## [codeblock]
 ## Player (CharacterBody2D, authority = 1)
-## └── StateSynchronizer            # ON_CHANGE delta: __tick, __ack, position, ...
-##       on owner client: records into timeline, hands (tick, ack) to prediction
-##       on remote client: writes through; the interpolator displays it
+## `-- StateSynchronizer
+##     carrier: __state { __tick, __ack, payload }
+##     owner client: record and reconcile
+##     remote client: write through for display
 ## [/codeblock]
 ##
-## [constant ACK] is the reconciliation ack (server to client, last consumed
-## input tick). It is per-entity and well defined because each entity has at most
-## one input-owning peer.
+## Useful send cadence has a one tick floor. A sub-tick
+## [member MultiplayerSynchronizer.replication_interval] burns packet framing
+## without adding authoring information.
 class_name StateSynchronizer
 extends StampedSynchronizer
 
 ## Virtual name of the reconciliation ack (last consumed input tick).
 const ACK := &"__ack"
 
-## Virtual name of the bundled snapshot carrier used when
-## [member PackedSynchronizer.bundle_payload] is on.
-##
-## It frames [constant StampedSynchronizer.TICK] and [constant ACK] ahead of the
-## [method PackedSynchronizer.encode_carrier] payload core, so the whole snapshot
-## is one atomic [NetwCodec] blob on the volatile ALWAYS lane instead of separate
-## ON_CHANGE stamps. Bundling is where [member PackedSynchronizer.property_codecs]
-## quantization pays off, since the blob is one opaque property.
+## Virtual name of the bundled snapshot carrier.
 const STATE := &"__state"
 
 ## Last consumed input tick surfaced to the owning client as [constant ACK].
-## Phase 1's consume step sets this; Phase 0 leaves it at -1.
+## Phase 1's consume step sets this. Phase 0 leaves it at [code]-1[/code].
 var server_ack: int = -1
 
 ## Invoked on the receiving client after a packet is flushed, with the packet's
@@ -48,22 +41,18 @@ var _pending_ack: int = -1
 
 func configure() -> void:
 	set_multiplayer_authority(1)
-	if bundle_payload:
+	if transport == Transport.STOCK:
 		register_stamp(STATE, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
-		return
-	register_stamp(TICK, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
-	register_stamp(ACK, SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE)
 
 
 # State-sync presence is the rewind trigger: on the server, register the entity
 # so the simulation service records its authoritative history every tick, even
 # without a PredictionComponent. The server records via snapshot_payload(), never
-# through record(), so timeline stays null here (the server never receives its
-# own packets).
+# through record(), so timeline stays null here.
 func _ready() -> void:
-	# Replication config setup only. Timeline registration runs from
-	# NetwEntity.reparented (fired after authority settles, on spawn and reparent).
 	super._ready()
+	if not Engine.is_editor_hint():
+		_register_timeline()
 
 
 func _exit_tree() -> void:
@@ -91,9 +80,9 @@ func carrier_name() -> StringName:
 
 
 func _ordered_virtual_names() -> Array[StringName]:
-	if bundle_payload:
+	if carrier_enabled() and transport == Transport.STOCK:
 		return [STATE]
-	return [TICK, ACK]
+	return []
 
 
 func _read_property(name: StringName, path: NodePath) -> Variant:
@@ -124,10 +113,6 @@ func encode_carrier() -> PackedByteArray:
 
 ## Overrides [method PackedSynchronizer.decode_carrier] to decode a
 ## snapshot blob and prime the receive path.
-##
-## This updates the stamp, the pending ack, and each payload value (routed
-## through the stamp layer so write_through and _pending_payload behave
-## exactly as the unbundled path).
 func decode_carrier(value: Variant) -> void:
 	if not (value is PackedByteArray):
 		return
@@ -140,8 +125,11 @@ func decode_carrier(value: Variant) -> void:
 	)
 	if frame.is_empty():
 		return
-	_pending_tick = int(frame.get(&"tick", -1))
-	last_received_tick = _pending_tick
+	var tick := int(frame.get(&"tick", -1))
+	if transport == Transport.RPC and tick < last_received_tick:
+		return
+	_pending_tick = tick
+	last_received_tick = tick
 	_pending_ack = int(frame.get(&"ack", -1))
 	var payload: Dictionary = frame.get(&"payload", { })
 	for k: StringName in payload:
@@ -181,10 +169,6 @@ func _on_reparented(_reparent: MultiplayerEntity.ReparentOpts) -> void:
 func _register_timeline() -> void:
 	if multiplayer and multiplayer.is_server():
 		var entity := NetwEntity.of(self)
-		# State-sync presence is the rewind trigger, so an entity-bound
-		# synchronizer needs the tree's LagCompensation node. The required guard
-		# logs a clear error when this synchronizer sits under a MultiplayerTree
-		# with no node mounted, yet stays quiet for a scene run standalone.
 		if entity:
 			var sim := LagCompensation.resolve_required(self)
 			if sim:
@@ -195,3 +179,33 @@ func _register_timeline() -> void:
 # entity's recursive controller updates.
 func _repin_authority(_previous_peer: int, _peer: int) -> void:
 	set_multiplayer_authority(1)
+	_refresh_rpc_driver()
+
+
+func _rpc_outgoing_bytes(tick: int) -> PackedByteArray:
+	var core := encode_payload_core()
+	var retained_changed := _retained_changed()
+	var heartbeat_due := _rpc_heartbeat_due(tick)
+	if core == _rpc_last_core and not retained_changed and not heartbeat_due:
+		return PackedByteArray()
+	_rpc_last_core = core
+	_rpc_force_reliable = retained_changed
+	return _pack_wire_bytes(encode_carrier())
+
+
+func _on_rpc_carrier_flushed() -> void:
+	_on_synchronized()
+
+
+func _rpc_heartbeat_due(tick: int) -> bool:
+	if _rpc_last_sent_tick < 0:
+		return true
+	var interval := heartbeat_ticks
+	if interval <= 0:
+		var clock := MultiplayerClock.for_node(self)
+		interval = clock.tickrate if clock else 60
+	return tick - _rpc_last_sent_tick >= interval
+
+
+func relay_channel() -> int:
+	return RelayService.Command.STATE

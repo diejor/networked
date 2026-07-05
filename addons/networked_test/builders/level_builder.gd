@@ -82,9 +82,19 @@ func build() -> Node:
 
 	for child in _custom_children:
 		var child_dup: Node = child.duplicate()
+		_mark_spawn_template_child(child_dup)
 		var _a2: Node = SceneAssembly.attach(root, child_dup, root)
 
 	return root
+
+
+func _mark_spawn_template_child(child: Node) -> void:
+	var entity := MultiplayerEntity.unwrap(child)
+	if not entity:
+		return
+	if not NetwEntity.parse_entity(child.name).is_empty():
+		return
+	child.set_meta(MultiplayerEntity._SPAWN_TEMPLATE_META, true)
 
 
 ## Composes, packs, and returns a [PackedScene] registered in memory.

@@ -4,9 +4,9 @@ extends NetwTestSuite
 
 func _bits(b: int, lo: float, hi: float) -> NetwQuantizeBits:
 	var q := NetwQuantizeBits.new()
-	q.bits = b
-	q.min_value = lo
-	q.max_value = hi
+	q.bit_count = b
+	q.min_limit = lo
+	q.max_limit = hi
 	return q
 
 
@@ -56,9 +56,9 @@ func test_quantized_window_roundtrip() -> void:
 func test_snapshot_mixed_quantized_and_raw() -> void:
 	var keys: Array[StringName] = [&"position", &"velocity", &"stunned"]
 	var fixed := NetwQuantizeFixed.new()
-	fixed.step = 0.5
-	fixed.min_value = -1000.0
-	fixed.max_value = 1000.0
+	fixed.resolution_step = 0.5
+	fixed.min_limit = -1000.0
+	fixed.max_limit = 1000.0
 	var quantizers: Array = [fixed, _bits(8, -90.0, 90.0), null]
 	var types: Array = [TYPE_VECTOR2, TYPE_VECTOR2, TYPE_BOOL]
 	var payload := {

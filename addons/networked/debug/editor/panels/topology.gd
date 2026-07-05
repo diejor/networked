@@ -1,6 +1,6 @@
 ## Topology panel - shows synchronizer tree and identity for one player peer.
 ##
-## Displays the latest [NetTopologySnapshot] received from the reporter.
+## Displays the latest [NetwTopologySnapshot] received from the reporter.
 ## Topology is current-state (not time-series), so [method populate] shows only
 ## the most recent entry and [method on_new_entry] replaces rather than appends.
 ##
@@ -123,8 +123,8 @@ func _apply_identity(d: Dictionary) -> void:
 	var node_path: String = d.get("node_path", "")
 	var peer_id: int = d.get("peer_id", 0)
 	var scene: String = d.get("scene_name", "-")
-	var is_server: bool = d.get("is_server", false)
-	var mode_str: String = "SERVER" if is_server else "CLIENT"
+	var role := _role_from_payload(d)
+	var mode_str: String = d.get("role_name", MultiplayerTree.Role.keys()[role])
 
 	var username: String = d.get("username", "-")
 
@@ -137,6 +137,14 @@ func _apply_identity(d: Dictionary) -> void:
 	_last_peer_id = peer_id
 	if _node_btn:
 		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
+
+
+func _role_from_payload(d: Dictionary) -> MultiplayerTree.Role:
+	if d.has("role"):
+		return d.get("role", MultiplayerTree.Role.NONE)
+	if d.get("is_server", false):
+		return MultiplayerTree.Role.DEDICATED_SERVER
+	return MultiplayerTree.Role.CLIENT
 
 # --- Synchronizer tree --------------------------------------------------------
 

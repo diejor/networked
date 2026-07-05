@@ -274,7 +274,7 @@ func sync_breakpoints_cleared() -> void:
 		for item: TreeItem in _caller_rows[key]:
 			_refresh_bp_cell(item, false)
 
-# --- Span Lifecycle (NetTrace) ------------------------------------------------
+# --- Span Lifecycle (NetwTrace) ------------------------------------------------
 
 
 ## Creates a top-level span row with an open-state indicator (yellow (o)).
@@ -433,8 +433,8 @@ func _on_copy() -> void:
 	DisplayServer.clipboard_set("\n".join(lines))
 
 
-## Registers [param item] in [member _caller_rows] and adds the breakpoint button.
-## Does nothing if [param caller] is empty (no source info available).
+# Registers [param item] in [member _caller_rows] and adds the breakpoint button.
+# Does nothing if [param caller] is empty (no source info available).
 func _register_caller_row(item: TreeItem, caller: Dictionary) -> void:
 	if caller.is_empty():
 		return

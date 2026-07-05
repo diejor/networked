@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="7_qil8s"]
 [ext_resource type="Script" uid="uid://wbpaoljt4w77" path="res://addons/networked/addons/nakama/nakama_backend.gd" id="8_pbhs4"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="10_browser"]
-[ext_resource type="PackedScene" path="res://examples/bomber/game/in_lobby.tscn" id="11_in"]
 [ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="12_backend"]
 [ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="13_ws"]
 [ext_resource type="Script" uid="uid://b8xpp6r4y1ku2" path="res://addons/networked/addons/steam/steam_backend.gd" id="14_steam"]
@@ -90,10 +89,6 @@ theme_override_font_sizes/font_size = 16
 text = "Status Label"
 horizontal_alignment = 1
 vertical_alignment = 1
-
-[node name="InLobby" parent="." unique_id=788442195 instance=ExtResource("11_in")]
-unique_name_in_owner = true
-visible = false
 
 [node name="ErrorDialog" type="AcceptDialog" parent="." unique_id=142008537]
 

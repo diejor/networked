@@ -53,7 +53,7 @@ func test_peers_and_rosters_see_each_other() -> void:
 
 	for tree in [host_tree, client_a, client_b]:
 		assert_int(tree.multiplayer.get_peers().size()).is_equal(2)
-		assert_int(tree.get_joined_players().size()).is_equal(3)
+		assert_int(tree.get_participants().size()).is_equal(3)
 
 
 func test_disconnect_propagates_to_remaining_peers() -> void:
@@ -172,4 +172,4 @@ func _has_peer(tree: MultiplayerTree, peer_id: int) -> bool:
 func _joined_count(tree: MultiplayerTree) -> int:
 	if not is_instance_valid(tree):
 		return 0
-	return tree.get_joined_players().size()
+	return tree.get_participants().size()

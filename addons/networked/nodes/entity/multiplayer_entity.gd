@@ -24,6 +24,20 @@ extends MultiplayerSynchronizer
 ## [br][br]
 ## See [method instantiate_from], [method spawn_under],
 ## [method spawn_player], and [method despawn] for the spawn/despawn interface.
+## 
+## [br][br]
+## See [NetwEntity] for custom spawn identity binding.
+##
+## [br][br]
+## [EntitySpawnPolicy] is the managed player join path. It reads a selected
+## [MultiplayerEntity], instantiates the player through [method spawn_player],
+## and registers it through [method MultiplayerScene.add_player] so identity,
+## [member owner] authority, and [member MultiplayerScene.gate] enrollment
+## settle through the standard lifecycle.
+## [codeblock]
+## var policy := EntitySpawnPolicy.from_scene_node_path(spawn_point)
+## payload.spawn = policy.to_dict()
+## [/codeblock]
 ##
 ## Siblings react to the spawn lifecycle via [signal NetwEntity.spawning]
 ## [codeblock]
@@ -93,12 +107,22 @@ enum DisconnectRule {
 	DESPAWN,
 }
 
-## Emitted after [member entity_id] and multiplayer authority
-## are resolved, but [b]before[/b] sibling [method Node._enter_tree].
+## Emitted once after [member entity_id], [member peer_id], [member controller],
+## and spawn-packet properties are decoded. The entity is in the tree, but its
+## owner may not have completed [method Node._ready].
+##
 ## Mirrors [signal NetwEntity.spawning] for callers that already hold a
-## [MultiplayerEntity] reference.
+## [MultiplayerEntity] reference. Connect from the editor when you only need to
+## read spawn-time identity or authority.
 signal spawning
 
+## Emitted once after identity is decoded and components table is populated.
+signal identity_hydrated
+
+
+## Emitted once after the owner is in the tree, registered with its
+## [MultiplayerScene], and finished [method Node._ready].
+##
 ## Mirrors [signal NetwEntity.spawned] for callers that already hold a
 ## [MultiplayerEntity] reference.
 signal spawned
@@ -173,6 +197,9 @@ var _pending_controller_binding_set := false
 var _action_spawn_hidden := false
 var _action_spawn_original_visible := true
 var _reparented_once := false
+var _spawning_emitted_once := false
+var _spawned_emitted_once := false
+var _spawn_config_locked := false
 
 ## Stable entity label mirrored to [member NetwEntity.entity_id].
 ## If empty, the spawn lifecycle derives it from [member Node.name].
@@ -239,6 +266,22 @@ var action_spawn_tick: int = -1
 
 ## Peer that requested the [NetwAction] result, or [code]0[/code].
 var action_requester: int = 0
+
+# Wire route allocated by LivenessService on the server and delivered to
+# clients as a spawn prop, so the binding lands exactly when the node exists.
+@export var _netw_route: int = 0
+@export var _netw_table_hash: int = 0
+
+
+const _SPAWN_TEMPLATE_META := &"_networked_spawn_template"
+
+## The [MultiplayerEntity.DespawnOpts] of the [method despawn] currently in
+## flight, or [code]null[/code] outside a despawn.
+##
+## Set for the duration of the [signal despawning] emission so listeners such
+## as [LivenessService] can read the despawn mode, for example the linger flag
+## that turns a route [constant LivenessService.State.LINGERING].
+var active_despawn_opts: DespawnOpts = null
 
 
 func _get_entity_record() -> NetwEntity:
@@ -327,10 +370,15 @@ func _notification(what: int) -> void:
 	entity.contribute_spawn_property(self, &"controller_binding_set")
 	entity.contribute_spawn_property(self, &"action_spawn_tick")
 	entity.contribute_spawn_property(self, &"action_requester")
+	entity.contribute_spawn_property(self, &"_netw_route")
+	entity.contribute_spawn_property(self, &"_netw_table_hash")
 	_hydrate_identity_once(entity)
+
 	_hydrate_controller_once(entity)
 	if not entity.owner_tree_entered.is_connected(_on_owner_tree_entered):
 		entity.owner_tree_entered.connect(_on_owner_tree_entered)
+	if owner and not owner.ready.is_connected(_on_owner_ready):
+		owner.ready.connect(_on_owner_ready)
 
 
 func _enter_tree() -> void:
@@ -341,6 +389,7 @@ func _enter_tree() -> void:
 	set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
 	if controller_binding_set:
 		_apply_control()
+	_emit_spawning_once()
 	if _reparented_once:
 		# On a reparent this runs mid-propagation (the subtree is still rebuilding),
 		# so defer the emit to post-settle when every node is back in the tree.
@@ -353,6 +402,8 @@ func _ready() -> void:
 	_dbg.trace("_ready for %s", [owner.name if owner else "<no owner>"])
 
 	if is_template:
+		if _is_spawner_spawned_owner():
+			_debug_validate_spawn_identity()
 		_apply_template_state()
 		return
 	if (
@@ -374,18 +425,18 @@ func _exit_tree() -> void:
 		clock.on_tick.disconnect(_on_action_reveal_tick)
 	if _is_local_represented_peer():
 		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.local_player == owner:
+		if mt and mt.local_player != null and mt.local_player.owner == owner:
 			mt.local_player = null
 	despawned.emit()
 
 
-# Starts the entity lifecycle after identity is available.
+# Starts scene registration after identity is available.
 #
 # Spawn contributions are locked before sibling components hydrate. Control
-# authority is applied before [signal NetwEntity.spawning]. Scene registration
-# still follows representation through [member peer_id].
+# authority is applied before scene registration, which still follows
+# representation through [member peer_id].
 # [codeblock]
-# spawn properties -> control authority -> spawning -> scene registration
+# spawn properties -> control authority -> scene registration
 # [/codeblock]
 func _on_owner_tree_entered() -> void:
 	if Engine.is_editor_hint():
@@ -395,8 +446,19 @@ func _on_owner_tree_entered() -> void:
 	_dbg.trace("Entity '%s' entering tree.", [owner.name])
 	var entity := Netw.ctx(self).entity
 	if entity:
+		if not is_template and _netw_route == 0:
+			if entity.route > 0:
+				# The wrap_spawn envelope already carried a route. Adopt it
+				# so the spawn prop and the envelope stay one channel-agnostic
+				# value.
+				_netw_route = entity.route
+			elif _is_route_authority():
+				var liveness := LivenessService.for_node(self)
+				if liveness:
+					_netw_route = liveness.allocate_route(entity)
 		_hydrate_identity_once(entity)
 		_hydrate_controller_once(entity)
+	_spawn_config_locked = true
 	_sanitize_replication_config()
 	_apply_control()
 	_apply_action_spawn_visibility()
@@ -405,10 +467,39 @@ func _on_owner_tree_entered() -> void:
 		# sibling synchronizers in-tree, so it runs in _ready, not here.
 		return
 
+	_register_with_scene()
+
+
+func _on_owner_ready() -> void:
+	if Engine.is_editor_hint():
+		return
+	_emit_spawned_once()
+
+
+func _emit_spawning_once() -> void:
+	if _spawning_emitted_once:
+		return
+	if is_template:
+		return
+	_spawning_emitted_once = true
+	var entity := _get_entity_record()
 	if entity:
+		identity_hydrated.emit()
+		if _netw_route > 0:
+			var liveness := LivenessService.for_node(self)
+			if liveness:
+				liveness.bind_route(_netw_route, entity)
 		entity.spawning.emit()
 	spawning.emit()
-	_register_with_scene()
+
+
+func _emit_spawned_once() -> void:
+	if _spawned_emitted_once:
+		return
+	if is_template:
+		return
+	_spawned_emitted_once = true
+	var entity := _get_entity_record()
 	if entity:
 		entity.spawned.emit()
 	spawned.emit()
@@ -591,6 +682,22 @@ func _hydrate_identity_once(entity: NetwEntity) -> void:
 		elif owner:
 			entity.peer_id = NetwEntity.parse_peer(owner.name)
 	_pending_peer_id = entity.peer_id
+	if not is_template and _netw_route > 0:
+		var liveness := LivenessService.for_node(self)
+		if liveness:
+			liveness.bind_route(_netw_route, entity)
+
+
+# Api-based server test so offline trees allocate without tripping the
+# role-unset warning. Offline counts as server, matching the service
+# convention.
+func _is_route_authority() -> bool:
+	var mt := MultiplayerTree.resolve(self)
+	if mt == null:
+		return false
+	return not mt.multiplayer_api \
+			or mt.multiplayer_peer == null \
+			or mt.multiplayer_api.is_server()
 
 
 func _hydrate_controller_once(entity: NetwEntity) -> void:
@@ -629,6 +736,37 @@ func _apply_template_state() -> void:
 	SynchronizersCache.sync_only_server(owner)
 	pass
 
+
+func _debug_validate_spawn_identity() -> void:
+	if not OS.is_debug_build():
+		return
+	if not is_template:
+		return
+	if owner and not NetwEntity.parse_entity(owner.name).is_empty():
+		return
+	if owner and owner.has_meta(_SPAWN_TEMPLATE_META):
+		return
+	var msg := (
+			"spawned entity has no identity. Wrap your spawn_function with " +
+			"NetwEntity.wrap_spawn or bind identity before returning"
+	)
+	push_error(msg)
+
+
+func _is_spawner_spawned_owner() -> bool:
+	if not is_instance_valid(owner) or not owner.is_inside_tree():
+		return false
+	var parent := owner.get_parent()
+	if parent == null:
+		return false
+	var root := owner.get_tree().root
+	for node in root.find_children("*", "MultiplayerSpawner", true, false):
+		var spawner := node as MultiplayerSpawner
+		var spawn_parent := spawner.get_node_or_null(spawner.spawn_path)
+		if spawn_parent == parent:
+			return true
+	return false
+
 # Spawn config.
 
 
@@ -639,6 +777,14 @@ func _apply_template_state() -> void:
 ## Intended for use during spawn-property contributions. This is idempotent:
 ## adding the same path twice is a no-op.
 func add_spawn_property(prop: NodePath) -> void:
+	assert(
+		not _spawn_config_locked,
+		(
+				"MultiplayerEntity.add_spawn_property: spawn config is " +
+				"locked. Contribute from NOTIFICATION_PARENTED before the " +
+				"spawn packet is sealed."
+		),
+	)
 	if not replication_config:
 		replication_config = SceneReplicationConfig.new()
 	_add_spawn_property_into(replication_config, prop)
@@ -679,6 +825,11 @@ func _sanitize_replication_config() -> void:
 		_coerce_to_spawn_only(replication_config, prop)
 
 
+func _validate_property(property: Dictionary) -> void:
+	if property.name == &"_netw_route" or property.name == &"_netw_table_hash":
+		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
+
+
 # Registers the entity with the enclosing [MultiplayerScene] so per-peer
 # scene visibility filters apply. Scene-owned enrollment - the scene's
 # layer/gate is the authoritative admission state; [InterestComponent]
@@ -693,7 +844,7 @@ func _register_with_scene() -> void:
 		)
 		return
 	if peer_id != 0:
-		scene.register_player(owner)
+		scene.register_player(NetwEntity.of(owner))
 		_assign_local_player_if_needed()
 	else:
 		scene.track_node(owner)
@@ -704,7 +855,7 @@ func _assign_local_player_if_needed() -> void:
 		return
 	var mt := MultiplayerTree.resolve(self)
 	if mt:
-		mt.local_player = owner
+		mt.local_player = NetwEntity.of(owner)
 
 
 func _is_local_represented_peer() -> bool:
@@ -868,24 +1019,35 @@ func spawn_under(parent: Node = null, id: StringName = &"") -> Node:
 	return copy
 
 
-## Instantiates a player copy from [param rj].
+## Instantiates a player copy from [param participant].
 ## [br][br][b]Server Only.[/b]
-func instantiate_player(rj: ResolvedJoin) -> Node:
+func instantiate_player(participant: NetwParticipant) -> Node:
 	assert(multiplayer.is_server())
+	if participant == null or participant.join == null:
+		return null
 	var copy := instantiate_from(
 		owner,
 		func(c: MultiplayerEntity) -> void:
-			NetwEntity.bind(c.owner, rj.username, rj.peer_id)
+			NetwEntity.bind(
+				c.owner,
+				participant.username,
+				participant.peer_id,
+			)
 	)
 	return copy
 
 
-## Spawns a player copy into [param scene] from [param rj].
+## Spawns a player copy into [param scene] from [param participant].
 ## [br][br][b]Server Only.[/b]
-func spawn_player(rj: ResolvedJoin, scene: MultiplayerScene) -> Node:
+func spawn_player(
+		participant: NetwParticipant,
+		scene: MultiplayerScene,
+) -> Node:
 	assert(multiplayer.is_server(), "spawn_player is server-only")
-	var copy := instantiate_player(rj)
-	scene.add_player(copy)
+	var copy := instantiate_player(participant)
+	if copy == null:
+		return null
+	scene.add_player(NetwEntity.of(copy))
 	return copy
 
 
@@ -919,7 +1081,7 @@ func reparent_to(new_parent: Node, opts: ReparentOpts = null) -> void:
 
 	entity.reparenting = opts
 	if _is_cross_scene_player_reparent(source_scene, destination_scene):
-		destination_scene.prepare_player_reparent(owner)
+		destination_scene.prepare_player_reparent(entity)
 
 	var disconnect_after_enter := _prepare_scene_signal_handoff(
 		source_scene,
@@ -934,7 +1096,7 @@ func reparent_to(new_parent: Node, opts: ReparentOpts = null) -> void:
 		owner.tree_entered.disconnect(disconnect_after_enter)
 
 	if _is_cross_scene_player_reparent(source_scene, destination_scene):
-		destination_scene.complete_player_reparent(owner)
+		destination_scene.complete_player_reparent(entity)
 	elif destination_scene:
 		destination_scene.track_node(owner)
 	entity.reparenting = null
@@ -1001,7 +1163,9 @@ func despawn(opts: DespawnOpts = null) -> void:
 	assert(multiplayer.is_server(), "despawn is server-only")
 	if opts == null:
 		opts = DespawnOpts.new()
+	active_despawn_opts = opts
 	despawning.emit(opts.reason)
+	active_despawn_opts = null
 	if opts.flush_save:
 		var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
 		if save:

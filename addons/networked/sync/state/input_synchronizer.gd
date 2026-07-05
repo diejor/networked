@@ -18,6 +18,10 @@
 ## samples on the same volatile lane as a compact [PackedByteArray] encoded by
 ## [NetwCodec], sized by [method input_window_size] and sourced from the
 ## owning peer's predicted [NetwTimeline].
+##
+## Useful send cadence has a one tick floor. A sub-tick
+## [member MultiplayerSynchronizer.replication_interval] burns packet framing
+## without adding authoring information.
 class_name InputSynchronizer
 extends StampedSynchronizer
 
@@ -69,8 +73,13 @@ var _pending_window: Array = []
 
 
 func configure() -> void:
-	register_stamp(TICK, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
-	if _window_enabled():
+	if transport == Transport.RPC and audience == Audience.PUBLIC:
+		push_error(
+			"InputSynchronizer: Audience.PUBLIC requires STOCK transport.",
+		)
+	if transport == Transport.STOCK:
+		register_stamp(TICK, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
+	if _window_enabled() and transport == Transport.STOCK:
 		register_stamp(INPUT_WINDOW, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 
 
@@ -150,6 +159,7 @@ func _on_control_changed(_previous_peer: int, _peer: int) -> void:
 func _bind_authority(entity: NetwEntity) -> void:
 	var controller := entity.controller
 	set_multiplayer_authority(controller if controller != 0 else 1)
+	_refresh_rpc_driver()
 
 
 func _apply_audience() -> void:
@@ -199,14 +209,39 @@ func encode_carrier() -> PackedByteArray:
 func decode_carrier(value: Variant) -> void:
 	if value is PackedByteArray:
 		var keys := _payload_keys()
-		_pending_window = NetwCodec.decode_window(
+		var decoded := NetwCodec.decode_window(
 			value,
 			keys,
 			_payload_quantizers(keys),
 			_payload_types(keys),
 		)
+		_pending_window = []
+		var newest := -1
+		for entry: Dictionary in decoded:
+			newest = maxi(newest, int(entry.get(&"tick", -1)))
+		if newest <= _rpc_last_received_tick:
+			return
+		_rpc_last_received_tick = newest
+		_pending_tick = newest
+		last_received_tick = newest
+		for entry: Dictionary in decoded:
+			if int(entry.get(&"tick", -1)) > acknowledged_tick:
+				_pending_window.append(entry)
 	else:
 		_pending_window = []
+
+
+func _rpc_outgoing_bytes(tick: int) -> PackedByteArray:
+	var newest := _authoring_tick()
+	if newest < 0 or newest == _rpc_last_sent_tick:
+		return PackedByteArray()
+	_rpc_force_reliable = false
+	return _pack_wire_bytes(encode_carrier())
+
+
+
+func _on_rpc_carrier_flushed() -> void:
+	_on_synchronized()
 
 
 # The window is on unless input_window_size explicitly requests single-sample
@@ -236,7 +271,11 @@ func _warn_if_undersized() -> void:
 	var recommended := maxi(2, ceili(replication_interval * clock.tickrate) * redundancy_packets)
 	if input_window_size < recommended:
 		push_warning(
-			"InputSynchronizer: input_window_size=%d is below the cadence recommendation %d (replication_interval=%.3f, tickrate=%d, redundancy_packets=%d)" % [
+			(
+					"InputSynchronizer: input_window_size=%d is below the "
+					+ "cadence recommendation %d (replication_interval=%.3f, "
+					+ "tickrate=%d, redundancy_packets=%d)"
+			) % [
 				input_window_size,
 				recommended,
 				replication_interval,
@@ -244,3 +283,15 @@ func _warn_if_undersized() -> void:
 				redundancy_packets,
 			],
 		)
+
+
+func relay_channel() -> int:
+	return RelayService.Command.INPUT
+
+
+func relay_recipients(liveness: LivenessService, entity: NetwEntity) -> Array[int]:
+	if audience == Audience.SERVER_ONLY:
+		if multiplayer and not multiplayer.is_server():
+			return [1]
+		return []
+	return super.relay_recipients(liveness, entity)

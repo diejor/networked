@@ -75,14 +75,14 @@ func _on_multiplayer_configured() -> void:
 	if mt.role == MultiplayerTree.Role.DEDICATED_SERVER:
 		queue_free()
 		return
-	if not mt.local_player_joined.is_connected(_on_local_player_joined):
-		mt.local_player_joined.connect(_on_local_player_joined)
+	if not mt.local_participant_joined.is_connected(_on_local_participant_joined):
+		mt.local_participant_joined.connect(_on_local_participant_joined)
 
 
 # Plays the arrival animation when the local peer's player first appears.
 # Replaces MultiplayerEntity's direct reach into TPLayerAPI; presentation
 # stays inside the presentation node.
-func _on_local_player_joined(_rj: ResolvedJoin) -> void:
+func _on_local_participant_joined(_participant: NetwParticipant) -> void:
 	teleport_in()
 
 

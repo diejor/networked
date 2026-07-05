@@ -1,28 +1,30 @@
 @tool
-## [ProxySynchronizer] that bit-packs its payload into one [NetwCodec] blob on the
-## wire, quantized by a per-property [NetwQuantize].
+## [ProxySynchronizer] that sends its payload as one [NetwCodec] carrier.
 ##
-## Godot's stock replication has no per-property codec hook, so a quantizer only
-## reaches the wire when the values are bundled into a single carrier property and
-## encoded here. [member bundle_payload] off leaves the codecs inert and the
-## payload on stock per-property replication. On, the payload props are suppressed
-## to [constant SceneReplicationConfig.REPLICATION_MODE_NEVER] and ride one
-## [method carrier_name] blob instead, trading Godot's ON_CHANGE per-property
-## diffing for an atomic packet. Bundle co-changing hot props, leave sparse
-## independent props on the stock path.
+## The carrier is the wire contract. Payload properties remain registered so
+## [method snapshot_payload] and [method apply_payload] can read and write live
+## nodes, but the standalone payload rows are suppressed on the wire.
 ##
 ## [codeblock]
-## # A standalone quantized state sync for many server-driven AI agents:
 ## var sync := PackedSynchronizer.new()
-## sync.bundle_payload = true
 ## sync.register_property(&"position", NodePath(".:position")).quantize(pos_codec)
 ## sync.register_property(&"velocity", NodePath(".:velocity")).quantize(vel_codec)
-## # position + velocity now ride one __packed blob, no timeline, no prediction.
+## sync.transport = PackedSynchronizer.Transport.RPC
 ## [/codeblock]
 ##
-## The wire never carries property names. Both peers derive the ordered key list
-## and the per-key [NetwQuantize] from the same registered config, which is what
-## lets [method snapshot_payload] and the receive path agree without a schema.
+## Replication modes on payload rows are delivery intent for this hierarchy:
+## [br]- [constant SceneReplicationConfig.REPLICATION_MODE_ALWAYS]: volatile.
+## Freshest wins. Loss is healed by a later carrier.
+## [br]- [constant SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE]: retained.
+## Eventual delivery is required. Missing means unchanged.
+## [br]- [constant SceneReplicationConfig.REPLICATION_MODE_NEVER]: suppressed.
+## Readable by [method snapshot_payload], but never sent alone.
+## [br][br]
+## [constant SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE] no longer means
+## per-property diffing because the carrier is atomic.
+## [constant SceneReplicationConfig.REPLICATION_MODE_ALWAYS] no longer means
+## timer cadence when [constant Transport.RPC] is selected. It means
+## newest-wins delivery at the cadence chosen by this synchronizer.
 class_name PackedSynchronizer
 extends ProxySynchronizer
 
@@ -31,23 +33,19 @@ const PACKED := &"__packed"
 
 ## Backing transport for the virtual-property surface.
 enum Transport {
-	## Godot [SceneMultiplayer] replication. The only implemented transport.
+	## Godot [SceneMultiplayer] replication through a carrier property.
 	STOCK,
+	## [PackedSynchronizer] RPC carrier sends gated by local policy.
+	RPC,
 }
 
-## Selected transport. Only [constant Transport.STOCK] exists today. A future
-## send-bytes channel becomes a second value behind this same surface: it delivers
-## the same packed blob through [code]rpc_id[/code] instead of a replicated
-## property, so nothing above the synchronizer changes when it lands.
-var transport := Transport.STOCK
+## Selected carrier transport.
+@export var transport: Transport = Transport.STOCK
 
-## When true, every payload property is packed into one [method carrier_name]
-## blob on the volatile ALWAYS lane instead of replicating per property.
+## Maximum ticks between forced volatile state sends on [constant Transport.RPC].
 ##
-## Bundling is the only way a [member property_codecs] quantizer reaches the wire,
-## so the codecs are inert while this is off. Off by default, which preserves the
-## per-property replication shape for existing synchronizers.
-@export var bundle_payload: bool = false
+## A value of [code]0[/code] derives one second from [MultiplayerClock.tickrate].
+@export_range(0, 600, 1) var heartbeat_ticks: int = 0
 
 @export_group("Compression", "compression_")
 
@@ -82,21 +80,25 @@ var transport := Transport.STOCK
 ## [/codeblock]
 @export var property_codecs: Dictionary[StringName, NetwQuantize] = { }
 
+var _rpc_clock: MultiplayerClock = null
+var _rpc_last_sent_tick: int = -1
+var _rpc_last_received_tick: int = -1
+var _rpc_last_reliable_core := PackedByteArray()
+var _rpc_last_core := PackedByteArray()
+var _rpc_force_reliable: bool = false
+
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	configure()
 	finalize()
+	_refresh_rpc_driver()
 
 
 ## Override to set authority and register stamps and payload before finalize.
-##
-## The base registers the bare [method carrier_name] stamp when
-## [member bundle_payload] is on, so a standalone [PackedSynchronizer] configured
-## through the inspector bundles with no override.
 func configure() -> void:
-	if carrier_enabled():
+	if carrier_enabled() and transport == Transport.STOCK:
 		register_stamp(carrier_name(), SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
 
 
@@ -111,6 +113,7 @@ func finalize() -> void:
 	super.finalize()
 	if not carrier_enabled() or not replication_config:
 		return
+	_warn_retained_stock_props()
 	var payload := _payload_keys()
 	for path: NodePath in replication_config.get_properties():
 		var sub := path.get_subname_count()
@@ -171,9 +174,9 @@ func snapshot_payload() -> Dictionary:
 	return out
 
 
-## Override to gate the bundled carrier. The base returns [member bundle_payload].
+## Override to gate the bundled carrier. The base always enables it.
 func carrier_enabled() -> bool:
-	return bundle_payload
+	return true
 
 
 ## Override to name the bundled carrier virtual property. The base returns
@@ -187,10 +190,7 @@ func carrier_name() -> StringName:
 ## Subclasses override to prepend their framing (a tick stamp, an ack, or a
 ## redundancy window) ahead of the same [method NetwCodec.encode_payload] core.
 func encode_carrier() -> PackedByteArray:
-	var keys := _payload_keys()
-	var w := NetwBitBuffer.Writer.new()
-	NetwCodec.encode_payload(w, snapshot_payload(), keys, _payload_quantizers(keys))
-	return w.to_bytes()
+	return encode_payload_core()
 
 
 ## Decodes the carrier blob and writes each payload value onto the live node. The
@@ -198,35 +198,20 @@ func encode_carrier() -> PackedByteArray:
 func decode_carrier(value: Variant) -> void:
 	if not (value is PackedByteArray):
 		return
-	var keys := _payload_keys()
-	var r := NetwBitBuffer.Reader.new(value)
-	var payload := NetwCodec.decode_payload(
-		r,
-		keys,
-		_payload_quantizers(keys),
-		_payload_types(keys),
-	)
+	var payload := decode_payload_core(value)
 	for k: StringName in payload:
 		super._write_property(k, get_real_path(k), payload[k])
 
 
 func _ordered_virtual_names() -> Array[StringName]:
-	if carrier_enabled():
+	if carrier_enabled() and transport == Transport.STOCK:
 		return [carrier_name()]
 	return []
 
 
 func _read_property(name: StringName, path: NodePath) -> Variant:
 	if carrier_enabled() and name == carrier_name():
-		var bytes := encode_carrier()
-		if compression_enabled and not bytes.is_empty():
-			var compressed := bytes.compress(int(compression_mode))
-			var output := PackedByteArray()
-			output.resize(4)
-			output.encode_u32(0, bytes.size())
-			output.append_array(compressed)
-			return output
-		return bytes
+		return _pack_wire_bytes(encode_carrier())
 	return super._read_property(name, path)
 
 
@@ -234,32 +219,149 @@ func _write_property(name: StringName, path: NodePath, value: Variant) -> void:
 	if carrier_enabled() and name == carrier_name():
 		if not (value is PackedByteArray):
 			return
-		var bytes: PackedByteArray = value
-		if compression_enabled and not bytes.is_empty():
-			if bytes.size() < 4:
-				Netw.dbg.error(
-					"PackedSynchronizer: Received compressed packet under 4 bytes."
-				)
-				return
-			var decompressed_size := bytes.decode_u32(0)
-			if decompressed_size > compression_max_size:
-				Netw.dbg.error(
-					"PackedSynchronizer: Decompressed size exceeds safety limit."
-				)
-				return
-			var compressed_data := bytes.slice(4)
-			bytes = compressed_data.decompress(
-					decompressed_size,
-					int(compression_mode),
-			)
-			if bytes.is_empty():
-				Netw.dbg.error(
-					"PackedSynchronizer: Decompression failed."
-				)
-				return
+		var bytes := _unpack_wire_bytes(value)
+		if bytes.is_empty() and not (value as PackedByteArray).is_empty():
+			return
 		decode_carrier(bytes)
 		return
 	super._write_property(name, path, value)
+
+
+## Encodes the payload core without tick or ack framing.
+func encode_payload_core(keys: Array[StringName] = []) -> PackedByteArray:
+	if keys.is_empty():
+		keys = _payload_keys()
+	var w := NetwBitBuffer.Writer.new()
+	NetwCodec.encode_payload(w, snapshot_payload(), keys, _payload_quantizers(keys))
+	return w.to_bytes()
+
+
+## Decodes a payload core without tick or ack framing.
+func decode_payload_core(value: PackedByteArray, keys: Array[StringName] = []) -> Dictionary:
+	if keys.is_empty():
+		keys = _payload_keys()
+	var r := NetwBitBuffer.Reader.new(value)
+	return NetwCodec.decode_payload(
+		r,
+		keys,
+		_payload_quantizers(keys),
+		_payload_types(keys),
+	)
+
+
+func _enter_tree() -> void:
+	_refresh_rpc_driver()
+
+
+func _exit_tree() -> void:
+	_refresh_rpc_driver()
+
+
+func set_multiplayer_authority(id: int, recursive: bool = true) -> void:
+	super.set_multiplayer_authority(id, recursive)
+	_refresh_rpc_driver()
+
+
+func _receive_relay_payload(payload: PackedByteArray, sender: int) -> void:
+	if sender != get_multiplayer_authority():
+		return
+	_apply_rpc_carrier(payload)
+
+
+func _apply_rpc_carrier(bytes: PackedByteArray) -> void:
+	var decoded := _unpack_wire_bytes(bytes)
+	if decoded.is_empty() and not bytes.is_empty():
+		return
+	decode_carrier(decoded)
+	_on_rpc_carrier_flushed()
+
+
+func _on_rpc_carrier_flushed() -> void:
+	pass
+
+
+func _refresh_rpc_driver() -> void:
+	if Engine.is_editor_hint():
+		return
+	var relay := RelayService.for_node(self)
+	if not relay:
+		return
+
+	if is_inside_tree() and transport == Transport.RPC and is_multiplayer_authority():
+		relay.register_sender(self)
+	else:
+		relay.unregister_sender(self)
+
+
+func _relay_outgoing_bytes(tick: int) -> Array:
+	var bytes := _rpc_outgoing_bytes(tick)
+	_rpc_last_sent_tick = tick
+	return [bytes, _rpc_force_reliable]
+
+
+func _rpc_outgoing_bytes(_tick: int) -> PackedByteArray:
+	_rpc_force_reliable = _retained_changed()
+	return _pack_wire_bytes(encode_carrier())
+
+
+## Override to name the [enum RelayService.Command] this synchronizer's
+## carrier rides. [StateSynchronizer] and [InputSynchronizer] each claim their
+## own channel.
+func relay_channel() -> int:
+	assert(false, "override relay_channel")
+	return -1
+
+
+## Override to narrow who receives this synchronizer's relay sends. The base
+## fans out to [method LivenessService.live_peers] on the server and to the
+## server on a client. [InputSynchronizer] narrows this to
+## [member InputSynchronizer.audience].
+func relay_recipients(liveness: LivenessService, entity: NetwEntity) -> Array[int]:
+	if multiplayer and multiplayer.is_server():
+		return liveness.live_peers(entity)
+	return [1]
+
+
+func _retained_changed() -> bool:
+	var keys := _retained_payload_keys()
+	if keys.is_empty():
+		return false
+	var core := encode_payload_core(keys)
+	if core == _rpc_last_reliable_core:
+		return false
+	_rpc_last_reliable_core = core
+	return true
+
+
+func _pack_wire_bytes(bytes: PackedByteArray) -> PackedByteArray:
+	if compression_enabled and not bytes.is_empty():
+		var compressed := bytes.compress(int(compression_mode))
+		var output := PackedByteArray()
+		output.resize(4)
+		output.encode_u32(0, bytes.size())
+		output.append_array(compressed)
+		return output
+	return bytes
+
+
+func _unpack_wire_bytes(bytes: PackedByteArray) -> PackedByteArray:
+	if compression_enabled and not bytes.is_empty():
+		if bytes.size() < 4:
+			Netw.dbg.error("PackedSynchronizer: Received compressed packet under 4 bytes.")
+			return PackedByteArray()
+		var decompressed_size := bytes.decode_u32(0)
+		if decompressed_size > compression_max_size:
+			Netw.dbg.error("PackedSynchronizer: Decompressed size exceeds safety limit.")
+			return PackedByteArray()
+		var compressed_data := bytes.slice(4)
+		var unpacked := compressed_data.decompress(
+			decompressed_size,
+			int(compression_mode),
+		)
+		if unpacked.is_empty() and decompressed_size > 0:
+			Netw.dbg.error("PackedSynchronizer: Decompression failed.")
+		return unpacked
+	return bytes
 
 
 # Ordered payload virtual names (non-stamp virtuals) in config order, so both
@@ -272,6 +374,28 @@ func _payload_keys() -> Array[StringName]:
 			continue
 		out.append(vname)
 	return out
+
+
+func _retained_payload_keys() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for key: StringName in _payload_keys():
+		if get_property_replication_mode(key) == \
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE:
+			out.append(key)
+	return out
+
+
+func _warn_retained_stock_props() -> void:
+	if transport != Transport.STOCK:
+		return
+	for key: StringName in _retained_payload_keys():
+		push_warning(
+			(
+					"PackedSynchronizer: retained property '%s' is on STOCK "
+					+ "transport. Switch the property to volatile or move it "
+					+ "to a plain synchronizer sibling."
+			) % [key],
+		)
 
 
 # Per-key quantizers parallel to [param keys], null where unconfigured.

@@ -27,10 +27,10 @@ func get_scene() -> MultiplayerScene:
 ## Adds [param player] to the scene via [method Scene.add_player],
 ## or directly to [member _parent_node] if no scene is set.
 ##
-## Closes [param span] with [method NetSpan.end] when provided.
-func place_player(player: Node, span: NetSpan = null) -> void:
+## Closes [param span] with [method NetwSpan.end] when provided.
+func place_player(player: Node, span: NetwSpan = null) -> void:
 	if is_instance_valid(_scene):
-		_scene.add_player(player)
+		_scene.add_player(NetwEntity.of(player))
 	elif is_instance_valid(_parent_node):
 		_parent_node.add_child(player)
 	if span:

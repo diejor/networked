@@ -48,7 +48,7 @@ will meet in this quick start are the moving parts of every session.
   :ref:`BackendPeer <class_BackendPeer>`), and call its session entry methods:
   :ref:`join or host <class_MultiplayerTree_method_join_or_host>`,
   :ref:`join <class_MultiplayerTree_method_join>`, or
-  :ref:`host player <class_MultiplayerTree_method_host_player>`. It owns its own
+  :ref:`host <class_MultiplayerTree_method_host>`. It owns its own
   :godot:`SceneMultiplayer <SceneMultiplayer>` and installs it onto the scene
   tree, so every descendant gets the correct :godot:`multiplayer <Node#class_node_property_multiplayer>` property
   automatically.
@@ -167,7 +167,7 @@ call :ref:`join() <class_MultiplayerTree_method_join>` instead.
     joining players spawn automatically without any spawn-handling code. A tree
     without a dropped world scene leaves ``spawn_policy`` unset, so you control
     spawning from
-    :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` instead.
+    :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` instead.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project

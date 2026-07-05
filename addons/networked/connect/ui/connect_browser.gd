@@ -16,29 +16,29 @@
 class_name ConnectBrowser
 extends Control
 
-const _ROW_SCENE := preload(
-	"res://addons/networked/connect/ui/row.tscn"
+var _ROW_SCENE := load(
+	"res://addons/networked/connect/ui/row.tscn",
 )
-const _ADD_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/add_popup.tscn"
+var _ADD_POPUP_SCENE := load(
+	"res://addons/networked/connect/ui/popups/add_popup.tscn",
 )
-const _HOST_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/host_popup.tscn"
+var _HOST_POPUP_SCENE := load(
+	"res://addons/networked/connect/ui/popups/host_popup.tscn",
 )
-const _JOIN_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/join_popup.tscn"
+var _JOIN_POPUP_SCENE := load(
+	"res://addons/networked/connect/ui/popups/join_popup.tscn",
 )
-const _JOIN_DIRECT_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/join_direct_popup.tscn"
+var _JOIN_DIRECT_POPUP_SCENE := load(
+	"res://addons/networked/connect/ui/popups/join_direct_popup.tscn",
 )
-const _CONNECTING_POPUP_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/connecting_popup.tscn"
+var _CONNECTING_POPUP_SCENE := load(
+	"res://addons/networked/connect/ui/popups/connecting_popup.tscn",
 )
-const _DETAIL_ITEM_SCENE := preload(
-	"res://addons/networked/connect/ui/detail_item.tscn"
+var _DETAIL_ITEM_SCENE := load(
+	"res://addons/networked/connect/ui/detail_item.tscn",
 )
-const _MENU_SCENE := preload(
-	"res://addons/networked/connect/ui/popups/menu.tscn"
+var _MENU_SCENE := load(
+	"res://addons/networked/connect/ui/popups/menu.tscn",
 )
 
 const _ROW_MENU_JOIN := Menu.ID_JOIN
@@ -67,8 +67,8 @@ const PLACEHOLDER_SERVER_NAME := "My Server"
 var spawner_options: Array[SceneNodePath] = []
 
 ## When [code]true[/code], hides this browser on
-## [signal NetwConnect.session_entered] and shows it again on
-## [signal NetwConnect.session_left].
+## [signal NetwConnect.connected] and shows it again on
+## [signal NetwConnect.disconnected].
 @export var hide_when_session_active: bool = true
 
 ## Path used to load and persist saved targets shown by this browser.
@@ -187,7 +187,7 @@ func _setup_session() -> void:
 	_rebuild_from_session()
 	_connect.refresh()
 	# Catch up when the tree entered before this browser bound, e.g. a debug
-	# auto-connect: session_entered already fired, so apply its effect now.
+	# auto-connect: connected already fired, so apply its effect now.
 	if _connect.is_session_active():
 		_on_session_entered()
 
@@ -201,10 +201,10 @@ func _bind_session_signals() -> void:
 		_connect.target_removed.connect(_on_target_removed)
 	if not _connect.target_updated.is_connected(_on_target_updated):
 		_connect.target_updated.connect(_on_target_updated)
-	if not _connect.session_entered.is_connected(_on_session_entered):
-		_connect.session_entered.connect(_on_session_entered)
-	if not _connect.session_left.is_connected(_on_session_left):
-		_connect.session_left.connect(_on_session_left)
+	if not _connect.connected.is_connected(_on_session_entered):
+		_connect.connected.connect(_on_session_entered)
+	if not _connect.disconnected.is_connected(_on_session_left):
+		_connect.disconnected.connect(_on_session_left)
 	if not _connect.host_failed.is_connected(_show_banner):
 		_connect.host_failed.connect(_show_banner)
 	if not _connect.join_failed.is_connected(_on_join_failed):
@@ -226,10 +226,10 @@ func _unbind_session_signals() -> void:
 		_connect.target_removed.disconnect(_on_target_removed)
 	if _connect.target_updated.is_connected(_on_target_updated):
 		_connect.target_updated.disconnect(_on_target_updated)
-	if _connect.session_entered.is_connected(_on_session_entered):
-		_connect.session_entered.disconnect(_on_session_entered)
-	if _connect.session_left.is_connected(_on_session_left):
-		_connect.session_left.disconnect(_on_session_left)
+	if _connect.connected.is_connected(_on_session_entered):
+		_connect.connected.disconnect(_on_session_entered)
+	if _connect.disconnected.is_connected(_on_session_left):
+		_connect.disconnected.disconnect(_on_session_left)
 	if _connect.host_failed.is_connected(_show_banner):
 		_connect.host_failed.disconnect(_show_banner)
 	if _connect.join_failed.is_connected(_on_join_failed):

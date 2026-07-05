@@ -5,9 +5,20 @@ extends SpawnPolicy
 ## spawns them at the [MultiplayerEntity] the client picked.
 ##
 ## [br][br]
-## The target is a single [member spawn_point] picked in the inspector. The
-## client serializes it through [method to_dict] and the server reads it back in
-## [method spawn]. See [SpawnPolicy] for the client and server split.
+## [member spawn_point] is the join contract. It must point at a
+## [MultiplayerEntity] inside a scene managed by [MultiplayerSceneManager].
+## The client serializes it through [method to_dict]. The server reads it in
+## [method spawn], activates the [MultiplayerScene], calls
+## [method MultiplayerEntity.spawn_player], and finishes with
+## [method MultiplayerScene.add_player].
+## [codeblock]
+## var policy := EntitySpawnPolicy.from_scene_node_path(spawn_point)
+## payload.spawn = policy.to_dict()
+## [/codeblock]
+##
+## Use [EntitySpawnPolicy] when players should enter through a declared scene
+## spawn point. Use [NetwEntity] directly only when gameplay owns the lower
+## level [MultiplayerSpawner] identity path.
 
 ## The [MultiplayerEntity] a joining player spawns at, picked in the inspector.
 ## [method to_dict] splits it into the scene basename and the in scene node path
@@ -30,17 +41,30 @@ static func from_scene_node_path(path: SceneNodePath) -> EntitySpawnPolicy:
 
 
 func to_dict() -> Dictionary:
+	assert(
+		spawn_point != null,
+		"assign spawn_point before using ConnectBrowser or joining",
+	)
 	if spawn_point == null:
-		return { }
-	return {
-		"scene_name": StringName(spawn_point.get_scene_name()),
-		"spawner_path": NodePath(spawn_point.node_path),
-	}
+		return with_policy_script({ })
+	return with_policy_script(
+		{
+			"scene_name": StringName(spawn_point.get_scene_name()),
+			"spawner_path": NodePath(spawn_point.node_path),
+		},
+	)
 
 
 func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 	var target_scene_name := StringName(rj.spawn.get("scene_name", &""))
 	var target_spawner_path: NodePath = rj.spawn.get("spawner_path", NodePath())
+	assert(
+		not target_scene_name.is_empty(),
+		(
+				"client sent no spawn intent. Sender and receiver are using " +
+				"different SpawnPolicies"
+		),
+	)
 	if target_scene_name.is_empty():
 		return null
 
@@ -49,9 +73,11 @@ func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
 	assert(scene, "activate_scene must guarantee scene presence")
 
 	var entity := _entity_in(scene, target_spawner_path)
-	var player := entity.instantiate_player(rj)
+	var participant := ctx.tree.participant(rj.peer_id)
+	assert(participant, "spawn requires an accepted participant")
+	var player := entity.instantiate_player(participant)
 	var target_scene := await mgr._resolve_hydrated_spawn_scene(player, scene)
-	target_scene.add_player(player)
+	target_scene.add_player(NetwEntity.of(player))
 	return target_scene
 
 

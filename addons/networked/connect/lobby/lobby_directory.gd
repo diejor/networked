@@ -21,7 +21,7 @@ extends NetwService
 
 ## How widely a hosted lobby is advertised.
 ##
-## A directory that lacks [constant Capability.FRIENDS_ONLY] treats
+## A directory that lacks [constant Capability.FRIENDS_ONLY_SUPPORT] treats
 ## [constant Visibility.FRIENDS_ONLY] as [constant Visibility.PRIVATE].
 ## [codeblock]
 ## PUBLIC        browse-visible.
@@ -40,13 +40,13 @@ enum Visibility {
 ## [codeblock]
 ## Capability
 ## ├── BROWSE        # list_lobbies returns provider results.
-## ├── FRIENDS_ONLY  # Visibility.FRIENDS_ONLY is supported.
-## ├── INVITES       # invite_received can fire.
-## └── FRIEND_NAMES  # get_member_name resolves personas.
+## ├── FRIENDS_ONLY_SUPPORT  # Visibility.FRIENDS_ONLY is supported.
+## ├── INVITES               # invite_received can fire.
+## └── FRIEND_NAMES          # get_member_name resolves personas.
 ## [/codeblock]
 enum Capability {
 	BROWSE = 1,
-	FRIENDS_ONLY = 2,
+	FRIENDS_ONLY_SUPPORT = 2,
 	INVITES = 4,
 	FRIEND_NAMES = 8,
 }

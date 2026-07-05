@@ -28,7 +28,7 @@ func test_sample_hits_rewound_misses_live() -> void:
 	var view_tick: int = s.server_clock.tick - 8
 	var past := s.server.lag_compensation.sample(p.server_entity, view_tick)
 	assert_that(past.is_empty()).is_false()
-	var rewound_pos: Vector2 = past.position
+	var rewound_pos: Vector2 = past.get_value(&"position")
 	var live_pos: Vector2 = p.server_body.position
 
 	# The target moved between the perceived tick and now.

@@ -142,3 +142,9 @@ class Reader:
 		var slice := _in.slice(_pos, _pos + count)
 		_pos += count
 		return slice
+
+
+	## Aligns, then returns how many unread bytes remain.
+	func remaining_bytes() -> int:
+		align()
+		return maxi(_in.size() - _pos, 0)

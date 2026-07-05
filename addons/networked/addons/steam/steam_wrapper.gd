@@ -244,3 +244,31 @@ static func chat_room_enter_response_to_string(code: int) -> String:
 			return "You blocked a member"
 		_:
 			return "Unknown response %d" % code
+
+
+## Maps [code]InitResult[/code] values to their enum name.
+static func init_result_to_string(code: int) -> String:
+	match code:
+		InitResult.OK:
+			return "OK"
+		InitResult.FAILED_GENERIC:
+			return "FAILED_GENERIC"
+		InitResult.NO_STEAM_CLIENT:
+			return "NO_STEAM_CLIENT"
+		InitResult.VERSION_MISMATCH:
+			return "VERSION_MISMATCH"
+		_:
+			return "UNKNOWN (%d)" % code
+
+
+## Returns a descriptive failure message for the [code]InitResult[/code] code.
+static func init_result_to_reason(code: int) -> String:
+	match code:
+		InitResult.FAILED_GENERIC:
+			return "generic initialization error"
+		InitResult.NO_STEAM_CLIENT:
+			return "no Steam client running"
+		InitResult.VERSION_MISMATCH:
+			return "SDK version mismatch"
+		_:
+			return "unknown error"

@@ -46,8 +46,8 @@ static func encode_snapshot(
 		quantizers: Array,
 ) -> PackedByteArray:
 	var w := NetwBitBuffer.Writer.new()
-	_put_varint(w, tick + 1)
-	_put_varint(w, ack + 1)
+	_put_svarint(w, tick)
+	_put_svarint(w, ack)
 	encode_payload(w, payload, keys, quantizers)
 	return w.to_bytes()
 
@@ -69,8 +69,8 @@ static func decode_snapshot(
 	var ack_val := _get_safe_varint(r)
 	if ack_val < 0:
 		return { }
-	var tick := tick_val - 1
-	var ack := ack_val - 1
+	var tick := _decode_zigzag(tick_val)
+	var ack := _decode_zigzag(ack_val)
 	var payload := decode_payload(r, keys, quantizers, types)
 	return { &"tick": tick, &"ack": ack, &"payload": payload }
 
@@ -144,6 +144,28 @@ static func decode_payload(
 		var t: int = types[i] if i < types.size() else TYPE_NIL
 		out[keys[i]] = _decode_value(r, t, q)
 	return out
+
+
+## Writes a single [param value] into [param w], bit-packed by
+## [param quantizer] when set, otherwise byte-aligned with a type tag. The
+## public entry to the value-encoding core, shared by entity RPC arguments.
+static func encode_value(
+		w: NetwBitBuffer.Writer,
+		value: Variant,
+		quantizer: NetwQuantize,
+) -> void:
+	_encode_value(w, value, quantizer)
+
+
+## Reads a single value written by [method encode_value]. [param type] is the
+## reconstructed [enum Variant.Type] a quantized value needs, ignored on the
+## tagged path.
+static func decode_value(
+		r: NetwBitBuffer.Reader,
+		type: int,
+		quantizer: NetwQuantize,
+) -> Variant:
+	return _decode_value(r, type, quantizer)
 
 
 static func _encode_value(
@@ -237,6 +259,16 @@ static func _type_byte(value: Variant) -> int:
 			return T_FALLBACK
 
 
+## Writes [param value] as a varint into [param w].
+static func put_varint(w: NetwBitBuffer.Writer, value: int) -> void:
+	_put_varint(w, value)
+
+
+## Reads a varint from [param r], returning [code]-1[/code] on error/overflow.
+static func get_safe_varint(r: NetwBitBuffer.Reader) -> int:
+	return _get_safe_varint(r)
+
+
 static func _put_varint(w: NetwBitBuffer.Writer, value: int) -> void:
 	for __ in 5:
 		var byte := value & 0x7F
@@ -246,6 +278,18 @@ static func _put_varint(w: NetwBitBuffer.Writer, value: int) -> void:
 		else:
 			w.put_aligned_u8(byte)
 			break
+
+
+static func _put_svarint(w: NetwBitBuffer.Writer, value: int) -> void:
+	_put_varint(w, _encode_zigzag(value))
+
+
+static func _encode_zigzag(value: int) -> int:
+	return (value << 1) if value >= 0 else ((-value << 1) - 1)
+
+
+static func _decode_zigzag(value: int) -> int:
+	return (value >> 1) if value & 1 == 0 else -((value >> 1) + 1)
 
 
 static func _get_safe_varint(r: NetwBitBuffer.Reader) -> int:

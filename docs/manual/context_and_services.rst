@@ -130,10 +130,10 @@ context, in :godot:`_ready() <Node#class_node_private_method__ready>` after the 
 
     @onready var ctx: NetwContext = Netw.ctx(self)
 
-    func _on_player_joined(rj: ResolvedJoin) -> void:
+    func _on_participant_joined(participant: NetwParticipant) -> void:
         if not ctx.is_valid():
             ctx = Netw.ctx(self)
-        ctx.services.get_service(BomberGamestate).register_player(rj)
+        ctx.services.get_service(BomberGamestate).register_player(participant)
 
 This keeps you inside the addon's lifetime guarantees without writing a
 re-resolve helper for every script that needs the tree.

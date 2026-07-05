@@ -1,4 +1,4 @@
-## Adapts [NetSpan] event data for the debugger's Span Tracer panel.
+## Adapts [NetwSpan] event data for the debugger's Span Tracer panel.
 @tool
 class_name SpanAdapter
 extends PanelDataAdapter

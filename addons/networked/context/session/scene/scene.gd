@@ -20,14 +20,14 @@ extends RefCounted
 # Player lifecycle signals
 # ---------------------------------------------------------------------------
 
-## Emitted when a player's node is spawned into this scene.
-signal player_entered(player: Node)
-## Emitted when a player's node is despawned from this scene.
-signal player_left(player: Node)
-## Emitted when a player toggles their ready state to [code]true[/code] via
-## [NetwScene.Readiness].[br][br]This is a manual ready-state signal, not an
-## automatic join event. See [signal player_entered] for spawn detection.
-signal player_ready(rj: ResolvedJoin)
+## Emitted when a player's identity is spawned into this scene.
+signal player_entered(player: NetwEntity)
+## Emitted when a player's identity is despawned from this scene.
+signal player_left(player: NetwEntity)
+## Emitted when a participant is admitted to this scene.
+signal participant_entered(participant: NetwParticipant)
+## Emitted when a participant is released from this scene.
+signal participant_left(participant: NetwParticipant)
 
 # ---------------------------------------------------------------------------
 # Suspend / resume signals  (soft, signal-only, game code decides)
@@ -62,16 +62,28 @@ signal countdown_cancelled()
 # ---------------------------------------------------------------------------
 
 var _scene_ref: WeakRef
-# Held strongly while the countdown is running so the timer stays alive.
-var _active_countdown: Countdown
 var _tree: NetwTree
+var _admission_layer: NetwInterestLayer
+var _admission_tree: MultiplayerTree
+var _pending_admitted_peers: Dictionary[int, bool] = { }
 
 
 func _init(scene: MultiplayerScene) -> void:
 	_scene_ref = weakref(scene)
 	scene.spawned.connect(_on_spawned)
 	scene.despawned.connect(_on_despawned)
-	scene.player_ready.connect(_on_player_ready)
+	scene.suspended.connect(suspended.emit)
+	scene.resumed.connect(resumed.emit)
+	scene.suspend_requested.connect(suspend_requested.emit)
+	scene.countdown_started.connect(countdown_started.emit)
+	scene.countdown_tick.connect(countdown_tick.emit)
+	scene.countdown_finished.connect(countdown_finished.emit)
+	scene.countdown_cancelled.connect(countdown_cancelled.emit)
+	if scene.multiplayer and scene.multiplayer.is_server():
+		scene.peer_admitted.connect(_on_peer_admitted)
+		scene.peer_released.connect(_on_peer_released)
+	else:
+		_bind_client_admission_layer(scene)
 
 # ---------------------------------------------------------------------------
 # Validity / identity queries
@@ -80,6 +92,8 @@ func _init(scene: MultiplayerScene) -> void:
 
 ## Returns [code]true[/code] while the underlying [Scene] is still alive.
 func is_valid() -> bool:
+	if _scene_ref == null:
+		return false
 	return is_instance_valid(_scene_ref.get_ref())
 
 
@@ -134,12 +148,20 @@ var peers: Array[int]:
 		result.assign(scene.connected_peers.keys())
 		return result
 
+## Participants currently admitted to this scene.
+var participants: Array[NetwParticipant]:
+	get:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return []
+		return scene.participants
+
 # ---------------------------------------------------------------------------
 # Player queries
 # ---------------------------------------------------------------------------
 
-## All player nodes currently in this scene.
-var players: Array[Node]:
+## All player identities currently in this scene.
+var players: Array[NetwEntity]:
 	get:
 		var scene := _scene_ref.get_ref() as MultiplayerScene
 		if not is_instance_valid(scene):
@@ -154,26 +176,26 @@ var player_count: int:
 			return 0
 		return scene.get_players().size()
 
-## The player node owned by the local peer, or [code]null[/code].
-var local_player: Node:
+## The player identity owned by the local peer, or [code]null[/code].
+var local_player: NetwEntity:
 	get:
 		var scene := _scene_ref.get_ref() as MultiplayerScene
 		if not is_instance_valid(scene):
 			return null
 		var local_id := scene.multiplayer.get_unique_id()
-		for player: Node in scene.get_players():
-			if _get_peer_id(player) == local_id:
+		for player: NetwEntity in scene.get_players():
+			if player.peer_id == local_id:
 				return player
 		return null
 
 
-## Returns the player node owned by [param peer_id], or [code]null[/code].
-func get_player_by_peer_id(peer_id: int) -> Node:
+## Returns the player identity owned by [param peer_id], or [code]null[/code].
+func get_player_by_peer_id(peer_id: int) -> NetwEntity:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if not is_instance_valid(scene):
 		return null
-	for player: Node in scene.get_players():
-		if _get_peer_id(player) == peer_id:
+	for player: NetwEntity in scene.get_players():
+		if player.peer_id == peer_id:
 			return player
 	return null
 
@@ -183,6 +205,14 @@ func get_player_by_peer_id(peer_id: int) -> Node:
 func wait_for_players(n: int) -> void:
 	while player_count < n:
 		await player_entered
+
+
+## Suspends until at least [param n] participants are admitted.
+## Safe to [operator await].
+func wait_for_participants(n: int) -> void:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		await scene.wait_for_participants(n)
 
 # ---------------------------------------------------------------------------
 # Static access
@@ -210,16 +240,73 @@ func close() -> void:
 			scene.spawned.disconnect(_on_spawned)
 		if scene.despawned.is_connected(_on_despawned):
 			scene.despawned.disconnect(_on_despawned)
-		if scene.player_ready.is_connected(_on_player_ready):
-			scene.player_ready.disconnect(_on_player_ready)
-	if _active_countdown:
-		_active_countdown.cancel()
-		_active_countdown = null
-	_scene_ref = null
+		if scene.suspended.is_connected(suspended.emit):
+			scene.suspended.disconnect(suspended.emit)
+		if scene.resumed.is_connected(resumed.emit):
+			scene.resumed.disconnect(resumed.emit)
+		if scene.suspend_requested.is_connected(suspend_requested.emit):
+			scene.suspend_requested.disconnect(suspend_requested.emit)
+		if scene.countdown_started.is_connected(countdown_started.emit):
+			scene.countdown_started.disconnect(countdown_started.emit)
+		if scene.countdown_tick.is_connected(countdown_tick.emit):
+			scene.countdown_tick.disconnect(countdown_tick.emit)
+		if scene.countdown_finished.is_connected(countdown_finished.emit):
+			scene.countdown_finished.disconnect(countdown_finished.emit)
+		if scene.countdown_cancelled.is_connected(countdown_cancelled.emit):
+			scene.countdown_cancelled.disconnect(countdown_cancelled.emit)
+		if scene.peer_admitted.is_connected(_on_peer_admitted):
+			scene.peer_admitted.disconnect(_on_peer_admitted)
+		if scene.peer_released.is_connected(_on_peer_released):
+			scene.peer_released.disconnect(_on_peer_released)
+	if _admission_layer:
+		if _admission_layer.viewer_added.is_connected(_on_peer_admitted):
+			_admission_layer.viewer_added.disconnect(_on_peer_admitted)
+		if _admission_layer.viewer_removed.is_connected(_on_peer_released):
+			_admission_layer.viewer_removed.disconnect(_on_peer_released)
+	if _admission_tree \
+			and _admission_tree.participant_joined.is_connected(
+				_on_tree_participant_joined,
+			):
+		_admission_tree.participant_joined.disconnect(
+			_on_tree_participant_joined,
+		)
+	_scene_ref = weakref(null)
 
 # ---------------------------------------------------------------------------
 # Soft suspend / resume  (signal-only, game code decides)
 # ---------------------------------------------------------------------------
+
+
+## Admits [param participant] to this scene without spawning a player node.
+##
+## [br][br][b]Server Only.[/b]
+func admit(participant: NetwParticipant) -> void:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene.admit(participant)
+
+
+## Releases [param participant] from this scene without touching player nodes.
+##
+## [br][br][b]Server Only.[/b]
+func release(participant: NetwParticipant) -> void:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	if is_instance_valid(scene):
+		scene.release(participant)
+
+
+## Moves [param moving_participants] into this scene.
+##
+## Returns a [NetwScene.MoveBatch] that emits
+## [signal NetwScene.MoveBatch.participant_arrived] for each participant and
+## [signal NetwScene.MoveBatch.completed] once all moves have been applied.
+## [br][br][b]Server Only.[/b]
+func move_participants(
+		moving_participants: Array[NetwParticipant],
+) -> MoveBatch:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	return scene.move_participants(moving_participants) \
+	if is_instance_valid(scene) else null
 
 
 ## Broadcasts a soft-suspend notification to scene peers.
@@ -230,17 +317,8 @@ func close() -> void:
 ## [br][br][b]Server Only.[/b]
 func suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(
-		scene.multiplayer.is_server(),
-		"NetwScene.suspend() must be called on the server.",
-	)
-	for peer_id: int in scene.connected_peers:
-		if peer_id == scene.multiplayer.get_unique_id():
-			continue
-		scene._rpc_receive_suspend.rpc_id(peer_id, reason)
-	suspended.emit(reason)
+	if is_instance_valid(scene):
+		scene.suspend(reason)
 
 
 ## Asks the server to suspend the scene.
@@ -249,9 +327,8 @@ func suspend(reason: String = "") -> void:
 ## [br][br][b]Player request.[/b]
 func request_suspend(reason: String = "") -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	scene._rpc_request_suspend.rpc_id(1, reason)
+	if is_instance_valid(scene):
+		scene.request_suspend(reason)
 
 
 ## Broadcasts a resume notification to scene peers.
@@ -260,17 +337,8 @@ func request_suspend(reason: String = "") -> void:
 ## [br][br][b]Server Only.[/b]
 func resume() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(
-		scene.multiplayer.is_server(),
-		"NetwScene.resume() must be called on the server.",
-	)
-	for peer_id: int in scene.connected_peers:
-		if peer_id == scene.multiplayer.get_unique_id():
-			continue
-		scene._rpc_receive_resume.rpc_id(peer_id)
-	resumed.emit()
+	if is_instance_valid(scene):
+		scene.resume()
 
 # ---------------------------------------------------------------------------
 # Countdown
@@ -290,37 +358,9 @@ func start_countdown(
 		seconds: int,
 		tick_interval: float = 1.0,
 ) -> Countdown:
-	assert(seconds > 0, "NetwScene.start_countdown(): seconds must be > 0.")
-	assert(
-		tick_interval > 0.0,
-		"NetwScene.start_countdown(): tick_interval must be > 0.",
-	)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return null
-	assert(
-		scene.multiplayer.is_server(),
-		"NetwScene.start_countdown() must be called on the server.",
-	)
-
-	cancel_countdown()
-
-	var cd := Countdown.new(scene, seconds, tick_interval)
-	_active_countdown = cd
-
-	cd.tick.connect(_on_countdown_tick)
-	cd.finished.connect(_on_countdown_finished)
-	cd.cancelled.connect(_on_countdown_cancelled)
-
-	# Notify clients before the first tick so they can prepare UI
-	for peer_id: int in scene.connected_peers:
-		if peer_id == scene.multiplayer.get_unique_id():
-			continue
-		scene._rpc_receive_countdown_started.rpc_id(peer_id, seconds)
-	countdown_started.emit(seconds)
-
-	cd._start()
-	return cd
+	return scene.start_countdown(seconds, tick_interval) \
+	if is_instance_valid(scene) else null
 
 
 ## Cancels the currently running countdown, if any.
@@ -329,15 +369,8 @@ func start_countdown(
 ## [br][br][b]Server Only.[/b]
 func cancel_countdown() -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return
-	assert(
-		scene.multiplayer.is_server(),
-		"NetwScene.cancel_countdown() must be called on the server.",
-	)
-	if _active_countdown and _active_countdown.is_running():
-		_active_countdown.cancel()
-	_active_countdown = null
+	if is_instance_valid(scene):
+		scene.cancel_countdown()
 
 # ---------------------------------------------------------------------------
 # Readiness gate
@@ -351,13 +384,7 @@ func cancel_countdown() -> void:
 ## automatically. Multiple independent gates can be active simultaneously.
 func create_readiness_gate() -> Readiness:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene):
-		return null
-	var gate := Readiness.new(scene)
-	scene._register_readiness_gate(gate)
-	for player: Node in scene.get_players():
-		gate._add_peer(_get_peer_id(player))
-	return gate
+	return scene.create_readiness_gate() if is_instance_valid(scene) else null
 
 # ---------------------------------------------------------------------------
 # Internal signal handlers
@@ -366,10 +393,10 @@ func create_readiness_gate() -> Readiness:
 
 func _on_spawned(player: Node) -> void:
 	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if not is_instance_valid(scene) or not (player in scene.get_players()):
+	var entity := NetwEntity.of(player)
+	if not is_instance_valid(scene) or not (entity in scene.get_players()):
 		return
-	player_entered.emit(player)
-	scene._notify_gates_player_added(_get_peer_id(player))
+	player_entered.emit(entity)
 
 
 func _on_despawned(player: Node) -> void:
@@ -379,44 +406,86 @@ func _on_despawned(player: Node) -> void:
 	var peer_id := _get_peer_id(player)
 	if peer_id == 0:
 		return
-	player_left.emit(player)
-	scene._notify_gates_player_removed(peer_id)
+	var entity := NetwEntity.of(player)
+	player_left.emit(entity)
 
 
-func _on_countdown_tick(seconds_left: int) -> void:
-	countdown_tick.emit(seconds_left)
+func _on_peer_admitted(peer_id: int) -> void:
+	var netw_tree := tree()
+	if netw_tree == null:
+		return
+	var participant := netw_tree.participant(peer_id)
+	if participant == null:
+		_pending_admitted_peers[peer_id] = true
+		return
+	_pending_admitted_peers.erase(peer_id)
+	participant.current_scene = self
+	participant_entered.emit(participant)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		for peer_id: int in scene.connected_peers:
-			if peer_id == scene.multiplayer.get_unique_id():
-				continue
-			scene._rpc_receive_countdown_tick.rpc_id(peer_id, seconds_left)
+		scene._notify_gates_player_added(peer_id)
 
 
-func _on_countdown_finished() -> void:
-	countdown_finished.emit()
+func _on_peer_released(peer_id: int) -> void:
+	var netw_tree := tree()
+	if netw_tree == null:
+		return
+	var participant := netw_tree.participant(peer_id)
+	if participant == null:
+		return
+	if _is_current_scene(participant):
+		_clear_current_scene_if_still_current.call_deferred(
+			participant,
+			unwrap().get_instance_id(),
+		)
+	participant_left.emit(participant)
 	var scene := _scene_ref.get_ref() as MultiplayerScene
 	if is_instance_valid(scene):
-		for peer_id: int in scene.connected_peers:
-			if peer_id == scene.multiplayer.get_unique_id():
-				continue
-			scene._rpc_receive_countdown_finished.rpc_id(peer_id)
-	_active_countdown = null
+		scene._notify_gates_player_removed(peer_id)
 
 
-func _on_countdown_cancelled() -> void:
-	countdown_cancelled.emit()
-	var scene := _scene_ref.get_ref() as MultiplayerScene
-	if is_instance_valid(scene):
-		for peer_id: int in scene.connected_peers:
-			if peer_id == scene.multiplayer.get_unique_id():
-				continue
-			scene._rpc_receive_countdown_cancelled.rpc_id(peer_id)
-	_active_countdown = null
+func _is_current_scene(participant: NetwParticipant) -> bool:
+	var current := participant.current_scene
+	if current == null:
+		return false
+	return current.unwrap() == unwrap()
 
 
-func _on_player_ready(rj: ResolvedJoin) -> void:
-	player_ready.emit(rj)
+func _clear_current_scene_if_still_current(
+		participant: NetwParticipant,
+		scene_instance_id: int,
+) -> void:
+	var current := participant.current_scene
+	if current and current.unwrap() \
+			and current.unwrap().get_instance_id() == scene_instance_id:
+		participant.current_scene = null
+
+
+func _bind_client_admission_layer(scene: MultiplayerScene) -> void:
+	var mt := MultiplayerTree.for_node(scene)
+	if mt == null or mt.interest == null:
+		return
+	_admission_tree = mt
+	if not mt.participant_joined.is_connected(_on_tree_participant_joined):
+		mt.participant_joined.connect(_on_tree_participant_joined)
+	var l := mt.interest.layer(scene.scene_layer_id())
+	if l == null:
+		return
+	_admission_layer = l
+	if not l.viewer_added.is_connected(_on_peer_admitted):
+		l.viewer_added.connect(_on_peer_admitted)
+	if not l.viewer_removed.is_connected(_on_peer_released):
+		l.viewer_removed.connect(_on_peer_released)
+	for peer_id: int in l.viewers:
+		_on_peer_admitted(peer_id)
+
+
+func _on_tree_participant_joined(participant: NetwParticipant) -> void:
+	if _admission_layer == null:
+		return
+	if not _admission_layer.viewers.has(participant.peer_id):
+		return
+	_on_peer_admitted(participant.peer_id)
 
 
 func _get_peer_id(node: Node) -> int:
@@ -518,14 +587,45 @@ class Countdown:
 			_schedule_tick()
 
 
-## Per-scene readiness gate tracks which players have confirmed ready.
+## Server-side handle for a participant scene move.
+##
+## Obtain via [method NetwScene.move_participants].
+class MoveBatch:
+	extends RefCounted
+
+	## Emitted as each participant is admitted to the destination scene.
+	signal participant_arrived(participant: NetwParticipant)
+	## Emitted after every participant has been admitted.
+	signal completed()
+
+	var _pending: int = 0
+	var _arrivals: Array[NetwParticipant] = []
+
+
+	func _init(participants: Array[NetwParticipant]) -> void:
+		_pending = participants.size()
+
+
+	func _queue_arrival(participant: NetwParticipant) -> void:
+		_pending = maxi(0, _pending - 1)
+		_arrivals.append(participant)
+
+
+	func _flush() -> void:
+		for participant: NetwParticipant in _arrivals:
+			participant_arrived.emit(participant)
+		_arrivals.clear()
+		completed.emit()
+
+
+## Per-scene readiness gate tracks which participants have confirmed ready.
 ##
 ## Obtain via [method NetwScene.create_readiness_gate].
 ## Clients call [method set_ready]. The server broadcasts the change to all peers.
 ## [codeblock]
 ## # Game scene screen (runs on all peers):
 ## var gate := ctx.scene.create_readiness_gate()
-## gate.player_ready_changed.connect(_refresh_ready_ui)
+## gate.participant_ready_changed.connect(_refresh_ready_ui)
 ## gate.all_ready.connect(_on_everyone_ready)
 ##
 ## # Player clicks "Ready":
@@ -534,16 +634,16 @@ class Countdown:
 class Readiness:
 	extends RefCounted
 
-	## Emitted on all peers when a player's readiness state changes.
-	signal player_ready_changed(peer_id: int, is_ready: bool)
-	## Emitted when every tracked player is ready.
+	## Emitted on all peers when a participant's readiness state changes.
+	signal participant_ready_changed(participant: NetwParticipant, is_ready: bool)
+	## Emitted when every tracked participant is ready.
 	##
-	## This also emits when a not-ready player leaves, if the remaining
-	## players are all ready.
+	## This also emits when a not-ready participant leaves, if the remaining
+	## participants are all ready.
 	signal all_ready()
 
 	var _scene_ref: WeakRef
-	## Peer ID -> ready state. Populated as players enter/leave the scene.
+	# Peer ID -> ready state. Populated as participants enter or leave.
 	var _readiness: Dictionary[int, bool] = { }
 
 
@@ -556,22 +656,36 @@ class Readiness:
 		return is_instance_valid(_scene_ref.get_ref())
 
 
-	## Returns [code]true[/code] if [param peer_id] has confirmed ready.
-	func is_peer_ready(peer_id: int) -> bool:
-		return _readiness.get(peer_id, false)
+	## Returns [code]true[/code] if [param participant] has confirmed ready.
+	func is_ready(participant: NetwParticipant) -> bool:
+		if participant == null:
+			return false
+		return _readiness.get(participant.peer_id, false)
 
 
-	## Returns all peer IDs that have confirmed ready.
-	func get_ready_peers() -> Array[int]:
-		var result: Array[int] = []
+	## Returns [code]true[/code] if [param participant] is tracked.
+	func tracks(participant: NetwParticipant) -> bool:
+		if participant == null:
+			return false
+		return _readiness.has(participant.peer_id)
+
+
+	## Returns all participants that have confirmed ready.
+	func get_ready_participants() -> Array[NetwParticipant]:
+		var result: Array[NetwParticipant] = []
+		var tree := _tree()
+		if tree == null:
+			return result
 		for id: int in _readiness:
 			if _readiness[id]:
-				result.append(id)
+				var participant := tree.participant(id)
+				if participant:
+					result.append(participant)
 		return result
 
 
-	## Returns [code]true[/code] when every tracked player is ready and there is at
-	## least one player.
+	## Returns [code]true[/code] when every tracked participant is ready and
+	## there is at least one participant.
 	func are_all_ready() -> bool:
 		if _readiness.is_empty():
 			return false
@@ -581,7 +695,7 @@ class Readiness:
 		return true
 
 
-	## Marks the local player as ready (or not ready).
+	## Marks the local participant as ready or not ready.
 	##
 	## On a client this sends an RPC to the server. On the server/host it applies
 	## the change directly. The update is broadcast to all peers automatically.
@@ -598,18 +712,29 @@ class Readiness:
 	# Called internally by [Scene] when the server broadcasts a readiness update.
 	func _receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 		_readiness[peer_id] = is_ready
-		player_ready_changed.emit(peer_id, is_ready)
+		var tree := _tree()
+		var participant := tree.participant(peer_id) if tree else null
+		if participant:
+			participant_ready_changed.emit(participant, is_ready)
 		if are_all_ready():
 			all_ready.emit()
 
 
-	# Called internally when a player enters the scene (starts as not-ready).
+	# Called internally when a participant enters the scene.
 	func _add_peer(peer_id: int) -> void:
 		if peer_id not in _readiness:
 			_readiness[peer_id] = false
 
 
-	# Called internally when a player leaves the scene (removes their entry).
+	# Called internally when a participant leaves the scene.
 	func _remove_peer(peer_id: int) -> void:
 		if _readiness.erase(peer_id) and are_all_ready():
 			all_ready.emit()
+
+
+	func _tree() -> NetwTree:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return null
+		var mt := MultiplayerTree.for_node(scene)
+		return NetwTree.new(mt) if mt else null

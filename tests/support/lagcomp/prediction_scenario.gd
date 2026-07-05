@@ -40,6 +40,8 @@ var _tickrate: int
 var _client_peer_id: int
 var _entities: Array[PredictedEntity] = []
 var _entity_counter: int = 0
+var state_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
+var input_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
 
 ## Entity-root type composed for each predicted pair through [PlayerBuilder].
 ##
@@ -109,8 +111,8 @@ func add_predicted_entity(
 	var ename := "Predicted%d" % _entity_counter
 	var builder := PlayerBuilder.new(ename) \
 			.with_root(body_type) \
-			.with_state(state_props) \
-			.with_input(input_props) \
+			.with_state(state_props, state_transport) \
+			.with_input(input_props, input_transport) \
 			.with_prediction(missing_policy, epsilon)
 
 	var server_root := builder.build() as LagCompSimBody
@@ -125,6 +127,16 @@ func add_predicted_entity(
 
 	server.add_child(server_root)
 	client.add_child(client_root)
+
+	var server_liveness := server.get_service(LivenessService) as LivenessService
+	var client_liveness := client.get_service(LivenessService) as LivenessService
+	var server_entity := NetwEntity.of(server_root)
+	var client_entity := NetwEntity.of(client_root)
+	if server_liveness and client_liveness:
+		var route := server_liveness.allocate_route(server_entity)
+		server_liveness.bind_route(route, server_entity)
+		client_liveness.bind_route(route, client_entity)
+
 	await _tree.process_frame
 
 	var p := PredictedEntity.new()

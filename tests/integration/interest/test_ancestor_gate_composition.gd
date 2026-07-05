@@ -90,7 +90,8 @@ func test_ancestor_gate_blocks_own_layer_until_scene_admits() -> void:
 func _find_player(scene: MultiplayerScene, player_name: StringName) -> Node:
 	if scene == null:
 		return null
-	for player: Node in scene.player_nodes():
-		if player.name == player_name:
-			return player
+	for player: NetwEntity in scene.player_nodes():
+		var owner := player.owner
+		if owner and owner.name == player_name:
+			return owner
 	return null

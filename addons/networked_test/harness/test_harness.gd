@@ -364,7 +364,7 @@ func admit_client_to_scene(
 	return await wait_for_scene(client, scene_name)
 
 
-## Sends [method MultiplayerTree.request_join_player] from [param client].
+## Sends [method MultiplayerTree.request_join] from [param client].
 ##
 ## [param level_scene_path] must be registered with
 ## [method register_spawnable_scene]. [param spawner_node_path] is relative to
@@ -393,7 +393,7 @@ func join_player(
 		entity_path,
 	).to_dict()
 
-	client.request_join_player.rpc_id(
+	client.request_join.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		join_payload.serialize(),
 	)
@@ -506,8 +506,8 @@ func create_connect_player_tree(
 
 
 ## Creates a standalone player host through
-## [method MultiplayerTree.host_player].
-func add_host_player(
+## [method MultiplayerTree.host].
+func add_host(
 		join_payload: JoinPayload,
 		auth_provider: NetwAuth = null,
 ) -> MultiplayerTree:
@@ -519,10 +519,10 @@ func add_host_player(
 	tree.auth_provider = auth_provider
 	var err: Error = await _loopback.connect_tree(
 		tree,
-		NetwHarnessSession.Entry.HOST_PLAYER,
+		NetwHarnessSession.Entry.HOST,
 		join_payload,
 	)
-	assert(err == OK, "host_player() failed: %s" % error_string(err))
+	assert(err == OK, "host() failed: %s" % error_string(err))
 	return tree
 
 
@@ -570,7 +570,7 @@ func spawn_player_node(
 	var username: String = client.get_meta(&"_harness_username")
 	NetwEntity.bind(node, StringName(username), peer_id)
 	var scene := scene_on_server(scene_name)
-	scene.add_player(node)
+	scene.add_player(NetwEntity.of(node))
 	return node
 
 
@@ -677,7 +677,7 @@ func wait_for_player(
 	var find_player := func() -> Node:
 		if player_name.is_empty():
 			var players := scene.player_nodes()
-			return players[0] if players.size() > 0 else null
+			return players[0].owner if players.size() > 0 else null
 		return _find_scene_player(scene, player_name)
 
 	if find_player.call() != null:
@@ -736,9 +736,9 @@ func _ensure_server_hosted() -> void:
 		return
 	var host_err: Error = await _loopback.connect_tree(
 		_server,
-		NetwHarnessSession.Entry.HOST,
+		NetwHarnessSession.Entry.OPEN_HOST,
 	)
-	assert(host_err == OK, "Server host() failed: %s" % error_string(host_err))
+	assert(host_err == OK, "Server _open_host() failed: %s" % error_string(host_err))
 
 
 func _instantiate_scene_manager() -> MultiplayerSceneManager:
@@ -853,9 +853,10 @@ func _find_scene_player(
 ) -> Node:
 	if not scene:
 		return null
-	for player: Node in scene.player_nodes():
-		if player.name == player_name:
-			return player
+	for player: NetwEntity in scene.player_nodes():
+		if player != null and is_instance_valid(player.owner):
+			if player.owner.name == player_name:
+				return player.owner
 	return null
 
 #endregion

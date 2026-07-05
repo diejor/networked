@@ -37,7 +37,7 @@ private-signal conventions. Suppress a one-off finding with a
   and signals.
 - Keep public names in ``snake_case``. Private helpers should start with
   ``_``.
-- Name signals after the event they report, such as ``player_joined`` or
+- Name signals after the event they report, such as ``participant_joined`` or
   ``configured``.
 
 Doc comments should explain what the API does from the caller's point of

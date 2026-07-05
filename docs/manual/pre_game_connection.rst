@@ -29,7 +29,7 @@ passed to the method, so the payload itself carries no transport state.
     caller already knows there is a server, such as when a server browser row was
     clicked, or an invite was accepted.
 
-:ref:`host_player() <class_MultiplayerTree_method_host_player>`
+:ref:`host() <class_MultiplayerTree_method_host>`
     Start this tree as the host. Use when the caller already knows it is
     hosting, for example, when a "Host Game" button was clicked.
 
@@ -51,7 +51,7 @@ passed to the method, so the payload itself carries no transport state.
     await tree.join(target, join)
 
     # Explicit host.
-    await tree.host_player(join)
+    await tree.host(join)
 
 Discovering live servers
 ------------------------
@@ -84,7 +84,7 @@ The reply is a :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>` wh
 :ref:`status <class_BackendPeer_ProbeResult_property_status>` is one of :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`,
 :ref:`UNREACHABLE <class_BackendPeer_ProbeResult_constant_UNREACHABLE>`, :ref:`TIMEOUT <class_BackendPeer_ProbeResult_constant_TIMEOUT>`, :ref:`UNSUPPORTED <class_BackendPeer_ProbeResult_constant_UNSUPPORTED>`, :ref:`BUSY <class_BackendPeer_ProbeResult_constant_BUSY>`, or :ref:`ERROR <class_BackendPeer_ProbeResult_constant_ERROR>`. On
 :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`, :ref:`info <class_BackendPeer_ProbeResult_property_info>` is a populated
-:ref:`ServerDescriptor.Info <class_ServerDescriptor_ServerInfo>` (player count, motd, game mode, a
+:ref:`ServerDescriptor.Info <class_ServerDescriptor_Info>` (player count, motd, game mode, a
 metadata bag for custom fields).
 
 Hosts customize what gets reported by assigning a
@@ -92,7 +92,7 @@ Hosts customize what gets reported by assigning a
 :ref:`server_info_source <class_MultiplayerTree_property_server_info_source>`
 on the tree. The default
 (:ref:`DefaultServerDescriptor <class_DefaultServerDescriptor>`) reports a
-live player count and marks :ref:`ServerDescriptor.Info.is_local_listener <class_ServerDescriptor_ServerInfo_property_is_local_listener>` as ``true`` so callers can
+live player count and marks :ref:`ServerDescriptor.Info.is_local_listener <class_ServerDescriptor_Info_property_is_local_listener>` as ``true`` so callers can
 tell a live local host from a closed port. Override for richer metadata:
 
 .. code-block:: gdscript
@@ -102,7 +102,7 @@ tell a live local host from a closed port. Override for richer metadata:
     func build_server_info(tree: MultiplayerTree) -> ServerDescriptor.Info:
         var info := ServerDescriptor.Info.new()
         info.is_local_listener = true
-        info.players = tree.get_joined_players().size()
+        info.players = tree.get_participants().size()
         info.max_players = 8
         info.game_mode = &"capture-the-flag"
         info.motd = "Friday night session"
@@ -193,7 +193,7 @@ The probe lifecycle is **client-owned**:
 2. Client sends :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` in the :godot:`peer_authenticating <SceneMultiplayer>` callback.
 3. Server's :godot:`auth_callback <SceneMultiplayer>` decodes the magic and
    dispatches ``NPRB`` to :ref:`AuthProtocol.Responder <class_AuthProtocol_Responder>`,
-   which builds a :ref:`ServerDescriptor.Info <class_ServerDescriptor_ServerInfo>` from the configured
+   which builds a :ref:`ServerDescriptor.Info <class_ServerDescriptor_Info>` from the configured
    :ref:`ServerDescriptor <class_ServerDescriptor>` and sends the reply.
 4. Client decodes the reply, returns the
    :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>`, and closes its peer.

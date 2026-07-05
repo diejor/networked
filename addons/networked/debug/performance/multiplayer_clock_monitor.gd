@@ -1,22 +1,22 @@
 ## Tracks and exposes [MultiplayerClock] metrics as Godot [Performance] monitors.
 ##
-## This is managed by the [NetworkedDebugReporter] to ensure that monitoring
+## This is managed by the [DebugReporter] to ensure that monitoring
 ## overhead remains isolated from core networking logic. It handles both
 ## local clocks (via signals) and remote clocks (via debug-only relayed pongs).
 @tool
 class_name MultiplayerClockMonitor
 extends Node
 
-## Set of monitor IDs currently registered to avoid duplicates and ensure
-## cleanup.
+# Set of monitor IDs currently registered to avoid duplicates and ensure
+# cleanup.
 var _registered_ids: Dictionary[StringName, bool] = { }
 
-## Persistent storage to ensure Callables always have a stable reference to 
-## the latest data.
-## [br][br]
-## [b]Key:[/b] Category String (e.g. "Clock Admin")
-## [br][br]
-## [b]Value:[/b] Dictionary of latest metrics.
+# Persistent storage to ensure Callables always have a stable reference to 
+# the latest data.
+# [br][br]
+# [b]Key:[/b] Category String (e.g. "Clock Admin")
+# [br][br]
+# [b]Value:[/b] Dictionary of latest metrics.
 var _latest_data: Dictionary = { }
 
 
@@ -40,7 +40,7 @@ func update_local_clock(mt: MultiplayerTree, data: Dictionary) -> void:
 
 
 ## Updates metrics for a remote peer's clock (relayed via Editor).
-func update_relayed_clock(envelope: NetEnvelope) -> void:
+func update_relayed_clock(envelope: NetwEnvelope) -> void:
 	var peer_id := envelope.peer_id
 	var data := envelope.payload
 	var category := _get_category(null, peer_id, data)
@@ -48,7 +48,7 @@ func update_relayed_clock(envelope: NetEnvelope) -> void:
 
 
 ## Removes monitors for a relayed remote peer.
-func remove_relayed_clock(envelope: NetEnvelope) -> void:
+func remove_relayed_clock(envelope: NetwEnvelope) -> void:
 	var peer_id := envelope.peer_id
 	var data := envelope.payload
 	var category := _get_category(null, peer_id, data)
@@ -66,15 +66,7 @@ func _get_category(mt: MultiplayerTree, _p_id: int, data: Dictionary) -> String:
 	var username := data.get("username", "")
 	if username.is_empty():
 		if is_instance_valid(mt) and mt.local_player:
-			var entity := NetwEntity.of(mt.local_player)
-			if entity and not entity.entity_id.is_empty():
-				username = entity.entity_id
-			else:
-				var multiplayer_entity := MultiplayerEntity.unwrap(mt.local_player)
-				if multiplayer_entity:
-					username = multiplayer_entity.entity_id
-				else:
-					username = mt.local_player.name.get_slice("|", 0)
+			username = NetwIdentity.username_of(mt.local_player.owner)
 		else:
 			username = data.get("tree_name", "Unknown")
 

@@ -1,6 +1,6 @@
 ## Passive always-on-top pinning for the Networked debugger.
 ##
-## Added as a child of [NetworkedDebugReporter]. The editor decides which
+## Added as a child of [DebugReporter]. The editor decides which
 ## windows get pinned; this node only flips the [code]ALWAYS_ON_TOP[/code]
 ## flag, raises the window, and optionally re-applies a stored geometry
 ## (position + size) on pin.
@@ -9,7 +9,7 @@
 ## shutdown so the editor can re-apply it next time the window is pinned.
 extends Node
 
-class_name NetWindowPin
+class_name WindowPin
 
 const SETTING_PIN_ENABLED = "networked/debug/auto_pin_enabled"
 

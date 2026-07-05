@@ -48,19 +48,19 @@ enum Kind { EXIT, ENTER }
 # Server-side queue payload for a peer's local-view transition.
 class _VisRelay:
 	extends RefCounted
-	var path: NodePath
+	var route: int
 	var layer_id: StringName
 	var kind: int
 
 
-	func _init(p: NodePath, l: StringName, k: int) -> void:
-		path = p
+	func _init(r: int, l: StringName, k: int) -> void:
+		route = r
 		layer_id = l
 		kind = k
 
 
 	func to_wire() -> Array:
-		return [path, layer_id, kind]
+		return [route, layer_id, kind]
 
 
 	static func from_wire(raw: Variant) -> _VisRelay:
@@ -102,9 +102,6 @@ class _ObsRelay:
 
 var _observer_relay: Dictionary[int, Array] = { }
 var _visibility_relay: Dictionary[int, Array] = { }
-var _pending_visibility_events: Array[_VisRelay] = []
-var _pending_attempts: Array[int] = []
-var _pending_visibility_flush_scheduled: bool = false
 
 
 func service_type() -> Script:
@@ -151,10 +148,7 @@ func _clear_session_state() -> void:
 	_dirty_gate_layers.clear()
 	_observer_relay.clear()
 	_visibility_relay.clear()
-	_pending_visibility_events.clear()
-	_pending_attempts.clear()
 	_refresh_scheduled = false
-	_pending_visibility_flush_scheduled = false
 
 
 ## Returns the layer for [param layer_id], creating it when missing.
@@ -196,7 +190,7 @@ func all_layers() -> Array[NetwInterestLayer]:
 ##   ┠╴ entities_filtered: int  # entities with a visibility filter installed
 ##   ┠╴ visible_edges: int      # admitted (entity, peer) pairs, all layers
 ##   ┠╴ dirty_entities: int     # entities pending a visibility recompute
-##   ┠╴ relay_backlog: int      # unbound-layer transitions awaiting reconcile
+##   ┠╴ relay_backlog: int      # relayed transitions awaiting entity liveness
 ##   ┖╴ transitions_total: int  # summed per-layer churn since creation
 ## }
 ## [/codeblock]
@@ -214,9 +208,19 @@ func monitor_snapshot() -> Dictionary:
 		&"entities_filtered": _entity_filters.size(),
 		&"visible_edges": visible_edges,
 		&"dirty_entities": _dirty_entities.size(),
-		&"relay_backlog": _pending_visibility_events.size(),
+		&"relay_backlog": _liveness_backlog(),
 		&"transitions_total": transitions_total,
 	}
+
+
+## Returns the per-peer admit counts for [param entity].
+func committed_admits(entity: NetwEntity) -> Dictionary:
+	return _admit_count.get(entity, {})
+
+
+## Returns [code]true[/code] if [param entity] has a visibility filter installed.
+func has_filter(entity: NetwEntity) -> bool:
+	return _entity_filters.has(entity)
 
 
 ## Returns [code]true[/code] if any layer admits [param peer_id] to
@@ -434,6 +438,12 @@ func _schedule_visibility_flush() -> void:
 ## the server's subsequent per-entity despawn packets to fail with
 ## [code]ERR_UNAUTHORIZED[/code] (no [code]recv_nodes[/code] entry).
 func flush() -> void:
+	var mt := _tree()
+	if not is_instance_valid(mt) or mt.multiplayer_peer == null:
+		return
+	if mt.multiplayer_peer.get_connection_status() \
+			== MultiplayerPeer.CONNECTION_DISCONNECTED:
+		return
 	_refresh_scheduled = false
 	var transitions := _gather_gate_transitions()
 	_apply_gate_admits(transitions)
@@ -467,8 +477,14 @@ func _flush_visibility() -> void:
 func _gather_gate_transitions() -> Dictionary:
 	var out: Dictionary = { }
 	var mt := _tree()
-	if not is_instance_valid(mt) or mt.multiplayer_peer == null \
-			or not mt.multiplayer_api.is_server():
+	if not is_instance_valid(mt) or mt.multiplayer_peer == null:
+		_dirty_gate_layers.clear()
+		return out
+	if mt.multiplayer_peer.get_connection_status() \
+			== MultiplayerPeer.CONNECTION_DISCONNECTED:
+		_dirty_gate_layers.clear()
+		return out
+	if not mt.multiplayer_api.is_server():
 		_dirty_gate_layers.clear()
 		return out
 	var peers := mt.multiplayer_api.get_peers()
@@ -602,11 +618,20 @@ func _tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
 
 
+# Relayed transitions parked in LivenessService.when_live for the monitor.
+func _liveness_backlog() -> int:
+	var liveness := LivenessService.for_node(self)
+	return liveness.pending_live_count() if liveness else 0
+
+
 func _is_server() -> bool:
 	var mt := _tree()
 	if not is_instance_valid(mt):
 		return true
 	if not mt.multiplayer_api or mt.multiplayer_peer == null:
+		return true
+	if mt.multiplayer_peer.get_connection_status() \
+			== MultiplayerPeer.CONNECTION_DISCONNECTED:
 		return true
 	return mt.multiplayer_api.is_server()
 
@@ -666,10 +691,18 @@ func _queue_visibility_event(
 	var mt := _tree()
 	if not _can_send_rpc_to_peer(mt, observer_peer):
 		return
+	var liveness := LivenessService.for_node(self)
+	if not liveness:
+		return
+	# Server-side allocation is legal here, but the client only learns the
+	# route through a spawn channel. An entity with neither a
+	# MultiplayerEntity nor an envelope route needs a manual bind_route on
+	# every peer, or this event expires client-side.
+	var route := liveness.allocate_route(entity)
 	var bucket: Array = _visibility_relay.get_or_add(observer_peer, [])
 	bucket.append(
 		_VisRelay.new(
-			mt.get_path_to(entity.owner),
+			route,
 			layer.layer_id,
 			kind,
 		),
@@ -797,68 +830,37 @@ func _rpc_visibility_events(events: Array) -> void:
 	var mt := _tree()
 	if not is_instance_valid(mt):
 		return
+	var liveness := LivenessService.for_node(self)
+	if not liveness:
+		return
 	for raw in events:
 		var event := _VisRelay.from_wire(raw)
 		if event == null:
 			continue
-		if not _apply_visibility_event(mt, event):
-			_pending_visibility_events.append(event)
-			_pending_attempts.append(0)
-	if not _pending_visibility_events.is_empty():
-		_schedule_pending_visibility_flush()
+		# An EXIT for an entity that never became live is a no-op, so only
+		# ENTER events park and wait for the spawn window.
+		if event.kind != Kind.ENTER \
+				and liveness.route_state(event.route) \
+				!= LivenessService.State.LIVE:
+			continue
+		liveness.when_live(event.route, func():
+			_apply_visibility_event(mt, event)
+		)
 
 
-func _apply_visibility_event(mt: MultiplayerTree, event: _VisRelay) -> bool:
+func _apply_visibility_event(mt: MultiplayerTree, event: _VisRelay) -> void:
 	if not is_instance_valid(mt):
-		return true
-	var node := mt.get_node_or_null(event.path)
-	if not is_instance_valid(node):
-		return event.kind != Kind.ENTER
-	var entity := NetwEntity.of(node)
+		return
+	var liveness := LivenessService.for_node(self)
+	if not liveness:
+		return
+	var entity := liveness.entity_of(event.route)
 	if not entity:
-		return true
+		return
 	var layer := layer_for(event.layer_id)
 	if not layer:
-		return true
+		return
 	if event.kind == Kind.ENTER:
 		layer._client_admit(entity)
 	else:
 		layer._client_revoke(entity)
-	return true
-
-
-func _flush_pending_visibility_events() -> void:
-	_pending_visibility_flush_scheduled = false
-	var pending_events := _pending_visibility_events
-	var pending_attempts := _pending_attempts
-	_pending_visibility_events = []
-	_pending_attempts = []
-	var mt := _tree()
-	for i in pending_events.size():
-		var event := pending_events[i]
-		var attempts := pending_attempts[i]
-		if _apply_visibility_event(mt, event):
-			continue
-		if attempts < 30:
-			_pending_visibility_events.append(event)
-			_pending_attempts.append(attempts + 1)
-			continue
-		Netw.dbg.warn(
-			"InterestService: ENTER for missing node '%s'",
-			[String(event.path)],
-			func(m): push_warning(m)
-		)
-	if not _pending_visibility_events.is_empty():
-		_schedule_pending_visibility_flush()
-
-
-func _schedule_pending_visibility_flush() -> void:
-	if _pending_visibility_flush_scheduled:
-		return
-	if not is_inside_tree():
-		return
-	_pending_visibility_flush_scheduled = true
-	get_tree().process_frame.connect(
-		_flush_pending_visibility_events,
-		CONNECT_ONE_SHOT,
-	)

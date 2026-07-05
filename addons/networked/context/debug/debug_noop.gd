@@ -35,22 +35,22 @@ func trace(
 	pass
 
 
-## Returns a no-op [NetSpan].
+## Returns a no-op [NetwSpan].
 func span(
 		_context: Object,
 		label: String,
 		_meta: Dictionary = { },
 		_follows_from: CheckpointToken = null,
-) -> NetSpan:
-	return NetSpan.new(&"", label)
+) -> NetwSpan:
+	return NetwSpan.new(&"", label)
 
 
-## Returns a no-op [NetPeerSpan].
+## Returns a no-op [NetwPeerSpan].
 func peer_span(
 		_context: Object,
 		label: String,
 		_peers: Array = [],
 		_meta: Dictionary = { },
 		_token: CheckpointToken = null,
-) -> NetPeerSpan:
-	return NetPeerSpan.new(&"", label)
+) -> NetwPeerSpan:
+	return NetwPeerSpan.new(&"", label)

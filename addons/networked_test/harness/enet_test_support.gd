@@ -48,7 +48,7 @@ static func start_host(
 		tree.backend = backend
 		parent.add_child(tree)
 
-		var err: Error = await tree.host(true)
+		var err: Error = await tree._open_host(true)
 		if err == OK:
 			if auth_timeout > 0.0:
 				tree.api.auth_timeout = auth_timeout

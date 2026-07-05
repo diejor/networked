@@ -5,6 +5,7 @@ type="CompressedTexture2D"
 uid="uid://dsv3o2p5o7bbo"
 path="res://.godot/imported/MultiplayerEntity.svg-ef6dc8a8469c0250fbf3a667ad2fda09.ctex"
 metadata={
+"has_editor_variant": true,
 "vram_texture": false
 }
 
@@ -39,5 +40,5 @@ process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
 svg/scale=1.0
-editor/scale_with_editor_scale=false
+editor/scale_with_editor_scale=true
 editor/convert_colors_with_editor_theme=false

@@ -38,7 +38,7 @@ func _process(_delta: float) -> void:
 
 	visible = true
 	var auth := node.get_multiplayer_authority()
-	_update_visuals(NetworkedDebugReporter.get_peer_debug_color(auth))
+	_update_visuals(DebugReporter.get_peer_debug_color(auth))
 	_update_position(node)
 
 

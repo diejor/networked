@@ -70,8 +70,8 @@ func _ready() -> void:
 	if not ctx or not ctx.tree:
 		return
 
-	for rj: ResolvedJoin in ctx.tree.joined_players:
-		add_player(rj.peer_id, str(rj.username))
+	for participant: NetwParticipant in ctx.tree.participants:
+		add_player(participant.peer_id, str(participant.username))
 
 
 func _on_exit_game_pressed() -> void:

@@ -58,14 +58,17 @@ func test_listen_server_host_gets_identity() -> void:
 	assert_that(bucket.identity).is_not_null()
 	assert_that(bucket.identity.username).is_equal(StringName("host"))
 	assert_that(bucket.identity.service).is_equal(&"dummy")
+	var participant := tree.get_participant(1)
+	assert_that(participant).is_not_null()
+	assert_that(participant.identity).is_equal(bucket.identity)
 
 
 func test_no_auth_provider_trusts_client_username() -> void:
 	server.auth_provider = null
 	client_tree.auth_provider = null
 
-	var joined_rjs: Array[ResolvedJoin] = []
-	server.player_joined.connect(func(rj): joined_rjs.append(rj))
+	var participants: Array[NetwParticipant] = []
+	server.participant_joined.connect(func(p): participants.append(p))
 	monitor_signals(server, false)
 	var target := JoinTarget.new()
 	target.backend = client_tree.backend
@@ -79,10 +82,11 @@ func test_no_auth_provider_trusts_client_username() -> void:
 	@warning_ignore("redundant_await")
 	await assert_signal(server) \
 			.wait_until(1000) \
-			.is_emitted("player_joined", [any()])
+			.is_emitted("participant_joined", [any()])
 
-	assert_that(joined_rjs).has_size(1)
-	assert_that(joined_rjs[0].username).is_equal(StringName("jose"))
+	assert_that(participants).has_size(1)
+	assert_that(participants[0].username).is_equal(StringName("jose"))
+	assert_that(participants[0].identity).is_null()
 
 
 func _join_payload(username: String) -> JoinPayload:

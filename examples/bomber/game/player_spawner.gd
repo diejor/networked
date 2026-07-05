@@ -9,44 +9,48 @@ const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 
 
 func _ready() -> void:
-	spawn_function = _spawn_player
+	spawn_function = NetwEntity.wrap_spawn(_spawn_player)
 	if multiplayer.is_server():
-		gamestate.match_started.connect(_on_match_started)
+		ctx.scene.participant_entered.connect(_on_participant_entered)
+		for participant: NetwParticipant in ctx.scene.participants:
+			_on_participant_entered(participant)
 
 
-func _on_match_started() -> void:
-	spawn_joined_players(ctx.tree.joined_players)
+func _on_participant_entered(participant: NetwParticipant) -> void:
+	spawn_participant(participant)
 
 
-## Server-only. Spawns one player for each accepted join data.
-func spawn_joined_players(joined_players: Array[ResolvedJoin]) -> void:
+## Server only. Spawns one player for [param participant].
+func spawn_participant(participant: NetwParticipant) -> void:
 	assert(multiplayer.is_server())
+	if participant == null or participant.join == null:
+		return
+	if _has_player(participant.join):
+		return
 
-	joined_players.sort_custom(
-		func(a: ResolvedJoin, b: ResolvedJoin) -> bool:
+	var ordered := ctx.scene.participants
+	ordered.sort_custom(
+		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
 	)
-
-	for index in joined_players.size():
-		var rj := joined_players[index]
-		if _has_player(rj):
-			continue
-
-		var data := { spawn_index = index }
-		spawn(NetwEntity.decorate_spawn(data, rj))
+	var spawn_index := maxi(ordered.find(participant), 0)
+	var data := {
+		peer_id = participant.peer_id,
+		spawn_index = spawn_index,
+		username = participant.username,
+	}
+	NetwEntity.spawn_for(self, participant, data)
 
 
 func _spawn_player(data: Dictionary) -> Node:
-	var spawn_identity := NetwEntity.spawn_identity(data)
-
 	var player := PLAYER_SCENE.instantiate()
-	spawn_identity.bind(player)
-	var username := str(spawn_identity.entity_id)
+	var peer_id := int(data.peer_id)
+	var username := str(data.username)
 	var spawn_index := int(data.spawn_index)
 
 	var world := ctx.scene.level
 	var score := world.get_node("Score")
-	score.add_player(spawn_identity.peer_id, username)
+	score.add_player(peer_id, username)
 
 	player.position = _get_spawn_position(spawn_index)
 

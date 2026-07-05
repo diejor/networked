@@ -23,7 +23,7 @@ var username: StringName = &""
 ## Mirrors [member MultiplayerTree.local_player].
 var local_player: Node:
 	get:
-		return tree.local_player if tree else null
+		return tree.local_player.owner if tree and tree.local_player else null
 
 
 func _init(
@@ -76,18 +76,20 @@ func find_player(player_username: StringName) -> Node:
 		return null
 
 	var player_name := StringName(str(player_username))
-	for player in tree.get_all_players():
-		if _player_matches_username(player, player_name):
-			return player
+	for player: NetwEntity in tree.get_all_players():
+		if player != null and is_instance_valid(player.owner):
+			if _player_matches_username(player.owner, player_name):
+				return player.owner
 
 	var sm := tree.get_service(MultiplayerSceneManager)
 	if not sm:
 		return null
 
 	for active_scene: MultiplayerScene in sm.active_scenes.values():
-		for player in active_scene.get_players():
-			if _player_matches_username(player, player_name):
-				return player
+		for player: NetwEntity in active_scene.get_players():
+			if player != null and is_instance_valid(player.owner):
+				if _player_matches_username(player.owner, player_name):
+					return player.owner
 	return null
 
 

@@ -1,6 +1,6 @@
 ## Crash Manifest panel - the Orchestrator Peak.
 ##
-## Displays received [NetDebugManifest] entries as an interactive [Tree].
+## Displays received [NetwManifest] entries as an interactive [Tree].
 ## Selecting a row calls back into [NetworkedDebuggerUI] to synchronize
 ## the Span Tracer, Matrices, and Components panels.
 @tool

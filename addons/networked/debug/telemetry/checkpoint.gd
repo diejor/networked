@@ -1,6 +1,6 @@
 ## Lightweight causal link for the Networked span tracing system.
 ##
-## A [CheckpointToken] captures a point in time within a [NetSpan] so that a
+## A [CheckpointToken] captures a point in time within a [NetwSpan] so that a
 ## subsequent, causally-related span can declare an explicit [code]follows_from[/code]
 ## relationship - without touching production node metadata.
 ## [br][br]
@@ -13,7 +13,7 @@
 class_name CheckpointToken
 extends RefCounted
 
-## The [member NetSpan.id] of the span that produced this token.
+## The [member NetwSpan.id] of the span that produced this token.
 var span_id: StringName
 
 ## Human-readable label of the originating span.

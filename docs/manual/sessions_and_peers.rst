@@ -19,19 +19,18 @@ gameplay: you usually want to know a peer's username, which scene they have
 been routed into, and the data they presented when they joined.
 
 The :ref:`MultiplayerTree <class_MultiplayerTree>` keeps a roster of every
-:ref:`ResolvedJoin <class_ResolvedJoin>` it has accepted. The roster is
+:ref:`NetwParticipant <class_NetwParticipant>` it has accepted. The roster is
 authoritative on the server, mirrored on every client, and re-synchronized
-to late joiners when they connect. You read it via two paired methods:
+to late joiners when they connect. You read it through participant handles:
 
-- :ref:`get_joined_players() <class_MultiplayerTree_method_get_joined_players>`
-  returns every accepted player as an array of
-  :ref:`ResolvedJoin <class_ResolvedJoin>`.
-- :ref:`get_joined_player() <class_MultiplayerTree_method_get_joined_player>`
-  resolves a single peer id, or returns ``null`` if the peer never joined or
-  has been forgotten on disconnect.
+- :ref:`get_participants() <class_MultiplayerTree_method_get_participants>`
+  returns every accepted participant.
+- :ref:`get_participant() <class_MultiplayerTree_method_get_participant>`
+  resolves a single peer id, or returns ``null`` if the peer was not accepted
+  or has been forgotten on disconnect.
 
 Roster entries are emitted on the
-:ref:`player_joined <class_MultiplayerTree_signal_player_joined>` signal as
+:ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` signal as
 they arrive, including the late-join "catch up" packet, so a UI subscribed
 to that signal does not need to scan the roster on start-up.
 
@@ -88,7 +87,7 @@ like this:
    the transport peer becomes connected.
 2. :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`: the payload is serialized and sent to
    the server via the
-   :ref:`request_join_player <class_MultiplayerTree_method_request_join_player>`
+   :ref:`request_join <class_MultiplayerTree_method_request_join>`
    RPC.
 3. The server unpacks the payload, runs
    :ref:`AuthCoordinator.resolve_identity() <class_AuthCoordinator>`, and
@@ -96,9 +95,9 @@ like this:
 4. Username collisions are resolved (or the offender is kicked).
 5. The server remembers the resolved join and broadcasts it to every peer. The fresh peer also receives the existing roster.
 6. Every peer's
-   :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` signal
+   :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` signal
    fires. The accepted peer's
-   :ref:`local_player_joined <class_MultiplayerTree_signal_local_player_joined>`
+   :ref:`local_participant_joined <class_MultiplayerTree_signal_local_participant_joined>`
    fires in addition.
 
 You will rarely call :ref:`submit join <class_MultiplayerTree_method_submit_join>`
@@ -112,15 +111,15 @@ do it for you. But you can intercept any step:
 - Subclass :ref:`SessionRoster <class_SessionRoster>` to customise username
   collisions, kick policies, or roster persistence.
 - Listen to
-  :ref:`player_joined <class_MultiplayerTree_signal_player_joined>` and
+  :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` and
   refuse to spawn certain payloads. The spawn flow is decoupled, so a
-  joined player who is never spawned simply waits in the lobby.
+  participant who is never spawned simply waits in the lobby.
 
 .. note::
 
     The handshake is intentionally idempotent on remote peers. Receiving
-    the same :ref:`ResolvedJoin <class_ResolvedJoin>` twice (from the
-    broadcast and from the catch-up packet) is a no-op:
+    the same accepted participant twice (from the broadcast and from the
+    catch-up packet) is a no-op:
     :ref:`SessionRoster <class_SessionRoster>` keys by peer id and the
     second remembrance returns false without re-emitting the signal.
 
@@ -130,7 +129,7 @@ A worked example
 The ``examples/bomber`` project ships a small gamestate node that
 demonstrates the pattern end-to-end. Its ``BomberGamestate`` registers
 itself as a service, then connects to
-:ref:`player_joined <class_MultiplayerTree_signal_player_joined>` and
+:ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` and
 :ref:`peer_disconnected <class_MultiplayerTree_signal_peer_disconnected>`
 to keep a ``players`` dictionary in sync with the roster:
 
@@ -138,16 +137,16 @@ to keep a ``players`` dictionary in sync with the roster:
  .. code-tab:: gdscript GDScript
 
     func setup_connections() -> void:
-        ctx.tree.player_joined.connect(_on_player_joined)
+        ctx.tree.participant_joined.connect(_on_participant_joined)
         ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
         ctx.tree.connected_to_server.connect(_on_connected_ok)
         ctx.tree.server_disconnected.connect(_on_server_disconnected)
 
-    func _on_player_joined(rj: ResolvedJoin) -> void:
-        players[rj.peer_id] = rj.username
+    func _on_participant_joined(participant: NetwParticipant) -> void:
+        players[participant.peer_id] = participant.username
         player_list_changed.emit()
 
 That is the entire bridge between the multiplayer roster and the lobby UI.
-Note how the gamestate never touches RPCs itself. It reads the resolved
+Note how the gamestate never touches RPCs itself. It reads the participant
 data the tree has already validated and broadcast.
 .

@@ -48,26 +48,26 @@ func error(arg1: Variant, arg2: Variant = null, arg3: Variant = null) -> void:
 		Netw.dbg.error(c, arg1, arg2, arg3)
 
 
-## Opens a new general-purpose [NetSpan].
+## Opens a new general-purpose [NetwSpan].
 func span(
 		label: String,
 		meta: Dictionary = { },
 		follows_from: CheckpointToken = null,
-) -> NetSpan:
+) -> NetwSpan:
 	var c := _context_ref.get_ref()
 	if c:
 		return Netw.dbg.span(c, label, meta, follows_from)
-	return NetSpan.new(&"", label)
+	return NetwSpan.new(&"", label)
 
 
-## Opens a new peer-aware [NetPeerSpan].
+## Opens a new peer-aware [NetwPeerSpan].
 func peer_span(
 		label: String,
 		peers: Array = [],
 		meta: Dictionary = { },
 		token: CheckpointToken = null,
-) -> NetPeerSpan:
+) -> NetwPeerSpan:
 	var c := _context_ref.get_ref()
 	if c:
 		return Netw.dbg.peer_span(c, label, peers, meta, token)
-	return NetPeerSpan.new(&"", label)
+	return NetwPeerSpan.new(&"", label)

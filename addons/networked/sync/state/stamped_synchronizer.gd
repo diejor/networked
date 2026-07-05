@@ -21,6 +21,9 @@
 ## property, via [signal MultiplayerSynchronizer.synchronized] and
 ## [signal MultiplayerSynchronizer.delta_synchronized]. The authority peer never
 ## receives its own packets, so [method record] only ever runs on a consumer.
+## Useful send cadence has a one tick floor. A sub-tick
+## [member MultiplayerSynchronizer.replication_interval] burns packet framing
+## without adding authoring information.
 class_name StampedSynchronizer
 extends PackedSynchronizer
 
@@ -63,6 +66,7 @@ func _ready() -> void:
 	if not delta_synchronized.is_connected(_on_synchronized):
 		delta_synchronized.connect(_on_synchronized)
 	super._ready()
+	_warn_if_sub_tick_cadence()
 
 
 ## Override to record [param payload] at [param tick] on the correct timeline
@@ -123,6 +127,31 @@ func _on_synchronized() -> void:
 		return
 	var snapshot := _pending_payload.duplicate()
 	record(_pending_tick, snapshot)
+
+
+func _warn_if_sub_tick_cadence() -> void:
+	# Under Transport.RPC nothing rides the engine's timer-driven lanes, so
+	# replication_interval drives no wire traffic and the sub-tick poll cost
+	# this warning guards against does not exist.
+	if transport == Transport.RPC:
+		return
+	var clock := MultiplayerClock.for_node(self)
+	if not clock:
+		return
+	if replication_interval >= clock.ticktime:
+		return
+	push_warning(
+		(
+				"%s: replication_interval=%.4f is below one tick "
+				+ "(ticktime=%.4f). Use replication_interval = ticktime "
+				+ "or a larger tick multiple on %s."
+		) % [
+			get_class(),
+			replication_interval,
+			clock.ticktime,
+			get_path(),
+		],
+	)
 
 
 # Writes a restored payload onto the live body. The split between the spatial

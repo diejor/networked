@@ -68,10 +68,10 @@ func add_host(
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
-		NetwHarnessSession.Entry.HOST_PLAYER,
+		NetwHarnessSession.Entry.HOST,
 		_make_join_payload(username, spawn),
 	)
-	assert(err == OK, "host_player() failed: %s" % error_string(err))
+	assert(err == OK, "host() failed: %s" % error_string(err))
 
 	_finish_online_runner(runner)
 	await _wait_for_roster(runner)
@@ -117,8 +117,8 @@ func disconnect_runner(runner: NetwSceneRunner) -> void:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in host.tree.get_joined_players():
-				if rj.peer_id == peer_id:
+			for participant: NetwParticipant in host.tree.get_participants():
+				if participant.peer_id == peer_id:
 					return false
 			return true,
 		"server to drop peer %d" % peer_id,
@@ -429,8 +429,8 @@ func _wait_for_roster(runner: NetwSceneRunner) -> void:
 		return
 	var timed_out := await _wait_until(
 		func() -> bool:
-			for rj: ResolvedJoin in host.tree.get_joined_players():
-				if rj.peer_id == runner.peer_id:
+			for participant: NetwParticipant in host.tree.get_participants():
+				if participant.peer_id == runner.peer_id:
 					return true
 			return false,
 		"server roster to admit %s" % runner.username,

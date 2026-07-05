@@ -31,11 +31,13 @@ auto_host_headless = false
 app_id = &"7x283tsfmy1xpr4"
 
 [node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="MultiplayerTree" unique_id=274629760]
-_spawnable_scenes = PackedStringArray("uid://l523ox2awhi6")
+_spawnable_scenes = PackedStringArray("uid://l523ox2awhi6", "res://examples/bomber/game/lobby_level.tscn")
 spawn_path = NodePath(".")
 script = ExtResource("4_p4o8j")
 scene_config/world/load_mode = 1
 scene_config/world/empty_action = 1
+scene_config/lobby_level/load_mode = 1
+scene_config/lobby_level/empty_action = 1
 
 [node name="Gamestate" type="Node" parent="MultiplayerTree" unique_id=487890910]
 unique_name_in_owner = true
@@ -74,4 +76,4 @@ client_id = "1519144648411447338"
 rendezvous = SubResource("Resource_disc_rdv")
 metadata/_custom_type_script = "uid://certc8teajoaj"
 
-[node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]
+[node name="Lobby" parent="MultiplayerTree" unique_id=125506540 instance=ExtResource("9_gbknk")]

@@ -35,15 +35,16 @@ func test_relays_join_progress() -> void:
 	var target := _make_target()
 	var captured: Array = []
 	facade.join_progress.connect(
-		func(t, message, ratio): captured.append([t, message, ratio])
+		func(t, step, message, ratio): captured.append([t, step, message, ratio])
 	)
 
-	session.join_progress.emit(target, "Progress", 0.25)
+	session.join_progress.emit(target, &"connecting", "Progress", 0.25)
 
 	assert_int(captured.size()).is_equal(1)
 	assert_that(captured[0][0]).is_same(target)
-	assert_str(captured[0][1]).is_equal("Progress")
-	assert_float(captured[0][2]).is_equal(0.25)
+	assert_str(captured[0][1]).is_equal(&"connecting")
+	assert_str(captured[0][2]).is_equal("Progress")
+	assert_float(captured[0][3]).is_equal(0.25)
 	session.queue_free()
 
 

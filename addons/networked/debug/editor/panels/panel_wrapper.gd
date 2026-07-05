@@ -25,8 +25,8 @@ var peer_key: String
 ## The inner panel control. May be any [Control] subclass.
 var panel_control: Control
 
-## Non-null when [member panel_control] extends [DebugPanel].
-## Used for type-safe hook dispatch - no has_method checks needed.
+# Non-null when [member panel_control] extends [DebugPanel].
+# Used for type-safe hook dispatch - no has_method checks needed.
 var _debug_panel: DebugPanel
 
 var _peer_color: Color

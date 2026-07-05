@@ -193,7 +193,7 @@ func service_entered(mt: MultiplayerTree) -> void:
 	# Bridge a dropped connection into the activity lifecycle so a host that leaves
 	# (or any transport drop) surfaces as session_lost while connected, the
 	# transition a game hangs its rematch policy on. server_disconnected fires only
-	# on an involuntary drop, never on a graceful local disconnect_player, so it is
+	# on an involuntary drop, never on a graceful local leave, so it is
 	# the precise loss signal; server_disconnecting carries the announced reason.
 	mt.server_disconnecting.connect(
 		func(reason: String) -> void:

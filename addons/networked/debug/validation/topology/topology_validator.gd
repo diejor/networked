@@ -1,12 +1,11 @@
 ## Developer-only topology validation for the Networked addon.
 ##
-## Contains static helpers that inspect the synchronizer topology of a player
-## node: expected vs actual counts, cache vs live diff, and virtual property
-## constraint checks.
+## Inspects the synchronizer topology of a player node: expected vs actual
+## counts, cache vs live diff, and virtual property constraint checks
+## (SaveComponent, SceneSynchronizer, MultiplayerEntity, etc.).
 ## [br][br]
-## (SaveComponent, SceneSynchronizer, MultiplayerEntity, etc.)
-## [br][br]
-## Use from: tests, [code]@tool[/code] scripts, debugger panels.
+## An instance so the checks are steppable (no statics, per the debugger's
+## no-statics invariant). Owned by [TopologyNetValidator].
 class_name TopologyValidator
 extends RefCounted
 
@@ -16,7 +15,7 @@ extends RefCounted
 ## [br]- [MultiplayerEntity] -> 1 (extends MultiplayerSynchronizer)
 ## [br][br]
 ## Does not count user-defined synchronizers; this is a minimum floor only.
-static func expected_sync_count(node: Node) -> int:
+func expected_sync_count(node: Node) -> int:
 	var n := 0
 	if MultiplayerEntity.unwrap(node) != null:
 		n += 1
@@ -36,7 +35,7 @@ static func expected_sync_count(node: Node) -> int:
 ##  ┠╴live_count (int)                     # live synchronizer count
 ##  ┖╴expected_min (int)                   # minimum expected count
 ## [/codeblock]
-static func validate_node(node: Node) -> Dictionary:
+func validate_node(node: Node) -> Dictionary:
 	var errors: Array[String] = []
 	var expected_min := expected_sync_count(node)
 
@@ -91,7 +90,7 @@ static func validate_node(node: Node) -> Dictionary:
 ##  ┠╴only_in_cache (Array[String])        # names in cache but not in live
 ##  ┖╴only_in_live (Array[String])         # names in live but not in cache
 ## [/codeblock]
-static func cache_diff(node: Node) -> Dictionary:
+func cache_diff(node: Node) -> Dictionary:
 	var cached_names: Array[String] = []
 	if node.has_meta(SynchronizersCache.META_KEY):
 		var cached: Array[MultiplayerSynchronizer] = []
@@ -119,7 +118,7 @@ static func cache_diff(node: Node) -> Dictionary:
 	}
 
 
-static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
+func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	var errs: Array[String] = []
 
 	var config := save_comp.replication_config
@@ -159,7 +158,7 @@ static func _check_save_component(save_comp: SaveComponent) -> Array[String]:
 	return errs
 
 
-static func _check_multiplayer_entity(
+func _check_multiplayer_entity(
 		entity: MultiplayerEntity,
 ) -> Array[String]:
 	var errs: Array[String] = []
@@ -170,10 +169,18 @@ static func _check_multiplayer_entity(
 			"get_path_to(entity.owner) was likely called before the " +
 			"player entered the scene tree.",
 		)
+	if entity.is_template:
+		errs.append(
+			(
+					"spawned entity has no identity. Wrap your " +
+					"spawn_function with NetwEntity.wrap_spawn or bind " +
+					"identity before returning"
+			),
+		)
 	return errs
 
 
-static func _check_authority(node: Node) -> Array[String]:
+func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
 	var entity := MultiplayerEntity.unwrap(node)
 	var expected := _get_expected_authority(node, entity)
@@ -191,22 +198,20 @@ static func _check_authority(node: Node) -> Array[String]:
 	return errs
 
 
-static func _get_expected_authority(
+func _get_expected_authority(
 		node: Node,
 		entity: MultiplayerEntity,
 ) -> int:
 	if not entity:
 		return NetwEntity.parse_peer(node.name)
 
-	match entity.initial_controller:
-		MultiplayerEntity.InitialController.SERVER:
-			return MultiplayerPeer.TARGET_PEER_SERVER
-		MultiplayerEntity.InitialController.REPRESENTED_PEER:
-			return NetwEntity.parse_peer(node.name)
-	return 0
+	var controller := entity.controller
+	if controller == 0:
+		return MultiplayerPeer.TARGET_PEER_SERVER
+	return controller
 
 
-static func _check_server_authority_synchronizer(
+func _check_server_authority_synchronizer(
 		node: Node,
 ) -> Array[String]:
 	var errs: Array[String] = []

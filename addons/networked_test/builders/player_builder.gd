@@ -26,9 +26,10 @@ var _interest_report: bool = false
 
 var _has_state: bool = false
 var _state_props: Array[StringName] = []
-var _state_bundled: bool = false
+var _state_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
 var _has_input: bool = false
 var _input_props: Array[StringName] = []
+var _input_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
 var _has_prediction: bool = false
 var _prediction_missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL
@@ -164,17 +165,20 @@ func with_interest(
 ## Attaches the server-authoritative state slot and registers each of
 ## [param props] as an ON_CHANGE payload property at [code].:prop[/code] on the
 ## entity root, so a predicting client compares against and a server records the
-## same whole-entity snapshot. Set [param bundled] to ride the payload as one
-## packed blob (the props are then suppressed to NEVER on the wire but stay
-## resolvable through [method ProxySynchronizer.get_real_path]).
+## same whole-entity snapshot. [StateSynchronizer] always rides its packed
+## carrier, so the payload rows stay resolvable through
+## [method ProxySynchronizer.get_real_path].
 ##
 ## The payload is baked into the synchronizer's [code]replication_config[/code]
 ## with real paths, so it survives [method pack] / instantiate, not just
 ## [method build].
-func with_state(props: Array[StringName], bundled: bool = false) -> PlayerBuilder:
+func with_state(
+		props: Array[StringName],
+		_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK,
+) -> PlayerBuilder:
 	_has_state = true
 	_state_props = props
-	_state_bundled = bundled
+	_state_transport = _transport
 	return self
 
 
@@ -184,9 +188,13 @@ func with_state(props: Array[StringName], bundled: bool = false) -> PlayerBuilde
 ## child (mirroring bomber's [code]$Inputs[/code]) and registers each of
 ## [param props] as an ALWAYS payload property at [code].:prop[/code] on the
 ## entity root. Authority binds to the controller through the entity lifecycle.
-func with_input(props: Array[StringName]) -> PlayerBuilder:
+func with_input(
+		props: Array[StringName],
+		_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK,
+) -> PlayerBuilder:
 	_has_input = true
 	_input_props = props
+	_input_transport = _transport
 	return self
 
 
@@ -255,7 +263,8 @@ func build() -> Node:
 			cfg.property_set_spawn(path, entry.get("spawn", false))
 			cfg.property_set_watch(path, entry.get("watch", true))
 			save_comp._save_modes[prop] = entry.get(
-				"save_mode", SaveComponent.SaveMode.SNAPSHOT,
+				"save_mode",
+				SaveComponent.SaveMode.SNAPSHOT,
 			)
 			save_comp._save_intervals[prop] = entry.get("interval", 0.0)
 		save_comp.replication_config = cfg
@@ -287,7 +296,7 @@ func build() -> Node:
 	if _has_state:
 		var state := StateSynchronizer.new()
 		state.name = "StateSync"
-		state.bundle_payload = _state_bundled
+		state.transport = _state_transport
 		# register_property populates _properties for the build() path (callers
 		# inspect it pre-tree). The baked replication_config carries the same real
 		# paths so finalize -> _import_from_config reconstructs the payload on the
@@ -296,14 +305,14 @@ func build() -> Node:
 			state.register_property(
 				prop,
 				NodePath(".:" + prop),
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+				SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 				false,
-				true,
+				false,
 			)
 		state.replication_config = _payload_config(
 			_state_props,
-			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
-			true,
+			SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
+			false,
 		)
 		var _a6: Node = SceneAssembly.attach(root, state, root)
 		state.root_path = state.get_path_to(root)
@@ -314,6 +323,7 @@ func build() -> Node:
 		var _a7: Node = SceneAssembly.attach(root, inputs, root)
 		var input := InputSynchronizer.new()
 		input.name = "InputSync"
+		input.transport = _input_transport
 		# Same dual registration as state: _properties for build(), baked config
 		# for pack().
 		for prop in _input_props:

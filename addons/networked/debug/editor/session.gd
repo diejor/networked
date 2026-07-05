@@ -3,7 +3,15 @@ class_name DebuggerSession
 extends RefCounted
 
 ## Emitted when a new [MultiplayerTree] peer completes registration.
-signal peer_registered(peer_key: String, display_name: String, tree_name: String, is_server: bool, color: Color, is_remote: bool, peer_id: int)
+signal peer_registered(
+		peer_key: String,
+		display_name: String,
+		tree_name: String,
+		role: MultiplayerTree.Role,
+		color: Color,
+		is_remote: bool,
+		peer_id: int,
+)
 
 ## Emitted when a peer is removed from the registry.
 signal peer_unregistered(peer_key: String)
@@ -27,45 +35,46 @@ signal session_cleared()
 var plugin: EditorDebuggerPlugin
 var session_id: int
 
-## Peer registry mapping [code]peer_key[/code] to peer info:
-## [codeblock]
-## Dictionary
-##  ┖╴peer_key (String)                    # format: "source_path|reporter_id"
-##     ┖╴{ }
-##        ┠╴username (String)
-##        ┠╴tree_name (String)
-##        ┠╴display_name (String)
-##        ┠╴is_server (bool)
-##        ┠╴backend_class (String)
-##        ┠╴online (bool)
-##        ┠╴color (Color)
-##        ┠╴peer_id (int)
-##        ┖╴is_remote (bool)
-## [/codeblock]
+# Peer registry mapping [code]peer_key[/code] to peer info:
+# [codeblock]
+# Dictionary
+#  ┖╴peer_key (String)                    # format: "source_path|reporter_id"
+#     ┖╴{ }
+#        ┠╴username (String)
+#        ┠╴tree_name (String)
+#        ┠╴display_name (String)
+#        ┠╴role ([enum MultiplayerTree.Role])
+#        ┠╴is_server (bool)
+#        ┠╴backend_class (String)
+#        ┠╴online (bool)
+#        ┠╴color (Color)
+#        ┠╴peer_id (int)
+#        ┖╴is_remote (bool)
+# [/codeblock]
 var _peers: Dictionary[String, Dictionary] = { }
 
-## All adapters: [code]adapter_key[/code] -> [PanelDataAdapter] instance.
+# All adapters: [code]adapter_key[/code] -> [PanelDataAdapter] instance.
 var _adapters: Dictionary[String, PanelDataAdapter] = { }
 
-## Alias map shared by all [CrashAdapter] instances (NodePath prefix -> readable alias).
+# Alias map shared by all [CrashAdapter] instances (NodePath prefix -> readable alias).
 var _alias_map: Dictionary = { }
 
-## Map of [code]span_id[/code] -> [code]peer_key[/code] for routing span events that arrive without context.
+# Map of [code]span_id[/code] -> [code]peer_key[/code] for routing span events that arrive without context.
 var _span_peer_map: Dictionary = { }
 
-## Deduplication set for crash manifests replayed via snapshot.
-## [br][br]
-## [code]peer_key[/code] -> [code]Dictionary[cid, true][/code] - prevents the same manifest appearing twice
-## when both the live event and the history replay arrive in the same session.
+# Deduplication set for crash manifests replayed via snapshot.
+# [br][br]
+# [code]peer_key[/code] -> [code]Dictionary[cid, true][/code] - prevents the same manifest appearing twice
+# when both the live event and the history replay arrive in the same session.
 var _seen_crash_cids: Dictionary = { }
 
 var auto_break: bool = false
 
-## Hue index for golden-ratio peer color assignment.
+# Hue index for golden-ratio peer color assignment.
 var _color_index: int = 0
 
-## Peer color table: [code]peer_id[/code] -> [Color] (stable by [code]peer_id[/code] for consistent coloring).
-var _peer_colors: Dictionary[int, Color] = { }
+# Peer color table: [code]peer_key[/code] -> [Color].
+var _peer_colors: Dictionary[String, Color] = { }
 
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
@@ -82,7 +91,7 @@ func receive(message: String, data: Array, is_remote: bool = false) -> void:
 		return
 
 	if data[0] is PackedByteArray:
-		var envelope := NetEnvelope.from_dict(bytes_to_var(data[0]))
+		var envelope := NetwEnvelope.from_dict(bytes_to_var(data[0]))
 		_route_envelope(envelope, is_remote)
 		return
 
@@ -103,6 +112,29 @@ func set_auto_break(enabled: bool) -> void:
 	auto_break = enabled
 	if plugin:
 		plugin.send_to_game(session_id, "networked:set_auto_break", [enabled])
+
+
+## Asks the game process to clone the local tree behind [param peer_key] into
+## its own window. Only meaningful for a local (non-remote) peer, which the
+## caller ([PeerTreePanel]) already gates on.
+func send_spawn_tree(peer_key: String) -> void:
+	if not plugin:
+		return
+	var tree_name: String = _peers.get(peer_key, { }).get("tree_name", "")
+	if tree_name.is_empty():
+		return
+	plugin.send_to_game(session_id, "networked:spawn_tree", [{ "tree_name": tree_name }])
+
+
+## Toggles a debugger-spawned tree's window between embedded and native. Only
+## meaningful for a spawned peer, which the caller ([PeerTreePanel]) gates on.
+func send_toggle_embed(peer_key: String) -> void:
+	if not plugin:
+		return
+	var tree_name: String = _peers.get(peer_key, { }).get("tree_name", "")
+	if tree_name.is_empty():
+		return
+	plugin.send_to_game(session_id, "networked:toggle_embed", [{ "tree_name": tree_name }])
 
 
 func send_node_inspect(
@@ -209,7 +241,7 @@ func unregister_peers(peer_keys: Array[String]) -> void:
 # ─── Envelope Router ──────────────────────────────────────────────────────────
 
 
-func _route_envelope(envelope: NetEnvelope, is_remote: bool = false) -> void:
+func _route_envelope(envelope: NetwEnvelope, is_remote: bool = false) -> void:
 	if envelope.source_path.is_empty() or envelope.reporter_id.is_empty():
 		_dbg.warn("DebuggerSession: [DropBadEnvelope] missing source_path or reporter_id")
 		return
@@ -265,16 +297,25 @@ func _trace_route(msg: String, pk: String, is_remote: bool) -> void:
 # ─── Message Handlers ─────────────────────────────────────────────────────────
 
 
-func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> void:
+func _on_session_registered(envelope: NetwEnvelope, is_remote: bool = false) -> void:
 	var pk := envelope.peer_key()
 	var d := envelope.payload
 	var username := d.get("username", "")
-	var peer_id := envelope.peer_id
-	var is_server: bool = d.get("is_server", false) or peer_id == 1
+	# Prefer the payload's peer_id: report_session_registered computes it
+	# synchronously and gates it on State.ONLINE, so it is never the stale "1" a
+	# client peer reports after mounting but before the server assigns its id.
+	# envelope.peer_id is computed at flush time and can catch that window.
+	var peer_id: int = d.get("peer_id", envelope.peer_id)
+	var role := _role_from_payload(d, peer_id)
+	var is_server := _role_is_host(role)
 	var tree_name: String = d.get("tree_name", envelope.source_path.get_file())
+	# Absent on legacy payloads; default true keeps their behavior. The offline
+	# phase of two-phase registration reports false.
+	var online: bool = d.get("online", true)
 
-	# If already online, update identity if it was unknown at registration time.
-	if pk in _peers and _peers[pk].get("online", false):
+	# Already known: merge this registration into the existing row. This is also
+	# the offline->online upgrade path (two-phase registration re-emits on connect).
+	if pk in _peers:
 		var changed := false
 
 		# Upgrade path: if we were remote but just got a local registration, prefer local.
@@ -287,10 +328,28 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 			_peers[pk]["peer_id"] = peer_id
 			peer_id_resolved.emit(pk, peer_id)
 
+		if _peers[pk].get("online", false) != online:
+			_peers[pk]["online"] = online
+			peer_status_changed.emit(pk, online)
+
+		if _peers[pk].get("role", MultiplayerTree.Role.NONE) != role:
+			_peers[pk]["role"] = role
+			_peers[pk]["is_server"] = is_server
+			_peers[pk]["display_name"] = _get_display_name(
+				username,
+				_peers[pk]["tree_name"],
+				role,
+			)
+			changed = true
+
 		# Update username if it changed (e.g. from empty to a real name).
 		if _peers[pk].get("username", "") != username and not username.is_empty():
 			_peers[pk]["username"] = username
-			_peers[pk]["display_name"] = _get_display_name(username, _peers[pk]["tree_name"], _peers[pk]["is_server"])
+			_peers[pk]["display_name"] = _get_display_name(
+				username,
+				_peers[pk]["tree_name"],
+				role,
+			)
 			changed = true
 
 		if changed:
@@ -301,34 +360,32 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 
 	_dbg.info("DebuggerSession: [Registered] '%s' (peer=%d, remote=%s, path=%s)" % [username if not username.is_empty() else tree_name, peer_id, is_remote, envelope.source_path])
 
-	var color: Color = _assign_peer_color(peer_id)
+	var color: Color = _assign_peer_color(pk)
 	_peers[pk] = {
 		"username": username,
 		"tree_name": tree_name,
-		"display_name": _get_display_name(username, tree_name, is_server),
+		"display_name": _get_display_name(username, tree_name, role),
+		"role": role,
 		"is_server": is_server,
 		"backend_class": d.get("backend_class", ""),
-		"online": true,
+		"online": online,
 		"color": color,
 		"peer_id": peer_id,
 		"is_remote": is_remote,
+		"spawned": d.get("spawned", false),
 	}
 
 	peer_registered.emit(
 		pk,
 		username,
 		tree_name,
-		is_server,
+		role,
 		color,
 		is_remote,
 		peer_id,
 	)
 
 	for pt in PanelDataAdapter.PANEL_NAMES.keys():
-		if is_server:
-			if pt == PanelDataAdapter.PanelType.TOPOLOGY:
-				continue
-
 		var key: String = _adapter_key(pk, pt)
 		if key not in _adapters:
 			var display_name := username if not username.is_empty() else tree_name
@@ -341,7 +398,7 @@ func _on_session_registered(envelope: NetEnvelope, is_remote: bool = false) -> v
 		plugin.send_to_game(session_id, "networked:set_auto_break", [auto_break])
 
 
-func _on_session_unregistered(envelope: NetEnvelope, is_remote: bool = false) -> void:
+func _on_session_unregistered(envelope: NetwEnvelope, is_remote: bool = false) -> void:
 	var pk := envelope.peer_key()
 	if pk not in _peers:
 		return
@@ -358,7 +415,7 @@ func _on_session_unregistered(envelope: NetEnvelope, is_remote: bool = false) ->
 		)
 
 
-func _on_peer_event(envelope: NetEnvelope, connected: bool) -> void:
+func _on_peer_event(envelope: NetwEnvelope, connected: bool) -> void:
 	var pk := envelope.peer_key()
 	if pk not in _peers:
 		return
@@ -371,7 +428,7 @@ func _on_peer_event(envelope: NetEnvelope, connected: bool) -> void:
 			_adapters[key].on_peer_event(envelope.payload, connected)
 
 
-func _on_clock_sample(envelope: NetEnvelope, is_remote: bool = false) -> void:
+func _on_clock_sample(envelope: NetwEnvelope, is_remote: bool = false) -> void:
 	if is_remote and plugin:
 		if not plugin.is_game_session_active(session_id):
 			return
@@ -385,7 +442,7 @@ func _on_clock_sample(envelope: NetEnvelope, is_remote: bool = false) -> void:
 		)
 
 
-func _on_crash_manifest(envelope: NetEnvelope) -> void:
+func _on_crash_manifest(envelope: NetwEnvelope) -> void:
 	var pk := envelope.peer_key()
 	var payload := envelope.payload
 	var trigger: String = payload.get("trigger", "UNKNOWN")
@@ -408,7 +465,7 @@ func _on_crash_manifest(envelope: NetEnvelope) -> void:
 		_adapters[key].feed(envelope.payload)
 
 
-func _on_span(envelope: NetEnvelope, type: String) -> void:
+func _on_span(envelope: NetwEnvelope, type: String) -> void:
 	var pk := envelope.peer_key()
 	var span_id: String = envelope.payload.get("id", "")
 	if pk.is_empty() and span_id in _span_peer_map:
@@ -420,7 +477,7 @@ func _on_span(envelope: NetEnvelope, type: String) -> void:
 		_adapters[key].on_span_event(envelope.payload, type)
 
 
-func _on_lobby_event(envelope: NetEnvelope) -> void:
+func _on_lobby_event(envelope: NetwEnvelope) -> void:
 	var np: String = envelope.payload.get("node_path", "")
 	var alias: String = envelope.payload.get("alias", "")
 	if not np.is_empty() and not alias.is_empty():
@@ -430,7 +487,7 @@ func _on_lobby_event(envelope: NetEnvelope) -> void:
 		_adapters[key].feed(envelope.payload)
 
 
-func _on_topology_snapshot(envelope: NetEnvelope) -> void:
+func _on_topology_snapshot(envelope: NetwEnvelope) -> void:
 	var key := _adapter_key(envelope.peer_key(), PanelDataAdapter.PanelType.TOPOLOGY)
 	if key in _adapters:
 		_adapters[key].feed(envelope.payload)
@@ -456,21 +513,39 @@ func _create_adapter(peer_k: String, display: String, type: PanelDataAdapter.Pan
 	return adapter
 
 
-func _assign_peer_color(peer_id: int) -> Color:
-	if peer_id in _peer_colors:
-		return _peer_colors[peer_id]
+func _assign_peer_color(peer_key: String) -> Color:
+	if peer_key in _peer_colors:
+		return _peer_colors[peer_key]
 
-	var h := fmod(float(abs(peer_id)) * 0.618033988749895, 1.0)
+	var h := fmod(float(_color_index) * 0.618033988749895, 1.0)
+	_color_index += 1
 	var c := Color.from_hsv(h, 0.6, 0.9)
-	_peer_colors[peer_id] = c
+	_peer_colors[peer_key] = c
 	return c
 
 
-func _get_display_name(username: String, tree_name: String, is_server: bool) -> String:
-	if is_server:
+func _get_display_name(
+		username: String,
+		tree_name: String,
+		role: MultiplayerTree.Role,
+) -> String:
+	if role == MultiplayerTree.Role.DEDICATED_SERVER:
 		return tree_name
 
 	if username.is_empty():
 		return tree_name
 
 	return "%s [%s]" % [tree_name, username]
+
+
+func _role_from_payload(d: Dictionary, peer_id: int) -> MultiplayerTree.Role:
+	if d.has("role"):
+		return d.get("role", MultiplayerTree.Role.NONE)
+	if d.get("is_server", false) or peer_id == 1:
+		return MultiplayerTree.Role.DEDICATED_SERVER
+	return MultiplayerTree.Role.CLIENT
+
+
+func _role_is_host(role: MultiplayerTree.Role) -> bool:
+	return role == MultiplayerTree.Role.DEDICATED_SERVER \
+			or role == MultiplayerTree.Role.LISTEN_SERVER

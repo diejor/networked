@@ -10,8 +10,8 @@ extends RefCounted
 enum Entry {
 	JOIN,
 	JOIN_OR_HOST,
-	HOST_PLAYER,
 	HOST,
+	OPEN_HOST,
 }
 
 
@@ -137,10 +137,10 @@ func connect_tree(
 				active_adapter.make_join_target(tree),
 				payload,
 			)
-		Entry.HOST_PLAYER:
-			return await tree.host_player(payload)
 		Entry.HOST:
-			return await tree.host()
+			return await tree.host(payload)
+		Entry.OPEN_HOST:
+			return await tree._open_host()
 		_:
 			return ERR_INVALID_PARAMETER
 

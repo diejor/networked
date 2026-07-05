@@ -38,8 +38,8 @@ func test_client_is_online_after_auto_connect_player() -> void:
 	assert_that(tree.is_online()).is_true()
 
 
-func test_host_player_starts_server_and_joins() -> void:
-	var tree := await harness.add_host_player(
+func test_host_starts_server_and_joins() -> void:
+	var tree := await harness.add_host(
 		harness.make_sceneless_payload("valeria"),
 	)
 

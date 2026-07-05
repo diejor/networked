@@ -58,6 +58,22 @@ var interest_service: InterestService:
 			return null
 		return mt.get_service(InterestService) as InterestService
 
+## The [LivenessService] service, or [code]null[/code].
+var liveness_service: LivenessService:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(LivenessService) as LivenessService
+
+## The [RelayService] service, or [code]null[/code].
+var entity_relay: RelayService:
+	get:
+		var mt: MultiplayerTree = _tree_ref.get_ref()
+		if not mt:
+			return null
+		return mt.get_service(RelayService) as RelayService
+
 ## The [LagCompensation] service, or [code]null[/code].
 var lag_compensation: LagCompensation:
 	get:

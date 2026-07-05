@@ -106,15 +106,21 @@ despawn commands for client-authoritative entities without playing
 permission games. It owns the synchronizer, the synchronizer owns the
 spawn list, and the entity rides along.
 
-Contributing spawn properties
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Spawn lifecycle signals
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Sibling components can extend the spawn packet without touching the
-spawner's exported config. From the
+Sibling components that only need decoded identity can connect to
+:ref:`spawning <class_MultiplayerEntity_signal_spawning>` or
+:ref:`spawned <class_MultiplayerEntity_signal_spawned>` in the editor.
+``spawning`` runs once after identity, authority, and spawn properties are
+applied. ``spawned`` runs once after scene registration and the owner
+finishes :godot:`_ready() <Node#class_node_private_method__ready>`.
+
+Use
 :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`
-hook of the sibling, call
-:ref:`contribute_spawn_property() <class_NetwEntity>` with the source node
-and property the synchronizer should bundle:
+only when the component must also contribute spawn properties. From that
+hook, call :ref:`contribute_spawn_property() <class_NetwEntity>` with the
+source node and property the synchronizer should bundle:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -129,7 +135,7 @@ and property the synchronizer should bundle:
         if multiplayer.is_server():
             hydrate_from_db()
 
-The ordering is important: contributions must happen in
+The ordering is important: contributions still must happen in
 :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`, because Godot reads the synchronizer's
 replication config between scene instantiation and tree entry. Connecting
 to :ref:`spawning <class_MultiplayerEntity_signal_spawning>` and adding
@@ -148,7 +154,7 @@ Spawning and despawning
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Most spawns happen inside the addon: a client connects, the server
-resolves their :ref:`ResolvedJoin <class_ResolvedJoin>`, and
+accepts their :ref:`NetwParticipant <class_NetwParticipant>`, and
 :ref:`spawn_player() <class_MultiplayerEntity_method_spawn_player>` drops a
 copy of the template into the target
 :ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else (NPCs, projectiles, loot) there are two helpers:
@@ -160,10 +166,10 @@ copy of the template into the target
   before it enters the tree, and let the caller add it to the scene.
 
 Both are server-only. The copy goes through the same spawn lifecycle as a
-player would: it picks up the spawn snapshot, runs the
-:ref:`spawning <class_MultiplayerEntity_signal_spawning>` signal so sibling
-components can hydrate, registers with the scene's synchronizer, and
-finally fires :ref:`spawned <class_NetwEntity>`.
+player would: it picks up the spawn snapshot, runs
+:ref:`spawning <class_MultiplayerEntity_signal_spawning>`, registers with
+the scene's synchronizer, finishes :godot:`_ready() <Node#class_node_private_method__ready>`,
+and finally fires :ref:`spawned <class_NetwEntity>`.
 
 Despawning is symmetric:
 :ref:`despawn() <class_MultiplayerEntity_method_despawn>` flushes the

@@ -41,7 +41,7 @@ Two tree placements are common:
   :ref:`desired_role <class_MultiplayerTree_property_desired_role>` set to
   :ref:`CLIENT <class_MultiplayerTree_constant_CLIENT>`. When
   :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` or
-  :ref:`host_player() <class_MultiplayerTree_method_host_player>` needs to
+  :ref:`host() <class_MultiplayerTree_method_host>` needs to
   host, the tree duplicates itself, names the copy ``Server``, hosts that
   sibling as a
   :ref:`DEDICATED_SERVER <class_MultiplayerTree_constant_DEDICATED_SERVER>`,
@@ -111,7 +111,7 @@ URL or transport-specific fields.
 - :ref:`join() <class_MultiplayerTree_method_join>`: open
   the target backend against a known address as a client. Use when the
   caller knows there is a server.
-- :ref:`host_player() <class_MultiplayerTree_method_host_player>`: start
+- :ref:`host() <class_MultiplayerTree_method_host>`: start
   this tree as the host. Use when the caller knows it is hosting.
 
 A typical local flow looks like this:
@@ -128,7 +128,7 @@ A typical local flow looks like this:
    via :ref:`submit_join() <class_MultiplayerTree_method_submit_join>`.
 5. The server validates, resolves identity, broadcasts the accepted player
    to all peers, and emits
-   :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`
+   :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>`
    everywhere, including locally on the new peer.
 
 For the protocol behind :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>` and probe isolation, see
@@ -140,7 +140,7 @@ lobby ID and backend template into a :ref:`JoinTarget <class_JoinTarget>`
 which is passed directly to :ref:`join() <class_MultiplayerTree_method_join>`.
 The tree then initializes the backend (e.g. :ref:`SteamBackend <class_SteamBackend>`) and finalizes the
 session through :ref:`join() <class_MultiplayerTree_method_join>` or
-:ref:`host_player() <class_MultiplayerTree_method_host_player>` identically
+:ref:`host() <class_MultiplayerTree_method_host>` identically
 to ENet or WebSocket connections.
 
 Signals you will actually wire
@@ -152,12 +152,12 @@ are:
 - :ref:`session_entered <class_MultiplayerTree_signal_session_entered>`: the API and
   scene manager are ready. Use this to register custom services or to read
   :ref:`role <class_MultiplayerTree_property_role>` for the first time.
-- :ref:`player_joined <class_MultiplayerTree_signal_player_joined>`:
-  fires on **every** peer when the server accepts a new player. Receives a
-  :ref:`ResolvedJoin <class_ResolvedJoin>` with the peer id, username, and
-  resolved spawner path.
-- :ref:`local_player_joined <class_MultiplayerTree_signal_local_player_joined>`
-  the same event, but only fires when the joined peer is *this* one.
+- :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>`:
+  emits once for each accepted participant known to the peer. Fresh accepts
+  emit on every peer, and late joiners receive one emission per participant
+  accepted before they connected.
+- :ref:`local_participant_joined <class_MultiplayerTree_signal_local_participant_joined>`
+  the same event, but only fires when the participant is *this* peer.
   Useful for camera setup and HUD bootstrapping.
 - :ref:`peer_disconnected <class_MultiplayerTree_signal_peer_disconnected>`
   the underlying transport dropped a peer. Already de-duplicated. The
@@ -165,13 +165,13 @@ are:
 - :ref:`server_disconnected <class_MultiplayerTree_signal_server_disconnected>`
   fired on the client when the server goes away. The state machine has
   already moved back toward :ref:`OFFLINE <class_MultiplayerTree_constant_OFFLINE>` by the time the handler runs, so it
-  is safe to immediately call :ref:`disconnect_player() <class_MultiplayerTree_method_disconnect_player>` or change scenes.
+  is safe to immediately call :ref:`leave() <class_MultiplayerTree_method_leave>` or change scenes.
 
 Tearing down
 ------------
 
 Closing a session is just calling
-:ref:`disconnect_player() <class_MultiplayerTree_method_disconnect_player>`.
+:ref:`leave() <class_MultiplayerTree_method_leave>`.
 It flushes the local peer's :ref:`SaveComponent <class_SaveComponent>` data,
 closes the multiplayer peer, awaits the server's confirmation (with a 3
 second cap), and then resets :ref:`state <class_MultiplayerTree_property_state>` to :ref:`OFFLINE <class_MultiplayerTree_constant_OFFLINE>` and :ref:`role <class_MultiplayerTree_property_role>` to

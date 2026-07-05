@@ -120,7 +120,7 @@ var _table_scripts: Dictionary[StringName, Script] = { }
 ## Binds a [SaveComponent] to this database, registering its schema.
 ## If [param span] is provided, steps are recorded for the initialization
 ## process.
-func bind(component: SaveComponent, span: NetSpan = null) -> void:
+func bind(component: SaveComponent, span: NetwSpan = null) -> void:
 	if component.table_name.is_empty():
 		return
 

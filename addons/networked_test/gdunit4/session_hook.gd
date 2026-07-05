@@ -171,14 +171,14 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 			],
 		)
 
-	if not NetTrace._active.is_empty():
+	if not NetwTrace._active.is_empty():
 		push_error(
-			"TEST ISOLATION LEAK [%s]: Leaked %d NetTrace spans." % [
+			"TEST ISOLATION LEAK [%s]: Leaked %d NetwTrace spans." % [
 				event.test_name(),
-				NetTrace._active.size(),
+				NetwTrace._active.size(),
 			],
 		)
-		NetTrace.reset()
+		NetwTrace.reset()
 
 	if LocalLoopbackSession.shared != null:
 		push_error(

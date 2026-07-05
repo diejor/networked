@@ -11,7 +11,9 @@ func _notification(what: int) -> void:
 		_record_sample(&"parented_before_super")
 		var entity := Netw.ctx(self).entity
 		if entity:
+			entity.contribute_spawn_property(self, &"entity_id")
 			entity.contribute_spawn_property(self, &"identity_packet")
+			entity.contribute_spawn_property(self, &"peer_id")
 			if not entity.owner_tree_entered.is_connected(
 				_on_owner_tree_entered,
 			):

@@ -1,22 +1,44 @@
-## Structural validator that delegates to [TopologyValidator].
+## Validator that checks a spawned player's synchronizer topology.
 ##
-## Checks that the synchronizer topology of a spawned player node is correct:
-## expected count, cache/live consistency, [SaveComponent], [MultiplayerEntity],
-## and authority assignments.
+## Reacts to [constant NetwTreeEvent.Kind.PLAYER_SPAWNED] on server authority and
+## delegates the structural checks to [TopologyValidator] (expected sync count,
+## cache/live consistency, [SaveComponent], [MultiplayerEntity], and authority
+## assignments). A non-empty error set fails the active span and emits a
+## [NetwTopologyManifest] through the finding pipeline.
 class_name TopologyNetValidator
-extends NetValidator
+extends NetwValidator
 
-func _init() -> void:
-	phase = NetValidator.STRUCTURAL
+var _topology := TopologyValidator.new()
 
 
-## Executes the validation check.
-func execute(trigger: String, ctx: Dictionary) -> Array[String]:
-	if trigger != "player_spawn":
-		return []
+func interests() -> Array:
+	return [NetwTreeEvent.Kind.PLAYER_SPAWNED]
 
-	var player: Node = ctx.get("player")
+
+func inspect(event: NetwTreeEvent, report: NetwReport) -> void:
+	var mt := event.tree
+	if not is_instance_valid(mt) or not mt.is_host:
+		return
+
+	var player := event.node
 	if not is_instance_valid(player):
-		return []
+		return
 
-	return TopologyValidator.validate_node(player).errors
+	var errors: Array[String] = []
+	errors.assign(_topology.validate_node(player).errors)
+	if errors.is_empty():
+		return
+
+	var m := NetwTopologyManifest.new()
+	m.trigger = "TOPOLOGY_VALIDATION_FAILED"
+	m.errors = errors
+	m.player_name = player.name
+	m.in_tree = player.is_inside_tree()
+
+	var probe := report.probe()
+	if probe:
+		m.node_snapshot = probe.build_crash_snapshot(report.span())
+	else:
+		m.node_snapshot = NetwNodeSnapshot.from_node(player)
+
+	report.fail(m, "topology_invalid", { "errors": errors })

@@ -34,7 +34,7 @@ signal session_entered()
 ## session.
 ##
 ## Fires on exiting [constant State.ONLINE] through either
-## [method disconnect_player] or the server-crash path, never on a failed
+## [method leave] or the server-crash path, never on a failed
 ## connect. Session-scoped subscribers that wired up on [signal session_entered]
 ## release their connections and replication state here so nothing accumulates
 ## across repeated sessions on the same tree.
@@ -52,11 +52,17 @@ signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
 
-## Emitted on every peer after the server accepts a player join.
-signal player_joined(rj: ResolvedJoin)
+## Emitted once for each accepted participant known to this peer.
+##
+## Fresh accepts emit on every peer. Late joiners also receive one emission per
+## participant accepted before they connected.
+signal participant_joined(participant: NetwParticipant)
 
-## Emitted when this peer's player join has been accepted by the server.
-signal local_player_joined(rj: ResolvedJoin)
+## Emitted when this peer's participant has been accepted by the server.
+signal local_participant_joined(participant: NetwParticipant)
+
+## Emitted when [member local_participant] changes [member NetwParticipant.current_scene].
+signal local_scene_changed(from: NetwScene, to: NetwScene)
 
 ## Emitted after the host's startup scenes have been spawned and the server
 ## is ready to accept the local player. Only relevant for listen server hosts.
@@ -84,13 +90,13 @@ signal _connect_failed(result: BackendPeer.ConnectResult)
 ## Session lifecycle state for this tree.
 ## [codeblock]
 ## OFFLINE
-##   | host() / join() / host_player()
+##   | _open_host() / join() / host()
 ##   v
 ## CONNECTING --(failure or abort_join)--> OFFLINE
 ##   | success
 ##   v
 ## ONLINE
-##   | disconnect_player()
+##   | leave()
 ##   v
 ## DISCONNECTING --> OFFLINE
 ## [/codeblock]
@@ -247,7 +253,6 @@ func _warn_if_role_unset() -> void:
 ## Outcome of the last connection handshake.
 var last_connect_result: BackendPeer.ConnectResult = null
 
-
 ## Game-build tag that gates session admission, baked into every build.
 ##
 ## A joining peer whose tag differs is rejected during the auth handshake before
@@ -275,7 +280,7 @@ var last_connect_result: BackendPeer.ConnectResult = null
 ## [codeblock]
 ##     func build_server_info(tree: MultiplayerTree) -> ServerDescriptor.Info:
 ##         var info := ServerDescriptor.Info.new()
-##         info.players = tree.get_joined_players().size()
+##         info.players = tree.get_participants().size()
 ##         info.app_id = tree.app_id
 ##         return info
 ## [/codeblock]
@@ -289,7 +294,7 @@ var last_connect_result: BackendPeer.ConnectResult = null
 
 ## Server side [SpawnPolicy] for accepted joins.
 ##
-## A [code]null[/code] value means [signal player_joined] is the gameplay
+## A [code]null[/code] value means [signal participant_joined] is the gameplay
 ## entry point. If the tree has no [MultiplayerSceneManager] but does
 ## have a child scene with a [MultiplayerEntity], [method _enter_tree] creates a
 ## [EntitySpawnPolicy].
@@ -328,6 +333,11 @@ var api: SceneMultiplayer
 ## [member interest] is backed by the session [InterestService].
 var interest: NetwInterest
 
+## Liveness and routing facade for this tree.
+##
+## [member liveness] is backed by the session [LivenessService].
+var liveness: NetwLiveness
+
 ## Lag-compensation facade for this tree.
 ##
 ## [member lag_compensation] is backed by a [LagCompensation] node mounted under
@@ -351,23 +361,36 @@ var _tree_name: String = ""
 var _join_aborted: bool = false
 var _deletion_finalized: bool = false
 
-## Local player [Node] for this tree, or [code]null[/code].
+## Local player [NetwEntity] for this tree, or [code]null[/code].
 ##
 ## [signal local_player_changed] fires whenever this member changes.
-var local_player: Node:
+var local_player: NetwEntity:
 	set(value):
 		if local_player != value:
 			local_player = value
 			local_player_changed.emit(value)
 
 ## Emitted when [member local_player] is assigned or cleared.
-signal local_player_changed(player: Node)
+signal local_player_changed(player: NetwEntity)
 
-## Emitted after [member spawn_policy] places a player in a scene.
-signal player_scene_ready(
-		rj: ResolvedJoin,
-		scene: MultiplayerScene,
-)
+## Accepted [NetwParticipant] for this tree, or [code]null[/code].
+var local_participant: NetwParticipant:
+	set(value):
+		if local_participant == value:
+			return
+		if local_participant \
+				and local_participant.scene_changed.is_connected(
+					_on_local_participant_scene_changed,
+				):
+			local_participant.scene_changed.disconnect(
+				_on_local_participant_scene_changed,
+			)
+		local_participant = value
+		if local_participant:
+			local_participant.scene_changed.connect(
+				_on_local_participant_scene_changed,
+			)
+			_sync_local_participant_scene.call_deferred()
 
 ## Emitted on every peer when the game is paused via [method NetwTree.pause].
 signal tree_paused(reason: String)
@@ -431,10 +454,13 @@ static func resolve(context: Object) -> MultiplayerTree:
 
 
 var _roster: SessionRoster = SessionRoster.new()
+var _participants: Dictionary[int, NetwParticipant] = { }
 var _auth: AuthCoordinator
 var _services: ServiceRegistry = ServiceRegistry.new()
 var _client_join_payload: JoinPayload
 var _interest_service: InterestService
+var _liveness_service: LivenessService
+var _relay: RelayService
 
 
 ## Registers a [Node] as a service for this session.
@@ -489,7 +515,11 @@ func dispose() -> void:
 	if _auth:
 		_auth.clear()
 	_services.clear()
+	if local_participant and local_participant.current_scene:
+		local_participant.current_scene = null
+	local_participant = null
 	_roster.clear()
+	_participants.clear()
 	_client_join_payload = null
 
 
@@ -504,15 +534,27 @@ func has_peer_context(peer_id: int) -> bool:
 	return _roster.has_peer_context(peer_id)
 
 
-## Returns accepted player join data known by this peer.
-func get_joined_players() -> Array[ResolvedJoin]:
-	return _roster.get_joined_players()
+## Returns the [NetwParticipant] for [param peer_id], or [code]null[/code].
+func get_participant(peer_id: int) -> NetwParticipant:
+	if _get_accepted_join(peer_id) == null:
+		return null
+	if not _participants.has(peer_id):
+		_participants[peer_id] = NetwParticipant.new(self, peer_id)
+	return _participants[peer_id]
 
 
-## Returns the accepted player data for [param peer_id], or
-## [code]null[/code].
-func get_joined_player(peer_id: int) -> ResolvedJoin:
-	return _roster.get_joined_player(peer_id)
+## Returns every accepted participant.
+func get_participants() -> Array[NetwParticipant]:
+	var result: Array[NetwParticipant] = []
+	for rj: ResolvedJoin in _roster.get_accepted_joins():
+		var participant := get_participant(rj.peer_id)
+		if participant:
+			result.append(participant)
+	return result
+
+
+func _get_accepted_join(peer_id: int) -> ResolvedJoin:
+	return _roster.get_accepted_join(peer_id)
 
 
 ## Resolves the [SpawnSlot] for [param spawner_path].
@@ -531,8 +573,8 @@ func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 	return slot
 
 
-## Returns active player [Node]s across every [MultiplayerScene].
-func get_all_players() -> Array[Node]:
+## Returns active player [NetwEntity]s across every [MultiplayerScene].
+func get_all_players() -> Array[NetwEntity]:
 	var sm: MultiplayerSceneManager = get_service(MultiplayerSceneManager)
 	if sm:
 		return sm.get_all_players()
@@ -586,10 +628,17 @@ func _enter_tree() -> void:
 
 	_mount_api()
 	_ensure_interest_service()
+	_ensure_liveness_service()
+	_ensure_relay()
 	_ensure_host_scene_view()
 
-	if not player_joined.is_connected(_handle_join_spawn):
-		player_joined.connect(_handle_join_spawn)
+	# Two-phase debug registration: create the per-tree probe offline (role
+	# NONE, peer 0) so the connect lifecycle is observed from the start. The
+	# online upgrade (monitors, wire registration) happens in _finalize_session.
+	Netw.dbg.register_tree(self)
+
+	if not participant_joined.is_connected(_handle_join_spawn):
+		participant_joined.connect(_handle_join_spawn)
 
 	for child in get_children():
 		if child is MultiplayerSceneManager:
@@ -717,7 +766,12 @@ func _init() -> void:
 		api = SceneMultiplayer.new()
 		_interest_service = InterestService.new()
 		_interest_service.name = &"InterestService"
+		_liveness_service = LivenessService.new()
+		_liveness_service.name = &"LivenessService"
+		_relay = RelayService.new()
+		_relay.name = &"RelayService"
 		interest = NetwInterest.new(self)
+		liveness = NetwLiveness.new(self)
 		lag_compensation = NetwLagCompensation.new(self)
 		tree_exiting.connect(_on_exiting)
 
@@ -734,17 +788,17 @@ func _process(dt: float) -> void:
 
 ## Starts this tree as a server using [member backend].
 ##
-## [method host] creates transport and sets [member role]. Use
-## [method host_player] when the host should also submit a local
+## [method _open_host] creates transport and sets [member role]. Use
+## [method host] when the host should also submit a local
 ## [JoinPayload].
 ## [codeblock]
 ## tree.backend = ENetBackend.new()
 ##
-## var err := await tree.host()
+## var err := await tree._open_host()
 ## if err == OK:
 ##     print(tree.role)
 ## [/codeblock]
-func host(quiet: bool = false, options: LobbyDirectory.HostOptions = null) -> Error:
+func _open_host(quiet: bool = false, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	if backend == null:
 		if not quiet:
@@ -1015,7 +1069,7 @@ func join_or_host(
 	self.backend = backend_instance
 
 	if not self.backend.supports_embedded_server():
-		var host_err := await host(true)
+		var host_err := await _open_host(true)
 		if host_err == OK:
 			role = Role.LISTEN_SERVER
 			await host_ready
@@ -1037,7 +1091,7 @@ func join_or_host(
 		"join_or_host: no live listener (%s); hosting.",
 		[result],
 	)
-	return await host_player(join_payload)
+	return await host(join_payload)
 
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
@@ -1067,11 +1121,11 @@ func abort_join() -> void:
 ## [member state] returns to [constant State.OFFLINE] before this method
 ## completes. [signal session_ended] fires on the way out so session-scoped
 ## subscribers tear down.
-func disconnect_player() -> void:
+func leave() -> void:
 	if state == State.OFFLINE:
 		return
 
-	Netw.dbg.trace("MultiplayerTree: disconnect_player called.")
+	Netw.dbg.trace("MultiplayerTree: leave called.")
 	Netw.dbg.info("Disconnecting player.")
 
 	# Save before the transition so [method _teardown_session] does not despawn
@@ -1092,21 +1146,79 @@ func disconnect_player() -> void:
 	_transition(State.OFFLINE)
 
 
+## Pauses the game on every peer.
+##
+## [br][br][b]Server Only.[/b]
+func pause(reason: String = "") -> void:
+	assert(is_host, "MultiplayerTree.pause() must be called on the server.")
+	for peer_id: int in api.get_peers():
+		_rpc_receive_pause.rpc_id(peer_id, reason)
+	_rpc_receive_pause(reason)
+
+
+## Unpauses the game on every peer.
+##
+## [br][br][b]Server Only.[/b]
+func unpause() -> void:
+	assert(is_host, "MultiplayerTree.unpause() must be called on the server.")
+	for peer_id: int in api.get_peers():
+		_rpc_receive_unpause.rpc_id(peer_id)
+	_rpc_receive_unpause()
+
+
+## Disconnects [param peer_id] from the session.
+##
+## [br][br][b]Server Only.[/b]
+func kick(peer_id: int, reason: String = "") -> void:
+	assert(is_host, "MultiplayerTree.kick() must be called on the server.")
+	if not reason.is_empty():
+		_rpc_receive_kicked.rpc_id(peer_id, reason)
+	if multiplayer_peer:
+		multiplayer_peer.disconnect_peer(peer_id)
+
+
+## Asks the server to kick [param peer_id].
+##
+## [br][br][b]Player request.[/b]
+func request_kick(peer_id: int, reason: String = "") -> void:
+	_rpc_request_kick.rpc_id(1, peer_id, reason)
+
+
+## Asks the server for permission to leave.
+##
+## [br][br][b]Player request.[/b]
+func request_leave(reason: String = "") -> void:
+	_rpc_request_leave.rpc_id(1, reason)
+
+
+## Notifies all clients that the server is shutting down.
+##
+## [br][br][b]Server Only.[/b]
+func notify_shutdown(reason: String = "") -> void:
+	assert(
+		is_host,
+		"MultiplayerTree.notify_shutdown() must be called on the server.",
+	)
+	for peer_id: int in api.get_peers():
+		_rpc_receive_notify_shutdown.rpc_id(peer_id, reason)
+	_rpc_receive_notify_shutdown.rpc_id(1, reason)
+
+
 ## Hosts a session and submits the local [param join_payload].
 ##
 ## Use [method join_or_host] when the caller should probe before hosting.
-## [method host_player] is the direct host path.
+## [method host] is the direct host path.
 ## [codeblock]
 ## var payload := JoinPayload.new()
 ## payload.username = "Host"
 ##
-## var err := await tree.host_player(payload)
+## var err := await tree.host(payload)
 ## [/codeblock]
-func host_player(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
+func host(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
 	assert(state == State.OFFLINE, "Must be offline to host.")
 	assert(
 		desired_role != Role.DEDICATED_SERVER,
-		"host_player() needs a local player; a dedicated server hosts via host().",
+		"host() needs a local player; a dedicated server hosts via _open_host().",
 	)
 	var err := await _prepare_session(join_payload)
 	if err != OK:
@@ -1135,15 +1247,18 @@ func _prepare_session(join_payload: JoinPayload) -> Error:
 
 	_client_join_payload = join_payload
 	_auth.set_client_join_payload(join_payload)
-	await disconnect_player()
+	await leave()
 	return OK
 
 
-func _host_player_logic(join_payload: JoinPayload, options: LobbyDirectory.HostOptions = null) -> Error:
+func _host_player_logic(
+		join_payload: JoinPayload,
+		options: LobbyDirectory.HostOptions = null,
+) -> Error:
 	# LISTEN_SERVER and NONE host on this tree; CLIENT spins up an embedded
 	# dedicated sibling and joins it.
 	if desired_role != Role.CLIENT:
-		var host_err := await host(true, options)
+		var host_err := await _open_host(true, options)
 
 		if host_err == OK:
 			role = Role.LISTEN_SERVER
@@ -1175,7 +1290,7 @@ func _host_player_logic(join_payload: JoinPayload, options: LobbyDirectory.HostO
 		for path in client_sm.get_configured_paths():
 			server_sm._configure_default(path)
 
-	var host_err := await server.host(true)
+	var host_err := await server._open_host(true)
 	if host_err == OK:
 		var join_err := await _open_join_transport(
 			server.backend.get_join_address(),
@@ -1198,9 +1313,9 @@ func _host_player_logic(join_payload: JoinPayload, options: LobbyDirectory.HostO
 		return host_err
 
 
-## Submits [param join_payload] through [method request_join_player].
+## Submits [param join_payload] through [method request_join].
 func submit_join(join_payload: JoinPayload) -> void:
-	request_join_player.rpc_id(
+	request_join.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		join_payload.serialize(),
 	)
@@ -1236,7 +1351,7 @@ func _ready() -> void:
 		# host() resolves the live role from desired_role.
 		if desired_role == Role.LISTEN_SERVER \
 				or desired_role == Role.DEDICATED_SERVER:
-			await host()
+			await _open_host()
 		return
 
 	if debug_join != null and backend != null \
@@ -1255,23 +1370,23 @@ func _debug_autoconnect() -> void:
 		"MultiplayerTree: debug auto-connect as '%s'.",
 		[payload.username],
 	)
-	await host_player(payload)
+	await host(payload)
 
 
 ## Server RPC that accepts serialized join requests.
 ##
 ## [param bytes] must contain [method JoinPayload.serialize] data. Accepted
-## joins update [method get_joined_players] and emit [signal player_joined].
+## joins update [method get_participants] and emit [signal participant_joined].
 ## [codeblock]
 ## var payload := JoinPayload.new()
 ## payload.username = "valeria"
 ## tree.submit_join(payload)
 ## [/codeblock]
 @rpc("any_peer", "call_local", "reliable")
-func request_join_player(bytes: PackedByteArray) -> void:
+func request_join(bytes: PackedByteArray) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn(
-			"request_join_player received on non-server peer %d",
+			"request_join received on non-server peer %d",
 			[multiplayer.get_unique_id()],
 		)
 		return
@@ -1286,7 +1401,7 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	var rj := join_payload.resolve()
 	if not rj:
 		Netw.dbg.warn(
-			"request_join_player: invalid payload from peer %d",
+			"request_join: invalid payload from peer %d",
 			[peer_id],
 		)
 		return
@@ -1294,73 +1409,106 @@ func request_join_player(bytes: PackedByteArray) -> void:
 	if not _resolve_username_collision(rj):
 		return
 
-	_remember_joined_player(rj)
-	_rpc_notify_player_joined.rpc(rj.serialize())
+	_remember_accepted_join(rj)
+	_rpc_notify_participant_joined.rpc(rj.serialize())
 	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
-		_rpc_sync_joined_players.rpc_id(peer_id, _serialize_joined_players())
+		_rpc_sync_accepted_participants.rpc_id(
+			peer_id,
+			_serialize_accepted_participants(),
+		)
 
 
 # Emits the accepted join notification on remote peers.
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_notify_player_joined(bytes: PackedByteArray) -> void:
+func _rpc_notify_participant_joined(bytes: PackedByteArray) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != MultiplayerPeer.TARGET_PEER_SERVER:
 		Netw.dbg.warn(
-			"_rpc_notify_player_joined received from non-server peer %d",
+			"_rpc_notify_participant_joined received from non-server peer %d",
 			[sender],
 		)
 		return
 
 	var rj := ResolvedJoin.deserialize(bytes)
-	_remember_joined_player(rj)
+	_remember_accepted_join(rj)
 
 
-# Sends all accepted player payloads to a newly joined peer.
+# Sends all accepted participant payloads to a newly accepted peer.
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_sync_joined_players(payloads: Array[PackedByteArray]) -> void:
+func _rpc_sync_accepted_participants(payloads: Array[PackedByteArray]) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != MultiplayerPeer.TARGET_PEER_SERVER:
 		Netw.dbg.warn(
-			"_rpc_sync_joined_players received from non-server peer %d",
+			"_rpc_sync_accepted_participants from non-server peer %d",
 			[sender],
 		)
 		return
 
 	for bytes: PackedByteArray in payloads:
 		var rj := ResolvedJoin.deserialize(bytes)
-		_remember_joined_player(rj)
+		_remember_accepted_join(rj)
 
 
 # Emits join signals derived from the accepted server authority data.
-func _emit_player_joined(rj: ResolvedJoin) -> void:
-	player_joined.emit(rj)
+func _emit_participant_joined(participant: NetwParticipant) -> void:
+	# Bind local_participant first so its scene_changed relay is connected before
+	# any participant_joined handler admits the local player. On a listen server
+	# admission is synchronous, so a late bind would drop the first
+	# local_scene_changed.
+	var is_local := participant.peer_id == multiplayer.get_unique_id()
+	if is_local:
+		local_participant = participant
 
-	if rj.peer_id == multiplayer.get_unique_id():
-		local_player_joined.emit(rj)
+	participant_joined.emit(participant)
+
+	if is_local:
+		local_participant_joined.emit(participant)
 
 
-# Runs spawn_policy for accepted joins.
-func _handle_join_spawn(rj: ResolvedJoin) -> void:
+# Runs spawn_policy for accepted participants.
+func _handle_join_spawn(participant: NetwParticipant) -> void:
 	if not multiplayer.is_server():
 		return
 	if spawn_policy == null:
 		return
+	var rj := participant.join
+	if rj == null:
+		return
+	if rj.spawn.is_empty():
+		return
+	_assert_spawn_policy_matches(rj)
 	var scene := await spawn_policy.spawn(rj, Netw.ctx(self))
 	if scene:
-		player_scene_ready.emit(rj, scene)
+		var netw_scene := NetwScene.new(scene)
+		participant.current_scene = netw_scene
 
 
-# Stores resolved join data and emits it once on this peer.
-func _remember_joined_player(rj: ResolvedJoin) -> bool:
-	if _roster.remember_joined_player(rj):
-		_emit_player_joined(rj)
+func _assert_spawn_policy_matches(rj: ResolvedJoin) -> void:
+	if rj.spawn.is_empty():
+		return
+	var expected := spawn_policy.policy_script_identifier()
+	var actual := str(rj.spawn.get(SpawnPolicy._POLICY_SCRIPT_KEY, ""))
+	assert(
+		actual == expected,
+		(
+				"spawn policy mismatch. Sender and receiver are using " +
+				"different SpawnPolicies"
+		),
+	)
+
+
+# Stores accepted participant data and emits it once on this peer.
+func _remember_accepted_join(rj: ResolvedJoin) -> bool:
+	if _roster.remember_accepted_join(rj):
+		var participant := get_participant(rj.peer_id)
+		_emit_participant_joined(participant)
 		return true
 	return false
 
 
-# Serializes the locally known accepted player roster.
-func _serialize_joined_players() -> Array[PackedByteArray]:
-	return _roster.serialize_joined_players()
+# Serializes the locally known accepted participant roster.
+func _serialize_accepted_participants() -> Array[PackedByteArray]:
+	return _roster.serialize_accepted_joins()
 
 # Pause RPC handlers.
 
@@ -1414,12 +1562,12 @@ func _rpc_request_kick(target_peer_id: int, reason: String) -> void:
 # Disconnect RPC handlers.
 
 
-# Receives a client disconnect request on the server.
+# Receives a client leave request on the server.
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_disconnect(reason: String) -> void:
+func _rpc_request_leave(reason: String) -> void:
 	if not multiplayer.is_server():
 		Netw.dbg.warn(
-			"_rpc_request_disconnect received on non-server peer %d",
+			"_rpc_request_leave received on non-server peer %d",
 			[multiplayer.get_unique_id()],
 		)
 		return
@@ -1427,18 +1575,13 @@ func _rpc_request_disconnect(reason: String) -> void:
 	disconnect_requested.emit(peer_id, reason)
 
 
-## Broadcasts a server shutdown notice to all connected clients.
-func notify_shutdown(reason: String) -> void:
-	_rpc_receive_notify_disconnect.rpc(reason)
-
-
 # Receives the server shutdown notice on clients.
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_receive_notify_disconnect(reason: String) -> void:
+func _rpc_receive_notify_shutdown(reason: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender != 1:
 		Netw.dbg.warn(
-			"_rpc_receive_notify_disconnect received from non-server peer %d",
+			"_rpc_receive_notify_shutdown received from non-server peer %d",
 			[sender],
 		)
 		return
@@ -1501,6 +1644,77 @@ func _free_unparented_interest_service(keep: InterestService) -> void:
 	if _interest_service.get_parent() != null:
 		return
 	_interest_service.free()
+
+
+func _ensure_liveness_service() -> void:
+	if is_instance_valid(_liveness_service) \
+			and is_ancestor_of(_liveness_service):
+		return
+
+	var existing := get_node_or_null("LivenessService") \
+			as LivenessService
+	if not existing:
+		existing = find_service_node(LivenessService) \
+				as LivenessService
+	if existing:
+		_free_unparented_liveness_service(existing)
+		_liveness_service = existing
+		return
+
+	if is_instance_valid(_liveness_service) \
+			and _liveness_service.get_parent() == null:
+		add_child(_liveness_service)
+		return
+
+	_liveness_service = LivenessService.new()
+	_liveness_service.name = &"LivenessService"
+	add_child(_liveness_service)
+
+
+# Frees the transient service copied by duplicate().
+func _free_unparented_liveness_service(keep: LivenessService) -> void:
+	if not is_instance_valid(_liveness_service):
+		return
+	if _liveness_service == keep:
+		return
+	if _liveness_service.get_parent() != null:
+		return
+	_liveness_service.free()
+
+
+func _ensure_relay() -> void:
+	if is_instance_valid(_relay) \
+			and is_ancestor_of(_relay):
+		return
+
+	var existing := get_node_or_null("RelayService") \
+			as RelayService
+	if not existing:
+		existing = find_service_node(RelayService) \
+				as RelayService
+	if existing:
+		_free_unparented_relay(existing)
+		_relay = existing
+		return
+
+	if is_instance_valid(_relay) \
+			and _relay.get_parent() == null:
+		add_child(_relay)
+		return
+
+	_relay = RelayService.new()
+	_relay.name = &"RelayService"
+	add_child(_relay)
+
+
+func _free_unparented_relay(keep: RelayService) -> void:
+	if not is_instance_valid(_relay):
+		return
+	if _relay == keep:
+		return
+	if _relay.get_parent() != null:
+		return
+	_relay.free()
 
 
 # Clears the custom multiplayer API from the SceneTree path.
@@ -1581,7 +1795,7 @@ func _finalize_session() -> void:
 		"MultiplayerTree: session app_id='%s' app_tag=0x%08x.",
 		[String(app_id), _app_tag()],
 	)
-	Netw.dbg.register_tree(self)
+	Netw.dbg.finalize_tree(self)
 	session_entered.emit()
 
 	var sm := get_service(MultiplayerSceneManager)
@@ -1593,8 +1807,12 @@ func _finalize_session() -> void:
 # subscribers unwind and a same-tree re-host starts clean. The embedded Server
 # sibling spun up by _host_player_logic is freed here too.
 func _teardown_session() -> void:
+	if local_participant and local_participant.current_scene:
+		local_participant.current_scene = null
+	local_participant = null
 	session_ended.emit()
 	_roster.clear()
+	_participants.clear()
 	role = Role.NONE
 
 	var parent := get_parent()
@@ -1643,6 +1861,12 @@ func _notification(what: int) -> void:
 		if is_instance_valid(_interest_service) \
 				and _interest_service.get_parent() == null:
 			_interest_service.free()
+		if is_instance_valid(_liveness_service) \
+				and _liveness_service.get_parent() == null:
+			_liveness_service.free()
+		if is_instance_valid(_relay) \
+				and _relay.get_parent() == null:
+			_relay.free()
 
 
 func _on_exiting() -> void:
@@ -1698,8 +1922,42 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	Netw.dbg.info("Peer disconnected: %d", [peer_id])
+	var participant := _participants.get(peer_id, null) as NetwParticipant
+	if participant and participant.current_scene:
+		participant.current_scene = null
 	_roster.forget_peer(peer_id)
+	_participants.erase(peer_id)
 	peer_disconnected.emit(peer_id)
+
+
+func _on_local_participant_scene_changed(
+		from: NetwScene,
+		to: NetwScene,
+) -> void:
+	local_scene_changed.emit(from, to)
+
+
+func _sync_local_participant_scene() -> void:
+	if local_participant == null or interest == null:
+		return
+	var sm := get_service(MultiplayerSceneManager) as MultiplayerSceneManager
+	if sm == null:
+		return
+	for scene: MultiplayerScene in sm.active_scenes.values():
+		var layer := interest.get_layer(scene.scene_layer_id())
+		if layer and layer.viewers.has(local_participant.peer_id):
+			local_participant.current_scene = scene.get_context().scene
+			return
+
+
+func _notify_local_scene_released(
+		peer_id: int,
+		scene_layer_id: StringName,
+) -> void:
+	if peer_id == multiplayer.get_unique_id():
+		_rpc_clear_local_scene(scene_layer_id)
+	else:
+		rpc_id(peer_id, "_rpc_clear_local_scene", scene_layer_id)
 
 
 func _on_connected_to_server() -> void:
@@ -1717,7 +1975,25 @@ func _on_server_disconnected() -> void:
 	server_disconnected.emit()
 
 	# A server crash routes through the same teardown as a graceful leave. The
-	# ONLINE guard makes a crash arriving mid-disconnect_player a no-op.
+	# ONLINE guard makes a crash arriving mid-leave a no-op.
 	if state == State.ONLINE:
 		_transition(State.DISCONNECTING)
 		_transition(State.OFFLINE)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_clear_local_scene(scene_layer_id: StringName) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if sender != 1 and sender != 0:
+		Netw.dbg.warn(
+			"_rpc_clear_local_scene received from non-server peer %d",
+			[sender],
+		)
+		return
+	if local_participant == null:
+		return
+	var current := local_participant.current_scene
+	if current == null or current.unwrap() == null:
+		return
+	if current.unwrap().scene_layer_id() == scene_layer_id:
+		local_participant.current_scene = null

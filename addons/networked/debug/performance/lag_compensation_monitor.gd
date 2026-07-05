@@ -2,7 +2,7 @@
 ## Exposes [LagCompensation] health as Godot [Performance] monitors, one group per
 ## [MultiplayerTree].
 ##
-## This is a presentation adapter managed by the [NetworkedDebugReporter]. It pulls
+## This is a presentation adapter managed by the [DebugReporter]. It pulls
 ## [method LagCompensation.metrics] and turns the cumulative counters into live
 ## rates, so monitoring overhead stays out of the core simulation loop. Work runs
 ## only while a debugger is attached ([method EngineDebugger.is_active]) and is

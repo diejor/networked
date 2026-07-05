@@ -73,12 +73,11 @@ signal host_started()
 ## A host attempt failed. [param reason] is a human-readable string.
 signal host_failed(reason: String)
 
-## The bound [MultiplayerTree] reports a successful local entry
-## (host or client join). Fires once per session.
-signal session_entered()
+## Emitted when the bound [MultiplayerTree] reaches [constant MultiplayerTree.State.ONLINE].
+signal connected()
 
-## The bound [MultiplayerTree] returned to its offline state.
-signal session_left()
+## Emitted when the bound [MultiplayerTree] reaches [constant MultiplayerTree.State.OFFLINE].
+signal disconnected()
 
 ## Ceiling applied when a backend declares its connect path self-managed
 ## ([method BackendPeer.connect_timeout_hint] returns a negative value), so a
@@ -128,8 +127,8 @@ func _exit_tree() -> void:
 
 
 ## Binds the [MultiplayerTree] used by [method host] and [method join].
-## The session subscribes to its lifecycle so [signal session_entered]
-## and [signal session_left] fire from a single place.
+## The session subscribes to its lifecycle so [signal connected]
+## and [signal disconnected] fire from a single place.
 func bind_tree(tree: MultiplayerTree) -> void:
 	if _tree == tree:
 		return
@@ -150,7 +149,7 @@ func get_tree_bound() -> MultiplayerTree:
 
 ## Returns [code]true[/code] while the bound tree is in an active session.
 ##
-## A late binder reads this after wiring [signal session_entered] to catch up
+## A late binder reads this after wiring [signal connected] to catch up
 ## when the tree entered before the binding, e.g. a debug auto-connect.
 func is_session_active() -> bool:
 	return is_instance_valid(_tree) \
@@ -425,15 +424,15 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 	tree.backend = backend
 	var options := LobbyDirectory.HostOptions.make(config.server_name)
-	var err := await tree.host_player(payload, options)
+	var err := await tree.host(payload, options)
 
 	if err != OK:
 		host_failed.emit(
-			"backend host_player failed (%s)" % error_string(err),
+			"backend host failed (%s)" % error_string(err),
 		)
 		return err
 
-	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# connected fires from _on_tree_state_changed when the tree reaches
 	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
@@ -512,7 +511,7 @@ func join(target: JoinTarget, payload: JoinPayload) -> Error:
 		result.diagnostics = tree.backend.get_connection_diagnostics(1)
 	connection_diagnostics.emit(result)
 
-	# session_entered fires from _on_tree_state_changed when the tree reaches
+	# connected fires from _on_tree_state_changed when the tree reaches
 	# ONLINE, so every entry path (including debug auto-connect) is covered.
 	return OK
 
@@ -596,9 +595,9 @@ func _unbind_tree_signals() -> void:
 
 func _on_tree_state_changed(_old_state: int, new_state: int) -> void:
 	if new_state == MultiplayerTree.State.ONLINE:
-		session_entered.emit()
+		connected.emit()
 	elif new_state == MultiplayerTree.State.OFFLINE:
-		session_left.emit()
+		disconnected.emit()
 
 
 func _on_probe_result(result: BackendPeer.ProbeResult, target: JoinTarget) -> void:
@@ -684,7 +683,7 @@ func _on_directory_list_updated(
 
 
 func _on_directory_unavailable(reason: String, id: StringName) -> void:
-	Netw.dbg.warn(
+	Netw.dbg.debug(
 		"ConnectSession directory %s unavailable: %s.",
 		[String(id), reason],
 	)

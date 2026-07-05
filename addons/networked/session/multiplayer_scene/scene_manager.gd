@@ -376,15 +376,15 @@ func retire_scene(name: StringName, drain_frames: int = 8) -> void:
 	_free_retired_scene.call_deferred(scene, maxi(0, drain_frames))
 
 
-## Returns an array of all active player nodes.
-func get_all_players() -> Array[Node]:
-	var players: Array[Node] = []
+## Returns an array of all active player identities.
+func get_all_players() -> Array[NetwEntity]:
+	var players: Array[NetwEntity] = []
 	for scene: MultiplayerScene in active_scenes.values():
 		if not is_instance_valid(scene):
 			continue
-		for node: Node in scene.get_players():
-			if is_instance_valid(node):
-				players.append(node)
+		for entity: NetwEntity in scene.get_players():
+			if entity != null:
+				players.append(entity)
 	return players
 
 
@@ -482,6 +482,9 @@ func _on_scene_spawned(node: Node) -> void:
 		scene.despawned.connect(
 			_on_player_left_scene.bind(StringName(scene.level.name)),
 		)
+		scene.peer_released.connect(
+			_on_peer_left_scene.bind(StringName(scene.level.name)),
+		)
 		_apply_empty_action_if_needed.call_deferred(StringName(scene.level.name))
 
 
@@ -489,6 +492,14 @@ func _on_player_left_scene(player: Node, scene_name: StringName) -> void:
 	Netw.dbg.debug(
 		"Player left scene '%s'. Evaluating empty action.",
 		[scene_name],
+	)
+	_apply_empty_action_if_needed.call_deferred(scene_name)
+
+
+func _on_peer_left_scene(peer_id: int, scene_name: StringName) -> void:
+	Netw.dbg.debug(
+		"Peer %d left scene '%s'. Evaluating empty action.",
+		[peer_id, scene_name],
 	)
 	_apply_empty_action_if_needed.call_deferred(scene_name)
 

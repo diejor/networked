@@ -26,7 +26,7 @@ func test_rewind_moves_live_node_to_history_then_restores() -> void:
 	var live := s.move_along(entity, func(i: int) -> Vector2: return Vector2(float(i) * 8.0, 0.0), 24)
 
 	var view_tick: int = s.clock.tick - 8
-	var perceived: Vector2 = s.server.lag_compensation.sample(entity, view_tick).position
+	var perceived: Vector2 = s.server.lag_compensation.sample(entity, view_tick).get_value(&"position")
 	var targets: Array[NetwEntity] = [entity]
 
 	# A Dictionary collects the in-callable reads: a GDScript lambda captures locals

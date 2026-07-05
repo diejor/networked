@@ -133,11 +133,17 @@ func service_entered(mt: MultiplayerTree) -> void:
 		tree.node_added.connect(_on_node_added)
 
 
-func service_exiting(_mt: MultiplayerTree) -> void:
+func service_exiting(mt: MultiplayerTree) -> void:
 	var tree := get_tree()
 	if tree and tree.node_added.is_connected(_on_node_added):
 		tree.node_added.disconnect(_on_node_added)
 	_unbind_clock()
+	var relay := RelayService.for_node(self)
+	if relay:
+		relay.register_channel(
+			RelayService.Command.ACTION,
+			Callable(),
+		)
 
 
 ## Registers [param pc] so it is stepped each tick. Idempotent.
@@ -299,20 +305,45 @@ func _send_action_request(
 		view_tick: int,
 		data: Variant,
 		key: StringName,
-		timing_mode: int,
+		timing_mode: NetwAction.TimingMode,
 ) -> void:
-	if multiplayer and multiplayer.multiplayer_peer and not multiplayer.is_server():
-		_request_action.rpc_id(
-			MultiplayerPeer.TARGET_PEER_SERVER,
-			target_path,
-			method,
-			view_tick,
-			data,
-			key,
-			timing_mode,
+	# Routes are allocated server-side and learned from the spawn packet, so a
+	# remote requester only ever reads. A client-minted route would name a
+	# different entity on the server. A route of 0 fails resolution there and
+	# the request is denied, matching the old missing-node outcome.
+	var is_remote := multiplayer and multiplayer.multiplayer_peer \
+			and not multiplayer.is_server()
+	var route := 0
+	var mt := MultiplayerTree.resolve(self)
+	var node := mt.get_node_or_null(target_path) if mt else null
+	var entity := NetwEntity.of(node)
+	var liveness := LivenessService.for_node(self)
+	if entity and liveness:
+		route = liveness.route_of(entity)
+		if route <= 0 and not is_remote:
+			route = liveness.allocate_route(entity)
+	if route <= 0:
+		Netw.dbg.warn(
+			"LagCompensation: action target '%s' has no liveness route; "
+			+ "the request will be denied",
+			[String(target_path)],
 		)
+
+	if is_remote:
+		var relay := RelayService.for_node(self)
+		if relay:
+			var payload := var_to_bytes([
+				method, view_tick, data, key, timing_mode,
+			])
+			relay.send_to(
+				MultiplayerPeer.TARGET_PEER_SERVER,
+				route,
+				RelayService.Command.ACTION,
+				payload,
+				true,
+			)
 		return
-	_request_action(target_path, method, view_tick, data, key, timing_mode)
+	submit_action(route, method, view_tick, data, key, timing_mode, 0)
 
 
 func _deny_action_to(requester: int, key: StringName) -> void:
@@ -333,6 +364,12 @@ func _deny_action_to(requester: int, key: StringName) -> void:
 func _on_session_entered() -> void:
 	_bind_attempts = 0
 	_try_bind_clock()
+	var relay := RelayService.for_node(self)
+	if relay:
+		relay.register_channel(
+			RelayService.Command.ACTION,
+			_handle_action_carrier,
+		)
 
 
 # Binds to the tick loop once the clock service exists. The clock can mount after
@@ -371,20 +408,28 @@ func _on_tick(delta: float, tick: int) -> void:
 		_recorder.record(_registry, tick)
 
 
-@rpc("any_peer", "reliable")
-func _request_action(
-		target_path: NodePath,
+## Submits a player action request to be resolved.
+## [br][br][b]Server Only.[/b]
+func submit_action(
+		route: int,
 		method: StringName,
 		view_tick: int,
 		data: Variant,
 		key: StringName,
-		timing_mode: int = NetwAction.TimingMode.IMMEDIATE,
+		timing_mode: NetwAction.TimingMode,
+		requester: int,
 ) -> void:
-	if multiplayer and not multiplayer.is_server():
-		return
-	var requester := multiplayer.get_remote_sender_id() if multiplayer else 0
 	if requester == 0 and multiplayer and multiplayer.multiplayer_peer:
 		requester = multiplayer.get_unique_id()
+
+	var target_path: NodePath = NodePath()
+	var mt := MultiplayerTree.resolve(self)
+	var liveness := LivenessService.for_node(self)
+	if mt and liveness:
+		var entity := liveness.entity_of(route)
+		if entity and is_instance_valid(entity.owner):
+			target_path = mt.get_path_to(entity.owner)
+
 	var request := _PendingAction.new(
 		target_path,
 		method,
@@ -403,11 +448,38 @@ func _request_action(
 	if readiness != _Readiness.NOT_READY:
 		_execute_ready_action(request, current_tick, readiness)
 		return
-	# Not ready yet, so queue it, unless it is scheduled too far ahead to wait for.
+	# Not ready yet, so queue it, unless it is scheduled too far ahead to wait.
 	if view_tick > current_tick + max_future_action_ticks:
 		_deny_action_to(requester, key)
 		return
 	_pending_actions.append(request)
+
+
+func _handle_action_carrier(
+		entity: NetwEntity,
+		payload: PackedByteArray,
+		sender: int,
+) -> void:
+	if not multiplayer or not multiplayer.is_server():
+		return
+	var array = bytes_to_var(payload) as Array
+	if array == null or array.size() < 5:
+		return
+	var method: StringName = array[0]
+	var view_tick: int = array[1]
+	var data: Variant = array[2]
+	var key: StringName = array[3]
+	var timing_mode: int = array[4]
+
+	submit_action(
+		entity.route,
+		method,
+		view_tick,
+		data,
+		key,
+		timing_mode,
+		sender,
+	)
 
 
 @rpc("authority", "reliable")

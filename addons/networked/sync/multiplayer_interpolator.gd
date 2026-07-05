@@ -117,7 +117,7 @@ enum Mode {
 
 ## Defines how interpolated values are written to [member visual_root].
 enum VisualOutputMode {
-	AUTO = 0, ## Choose the safest mode from source and target properties.
+	AUTO_DETECT = 0, ## Choose the safest mode from source and target properties.
 	PROPERTY_VALUE = 1, ## Write the interpolated value directly.
 	SOURCE_DELTA = 2, ## Apply the smooth source delta to the initial value.
 	OWNER_TRANSFORM_COMPENSATED = 3, ## Keep the visual at the smooth owner pose.
@@ -190,10 +190,10 @@ enum PredictedMode {
 
 ## Controls how values are written when [member visual_root] is set.
 ## [br][br]
-## [enum VisualOutputMode.AUTO] makes child [code]position[/code] targets
+## [enum VisualOutputMode.AUTO_DETECT] makes child [code]position[/code] targets
 ## compensate against the owner's actual transform, which is the usual
 ## server-authoritative character setup.
-@export var visual_output_mode: VisualOutputMode = VisualOutputMode.AUTO:
+@export var visual_output_mode: VisualOutputMode = VisualOutputMode.AUTO_DETECT:
 	set(v):
 		visual_output_mode = v
 		_refresh_property_states()
@@ -664,7 +664,7 @@ func _resolve_visual_output_mode(
 		state: _PropertyState,
 		v_root: Node,
 ) -> VisualOutputMode:
-	if visual_output_mode != VisualOutputMode.AUTO:
+	if visual_output_mode != VisualOutputMode.AUTO_DETECT:
 		return visual_output_mode
 	if (
 			state.is_relative

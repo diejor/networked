@@ -34,7 +34,7 @@
 ##
 ## Host and join report failures two ways: the returned [enum Error] and the
 ## matching [signal host_failed] / [signal join_failed] signal. 
-## [signal session_entered] fires once you are in.
+## [signal connected] fires once transport is online.
 ##
 ## [br][br]
 ## [b]The Live List[/b]
@@ -63,8 +63,8 @@
 ## [b]Entering a Session[/b]
 ## [br][method host] and [method join] are where the
 ## connect layer hands off to the [MultiplayerTree]: a target sets the
-## tree's [BackendPeer] and opens transport. [signal session_entered] fires on
-## success, and [signal session_left] when the tree later goes offline.
+## tree's [BackendPeer] and opens transport. [signal connected] fires on
+## success, and [signal disconnected] when the tree later goes offline.
 class_name NetwConnect
 extends RefCounted
 
@@ -91,10 +91,10 @@ signal join_progress(target: JoinTarget, step: StringName, message: String, rati
 signal host_started()
 ## A host attempt failed. [param reason] is a human-readable string.
 signal host_failed(reason: String)
-## A local entry (host or client join) succeeded.
-signal session_entered()
-## The bound tree returned to its offline state.
-signal session_left()
+## Emitted when the bound [ConnectSession] reaches [signal ConnectSession.connected].
+signal connected()
+## Emitted when the bound [ConnectSession] reaches [signal ConnectSession.disconnected].
+signal disconnected()
 
 var _ref: WeakRef
 
@@ -111,8 +111,8 @@ func _init(session: ConnectSession) -> void:
 	session.join_progress.connect(join_progress.emit)
 	session.host_started.connect(host_started.emit)
 	session.host_failed.connect(host_failed.emit)
-	session.session_entered.connect(session_entered.emit)
-	session.session_left.connect(session_left.emit)
+	session.connected.connect(connected.emit)
+	session.disconnected.connect(disconnected.emit)
 
 
 ## Returns [code]true[/code] while the underlying [ConnectSession] is alive.
@@ -122,7 +122,7 @@ func is_valid() -> bool:
 
 ## Returns [code]true[/code] while the bound tree is already in a session.
 ##
-## Read this after wiring [signal session_entered] to catch up when the tree
+## Read this after wiring [signal connected] to catch up when the tree
 ## entered before the binding, e.g. a debug auto-connect.
 func is_session_active() -> bool:
 	var s := _ref.get_ref() as ConnectSession
@@ -133,7 +133,7 @@ func is_session_active() -> bool:
 
 ## Hosts a new game on the bound [MultiplayerTree]. [param config] selects the
 ## transport and the server name. [param payload] is the local player's identity.
-## On failure also emits [signal host_failed], on success [signal session_entered].
+## On failure also emits [signal host_failed], on success [signal connected].
 func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.host(config, payload) if s else ERR_UNCONFIGURED
@@ -141,7 +141,7 @@ func host(config: ConnectHostConfig, payload: JoinPayload) -> Error:
 
 ## Joins [param target] on the bound [MultiplayerTree]. [param payload] is the
 ## local player's identity. Returns [code]OK[/code] or an [enum Error]. On
-## failure also emits [signal join_failed], on success [signal session_entered].
+## failure also emits [signal join_failed], on success [signal connected].
 func join(target: JoinTarget, payload: JoinPayload) -> Error:
 	var s := _ref.get_ref() as ConnectSession
 	return await s.join(target, payload) if s else ERR_UNCONFIGURED

@@ -1,9 +1,9 @@
 class_name SessionRoster
 extends RefCounted
-## Manages the connected peers, accepted players, and authentication state for a MultiplayerTree.
+## Manages connected peers, accepted participants, and authentication state.
 
 var _peer_contexts: Dictionary[int, NetwPeerContext] = { }
-var _joined_players: Dictionary[int, ResolvedJoin] = { }
+var _accepted_joins: Dictionary[int, ResolvedJoin] = { }
 var _auth_rejection_reasons: Dictionary[int, String] = { }
 
 
@@ -19,37 +19,37 @@ func has_peer_context(peer_id: int) -> bool:
 	return _peer_contexts.has(peer_id)
 
 
-## Returns accepted player join data known by this peer.
-func get_joined_players() -> Array[ResolvedJoin]:
-	var players: Array[ResolvedJoin] = []
-	for rj: ResolvedJoin in _joined_players.values():
-		players.append(rj)
-	return players
+## Returns accepted participant join records known by this peer.
+func get_accepted_joins() -> Array[ResolvedJoin]:
+	var joins: Array[ResolvedJoin] = []
+	for rj: ResolvedJoin in _accepted_joins.values():
+		joins.append(rj)
+	return joins
 
 
-## Returns the accepted player data for [param peer_id], or [code]null[/code].
-func get_joined_player(peer_id: int) -> ResolvedJoin:
-	return _joined_players.get(peer_id) as ResolvedJoin
+## Returns the accepted join record for [param peer_id], or [code]null[/code].
+func get_accepted_join(peer_id: int) -> ResolvedJoin:
+	return _accepted_joins.get(peer_id) as ResolvedJoin
 
 
 ## Stores resolved join data. Returns [code]true[/code] if it was newly added,
 ## or updated from a spawn-less state to a spawn-carrying state.
-func remember_joined_player(rj: ResolvedJoin) -> bool:
-	if _joined_players.has(rj.peer_id):
-		var existing := _joined_players[rj.peer_id]
+func remember_accepted_join(rj: ResolvedJoin) -> bool:
+	if _accepted_joins.has(rj.peer_id):
+		var existing := _accepted_joins[rj.peer_id]
 		if existing.spawn.is_empty() and not rj.spawn.is_empty():
-			_joined_players[rj.peer_id] = rj
+			_accepted_joins[rj.peer_id] = rj
 			return true
 		return false
 
-	_joined_players[rj.peer_id] = rj
+	_accepted_joins[rj.peer_id] = rj
 	return true
 
 
-## Serializes the locally known accepted player roster.
-func serialize_joined_players() -> Array[PackedByteArray]:
+## Serializes the locally known accepted participant roster.
+func serialize_accepted_joins() -> Array[PackedByteArray]:
 	var payloads: Array[PackedByteArray] = []
-	for rj: ResolvedJoin in _joined_players.values():
+	for rj: ResolvedJoin in _accepted_joins.values():
 		payloads.append(rj.serialize())
 	return payloads
 
@@ -57,14 +57,14 @@ func serialize_joined_players() -> Array[PackedByteArray]:
 ## Erases a peer from the roster.
 func forget_peer(peer_id: int) -> void:
 	_peer_contexts.erase(peer_id)
-	_joined_players.erase(peer_id)
+	_accepted_joins.erase(peer_id)
 	_auth_rejection_reasons.erase(peer_id)
 
 
 ## Clears all state.
 func clear() -> void:
 	_peer_contexts.clear()
-	_joined_players.clear()
+	_accepted_joins.clear()
 	_auth_rejection_reasons.clear()
 
 
@@ -75,20 +75,24 @@ func set_auth_rejection_reason(peer_id: int, reason: String) -> void:
 
 ## Returns [code]true[/code] if the join should proceed, [code]false[/code]
 ## if the peer should be rejected due to a username collision.
-func resolve_username_collision(rj: ResolvedJoin, existing_players: Array[Node], disconnect_peer: Callable) -> bool:
+func resolve_username_collision(
+		rj: ResolvedJoin,
+		existing_players: Array[NetwEntity],
+		disconnect_peer: Callable,
+) -> bool:
 	var existing_names: Array[StringName] = []
-	for player in existing_players:
-		var entity := NetwEntity.of(player)
-		if entity and not entity.entity_id.is_empty():
-			existing_names.append(entity.entity_id)
-		else:
-			var client := MultiplayerEntity.unwrap(player)
-			if client:
-				existing_names.append(client.entity_id)
+	for entity in existing_players:
+		if entity != null:
+			if not entity.entity_id.is_empty():
+				existing_names.append(entity.entity_id)
 			else:
-				var parsed := player.name.get_slice("|", 0)
-				if not parsed.is_empty():
-					existing_names.append(StringName(parsed))
+				var client := entity.multiplayer_entity
+				if client:
+					existing_names.append(client.entity_id)
+				else:
+					var parsed := entity.owner.name.get_slice("|", 0)
+					if not parsed.is_empty():
+						existing_names.append(StringName(parsed))
 
 	var original_name := rj.username
 	if not original_name in existing_names:

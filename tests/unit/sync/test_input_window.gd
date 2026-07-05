@@ -26,7 +26,7 @@ func before_test() -> void:
 	await get_tree().process_frame
 
 
-func test_window_is_ack_bounded_and_capped() -> void:
+func test_window_selection_flow() -> void:
 	_sync.input_window_size = 4
 	var timeline := NetwTimeline.new()
 	_sync.timeline = timeline
@@ -80,16 +80,59 @@ func test_window_uses_newest_cap_when_ack_lags() -> void:
 	assert_int(window[3].tick).is_equal(15)
 
 
-func test_snapshot_payload_excludes_input_window() -> void:
+func test_payload_carrier_flow() -> void:
+	var motion_mode := -1
+	for path: NodePath in _sync.replication_config.get_properties():
+		var sub := path.get_subname_count()
+		if sub > 0 and StringName(path.get_subname(sub - 1)) == &"motion":
+			motion_mode = _sync.replication_config.property_get_replication_mode(path)
+
+	assert_int(motion_mode).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
+	assert_bool(_sync.has_virtual_property(&"motion")).is_true()
+
 	_root.position = Vector2(3, 4)
 	var snap := _sync.snapshot_payload()
-
 	assert_vector(snap.motion).is_equal(Vector2(3, 4))
 	assert_bool(snap.has(StampedSynchronizer.TICK)).is_false()
 	assert_bool(snap.has(InputSynchronizer.INPUT_WINDOW)).is_false()
 
 
-func test_receiver_records_window_samples_once() -> void:
+func test_single_sample_mode_keeps_payload_on_wire() -> void:
+	var root := Node2D.new()
+	add_child(root)
+	auto_free(root)
+
+	var sync := InputSynchronizer.new()
+	sync.name = "SingleSampleInput"
+	sync.input_window_size = 1
+	sync.register_property(
+		&"motion",
+		NodePath(".:position"),
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
+		false,
+		false,
+	)
+	root.add_child(sync)
+	sync.owner = root
+	sync.root_path = sync.get_path_to(root)
+	await get_tree().process_frame
+
+	var names: Array[StringName] = []
+	var motion_mode := -1
+	for path: NodePath in sync.replication_config.get_properties():
+		var sub := path.get_subname_count()
+		if sub == 0:
+			continue
+		var name := StringName(path.get_subname(sub - 1))
+		names.append(name)
+		if name == &"motion":
+			motion_mode = sync.replication_config.property_get_replication_mode(path)
+
+	assert_bool(names.has(InputSynchronizer.INPUT_WINDOW)).is_false()
+	assert_int(motion_mode).is_equal(SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
+
+
+func test_receiver_recording_flow() -> void:
 	var timeline := NetwTimeline.new()
 	_sync.timeline = timeline
 
@@ -115,9 +158,7 @@ func test_receiver_records_window_samples_once() -> void:
 	assert_vector(timeline.input_at(13).motion).is_equal(Vector2(13, -13))
 	assert_vector(timeline.input_at(15).motion).is_equal(Vector2(15, -15))
 
-
-func test_receiver_falls_back_to_direct_payload_without_window() -> void:
-	var timeline := NetwTimeline.new()
+	timeline = NetwTimeline.new()
 	_sync.timeline = timeline
 
 	_sync._write_property(StampedSynchronizer.TICK, NodePath(""), 15)
@@ -128,7 +169,6 @@ func test_receiver_falls_back_to_direct_payload_without_window() -> void:
 
 
 func test_codec_roundtrip() -> void:
-	# bool/int/Vector2 are raw-packed; float falls back to var_to_bytes.
 	var keys: Array[StringName] = [&"flag", &"count", &"motion", &"spin"]
 	var samples: Array[Dictionary] = [
 		{
@@ -160,36 +200,15 @@ func test_codec_roundtrip() -> void:
 	assert_vector(decoded[1].input.motion).is_equal(Vector2(-4, 8))
 	assert_float(decoded[1].input.spin).is_equal_approx(-1.25, 0.0001)
 
-
-func test_codec_empty_window_roundtrips_empty() -> void:
-	var keys: Array[StringName] = [&"motion"]
 	var empty: Array[Dictionary] = []
 	var bytes := NetwCodec.encode_window(empty, keys, [])
 	assert_int(bytes.size()).is_equal(0)
 	assert_int(NetwCodec.decode_window(bytes, keys, [], []).size()).is_equal(0)
 
 
-func test_window_sole_carrier_when_enabled() -> void:
-	# before_test leaves input_window_size = 0 (auto) -> window enabled, so
-	# finalize() suppresses the standalone payload props to NEVER.
-	var motion_mode := -1
-	for path: NodePath in _sync.replication_config.get_properties():
-		var sub := path.get_subname_count()
-		if sub > 0 and StringName(path.get_subname(sub - 1)) == &"motion":
-			motion_mode = _sync.replication_config.property_get_replication_mode(path)
-
-	assert_int(motion_mode).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
-	# Still registered and readable for the codec / snapshot_payload.
-	assert_bool(_sync.has_virtual_property(&"motion")).is_true()
-	_root.position = Vector2(9, 9)
-	assert_vector(_sync.snapshot_payload().motion).is_equal(Vector2(9, 9))
-
-
 func test_effective_window_size_derivation() -> void:
-	# Explicit positive value wins.
 	_sync.input_window_size = 7
 	assert_int(_sync._effective_window_size()).is_equal(7)
 
-	# Auto (0) with no resolvable clock falls back to 4.
 	_sync.input_window_size = 0
 	assert_int(_sync._effective_window_size()).is_equal(4)

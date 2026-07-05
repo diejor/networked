@@ -125,6 +125,11 @@ var _connect_offer_progress_sent := false
 var _active_host_options: LobbyDirectory.HostOptions = null
 
 
+func _init() -> void:
+	if not Engine.is_editor_hint():
+		_generate_signaling_namespace = Callable()
+
+
 func get_active_host_options() -> LobbyDirectory.HostOptions:
 	return _active_host_options
 

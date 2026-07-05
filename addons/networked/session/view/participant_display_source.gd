@@ -83,8 +83,9 @@ func _resolve() -> SubViewport:
 func _find_local_player() -> Node:
 	if not _tree:
 		return null
-	var player := _tree.local_player
-	if is_instance_valid(player):
+	var player_entity := _tree.local_player
+	if player_entity != null and is_instance_valid(player_entity.owner):
+		var player := player_entity.owner
 		_watch_local_player(player)
 		return player
 	var sm := _tree.get_service(MultiplayerSceneManager)
@@ -92,14 +93,15 @@ func _find_local_player() -> Node:
 		return null
 	var local_id := _tree.multiplayer.get_unique_id()
 	for scene: MultiplayerScene in sm.active_scenes.values():
-		for p in scene.get_players():
-			var entity := NetwEntity.of(p)
-			if entity and entity.peer_id == local_id:
-				_watch_local_player(p)
-				return p
-			if NetwEntity.parse_peer(p.name) == local_id:
-				_watch_local_player(p)
-				return p
+		for entity: NetwEntity in scene.get_players():
+			if entity != null and is_instance_valid(entity.owner):
+				var p := entity.owner
+				if entity.peer_id == local_id:
+					_watch_local_player(p)
+					return p
+				if NetwEntity.parse_peer(p.name) == local_id:
+					_watch_local_player(p)
+					return p
 	return null
 
 
@@ -194,8 +196,8 @@ func _watch_scene(scene: MultiplayerScene) -> void:
 		return
 	_watched_scenes.append(scene)
 	var player_spawned := _on_scene_player_spawned.bind(scene)
-	if not scene.player_spawned.is_connected(player_spawned):
-		scene.player_spawned.connect(player_spawned)
+	if not scene.spawned.is_connected(player_spawned):
+		scene.spawned.connect(player_spawned)
 	var tree_exiting := _unwatch_scene.bind(scene)
 	if not scene.tree_exiting.is_connected(tree_exiting):
 		scene.tree_exiting.connect(tree_exiting)
@@ -209,8 +211,8 @@ func _unwatch_scene(scene: MultiplayerScene) -> void:
 	if not is_instance_valid(scene):
 		return
 	var player_spawned := _on_scene_player_spawned.bind(scene)
-	if scene.player_spawned.is_connected(player_spawned):
-		scene.player_spawned.disconnect(player_spawned)
+	if scene.spawned.is_connected(player_spawned):
+		scene.spawned.disconnect(player_spawned)
 	var tree_exiting := _unwatch_scene.bind(scene)
 	if scene.tree_exiting.is_connected(tree_exiting):
 		scene.tree_exiting.disconnect(tree_exiting)
@@ -235,9 +237,9 @@ func _unwatch_local_player() -> void:
 	_local_player = null
 
 
-func _on_local_player_changed(player: Node) -> void:
-	if is_instance_valid(player):
-		_watch_local_player(player)
+func _on_local_player_changed(player: NetwEntity) -> void:
+	if player != null and is_instance_valid(player.owner):
+		_watch_local_player(player.owner)
 	_refresh_deferred()
 
 

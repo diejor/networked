@@ -85,9 +85,12 @@ func _on_display_source_changed(viewport: SubViewport) -> void:
 func _announce_view(viewport: SubViewport) -> void:
 	if not is_instance_valid(viewport) or not _mt:
 		return
-	var player: Node = _mt.local_player
-	if not is_instance_valid(player) or not viewport.is_ancestor_of(player):
+	var local_entity := _mt.local_player
+	if local_entity == null or not is_instance_valid(local_entity.owner):
 		return
-	var entity := MultiplayerEntity.unwrap(player)
+	var player := local_entity.owner
+	if not viewport.is_ancestor_of(player):
+		return
+	var entity := local_entity.multiplayer_entity
 	if entity:
 		entity.notify_view_activated()

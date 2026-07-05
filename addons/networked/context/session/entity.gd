@@ -15,10 +15,11 @@
 ## as an NPC or world object. See [member is_player] and [enum Ownership].
 ##
 ## [br][br]
-## The entity root is the node representing the networked entity (typically
-## the scene root in packed entity scenes). Siblings should access
-## it through [code]Netw.ctx(self).entity[/code] (see [member NetwContext.entity] 
-## or [method of].
+## The entity root is the node representing the networked entity. Siblings can
+## connect to [signal spawning] or [signal spawned] from the editor when they
+## only need decoded identity. Use [constant Node.NOTIFICATION_PARENTED] only
+## when the component must also call [method contribute_spawn_property] before
+## Godot reads [member MultiplayerEntity.replication_config].
 ## [codeblock]
 ## func _notification(what: int) -> void:
 ##     if what == NOTIFICATION_PARENTED:
@@ -30,16 +31,53 @@
 ##     if multiplayer.is_server():
 ##         restore_saved_state()
 ## [/codeblock]
+## [br][br]
+## A spawned [Node] with [MultiplayerEntity] must bind [member entity_id] and
+## [member peer_id] before it enters the tree. Helper pairs make that contract
+## explicit. Manual paths must perform the same bind.
+## [br][br]
+## Use [method wrap_spawn] inside [member MultiplayerSpawner.spawn_function]
+## when [method spawn_for] owns the spawn call.
+## [codeblock]
+## spawner.spawn_function = NetwEntity.wrap_spawn(_spawn_player)
+## NetwEntity.spawn_for(spawner, participant, payload)
+## [/codeblock]
+## Use [method decorate_spawn] when [member MultiplayerSpawner.spawn_function]
+## still uses [method wrap_spawn], but gameplay code owns when
+## [method MultiplayerSpawner.spawn] runs.
+## [codeblock]
+## spawner.spawn_function = NetwEntity.wrap_spawn(_spawn_player)
+## spawner.spawn(NetwEntity.decorate_spawn(payload, join))
+## [/codeblock]
+## Use [method spawn_identity] when a raw
+## [member MultiplayerSpawner.spawn_function] owns identity binding itself.
+## [codeblock]
+## var identity := NetwEntity.spawn_identity(data)
+## identity.bind(node)
+## [/codeblock]
+## Use [method bind] before [method Node.add_child] when identity rides the
+## [member Node.name] channel instead of custom spawn data.
+## [codeblock]
+## NetwEntity.bind(node, entity_id, peer_id)
+## parent.add_child(node)
+## [/codeblock]
+##
+## A [MultiplayerScene] with [member MultiplayerScene.gate] requires each
+## spawned [Node] to own its [NetwEntity] record. A plain [Node] satisfies that
+## invariant with [method ensure] before [method MultiplayerScene.track_node].
 class_name NetwEntity
 extends RefCounted
 
 # Metadata key that stores the [NetwEntity] record on an entity root.
 const _META_KEY := &"netw_entity"
 
-# Reserved key for Networked identity inside custom spawn dictionaries.
-# User payload remains at the top level. [method decorate_spawn] writes this
-# key, and [method spawn_identity] reads it back before [method bind].
+# Reserved keys for Networked spawn identity envelopes.
+#
+# [method spawn_for] owns the outer Variant as a Dictionary with these keys.
+# [method wrap_spawn] unwraps it and passes the user payload through unchanged.
+# [method decorate_spawn] remains the low-level Dictionary path.
 const _SPAWN_NETW_KEY := "_netw"
+const _SPAWN_DATA_KEY := "data"
 
 ## Whether an entity represents a joined peer or the server, derived from
 ## [member peer_id].
@@ -52,12 +90,12 @@ enum Ownership {
 }
 
 ## Whether an entity is server controlled or peer controlled, derived from
-## [member controller].
+## [member controller]. See [enum ControlKind].
 enum ControlKind {
 	## A peer currently controls the entity. [member controller] is non-zero.
-	PEER,
+	PEER_CONTROLLED,
 	## Server controlled entity. [member controller] is [code]0[/code].
-	SERVER,
+	SERVER_CONTROLLED,
 }
 
 ## Key roles identifying generic component slots on this entity record.
@@ -152,10 +190,13 @@ class _SpawnContribution extends RefCounted:
 ## Emitted once when the entity root enters the live scene tree.
 signal owner_tree_entered
 
-## Emitted before scene registration after identity is resolved.
+## Emitted once after identity, authority, and spawn-packet properties are
+## applied. The owner is in the tree, but [method Node._ready] may still be
+## running.
 signal spawning
 
-## Emitted by [MultiplayerEntity] after scene registration completes.
+## Emitted once after scene registration and the owner's [method Node._ready]
+## complete.
 signal spawned
 
 ## Emitted when this entity becomes visible to [param peer_id].
@@ -214,15 +255,24 @@ var reparenting: MultiplayerEntity.ReparentOpts = null
 ## Stable display/save/debug label for this entity.
 var entity_id: StringName = &""
 
-## Peer id of the joined player this entity represents (the same id carried by
-## [member ResolvedJoin.peer_id]), or [code]0[/code] for a server-owned entity
-## (NPC, prop, world object).
+## Peer id of the participant this entity represents, or [code]0[/code] for a
+## server-owned entity (NPC, prop, world object).
 ##
 ## A non-zero value drives [method MultiplayerScene.register_player],
 ## [member MultiplayerTree.local_player] tracking, and an automatic
 ## [method MultiplayerEntity.despawn] when its peer disconnects. This is the
 ## source of the player test. See [member is_player].
 var peer_id := 0
+
+## Compact wire route naming this entity in [LivenessService], or
+## [code]0[/code] when unroutable.
+##
+## Decoded from the [method wrap_spawn] envelope or the [MultiplayerEntity]
+## spawn packet. [RelayService] frames carry this value instead of a node
+## path, so a packet can always be addressed even while the node it targets is
+## still spawning. See [method LivenessService.route_of] for lookups by
+## entity and [method LivenessService.entity_of] for the reverse.
+var route := 0
 
 var _pending_controller := 0
 
@@ -252,7 +302,7 @@ var controller: int:
 ## Derived from [member controller]. See [enum ControlKind].
 var control_kind: ControlKind:
 	get:
-		return ControlKind.PEER if controller != 0 else ControlKind.SERVER
+		return ControlKind.PEER_CONTROLLED if controller != 0 else ControlKind.SERVER_CONTROLLED
 
 ## [code]true[/code] when the local peer controls this entity.
 var is_controlled_locally: bool:
@@ -263,21 +313,34 @@ var is_controlled_locally: bool:
 			return false
 		return controller == owner.multiplayer.get_unique_id()
 
-## Joined player record for [member controller], rebuilt from the local
-## [MultiplayerTree] roster. Never serialized.
-var controller_participant: ResolvedJoin:
+## Participant represented by [member peer_id], or [code]null[/code].
+##
+## This resolves the live session handle for player avatars. Server-owned
+## entities, props, and NPCs return [code]null[/code].
+var participant: NetwParticipant:
+	get:
+		if peer_id == 0 or not is_instance_valid(owner):
+			return null
+		var mt := MultiplayerTree.resolve(owner)
+		return mt.get_participant(peer_id) if mt else null
+
+## Participant steering [member controller], or [code]null[/code].
+##
+## This is independent from [member participant]. A server-owned entity can be
+## controlled by a participant without representing that participant.
+var controller_participant: NetwParticipant:
 	get:
 		if controller == 0 or not is_instance_valid(owner):
 			return null
 		var mt := MultiplayerTree.resolve(owner)
-		return mt.get_joined_player(controller) if mt else null
+		return mt.get_participant(controller) if mt else null
 
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
 	get:
 		return Ownership.PEER if peer_id != 0 else Ownership.SERVER
 
-## [code]true[/code] when this entity represents a joined player rather than a
+## [code]true[/code] when this entity represents a participant rather than a
 ## server-owned entity. The canonical player test across the addon. Equivalent
 ## to [code]ownership == Ownership.PEER[/code] and to a non-zero
 ## [member peer_id].
@@ -309,6 +372,85 @@ var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
 var _synchronizers_dirty: bool = true
 var _parent_entity_resolved: bool = false
 var _parent_entity_ref: WeakRef
+
+# Component ID mapping (R2 component-ID table)
+var _registered_components: Array[Node] = []
+var _components_by_id: Dictionary[int, NodePath] = {}
+var _ids_by_path: Dictionary[NodePath, int] = {}
+var _table_poisoned: bool = false
+var _table_hash: int = 0
+
+
+## Registers a sub-node as a component of the entity for RPC routing.
+func register_component(component: Node) -> void:
+	if component == owner:
+		return
+	if not _registered_components.has(component):
+		_registered_components.append(component)
+
+
+## Builds the component ID mapping table and computes its 16-bit hash.
+func hydrate_components() -> void:
+	var paths: Array[NodePath] = []
+	for comp in _registered_components:
+		if is_instance_valid(comp):
+			var rel := relative_path(owner, comp)
+			if not rel.is_empty():
+				paths.append(rel)
+	# Sort lexicographically to ensure order-insensitivity
+	paths.sort()
+
+	_components_by_id.clear()
+	_ids_by_path.clear()
+	for i in paths.size():
+		var idx := i + 1
+		if idx >= 255:
+			break
+		_components_by_id[idx] = paths[i]
+		_ids_by_path[paths[i]] = idx
+
+	_table_hash = _compute_table_hash(paths)
+
+
+# The 16-bit table hash rides the spawn packet so a client can detect a
+# structural mismatch with the server and poison its table. It covers the
+# component paths (which drive comp ids) and every routed script's sorted
+# @rpc method list (which drives 1-byte method ids), so a version skew in
+# either falls back to string paths and method names instead of misrouting.
+func _compute_table_hash(paths: Array[NodePath]) -> int:
+	var s := ""
+	for path in paths:
+		s += str(path) + ","
+
+	s += "|methods:"
+	var scripts: Array[Script] = []
+	if is_instance_valid(owner) and owner.get_script():
+		scripts.append(owner.get_script())
+	for comp in _registered_components:
+		if is_instance_valid(comp) and comp.get_script():
+			scripts.append(comp.get_script())
+	for sc in scripts:
+		var methods: Array = []
+		var cfg: Dictionary = sc.get_rpc_config()
+		if cfg:
+			for m in cfg:
+				methods.append(String(m))
+		methods.sort()
+		s += "|" + "/".join(methods)
+
+	return s.hash() & 0xFFFF
+
+
+func _on_identity_hydrated() -> void:
+	hydrate_components()
+	var me := multiplayer_entity
+	if me:
+		if me.is_multiplayer_authority():
+			me._netw_table_hash = _table_hash
+		else:
+			if me._netw_table_hash != _table_hash:
+				_table_poisoned = true
+				Netw.dbg.warn("Component table hash mismatch on entity '%s': server=%d, client=%d. Table poisoned.", [entity_id, me._netw_table_hash, _table_hash])
 
 
 ## Returns the [NetwEntity] associated with [param node]'s entity root.
@@ -418,32 +560,83 @@ static func bind(
 	return node
 
 
-## Decodes bindable identity from custom spawn data.
+## Wraps a [MultiplayerSpawner] spawn function so Networked identity is bound
+## before the spawned node enters the tree.
 ##
-## Use the original spawn [Dictionary] for gameplay data. This method only
-## extracts the identity needed to call [method NetwEntity.SpawnIdentity.bind].
+## The wrapped function receives the exact gameplay payload passed to
+## [method spawn_for]. The returned node is passed to
+## [method NetwEntity.SpawnIdentity.bind].
 ## [codeblock]
-## # Server:
-## var data := NetwEntity.decorate_spawn(
-##     {spawn_index = index},
-##     resolved_join
-## )
-## spawner.spawn(data)
+## func _ready() -> void:
+##     spawn_function = NetwEntity.wrap_spawn(_spawn_player)
 ##
-## #             |
-## #             v (Network spawn replication)
-## #             |
-##
-## # Client (spawn_function):
-## func _custom_spawn(data: Dictionary) -> Node:
-##     var spawn_identity := NetwEntity.spawn_identity(data)
-##
+## func _spawn_player(data: Dictionary) -> Node:
 ##     var player := PLAYER.instantiate()
-##     spawn_identity.bind(player)
-##
 ##     player.spawn_index = data.spawn_index
 ##     return player
 ## [/codeblock]
+##
+## [method wrap_spawn] and [method spawn_for] are two halves of one contract.
+## Use [method decorate_spawn] and [method spawn_identity] only for manual
+## low-level spawn functions.
+static func wrap_spawn(fn: Callable) -> Callable:
+	return _wrapped_spawn.bind(fn)
+
+
+static func _wrapped_spawn(envelope: Variant, fn: Callable) -> Node:
+	var envelope_error := _spawn_envelope_error(envelope)
+	if not envelope_error.is_empty():
+		var msg := (
+				"spawn data is not a Networked envelope: %s. Spawn through " +
+				"NetwEntity.spawn_for(spawner, participant, payload). " +
+				"wrap_spawn and spawn_for are two halves of one contract."
+		)
+		assert(false, msg % envelope_error)
+		return fn.call(envelope) as Node
+	var spawn_identity := SpawnIdentity.new(envelope)
+	var payload: Variant = (envelope as Dictionary).get(_SPAWN_DATA_KEY)
+	var node := fn.call(payload) as Node
+	assert(node != null, "NetwEntity.wrap_spawn function must return a Node")
+	spawn_identity.bind(node)
+	return node
+
+
+## Wraps [param payload] for [param participant] and calls
+## [method MultiplayerSpawner.spawn].
+##
+## [param payload] can be any Variant supported by Godot spawn replication,
+## including [Dictionary], [Array], [PackedByteArray], scalars, or
+## [code]null[/code].
+## Use with [method wrap_spawn] on the same [MultiplayerSpawner].
+## [br][br][b]Server Only.[/b]
+static func spawn_for(
+		spawner: MultiplayerSpawner,
+		participant: NetwParticipant,
+		payload: Variant = null,
+) -> Node:
+	assert(
+		spawner == null or spawner.multiplayer.is_server(),
+		"NetwEntity.spawn_for is server-only",
+	)
+	if spawner == null or participant == null or participant.join == null:
+		return null
+	assert(
+		_is_wrapped_spawn_callable(spawner.spawn_function),
+		(
+				"spawn_function is not wrapped. Set spawn_function = " +
+				"NetwEntity.wrap_spawn(your_fn) in _ready; spawn_for " +
+				"and wrap_spawn are two halves of one contract."
+		),
+	)
+	var liveness := LivenessService.for_node(spawner)
+	var route := liveness.reserve_route() if liveness else 0
+	return spawner.spawn(_spawn_envelope(participant.join, payload, route))
+
+## Decodes bindable identity from custom spawn data.
+##
+## Prefer [method wrap_spawn] for [MultiplayerSpawner.spawn_function].
+## [method spawn_identity] remains available for low level spawn functions that
+## bind identity directly.
 static func spawn_identity(data: Dictionary) -> SpawnIdentity:
 	return SpawnIdentity.new(data)
 
@@ -460,17 +653,74 @@ static func spawn(data: Dictionary) -> SpawnIdentity:
 static func decorate_spawn(
 		data: Dictionary,
 		rj: ResolvedJoin,
+		spawner: Node = null,
 ) -> Dictionary:
 	assert(
 		not data.has(_SPAWN_NETW_KEY),
 		"NetwEntity.decorate_spawn: '_netw' is reserved.",
 	)
+	var liveness := LivenessService.for_node(spawner) if spawner else null
+	var route := liveness.reserve_route() if liveness else 0
 	var out := data.duplicate(true)
 	out[_SPAWN_NETW_KEY] = {
 		"entity_id": rj.username,
 		"peer_id": rj.peer_id,
+		"route": route,
 	}
 	return out
+
+
+static func _spawn_envelope(
+		rj: ResolvedJoin,
+		payload: Variant = null,
+		route: int = 0,
+) -> Dictionary:
+	return {
+		_SPAWN_NETW_KEY: {
+			"entity_id": rj.username,
+			"peer_id": rj.peer_id,
+			"route": route,
+		},
+		_SPAWN_DATA_KEY: payload,
+	}
+
+
+static func _is_spawn_envelope(value: Variant) -> bool:
+	return _spawn_envelope_error(value).is_empty()
+
+
+static func _spawn_envelope_error(value: Variant) -> String:
+	if not value is Dictionary:
+		return "expected Dictionary"
+	var data := value as Dictionary
+	if not data.has(_SPAWN_DATA_KEY):
+		return "missing 'data'"
+	return _spawn_identity_error(data)
+
+
+static func _spawn_identity_error(data: Dictionary) -> String:
+	if not data.has(_SPAWN_NETW_KEY):
+		return "missing '_netw'"
+	var netw: Variant = data.get(_SPAWN_NETW_KEY)
+	if not netw is Dictionary:
+		return "'_netw' must be a Dictionary"
+	var identity := netw as Dictionary
+	if not identity.has("entity_id"):
+		return "missing '_netw.entity_id'"
+	if StringName(identity.get("entity_id", "")).is_empty():
+		return "'_netw.entity_id' must not be empty"
+	if not identity.has("peer_id"):
+		return "missing '_netw.peer_id'"
+	var peer_value: Variant = identity.get("peer_id")
+	if not (peer_value is int or peer_value is float):
+		return "'_netw.peer_id' must be numeric"
+	if int(peer_value) < 0:
+		return "'_netw.peer_id' must be >= 0"
+	return ""
+
+
+static func _is_wrapped_spawn_callable(fn: Callable) -> bool:
+	return fn.is_valid() and fn.get_method() == &"_wrapped_spawn"
 
 
 ## Bindable identity decoded from custom spawn data.
@@ -481,17 +731,36 @@ class SpawnIdentity extends RefCounted:
 	## Decoded peer ID for the spawned node, mapped from
 	## [member NetwEntity.peer_id].
 	var peer_id: int = 0
+	## Decoded route ID for the spawned node, or [code]0[/code] if missing.
+	var route: int = 0
 
 
 	func _init(spawn_data: Dictionary) -> void:
+		var envelope_error := NetwEntity._spawn_identity_error(spawn_data)
+		assert(
+			envelope_error.is_empty(),
+			"NetwEntity.spawn_identity: %s." % envelope_error,
+		)
 		var netw: Dictionary = spawn_data.get(_SPAWN_NETW_KEY, { })
 		entity_id = StringName(netw.get("entity_id", ""))
 		peer_id = int(netw.get("peer_id", 0))
+		route = int(netw.get("route", 0))
 
 
 	## Binds this identity onto [param node].
 	func bind(node: Node) -> Node:
-		return NetwEntity.bind(node, entity_id, peer_id)
+		var bound := NetwEntity.bind(node, entity_id, peer_id)
+		if route > 0:
+			var entity := NetwEntity.of(node)
+			if entity:
+				# bind_route writes entity.route once the tree is
+				# resolvable. The direct write covers pre-tree binds so
+				# _handle_tree_entered can re-bind from the record.
+				entity.route = route
+				var liveness := LivenessService.for_node(node)
+				if liveness:
+					liveness.bind_route(route, entity)
+		return bound
 
 
 ## Returns a [NodePath] from [param source] to [param target].
@@ -541,6 +810,11 @@ func _handle_tree_entered() -> void:
 	_parent_entity_resolved = false
 	_parent_entity_ref = null
 
+	if route > 0:
+		var liveness := LivenessService.for_node(owner)
+		if liveness:
+			liveness.bind_route(route, self)
+
 	if _tree_entered_fired:
 		return
 	_tree_entered_fired = true
@@ -552,8 +826,6 @@ func _handle_tree_entered() -> void:
 			for c in _pending_spawn_props:
 				parent.contribute_spawn_property(c.source, c.property)
 			_pending_spawn_props.clear()
-			if _slot_requires.has(Slot.MULTIPLAYER_ENTITY):
-				_slot_requires[Slot.MULTIPLAYER_ENTITY].clear()
 
 			for c in _pending_save_props:
 				parent.contribute_save_property(
@@ -567,8 +839,6 @@ func _handle_tree_entered() -> void:
 					c.watch,
 				)
 			_pending_save_props.clear()
-			if _slot_requires.has(Slot.SAVE):
-				_slot_requires[Slot.SAVE].clear()
 
 
 func _handle_tree_exiting() -> void:
@@ -590,6 +860,22 @@ func provide(slot_id: Slot, component: Object) -> void:
 		_slots.erase(slot_id)
 		return
 	_slots[slot_id] = weakref(component)
+
+	if slot_id == Slot.MULTIPLAYER_ENTITY:
+		var ent := component as MultiplayerEntity
+		if not ent.identity_hydrated.is_connected(_on_identity_hydrated):
+			ent.identity_hydrated.connect(_on_identity_hydrated)
+		for c in _pending_spawn_props:
+			var path := property_path(c.source, c.property)
+			if not path.is_empty():
+				ent.add_spawn_property(path)
+		_pending_spawn_props.clear()
+	elif slot_id == Slot.SAVE:
+		var s := component as SaveComponent
+		for c in _pending_save_props:
+			c.register_with(s)
+		_pending_save_props.clear()
+
 	if _slot_requires.has(slot_id):
 		var list: Array = _slot_requires[slot_id]
 		var consumers := list.duplicate()
@@ -698,14 +984,6 @@ func contribute_spawn_property(source: Node, property: StringName) -> void:
 	var contribution := _SpawnContribution.new(source, property)
 	_pending_spawn_props.append(contribution)
 
-	require(
-		Slot.MULTIPLAYER_ENTITY,
-		func(ent: MultiplayerEntity) -> void:
-			var path := property_path(contribution.source, contribution.property)
-			if not path.is_empty():
-				ent.add_spawn_property(path)
-	)
-
 
 ## Adds a property to the entity's save component.
 ##
@@ -753,12 +1031,6 @@ func contribute_save_property(
 		watch,
 	)
 	_pending_save_props.append(contribution)
-
-	require(
-		Slot.SAVE,
-		func(s: SaveComponent) -> void:
-			contribution.register_with(s)
-	)
 
 
 func _has_pending_save_property(

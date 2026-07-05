@@ -74,10 +74,18 @@ func _enter_tree() -> void:
 
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
-		push_error(
-			"SteamLobbyDirectory: only one instance is allowed. " +
-			"Queueing duplicate for deletion.",
-		)
+		# A debugger-spawned tree legitimately carries a second copy; Steam allows
+		# only one instance per process, so it stays dormant there without alarm.
+		if Netw.dbg.is_debug_tree(self):
+			Netw.dbg.debug(
+				"SteamLobbyDirectory: dormant in a debugger-spawned tree " +
+				"(Steam allows one instance per process).",
+			)
+		else:
+			push_error(
+				"SteamLobbyDirectory: only one instance is allowed. " +
+				"Queueing duplicate for deletion.",
+			)
 		queue_free()
 		return
 	_instance = weakref(self)
@@ -115,13 +123,17 @@ func _enter_tree() -> void:
 	)
 	_init_ok = status == SteamWrapper.InitResult.OK
 	if not _init_ok:
-		var reason := "Steam init failed (status %d)" % status
-		if status == SteamWrapper.InitResult.NO_STEAM_CLIENT:
-			reason += ": no Steam client running"
-		Netw.dbg.error(
+		var status_str := SteamWrapper.init_result_to_string(status)
+		var verbal: String = init_res.get("verbal", "")
+		var reason := "Steam init failed (status %s)" % status_str
+		if not verbal.is_empty():
+			reason += ": " + verbal
+		else:
+			reason += ": " + SteamWrapper.init_result_to_reason(status)
+		Netw.dbg.warn(
 			"SteamLobbyDirectory: %s",
 			[reason],
-			func(m): push_error(m)
+			func(m): push_warning(m)
 		)
 		provider_unavailable.emit.call_deferred(reason)
 		return
@@ -181,7 +193,7 @@ func is_ready() -> bool:
 func capabilities() -> int:
 	return (
 			LobbyDirectory.Capability.BROWSE
-			| LobbyDirectory.Capability.FRIENDS_ONLY
+			| LobbyDirectory.Capability.FRIENDS_ONLY_SUPPORT
 			| LobbyDirectory.Capability.INVITES
 			| LobbyDirectory.Capability.FRIEND_NAMES
 	)

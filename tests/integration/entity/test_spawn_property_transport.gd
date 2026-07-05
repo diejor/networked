@@ -106,7 +106,7 @@ func test_identity_packet_can_drive_record_without_encoded_name() -> void:
 	)
 	template.free()
 	var scene := harness.scene_on_server(level_builder.scene_name)
-	scene.add_player(player)
+	scene.add_player(NetwEntity.of(player))
 
 	var client_player := await harness.wait_for_player(
 		client0,
@@ -136,7 +136,7 @@ func _spawn_probe_player(client: MultiplayerTree, marker: String) -> Node:
 	template.free()
 	NetwEntity.bind(player, StringName(username), peer_id)
 	var scene := harness.scene_on_server(level_builder.scene_name)
-	scene.add_player(player)
+	scene.add_player(NetwEntity.of(player))
 	return player
 
 

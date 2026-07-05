@@ -73,7 +73,7 @@ func _rehost_with_spawned_player(
 		tree: MultiplayerTree,
 		username: String,
 ) -> Error:
-	var err: Error = await tree.host_player(_listen_payload(username))
+	var err: Error = await tree.host(_listen_payload(username))
 	if err == OK:
 		await harness.wait_for_player(tree, level_builder.scene_name)
 	return err
@@ -102,7 +102,7 @@ func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 
 	var order := _record_session_order(tree)
 
-	await tree.disconnect_player()
+	await tree.leave()
 	_assert_session_teardown_empty(tree)
 
 	var err := await _rehost_with_spawned_player(tree, "valeria")
@@ -138,7 +138,7 @@ func test_server_crash_converges_to_offline_and_no_role() -> void:
 func test_disconnect_then_join_different_backend_on_same_tree() -> void:
 	var tree := await _host_listen_with_spawned_player("valeria")
 
-	await tree.disconnect_player()
+	await tree.leave()
 	_assert_session_teardown_empty(tree)
 
 	var err := await _join_shared_backend_without_spawn(tree, "valeria")

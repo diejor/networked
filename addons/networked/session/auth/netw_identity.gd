@@ -30,6 +30,30 @@ func serialize() -> PackedByteArray:
 	return var_to_bytes(dict)
 
 
+## Returns a stable display name for [param node].
+static func username_of(node: Node) -> String:
+	if not is_instance_valid(node):
+		return ""
+	var entity := NetwEntity.of(node)
+	if entity and not entity.entity_id.is_empty():
+		return entity.entity_id
+	var multiplayer_entity := MultiplayerEntity.unwrap(node)
+	if multiplayer_entity:
+		return multiplayer_entity.entity_id
+	return node.name.get_slice("|", 0)
+
+
+## Returns a stable debugger key for [param node].
+static func stable_id_of(node: Node) -> Variant:
+	if not is_instance_valid(node):
+		return ""
+	var entity := NetwEntity.of(node)
+	if entity and entity.peer_id != 0:
+		return entity.peer_id
+	var parsed := NetwEntity.parse_peer(node.name)
+	return parsed if parsed != 0 else str(node.get_path())
+
+
 ## Populates a new [NetwIdentity] from a serialized [PackedByteArray].
 static func deserialize(bytes: PackedByteArray) -> NetwIdentity:
 	var data := bytes_to_var(bytes)

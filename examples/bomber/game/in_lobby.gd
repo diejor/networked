@@ -1,66 +1,51 @@
-## In-lobby UI: member roster + start/leave actions.
-##
-## Bound primarily to [NetwTree] / [NetwContext]: the roster comes from
-## accepted [signal NetwTree.player_joined] data, and the host-only "Start"
-## button is gated on [method NetwTree.is_listen_server]. The [LobbyDirectory]
-## is only consulted for resolving display names and leaving the social lobby.
+class_name InLobby
 extends Control
+## In-lobby roster and start/leave controls, scoped to the Lobby scene it ships in.
+##
+## Lives inside lobby_level.tscn, so it resolves its own [NetwContext] through
+## [method Netw.ctx] and is created and freed with the scene. The roster reflects
+## [member NetwScene.participants]; the host-only Start button moves everyone into
+## the World scene through [BomberGamestate].
 
-signal start_requested()
-
-@onready var _title: Label = %LobbyTitleLabel
 @onready var _member_list: ItemList = %MemberList
 @onready var _start_btn: Button = %StartButton
 @onready var _leave_btn: Button = %LeaveButton
 
-var _directory: LobbyDirectory
-var _ctx: NetwContext
+@onready var _ctx := Netw.ctx(self)
 
 
-func setup(directory: LobbyDirectory, ctx: NetwContext) -> void:
-	_directory = directory
-	_ctx = ctx
-
-	_ctx.tree.peer_connected.connect(func(_id: int) -> void: refresh())
-	_ctx.tree.peer_disconnected.connect(func(_id: int) -> void: refresh())
-	_ctx.tree.player_joined.connect(func(_rj: ResolvedJoin) -> void: refresh())
-
-	_start_btn.pressed.connect(func() -> void: start_requested.emit())
-	_leave_btn.pressed.connect(_on_leave_pressed)
-
-	set_title("")
-	refresh()
+func _ready() -> void:
+	_ctx.scene.participant_entered.connect(_on_membership_changed)
+	_ctx.scene.participant_left.connect(_on_membership_changed)
+	_start_btn.pressed.connect(_on_start_pressed)
+	_leave_btn.pressed.connect(_ctx.tree.leave)
+	_refresh()
 
 
-func set_title(text: String) -> void:
-	_title.text = text if not text.is_empty() else "Lobby"
+func _on_start_pressed() -> void:
+	var gamestate := _ctx.services.get_service(BomberGamestate) as BomberGamestate
+	gamestate.begin_game()
 
 
-func refresh() -> void:
+func _on_membership_changed(_participant: NetwParticipant) -> void:
+	_refresh()
+
+
+func _refresh() -> void:
 	_member_list.clear()
-	if _ctx == null:
-		return
-	var mp := multiplayer
-	var local_id: int = mp.get_unique_id() if mp.multiplayer_peer else 0
-	var joined_players := _ctx.tree.joined_players
-	joined_players.sort_custom(
-		func(a: ResolvedJoin, b: ResolvedJoin) -> bool:
+	var local := _ctx.tree.local_participant
+	var participants := _ctx.scene.participants
+	participants.sort_custom(
+		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id
 	)
-	for rj: ResolvedJoin in joined_players:
-		var pid := rj.peer_id
-		var label := str(rj.username)
-		if pid == local_id:
-			label += "   (you)"
-		_member_list.add_item(label)
+	for participant: NetwParticipant in participants:
+		var suffix := "   (you)" if participant == local else ""
+		_member_list.add_item("%s%s" % [participant.username, suffix])
 
+	# Recomputed here (not only in _ready) because on a listen-server host the
+	# role is assigned just after startup scenes spawn, so the first refresh
+	# after admission is when is_listen_server() becomes authoritative.
 	var host := _ctx.tree.is_listen_server()
 	_start_btn.visible = host
 	_start_btn.disabled = not host
-
-
-func _on_leave_pressed() -> void:
-	if _directory:
-		_directory.leave_lobby()
-	if _ctx:
-		await _ctx.tree.disconnect_player()

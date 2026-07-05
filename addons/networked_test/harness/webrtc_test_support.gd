@@ -29,7 +29,7 @@ static func start_host(parent: Node) -> Dictionary:
 	tree.backend = _make_backend()
 	parent.add_child(tree)
 
-	var err: Error = await tree.host(true)
+	var err: Error = await tree._open_host(true)
 	if err != OK:
 		push_error("WebRTCTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()

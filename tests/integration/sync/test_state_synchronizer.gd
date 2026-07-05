@@ -21,31 +21,30 @@ func _make_state_sync() -> StampedSynchronizer:
 	sync.register_property(
 		&"position",
 		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 		false,
-		true,
+		false,
 	)
 	return sync
 
 
 func _pos_codec() -> NetwQuantizeFixed:
 	var q := NetwQuantizeFixed.new()
-	q.step = 0.5
-	q.min_value = -512.0
-	q.max_value = 512.0
+	q.resolution_step = 0.5
+	q.min_limit = -512.0
+	q.max_limit = 512.0
 	return q
 
 
 # Bundled blob carrier with a fixed-grid position codec.
 func _make_bundled_state_sync() -> StampedSynchronizer:
 	var sync := StateSynchronizer.new()
-	sync.bundle_payload = true
 	sync.register_property(
 		&"position",
 		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 		false,
-		true,
+		false,
 	).quantize(_pos_codec())
 	return sync
 

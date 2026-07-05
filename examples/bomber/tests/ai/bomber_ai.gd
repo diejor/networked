@@ -328,6 +328,9 @@ func _best_open_step_toward(
 
 
 func _is_blocked(snap: WorldSnapshot, cell: Vector2i) -> bool:
+	if snap.grid_bounds.size != Vector2i.ZERO \
+			and not snap.grid_bounds.has_point(cell):
+		return true
 	if snap.wall_set.has(cell):
 		return true
 	for rock_cell: Vector2i in snap.rock_cells:

@@ -58,34 +58,30 @@ func before(
 	pass
 
 
-func test_facade_exposes_client_and_socket_factories() -> void:
+func test_facade_client_and_socket_surface() -> void:
 	var facade: Object = (load(_FACADE_PATH) as Script).new()
 	auto_free(facade)
 
 	assert_bool(facade.has_method("create_client")).is_true()
 	assert_bool(facade.has_method("create_socket_from")).is_true()
 
-
-func test_client_exposes_required_async_methods() -> void:
-	var script := load(_CLIENT_PATH) as Script
+	var client_script := load(_CLIENT_PATH) as Script
 	for method_name in REQUIRED_CLIENT_METHODS:
-		assert_bool(_script_has_method(script, method_name)) \
+		assert_bool(_script_has_method(client_script, method_name)) \
 				.override_failure_message(
 					"NakamaClient is missing '%s'." % method_name,
 				).is_true()
 
-
-func test_socket_exposes_required_methods_and_signals() -> void:
-	var script := load(_SOCKET_PATH) as Script
+	var socket_script := load(_SOCKET_PATH) as Script
 	for method_name in REQUIRED_SOCKET_METHODS:
-		assert_bool(_script_has_method(script, method_name)) \
+		assert_bool(_script_has_method(socket_script, method_name)) \
 				.override_failure_message(
 					"NakamaSocket is missing '%s'." % method_name,
 				).is_true()
-	_assert_signal_arity(script, REQUIRED_SOCKET_SIGNALS)
+	_assert_signal_arity(socket_script, REQUIRED_SOCKET_SIGNALS)
 
 
-func test_bridge_exposes_required_methods_and_signals() -> void:
+func test_bridge_storage_and_wrapper_surface() -> void:
 	var script := load(_BRIDGE_PATH) as Script
 	for method_name in REQUIRED_BRIDGE_METHODS:
 		assert_bool(_script_has_method(script, method_name)) \
@@ -94,8 +90,6 @@ func test_bridge_exposes_required_methods_and_signals() -> void:
 				).is_true()
 	_assert_signal_arity(script, REQUIRED_BRIDGE_SIGNALS)
 
-
-func test_storage_helper_shapes_match_wrapper_usage() -> void:
 	var id: Object = (load(_STORAGE_ID_PATH) as Script).new(
 		"profiles",
 		"player",
@@ -125,9 +119,6 @@ func test_storage_helper_shapes_match_wrapper_usage() -> void:
 	assert_str(write.value).is_equal("{\"ok\":true}")
 	assert_bool(write.has_method("as_write")).is_true()
 
-
-func test_wrapper_exposes_generic_storage_helpers() -> void:
-	# Pins the parse-safe storage surface NakamaDatabase calls through the wrapper.
 	var wrapper := NakamaWrapper.new()
 	for method_name in [
 		"write_storage_objects",
@@ -143,7 +134,6 @@ func test_wrapper_exposes_generic_storage_helpers() -> void:
 
 
 func test_session_service_exposes_auth_surface() -> void:
-	# Pins the shared-account API both NakamaLobbyDirectory and NakamaDatabase use.
 	var service: NakamaSessionService = auto_free(NakamaSessionService.new())
 	for method_name in [
 		"configure",
@@ -170,7 +160,6 @@ func test_lobby_directory_identity_uses_base_when_debug_suffix_disabled() -> voi
 
 	assert_str(dir._effective_device_id()).is_equal("quickstart-host")
 	assert_str(dir.get_local_member_name()).is_equal("diegote")
-
 
 
 func _script_has_method(script: Script, method_name: String) -> bool:

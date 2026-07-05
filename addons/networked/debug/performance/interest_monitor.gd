@@ -2,7 +2,7 @@
 ## Exposes [InterestService] occupancy as Godot [Performance] monitors, with a
 ## tree-wide group per [MultiplayerTree] and one group per [NetwInterestLayer].
 ##
-## This is a presentation adapter managed by the [NetworkedDebugReporter]. It pulls
+## This is a presentation adapter managed by the [DebugReporter]. It pulls
 ## [method InterestService.monitor_snapshot] and
 ## [method NetwInterestLayer.monitor_snapshot], turning the cumulative transition
 ## counters into live rates. Work runs only while a debugger is attached

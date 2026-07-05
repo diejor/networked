@@ -57,7 +57,7 @@ func test_player_spawns_in_level_after_join() -> void:
 		spawner_path,
 	)
 
-	client.request_join_player.rpc_id(
+	client.request_join.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
 		join_payload.serialize(),
 	)

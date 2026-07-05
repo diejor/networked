@@ -19,12 +19,15 @@ signal connected_to_server()
 ## Emitted on the client when the server disconnects or crashes.
 signal server_disconnected()
 
-## Emitted on every peer after the server accepts a player join.
-signal player_joined(rj: ResolvedJoin)
-## Emitted when this peer's player join has been accepted by the server.
-signal local_player_joined(rj: ResolvedJoin)
-## Emitted after a player's target scene has been activated.
-signal player_scene_ready(rj: ResolvedJoin, netw_scene: NetwScene)
+## Emitted once for each accepted participant known to this peer.
+##
+## Fresh accepts emit on every peer. Late joiners also receive one emission per
+## participant accepted before they connected.
+signal participant_joined(participant: NetwParticipant)
+## Emitted when this peer's participant has been accepted by the server.
+signal local_participant_joined(participant: NetwParticipant)
+## Emitted when [member local_participant] changes [member NetwParticipant.current_scene].
+signal local_scene_changed(from: NetwScene, to: NetwScene)
 ## Emitted on clients when the server notifies it is shutting down.
 signal server_disconnecting(reason: String)
 ## Emitted on the server when a client requests to kick a peer.
@@ -52,9 +55,9 @@ func _init(mt: MultiplayerTree) -> void:
 	mt.connected_to_server.connect(connected_to_server.emit)
 	mt.server_disconnected.connect(server_disconnected.emit)
 
-	mt.player_joined.connect(player_joined.emit)
-	mt.local_player_joined.connect(local_player_joined.emit)
-	mt.player_scene_ready.connect(_on_player_scene_ready)
+	mt.participant_joined.connect(participant_joined.emit)
+	mt.local_participant_joined.connect(local_participant_joined.emit)
+	mt.local_scene_changed.connect(local_scene_changed.emit)
 	mt.server_disconnecting.connect(server_disconnecting.emit)
 	mt.kick_requested.connect(kick_requested.emit)
 	mt.kicked.connect(kicked.emit)
@@ -69,24 +72,23 @@ func _init(mt: MultiplayerTree) -> void:
 func is_valid() -> bool:
 	return is_instance_valid(_tree_ref.get_ref())
 
-## All active player nodes across all scenes or the sceneless world.
-var all_players: Array[Node]:
+## All active player identities across all scenes or the sceneless world.
+var all_players: Array[NetwEntity]:
 	get:
 		var mt := _tree_ref.get_ref() as MultiplayerTree
 		return mt.get_all_players() if mt else []
 
-## Accepted player join data known by this peer.
-var joined_players: Array[ResolvedJoin]:
+## Accepted participants known by this peer.
+var participants: Array[NetwParticipant]:
 	get:
 		var mt := _tree_ref.get_ref() as MultiplayerTree
-		return mt.get_joined_players() if mt else []
+		return mt.get_participants() if mt else []
 
 
-## Returns the accepted player data for [param peer_id], or
-## [code]null[/code].
-func get_joined_player(peer_id: int) -> ResolvedJoin:
+## Returns the [NetwParticipant] for [param peer_id], or [code]null[/code].
+func participant(peer_id: int) -> NetwParticipant:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return mt.get_joined_player(peer_id) if mt else null
+	return mt.get_participant(peer_id) if mt else null
 
 
 ## Returns [code]true[/code] if the current session is hosting as a server.
@@ -120,9 +122,9 @@ func is_online() -> bool:
 ##
 ## Use this when the caller knows they are hosting. Otherwise, see
 ## [method auto_connect_player].
-func host_player(join_payload: JoinPayload) -> Error:
+func host(join_payload: JoinPayload) -> Error:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	return await mt.host_player(join_payload) if mt else ERR_UNCONFIGURED
+	return await mt.host(join_payload) if mt else ERR_UNCONFIGURED
 
 
 ## Opens the transport against the [param target] address and submits
@@ -175,11 +177,17 @@ var role: MultiplayerTree.Role:
 		var mt := _tree_ref.get_ref() as MultiplayerTree
 		return mt.role if mt else MultiplayerTree.Role.NONE
 
-## The local player node for this tree, or [code]null[/code].
-var local_player: Node:
+## The local player identity for this tree, or [code]null[/code].
+var local_player: NetwEntity:
 	get:
 		var mt := _tree_ref.get_ref() as MultiplayerTree
 		return mt.local_player if mt else null
+
+## Accepted [NetwParticipant] for this tree, or [code]null[/code].
+var local_participant: NetwParticipant:
+	get:
+		var mt := _tree_ref.get_ref() as MultiplayerTree
+		return mt.local_participant if mt else null
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -196,12 +204,8 @@ func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 ## [br][br][b]Server Only.[/b]
 func pause(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	assert(mt.is_server, "NetwTree.pause() must be called on the server.")
-	for peer_id: int in mt.multiplayer_api.get_peers():
-		mt._rpc_receive_pause.rpc_id(peer_id, reason)
-	mt._rpc_receive_pause(reason)
+	if mt:
+		mt.pause(reason)
 
 
 ## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
@@ -209,12 +213,8 @@ func pause(reason: String = "") -> void:
 ## [br][br][b]Server Only.[/b]
 func unpause() -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	assert(mt.is_server, "NetwTree.unpause() must be called on the server.")
-	for peer_id: int in mt.multiplayer_api.get_peers():
-		mt._rpc_receive_unpause.rpc_id(peer_id)
-	mt._rpc_receive_unpause()
+	if mt:
+		mt.unpause()
 
 
 ## Disconnects [param peer_id] from the session.
@@ -224,13 +224,8 @@ func unpause() -> void:
 ## [br][br][b]Server Only.[/b]
 func kick(peer_id: int, reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	assert(mt.is_server, "NetwTree.kick() must be called on the server.")
-	if not reason.is_empty():
-		mt._rpc_receive_kicked.rpc_id(peer_id, reason)
-	if mt.multiplayer_peer:
-		mt.multiplayer_peer.disconnect_peer(peer_id)
+	if mt:
+		mt.kick(peer_id, reason)
 
 
 ## Asks the server to kick [param peer_id].
@@ -239,53 +234,34 @@ func kick(peer_id: int, reason: String = "") -> void:
 ## [br][br][b]Player request.[/b]
 func request_kick(peer_id: int, reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	mt._rpc_request_kick.rpc_id(1, peer_id, reason)
+	if mt:
+		mt.request_kick(peer_id, reason)
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server
-## to acknowledge disconnection.
-func disconnect_player() -> void:
+## to acknowledge leaving.
+func leave() -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
 	if not mt:
 		return
-	await mt.disconnect_player()
+	await mt.leave()
 
 
-## Asks the server for permission to disconnect.
+## Asks the server for permission to leave.
 ##
 ## The server decides whether to honor it.
 ## [br][br][b]Player request.[/b]
-func request_disconnect(reason: String = "") -> void:
+func request_leave(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	mt._rpc_request_disconnect.rpc_id(1, reason)
+	if mt:
+		mt.request_leave(reason)
 
 
 ## Notifies all clients that the server is shutting down.
 ##
 ## Clients receive [signal server_disconnecting].
 ## [br][br][b]Server Only.[/b]
-func notify_disconnect(reason: String = "") -> void:
+func notify_shutdown(reason: String = "") -> void:
 	var mt := _tree_ref.get_ref() as MultiplayerTree
-	if not mt:
-		return
-	assert(
-		mt.is_server,
-		"NetwTree.notify_disconnect() must be called on the server.",
-	)
-	for peer_id: int in mt.multiplayer_api.get_peers():
-		mt._rpc_receive_notify_disconnect.rpc_id(peer_id, reason)
-	mt._rpc_receive_notify_disconnect.rpc_id(1, reason)
-
-
-func _on_player_scene_ready(
-		rj: ResolvedJoin,
-		scene: MultiplayerScene,
-) -> void:
-	var netw_scene := NetwScene.new(scene) if is_instance_valid(scene) else null
-	player_scene_ready.emit(rj, netw_scene)
-	if is_instance_valid(scene):
-		scene.player_ready.emit(rj)
+	if mt:
+		mt.notify_shutdown(reason)

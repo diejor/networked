@@ -63,6 +63,9 @@ func _setup_session(session_id: int) -> void:
 	session.peer_registered.connect(
 		_on_peer_registered.bind(session_id),
 	)
+	session.peer_identity_changed.connect(
+		_on_peer_identity_changed.bind(session_id),
+	)
 
 	var ui := NetworkedDebuggerUI.new()
 	ui.name = "Networked"
@@ -159,7 +162,7 @@ func _on_peer_registered(
 		peer_key: String,
 		_display_name: String,
 		tree_name: String,
-		is_server: bool,
+		role: MultiplayerTree.Role,
 		_color: Color,
 		is_remote: bool,
 		_peer_id: int,
@@ -167,7 +170,7 @@ func _on_peer_registered(
 ) -> void:
 	if is_remote:
 		return
-	var base_id := _base_stable_id_for(peer_key, tree_name, is_server)
+	var base_id := _base_stable_id_for(peer_key, tree_name, role)
 	var stable_id: String = _peer_stable_id.get(peer_key, "")
 	if stable_id.is_empty() or _stable_id_base(stable_id) != base_id:
 		stable_id = _assign_stable_id(base_id)
@@ -183,16 +186,74 @@ func _on_peer_registered(
 		_recompute_pins()
 
 
-## Builds the base identity used for pin + geometry slot assignment.
-## Independent of session_id and reporter_id.
+# Re-derives [param peer_key]'s stable_id when its role changes.
+# [br][br]
+# [signal DebuggerSession.peer_identity_changed] fires both for a username
+# edit and for a role transition (e.g. an offline tree at
+# [constant MultiplayerTree.Role.NONE] finishing its connect). A username-only
+# change resolves to the same base_id and is a no-op. A role change assigns a
+# fresh stable_id and migrates any pin/geometry state so a tree registered
+# offline keeps its window treatment once it goes live.
+func _on_peer_identity_changed(
+		peer_key: String,
+		_username: String,
+		session_id: int,
+) -> void:
+	# Only the session that natively owns this peer may re-slot or persist
+	# stable_id ownership; other sessions see the same event via relay.
+	if _local_peer_map.get(peer_key, -1) != session_id:
+		return
+	var session: DebuggerSession = _sessions.get(session_id)
+	if not is_instance_valid(session):
+		return
+	var info: Dictionary = session.get_peers().get(peer_key, { })
+	if info.is_empty():
+		return
+
+	var role: MultiplayerTree.Role = info.get("role", MultiplayerTree.Role.NONE)
+	var tree_name: String = info.get("tree_name", "")
+	var new_base := _base_stable_id_for(peer_key, tree_name, role)
+	var old_sid: String = _peer_stable_id.get(peer_key, "")
+	if not old_sid.is_empty() and _stable_id_base(old_sid) == new_base:
+		return
+
+	var new_sid := _assign_stable_id(new_base)
+	_peer_stable_id[peer_key] = new_sid
+	_remember_session_stable_id(session_id, new_sid)
+	_migrate_stable_id(old_sid, new_sid)
+	if _pinned_peers.has(new_sid):
+		_dbg.trace(
+			"Pin: role change re-applying for stable_id=%s on session=%d" \
+					% [new_sid, session_id],
+		)
+		_recompute_pins(session_id)
+
+
+# Moves pin/geometry state from [param old_sid] to [param new_sid] when a
+# peer's role transition re-slots it. Distinct from
+# [method _migrate_unslotted_state], which migrates from the pre-slot legacy
+# base_id key rather than between two full stable_ids.
+func _migrate_stable_id(old_sid: String, new_sid: String) -> void:
+	if old_sid.is_empty() or old_sid == new_sid:
+		return
+	if _pinned_peers.has(old_sid):
+		_pinned_peers[new_sid] = true
+		_pinned_peers.erase(old_sid)
+	if _geometry.has(old_sid) and not _geometry.has(new_sid):
+		_geometry[new_sid] = _geometry[old_sid]
+		_geometry.erase(old_sid)
+
+
+# Builds the base identity used for pin + geometry slot assignment.
+# Independent of session_id and reporter_id.
 func _base_stable_id_for(
 		peer_key: String,
 		tree_name: String,
-		is_server: bool,
+		role: MultiplayerTree.Role,
 ) -> String:
 	var source_path: String = peer_key.get_slice("|", 0)
-	var role: String = "server" if is_server else "client"
-	return "%s|%s|%s" % [source_path, tree_name, role]
+	var role_name: String = MultiplayerTree.Role.keys()[role].to_lower()
+	return "%s|%s|%s" % [source_path, tree_name, role_name]
 
 
 func _assign_stable_id(base_id: String) -> String:
@@ -262,8 +323,8 @@ func set_peer_pinned(
 	_recompute_pins(source_session_id)
 
 
-## Sends pin/unpin commands to game processes (with any stored geometry) and
-## syncs the UI checkbox state across all UIs except [param source_session_id].
+# Sends pin/unpin commands to game processes (with any stored geometry) and
+# syncs the UI checkbox state across all UIs except [param source_session_id].
 func _recompute_pins(source_session_id: int = -1) -> void:
 	# For each pinned stable_id, find the owning session (if any) and what
 	# geometry to apply. session_id -> Rect2i|null
@@ -341,7 +402,7 @@ func _capture_window_geometry(
 	if not is_envelope or data.is_empty() or not data[0] is PackedByteArray:
 		return false
 
-	var envelope := NetEnvelope.from_dict(bytes_to_var(data[0]))
+	var envelope := NetwEnvelope.from_dict(bytes_to_var(data[0]))
 	if envelope.msg != &"networked:window_geometry":
 		return false
 

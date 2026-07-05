@@ -26,7 +26,7 @@ static func start_host(
 		username: String = "host",
 ) -> Dictionary:
 	var tree := _make_tree(parent, "NakamaHost", username)
-	var err: Error = await tree.host_player(payload(username))
+	var err: Error = await tree.host(payload(username))
 	if err != OK:
 		push_error("NakamaTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
@@ -83,7 +83,7 @@ static func host_scene(
 	_configure_tree(tree, username)
 	parent.add_child(scene)
 
-	var err: Error = await tree.host_player(payload(username, _level_1_spawn()))
+	var err: Error = await tree.host(payload(username, _level_1_spawn()))
 	if err != OK:
 		push_error("NakamaTestSupport: host scene failed: %s" % error_string(err))
 		scene.queue_free()

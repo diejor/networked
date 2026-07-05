@@ -26,14 +26,13 @@ func test_virtual_names_and_root_anchored_paths() -> void:
 	var root := await _build_player()
 	var state := NetwEntity.of(root).state
 
-	# The stamp and ack are virtualized names, not real node properties.
-	assert_that(state.has_virtual_property(StampedSynchronizer.TICK)).is_true()
-	assert_that(state.has_virtual_property(StateSynchronizer.ACK)).is_true()
+	# The packed state carrier is a virtualized name, not a real node property.
+	assert_that(state.has_virtual_property(StateSynchronizer.STATE)).is_true()
 
-	# Root-anchored config path (StateSync:__tick), never the old ":__tick".
+	# Root-anchored config path (StateSync:__state), never the old ":__state".
 	var cfg := state.replication_config
-	assert_that(cfg.has_property(NodePath("StateSync:__tick"))).is_true()
-	assert_that(cfg.has_property(NodePath(":__tick"))).is_false()
+	assert_that(cfg.has_property(NodePath("StateSync:__state"))).is_true()
+	assert_that(cfg.has_property(NodePath(":__state"))).is_false()
 
 
 func test_finalized_proxies_visible_to_cache() -> void:

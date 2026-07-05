@@ -270,7 +270,7 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 	if not owner:
 		return out
 	for sync in SynchronizersCache.get_client_synchronizers(owner):
-		if not (sync is StateSynchronizer) or not sync.bundle_payload:
+		if not (sync is StateSynchronizer):
 			continue
 		if not sync.replication_config:
 			continue
@@ -308,6 +308,11 @@ func _notification(what: int) -> void:
 			entity.control_changed.connect(_on_control_changed)
 		if not entity.reparented.is_connected(_on_reparented):
 			entity.reparented.connect(_on_reparented)
+
+
+func _ready() -> void:
+	if not Engine.is_editor_hint():
+		_rewire()
 
 
 # Runtime wiring is driven entirely by NetwEntity.reparented, which fires after
@@ -412,6 +417,7 @@ func _rewire() -> void:
 
 	_role = _resolve_role()
 	_correction = _resolve_correction_mode()
+	_error_on_retained_predicted_props(state_sync)
 	match _role:
 		Role.PREDICT:
 			# Owning client owns a local predicted timeline. The server's
@@ -449,6 +455,19 @@ func _registry_timeline() -> NetwTimeline:
 	if _sim:
 		return _sim.register_timeline(_entity)
 	return null
+
+
+func _error_on_retained_predicted_props(state_sync: StateSynchronizer) -> void:
+	for key: StringName in state_sync._payload_keys():
+		if state_sync.get_property_replication_mode(key) == \
+				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE:
+			push_error(
+				(
+						"PredictionComponent: predicted state property '%s' "
+						+ "is retained. Predicted state must be volatile so "
+						+ "timeline snapshots arrive atomically."
+				) % [key],
+			)
 
 
 func _resolve_role() -> Role:

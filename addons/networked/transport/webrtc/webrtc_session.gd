@@ -231,6 +231,10 @@ func close_channels() -> void:
 func close() -> void:
 	if webrtc_peer:
 		close_channels()
+		if webrtc_peer.peer_connected.is_connected(_on_peer_connected):
+			webrtc_peer.peer_connected.disconnect(_on_peer_connected)
+		if webrtc_peer.peer_disconnected.is_connected(_on_peer_disconnected):
+			webrtc_peer.peer_disconnected.disconnect(_on_peer_disconnected)
 		webrtc_peer.close()
 	webrtc_peer = null
 	is_local_session = false

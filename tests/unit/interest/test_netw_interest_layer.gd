@@ -39,8 +39,10 @@ func test_entity_drive_emits_enter_and_exit() -> void:
 	var entity := _make_entity()
 	var enters: Array = []
 	var exits: Array = []
-	layer.interest_enter.connect(func(e, p): enters.append([e, p]))
-	layer.interest_exit.connect(func(e, p): exits.append([e, p]))
+	var on_enter := func(e, p): enters.append([e, p])
+	var on_exit := func(e, p): exits.append([e, p])
+	layer.interest_enter.connect(on_enter)
+	layer.interest_exit.connect(on_exit)
 
 	layer.add_entity(entity)
 	layer.add_viewer(7)
@@ -51,14 +53,18 @@ func test_entity_drive_emits_enter_and_exit() -> void:
 	layer.remove_entity(entity)
 
 	assert_that(exits).contains_exactly([[entity, 7]])
+	layer.interest_enter.disconnect(on_enter)
+	layer.interest_exit.disconnect(on_exit)
 
 
 func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 	var entity := _make_entity()
 	var viewer_adds: Array[int] = []
 	var entity_adds: Array[NetwEntity] = []
-	layer.viewer_added.connect(func(p): viewer_adds.append(p))
-	layer.entity_added.connect(func(e): entity_adds.append(e))
+	var on_viewer_add := func(p): viewer_adds.append(p)
+	var on_entity_add := func(e): entity_adds.append(e)
+	layer.viewer_added.connect(on_viewer_add)
+	layer.entity_added.connect(on_entity_add)
 
 	layer.add_viewer(7)
 	layer.add_viewer(7)
@@ -67,6 +73,8 @@ func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 
 	assert_that(viewer_adds).contains_exactly([7])
 	assert_that(entity_adds).contains_exactly([entity])
+	layer.viewer_added.disconnect(on_viewer_add)
+	layer.entity_added.disconnect(on_entity_add)
 
 
 func test_layer_with_service_broadcasts_through_hooks() -> void:

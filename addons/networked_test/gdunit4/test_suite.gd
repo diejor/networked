@@ -135,7 +135,7 @@ func enable_logs(logl: String = "trace") -> void:
 	NetwTestSessionHook.enable_current_test_logs(logl)
 
 
-## Enables reporter-backed [NetTrace] output for the current test case.
+## Enables reporter-backed [NetwTrace] output for the current test case.
 func enable_debugger() -> void:
 	NetwTestSessionHook.enable_current_test_debugger()
 

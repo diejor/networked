@@ -17,7 +17,6 @@
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
 
-
 ## Nakama server key, matching the server's [code]socket.server_key[/code].
 @export var server_key: String = "defaultkey"
 
@@ -350,8 +349,13 @@ func _ensure_connected() -> bool:
 		},
 	)
 	if not res.ok:
-		Netw.dbg.error("NakamaLobbyDirectory: connect failed: %s", [res.error])
-		provider_unavailable.emit(String(res.error))
+		var details := "connect to %s:%d failed: %s" % [host, port, res.error]
+		Netw.dbg.warn(
+			"NakamaLobbyDirectory: %s",
+			[details],
+			func(m): push_warning(m)
+		)
+		provider_unavailable.emit(details)
 		return false
 	return true
 

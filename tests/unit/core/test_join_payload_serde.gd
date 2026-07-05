@@ -69,6 +69,8 @@ func test_spawn_dict_round_trips() -> void:
 	assert_that(StringName(restored.spawn.get("scene_name"))).is_equal(&"Level1")
 	assert_that(restored.spawn.get("spawner_path")) \
 			.is_equal(NodePath("Players/MultiplayerEntity"))
+	assert_that(restored.spawn.get(SpawnPolicy._POLICY_SCRIPT_KEY)) \
+			.is_equal("EntitySpawnPolicy")
 
 
 func _spawner_path(scene_name: StringName, node_path: String) -> SceneNodePath:

@@ -61,6 +61,11 @@ var connect: NetwConnect:
 ## found. See [NetwInterest] for the public API.
 var interest: NetwInterest
 
+## Liveness facade for the enclosing [MultiplayerTree].
+## [code]null[/code] when no enclosing tree is found. See [NetwLiveness] for
+## the public API.
+var liveness: NetwLiveness
+
 ## Lag-compensation query facade for the enclosing [MultiplayerTree].
 ## [code]null[/code] when no enclosing tree is found. See
 ## [NetwLagCompensation] for the public API.
@@ -96,6 +101,7 @@ func _init(
 		tree = NetwTree.new(mt)
 		services = NetwServices.new(mt)
 		interest = mt.interest
+		liveness = mt.liveness
 		lag_compensation = mt.lag_compensation
 	scene = scene_ctx
 	_origin = origin

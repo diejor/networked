@@ -48,6 +48,16 @@ class PropConfig extends RefCounted:
 		return self
 
 
+	## Marks this property as retained intent and returns [code]self[/code]
+	## for chaining.
+	func retained() -> PropConfig:
+		_sync.set_property_replication_mode(
+			_vname,
+			SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		)
+		return self
+
+
 # Deferred node-property registration. Resolved during finalize().
 class _NodePropEntry extends RefCounted:
 	var vname: StringName
@@ -111,6 +121,31 @@ func register_property(
 @warning_ignore("unused_parameter")
 func set_property_codec(vname: StringName, quantizer: NetwQuantize) -> void:
 	pass
+
+
+## Sets the stored replication mode for [param vname].
+func set_property_replication_mode(
+		vname: StringName,
+		mode: SceneReplicationConfig.ReplicationMode,
+) -> void:
+	var opts: Dictionary = _prop_options.get(vname, { })
+	opts["mode"] = mode
+	opts["watch"] = _filter_watch(
+		vname,
+		mode == SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+	)
+	_prop_options[vname] = opts
+
+
+## Returns the stored replication mode for [param vname].
+func get_property_replication_mode(
+		vname: StringName,
+) -> SceneReplicationConfig.ReplicationMode:
+	var opts: Dictionary = _prop_options.get(vname, { })
+	return opts.get(
+		"mode",
+		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+	)
 
 
 ## Defers registration of [param property] on [param source] as

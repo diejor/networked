@@ -13,11 +13,10 @@ func before_test() -> void:
 
 	_sync = StateSynchronizer.new()
 	_sync.name = "StateSync"
-	_sync.bundle_payload = true
 	_sync.register_property(
 		&"position",
 		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	_root.add_child(_sync)
 	_sync.owner = _root
@@ -33,8 +32,8 @@ func test_compression_roundtrip() -> void:
 
 	# Simulate _read_property (which is what replicates the value over network)
 	var serialized: Variant = _sync._read_property(
-			_sync.carrier_name(),
-			_sync.get_path(),
+		_sync.carrier_name(),
+		_sync.get_path(),
 	)
 	assert_bool(serialized is PackedByteArray).is_true()
 
@@ -51,15 +50,15 @@ func test_compression_off_does_not_compress() -> void:
 	_root.position = Vector2(100, -200)
 
 	var uncompressed: Variant = _sync._read_property(
-			_sync.carrier_name(),
-			_sync.get_path(),
+		_sync.carrier_name(),
+		_sync.get_path(),
 	)
 
 	_sync.compression_enabled = true
 	_sync.compression_mode = FileAccess.COMPRESSION_ZSTD
 	var compressed: Variant = _sync._read_property(
-			_sync.carrier_name(),
-			_sync.get_path(),
+		_sync.carrier_name(),
+		_sync.get_path(),
 	)
 
 	# Compressed should be different than uncompressed
@@ -75,8 +74,8 @@ func test_compression_max_size_safety_limit() -> void:
 	_root.position = Vector2(100, -200)
 
 	var serialized: Variant = _sync._read_property(
-			_sync.carrier_name(),
-			_sync.get_path(),
+		_sync.carrier_name(),
+		_sync.get_path(),
 	)
 
 	# This should fail to decompress due to safety limit and not mutate position

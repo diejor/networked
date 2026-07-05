@@ -19,6 +19,10 @@
 class_name NetwDbg
 extends RefCounted
 
+## Node metadata key marking a debugger-spawned [MultiplayerTree] clone. Set by
+## [method mark_debug_tree], read by [method is_debug_tree].
+const _DEBUG_TREE_META := &"_netw_debug_tree"
+
 var _reporter_ref: WeakRef
 var _debug_enabled := false
 
@@ -78,7 +82,7 @@ func error(
 	_log(NetwLog.Level.ERROR, arg1, arg2, arg3, arg4)
 
 
-## Opens a new general-purpose [NetSpan].
+## Opens a new general-purpose [NetwSpan].
 ## [br][br]
 ## [param context] is the object originating the span.
 ## [param label] is the display name for the span.
@@ -89,11 +93,11 @@ func span(
 		label: String,
 		meta: Dictionary = { },
 		follows_from: CheckpointToken = null,
-) -> NetSpan:
-	return NetTrace.begin(label, context, meta, "", follows_from)
+) -> NetwSpan:
+	return NetwTrace.begin(label, context, meta, "", follows_from)
 
 
-## Opens a new peer-aware [NetPeerSpan].
+## Opens a new peer-aware [NetwPeerSpan].
 ## [br][br]
 ## [param context] is the object originating the span.
 ## [param label] is the display name for the span.
@@ -106,18 +110,52 @@ func peer_span(
 		peers: Array = [],
 		meta: Dictionary = { },
 		token: CheckpointToken = null,
-) -> NetPeerSpan:
-	return NetTrace.begin_peer(label, peers, context, meta, "", token)
+) -> NetwPeerSpan:
+	return NetwTrace.begin_peer(label, peers, context, meta, "", token)
 
 
-## Returns the currently active [NetSpan] on the top of the trace stack.
-func active_span() -> NetSpan:
-	return NetTrace.active_span()
+## Returns the currently active [NetwSpan] on the top of the trace stack.
+func active_span() -> NetwSpan:
+	return NetwTrace.active_span()
 
 
-## Resets the [NetTrace] system, clearing all active spans.
+## Mints an opaque [NetwCorrelation] handle for a cross-peer operation
+## [param context] is initiating.
+## [br][br]
+## The caller forwards the handle verbatim through the RPC it is instrumenting
+## and never reads it. The tier-probe on each side stamps its own span with
+## [member NetwCorrelation.id] so the editor can match them after the fact.
+## Returns an empty handle (zero wire cost) when the debugger is inactive.
+func correlate(_context: Object) -> NetwCorrelation:
+	var corr := NetwCorrelation.new()
+	if _debug_enabled:
+		corr.id = StringName("corr_%d_%d" % [Time.get_ticks_usec(), randi()])
+	return corr
+
+
+## Marks [param mt] as a debugger-spawned clone so production nodes (e.g. a
+## process-singleton lobby directory) and the editor can recognize it. A no-op
+## outside a debug build, where nothing spawns clones.
+func mark_debug_tree(mt: Node) -> void:
+	if is_instance_valid(mt):
+		mt.set_meta(_DEBUG_TREE_META, true)
+
+
+## True when [param context]'s owning [MultiplayerTree] was spawned by the
+## debugger. Resolves the tree by walking ancestry, so it works on an offline
+## clone before its role is set. Always false in a release build.
+func is_debug_tree(context: Object) -> bool:
+	var node := context as Node
+	while node != null:
+		if node is MultiplayerTree:
+			return node.has_meta(_DEBUG_TREE_META)
+		node = node.get_parent()
+	return false
+
+
+## Resets the [NetwTrace] system, clearing all active spans.
 func reset() -> void:
-	NetTrace.reset()
+	NetwTrace.reset()
 
 
 ## Returns [code]true[/code] when debug reporter features are enabled.
@@ -164,6 +202,41 @@ func register_tree(mt: MultiplayerTree) -> void:
 		reporter.register_tree(mt)
 
 
+## Installs [param v] so the detection pipeline routes matching [NetwTreeEvent]s
+## to it. Dev/test/setup only, never called from gameplay.
+func install_validator(v: NetwValidator) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"install_validator"):
+		reporter.install_validator(v)
+
+
+## Removes a previously installed [param v] from the detection pipeline.
+func remove_validator(v: NetwValidator) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"remove_validator"):
+		reporter.remove_validator(v)
+
+
+## Registers [param cb] to receive every [NetwFinding] the detection pipeline
+## emits. Dev/test/setup only, never called from gameplay.
+## [br][br]
+## The callback is invoked with the [NetwFinding] as
+## [code]cb.call(finding)[/code].
+func on_violation(cb: Callable) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"add_violation_listener"):
+		reporter.add_violation_listener(cb)
+
+
+## Upgrades [param mt] to a live session on the active reporter if one is
+## available. Pairs with [method register_tree] as the online phase of
+## two-phase tree registration.
+func finalize_tree(mt: MultiplayerTree) -> void:
+	var reporter := get_reporter()
+	if reporter and reporter.has_method(&"finalize_tree"):
+		reporter.finalize_tree(mt)
+
+
 ## Unregisters [param mt] from the active reporter if one is available.
 func unregister_tree(mt: MultiplayerTree) -> void:
 	var reporter := get_reporter()
@@ -173,19 +246,19 @@ func unregister_tree(mt: MultiplayerTree) -> void:
 
 ## Installs [param sink] as the active trace telemetry sink.
 func install_trace_sink(sink: Callable) -> void:
-	NetTrace.message_delegate = sink
+	NetwTrace.message_delegate = sink
 
 
 ## Clears the active trace telemetry sink.
 func clear_trace_sink(expected_sink: Callable = Callable()) -> void:
-	if expected_sink.is_valid() and NetTrace.message_delegate != expected_sink:
+	if expected_sink.is_valid() and NetwTrace.message_delegate != expected_sink:
 		return
-	NetTrace.message_delegate = Callable()
+	NetwTrace.message_delegate = Callable()
 
 
 ## Enables reporter-backed tracing until the returned scope is closed.
 func enable_for_test() -> NetwDbgScope:
-	var scope := NetwDbgScope.new(_debug_enabled, NetTrace.message_delegate)
+	var scope := NetwDbgScope.new(_debug_enabled, NetwTrace.message_delegate)
 	_debug_enabled = true
 	var reporter := get_reporter()
 	if reporter and reporter.has_method(&"set_enabled"):
@@ -195,7 +268,7 @@ func enable_for_test() -> NetwDbgScope:
 
 func _close_scope(previous_enabled: bool, previous_sink: Callable) -> void:
 	_debug_enabled = previous_enabled
-	NetTrace.message_delegate = previous_sink
+	NetwTrace.message_delegate = previous_sink
 	if not _debug_enabled:
 		var reporter := get_reporter()
 		if reporter and reporter.get_parent() \
@@ -203,7 +276,7 @@ func _close_scope(previous_enabled: bool, previous_sink: Callable) -> void:
 			reporter.get_parent().set_enabled(false)
 		elif reporter and reporter.has_method(&"set_enabled"):
 			reporter.set_enabled(false)
-		NetTrace.reset()
+		NetwTrace.reset()
 
 
 func _log(

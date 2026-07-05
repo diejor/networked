@@ -260,11 +260,11 @@ func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	tree.backend = _make_backend()
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
-	var err: Error = await tree.host_player(payload)
+	var err: Error = await tree.host(payload)
 	if err != OK:
 		_pending_room_name = ""
 		Netw.dbg.error(
-			"WebTorrentDirectory: host_player failed: %s",
+			"WebTorrentDirectory: host failed: %s",
 			[error_string(err)],
 		)
 		return null

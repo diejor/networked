@@ -31,6 +31,24 @@ func test_clean_predicts_authority_with_no_corrections() -> void:
 	assert_float(p.server_body.position.x).is_greater(0.0)
 
 
+func test_rpc_transport_matches_stock_prediction_convergence() -> void:
+	var s := PredictionScenario.new()
+	s.state_transport = PackedSynchronizer.Transport.RPC
+	s.input_transport = PackedSynchronizer.Transport.RPC
+	await s.setup(self)
+	var p := await s.add_predicted_entity()
+	s.latency_both(4)
+	s.hold_input(p, RIGHT)
+	s.warmup(p)
+	s.run(70)
+
+	assert_int(p.consumed).is_greater(10)
+	assert_int(p.observer.divergence_log.size()).is_greater(5)
+	assert_int(p.corrections).is_equal(0)
+	assert_float(p.client_body.position.x).is_greater(0.0)
+	assert_float(p.server_body.position.x).is_greater(0.0)
+
+
 func test_perturbation_reconverges() -> void:
 	# A server-only nudge the client never predicted forces a divergence. The
 	# client must snap to authority, replay its pending inputs, and reconverge.

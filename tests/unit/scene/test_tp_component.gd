@@ -8,33 +8,24 @@ extends NetwTestSuite
 const TEST_LEVEL := "res://addons/networked_test/fixtures/TestLevel.tscn"
 
 
-func test_resolve_scene_name_returns_root_name() -> void:
-	var scene_name := TPComponent._resolve_scene_name(TEST_LEVEL)
-	assert_that(scene_name).is_equal("TestLevel")
-
-
-func test_resolve_scene_name_empty_returns_empty() -> void:
-	var scene_name := TPComponent._resolve_scene_name("")
-	assert_that(scene_name).is_equal("")
-
-
-func test_current_scene_path_setter_caches_name() -> void:
+func test_scene_path_and_name_resolution_flow() -> void:
 	var tp: TPComponent = auto_free(TPComponent.new())
+
+	assert_that(TPComponent._resolve_scene_name(TEST_LEVEL)).is_equal(
+		"TestLevel",
+	)
+	assert_that(TPComponent._resolve_scene_name("")).is_equal("")
+
 	tp.current_scene_path = TEST_LEVEL
 	assert_that(tp.current_scene_name).is_equal("TestLevel")
 
-
-func test_current_scene_path_empty_clears_name() -> void:
-	var tp: TPComponent = auto_free(TPComponent.new())
-	tp.current_scene_path = TEST_LEVEL
 	tp.current_scene_path = ""
 	assert_that(tp.current_scene_name).is_equal("")
 
 
-func test_enter_tree_uses_starting_scene_when_empty() -> void:
+func test_spawn_and_start_scene_initialization_flow() -> void:
 	var tp: TPComponent = auto_free(TPComponent.new())
 	tp.starting_scene_path = SceneNodePath.new(TEST_LEVEL + "::")
-	# current_scene_path is empty by default
 	assert_that(tp.current_scene_path).is_equal("")
 
 	if tp.current_scene_path.is_empty():
@@ -43,39 +34,27 @@ func test_enter_tree_uses_starting_scene_when_empty() -> void:
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
 	assert_that(tp.current_scene_name).is_equal("TestLevel")
 
-
-func test_spawn_initializes_current_scene_path_from_starting_scene() -> void:
-	var tp: TPComponent = auto_free(TPComponent.new())
+	tp = auto_free(TPComponent.new())
 	tp.starting_scene_path = SceneNodePath.new(TEST_LEVEL + "::")
-
-	# We need a SceneManager for spawn()
 	var scene_mgr: MultiplayerSceneManager = auto_free(
 		MultiplayerSceneManager.new(),
 	)
-
-	# Manually call spawn without it being in tree
 	tp.spawn(scene_mgr)
 
-	# It should have initialized current_scene_path from starting_scene_path
 	assert_that(tp.current_scene_path).is_equal(TEST_LEVEL)
 
 
-func test_teleport_ignores_requests_while_active() -> void:
+func test_teleport_ignores_requests_while_busy() -> void:
 	var tp: TPComponent = auto_free(TPComponent.new())
 	await tp._tp_mutex.lock()
-
 	var promise := tp.teleport(SceneNodePath.new(TEST_LEVEL + "::"))
 	await get_tree().process_frame
-
 	assert_that(promise.is_completed).is_true()
 	tp._tp_mutex.unlock()
 
-
-func test_teleport_ignores_requests_while_settling() -> void:
-	var tp: TPComponent = auto_free(TPComponent.new())
+	tp = auto_free(TPComponent.new())
 	tp._settle_until_msec = Time.get_ticks_msec() + 1000
-
-	var promise := tp.teleport(SceneNodePath.new(TEST_LEVEL + "::"))
+	promise = tp.teleport(SceneNodePath.new(TEST_LEVEL + "::"))
 	await get_tree().process_frame
 
 	assert_that(promise.is_completed).is_true()
@@ -94,15 +73,12 @@ func test_parented_contributes_paths_without_node_owner() -> void:
 
 	var save := SaveComponent.new()
 	components.add_child(save)
-
 	var spawner := MultiplayerEntity.new()
 	components.add_child(spawner)
 
-	# Resolve deferred node properties now that the hierarchy is stable.
 	save.finalize()
 
 	var spawn_path := NodePath("Components/TPComponent:current_scene_path")
-	# Real path is relative to save's root.
 	var save_path := NodePath("TPComponent:current_scene_path")
 
 	assert_that(spawner.replication_config.has_property(spawn_path)).is_true()

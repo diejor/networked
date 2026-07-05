@@ -20,16 +20,10 @@ func before_test() -> void:
 	level_builder.pack()
 
 	harness = make_harness()
-	var sm_factory := func() -> MultiplayerSceneManager:
-		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
-		return sm
-	await harness.setup_factory(sm_factory)
-	client0 = await harness.add_client()
-	client1 = await harness.add_client()
+	await _setup_harness(harness)
 
 
-func test_request_control_grants_when_not_denied() -> void:
+func test_control_transfer_policy_flow() -> void:
 	var server_player := _spawn_control_player(client0)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client0, harness.player_name_for(client0))
@@ -58,16 +52,33 @@ func test_request_control_grants_when_not_denied() -> void:
 
 	assert_that(NetwEntity.of(server_player).controller).is_equal(peer_id)
 	assert_that(NetwEntity.of(client_player).controller).is_equal(peer_id)
+	assert_that(NetwEntity.of(server_player).participant) \
+			.is_equal(
+				harness.server().get_participant(
+					client0.multiplayer_peer.get_unique_id(),
+				),
+			)
+	assert_that(NetwEntity.of(server_player).controller_participant) \
+			.is_equal(harness.server().get_participant(peer_id))
+
+	var late_client := await harness.add_client()
+	harness.spawn_player(late_client, player_builder.packed)
+	var late_player := await _wait_for_player_on(
+		late_client,
+		harness.player_name_for(client0),
+	)
+	assert_that(NetwEntity.of(late_player).controller).is_equal(peer_id)
+	assert_that(late_player.get_multiplayer_authority()).is_equal(peer_id)
 
 
-func test_control_request_can_be_denied() -> void:
-	var server_player := _spawn_control_player(client0)
+func test_control_request_rejection_flow() -> void:
+	var denied_player := _spawn_control_player(client0)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
 
-	var server_entity := _mp(server_player)
-	server_entity.transfer = MultiplayerEntity.Transfer.REQUESTABLE
-	server_entity.control_requested.connect(
+	var denied_entity := _mp(denied_player)
+	denied_entity.transfer = MultiplayerEntity.Transfer.REQUESTABLE
+	denied_entity.control_requested.connect(
 		func(_peer_id: int, request: MultiplayerEntity.ControlRequest) -> void:
 			request.deny()
 	)
@@ -76,26 +87,26 @@ func test_control_request_can_be_denied() -> void:
 	await NetwTestSuite.drain_frames(get_tree(), 5)
 
 	var original_peer := client0.multiplayer_peer.get_unique_id()
-	assert_that(server_player.get_multiplayer_authority()) \
-			.is_equal(original_peer)
-	assert_that(NetwEntity.of(server_player).controller).is_equal(original_peer)
+	assert_that(denied_player.get_multiplayer_authority()).is_equal(original_peer)
+	assert_that(NetwEntity.of(denied_player).controller).is_equal(original_peer)
 
+	await harness.teardown()
+	harness = make_unmanaged_harness()
+	await _setup_harness(harness)
 
-func test_fixed_transfer_rejects_request() -> void:
-	var server_player := harness.spawn_player(client0, player_builder.packed)
+	var fixed_player := harness.spawn_player(client0, player_builder.packed)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
 
 	_mp(_client_player(client1, client0)).request_control()
 	await NetwTestSuite.drain_frames(get_tree(), 5)
 
-	var original_peer := client0.multiplayer_peer.get_unique_id()
-	assert_that(server_player.get_multiplayer_authority()) \
-			.is_equal(original_peer)
-	assert_that(NetwEntity.of(server_player).controller).is_equal(original_peer)
+	original_peer = client0.multiplayer_peer.get_unique_id()
+	assert_that(fixed_player.get_multiplayer_authority()).is_equal(original_peer)
+	assert_that(NetwEntity.of(fixed_player).controller).is_equal(original_peer)
 
 
-func test_controller_disconnect_reverts_to_server() -> void:
+func test_controller_disconnect_policy_flow() -> void:
 	var server_player := _spawn_control_player(client0)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
@@ -119,13 +130,15 @@ func test_controller_disconnect_reverts_to_server() -> void:
 	assert_that(NetwEntity.of(server_player).controller).is_equal(0)
 	assert_that(is_instance_valid(server_player)).is_true()
 
+	await harness.teardown()
+	harness = make_unmanaged_harness()
+	await _setup_harness(harness)
 
-func test_controller_disconnect_can_despawn() -> void:
-	var server_player := _spawn_control_player(client0)
+	server_player = _spawn_control_player(client0)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
-	var controller_peer := client1.multiplayer_peer.get_unique_id()
-	var server_entity := _mp(server_player)
+	controller_peer = client1.multiplayer_peer.get_unique_id()
+	server_entity = _mp(server_player)
 	server_entity.on_controller_disconnect = \
 	MultiplayerEntity.DisconnectRule.DESPAWN
 
@@ -144,43 +157,20 @@ func test_controller_disconnect_can_despawn() -> void:
 		"controller disconnect despawn",
 	)
 
+	await harness.teardown()
+	harness = make_unmanaged_harness()
+	await _setup_harness(harness)
 
-func test_late_joiner_receives_current_controller() -> void:
-	var server_player := _spawn_control_player(client0)
-	harness.spawn_player(client1, player_builder.packed)
-	await _wait_for_player_on(client1, harness.player_name_for(client0))
-	var controller_peer := client1.multiplayer_peer.get_unique_id()
-
-	_mp(server_player).grant_control(controller_peer)
-	await _wait_until(
-		func() -> bool:
-			return server_player.get_multiplayer_authority() == controller_peer,
-		"server authority to grant",
-	)
-
-	var late_client := await harness.add_client()
-	harness.spawn_player(late_client, player_builder.packed)
-	var late_player := await _wait_for_player_on(
-		late_client,
-		harness.player_name_for(client0),
-	)
-
-	assert_that(NetwEntity.of(late_player).controller).is_equal(controller_peer)
-	assert_that(late_player.get_multiplayer_authority()) \
-			.is_equal(controller_peer)
-
-
-func test_represented_peer_disconnect_despawns_before_revert() -> void:
-	var server_player := _spawn_control_player(client0)
+	server_player = _spawn_control_player(client0)
 	harness.spawn_player(client1, player_builder.packed)
 	await _wait_for_player_on(client1, harness.player_name_for(client0))
 	var represented_peer := client0.multiplayer_peer.get_unique_id()
-	var server_entity := _mp(server_player)
+	server_entity = _mp(server_player)
 	server_entity.on_controller_disconnect = \
 	MultiplayerEntity.DisconnectRule.REVERT_TO_SERVER
 
 	server_entity.grant_control(represented_peer)
-	var server_player_ref: WeakRef = weakref(server_player)
+	server_player_ref = weakref(server_player)
 	await harness.disconnect_client(client0)
 
 	await _wait_until(
@@ -188,6 +178,16 @@ func test_represented_peer_disconnect_despawns_before_revert() -> void:
 			return _is_freed(server_player_ref),
 		"represented peer despawn",
 	)
+
+
+func _setup_harness(target: NetwTestHarness) -> void:
+	var sm_factory := func() -> MultiplayerSceneManager:
+		var sm := NetwTestSuite.create_scene_manager()
+		sm.add_spawnable_scene(level_builder.resource_path)
+		return sm
+	await target.setup_factory(sm_factory)
+	client0 = await target.add_client()
+	client1 = await target.add_client()
 
 
 func _spawn_control_player(client: MultiplayerTree) -> Node:
@@ -219,9 +219,9 @@ func _wait_for_player_on(
 
 
 func _find_player(scene: MultiplayerScene, player_name: StringName) -> Node:
-	for player in scene.player_nodes():
-		if player.name == player_name:
-			return player
+	for player: NetwEntity in scene.player_nodes():
+		if player.owner.name == player_name:
+			return player.owner
 	return null
 
 

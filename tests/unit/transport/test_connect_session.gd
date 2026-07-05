@@ -1,8 +1,5 @@
-## Unit tests for [ConnectSession]: target add/remove, opt-in
-## persistence, provider list dispatch, and explicit failure
-## emission. Network-dependent paths (host / join success) live in
-## integration tests; here we cover what's reachable without a real
-## MultiplayerTree or backend.
+## Unit tests for [ConnectSession]: target persistence, directory dispatch, and
+## explicit failure emission.
 @tool
 class_name TestConnectSession
 extends NetwTestSuite
@@ -53,8 +50,6 @@ class _MockDirectory:
 
 	var canned_lobbies: Array[LobbyDirectory.LobbyInfo] = []
 	var list_calls: int = 0
-	var host_called_with: String = ""
-	var join_called_with: int = 0
 
 
 	func list_lobbies() -> void:
@@ -74,13 +69,11 @@ class _MockDirectory:
 		return target
 
 
-	func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
-		host_called_with = options.server_name
+	func host_lobby(_options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 		return null
 
 
-	func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
-		join_called_with = lobby_id
+	func join_lobby_peer(_lobby_id: int) -> MultiplayerPeer:
 		return null
 
 
@@ -96,89 +89,53 @@ func _make_target(address: String = "127.0.0.1") -> JoinTarget:
 	return target
 
 
-func test_add_target_emits_target_added() -> void:
+func test_saved_target_flow() -> void:
+	var path := _temp_path()
 	var session := ConnectSession.new()
 	add_child(session)
+	session.server_list_path = path
 	var captured: Array = []
 	session.target_added.connect(func(t): captured.append(t))
 
 	var target := _make_target()
-	session.add_target(target)
+	session.add_target(target, false)
 
 	assert_int(captured.size()).is_equal(1)
 	assert_that(captured[0]).is_same(target)
-	session.queue_free()
-
-
-func test_add_target_persist_false_does_not_write() -> void:
-	var path := _temp_path()
-	var session := ConnectSession.new()
-	add_child(session)
-	session.server_list_path = path
-
-	session.add_target(_make_target(), false)
 	assert_bool(FileAccess.file_exists(path)).is_false()
 	session.queue_free()
 
-
-func test_add_target_persist_true_writes_to_disk() -> void:
-	var path := _temp_path()
-	var session := ConnectSession.new()
+	session = ConnectSession.new()
 	add_child(session)
 	session.server_list_path = path
-
 	session.add_target(_make_target("10.0.0.1"), true)
 	assert_bool(FileAccess.file_exists(path)).is_true()
 
 	var loaded_session := ConnectSession.new()
 	add_child(loaded_session)
+	var added: Array = []
+	loaded_session.target_added.connect(func(t): added.append(t))
 	loaded_session.load_server_list(path)
+
 	var loaded_targets := loaded_session.get_saved_targets()
 	assert_int(loaded_targets.size()).is_equal(1)
 	assert_that(loaded_targets[0].address).is_equal("10.0.0.1")
+	assert_int(added.size()).is_equal(1)
+
+	var removed: Array = []
+	loaded_session.target_removed.connect(func(t): removed.append(t))
+	loaded_session.remove_target(loaded_targets[0])
+
+	assert_int(removed.size()).is_equal(1)
+	assert_that(removed[0]).is_same(loaded_targets[0])
+	assert_int(loaded_session.get_saved_targets().size()).is_equal(0)
+
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	session.queue_free()
 	loaded_session.queue_free()
 
 
-func test_load_server_list_emits_target_added_per_entry() -> void:
-	var path := _temp_path()
-	var seed_session := ConnectSession.new()
-	add_child(seed_session)
-	seed_session.add_target(_make_target("a"))
-	seed_session.add_target(_make_target("b"))
-	seed_session.save_server_list(path)
-
-	var session := ConnectSession.new()
-	add_child(session)
-	var added: Array = []
-	session.target_added.connect(func(t): added.append(t))
-
-	session.load_server_list(path)
-	assert_int(added.size()).is_equal(2)
-	assert_int(session.get_saved_targets().size()).is_equal(2)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	seed_session.queue_free()
-	session.queue_free()
-
-
-func test_remove_target_emits_and_clears_result() -> void:
-	var session := ConnectSession.new()
-	add_child(session)
-	var target := _make_target()
-	session.add_target(target)
-
-	var removed: Array = []
-	session.target_removed.connect(func(t): removed.append(t))
-	session.remove_target(target)
-
-	assert_int(removed.size()).is_equal(1)
-	assert_that(removed[0]).is_same(target)
-	assert_int(session.get_saved_targets().size()).is_equal(0)
-	session.queue_free()
-
-
-func test_register_directory_and_refresh_dispatches_targets() -> void:
+func test_directory_refresh_flow() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
 
@@ -206,11 +163,7 @@ func test_register_directory_and_refresh_dispatches_targets() -> void:
 	directory.queue_free()
 	session.queue_free()
 
-
-# A saved target whose backend cannot run here is never probed, so no
-# target_updated lands for it.
-func test_refresh_skips_unavailable_target() -> void:
-	var session := ConnectSession.new()
+	session = ConnectSession.new()
 	add_child(session)
 	var target := JoinTarget.new()
 	target.backend = _UnavailableBackend.new()
@@ -229,13 +182,11 @@ func test_refresh_skips_unavailable_target() -> void:
 	session.queue_free()
 
 
-func test_join_without_tree_emits_join_failed() -> void:
+func test_join_failure_and_progress_flow() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
-	var captured_result: Array = []
-	session.join_failed.connect(
-		func(_t, result): captured_result.append(result)
-	)
+	var failed: Array = []
+	session.join_failed.connect(func(_t, result): failed.append(result))
 
 	var target := _make_target()
 	var payload := JoinPayload.new()
@@ -243,66 +194,36 @@ func test_join_without_tree_emits_join_failed() -> void:
 	var err := await session.join(target, payload)
 
 	assert_int(err).is_equal(ERR_UNCONFIGURED)
-	assert_int(captured_result.size()).is_equal(1)
-	assert_bool(
-		captured_result[0].message.contains("MultiplayerTree"),
-	).is_true()
-	session.queue_free()
+	assert_int(failed.size()).is_equal(1)
+	assert_bool(failed[0].message.contains("MultiplayerTree")).is_true()
 
-
-func test_join_missing_backend_emits_join_failed() -> void:
-	var session := ConnectSession.new()
-	add_child(session)
-	# Bind a fresh tree so the no-tree branch doesn't fire first.
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 	session.bind_tree(tree)
-
-	var target := JoinTarget.new()
+	target = JoinTarget.new()
 	target.backend = null
 
-	var captured: Array = []
-	session.join_failed.connect(
-		func(_t, result): captured.append(result)
-	)
-
-	var payload := JoinPayload.new()
-	payload.username = &"valeria"
-	var err := await session.join(target, payload)
-
+	err = await session.join(target, payload)
 	assert_int(err).is_equal(ERR_INVALID_PARAMETER)
-	assert_int(captured.size()).is_equal(1)
-	assert_bool(captured[0].message.contains("failed")).is_true()
+	assert_int(failed.size()).is_equal(2)
+	assert_bool(failed[1].message.contains("failed")).is_true()
 
-	tree.queue_free()
-	session.queue_free()
-
-
-func test_join_progress_relays_live_backend_progress() -> void:
-	var session := ConnectSession.new()
-	add_child(session)
-	var tree := MultiplayerTree.new()
-	add_child(tree)
-	session.bind_tree(tree)
-
-	var target := _make_target()
+	target = _make_target()
 	target.backend = _ProgressBackend.new()
-	var captured: Array = []
+	var progress: Array = []
 	session.join_progress.connect(
 		func(t, step, message, ratio):
-			captured.append([t, step, message, ratio])
+			progress.append([t, step, message, ratio])
 	)
 
-	var payload := JoinPayload.new()
-	payload.username = &"valeria"
-	var err := await session.join(target, payload)
+	err = await session.join(target, payload)
 
 	assert_int(err).is_equal(ERR_CANT_CONNECT)
-	assert_int(captured.size()).is_equal(1)
-	assert_that(captured[0][0]).is_same(target)
-	assert_str(captured[0][1]).is_equal(&"connecting")
-	assert_str(captured[0][2]).is_equal("Mock progress")
-	assert_float(captured[0][3]).is_equal(0.5)
+	assert_int(progress.size()).is_equal(1)
+	assert_that(progress[0][0]).is_same(target)
+	assert_str(progress[0][1]).is_equal(&"connecting")
+	assert_str(progress[0][2]).is_equal("Mock progress")
+	assert_float(progress[0][3]).is_equal(0.5)
 
 	tree.backend = null
 	target.backend = null
@@ -310,7 +231,7 @@ func test_join_progress_relays_live_backend_progress() -> void:
 	session.queue_free()
 
 
-func test_host_without_tree_emits_host_failed() -> void:
+func test_host_failure_flow() -> void:
 	var session := ConnectSession.new()
 	add_child(session)
 	var captured: Array = []
@@ -325,26 +246,15 @@ func test_host_without_tree_emits_host_failed() -> void:
 	assert_int(err).is_equal(ERR_UNCONFIGURED)
 	assert_int(captured.size()).is_equal(1)
 	assert_bool(captured[0].contains("MultiplayerTree")).is_true()
-	session.queue_free()
 
-
-func test_host_missing_backend_emits_host_failed() -> void:
-	var session := ConnectSession.new()
-	add_child(session)
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 	session.bind_tree(tree)
 
-	var captured: Array = []
-	session.host_failed.connect(func(reason): captured.append(reason))
-
-	var config := ConnectHostConfig.new()
-	# No backend, no provider_id -> direct path with null template.
-	var payload := JoinPayload.new()
-	payload.username = &"valeria"
-	var err := await session.host(config, payload)
+	config = ConnectHostConfig.new()
+	err = await session.host(config, payload)
 
 	assert_int(err).is_equal(ERR_INVALID_PARAMETER)
-	assert_int(captured.size()).is_equal(1)
+	assert_int(captured.size()).is_equal(2)
 	tree.queue_free()
 	session.queue_free()

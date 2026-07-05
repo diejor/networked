@@ -4,7 +4,7 @@
 ## only when debug policy allows reporter activation.
 extends Node
 
-const REPORTER_PATH := "res://addons/networked/debug/core/reporter.gd"
+const REPORTER_PATH := "res://addons/networked/debug/core/debug_reporter.gd"
 
 var _reporter: Node
 
@@ -26,10 +26,10 @@ func _exit_tree() -> void:
 ## Enables or disables the heavy debug reporter.
 func set_enabled(enabled: bool) -> void:
 	if enabled:
-		NetworkedDebugReporter.set_enabled(true)
+		DebugReporter.set_enabled(true)
 		_create_reporter()
 	elif _reporter:
-		NetworkedDebugReporter.set_enabled(false)
+		DebugReporter.set_enabled(false)
 		_reporter.queue_free()
 		_reporter = null
 		Netw.dbg.register_reporter(self)
@@ -62,7 +62,7 @@ func _create_reporter() -> void:
 		Netw.dbg.unregister_reporter(self)
 	var reporter_script := load(REPORTER_PATH) as Script
 	_reporter = reporter_script.new()
-	_reporter.name = "NetworkedDebugReporter"
+	_reporter.name = "DebugReporter"
 	add_child(_reporter)
 
 

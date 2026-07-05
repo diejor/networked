@@ -28,22 +28,16 @@ func _make_db(slot: StringName) -> NetwDatabase:
 	return db
 
 
-func test_default_slot_is_default() -> void:
+func test_slot_selection_and_lock_flow() -> void:
 	var db: NetwDatabase = auto_free(NetwDatabase.new())
 	assert_str(db.slots.current()).is_equal(&"default")
 
-
-func test_open_before_lock_sets_current() -> void:
-	var db := _make_db(&"slot_a")
+	db = _make_db(&"slot_a")
 	assert_str(db.slots.current()).is_equal(&"slot_a")
 	assert_bool(db.slots._locked).is_false()
 
-
-func test_lock_engages_at_init() -> void:
-	var db := _make_db(&"slot_a")
 	db._register_schema(&"players", [&"hp"])
 	await get_tree().process_frame
-	# The slot choice is frozen once the backend initializes.
 	assert_bool(db.slots._locked).is_true()
 
 
@@ -59,7 +53,6 @@ func test_slot_isolates_records() -> void:
 	var record_a: Dictionary = await db_a._find_by_id(&"players", &"p1")
 	assert_int(record_a.get(&"hp")).is_equal(42)
 
-	# A second slot over the same base_dir sees nothing from the first.
 	var db_b := _make_db(&"slot_b")
 	db_b._register_schema(&"players", [&"hp"])
 	await get_tree().process_frame
@@ -67,19 +60,24 @@ func test_slot_isolates_records() -> void:
 	assert_bool(record_b.is_empty()).is_true()
 
 
-func test_list_and_delete_slots_with_no_slot_open() -> void:
-	# Seed two slots through direct backend writes.
+func test_namespace_listing_deletion_and_registry_flow() -> void:
 	var seed_a: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_a.base_dir = test_dir
-	seed_a.initialize({ &"players": [] as Array[StringName] }, "slot_a")
+	assert_int(seed_a.initialize({ &"players": [] as Array[StringName] }, "slot_a")) \
+			.is_equal(OK)
 	seed_a.upsert(&"players", &"p1", { &"hp": 1 })
 
 	var seed_b: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	seed_b.base_dir = test_dir
-	seed_b.initialize({ &"players": [] as Array[StringName] }, "slot_b")
+	assert_int(seed_b.initialize({ &"players": [] as Array[StringName] }, "slot_b")) \
+			.is_equal(OK)
 	seed_b.upsert(&"players", &"p2", { &"hp": 2 })
+	seed_a.upsert(&"players", &"shared", { &"hp": 10 })
+	seed_b.upsert(&"players", &"shared", { &"hp": 20 })
 
-	# A backend with no slot open can still browse and delete slots.
+	assert_int(seed_a.find_by_id(&"players", &"shared").get(&"hp")).is_equal(10)
+	assert_int(seed_b.find_by_id(&"players", &"shared").get(&"hp")).is_equal(20)
+
 	var browser: FileSystemDatabase = auto_free(FileSystemDatabase.new())
 	browser.base_dir = test_dir
 	var listed := browser.list_namespaces()
@@ -89,22 +87,3 @@ func test_list_and_delete_slots_with_no_slot_open() -> void:
 	var _after := browser.list_namespaces()
 	assert_array(_after).not_contains([&"slot_a"])
 	assert_array(_after).contains([&"slot_b"])
-
-
-func test_two_slots_coexist_without_registry_collision() -> void:
-	var be_a: FileSystemDatabase = auto_free(FileSystemDatabase.new())
-	be_a.base_dir = test_dir
-	assert_int(be_a.initialize({ &"players": [] as Array[StringName] }, "slot_a")) \
-			.is_equal(OK)
-
-	# Same base_dir, different slot: keyed on the slot root, so no collision.
-	var be_b: FileSystemDatabase = auto_free(FileSystemDatabase.new())
-	be_b.base_dir = test_dir
-	assert_int(be_b.initialize({ &"players": [] as Array[StringName] }, "slot_b")) \
-			.is_equal(OK)
-
-	be_a.upsert(&"players", &"shared", { &"hp": 10 })
-	be_b.upsert(&"players", &"shared", { &"hp": 20 })
-
-	assert_int(be_a.find_by_id(&"players", &"shared").get(&"hp")).is_equal(10)
-	assert_int(be_b.find_by_id(&"players", &"shared").get(&"hp")).is_equal(20)
