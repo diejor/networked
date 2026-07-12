@@ -2,7 +2,7 @@
 ## host / join.
 ##
 ## Most games never touch this directly. Instead, they go through [NetwConnect]
-## ([code]Netw.ctx(self).connect[/code]), which wraps the one canonical
+## ([code]Netw.of(self).connect[/code]), which wraps the one canonical
 ## session the [MultiplayerTree] owns. Reach for [ConnectSession] when you are
 ## building a [b]custom browser UI[/b] and want the raw node: it keeps the list
 ## of [JoinTarget]s (typed-in addresses plus lobbies discovered through
@@ -57,13 +57,13 @@ signal directory_unavailable(directory_id: StringName, reason: String)
 ## A join attempt began against [param target].
 signal join_started(target: JoinTarget)
 
-## A join attempt failed. [param result] is the [ConnectResult] outcome.
+## A join attempt failed. [param result] is the [BackendPeer.ConnectResult] outcome.
 signal join_failed(target: JoinTarget, result: BackendPeer.ConnectResult)
 
 ## A join attempt advanced through transport-specific progress.
 signal join_progress(target: JoinTarget, step: StringName, message: String, ratio: float)
 
-## A connection succeeded. [param result] is the [ConnectResult] containing
+## A connection succeeded. [param result] is the [BackendPeer.ConnectResult] containing
 ## happy-path diagnostics.
 signal connection_diagnostics(result: BackendPeer.ConnectResult)
 

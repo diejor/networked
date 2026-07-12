@@ -5,7 +5,7 @@
 ## sampling the timeline at the shooter's perceived tick reproduces where the
 ## target was, so a late hit registers against the rewound position and misses
 ## against the live one. Exercises the public seam
-## [method NetwLagCompensation.sample] through [member MultiplayerTree.lag_compensation].
+## [method NetwLagCompensationInterface.sample] through [member NetwMultiplayer.lag_compensation].
 class_name TestServerRewind
 extends NetwTestSuite
 
@@ -26,7 +26,7 @@ func test_sample_hits_rewound_misses_live() -> void:
 	s.run(60)
 
 	var view_tick: int = s.server_clock.tick - 8
-	var past := s.server.lag_compensation.sample(p.server_entity, view_tick)
+	var past := s.server.api.lag_compensation.sample(p.server_entity, view_tick)
 	assert_that(past.is_empty()).is_false()
 	var rewound_pos: Vector2 = past.get_value(&"position")
 	var live_pos: Vector2 = p.server_body.position
@@ -50,7 +50,7 @@ func test_clamps_view_tick_into_retained_window() -> void:
 
 	# A view tick older than anything retained returns neutral, the signal a real
 	# compensator clamps against rather than fabricating a position.
-	var ancient := s.server.lag_compensation.sample(p.server_entity, -100)
+	var ancient := s.server.api.lag_compensation.sample(p.server_entity, -100)
 	assert_that(ancient.is_empty()).is_true()
 
 
@@ -81,7 +81,7 @@ func test_sample_is_empty_off_server() -> void:
 
 	# The client records no authoritative history, so its facade sample degrades to
 	# an empty snapshot rather than fabricating a position or erroring.
-	var on_client := s.client.lag_compensation.sample(
+	var on_client := s.client.api.lag_compensation.sample(
 		p.client_entity,
 		s.client_clock.tick - 4,
 	)

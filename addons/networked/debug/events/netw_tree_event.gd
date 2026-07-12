@@ -50,14 +50,14 @@ func _init(p_kind: Kind, p_tree: MultiplayerTree) -> void:
 	tree = p_tree
 
 
-## Resolves a [NetwContext] anchored at [member node] when present, else at the
-## tree. The node anchor gives a player event its [member NetwContext.entity]
-## for free.
-func ctx() -> NetwContext:
-	return Netw.ctx(node) if is_instance_valid(node) else Netw.ctx(tree)
+## Resolves the [NetwMultiplayer] session anchored at [member node] when
+## present, else at the tree.
+func api() -> NetwMultiplayer:
+	return Netw.of(node) if is_instance_valid(node) else Netw.of(tree)
 
 
-## Resolves a [NetwContext] anchored at an explicit node, for when a consumer
-## wants a sibling or the scene root rather than the primary subject.
-func ctx_for(n: Node) -> NetwContext:
-	return Netw.ctx(n)
+## Resolves the [NetwMultiplayer] session anchored at an explicit node, for
+## when a consumer wants a sibling or the scene root rather than the primary
+## subject.
+func api_for(n: Node) -> NetwMultiplayer:
+	return Netw.of(n)

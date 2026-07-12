@@ -2,7 +2,7 @@ class_name BomberAI
 extends RefCounted
 ## Test-only AI driver for the bomber example game.
 ##
-## Reads the world scene tree each tick, runs a pluggable [Goal]
+## Reads the world scene tree each tick, runs a pluggable [BomberAI.Goal]
 ## strategy, and presses or releases actions on a [NetwSceneRunner].
 ## A universal flee override dodges active bombs regardless of goal.
 ## [br][br]

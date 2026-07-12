@@ -1,7 +1,7 @@
 ## Real-node determinism gate (ports the lag-comp spike determinism tier).
 ##
 ## Under [LockstepStepper] there is exactly one synchronizer send per tick and
-## [method MultiplayerClock.force_step] advances an exact tick count with no
+## [method NetwClockInterface.force_step] advances an exact tick count with no
 ## frame-cadence overshoot, so the seeded impairment draws against a fixed packet
 ## count and the outcome is reproducible to floating point. The same scenario run
 ## twice produces the same final state and the same correction trace.

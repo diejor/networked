@@ -1,14 +1,15 @@
 ## Schema registry and API surface for the networked persistence layer.
 ##
-## Save this resource as a [code].tres[/code] file and assign it to
-## [member SaveComponent.database] on any object that should persist
-## [member SaveComponent.record].
+## Save this resource as a [code].tres[/code] file and name it from an archetype
+## through [method Netw.configure_persistence] so its
+## [NetwPersistenceInterface.PersistenceEngine] persists into it.
 ##
 ## [br][br]
 ## [b]Slots:[/b] a slot is one independent save namespace. Open a slot with
-## [method NetwDatabase.SlotEngine.open] before any [SaveComponent] registers a
-## schema. Backends receive the selected slot during initialization and scope all
-## table records under it.
+## [method NetwDatabase.SlotEngine.open] before the first
+## [NetwPersistenceInterface.PersistenceEngine] registers a schema. Backends
+## receive the selected slot during initialization and scope all table records
+## under it.
 ## [codeblock]
 ## NetwDatabase
 ## └── slots.open(&"slot_2")
@@ -114,28 +115,6 @@ var _initialized: bool = false
 # table -> Script for a NetwRecord subclass
 var _table_scripts: Dictionary[StringName, Script] = { }
 
-# ── Binding ───────────────────────────────────────────────────────────────────
-
-
-## Binds a [SaveComponent] to this database, registering its schema.
-## If [param span] is provided, steps are recorded for the initialization
-## process.
-func bind(component: SaveComponent, span: NetwSpan = null) -> void:
-	if component.table_name.is_empty():
-		return
-
-	var columns := component.get_virtual_properties()
-	_register_schema(component.table_name, columns)
-
-	if span:
-		span.step(
-			"schema_registered",
-			{
-				table = component.table_name,
-				columns = columns,
-			},
-		)
-
 # ── Table access ──────────────────────────────────────────────────────────────
 
 
@@ -210,11 +189,11 @@ func _get_property_list() -> Array[Dictionary]:
 
 # Declares the columns for [param table].
 #
-# Called automatically by [SaveComponent] during sync setup.
+# Called automatically by a PersistenceEngine when it registers its schema.
 # Calling this again for the same table merges any new columns in.
 # Triggers backend initialization the first time any table is registered
-# (deferred so that multiple [SaveComponent] nodes registering in the same
-# frame are batched into one [method _initialize_backend] call).
+# (deferred so that multiple engines registering in the same frame are batched
+# into one [method _initialize_backend] call).
 func _register_schema(table: StringName, columns: Array[StringName]) -> void:
 	if not _schema.has(table):
 		_schema[table] = [] as Array[StringName]
@@ -497,7 +476,7 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 ## [method list] and [method delete] work before a slot is open. Use them from a
 ## save-select menu to enumerate or remove whole saves.
 ## [codeblock]
-## # Before any SaveComponent registers its schema:
+## # Before any persistence engine registers its schema:
 ## db.slots.open(&"slot_2")
 ##
 ## # From a save-select menu, no slot opened yet:
@@ -522,7 +501,7 @@ class SlotEngine:
 		assert(
 			not _locked,
 			"NetwDatabase.SlotEngine: slot is startup-only and the backend is " +
-			"already initialized. Open a slot before any SaveComponent registers.",
+			"already initialized. Open a slot before any persistence engine registers.",
 		)
 		_slot = slot
 
@@ -597,10 +576,10 @@ class TransactionContext:
 ## keeping all I/O knowledge inside the persistence layer.
 ##
 ## [codeblock lang=gdscript]
-## # Fetch a record and bind it to a SaveComponent:
+## # Fetch a record and read a column:
 ## var record := db.table(&"players").fetch(username)
 ## if record:
-##     save_comp.record = record
+##     var score := record.get_value(&"score", 0)
 ##
 ## # Write changes back to the database:
 ## var err := db.table(&"players").put(username, save_comp.record)

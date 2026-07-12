@@ -59,6 +59,13 @@ class Writer:
 		_out.append(value & 0xFF)
 
 
+	## Aligns, then writes a 16-bit little-endian value.
+	func put_aligned_u16(value: int) -> void:
+		align()
+		_out.append(value & 0xFF)
+		_out.append((value >> 8) & 0xFF)
+
+
 	## Aligns, then writes a 32-bit little-endian value.
 	func put_aligned_u32(value: int) -> void:
 		align()
@@ -80,7 +87,7 @@ class Writer:
 		return _out
 
 
-## Serves bits and bytes back from a [PackedByteArray] in the order [Writer] wrote
+## Serves bits and bytes back from a [PackedByteArray] in the order [NetwBitBuffer.Writer] wrote
 ## them.
 class Reader:
 	var _in: PackedByteArray
@@ -122,6 +129,17 @@ class Reader:
 		align()
 		var v := _in[_pos] if _pos < _in.size() else 0
 		_pos += 1
+		return v
+
+
+	## Aligns, then reads a 16-bit little-endian value.
+	func get_aligned_u16() -> int:
+		align()
+		var v := 0
+		for i in 2:
+			var b := _in[_pos] if _pos < _in.size() else 0
+			_pos += 1
+			v |= b << (i * 8)
 		return v
 
 

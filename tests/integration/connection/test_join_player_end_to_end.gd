@@ -6,7 +6,7 @@
 class_name TestJoinPlayerEndToEnd
 extends NetwTestSuite
 
-const _SPAWNER_NODE_PATH := "TestPlayerFull/MultiplayerEntity"
+const _SPAWNER_NODE_PATH := "TestPlayerFull"
 
 var harness: NetwTestHarness
 var valeria: MultiplayerTree

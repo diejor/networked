@@ -1,5 +1,5 @@
 ## Unit tests for [NetwInterestLayer]. Covers the canonical mutation
-## API exercised standalone (no [InterestService]) so the data model
+## API exercised standalone (no [NetwInterestInterface]) so the data model
 ## is testable in isolation.
 class_name TestNetwInterestLayer
 extends NetwTestSuite
@@ -78,16 +78,16 @@ func test_idempotent_mutations_do_not_duplicate_signals() -> void:
 
 
 func test_layer_with_service_broadcasts_through_hooks() -> void:
-	# When a layer is owned by an [InterestService] (i.e., obtained
-	# from [NetwInterest]), its mutators flow through the service
-	# hooks. Without a peer the broadcast is a no-op; this just
+	# When a layer is owned by a [NetwInterestInterface] (i.e., obtained
+	# from [member NetwMultiplayer.interest]), its mutators flow through the
+	# interface hooks. Without a peer the broadcast is a no-op; this just
 	# verifies the layer remains usable in that mode.
 	var mt := MultiplayerTree.new()
 	mt.name = "TestTreeWithService"
 	add_child(mt)
 	auto_free(mt)
 
-	var owned := mt.interest.layer(&"owned")
+	var owned := mt.api.interest.layer(&"owned")
 	var entity := _make_entity("owned_ent")
 	owned.add_entity(entity)
 	owned.add_viewer(11)

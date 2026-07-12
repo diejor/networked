@@ -8,9 +8,9 @@ var level_builder: LevelBuilder
 
 func before_test() -> void:
 	player_builder = PlayerBuilder.new("LivenessRacePlayer") \
-			.with_root(Node2D) \
+			.with_root(StateSyncBody) \
 			.with_multiplayer_entity() \
-			.with_state([&"position"], PackedSynchronizer.Transport.RPC)
+			.with_state([&"position"])
 	player_builder.pack()
 
 	level_builder = LevelBuilder.new("LivenessRaceLevel") \
@@ -43,15 +43,15 @@ func test_spawn_edge_race() -> void:
 	var server = harness.server()
 	var client = await harness.add_client("jose")
 
-	# Verify client relay has drops_unknown_route incremented when receiving a
-	# carrier for an unknown route
-	var client_relay: RelayService = client.get_service(RelayService)
-	
+	# Verify the client carrier has drops_unknown_route incremented when
+	# receiving a carrier for an unknown route
+	var client_api: NetwMultiplayer = client.api
+
 	# Send carrier on unknown route 99
 	var framed = _frame_carrier(99)
-	client_relay._receive_carrier(framed)
-	
-	var snapshot = client_relay.monitor_snapshot()
+	client_api.replication.receive_carrier(framed, 0)
+
+	var snapshot = client_api.monitor_snapshot()
 	assert_that(snapshot.get("drops_unknown_route", 0)).is_equal(1)
 
 	# Spawn player normally and ensure it converges
@@ -61,8 +61,8 @@ func test_spawn_edge_race() -> void:
 
 	var client_entity = NetwEntity.of(client_player)
 	var server_entity = NetwEntity.of(player)
-	var client_liveness: LivenessService = client.get_service(LivenessService)
-	var server_liveness: LivenessService = server.get_service(LivenessService)
+	var client_liveness: NetwLivenessInterface = client.api.liveness
+	var server_liveness: NetwLivenessInterface = server.api.liveness
 
 	var route = server_liveness.route_of(server_entity)
 	assert_that(route).is_greater(0)
@@ -85,8 +85,8 @@ func test_despawn_edge_race() -> void:
 	var player = harness.spawn_player(client, player_builder.packed)
 	await harness.wait_for_player(client, level_builder.scene_name)
 
-	var me = _mp(player)
-	var route = me._netw_route
+	var me = NetwEntity.of(player)
+	var route = me.route
 	assert_that(route).is_greater(0)
 
 	# Despawn player on server
@@ -96,26 +96,26 @@ func test_despawn_edge_race() -> void:
 	await NetwTestSuite.drain_frames(get_tree(), 1)
 
 	# Assert that route is dead on server
-	var server_liveness: LivenessService = server.get_service(LivenessService)
+	var server_liveness: NetwLivenessInterface = server.api.liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		LivenessService.State.DEAD
+		NetwLivenessInterface.State.DEAD
 	)
 
 	# Step client to receive the despawn packet and update route state
 	await NetwTestSuite.drain_frames(get_tree(), 5)
 
 	# Verify route is no longer live on client
-	var client_liveness: LivenessService = client.get_service(LivenessService)
+	var client_liveness: NetwLivenessInterface = client.api.liveness
 	assert_that(client_liveness.route_state(route)).is_equal(
-		LivenessService.State.DEAD
+		NetwLivenessInterface.State.DEAD
 	)
 
-	# Verify client relay drops carriers on dead route under drops_not_live
-	var client_relay: RelayService = client.get_service(RelayService)
+	# Verify the client carrier drops frames on a dead route under drops_not_live
+	var client_api: NetwMultiplayer = client.api
 	var framed = _frame_carrier(route)
-	client_relay._receive_carrier(framed)
+	client_api.replication.receive_carrier(framed, 0)
 
-	var snapshot = client_relay.monitor_snapshot()
+	var snapshot = client_api.monitor_snapshot()
 	assert_that(snapshot.get("drops_not_live", 0)).is_equal(1)
 
 
@@ -135,42 +135,41 @@ func test_linger_variant() -> void:
 	var player = harness.spawn_player(client, player_builder.packed)
 	await harness.wait_for_player(client, level_builder.scene_name)
 
-	var me = _mp(player)
-	var route = me._netw_route
+	var me = NetwEntity.of(player)
+	var route = me.route
 	assert_that(route).is_greater(0)
 
 	# Despawn with linger on server
-	var opts = MultiplayerEntity.DespawnOpts.new()
+	var opts = NetwEntity.DespawnOpts.new()
 	opts.linger = true
 	opts.linger_seconds = 0.5
 	me.despawn(opts)
 
 	# Server route should be LINGERING
-	var server_liveness: LivenessService = server.get_service(LivenessService)
+	var server_liveness: NetwLivenessInterface = server.api.liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		LivenessService.State.LINGERING
+		NetwLivenessInterface.State.LINGERING
 	)
 
-	# Frame a carrier on the lingering route and send it to server relay
-	var server_relay: RelayService = server.get_service(RelayService)
+	# Frame a carrier on the lingering route and send it to the server carrier
+	var server_api: NetwMultiplayer = server.api
 	var framed = _frame_carrier(route)
-	server_relay._receive_carrier(framed)
+	server_api.replication.receive_carrier(framed, 0)
 
-	var snapshot = server_relay.monitor_snapshot()
+	var snapshot = server_api.monitor_snapshot()
 	assert_that(snapshot.get("drops_not_live", 0)).is_equal(1)
 
-	# Step past linger window
+	# Step past linger window. The DEAD transition resolves at end-of-frame
+	# (the reparent grace applies to every spawn-book route), so give the
+	# deferred resolution one frame.
 	await player.tree_exited
+	await get_tree().process_frame
 
 	# Route is now dead on server
 	assert_that(server_liveness.route_state(route)).is_equal(
-		LivenessService.State.DEAD
+		NetwLivenessInterface.State.DEAD
 	)
 
 
 func _frame_carrier(route: int) -> PackedByteArray:
-	return RelayService.test_pack_frame(route, 0, RelayService.Command.STATE, PackedByteArray())
-
-
-func _mp(node: Node) -> MultiplayerEntity:
-	return MultiplayerEntity.unwrap(node)
+	return NetwFrameEnvelope.pack(route, 0, NetwFrameEnvelope.Channel.SYNC, PackedByteArray())

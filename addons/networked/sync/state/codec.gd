@@ -7,7 +7,7 @@
 ## property byte-aligns and writes a one-byte type tag plus a raw value
 ## ([code]bool[/code]/[code]int[/code]/[Vector2] packed, else
 ## [method @GlobalScope.var_to_bytes]). This is the value-encoding core shared by
-## [InputSynchronizer]'s window and [StateSynchronizer]'s bundled snapshot.
+## the windowed input lane and the state set's bundled snapshot.
 ##
 ## [codeblock]
 ## # snapshot (state blob): tick + ack header, then the bit-packed payload

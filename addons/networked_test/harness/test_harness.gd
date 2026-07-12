@@ -11,7 +11,7 @@
 ## var player := await harness.join_player(
 ##     client,
 ##     "uid://...",
-##     "Player/Components/MultiplayerEntity"
+##     "Player"
 ## )
 ## await harness.teardown()
 ## [/codeblock]
@@ -210,15 +210,16 @@ func server_scene_manager() -> MultiplayerSceneManager:
 	return scene_manager_for(_server)
 
 
-## Creates a [MultiplayerClock] on [method server] and every client.
+## Creates a [MultiplayerClock] on [method server] and every client, returning
+## the server's [NetwClockInterface] tick engine.
 ##
 ## Clients created after this call receive the same clock before joining.
-## Existing clients are awaited until [signal MultiplayerClock.clock_synchronized]
+## Existing clients are awaited until [signal NetwClockInterface.clock_synchronized]
 ## fires.
 func add_clock(
 		tickrate: int = 30,
 		display_offset: int = 3,
-) -> MultiplayerClock:
+) -> NetwClockInterface:
 	_clock_enabled = true
 	_clock_tickrate = tickrate
 	_clock_display_offset = display_offset
@@ -234,16 +235,17 @@ func add_clock(
 	return server_clock
 
 
-## Mounts a [LagCompensation] node on [method server] and every client.
+## Mounts a [LagCompensation] node on [method server] and every client,
+## returning the server's [NetwLagCompensationInterface] engine.
 ##
 ## The node is no longer auto-created, so a rewind or prediction test must mount it
 ## explicitly. Clients created after this call receive one before joining.
-func add_lag_compensation() -> LagCompensation:
+func add_lag_compensation() -> NetwLagCompensationInterface:
 	_lag_comp_enabled = true
-	var server_node := _ensure_lag_compensation(_server)
+	var server_iface := _ensure_lag_compensation(_server)
 	for client in _clients:
 		_ensure_lag_compensation(client)
-	return server_node
+	return server_iface
 
 
 ## Holds inbound packets to [param client] until
@@ -373,7 +375,7 @@ func admit_client_to_scene(
 ## var player := await harness.join_player(
 ##     client,
 ##     LEVEL,
-##     "Player/Components/MultiplayerEntity"
+##     "Player"
 ## )
 ## [/codeblock]
 func join_player(
@@ -808,11 +810,11 @@ func _make_service_tree(
 	return tree
 
 
-func _ensure_clock(mt: MultiplayerTree) -> MultiplayerClock:
+func _ensure_clock(mt: MultiplayerTree) -> NetwClockInterface:
 	var existing := mt.get_service(MultiplayerClock) as MultiplayerClock
-	if existing:
-		return existing
-	return _add_clock_node(mt)
+	if not existing:
+		_add_clock_node(mt)
+	return mt.api.clock
 
 
 func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
@@ -824,13 +826,13 @@ func _add_clock_node(mt: MultiplayerTree) -> MultiplayerClock:
 	return clock
 
 
-func _ensure_lag_compensation(mt: MultiplayerTree) -> LagCompensation:
+func _ensure_lag_compensation(mt: MultiplayerTree) -> NetwLagCompensationInterface:
 	var existing := mt.get_service(LagCompensation) as LagCompensation
 	if not existing:
 		existing = mt.find_service_node(LagCompensation) as LagCompensation
-	if existing:
-		return existing
-	return _add_lag_comp_node(mt)
+	if not existing:
+		_add_lag_comp_node(mt)
+	return mt.api.lag_compensation
 
 
 func _add_lag_comp_node(mt: MultiplayerTree) -> LagCompensation:

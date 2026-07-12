@@ -1,8 +1,6 @@
-## Tests for [MultiplayerEntity].
-##
-## Covers [NetwEntity] identity helpers, spawn-property collection, and
-## [enum MultiplayerEntity.InitialController] behavior.
-class_name TestMultiplayerEntity
+## Tests for [NetwEntity] identity, spawn-envelope, and controller lifecycle
+## behavior.
+class_name TestNetwEntityIdentity
 extends NetwTestSuite
 
 func test_identity_name_parsing() -> void:
@@ -25,19 +23,12 @@ func test_bind_and_spawn_identity_envelope() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
-	var mp_entity := MultiplayerEntity.new()
-	mp_entity.name = "MultiplayerEntity"
-	root.add_child(mp_entity)
-	mp_entity.owner = root
-
 	NetwEntity.bind(root, &"valeria", 42)
 
 	var entity := NetwEntity.of(root)
 	assert_that(root.name).is_equal("valeria|42")
 	assert_that(entity.entity_id).is_equal(&"valeria")
 	assert_that(entity.peer_id).is_equal(42)
-	assert_that(mp_entity.entity_id).is_equal(&"valeria")
-	assert_that(mp_entity.peer_id).is_equal(42)
 
 	var rj := ResolvedJoin.new()
 	rj.username = &"valeria"
@@ -46,9 +37,9 @@ func test_bind_and_spawn_identity_envelope() -> void:
 		"spawn_index": 7,
 	}
 
-	var data := NetwEntity.decorate_spawn(source, rj)
+	var data := NetwSpawn.decorate_spawn(source, rj)
 	var netw: Dictionary = data["_netw"]
-	var spawn_identity := NetwEntity.spawn_identity(data)
+	var spawn_identity := NetwSpawn.spawn_identity(data)
 
 	assert_that(NetwEntity._spawn_identity_error(data)).is_empty()
 	assert_that(NetwEntity._is_spawn_envelope(NetwEntity._spawn_envelope(rj))) \
@@ -77,7 +68,7 @@ func test_wrap_spawn_binds_identity_and_strips_envelope() -> void:
 	var payload := PackedByteArray([1, 2, 3])
 	var envelope := NetwEntity._spawn_envelope(rj, payload)
 	var received: Array[Variant] = []
-	var wrapped := NetwEntity.wrap_spawn(
+	var wrapped := NetwSpawn.wrap_spawn(
 		func(spawn_payload: Variant) -> Node:
 			received.append(spawn_payload)
 			var player := Node2D.new()
@@ -97,62 +88,11 @@ func test_wrap_spawn_binds_identity_and_strips_envelope() -> void:
 	assert_that(entity.peer_id).is_equal(42)
 
 
-func test_spawn_replication_config_contract() -> void:
-	var root: Node2D = auto_free(Node2D.new())
-	var entity := NetwEntity.ensure(root)
-	assert_that(entity.is_template).is_false()
-
-	var mp_entity := MultiplayerEntity.new()
-	root.add_child(mp_entity)
-	mp_entity.owner = root
-	entity.multiplayer_entity = mp_entity
-	assert_that(entity.is_template).is_true()
-
-	var path := NodePath(":position")
-	mp_entity.add_spawn_property(path)
-
-	var cfg := mp_entity.replication_config
-	assert_that(cfg.has_property(path)).is_true()
-	assert_that(cfg.property_get_spawn(path)).is_true()
-	assert_that(cfg.property_get_sync(path)).is_false()
-	assert_that(cfg.property_get_watch(path)).is_false()
-	assert_that(
-		cfg.property_get_replication_mode(path),
-	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
-
-	var picked := SceneReplicationConfig.new()
-	var visible_path := NodePath(":visible")
-	picked.add_property(visible_path)
-	picked.property_set_replication_mode(
-		visible_path,
-		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-	)
-	picked.property_set_spawn(visible_path, false)
-	picked.property_set_sync(visible_path, true)
-	picked.property_set_watch(visible_path, true)
-	mp_entity.replication_config = picked
-
-	mp_entity._sanitize_replication_config()
-
-	assert_that(picked.property_get_spawn(visible_path)).is_true()
-	assert_that(picked.property_get_sync(visible_path)).is_false()
-	assert_that(picked.property_get_watch(visible_path)).is_false()
-	assert_that(
-		picked.property_get_replication_mode(visible_path),
-	).is_equal(SceneReplicationConfig.REPLICATION_MODE_NEVER)
-
-	var expected := NodePath("MultiplayerEntity:entity_id")
-	assert_that(not picked.has_property(expected)).is_true()
-
-
 func test_controller_lifecycle_flow() -> void:
-	var parts := _make_player_root(42)
-	var root: Node2D = parts[0]
-	var entity: MultiplayerEntity = parts[1]
-
-	entity.initial_controller = \
-	MultiplayerEntity.InitialController.REPRESENTED_PEER
-	entity._on_owner_tree_entered()
+	var root := _make_player_root(42)
+	var entity := NetwEntity.of(root)
+	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	add_child(root)
 
 	assert_that(root.get_multiplayer_authority()).is_equal(42)
 	assert_that(entity.controller).is_equal(42)
@@ -160,60 +100,46 @@ func test_controller_lifecycle_flow() -> void:
 	assert_that(NetwEntity.of(root).control_kind) \
 			.is_equal(NetwEntity.ControlKind.PEER_CONTROLLED)
 
-	parts = _make_player_root(42)
-	root = parts[0]
-	entity = parts[1]
-	entity.initial_controller = MultiplayerEntity.InitialController.SERVER
-	entity._on_owner_tree_entered()
-	assert_that(root.get_multiplayer_authority()).is_equal(1)
+	var server_root := _make_player_root(42)
+	var server_entity := NetwEntity.of(server_root)
+	server_entity.initial_controller = NetwEntity.InitialController.SERVER
+	add_child(server_root)
+	assert_that(server_root.get_multiplayer_authority()).is_equal(1)
 
 	var no_peer_root: Node2D = auto_free(Node2D.new())
 	no_peer_root.name = "NoSeparator"
-	var no_peer_spawner := MultiplayerEntity.new()
-	no_peer_spawner.name = "MultiplayerEntity"
-	no_peer_root.add_child(no_peer_spawner)
-	no_peer_spawner.owner = no_peer_root
-	no_peer_spawner.root_path = no_peer_spawner.get_path_to(no_peer_root)
-	no_peer_spawner.initial_controller = \
-	MultiplayerEntity.InitialController.REPRESENTED_PEER
-	no_peer_spawner._on_owner_tree_entered()
+	var no_peer_entity := NetwEntity.ensure(no_peer_root)
+	no_peer_entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	add_child(no_peer_root)
 	assert_that(no_peer_root.get_multiplayer_authority()).is_equal(1)
 
-	parts = _make_player_root(0)
-	root = parts[0]
-	entity = parts[1]
-	entity._on_owner_tree_entered()
-	entity.grant_control(42)
+	var grant_root := _make_player_root(0)
+	var grant_entity := NetwEntity.of(grant_root)
+	add_child(grant_root)
+	grant_entity.grant_control(42)
 
-	var record := NetwEntity.of(root)
-	assert_that(root.get_multiplayer_authority()).is_equal(42)
-	assert_that(record.controller).is_equal(42)
-	assert_that(record.control_kind) \
+	assert_that(grant_root.get_multiplayer_authority()).is_equal(42)
+	assert_that(grant_entity.controller).is_equal(42)
+	assert_that(grant_entity.control_kind) \
 			.is_equal(NetwEntity.ControlKind.PEER_CONTROLLED)
 
-	entity.revoke_control()
+	grant_entity.revoke_control()
 
-	assert_that(root.get_multiplayer_authority()).is_equal(1)
-	assert_that(record.controller).is_equal(0)
-	assert_that(record.control_kind) \
+	assert_that(grant_root.get_multiplayer_authority()).is_equal(1)
+	assert_that(grant_entity.controller).is_equal(0)
+	assert_that(grant_entity.control_kind) \
 			.is_equal(NetwEntity.ControlKind.SERVER_CONTROLLED)
 
 	var validator := TopologyValidator.new()
-	entity.grant_control(42)
-	assert_that(validator._get_expected_authority(root, entity)).is_equal(42)
-	entity.revoke_control()
-	assert_that(validator._get_expected_authority(root, entity)).is_equal(1)
+	grant_entity.grant_control(42)
+	assert_that(validator._get_expected_authority(grant_root)).is_equal(42)
+	grant_entity.revoke_control()
+	assert_that(validator._get_expected_authority(grant_root)).is_equal(1)
 
 
 func test_entity_lookup_and_resolution_flow() -> void:
 	var root: Node2D = auto_free(Node2D.new())
-	var spawner := MultiplayerEntity.new()
-	spawner.name = "MultiplayerEntity"
-	root.add_child(spawner)
-	spawner.owner = root
-
-	assert_that(MultiplayerEntity.unwrap(root)).is_equal(spawner)
-	assert_that(MultiplayerEntity.unwrap(auto_free(Node2D.new()))).is_null()
+	NetwEntity.ensure(root)
 
 	var child := Node2D.new()
 	root.add_child(child)
@@ -279,83 +205,19 @@ func test_scene_tracking_requires_own_entity_record() -> void:
 	assert_that(scene.tracked_nodes.has(child)).is_true()
 
 
-func test_multiplayer_entity_identity_forwarding() -> void:
-	var mp_entity := MultiplayerEntity.new()
-	auto_free(mp_entity)
-
-	mp_entity.entity_id = &"custom_id"
-	mp_entity.peer_id = 99
-	assert_that(mp_entity.entity_id).is_equal(&"custom_id")
-	assert_that(mp_entity.peer_id).is_equal(99)
-
-	var root := Node2D.new()
-	auto_free(root)
-	root.add_child(mp_entity)
-	mp_entity.owner = root
-
-	mp_entity._notification(Node.NOTIFICATION_PARENTED)
-
-	var entity := NetwEntity.of(root)
-	assert_that(entity).is_not_null()
-	assert_that(entity.entity_id).is_equal(&"custom_id")
-	assert_that(entity.peer_id).is_equal(99)
-
-	entity.entity_id = &"updated_id"
-	entity.peer_id = 100
-	assert_that(mp_entity.entity_id).is_equal(&"updated_id")
-	assert_that(mp_entity.peer_id).is_equal(100)
-
-	mp_entity.entity_id = &"final_id"
-	mp_entity.peer_id = 101
-	assert_that(entity.entity_id).is_equal(&"final_id")
-	assert_that(entity.peer_id).is_equal(101)
-
-
-func test_nested_entity_record_forwarding_on_tree_enter() -> void:
-	var parent := Node2D.new()
-	var child := Node2D.new()
-	child.name = "ChildNode"
-	auto_free(parent)
-	auto_free(child)
-
-	var child_entity := NetwEntity.ensure(child)
-	child_entity.contribute_spawn_property(child, &"ammo")
-
-	assert_that(child_entity._pending_spawn_props.size()).is_equal(1)
-
-	var parent_entity := NetwEntity.ensure(parent)
-	parent.add_child(child)
-	child.owner = parent
-
-	child_entity._handle_tree_entered()
-
-	assert_that(child_entity._pending_spawn_props.is_empty()).is_true()
-	assert_that(parent_entity._pending_spawn_props.size()).is_equal(1)
-
-	var forwarded := parent_entity._pending_spawn_props[0]
-	assert_that(forwarded.source).is_equal(child)
-	assert_that(forwarded.property).is_equal(&"ammo")
-
-
-func _make_player_root(peer_id: int) -> Array:
+func _make_player_root(peer_id: int) -> Node2D:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "valeria|%d" % peer_id
-
-	var entity := MultiplayerEntity.new()
-	entity.name = "MultiplayerEntity"
-	root.add_child(entity)
-	entity.owner = root
-	entity.root_path = entity.get_path_to(root)
-
-	return [root, entity]
+	NetwEntity.ensure(root)
+	return root
 
 
-func test_envelope_route_and_me_interplay() -> void:
+func test_envelope_route_binds_before_tree_entry() -> void:
 	var mt := MultiplayerTree.new()
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	var liveness := mt.get_service(LivenessService) as LivenessService
+	var liveness := mt.api.liveness
 
 	# 1. Reserve a route on the server
 	var route := liveness.reserve_route()
@@ -368,28 +230,19 @@ func test_envelope_route_and_me_interplay() -> void:
 	var envelope := NetwEntity._spawn_envelope(rj, null, route)
 
 	# 3. Simulate wrap_spawn callback
-	var spawn_identity := NetwEntity.spawn_identity(envelope)
+	var spawn_identity := NetwSpawn.spawn_identity(envelope)
 
 	var root := Node2D.new()
 	root.name = "player1"
 	auto_free(root)
 
-	var me := MultiplayerEntity.new()
-	me.name = "MultiplayerEntity"
-	root.add_child(me)
-	me.owner = root
-
 	# Bind identity and the reserved route BEFORE entering the tree
 	spawn_identity.bind(root)
 
-	# Add to the tree to trigger _on_owner_tree_entered
+	# Add to the tree to trigger tree-entry route binding
 	mt.add_child(root)
 
 	# 4. Verify that route is bound correctly
 	var entity := NetwEntity.of(root)
 	assert_that(liveness.route_of(entity)).is_equal(route)
 	assert_that(liveness.entity_of(route)).is_equal(entity)
-
-	# 5. Let MultiplayerEntity initialize and verify it adopts the envelope's route
-	assert_that(me._netw_route).is_equal(route)
-

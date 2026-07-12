@@ -5,8 +5,4 @@
 [resource]
 script = ExtResource("1_aghgm")
 global_level = 3
-module_overrides = {
-"debug": 5,
-"transport": 3
-}
 metadata/_custom_type_script = "uid://df08q81gaomy3"

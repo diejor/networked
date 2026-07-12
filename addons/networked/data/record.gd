@@ -1,12 +1,12 @@
 ## Abstract key-value record for serializable networked data.
 ##
-## [NetwRecord] is the shared value object behind [SaveComponent] persistence,
-## [NetwDatabase] rows, and detached state samples. It stores named values
-## without owning the scene object those values came from.
+## [NetwRecord] is the shared value object behind [NetwPersistenceInterface]
+## persistence, [NetwDatabase] rows, and detached state samples. It stores named
+## values without owning the scene object those values came from.
 ##
 ## [codeblock]
 ## var row: NetwRecord = db.table(&"players").fetch(username)
-## %SaveComponent.record = row
+## var health: int = row.get_value(&"health", 100)
 ##
 ## row.set_value(&"health", 75)
 ## var hp: int = row.get_value(&"health", 100)

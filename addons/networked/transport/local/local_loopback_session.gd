@@ -227,7 +227,7 @@ func poll() -> void:
 ## Polls all active peers and advances session time once per physics frame.
 ##
 ## Session time tracks physics frames, not idle frames, so
-## [member LinkConditions.latency_ms] maps to a stable wall-clock latency
+## [member LocalLoopbackSession.LinkConditions.latency_ms] maps to a stable wall-clock latency
 ## regardless of how many idle frames the
 ## engine runs between physics steps. Latency is therefore reproducible. Idle
 ## frames in excess of the physics rate still drain delivered packets through the

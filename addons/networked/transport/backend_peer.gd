@@ -23,7 +23,7 @@ extends Resource
 
 ## Emitted when an in-progress client connection has a terminal failure.
 ## [br][br]
-## Carries a [ConnectResult] outcome.
+## Carries a [BackendPeer.ConnectResult] outcome.
 signal connect_failed(result: ConnectResult)
 
 ## Emitted while an in-progress client connection advances.
@@ -59,9 +59,9 @@ const _LEGACY_SECONDS_MAX := 1.0
 ## Jitter is measured from delivered clock samples. Packet loss, polling, and
 ## frame timing can all widen it.
 ## Watch the [code]MultiplayerClock *[/code] performance monitors to compare
-## [member MultiplayerClock.rtt], [member MultiplayerClock.rtt_jitter], the pong
+## [member NetwClockInterface.rtt], [member NetwClockInterface.rtt_jitter], the pong
 ## calibration error from [signal MultiplayerClock.pong_received], and
-## [member MultiplayerClock.recommended_display_offset].
+## [member NetwClockInterface.recommended_display_offset].
 @export var simulate_lag: bool = false
 ## Minimum simulated one way packet delay in milliseconds.
 @export_range(
@@ -253,7 +253,7 @@ func supports_embedded_server() -> bool:
 ## and build.
 ##
 ## Availability is a separate axis from [method probe_server_info]. A backend
-## that returns [method ProbeResult.unsupported] connects fine. It just
+## that returns [method BackendPeer.ProbeResult.unsupported] connects fine. It just
 ## reports status through a directory instead of a probe. A backend that returns
 ## [code]false[/code] here cannot connect at all, so the browser hides it from
 ## host and join flows. Self-contained transports answer with a platform feature
@@ -286,7 +286,7 @@ func can_host() -> bool:
 
 ## Looks up [ServerDescriptor.Info] for [param _address] without joining the server.
 ##
-## The default result is [method ProbeResult.unsupported]. Backends with a
+## The default result is [method BackendPeer.ProbeResult.unsupported]. Backends with a
 ## lightweight connection path can override this with [AuthProtocol.Client].
 ## Directory based backends can return cached metadata or keep the default.
 ## [codeblock]
@@ -313,7 +313,7 @@ func connect_timeout_hint() -> float:
 	return 5.0
 
 
-## Returns the [AddressHint] for connect UI fields.
+## Returns the [BackendPeer.AddressHint] for connect UI fields.
 func get_address_hint() -> AddressHint:
 	var hint := AddressHint.new()
 	hint.label = "Address"

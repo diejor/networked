@@ -118,6 +118,7 @@ func _on_resource_changed(res: Resource) -> void:
 
 		var addon_root := NetwLog._addon_root
 		NetwLog.initialize(addon_root)
+		NetwLog.reload_active_profile()
 		_refresh_tree()
 	else:
 		_settings = null

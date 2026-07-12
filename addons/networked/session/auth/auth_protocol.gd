@@ -150,7 +150,7 @@ static func decode_probe_request(data: PackedByteArray) -> Dictionary:
 
 
 ## Builds a probe-reply packet carrying [param payload] (typically a
-## [code]var_to_bytes[/code] encoding of [Info]'s dictionary).
+## [code]var_to_bytes[/code] encoding of [ServerDescriptor.Info]'s dictionary).
 ##
 ## [param status] is one of [enum ProbeStatus].
 static func encode_probe_reply(

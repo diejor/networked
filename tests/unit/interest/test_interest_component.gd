@@ -4,8 +4,8 @@
 ## tree-exit, and the [member layer_ids] setter diff.
 ##
 ## A bare [MultiplayerTree] hosts each test so
-## [code]Netw.ctx(self).interest[/code] resolves to a real
-## [NetwInterest]. No multiplayer peer is attached.
+## [code]Netw.of(self).interest[/code] resolves to a real
+## [NetwInterestInterface]. No multiplayer peer is attached.
 class_name TestInterestComponent
 extends NetwTestSuite
 
@@ -21,18 +21,16 @@ func before_test() -> void:
 
 func _make_entity(entity_name: String = "Ent") -> Node:
 	# Entity-root under the [MultiplayerTree] so
-	# [code]Netw.ctx(self).interest[/code] resolves. No
-	# [MultiplayerEntity] is attached: it would crash in [code]_ready[/code]
-	# without a packed-scene template owner.
+	# [code]Netw.of(self).interest[/code] resolves.
 	return make_test_entity(mt, entity_name, 0, false)
 
 
 func _layer(layer_id: StringName) -> NetwInterestLayer:
-	return mt.interest.layer(layer_id)
+	return mt.api.interest.layer(layer_id)
 
 
-func _service() -> InterestService:
-	return mt.get_service(InterestService) as InterestService
+func _service() -> NetwInterestInterface:
+	return mt.api.interest
 
 
 func test_visibility_enter_waits_for_delayed_node() -> void:
@@ -43,10 +41,11 @@ func test_visibility_enter_waits_for_delayed_node() -> void:
 
 	var route := 42
 
-	_service()._rpc_visibility_events(
-		[
-			[route, &"sight", InterestService.Kind.ENTER],
-		],
+	_service()._handle_visibility_events(
+		var_to_bytes([
+			[route, &"sight", NetwInterestInterface.Kind.ENTER],
+		]),
+		1,
 	)
 	await drain_frames(get_tree(), 2)
 	assert_that(visible.is_empty()).is_true()
@@ -54,7 +53,7 @@ func test_visibility_enter_waits_for_delayed_node() -> void:
 	var root := _make_entity("Delayed")
 	var entity := NetwEntity.of(root)
 	
-	var liveness_service := mt.get_service(LivenessService) as LivenessService
+	var liveness_service := mt.api.liveness
 	liveness_service.bind_route(route, entity)
 	
 	await drain_frames(get_tree(), 2)
@@ -68,12 +67,9 @@ func test_layer_configuration_flow() -> void:
 	var component := InterestComponent.new()
 	root.add_child(component)
 	var entity := NetwEntity.of(root)
-	var found := false
-	for c in entity._pending_spawn_props:
-		if c.source == component and c.property == &"layer_ids":
-			found = true
-			break
-	assert_that(found).is_true()
+	var cfg := NetwScriptModel.get_node_property_configs(component).get(&"layer_ids") \
+			as NetwScriptModel.SyncConfig
+	assert_that(cfg != null and cfg.is_spawn_state).is_true()
 
 	var layer_a := _layer(&"a")
 	var layer_b := _layer(&"b")

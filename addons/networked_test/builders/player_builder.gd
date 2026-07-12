@@ -12,6 +12,7 @@ var packed: PackedScene = null
 var _name: String
 var _root_type: Variant = Node
 var _has_entity: bool = false
+var _has_save: bool = false
 var _save_database: Resource = null
 var _save_table: StringName = &""
 var _tp_level_scene_path: String = ""
@@ -26,10 +27,10 @@ var _interest_report: bool = false
 
 var _has_state: bool = false
 var _state_props: Array[StringName] = []
-var _state_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
 var _has_input: bool = false
 var _input_props: Array[StringName] = []
-var _input_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
+var _has_broadcast: bool = false
+var _broadcast_props: Array[StringName] = []
 var _has_prediction: bool = false
 var _prediction_missing_policy: PredictionComponent.MissingInput = \
 		PredictionComponent.MissingInput.STALL
@@ -61,14 +62,25 @@ func with_root(type: Variant) -> PlayerBuilder:
 	return self
 
 
-## Enables the [MultiplayerEntity] on the player.
+## Enables player-represented control on the [NetwEntity].
+##
+## Bakes [member NetwEntity.initial_controller] to
+## [constant NetwEntity.InitialController.REPRESENTED_PEER] the serialization-safe
+## way: [method build] extends the [method with_root] type with a generated root
+## script whose [code]_init()[/code] writes the archetype config, mirroring how a
+## hand-authored player root configures itself. The write re-runs on every
+## instantiate, so it survives [method PackedScene.pack].
 func with_multiplayer_entity() -> PlayerBuilder:
 	_has_entity = true
 	return self
 
 
-## Configures the [SaveComponent] on the player entity.
+## Declares persistence on the player archetype, baking the table into the packed
+## scene as metadata the [NetwPersistenceInterface] reads. The database is set per
+## instance after spawn through
+## [constant NetwPersistenceInterface.PersistenceEngine.META_DATABASE].
 func with_save(database: Resource, table: StringName) -> PlayerBuilder:
+	_has_save = true
 	_save_database = database
 	_save_table = table
 	return self
@@ -84,27 +96,18 @@ func with_tp(
 	return self
 
 
-## Pre-bakes root [param property] as a save-tracked property.
-##
-## The path [code]NodePath(".:" + property)[/code] is baked into the
-## [SaveComponent] replication config before [method pack], so
-## [method ProxySynchronizer.finalize] can process it without a post-spawn
-## contribution call. [param save_mode] and [param interval] bake the per-property
-## persistence trust and snapshot cadence into the component's declaration maps.
+## Bakes root [param property] as a persistence column with an optional
+## per-column snapshot [param interval] ([code]0.0[/code] inherits the archetype
+## default). The server reads the live value at flush time, so a synced field is
+## persistable exactly when the server sees it.
 func with_save_property(
 		property: StringName,
-		save_mode: SaveComponent.SaveMode = SaveComponent.SaveMode.SNAPSHOT,
 		interval: float = 0.0,
-		spawn: bool = false,
-		watch: bool = true,
 ) -> PlayerBuilder:
 	_save_properties.append(
 		{
 			"property": property,
-			"save_mode": save_mode,
 			"interval": interval,
-			"spawn": spawn,
-			"watch": watch,
 		},
 	)
 	return self
@@ -160,41 +163,43 @@ func with_interest(
 	return self
 
 
-## Configures a [StateSynchronizer] on the player entity.
+## Declares that the entity root's script owns a derived state set covering
+## [param props].
 ##
-## Attaches the server-authoritative state slot and registers each of
-## [param props] as an ON_CHANGE payload property at [code].:prop[/code] on the
-## entity root, so a predicting client compares against and a server records the
-## same whole-entity snapshot. [StateSynchronizer] always rides its packed
-## carrier, so the payload rows stay resolvable through
-## [method ProxySynchronizer.get_real_path].
-##
-## The payload is baked into the synchronizer's [code]replication_config[/code]
-## with real paths, so it survives [method pack] / instantiate, not just
-## [method build].
-func with_state(
-		props: Array[StringName],
-		_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK,
-) -> PlayerBuilder:
+## The server-authored predicted state is the set a script marks with
+## [method NetwScriptModel.PropertyConfig.state], so this attaches no node. It
+## asserts at [method build] that the root script marks every one of [param props],
+## the schema both peers derive from the shared script. Pair it with a
+## [method with_root] whose script declares the marks.
+func with_state(props: Array[StringName]) -> PlayerBuilder:
 	_has_state = true
 	_state_props = props
-	_state_transport = _transport
 	return self
 
 
-## Configures an [InputSynchronizer] on the player entity.
+## Declares that the entity root's script owns a derived input set covering
+## [param props].
 ##
-## Attaches the controller-authoritative input slot under an [code]Inputs[/code]
-## child (mirroring bomber's [code]$Inputs[/code]) and registers each of
-## [param props] as an ALWAYS payload property at [code].:prop[/code] on the
-## entity root. Authority binds to the controller through the entity lifecycle.
-func with_input(
-		props: Array[StringName],
-		_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK,
-) -> PlayerBuilder:
+## The controller-authored input is the set a script marks with
+## [method NetwScriptModel.PropertyConfig.input], so this attaches no node. It
+## asserts at [method build] that the root script marks every one of [param props].
+## Authority follows the controller through the set's policy, evaluated per pump.
+func with_input(props: Array[StringName]) -> PlayerBuilder:
 	_has_input = true
 	_input_props = props
-	_input_transport = _transport
+	return self
+
+
+## Declares that the entity root's script owns a derived broadcast set covering
+## [param props].
+##
+## The controller-authored display stream is the set a script marks with
+## [method NetwScriptModel.PropertyConfig.broadcast], so this attaches no node. It
+## asserts at [method build] that the root script marks every one of [param props],
+## and ensures the [NetwEntity] the set resolves through.
+func with_broadcast(props: Array[StringName]) -> PlayerBuilder:
+	_has_broadcast = true
+	_broadcast_props = props
 	return self
 
 
@@ -215,61 +220,102 @@ func with_prediction(
 	return self
 
 
-# Builds a real-path [SceneReplicationConfig] for [param props] at [code].:prop[/code]
-# on the entity root. Baking real paths (rather than relying on register_property's
-# in-memory _properties map, which is not serialized) is what lets a payload
-# survive pack()/instantiate: finalize -> _import_from_config rebuilds the virtual
-# map from this config on every peer.
-func _payload_config(
+# Asserts the entity-root script declares each of [param props] in its derived
+# set of [param record], the marks [method Netw.configure_property] registers. The
+# root script owns the marks, so a scriptless or unmarked root is a build error that
+# names the missing declaration.
+func _assert_root_declares(
+		root: Node,
+		record: int,
 		props: Array[StringName],
-		mode: SceneReplicationConfig.ReplicationMode,
-		watch: bool,
-) -> SceneReplicationConfig:
-	var cfg := SceneReplicationConfig.new()
+		verb: String,
+) -> void:
+	var script := root.get_script() as Script
+	assert(
+		script != null,
+		"PlayerBuilder.%s requires a root script declaring the marks through "
+		% verb + "Netw.configure_property()." ,
+	)
+	var set := NetwSyncSet.from_script(script, record)
+	assert(
+		set != null,
+		"PlayerBuilder.%s: the root script declares no matching set." % verb,
+	)
+	var keys := set.keys()
 	for prop in props:
-		var path := NodePath(".:" + prop)
-		cfg.add_property(path)
-		cfg.property_set_replication_mode(path, mode)
-		cfg.property_set_spawn(path, false)
-		cfg.property_set_watch(path, watch)
-	return cfg
+		assert(
+			prop in keys,
+			"PlayerBuilder.%s: the root script does not mark '%s'." % [verb, prop],
+		)
+
+
+# Generates the entity-root script that bakes the represented-peer archetype
+# config into the packed scene. The script re-runs its _init on every instantiate,
+# the serialization-safe home a marker node once stood in for. A scripted root's
+# own _init is preserved with super(); a native root has no _init to chain.
+func _entity_root_script() -> GDScript:
+	var lines := PackedStringArray()
+	var chains_super := _root_type is Script and _script_defines_init(_root_type)
+	if _root_type is Script:
+		var script_path: String = (_root_type as Script).resource_path
+		assert(
+			not script_path.is_empty(),
+			"PlayerBuilder: with_multiplayer_entity needs a root script with a resource path.",
+		)
+		lines.append("extends \"%s\"" % script_path)
+	else:
+		var dummy: Object = _root_type.new()
+		lines.append("extends %s" % dummy.get_class())
+		dummy.free()
+	lines.append("func _init() -> void:")
+	if chains_super:
+		lines.append("\tsuper()")
+	lines.append(
+		"\tNetwEntity.resolve(self).initial_controller ="
+		+ " NetwEntity.InitialController.REPRESENTED_PEER",
+	)
+	var script := GDScript.new()
+	script.source_code = "\n".join(lines) + "\n"
+	var err := script.reload()
+	assert(err == OK, "PlayerBuilder: failed to generate the entity root script.")
+	return script
+
+
+# Whether [param script] declares its own _init, the only case where super()
+# resolves. GDScript super() reaches the immediate base's own body, not an _init
+# inherited from further up the chain, so an inherited-only _init reports false.
+func _script_defines_init(script: Script) -> bool:
+	for method in script.get_script_method_list():
+		if method.name == "_init":
+			return true
+	return false
 
 
 ## Composes and returns a live player node tree.
 func build() -> Node:
-	var root: Node = _root_type.new()
+	var root: Node = _entity_root_script().new() if _has_entity else _root_type.new()
 	root.name = _name
 
-	if _has_entity:
-		var entity := MultiplayerEntity.new()
-		entity.initial_controller = \
-		MultiplayerEntity.InitialController.REPRESENTED_PEER
-		entity.set_meta("_custom_type_script", "uid://bspawnrcomp001")
-		var _a1: Node = SceneAssembly.attach(root, entity, root)
-
-	if _save_database != null:
-		var save_comp := SaveComponent.new()
-		save_comp.set("database", _save_database)
-		save_comp.set("table_name", _save_table)
-		var cfg := SceneReplicationConfig.new()
+	if _has_save:
+		# Persistence is declared as metadata on the root, the pack-surviving
+		# scriptless path. Only value-typed table and columns bake in; the live
+		# database is set on the spawned instance after spawn.
+		root.set_meta(
+			NetwPersistenceInterface.PersistenceEngine.META_TABLE,
+			_save_table,
+		)
+		var columns: Array = []
 		for entry: Dictionary in _save_properties:
-			var prop: StringName = entry["property"]
-			var path := NodePath(".:" + prop)
-			cfg.add_property(path)
-			cfg.property_set_replication_mode(
-				path,
-				SceneReplicationConfig.REPLICATION_MODE_ON_CHANGE,
+			columns.append(
+				{
+					"property": entry["property"],
+					"interval": entry.get("interval", 0.0),
+				},
 			)
-			cfg.property_set_spawn(path, entry.get("spawn", false))
-			cfg.property_set_watch(path, entry.get("watch", true))
-			save_comp._save_modes[prop] = entry.get(
-				"save_mode",
-				SaveComponent.SaveMode.SNAPSHOT,
-			)
-			save_comp._save_intervals[prop] = entry.get("interval", 0.0)
-		save_comp.replication_config = cfg
-		var _a2: Node = SceneAssembly.attach(root, save_comp, root)
-		save_comp.root_path = save_comp.get_path_to(root)
+		root.set_meta(
+			NetwPersistenceInterface.PersistenceEngine.META_COLUMNS,
+			columns,
+		)
 
 	if not _tp_level_scene_path.is_empty():
 		var tp_comp := TPComponent.new()
@@ -286,61 +332,27 @@ func build() -> Node:
 		interest_comp.report_observers = _interest_report
 		var _a5: Node = SceneAssembly.attach(root, interest_comp, root)
 
-	if _has_state or _has_input or _has_prediction:
-		# The state and input synchronizers resolve NetwEntity.of in
-		# NOTIFICATION_PARENTED, which fires on attach before tree entry, so the
-		# entity must exist on the root before any lag-comp component attaches.
-		# Reuse the one with_multiplayer_entity() created, else ensure it now.
+	if _has_state or _has_input or _has_broadcast or _has_prediction:
+		# The prediction component resolves NetwEntity.of in NOTIFICATION_PARENTED,
+		# which fires on attach before tree entry, so the entity must exist on the
+		# root before it attaches. Reuse the one with_multiplayer_entity() created,
+		# else ensure it now.
 		NetwEntity.ensure(root)
 
 	if _has_state:
-		var state := StateSynchronizer.new()
-		state.name = "StateSync"
-		state.transport = _state_transport
-		# register_property populates _properties for the build() path (callers
-		# inspect it pre-tree). The baked replication_config carries the same real
-		# paths so finalize -> _import_from_config reconstructs the payload on the
-		# pack()/instantiate path too, where _properties is not serialized.
-		for prop in _state_props:
-			state.register_property(
-				prop,
-				NodePath(".:" + prop),
-				SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-				false,
-				false,
-			)
-		state.replication_config = _payload_config(
-			_state_props,
-			SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-			false,
+		_assert_root_declares(
+			root, NetwSyncSet.Record.RECORD_STATE, _state_props, "with_state",
 		)
-		var _a6: Node = SceneAssembly.attach(root, state, root)
-		state.root_path = state.get_path_to(root)
 
 	if _has_input:
-		var inputs := Node.new()
-		inputs.name = "Inputs"
-		var _a7: Node = SceneAssembly.attach(root, inputs, root)
-		var input := InputSynchronizer.new()
-		input.name = "InputSync"
-		input.transport = _input_transport
-		# Same dual registration as state: _properties for build(), baked config
-		# for pack().
-		for prop in _input_props:
-			input.register_property(
-				prop,
-				NodePath(".:" + prop),
-				SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-				false,
-				false,
-			)
-		input.replication_config = _payload_config(
-			_input_props,
-			SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-			false,
+		_assert_root_declares(
+			root, NetwSyncSet.Record.RECORD_INPUT, _input_props, "with_input",
 		)
-		var _a8: Node = SceneAssembly.attach(inputs, input, root)
-		input.root_path = input.get_path_to(root)
+
+	if _has_broadcast:
+		_assert_root_declares(
+			root, NetwSyncSet.Record.RECORD_BROADCAST, _broadcast_props, "with_broadcast",
+		)
 
 	if _has_prediction:
 		var prediction := PredictionComponent.new()

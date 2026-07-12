@@ -1,13 +1,13 @@
 ## Keyed optimistic effect ledger for predicted actions.
 ##
-## [LagCompensation] owns the pending state so one [MultiplayerTree]
+## [NetwLagCompensationInterface] owns the pending state so one [MultiplayerTree]
 ## resolves every [method arm], [method adopt], and [method discard] through the
 ## same tick clock. [NetwAction] uses this ledger for command prediction, while
 ## custom transports can use the keyed primitive directly.
 ##
 ## [codeblock]
-## var lag := Netw.ctx(self).lag_compensation
-## var key := lag.effects.key_for(Netw.ctx(self).entity, view_tick)
+## var lag := Netw.of(self).lag_compensation
+## var key := lag.effects.key_for(NetwEntity.of(self), view_tick)
 ## lag.effects.arm(key, func() -> void: ghost.queue_free())
 ## # Later, authoritative transport resolves the same key.
 ## lag.effects.adopt(key)
@@ -21,7 +21,7 @@ extends RefCounted
 var _service_ref: WeakRef
 
 
-func _init(service: LagCompensation = null) -> void:
+func _init(service: NetwLagCompensationInterface = null) -> void:
 	_service_ref = weakref(service) if service else null
 
 
@@ -58,5 +58,5 @@ func discard(key: StringName) -> void:
 		service._effect_discard(key)
 
 
-func _service() -> LagCompensation:
-	return _service_ref.get_ref() as LagCompensation if _service_ref else null
+func _service() -> NetwLagCompensationInterface:
+	return _service_ref.get_ref() as NetwLagCompensationInterface if _service_ref else null

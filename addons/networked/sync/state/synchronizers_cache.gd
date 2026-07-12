@@ -156,12 +156,9 @@ static func _extract_clean_name(path: NodePath) -> StringName:
 
 
 ## Returns the normalized [code][object, sub_path][/code] targets [param sync]
-## governs, resolved against [param root].
-##
-## A [ProxySynchronizer] reports each [method ProxySynchronizer.get_real_path]
-## that resolves, skipping empty real paths (stamps). A plain synchronizer
-## reports each [code]replication_config[/code] path. Two synchronizers overlap
-## when they share an entry, the key used by overlap detection.
+## governs, resolved against [param root]: each [code]replication_config[/code]
+## path. Two synchronizers overlap when they share an entry, the key used by
+## overlap detection.
 static func governed_targets(
 		sync: MultiplayerSynchronizer,
 		root: Node,
@@ -169,14 +166,7 @@ static func governed_targets(
 	var out: Array = []
 	if not is_instance_valid(sync) or not is_instance_valid(root):
 		return out
-	if sync is ProxySynchronizer:
-		var proxy := sync as ProxySynchronizer
-		for vname: StringName in proxy.get_virtual_properties():
-			var path := proxy.get_real_path(vname)
-			if path.is_empty():
-				continue
-			_append_target(out, root, path)
-	elif sync.replication_config:
+	if sync.replication_config:
 		for path: NodePath in sync.replication_config.get_properties():
 			if path.is_empty():
 				continue
@@ -190,6 +180,39 @@ static func _append_target(out: Array, root: Node, path: NodePath) -> void:
 	var sub: NodePath = res[2]
 	if obj and not sub.is_empty():
 		out.append([obj, sub])
+
+
+## Returns the [code][key, node, property][/code] triples [param sync]
+## replicates, resolved against [param root].
+##
+## [code]key[/code] is the [code]replication_config[/code] path, so a receive
+## handler can map a decoded payload key straight to its target. Unresolved
+## paths are skipped. This is the single resolver the interpolation receive
+## adapter reads.
+static func display_bindings(sync: MultiplayerSynchronizer, root: Node) -> Array:
+	var out: Array = []
+	if not is_instance_valid(sync) or not is_instance_valid(root):
+		return out
+	if sync.replication_config:
+		for path: NodePath in sync.replication_config.get_properties():
+			_append_binding(out, root, StringName(path), path)
+	return out
+
+
+static func _append_binding(
+		out: Array,
+		root: Node,
+		key: StringName,
+		path: NodePath,
+) -> void:
+	if path.is_empty():
+		return
+	var res := root.get_node_and_resource(path)
+	var node := res[0] as Node
+	var sub: NodePath = res[2]
+	if not node or sub.get_subname_count() <= 0:
+		return
+	out.append([key, node, StringName(sub.get_subname(0))])
 
 
 ## Restricts all synchronizers on [param target_node] to only send data

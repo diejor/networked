@@ -137,10 +137,10 @@ to keep a ``players`` dictionary in sync with the roster:
  .. code-tab:: gdscript GDScript
 
     func setup_connections() -> void:
-        ctx.tree.participant_joined.connect(_on_participant_joined)
-        ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
-        ctx.tree.connected_to_server.connect(_on_connected_ok)
-        ctx.tree.server_disconnected.connect(_on_server_disconnected)
+        ctx.participant_joined.connect(_on_participant_joined)
+        ctx.peer_disconnected.connect(_on_peer_disconnected)
+        ctx.connected_to_server.connect(_on_connected_ok)
+        ctx.server_disconnected.connect(_on_server_disconnected)
 
     func _on_participant_joined(participant: NetwParticipant) -> void:
         players[participant.peer_id] = participant.username

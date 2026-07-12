@@ -3,14 +3,14 @@
 ##
 ## A quantizer turns a value into a fixed number of bits and back, trading
 ## precision for size. It is the only "schema" object in the codec stack.
-## There is no separate schema container. Assignment is per property on the
-## synchronizer. See [StampedSynchronizer]. The same resource can be shared
+## There is no separate schema container. Assignment is per property through
+## [method NetwScriptModel.SyncConfig.quantize]. The same resource can be shared
 ## across properties by reference. A quantizer is type-aware, so one instance
 ## handles [Vector2], [float], or [int] without nesting.
 ##
 ## [codeblock]
 ## # Assigned on a synchronizer's codec/<prop> slot, or in code:
-## register_property(&"position", path).quantize(NetwQuantizeFixed.new())
+## Netw.configure_property(self, &"position").quantize(NetwQuantizeFixed.new())
 ## [/codeblock]
 ##
 ## Widths come from this resource on both peers, never the wire, so the decoder
@@ -52,3 +52,24 @@ extends Resource
 ## ([member PredictionComponent.divergence_epsilon]). A correction threshold
 ## below this value triggers on quantization noise alone.
 @abstract func max_error(type: Variant.Type) -> float
+
+
+## Returns whether [param other] encodes the identical bit layout: the same
+## quantizer script with the same exported parameters.
+##
+## Two layout-equal quantizers read each other's bits, so a configuration
+## re-declared per instance with fresh but identical quantizers is the same
+## schema, not a conflict. [method NetwScriptModel.SyncConfig.quantize] warns
+## only when a re-declaration fails this check.
+func is_same_layout(other: NetwQuantize) -> bool:
+	if other == self:
+		return true
+	if other == null or other.get_script() != get_script():
+		return false
+	for prop in get_property_list():
+		if prop["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			continue
+		var prop_name: StringName = prop["name"]
+		if get(prop_name) != other.get(prop_name):
+			return false
+	return true

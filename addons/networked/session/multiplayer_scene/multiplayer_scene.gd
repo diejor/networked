@@ -6,11 +6,12 @@ extends Node
 ## boundary. Clients receive the subtree only after [method connect_peer] or
 ## [method register_player] admits their peer.
 ## [codeblock]
-## var player := MultiplayerEntity.instantiate_player(participant)
+## var node := template_entity.instantiate_player(participant)
+## var player := NetwEntity.of(node)
 ## scene.add_player(player)
 ##
 ## scene.prepare_player_reparent(player)
-## player.reparent(scene.level)
+## node.reparent(scene.level)
 ## scene.complete_player_reparent(player)
 ## [/codeblock]
 
@@ -32,12 +33,9 @@ var level: Node:
 		hook_spawn_signals(level)
 		level.owner = self
 		if is_instance_valid(gate):
-			NetwEntity.ensure(self).provide(
-				NetwEntity.Slot.INTEREST_GATE,
-				gate,
-			)
+			NetwEntity.ensure(self).interest_gate = gate
 
-var _context: NetwContext
+var _netw_scene: NetwScene
 
 ## Emitted when a tracked [Node] enters this scene.
 signal spawned(node: Node)
@@ -87,47 +85,53 @@ func scene_layer_id() -> StringName:
 ## Returns the [NetwInterestLayer] for [method scene_layer_id].
 var layer: NetwInterestLayer:
 	get:
-		var ctx := get_context()
-		if not ctx or ctx.interest == null:
+		var api := NetwMultiplayer.of(self)
+		if not api:
 			return null
 		var id := scene_layer_id()
 		if id.is_empty():
 			return null
-		return ctx.interest.layer(id)
+		return api.interest.layer(id)
 
 
-## Returns the [NetwContext] for this scene.
-func get_context() -> NetwContext:
-	if not _context or not _context.is_valid():
-		var mt := MultiplayerTree.for_node(self)
-		if not mt:
+## The [NetwScene] facade for this scene, built once and memoized.
+##
+## [code]null[/code] until the scene is inside the live tree. Resolve it from
+## any node with [method NetwScene.for_node].
+var netw_scene: NetwScene:
+	get:
+		if _netw_scene and _netw_scene.is_valid():
+			return _netw_scene
+		if not is_inside_tree():
+			return null
+		if not MultiplayerTree.for_node(self):
 			Netw.dbg.error(
-				"Scene.get_context(): MultiplayerTree not found.",
+				"Scene.netw_scene: MultiplayerTree not found.",
 				func(m): push_error(m)
 			)
 			return null
-		var scene_ctx := NetwScene.new(self)
-		_context = NetwContext.new(mt, scene_ctx)
-	return _context
+		_netw_scene = NetwScene.new(self)
+		return _netw_scene
 
 
 func _ready() -> void:
 	if not _is_server():
-		get_context()
+		var _warm := netw_scene
+	_bind_admission_bus()
 
 
 func _exit_tree() -> void:
+	_unbind_admission_bus()
 	_clear_participant_scene_membership()
 	if _active_countdown:
 		_active_countdown.cancel()
 		_active_countdown = null
-	if _context and _context.has_scene():
-		_context.scene.close()
+	if _netw_scene and _netw_scene.is_valid():
+		_netw_scene.close()
 
 
 func _clear_participant_scene_membership() -> void:
-	var ctx := get_context()
-	if ctx == null or not ctx.has_scene():
+	if netw_scene == null:
 		return
 	var mt := MultiplayerTree.for_node(self)
 	if mt and mt.local_participant:
@@ -162,6 +166,41 @@ func hook_spawn_signals(level: Node) -> void:
 			spawner.spawned.connect(_on_spawned)
 		if not spawner.despawned.is_connected(_on_despawned):
 			spawner.despawned.connect(_on_despawned)
+
+
+# Subscribes to the liveness bus so a routed entity enrolls in this scene the
+# moment its route goes live, on every peer. The explicit track_node/add_player
+# and spawner-signal paths stay for the offline and no-route entities that never
+# reach the bus.
+func _bind_admission_bus() -> void:
+	var api := NetwMultiplayer.of(self)
+	if not api:
+		return
+	if not api.liveness.entity_live.is_connected(_on_liveness_entity_live):
+		api.liveness.entity_live.connect(_on_liveness_entity_live)
+
+
+func _unbind_admission_bus() -> void:
+	var api := NetwMultiplayer.of(self)
+	if not api:
+		return
+	if api.liveness.entity_live.is_connected(_on_liveness_entity_live):
+		api.liveness.entity_live.disconnect(_on_liveness_entity_live)
+
+
+# Enrolls a newly live entity whose enclosing scene is this one. Idempotent with
+# the explicit enrollment paths: a node already tracked is left alone.
+func _on_liveness_entity_live(_route: int, entity: NetwEntity) -> void:
+	if not is_instance_valid(entity) or not is_instance_valid(entity.owner):
+		return
+	if _tracked_nodes.has(entity.owner):
+		return
+	if MultiplayerTree.scene_for_node(entity.owner) != self:
+		return
+	if entity.peer_id != 0:
+		register_player(entity)
+	else:
+		track_node(entity.owner)
 
 ## Peer ids admitted to [member gate].
 var connected_peers: Dictionary[int, bool]:
@@ -284,13 +323,13 @@ func move_participants(
 		multiplayer.is_server(),
 		"MultiplayerScene.move_participants() must be called on the server.",
 	)
-	var ctx := get_context()
-	if ctx == null or not ctx.has_scene():
+	var netw := netw_scene
+	if netw == null or not netw.is_valid():
 		return null
 	var batch := NetwScene.MoveBatch.new(moving_participants)
 	for participant: NetwParticipant in moving_participants:
 		if participant:
-			participant.move_to(ctx.scene)
+			participant.move_to(netw)
 			batch._queue_arrival(participant)
 	batch._flush.call_deferred()
 	return batch
@@ -459,9 +498,6 @@ func _on_spawned(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
 	var entity := NetwEntity.of(node)
-	var multiplayer_entity := MultiplayerEntity.unwrap(node)
-	if multiplayer_entity:
-		multiplayer_entity._debug_validate_spawn_identity()
 	if _owns_entity_record(node, entity):
 		_tracked_nodes[node] = true
 		if is_instance_valid(gate):
@@ -511,8 +547,8 @@ func _debug_report_missing_own_entity(
 	var msg := (
 			"MultiplayerScene '%s': spawned node '%s' has no NetwEntity " +
 			"of its own. %s. Under a gated scene every spawned entity " +
-			"needs its own identity. Add MultiplayerEntity, or call " +
-			"NetwEntity.ensure(node) and MultiplayerScene.track_node(node)."
+			"needs its own identity. Call NetwEntity.ensure(node) before " +
+			"MultiplayerScene.track_node(node)."
 	)
 	Netw.dbg.error(
 		msg,
@@ -596,7 +632,6 @@ func register_player(player: NetwEntity) -> void:
 	_players_by_peer[peer_id] = weakref(player.owner)
 	connect_peer(peer_id)
 	track_node(player.owner)
-	_assign_local_player_if_needed(player, peer_id)
 	_flush_gate_now()
 	var bound := _on_player_exiting.bind(player.owner)
 	if not player.owner.tree_exiting.is_connected(bound):
@@ -646,48 +681,22 @@ func _find_peer_for_player(player: Node) -> int:
 	return 0
 
 
-func _assign_local_player_if_needed(player: NetwEntity, peer_id: int) -> void:
-	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.multiplayer_api:
-		return
-	if peer_id != mt.multiplayer_api.get_unique_id():
-		return
-	if player.owner.is_node_ready():
-		mt.local_player = player
-		return
-	if not player.owner.ready.is_connected(_assign_ready_local_player.bind(player)):
-		player.owner.ready.connect(
-			_assign_ready_local_player.bind(player),
-			CONNECT_ONE_SHOT,
-		)
-
-
-func _assign_ready_local_player(player: NetwEntity) -> void:
-	var mt := MultiplayerTree.resolve(self)
-	if mt and player != null and is_instance_valid(player.owner):
-		mt.local_player = player
-
-
 func _flush_interest_now() -> void:
 	if not _is_server():
 		return
 	var mt := MultiplayerTree.resolve(self)
-	if not mt:
+	if not mt or not mt.api:
 		return
-	var service := mt.get_service(InterestService) as InterestService
-	if service:
-		service.flush()
+	mt.api.interest.flush()
 
 
 func _flush_gate_now() -> void:
 	if not _is_server():
 		return
 	var mt := MultiplayerTree.resolve(self)
-	if not mt:
+	if not mt or not mt.api:
 		return
-	var service := mt.get_service(InterestService) as InterestService
-	if service:
-		service.flush_gates()
+	mt.api.interest.flush_gates()
 
 # Readiness gate helpers.
 

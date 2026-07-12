@@ -1,4 +1,4 @@
-## Integration tests for scoped scene rewind ([method NetwLagCompensation.rewind]).
+## Integration tests for scoped scene rewind ([method NetwLagCompensationInterface.rewind]).
 ##
 ## Scene rewind briefly applies an entity's recorded past state to its live node so
 ## validation code can read the live node where the shooter saw the target, then
@@ -26,13 +26,13 @@ func test_rewind_moves_live_node_to_history_then_restores() -> void:
 	var live := s.move_along(entity, func(i: int) -> Vector2: return Vector2(float(i) * 8.0, 0.0), 24)
 
 	var view_tick: int = s.clock.tick - 8
-	var perceived: Vector2 = s.server.lag_compensation.sample(entity, view_tick).get_value(&"position")
+	var perceived: Vector2 = s.server.api.lag_compensation.sample(entity, view_tick).get_value(&"position")
 	var targets: Array[NetwEntity] = [entity]
 
 	# A Dictionary collects the in-callable reads: a GDScript lambda captures locals
 	# by value, so assignments to plain locals inside it would not escape.
 	var probe := { &"seen": Vector2.ZERO, &"hit_perceived": false, &"hit_live": false }
-	s.server.lag_compensation.rewind(
+	s.server.api.lag_compensation.rewind(
 		targets,
 		view_tick,
 		func() -> void:
@@ -64,7 +64,7 @@ func test_rewind_skips_entity_with_no_history() -> void:
 	var probe := { &"ran": false }
 	# A view tick with no retained state leaves the live node untouched, but still
 	# runs the callable (it simply has no rewound targets to read).
-	s.server.lag_compensation.rewind(
+	s.server.api.lag_compensation.rewind(
 		targets,
 		-100,
 		func() -> void:
@@ -81,29 +81,29 @@ func test_linger_keeps_target_rewindable_until_freed() -> void:
 	var node := await s.spawn_despawnable_entity("Linger")
 	var entity := NetwEntity.of(node)
 
-	# Registered by StateSynchronizer presence on the server. Seed a known
+	# Registered by state-set presence on the server. Seed a known
 	# authoritative state so the rewind query is meaningful after despawn.
-	var tl := s.server.lag_compensation.timeline_of(entity)
+	var tl := s.server.api.lag_compensation.timeline_of(entity)
 	assert_that(tl).is_not_null()
 	tl.record_state(5, { &"position": Vector2(40.0, 0.0) })
 
 	# Despawn with linger: the target dies but stays rewindable for the window.
-	var opts := MultiplayerEntity.DespawnOpts.new(&"killed")
+	var opts := NetwEntity.DespawnOpts.new(&"killed")
 	opts.linger = true
 	opts.linger_seconds = 0.15
-	MultiplayerEntity.unwrap(node).despawn(opts)
+	NetwEntity.of(node).despawn(opts)
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
 	# During the window the entity lingers (deactivated, not freed) and stays
 	# rewindable, so a late shooter still validates against where the target was.
 	assert_bool(is_instance_valid(node)).is_true()
-	assert_that(s.server.lag_compensation.timeline_of(entity)).is_not_null()
-	var during := s.server.lag_compensation.sample(entity, 5)
+	assert_that(s.server.api.lag_compensation.timeline_of(entity)).is_not_null()
+	var during := s.server.api.lag_compensation.sample(entity, 5)
 	assert_vector(during.position).is_equal_approx(Vector2(40.0, 0.0), Vector2.ONE * 0.001)
 
 	# After the window passes the entity frees and its timeline unregisters.
 	await (Engine.get_main_loop() as SceneTree).create_timer(0.35).timeout
 	await (Engine.get_main_loop() as SceneTree).process_frame
 	assert_bool(is_instance_valid(node)).is_false()
-	assert_that(s.server.lag_compensation.timeline_of(entity)).is_null()
-	assert_bool(s.server.lag_compensation.sample(entity, 5).is_empty()).is_true()
+	assert_that(s.server.api.lag_compensation.timeline_of(entity)).is_null()
+	assert_bool(s.server.api.lag_compensation.sample(entity, 5).is_empty()).is_true()

@@ -88,13 +88,13 @@ func build() -> Node:
 	return root
 
 
+# Marks a spawn-point template child so it declares itself a template on every
+# peer at tree entry, the assembly-side channel for scenes whose child roots
+# carry no editor ownership.
 func _mark_spawn_template_child(child: Node) -> void:
-	var entity := MultiplayerEntity.unwrap(child)
-	if not entity:
-		return
 	if not NetwEntity.parse_entity(child.name).is_empty():
 		return
-	child.set_meta(MultiplayerEntity._SPAWN_TEMPLATE_META, true)
+	child.set_meta(NetwEntity._SPAWN_TEMPLATE_META, true)
 
 
 ## Composes, packs, and returns a [PackedScene] registered in memory.

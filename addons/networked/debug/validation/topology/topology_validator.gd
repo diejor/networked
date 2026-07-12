@@ -1,8 +1,8 @@
 ## Developer-only topology validation for the Networked addon.
 ##
-## Inspects the synchronizer topology of a player node: expected vs actual
-## counts, cache vs live diff, and virtual property constraint checks
-## (SaveComponent, SceneSynchronizer, MultiplayerEntity, etc.).
+## Inspects the entity topology of a player node: cache vs live synchronizer
+## diff, and authority/identity checks sourced from the [NetwEntity] record
+## rather than any single synchronizer node.
 ## [br][br]
 ## An instance so the checks are steppable (no statics, per the debugger's
 ## no-statics invariant). Owned by [TopologyNetValidator].
@@ -11,15 +11,11 @@ extends RefCounted
 
 ## Returns the minimum expected [MultiplayerSynchronizer] count for [param node].
 ## [br][br]
-## Counts standard components present as children:
-## [br]- [MultiplayerEntity] -> 1 (extends MultiplayerSynchronizer)
-## [br][br]
-## Does not count user-defined synchronizers; this is a minimum floor only.
-func expected_sync_count(node: Node) -> int:
-	var n := 0
-	if MultiplayerEntity.unwrap(node) != null:
-		n += 1
-	return n
+## The addon requires no native synchronizer of its own. Replication is
+## server-authored through the pipeline, so this floor is always [code]0[/code].
+## Game-authored synchronizers are not counted here.
+func expected_sync_count(_node: Node) -> int:
+	return 0
 
 
 ## Validates the synchronizer topology of [param node].
@@ -60,16 +56,8 @@ func validate_node(node: Node) -> Dictionary:
 			],
 		)
 
-	var save_comp: SaveComponent = node.get_node_or_null("%SaveComponent")
-	if save_comp:
-		errors.append_array(_check_save_component(save_comp))
-
-	var client_comp := MultiplayerEntity.unwrap(node)
-	if client_comp:
-		errors.append_array(_check_multiplayer_entity(client_comp))
-
+	errors.append_array(_check_identity(node))
 	errors.append_array(_check_authority(node))
-	errors.append_array(_check_server_authority_synchronizer(node))
 
 	return {
 		"ok": errors.is_empty(),
@@ -118,58 +106,12 @@ func cache_diff(node: Node) -> Dictionary:
 	}
 
 
-func _check_save_component(save_comp: SaveComponent) -> Array[String]:
+func _check_identity(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-
-	var config := save_comp.replication_config
-	if not config or config.get_properties().is_empty():
-		errs.append(
-			"SaveComponent on '%s' has 0 replication properties. " % \
-					[save_comp.owner.name if save_comp.owner else "?"] +
-			"Check the Replication panel in the Editor and ensure " +
-			"instantiate() has been called.",
-		)
-
-	if config:
-		pass
-
-	if save_comp.database and not save_comp.table_name.is_empty():
-		var tracked: Array[StringName] = save_comp._properties.keys()
-		var registered: Array[StringName] = \
-				save_comp.database.get_registered_columns(save_comp.table_name)
-		if not registered.is_empty():
-			var only_tracked := tracked.filter(
-				func(c: StringName) -> bool: return c not in registered
-			)
-			var only_registered := registered.filter(
-				func(c: StringName) -> bool: return c not in tracked
-			)
-			if not only_tracked.is_empty() or not only_registered.is_empty():
-				errs.append(
-					("Schema drift on '%s' table='%s': only_in_sync=%s " +
-							"only_in_db=%s") % [
-						save_comp.owner.name if save_comp.owner else "?",
-						save_comp.table_name,
-						str(only_tracked),
-						str(only_registered),
-					],
-				)
-
-	return errs
-
-
-func _check_multiplayer_entity(
-		entity: MultiplayerEntity,
-) -> Array[String]:
-	var errs: Array[String] = []
-	if entity.root_path == NodePath(""):
-		errs.append(
-			"MultiplayerEntity.root_path is empty on '%s'. " % \
-					[entity.owner.name] +
-			"get_path_to(entity.owner) was likely called before the " +
-			"player entered the scene tree.",
-		)
-	if entity.is_template:
+	var entity := NetwEntity.of(node)
+	if entity == null:
+		return errs
+	if entity.entity_id.is_empty():
 		errs.append(
 			(
 					"spawned entity has no identity. Wrap your " +
@@ -182,8 +124,7 @@ func _check_multiplayer_entity(
 
 func _check_authority(node: Node) -> Array[String]:
 	var errs: Array[String] = []
-	var entity := MultiplayerEntity.unwrap(node)
-	var expected := _get_expected_authority(node, entity)
+	var expected := _get_expected_authority(node)
 	if expected == 0:
 		return errs
 
@@ -198,34 +139,12 @@ func _check_authority(node: Node) -> Array[String]:
 	return errs
 
 
-func _get_expected_authority(
-		node: Node,
-		entity: MultiplayerEntity,
-) -> int:
-	if not entity:
+func _get_expected_authority(node: Node) -> int:
+	var entity := NetwEntity.of(node)
+	if entity == null:
 		return NetwEntity.parse_peer(node.name)
 
 	var controller := entity.controller
 	if controller == 0:
 		return MultiplayerPeer.TARGET_PEER_SERVER
 	return controller
-
-
-func _check_server_authority_synchronizer(
-		node: Node,
-) -> Array[String]:
-	var errs: Array[String] = []
-	var has_server_sync := false
-	for sync: MultiplayerSynchronizer in \
-	SynchronizersCache.get_synchronizers(node):
-		if sync.get_multiplayer_authority() == 1:
-			has_server_sync = true
-			break
-	if not has_server_sync:
-		errs.append(
-			"No server-authoritative MultiplayerSynchronizer on '%s'. " % \
-					[node.name] +
-			"Scene visibility requires at least one synchronizer " +
-			"with authority=1 so the server can control replication.",
-		)
-	return errs

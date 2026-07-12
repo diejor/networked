@@ -1,6 +1,6 @@
 ## Abstract base class for client-side teleport transition overlays.
 ##
-## Automatically registers itself with [NetwServices] when added to the tree.
+## Automatically registers itself with [NetwService] when added to the tree.
 ## Subclasses implement [method teleport_out] (fade/cover outgoing scene) and
 ## [method teleport_in] (reveal incoming scene). Both methods are awaitable.
 @abstract
@@ -27,7 +27,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwServices.register(self, TPLayerAPI)
+	var mt := NetwService.register(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
 		"TPLayer must be a descendant of a MultiplayerTree",
@@ -45,7 +45,7 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwServices.unregister(self, TPLayerAPI)
+	var mt := NetwService.unregister(self, TPLayerAPI)
 	assert(
 		is_instance_valid(mt),
 		"TPLayer must be a descendant of a MultiplayerTree",
@@ -80,15 +80,11 @@ func _on_multiplayer_configured() -> void:
 
 
 # Plays the arrival animation when the local peer's player first appears.
-# Replaces MultiplayerEntity's direct reach into TPLayerAPI; presentation
-# stays inside the presentation node.
+# Presentation stays inside the presentation node.
 func _on_local_participant_joined(_participant: NetwParticipant) -> void:
 	teleport_in()
 
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
 func get_multiplayer_tree() -> MultiplayerTree:
-	var api := multiplayer as SceneMultiplayer
-	if not api:
-		return null
-	return api.get_meta(&"_multiplayer_tree", null) as MultiplayerTree
+	return MultiplayerTree.for_node(self)

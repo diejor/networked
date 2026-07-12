@@ -51,7 +51,7 @@ static func start_host(
 		var err: Error = await tree._open_host(true)
 		if err == OK:
 			if auth_timeout > 0.0:
-				tree.api.auth_timeout = auth_timeout
+				tree.api.inner.auth_timeout = auth_timeout
 			return { tree = tree, port = candidate, backend = tree.backend }
 
 		tree.queue_free()

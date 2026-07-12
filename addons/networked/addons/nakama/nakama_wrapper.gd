@@ -402,7 +402,10 @@ func read_public_storage(collection: String, limit := 100) -> Dictionary:
 ## Lists public objects under [param collection] across all owners.
 ##
 ## Nakama scopes storage by collection, key, and owner. This preserves every
-## owner entry, including multiple objects with the same key.
+## owner entry, including multiple objects with the same key. [param limit] is
+## the server page size. The listing follows the server cursor until the
+## collection is exhausted, so callers see every record, not just the first
+## page.
 ## [codeblock]
 ## Array
 ## └── Dictionary
@@ -416,22 +419,29 @@ func list_public_storage(collection: String, limit := 100) -> Array:
 	var session = _resolve_session()
 	if client == null or session == null or collection.is_empty():
 		return out
-	var res = await client.list_storage_objects_async(
-		session,
-		collection,
-		"",
-		limit,
-	)
-	if res == null or res.is_exception():
-		return out
-	for object in res.objects:
-		out.append(
-			{
-				"key": String(object.key),
-				"value": JSON.parse_string(String(object.value)),
-				"user_id": String(object.user_id),
-			},
+	var cursor: Variant = null
+	while true:
+		var res = await client.list_storage_objects_async(
+			session,
+			collection,
+			"",
+			limit,
+			cursor,
 		)
+		if res == null or res.is_exception():
+			return out
+		for object in res.objects:
+			out.append(
+				{
+					"key": String(object.key),
+					"value": JSON.parse_string(String(object.value)),
+					"user_id": String(object.user_id),
+				},
+			)
+		var next := String(res.cursor) if res.cursor != null else ""
+		if next.is_empty() or res.objects.is_empty():
+			break
+		cursor = next
 	return out
 
 

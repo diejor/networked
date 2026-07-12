@@ -30,21 +30,21 @@ func _make_entity(entity_name: String = "Ent") -> NetwEntity:
 
 func test_gate_binds_layer_on_enter_tree() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.get_layer(&"a")
+	var layer := mt.api.interest.get_layer(&"a")
 	assert_that(layer).is_not_null()
 	assert_that(layer.bound_gate()).is_equal(gate)
 
 
 func test_gate_unbinds_on_exit_tree() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.get_layer(&"a")
+	var layer := mt.api.interest.get_layer(&"a")
 	mt.remove_child(gate)
 	assert_that(layer.bound_gate()).is_null()
 
 
 func test_track_entity_delegates_to_bound_layer() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
+	var layer := mt.api.interest.layer(&"a")
 	var entity := _make_entity()
 
 	gate.track_entity(entity)
@@ -56,13 +56,13 @@ func test_track_entity_delegates_to_bound_layer() -> void:
 	assert_that(gate.has_entity(entity)).is_false()
 
 
-func _service() -> InterestService:
-	return mt.get_service(InterestService) as InterestService
+func _service() -> NetwInterestInterface:
+	return mt.api.interest
 
 
 func test_layer_writes_through_to_gate_snapshot() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
+	var layer := mt.api.interest.layer(&"a")
 	layer.add_viewer(7)
 	layer.add_viewer(11)
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
@@ -79,7 +79,7 @@ func test_layer_writes_through_to_gate_snapshot() -> void:
 
 
 func test_gate_picks_up_initial_layer_state_on_bind() -> void:
-	var layer := mt.interest.layer(&"a")
+	var layer := mt.api.interest.layer(&"a")
 	layer.add_viewer(7)
 	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
 	var gate := _make_gate(&"a")
@@ -91,7 +91,7 @@ func test_gate_picks_up_initial_layer_state_on_bind() -> void:
 
 func test_verdict_reflects_policy() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
+	var layer := mt.api.interest.layer(&"a")
 	_service().flush()
 	assert_that(gate.verdict_for(7)).is_false()
 	layer.add_viewer(7)
@@ -101,7 +101,7 @@ func test_verdict_reflects_policy() -> void:
 
 func test_batched_mutations_produce_one_snapshot() -> void:
 	var gate := _make_gate(&"a")
-	var layer := mt.interest.layer(&"a")
+	var layer := mt.api.interest.layer(&"a")
 	# Mutate many times in one frame; assert the gate observes only
 	# the final state once flush runs (i.e. nothing was written
 	# eagerly between mutations).
@@ -124,7 +124,6 @@ func test_second_gate_for_same_layer_errors() -> void:
 	# We tolerate the error; the gate just shouldn't replace the first.
 	mt.add_child(second)
 	auto_free(second)
-	var registered: InterestGate = mt.get_service(InterestService) \
-			.gate_for(&"a")
+	var registered: InterestGate = mt.api.interest.gate_for(&"a")
 	# First gate remains the registered one.
 	assert_that(registered).is_not_equal(second)

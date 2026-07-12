@@ -1,4 +1,4 @@
-## Automatically tracks a [MultiplayerEntity] or [Node] and displays its 
+## Automatically tracks a [NetwEntity] or [Node] and displays its
 ## [member multiplayer.get_unique_id] and username in world-space using unprojection.
 class_name DebugClient
 extends Control
@@ -9,7 +9,7 @@ const OFFSET_3D := Vector3(0, 2.0, 0)
 @onready var uid_label: RichTextLabel = %UIDLabel
 @onready var username_label: RichTextLabel = %UsernameLabel
 
-var _entity: MultiplayerEntity
+var _entity: NetwEntity
 var _target: Node
 var _username: String = ""
 
@@ -42,7 +42,7 @@ func _process(_delta: float) -> void:
 	_update_position(node)
 
 
-func follow_entity(entity: MultiplayerEntity) -> void:
+func follow_entity(entity: NetwEntity) -> void:
 	_entity = entity
 	_target = null
 	_username = entity.entity_id if entity else &""

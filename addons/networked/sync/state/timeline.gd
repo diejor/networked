@@ -15,7 +15,7 @@
 ## [/codeblock]
 ##
 ## Snapshots are whole-entity [Dictionary] values keyed by a tick number, with
-## each entry mapping a [ProxySynchronizer] virtual name to its value. Two
+## each entry mapping a state or input field key to its value. Two
 ## [NetwRingBuffer] rings back the store, one for state and one for input, so a
 ## restore is a single atomic [method state_at] read rather than a per-property
 ## walk.

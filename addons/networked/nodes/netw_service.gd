@@ -3,7 +3,7 @@
 ##
 ## Registration is bound to tree membership. The service enters the registry on
 ## [code]_enter_tree[/code] and leaves on [code]_exit_tree[/code], skipping the
-## editor, so it is discoverable through [method NetwServices.get_service]
+## editor, so it is discoverable through [method NetwMultiplayer.get_service]
 ## exactly while it is mounted under a live tree. The lifecycle is sealed.
 ## Subclasses never override [code]_enter_tree[/code] or [code]_exit_tree[/code].
 ## They override [method service_entered] and [method service_exiting] instead,
@@ -24,8 +24,8 @@
 ##
 ## Nodes that already extend a non-[Node] base (such as
 ## [MultiplayerSceneManager]) cannot adopt this base under GDScript single
-## inheritance. They call [method NetwServices.register] and
-## [method NetwServices.unregister] directly.
+## inheritance. They call [method NetwService.register] and
+## [method NetwService.unregister] directly.
 @icon("res://addons/networked/assets/NetwService.svg")
 @abstract
 class_name NetwService
@@ -48,19 +48,56 @@ static func is_transport_restricted() -> bool:
 	return transport_restricted_probe.is_valid() and bool(transport_restricted_probe.call())
 
 # ---------------------------------------------------------------------------
+# Static registration helpers
+# ---------------------------------------------------------------------------
+
+
+## Registers [param service] as a session service.
+##
+## Walks [param service]'s ancestor chain to find the owning [MultiplayerTree],
+## then calls [method MultiplayerTree.register_service]. If [param type] is
+## [code]null[/code], the service's script class is used as the registration
+## key.
+## [codeblock]
+## func _enter_tree() -> void:
+##     var mt := NetwService.register(self)
+## [/codeblock]
+## Returns the owning [MultiplayerTree], or [code]null[/code] if [param service]
+## is not a descendant of one.
+static func register(service: Node, type: Script = null) -> MultiplayerTree:
+	var mt := MultiplayerTree.resolve(service)
+	if is_instance_valid(mt):
+		mt.register_service(service, type)
+	return mt
+
+
+## Unregisters [param service] from the session.
+## [codeblock]
+## func _exit_tree() -> void:
+##     NetwService.unregister(self)
+## [/codeblock]
+## Returns the owning [MultiplayerTree], or [code]null[/code] if [param service]
+## is not a descendant of one.
+static func unregister(service: Node, type: Script = null) -> MultiplayerTree:
+	var mt := MultiplayerTree.resolve(service)
+	if is_instance_valid(mt):
+		mt.unregister_service(service, type)
+	return mt
+
+# ---------------------------------------------------------------------------
 # Override points
 # ---------------------------------------------------------------------------
 
 
 ## Returns the registration key for this service.
 ##
-## Return a family base type so [method NetwServices.get_service] and
-## [method NetwServices.get_services] resolve subclasses under it. Return
+## Return a family base type so [method NetwMultiplayer.get_service] and
+## [method NetwMultiplayer.get_services] resolve subclasses under it. Return
 ## [code]null[/code] (the default) to register under the concrete script, which
 ## keeps each instance under a unique key. Several instances sharing one key
 ## overwrite each other in the registry, so families with many instances (like
 ## [LobbyDirectory]) keep the concrete default and are collected through
-## [method NetwServices.get_services].
+## [method NetwMultiplayer.get_services].
 func service_type() -> Script:
 	return null
 
@@ -98,7 +135,7 @@ func service_exiting(mt: MultiplayerTree) -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint() or not should_register():
 		return
-	var mt := NetwServices.register(self, service_type())
+	var mt := NetwService.register(self, service_type())
 	if is_instance_valid(mt):
 		service_entered(mt)
 
@@ -109,4 +146,4 @@ func _exit_tree() -> void:
 	var mt := MultiplayerTree.resolve(self)
 	if is_instance_valid(mt):
 		service_exiting(mt)
-	NetwServices.unregister(self, service_type())
+	NetwService.unregister(self, service_type())

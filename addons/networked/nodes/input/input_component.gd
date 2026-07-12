@@ -23,9 +23,9 @@ signal action_changed(action: StringName, pressed: bool)
 ## is the multiplayer authority). Carries the tick number and a snapshot of the current state.
 signal tick_snapshot(tick: int, state: Dictionary)
 
-## When [code]true[/code], connects to [MultiplayerClock.on_tick] and emits
-## [signal tick_snapshot] each tick. Requires a [MultiplayerClock] registered
-## on this node's multiplayer API.
+## When [code]true[/code], connects to [signal NetwClockInterface.on_tick] and
+## emits [signal tick_snapshot] each tick. Requires a [MultiplayerClock]
+## registered on this node's multiplayer API.
 @export var tick_mode: bool = false
 
 ## Current pressed state for each tracked action, keyed by action name.
@@ -38,18 +38,29 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 @abstract func get_inputs() -> Array
 
 
+# The controlling peer keeps latching input under PROCESS_MODE_ALWAYS so an
+# ancestor held in PROCESS_MODE_DISABLED (the teleport reparent guard) never
+# deafens _unhandled_input mid-teleport, which would strand a released key as
+# pressed in state. Non-authority peers never latch local input.
+func _sync_process_mode_to_authority() -> void:
+	process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+		if is_multiplayer_authority()
+		else Node.PROCESS_MODE_DISABLED
+	)
+
+
 func _enter_tree() -> void:
-	if not is_multiplayer_authority():
-		process_mode = Node.PROCESS_MODE_DISABLED
-		return
+	_sync_process_mode_to_authority()
 
 
 func _ready() -> void:
+	_sync_process_mode_to_authority()
 	if not is_multiplayer_authority():
-		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 	if tick_mode:
-		var clock := MultiplayerClock.for_node(self)
+		var api := NetwMultiplayer.of(self)
+		var clock := api.clock if api and api.clock.is_configured() else null
 		if clock:
 			clock.before_tick.connect(_on_before_tick)
 			clock.on_tick.connect(_on_tick)
@@ -60,8 +71,8 @@ func _ready() -> void:
 ## Override to refresh this component's replicated input exports from the current
 ## [member state] before each tick is simulated.
 ##
-## Runs at [signal MultiplayerClock.before_tick] on the controlling peer only, so
-## the values a [InputSynchronizer] ships and a [PredictionComponent] snapshots are
+## Runs at [signal NetwClockInterface.before_tick] on the controlling peer only, so
+## the values the input set ships and a [PredictionComponent] snapshots are
 ## the tick's gathered input, never a stale poll. The base is a no-op, so a
 ## subclass that only emits [signal tick_snapshot] needs no override.
 ## [codeblock]

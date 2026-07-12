@@ -126,8 +126,8 @@ func delete_namespace(slot: String) -> Error:
 ##
 ## The whole store lives in [code]namespace -> table -> id -> Dictionary[/code]
 ## and vanishes when the backend is freed, so it is what a unit test for
-## [SaveComponent] or [NetwDatabase] reaches for when disk I/O would only add
-## flakiness. It overrides every method, so warming never applies.
+## [NetwDatabase] reaches for when disk I/O would only add flakiness. It overrides
+## every method, so warming never applies.
 ## [codeblock]
 ## var db := NetwDatabase.new()
 ## db.backend = NetwDatabaseBackend.Dict.new()

@@ -16,6 +16,8 @@ extends NetwTestSuite
 const _TIMEOUT := 10.0
 
 var _trees: Array = []
+var _services: Array = []
+var _instance_id := ""
 
 
 @warning_ignore("unused_parameter")
@@ -30,6 +32,7 @@ func after_test() -> void:
 	# The rendezvous installs a global proxy resolver bound to a per-test
 	# rendezvous; drop it so it never leaks into another suite's Nakama connect.
 	NakamaWrapper.proxy_base_resolver = Callable()
+	await _delete_rendezvous_records()
 	for tree in _trees.duplicate():
 		if is_instance_valid(tree):
 			await NakamaTestSupport.stop_tree(tree)
@@ -37,10 +40,36 @@ func after_test() -> void:
 	await super.after_test()
 
 
+# Each hosting participant published a record owned by its own Nakama user.
+# Delete them so the shared collection never accumulates one record per run.
+func _delete_rendezvous_records() -> void:
+	if _instance_id.is_empty():
+		_services.clear()
+		return
+	for service: DiscordActivityService in _services:
+		if not is_instance_valid(service):
+			continue
+		var tree := MultiplayerTree.resolve(service)
+		if tree == null:
+			continue
+		var session := tree.get_nakama_session()
+		if session == null:
+			continue
+		var rdv := service.rendezvous as NakamaDiscordRendezvous
+		if rdv == null:
+			continue
+		var wrapper := NakamaWrapper.new()
+		wrapper.use_session(session)
+		await wrapper.delete_public_storage(rdv.collection, _instance_id)
+	_services.clear()
+	_instance_id = ""
+
+
 func test_two_participants_rendezvous_into_one_match() -> void:
 	# A per-run instance id so the shared rendezvous collection never collides with
 	# a leftover record from an earlier run.
 	var instance_id := "disc-%d-%d" % [Time.get_unix_time_from_system(), randi()]
+	_instance_id = instance_id
 
 	var host_service := _build_participant("alice", instance_id)
 	var host_err: Error = await host_service.connect_activity(_payload("alice"))
@@ -112,6 +141,7 @@ func _build_participant(
 
 	add_child(tree)
 	_trees.append(tree)
+	_services.append(service)
 	return service
 
 

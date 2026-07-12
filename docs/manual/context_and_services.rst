@@ -1,64 +1,76 @@
 .. _doc_manual_context_and_services:
 
-Context and services
-====================
+Sessions and services
+=====================
 
 The :ref:`Netw <class_Netw>` static class is the public surface most user
 code interacts with day to day. Its centerpiece is
-:ref:`Netw.ctx() <class_Netw_method_ctx>`, a single call that resolves a
-node's session, services, scene, and entity facades in one go for the give :godot:`Node <Node>`. Once you
-get used to reaching for :ref:`Netw.ctx(self) <class_Netw_method_ctx>` first, the rest of the addon
-stops feeling like four separate libraries and starts feeling like one.
+:ref:`Netw.of() <class_Netw_method_of>`, a single call that resolves a node's
+:ref:`NetwMultiplayer <class_NetwMultiplayer>` session for the given
+:godot:`Node <Node>`. Once you get used to reaching for
+:ref:`Netw.of(self) <class_Netw_method_of>` first, the rest of the addon stops
+feeling like several separate libraries and starts feeling like one object.
 
-The four facades
-----------------
+Two rules
+---------
 
-:ref:`NetwContext <class_NetwContext>` exposes four members, each of which
-may independently be ``null`` depending on where in the tree you called it:
+There are exactly two ways to ask a question, and which one you use depends on
+the kind of question:
 
-- :ref:`tree <class_NetwContext_property_tree>`: a
-  :ref:`NetwTree <class_NetwTree>` facade that wraps the enclosing
-  :ref:`MultiplayerTree <class_MultiplayerTree>`. Use it for session-level
-  operations: pause, unpause, kick, request disconnect.
-- :ref:`services <class_NetwContext_property_services>`: a service
-  locator for backend systems registered on the tree. The built-in
-  services include the :ref:`MultiplayerClock <class_MultiplayerClock>` and the
-  :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`. You can
-  add your own with
-  :ref:`NetwServices.register() <class_NetwServices_method_register>`.
-- :ref:`scene <class_NetwContext_property_scene>`: a
-  :ref:`NetwScene <class_NetwScene>` facade for the enclosing
-  :ref:`MultiplayerScene <class_MultiplayerScene>`. Provides readiness
-  gates, countdowns, and ready/waiting-room flows.
-- :ref:`entity <class_NetwContext_property_entity>`: a
-  :ref:`NetwEntity <class_NetwEntity>` facade resolved by walking from the
-  origin node up to the owning entity root. Available even on orphan nodes
-  (during :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`,
-  for example), which is why it is the only facade you can rely on inside
-  the very early parts of a spawn lifecycle.
+- **Positional questions** (what encloses this node?) are static walkers on the
+  answering class. :ref:`NetwEntity.of() <class_NetwEntity_method_of>` resolves
+  the entity for a node, and
+  :ref:`NetwScene.for_node() <class_NetwScene_method_for_node>` resolves its
+  scene. Both walk the parent chain and work on orphan nodes, which is why they
+  are the only ones you can rely on inside the very early parts of a spawn
+  lifecycle (during
+  :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`,
+  for example).
+- **Session questions** (who is live, what is visible, what services exist?)
+  are properties and methods on the
+  :ref:`NetwMultiplayer <class_NetwMultiplayer>` you reach with
+  :ref:`Netw.of(node) <class_Netw_method_of>`. A node that is not inside a
+  :ref:`MultiplayerTree <class_MultiplayerTree>` yet has no session, so
+  :ref:`Netw.of() <class_Netw_method_of>` returns ``null`` there. That is the
+  true semantics: liveness, interest, participants, and services do not exist
+  for a node outside a session.
 
-The split is intentional. Tree and services need an enclosing
-:ref:`MultiplayerTree <class_MultiplayerTree>`. Scene needs an enclosing
-:ref:`MultiplayerScene <class_MultiplayerScene>`, entity needs only a
-parent chain. Code that reads only what it needs stays usable in more
-contexts. A component that resolves :ref:`ctx.entity <class_NetwContext_property_entity>` works in editor
-tests, in headless integration tests, and in unspawned templates without
-any guards beyond a null check on the member it actually uses.
+The session surface
+-------------------
 
-.. tip::
+:ref:`NetwMultiplayer <class_NetwMultiplayer>` is the one object you talk to
+for everything about the session you are in:
 
-    Always check :ref:`is_valid() <class_NetwContext_method_is_valid>`
-    before caching a context across frames. The underlying tree can be
-    freed during disconnects and scene swaps. A stale context returns
-    facades that look healthy but point at freed objects.
+- session verbs and state:
+  :ref:`host() <class_NetwMultiplayer_method_host>`,
+  :ref:`join() <class_NetwMultiplayer_method_join>`,
+  :ref:`pause() <class_NetwMultiplayer_method_pause>`,
+  :ref:`kick() <class_NetwMultiplayer_method_kick>`,
+  :ref:`role <class_NetwMultiplayer_property_role>`,
+  :ref:`participants <class_NetwMultiplayer_property_participants>`,
+  :ref:`local_player <class_NetwMultiplayer_property_local_player>`.
+- owned interfaces:
+  :ref:`clock <class_NetwMultiplayer_property_clock>`,
+  :ref:`liveness <class_NetwMultiplayer_property_liveness>`,
+  :ref:`interest <class_NetwMultiplayer_property_interest>`,
+  :ref:`lag_compensation <class_NetwMultiplayer_property_lag_compensation>`,
+  :ref:`interpolation <class_NetwMultiplayer_property_interpolation>`. These are
+  direct properties, never ``null`` once the session exists (the clock and lag
+  compensation stay inert until a configurator node registers).
+- the built-in services
+  :ref:`scene_manager <class_NetwMultiplayer_property_scene_manager>` and the
+  :ref:`connect <class_NetwMultiplayer_property_connect>` browser facade, plus
+  your own through
+  :ref:`get_service() <class_NetwMultiplayer_method_get_service>`.
 
 Registering custom services
 ---------------------------
 
 Services are :godot:`Node <Node>` instances that live under the
 :ref:`MultiplayerTree <class_MultiplayerTree>` and are looked up by type.
-Networked already registers the clock and the scene manager. To add your
-own, declare the class and register the instance:
+Networked already registers the scene manager. To add your own, declare the
+class and register the instance through
+:ref:`NetwService <class_NetwService>`:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
@@ -67,18 +79,17 @@ own, declare the class and register the instance:
     extends Node
 
     func _enter_tree() -> void:
-        NetwServices.register(self)
+        NetwService.register(self)
 
     func _exit_tree() -> void:
-        NetwServices.unregister(self)
+        NetwService.unregister(self)
 
 Anywhere in the session, recover the service with the typed accessor:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    var ctx := Netw.ctx(self)
-    var gamestate: BomberGamestate = ctx.services.get_service(BomberGamestate)
+    var gamestate: BomberGamestate = Netw.of(self).get_service(BomberGamestate)
     gamestate.begin_match()
 
 Services must be descendants of the tree node. The tree asserts on this
@@ -111,30 +122,24 @@ mis-wirings, :ref:`ERROR <class_NetwLog_constant_ERROR>` for "this session is no
 level is :ref:`INFO <class_NetwLog_constant_INFO>`. Switch to :ref:`DEBUG <class_NetwLog_constant_DEBUG>` while debugging join issues and you
 will see the full handshake annotated step-by-step in the output panel.
 
-When to call Netw.ctx
----------------------
+Caching the session
+-------------------
 
-``Netw.ctx(node)`` is cheap. It walks the parent chain and constructs a
-small :ref:`NetwContext <class_NetwContext>` wrapper. Call it on demand at
-the top of methods that need session access rather than caching it on the
-node, unless you have a profiler-measured reason not to. Caching is fine
-inside a method, but a stale field across frames is the most common cause
-of "I'm reading the wrong tree" bugs after a reconnect.
-
-If you find yourself reaching for the same facade in many methods of the
-same node, the canonical shortcut is to cache the *facade*, not the
-context, in :godot:`_ready() <Node#class_node_private_method__ready>` after the surrounding tree is configured:
+:ref:`Netw.of() <class_Netw_method_of>` returns the tree's persistent
+:ref:`NetwMultiplayer <class_NetwMultiplayer>`, created once per tree and stable
+across reconnects and backend swaps. Unlike the old per-call context wrapper it
+is safe to cache: a cached reference stays a valid object and reports
+inactivity through
+:ref:`is_active() <class_NetwMultiplayer_method_is_active>` instead of dangling
+after teardown.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    @onready var ctx: NetwContext = Netw.ctx(self)
+    @onready var netw := Netw.of(self)
 
     func _on_participant_joined(participant: NetwParticipant) -> void:
-        if not ctx.is_valid():
-            ctx = Netw.ctx(self)
-        ctx.services.get_service(BomberGamestate).register_player(participant)
+        netw.get_service(BomberGamestate).register_player(participant)
 
-This keeps you inside the addon's lifetime guarantees without writing a
-re-resolve helper for every script that needs the tree.
-.
+The one rule for user code: configure in :godot:`_init() <Object#class_object_private_method__init>`,
+talk to the session from the tree.

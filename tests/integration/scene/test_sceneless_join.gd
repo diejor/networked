@@ -1,7 +1,8 @@
 ## Integration test for the default-scene join flow.
 ##
-## Verifies that dropping a Level as a direct child of [MultiplayerTree]
-## automatically routes joins and spawns players via a managed scene.
+## Verifies that a world scene the harness wraps in an explicit
+## [MultiplayerSceneManager] (see [method NetwTestHarness.setup]) routes joins
+## and spawns players via the managed scene.
 class_name TestLobbylessJoin
 extends NetwTestSuite
 
@@ -24,10 +25,14 @@ func before_test() -> void:
 	level_builder.pack()
 	template_instance.free()
 
-	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
+	spawner_path = player_builder.player_name
 
 	harness = make_harness()
-	await harness.setup(level_builder.packed)
+	var sm_factory := func() -> MultiplayerSceneManager:
+		var sm := NetwTestSuite.create_scene_manager()
+		sm.add_spawnable_scene(level_builder.resource_path)
+		return sm
+	await harness.setup_factory(sm_factory)
 	client = await harness.add_client()
 
 
@@ -42,9 +47,9 @@ func test_default_scene_wraps_level_and_context() -> void:
 	)
 	assert_that(level).is_not_null()
 
-	var ctx := Netw.ctx(level)
+	var ctx := Netw.of(level)
 	assert_that(ctx).is_not_null()
-	assert_that(ctx.is_valid()).is_true()
+	assert_that(ctx.is_active()).is_true()
 
 
 func test_player_spawns_in_level_after_join() -> void:
@@ -77,6 +82,6 @@ func test_player_spawns_in_level_after_join() -> void:
 			.is_not_null()
 
 	var player := level.get_node(player_name)
-	var client_comp := MultiplayerEntity.unwrap(player)
+	var client_comp := NetwEntity.of(player)
 	assert_that(client_comp).is_not_null()
 	assert_that(str(client_comp.entity_id)).is_equal(username)

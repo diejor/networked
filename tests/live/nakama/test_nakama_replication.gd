@@ -2,6 +2,7 @@ class_name TestNakamaReplication
 extends NetwTestSuite
 
 const MAIN := preload("res://examples/quick_start/Main.tscn")
+const DATABASE := preload("res://examples/quick_start/quick_start_database.tres")
 const _TIMEOUT := 10.0
 
 var _trees: Array = []
@@ -12,7 +13,11 @@ func before(
 		do_skip = NakamaTestServer.unavailable(),
 		skip_reason = NakamaTestServer.SKIP_REASON,
 ) -> void:
-	pass
+	# The quick_start SaveComponents persist into the repo-local saves dir.
+	# Redirect the shared database resource to a gdUnit temp dir so a stale
+	# save (for example valeria parked in Level2) can't shape this run's spawns.
+	var fs := DATABASE.backend as FileSystemDatabase
+	fs.base_dir = create_temp_dir("quick_start_saves")
 
 
 func after_test() -> void:

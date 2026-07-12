@@ -47,7 +47,7 @@ class Info:
 		return var_to_bytes(dict)
 
 
-	## Decodes a wire-format byte array into a fresh [Info].
+	## Decodes a wire-format byte array into a fresh [ServerDescriptor.Info].
 	##
 	## Returns [code]null[/code] if [param bytes] does not decode to a dictionary.
 	static func from_payload(bytes: PackedByteArray) -> Info:
@@ -69,7 +69,7 @@ class Info:
 		return info
 
 
-## Builds a fresh [Info] for [param tree]. Called on the host inside
+## Builds a fresh [ServerDescriptor.Info] for [param tree]. Called on the host inside
 ## the auth callback; must not mutate session state.
 ##
 ## [br][br][b]Server Only.[/b]

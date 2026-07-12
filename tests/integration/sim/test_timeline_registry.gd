@@ -1,7 +1,7 @@
 ## Integration tests for the [LagCompensation] timeline registry + recorder.
 ##
-## Proves Decision 3 / 4: an entity with a server-authoritative [StateSynchronizer]
-## and no [PredictionComponent] is registered by state-sync presence alone, and the
+## Proves Decision 3 / 4: an entity whose script declares a server-authoritative
+## state set and no [PredictionComponent] is registered by state-set presence alone, and the
 ## server records its authoritative snapshot every tick. A non-predicted entity is
 ## therefore rewindable by default, which is the substrate the server rewind query
 ## reads. Driven server-only through [RewindScenario].
@@ -13,7 +13,7 @@ func test_state_sync_presence_registers_a_timeline() -> void:
 	await s.setup(self)
 	var entity := await s.spawn_state_entity("Platform")
 
-	# Registered by the StateSynchronizer alone, with no PredictionComponent.
+	# Registered by the derived state set alone, with no PredictionComponent.
 	var tl := s.sim.timeline_of(entity)
 	assert_bool(tl != null).is_true()
 	# The registry timeline is published to the entity slot.

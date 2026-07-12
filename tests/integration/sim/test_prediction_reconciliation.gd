@@ -1,6 +1,6 @@
 ## Real-node ack-based reconciliation (ports the lag-comp spike tier C).
 ##
-## Drives the production [StateSynchronizer], [InputSynchronizer], and
+## Drives the production derived state and input sets and the
 ## [PredictionComponent] across a real loopback through [PredictionScenario]: the
 ## owning client predicts immediately, the server stamps an ack, and the client
 ## reconciles on that ack with no clock lead and no determinism contract. This is
@@ -17,24 +17,6 @@ func test_clean_predicts_authority_with_no_corrections() -> void:
 	# matches the server's authoritative computation tick for tick, so no
 	# correction ever fires in steady state.
 	var s := PredictionScenario.new()
-	await s.setup(self)
-	var p := await s.add_predicted_entity()
-	s.latency_both(4)
-	s.hold_input(p, RIGHT)
-	s.warmup(p)
-	s.run(70)
-
-	assert_int(p.consumed).is_greater(10)
-	assert_int(p.observer.divergence_log.size()).is_greater(5)
-	assert_int(p.corrections).is_equal(0)
-	assert_float(p.client_body.position.x).is_greater(0.0)
-	assert_float(p.server_body.position.x).is_greater(0.0)
-
-
-func test_rpc_transport_matches_stock_prediction_convergence() -> void:
-	var s := PredictionScenario.new()
-	s.state_transport = PackedSynchronizer.Transport.RPC
-	s.input_transport = PackedSynchronizer.Transport.RPC
 	await s.setup(self)
 	var p := await s.add_predicted_entity()
 	s.latency_both(4)

@@ -1,9 +1,10 @@
-## Records the divergence series a client [PredictionComponent] reports.
+## Records the divergence series a client prediction handle reports.
 ##
-## Connects to [signal PredictionComponent.state_evaluated] (every receive) and
-## [signal PredictionComponent.reconciled] (corrections only), so the scenario
-## reads peak and tail divergence and the correction count off real-node signals
-## instead of the retired spike's metric fields.
+## Connects to [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated]
+## (every receive) and
+## [signal NetwLagCompensationInterface.PredictionHandle.reconciled] (corrections
+## only), so the scenario reads peak and tail divergence and the correction count
+## off real signals instead of the retired spike's metric fields.
 ##
 ## [codeblock]
 ## divergence_log entry:
@@ -18,14 +19,14 @@ extends RefCounted
 ## One entry per state receive, in arrival order.
 var divergence_log: Array[Dictionary] = []
 
-## Corrections seen through [signal PredictionComponent.reconciled].
+## Corrections seen through [signal NetwLagCompensationInterface.PredictionHandle.reconciled].
 var correction_count: int = 0
 
-var _prediction: PredictionComponent
+var _prediction: NetwLagCompensationInterface.PredictionHandle
 
 
 ## Binds to [param prediction]'s divergence signals.
-func observe(prediction: PredictionComponent) -> void:
+func observe(prediction: NetwLagCompensationInterface.PredictionHandle) -> void:
 	_prediction = prediction
 	prediction.state_evaluated.connect(_on_state_evaluated)
 	prediction.reconciled.connect(_on_reconciled)

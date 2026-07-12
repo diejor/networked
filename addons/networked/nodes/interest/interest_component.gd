@@ -49,7 +49,7 @@ signal observer_left(layer_id: StringName, peer_id: int)
 ## This answers "who can see me?" Client code asking "what can I see?"
 ## should connect to [signal NetwInterestLayer.entity_visible] instead.
 @export var report_observers: bool = false
-var _interest: NetwInterest = null
+var _interest: NetwInterestInterface = null
 
 
 func _init() -> void:
@@ -70,10 +70,10 @@ func _notification(what: int) -> void:
 		return
 	if Engine.is_editor_hint():
 		return
-	var entity := Netw.ctx(self).entity
+	var entity := NetwEntity.resolve(self)
 	if not entity:
 		return
-	entity.contribute_spawn_property(self, &"layer_ids")
+	Netw.configure_property(self, &"layer_ids").on_spawn()
 
 
 func _enter_tree() -> void:
@@ -180,8 +180,8 @@ func _resolve_entity() -> NetwEntity:
 	return NetwEntity.of(self)
 
 
-func _resolve_interest() -> NetwInterest:
+func _resolve_interest() -> NetwInterestInterface:
 	if _interest:
 		return _interest
-	var mt := MultiplayerTree.resolve(self)
-	return mt.interest if mt else null
+	var api := NetwMultiplayer.of(self)
+	return api.interest if api else null

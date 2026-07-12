@@ -502,7 +502,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_disconnect_all()
-	NetwServices.unregister(self, TreeProbe)
+	NetwService.unregister(self, TreeProbe)
 	for scene: MultiplayerScene in _hooked_scenes.keys():
 		_unhook_synchronizer(scene)
 	_hooked_scenes.clear()
@@ -576,7 +576,7 @@ func _on_configured() -> void:
 	if not mt or not reporter or _scene_wired:
 		return
 
-	NetwServices.register(self, TreeProbe)
+	NetwService.register(self, TreeProbe)
 	_scene_wired = true
 
 	var clock: MultiplayerClock = mt.get_service(MultiplayerClock)

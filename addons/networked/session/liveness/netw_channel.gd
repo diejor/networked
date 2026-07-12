@@ -17,36 +17,36 @@
 ## [/codeblock]
 ## Pass [param batched] as [code]true[/code] to [method send] or
 ## [method broadcast] to aggregate payloads into the shared peer buffers
-## flushed by [method RelayService.flush_all_buffers].
+## flushed by [method NetwReplicationInterface.flush_all_buffers].
 class_name NetwChannel
 extends RefCounted
 
 ## The channel identifier. Must be between 100 and 254.
 var id: int
 
-var _relay: RelayService
+var _replication: NetwReplicationInterface
 
 
-func _init(p_id: int, p_relay: RelayService) -> void:
+func _init(p_id: int, p_replication: NetwReplicationInterface) -> void:
 	assert(
 		p_id >= 100 and p_id <= 254,
 		"NetwChannel: ID must be between 100 and 254."
 	)
 	id = p_id
-	_relay = p_relay
+	_replication = p_replication
 
 
 ## Sends the custom channel payload to the specified [param peer_id].
 ##
 ## With [param batched] as [code]true[/code], the payload queues into the
-## peer aggregation buffers flushed by [method RelayService.flush_all_buffers].
+## peer aggregation buffers flushed by [method NetwReplicationInterface.flush_all_buffers].
 func send(peer_id: int, payload: PackedByteArray, reliable: bool = true, batched: bool = false) -> void:
-	_relay.send_to(peer_id, 0, id, payload, reliable, 0, "", batched)
+	_replication.send_to(peer_id, 0, id, payload, reliable, 0, "", batched)
 
 
 ## Broadcasts the custom channel payload to all other connected peers.
 func broadcast(payload: PackedByteArray, reliable: bool = true, batched: bool = false) -> void:
-	_relay.send_to(0, 0, id, payload, reliable, 0, "", batched)
+	_replication.send_to(0, 0, id, payload, reliable, 0, "", batched)
 
 
 ## Registers a [param handler] to receive payloads for this custom channel.
@@ -54,7 +54,7 @@ func broadcast(payload: PackedByteArray, reliable: bool = true, batched: bool = 
 ## The [param handler] is called as:
 ## [code]handler(sender: int, payload: PackedByteArray)[/code].
 func register(handler: Callable) -> void:
-	_relay.register_channel(
+	_replication.register_channel(
 		id,
 		func(_entity, payload: PackedByteArray, sender: int) -> void:
 			handler.call(sender, payload)

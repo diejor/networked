@@ -90,7 +90,7 @@ func parse(formatted_path: String) -> void:
 ## and the scene file exists on disk.
 ## [br][br]
 ## [b]Note:[/b] This is a surface-level check. It does [b]not[/b] verify if the [member node_path]
-## actually exists inside the scene file. Use [method StateInspector.is_valid] for a more robust validation.
+## actually exists inside the scene file. Use [method SceneNodePath.StateInspector.is_valid] for a more robust validation.
 func is_valid() -> bool:
 	if scene_path.is_empty() or node_path.is_empty():
 		return false
@@ -102,7 +102,7 @@ func is_valid() -> bool:
 ## [SceneNodePath.Result] containing the scene root and the specific target [Node].
 ##
 ## [br][br][b]Note:[/b] This method does [i]not[/i] add the nodes to the [SceneTree].
-## You are responsible for adding [member Result.root] to the tree and managing its lifecycle.
+## You are responsible for adding [member SceneNodePath.Result.root] to the tree and managing its lifecycle.
 func instantiate(edit_state: PackedScene.GenEditState = 0) -> Result:
 	var target_node := _instantiate_and_get(edit_state)
 	if not target_node:

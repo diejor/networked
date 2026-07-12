@@ -1,9 +1,9 @@
 @tool
-## Exposes [InterestService] occupancy as Godot [Performance] monitors, with a
+## Exposes [NetwInterestInterface] occupancy as Godot [Performance] monitors, with a
 ## tree-wide group per [MultiplayerTree] and one group per [NetwInterestLayer].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
-## [method InterestService.monitor_snapshot] and
+## [method NetwInterestInterface.monitor_snapshot] and
 ## [method NetwInterestLayer.monitor_snapshot], turning the cumulative transition
 ## counters into live rates. Work runs only while a debugger is attached
 ## ([method EngineDebugger.is_active]) and is throttled, and the per-layer
@@ -26,7 +26,7 @@
 ## [/codeblock]
 ##
 ## Interest is server authoritative, so a pure client tree reads near zero. Reach
-## the data source through [method InterestService.monitor_snapshot] in non-debug
+## the data source through [method NetwInterestInterface.monitor_snapshot] in non-debug
 ## code, never these monitors.
 class_name InterestMonitor
 extends Node
@@ -59,7 +59,7 @@ func _exit_tree() -> void:
 	clear_all()
 
 
-## Tracks [param mt] so its [InterestService] is sampled each interval.
+## Tracks [param mt] so its [NetwInterestInterface] is sampled each interval.
 func register_tree(mt: MultiplayerTree) -> void:
 	if mt not in _trees:
 		_trees.append(mt)
@@ -86,11 +86,11 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		var service := mt.get_service(InterestService) as InterestService
-		if not service:
+		var interest := mt.api.interest if mt.api else null
+		if not interest:
 			continue
 		var tree_category := _tree_category(mt)
-		var snap := service.monitor_snapshot()
+		var snap := interest.monitor_snapshot()
 		_store(
 			tree_category,
 			{
@@ -104,7 +104,7 @@ func _sample(elapsed: float) -> void:
 		)
 
 		var live: Dictionary[String, bool] = { }
-		for layer in service.all_layers():
+		for layer in interest.all_layers():
 			var layer_category := "%s · %s" % [tree_category, String(layer.layer_id)]
 			live[layer_category] = true
 			var lsnap := layer.monitor_snapshot()

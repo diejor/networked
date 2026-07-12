@@ -71,15 +71,15 @@ func test_parented_contributes_paths_without_node_owner() -> void:
 	var tp := TPComponent.new()
 	components.add_child(tp)
 
-	var save := SaveComponent.new()
-	components.add_child(save)
-	var spawner := MultiplayerEntity.new()
+	var spawner := Node.new()
 	components.add_child(spawner)
 
-	save.finalize()
-
-	var spawn_path := NodePath("Components/TPComponent:current_scene_path")
-	var save_path := NodePath("TPComponent:current_scene_path")
-
-	assert_that(spawner.replication_config.has_property(spawn_path)).is_true()
-	assert_that(save.get_real_path(&"current_scene_path")).is_equal(save_path)
+	# current_scene_path rides the spawn packet through its .on_spawn() mark and
+	# is a persisted column with no per-tick sync axis, so it rides no lane.
+	var cfg: NetwScriptModel.PropertyConfig = \
+			NetwScriptModel.get_node_property_configs(tp).get(&"current_scene_path")
+	assert_that(cfg).is_not_null()
+	assert_that(cfg.is_spawn_state).is_true()
+	assert_that(cfg.is_persisted).is_true()
+	assert_that(cfg.in_state_set).is_false()
+	assert_that(cfg.in_input_set).is_false()

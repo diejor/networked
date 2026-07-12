@@ -15,11 +15,11 @@ Features
 --------
 
 - Scene-aware player spawning with :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>`
-  and :ref:`MultiplayerEntity <class_MultiplayerEntity>`.
+  and :ref:`NetwEntity <class_NetwEntity>`.
 - Smooth snapshot playback with :ref:`MultiplayerInterpolator <class_MultiplayerInterpolator>`.
 - Level transitions with :ref:`TPComponent <class_TPComponent>`.
 - Player data persistence with :ref:`NetwDatabase <class_NetwDatabase>` and
-  :ref:`SaveComponent <class_SaveComponent>`.
+  :ref:`NetwPersistenceInterface <class_NetwPersistenceInterface>`.
 - Transport resources for ENet, WebSocket, WebRTC, Steam, and local loopback.
 - Debug logging and topology tools for following what happens across peers.
 

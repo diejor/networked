@@ -272,5 +272,5 @@ Wiring it up looks like:
     add_child(browser)
 
     # Optional: surface lobbies from a SteamLobbyDirectory in the same list.
-    var session := Netw.ctx(multiplayer_tree).connect
+    var session := Netw.of(multiplayer_tree).connect
     session.register_directory(&"steam", steam_directory)

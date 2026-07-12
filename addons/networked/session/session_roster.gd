@@ -86,13 +86,9 @@ func resolve_username_collision(
 			if not entity.entity_id.is_empty():
 				existing_names.append(entity.entity_id)
 			else:
-				var client := entity.multiplayer_entity
-				if client:
-					existing_names.append(client.entity_id)
-				else:
-					var parsed := entity.owner.name.get_slice("|", 0)
-					if not parsed.is_empty():
-						existing_names.append(StringName(parsed))
+				var parsed := entity.owner.name.get_slice("|", 0)
+				if not parsed.is_empty():
+					existing_names.append(StringName(parsed))
 
 	var original_name := rj.username
 	if not original_name in existing_names:

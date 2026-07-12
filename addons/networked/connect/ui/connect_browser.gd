@@ -62,7 +62,7 @@ const PLACEHOLDER_SERVER_NAME := "My Server"
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
 	PROPERTY_HINT_ARRAY_TYPE,
-	"24/17:SceneNodePath:MultiplayerEntity",
+	"24/17:SceneNodePath:Node",
 )
 var spawner_options: Array[SceneNodePath] = []
 
@@ -165,7 +165,7 @@ func _exit_tree() -> void:
 ## Drives this browser from [param connect], the resolved [NetwConnect] for the
 ## target tree. Prefer this over the [member tree] export when the browser does
 ## not sit under the [MultiplayerTree]. A parent typically calls
-## [code]browser.bind(Netw.ctx(tree).connect)[/code].
+## [code]browser.bind(Netw.of(tree).connect)[/code].
 func bind(connect: NetwConnect) -> void:
 	_bound_connect = connect
 	if is_inside_tree():
@@ -180,7 +180,7 @@ func _setup_session() -> void:
 	if _bound_connect != null and _bound_connect.is_valid():
 		_connect = _bound_connect
 	else:
-		_connect = Netw.ctx(tree if tree != null else self).connect
+		_connect = Netw.of(tree if tree != null else self).connect
 	_session_ready = true
 	_connect.load_server_list(server_list_path)
 	_bind_session_signals()
@@ -671,7 +671,7 @@ static func format_spawner_label(path: SceneNodePath) -> String:
 
 ## Returns a user-friendly error string for [param result].
 ##
-## Maps the [ConnectResult] status and details to friendly descriptions.
+## Maps the [BackendPeer.ConnectResult] status and details to friendly descriptions.
 static func format_connect_error(result: BackendPeer.ConnectResult) -> String:
 	if result == null:
 		return "Unknown error."
@@ -708,7 +708,7 @@ static func format_connect_error(result: BackendPeer.ConnectResult) -> String:
 			return "Connection failed."
 
 
-## Returns an optional second line for useful [ConnectResult] diagnostics.
+## Returns an optional second line for useful [BackendPeer.ConnectResult] diagnostics.
 static func format_connect_detail(result: BackendPeer.ConnectResult) -> String:
 	if result == null:
 		return ""

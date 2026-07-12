@@ -26,8 +26,7 @@ func test_key_survives_entity_name_transport() -> void:
 
 
 func test_adopt_drops_pending_without_revert() -> void:
-	var service := LagCompensation.new()
-	auto_free(service)
+	var service := NetwLagCompensationInterface.new()
 	var effects := service.effects
 	var reverted := { &"value": false }
 
@@ -44,8 +43,7 @@ func test_adopt_drops_pending_without_revert() -> void:
 
 
 func test_discard_runs_revert_once() -> void:
-	var service := LagCompensation.new()
-	auto_free(service)
+	var service := NetwLagCompensationInterface.new()
 	var effects := service.effects
 	var reverted := { &"count": 0 }
 
@@ -62,8 +60,7 @@ func test_discard_runs_revert_once() -> void:
 
 
 func test_timeout_discards_pending_effect() -> void:
-	var service := LagCompensation.new()
-	auto_free(service)
+	var service := NetwLagCompensationInterface.new()
 	var effects := service.effects
 	var reverted := { &"value": false }
 
@@ -73,15 +70,14 @@ func test_timeout_discards_pending_effect() -> void:
 			reverted[&"value"] = true,
 		2,
 	)
-	service._on_tick(0.0, 1)
+	service.tick_step(0.0, 1)
 	assert_bool(reverted[&"value"]).is_false()
-	service._on_tick(0.0, 2)
+	service.tick_step(0.0, 2)
 	assert_bool(reverted[&"value"]).is_true()
 
 
 func test_observer_adopts_already_bound_entity() -> void:
-	var service := LagCompensation.new()
-	auto_free(service)
+	var service := NetwLagCompensationInterface.new()
 	var effects := service.effects
 	var confirmed := { &"value": false }
 	var node := Node.new()
@@ -101,8 +97,7 @@ func test_observer_adopts_already_bound_entity() -> void:
 
 
 func test_observer_adopts_from_entity_child() -> void:
-	var service := LagCompensation.new()
-	auto_free(service)
+	var service := NetwLagCompensationInterface.new()
 	var effects := service.effects
 	var confirmed := { &"value": false }
 	var node := Node.new()

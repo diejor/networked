@@ -2,7 +2,7 @@
 ##
 ## Translates a [StretchSettings] + control rect into concrete values to push
 ## onto a [SubViewport]: its [code]size[/code], its [code]size_2d_override[/code]
-## and stretch flag, and the on-screen rect ([member Result.inner_rect]) where
+## and stretch flag, and the on-screen rect ([member StretchLayout.Result.inner_rect]) where
 ## its texture should be drawn. Mirrors Godot's root stretch pipeline.
 ##
 ## Knows nothing about networking, multiplayer, or SubViewports. Operates on

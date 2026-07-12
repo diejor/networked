@@ -41,9 +41,9 @@ func add_player(id: int, new_player_name: String) -> void:
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text = new_player_name + "\n" + "0"
-	var ctx := Netw.ctx(self)
+	var ctx := Netw.of(self)
 	var gamestate: BomberGamestate = \
-			ctx.services.get_service(BomberGamestate) if ctx.services else null
+			ctx.get_service(BomberGamestate) if ctx else null
 	if gamestate:
 		label.modulate = gamestate.get_player_color(new_player_name)
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -66,17 +66,17 @@ func add_player(id: int, new_player_name: String) -> void:
 func _ready() -> void:
 	$"../Winner".hide()
 
-	var ctx := Netw.ctx(self)
-	if not ctx or not ctx.tree:
+	var ctx := Netw.of(self)
+	if not ctx:
 		return
 
-	for participant: NetwParticipant in ctx.tree.participants:
+	for participant: NetwParticipant in ctx.participants:
 		add_player(participant.peer_id, str(participant.username))
 
 
 func _on_exit_game_pressed() -> void:
-	var ctx := Netw.ctx(self)
+	var ctx := Netw.of(self)
 	var gamestate: BomberGamestate = \
-			ctx.services.get_service(BomberGamestate) if ctx.services else null
+			ctx.get_service(BomberGamestate) if ctx else null
 	if gamestate:
 		gamestate.end_game()

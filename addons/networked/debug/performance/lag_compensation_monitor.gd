@@ -89,10 +89,9 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		var service := mt.get_service(LagCompensation) as LagCompensation
-		if not service:
+		if not mt.api or not mt.api.lag_compensation.is_configured():
 			continue
-		_sample_tree(_category(mt), service.metrics(), elapsed)
+		_sample_tree(_category(mt), mt.api.lag_compensation.metrics(), elapsed)
 
 
 func _sample_tree(category: String, metrics: Dictionary, elapsed: float) -> void:

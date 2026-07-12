@@ -19,13 +19,32 @@ var current_anim: String = ""
 @onready var inputs: Node = $Inputs
 @onready var label: Label = %label
 
-@onready var ctx := Netw.ctx(self)
-@onready var clock := ctx.services.clock
+@onready var ctx := Netw.of(self)
+@onready var clock := ctx.clock
 @onready var lag := ctx.lag_compensation
-@onready var entity := ctx.entity
+@onready var entity := NetwEntity.of(self)
 @onready var bomb_action := lag.action(_place_bomb)
 @onready var gamestate: BomberGamestate = \
-		ctx.services.get_service(BomberGamestate)
+		ctx.get_service(BomberGamestate)
+
+
+# Declares the server-authored state set off this script: position on a fixed
+# world-grid step and velocity bit-packed to its speed envelope, the same
+# quantization the wire carried when a synchronizer node owned the stream.
+func _init() -> void:
+	var entity := NetwEntity.resolve(self)
+	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	entity.on_controller_disconnect = NetwEntity.DisconnectRule.DESPAWN
+
+	var position_quantizer := NetwQuantizeFixed.new()
+	position_quantizer.resolution_step = 5.0
+	position_quantizer.min_limit = -500.0
+	position_quantizer.max_limit = 1500.0
+	Netw.configure_property(self, &"position").state().on_spawn().quantize(position_quantizer)
+	var velocity_quantizer := NetwQuantizeBits.new()
+	velocity_quantizer.min_limit = -90.0
+	velocity_quantizer.max_limit = 90.0
+	Netw.configure_property(self, &"velocity").state().quantize(velocity_quantizer)
 
 
 func _ready() -> void:

@@ -198,3 +198,23 @@ func test_transform_3d_composes_origin_rotation_and_scale() -> void:
 		value.basis.get_scale(),
 		Vector3(0.001, 0.001, 0.001),
 	)
+
+
+func test_layout_equality_matches_script_and_parameters() -> void:
+	# Two fresh instances with identical parameters are the same schema, the
+	# case a per-instance _init re-declaration produces every spawn.
+	var a := _fixed(0.25, -10.0, 10.0)
+	var b := _fixed(0.25, -10.0, 10.0)
+	assert_bool(a.is_same_layout(b)).is_true()
+
+	# A changed parameter is a different bit layout.
+	var c := _fixed(0.5, -10.0, 10.0)
+	assert_bool(a.is_same_layout(c)).is_false()
+
+	# A different quantizer class is a different layout even when field names
+	# overlap, and null never matches an instance.
+	var bits := NetwQuantizeBits.new()
+	bits.min_limit = -10.0
+	bits.max_limit = 10.0
+	assert_bool(a.is_same_layout(bits)).is_false()
+	assert_bool(a.is_same_layout(null)).is_false()

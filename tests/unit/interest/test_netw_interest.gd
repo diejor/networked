@@ -1,10 +1,10 @@
-## Unit tests for [NetwInterest]. The facade is 3 methods deep; the
+## Unit tests for [NetwInterestInterface]. The facade is 3 methods deep; the
 ## real API lives on [NetwInterestLayer].
 class_name TestNetwInterest
 extends NetwTestSuite
 
 var mt: MultiplayerTree
-var interest: NetwInterest
+var interest: NetwInterestInterface
 
 
 func before_test() -> void:
@@ -12,7 +12,7 @@ func before_test() -> void:
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	interest = mt.interest
+	interest = mt.api.interest
 
 
 func test_layer_creates_on_first_use() -> void:

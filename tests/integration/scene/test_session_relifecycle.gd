@@ -8,7 +8,7 @@
 class_name TestSessionRelifecycle
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerFull/MultiplayerEntity"
+const SPAWNER_PATH := "TestPlayerFull"
 
 var harness: NetwTestHarness
 var player_builder: PlayerBuilder
@@ -61,7 +61,7 @@ func _record_session_order(tree: MultiplayerTree) -> Array[String]:
 
 func _assert_session_teardown_empty(tree: MultiplayerTree) -> void:
 	var sm := tree.get_service(MultiplayerSceneManager)
-	var interest := tree.get_service(InterestService)
+	var interest := tree.api.interest
 	assert_int(tree.state).is_equal(MultiplayerTree.State.OFFLINE)
 	assert_int(tree.role).is_equal(MultiplayerTree.Role.NONE)
 	assert_bool(sm.active_scenes.is_empty()).is_true()

@@ -24,9 +24,9 @@ extends Resource
 ## func to_dict() -> Dictionary:
 ##     return { "point": point_name }
 ##
-## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
+## func spawn(rj: ResolvedJoin, netw: NetwMultiplayer) -> MultiplayerScene:
 ##     var point: StringName = rj.spawn.get("point", &"")
-##     var mgr := ctx.services.scene_manager
+##     var mgr := netw.scene_manager
 ##     var scene := await mgr.activate_scene(&"Arena")
 ##     # ...add the player to scene at point...
 ##     return scene
@@ -61,18 +61,18 @@ func with_policy_script(data: Dictionary) -> Dictionary:
 ## [member NetwParticipant.current_scene] reflects the returned scene.
 ##
 ## Read the client's spawn intent from [member ResolvedJoin.spawn] and reach
-## scene services through [param ctx].
+## scene services through [param netw].
 ## [codeblock]
-## func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene:
+## func spawn(rj: ResolvedJoin, netw: NetwMultiplayer) -> MultiplayerScene:
 ##     var point: StringName = rj.spawn.get("point", &"")
-##     var mgr := ctx.services.scene_manager
+##     var mgr := netw.scene_manager
 ##     var scene := await mgr.activate_scene(&"Arena")
 ##     # ...add the player to scene at point...
 ##     return scene
 ## [/codeblock]
 ## [br][br][b]Server Only.[/b]
 @abstract
-func spawn(rj: ResolvedJoin, ctx: NetwContext) -> MultiplayerScene
+func spawn(rj: ResolvedJoin, netw: NetwMultiplayer) -> MultiplayerScene
 
 
 ## Serializes this policy's exported fields into the spawn-intent dictionary

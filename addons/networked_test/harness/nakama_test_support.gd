@@ -193,7 +193,7 @@ static func _collect_nodes(root: Node) -> Array[Node]:
 
 static func _level_1_spawn() -> Dictionary:
 	var path := SceneNodePath.new(
-		"uid://bqi7mvxdnvgch::Player/Components/MultiplayerEntity"
+		"uid://bqi7mvxdnvgch::Player"
 	)
 	return EntitySpawnPolicy.from_scene_node_path(path).to_dict()
 

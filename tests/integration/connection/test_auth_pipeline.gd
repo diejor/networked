@@ -23,7 +23,7 @@ func before_test() -> void:
 	level_builder.pack()
 	template_instance.free()
 
-	spawner_path = "%s/MultiplayerEntity" % player_builder.player_name
+	spawner_path = player_builder.player_name
 
 	harness = make_harness()
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)

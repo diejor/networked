@@ -37,7 +37,7 @@ func before_test() -> void:
 func test_scene_gate_is_provided_on_container_entity() -> void:
 	var scene_entity := NetwEntity.of(server_scene)
 	assert_that(scene_entity).is_not_null()
-	assert_that(scene_entity.slot(NetwEntity.Slot.INTEREST_GATE)) \
+	assert_that(scene_entity.interest_gate) \
 			.is_equal(server_scene.gate)
 
 
@@ -57,8 +57,7 @@ func test_ancestor_gate_blocks_own_layer_until_scene_admits() -> void:
 		NodePath(client_player.name),
 	) as Node2D
 	var entity := NetwEntity.of(server_player)
-	var service := harness.server().get_service(InterestService) \
-			as InterestService
+	var service := harness.server().api.interest
 	var own_layer := service.layer_for(&"always")
 	own_layer.add_entity(entity)
 	own_layer.add_viewer(peer_b)

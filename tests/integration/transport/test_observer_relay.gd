@@ -61,7 +61,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
-	var sight := server_tree.interest.layer(&"sight")
+	var sight := server_tree.api.interest.layer(&"sight")
 	sight.add_entity(entity)
 
 	# Resolve the owner-side entity (on client0) to listen for the
@@ -71,7 +71,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 		level_builder.scene_name,
 	)
 	var owner_entity := NetwEntity.of(owner_player)
-	var client1_layer := client1.interest.layer(&"sight")
+	var client1_layer := client1.api.interest.layer(&"sight")
 
 	var entered: Array = []
 	var left: Array = []
@@ -124,7 +124,7 @@ func test_relay_silent_when_flag_off() -> void:
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
 	var server_tree := harness.server() as MultiplayerTree
-	var sight := server_tree.interest.layer(&"sight")
+	var sight := server_tree.api.interest.layer(&"sight")
 	sight.add_entity(entity)
 
 	var owner_player := await harness.wait_for_player(

@@ -1,7 +1,7 @@
-## Regression test for the overlap primitives behind the [SaveComponent] lint.
+## Regression test for the overlap primitives behind the persistence L1 lint.
 ##
 ## [method SynchronizersCache.governed_targets] and
-## [method NetwEntity.governs_property] must see that a save-tracked property is
+## [method NetwEntity.governs_property] must see that a persisted property is
 ## ALSO governed by another synchronizer, at a post-[code]_ready[/code] point and
 ## after a teleport reparents the subtree. The lint is non-load-bearing
 ## (the config is frozen from the declaration), so this pins only the detection
@@ -9,7 +9,7 @@
 class_name TestSaveOverlapLint
 extends NetwTestSuite
 
-const SPAWNER_PATH := "OverlapPlayer/MultiplayerEntity"
+const SPAWNER_PATH := "OverlapPlayer"
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -29,11 +29,11 @@ func before_test() -> void:
 	var level_path := NetwPathNamespace.next_path("level", "TestLevel")
 	var level_2_path := NetwPathNamespace.next_path("level", "TestLevel2")
 
-	# SaveComponent tracks `position`; the StateSynchronizer ALSO governs
-	# `position` (authority 1) -- the overlap case. with_state bakes a packable
-	# real-path config, so the payload survives the harness join (pack/instantiate).
+	# Persistence tracks `position`; the root's derived state set ALSO governs
+	# `position` (server-authored) -- the overlap case. The marks live on the root
+	# script, so the declaration survives the harness join (pack/instantiate).
 	player_builder = PlayerBuilder.new("OverlapPlayer") \
-			.with_root(Node2D) \
+			.with_root(StateSyncBody) \
 			.with_multiplayer_entity() \
 			.with_save(db, &"overlap") \
 			.with_save_property(&"position") \
@@ -67,7 +67,7 @@ func before_test() -> void:
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
 	harness.register_spawnable_scene(level_builder.packed)
 	harness.register_spawnable_scene(level_2_builder.packed)
-	# StateSynchronizer._ready resolves a required LagCompensation on the server.
+	# The state set's timeline registration resolves LagCompensation on the server.
 	harness.add_lag_compensation()
 	client0 = await harness.add_client()
 
@@ -83,22 +83,18 @@ func _spawn_player(scene_path: String) -> Node2D:
 
 
 func _assert_overlap(player: Node) -> void:
-	var save: SaveComponent = player.get_node("%SaveComponent")
-	var state := player.get_node("StateSync") as StateSynchronizer
 	var entity := NetwEntity.of(player)
 
-	# Both siblings finalized: real paths are populated post-_ready.
-	var save_path := save.get_real_path(&"position")
-	assert_bool(save_path.is_empty()).is_false()
-	assert_bool(state.get_real_path(&"position").is_empty()).is_false()
+	# The root script's derived state set governs the same live target as the
+	# persisted position column.
+	var binding := entity.state_binding
+	assert_that(binding).is_not_null()
+	assert_bool(&"position" in binding.set.keys()).is_true()
 
-	# StateSync governs the same live target as the save property.
-	var state_targets := SynchronizersCache.governed_targets(state, player)
-	assert_array(state_targets).is_not_empty()
-
-	# The entity-level accessor the lint runs on (excluding the SaveComponent
-	# itself) still finds the StateSync that governs the same target.
-	assert_bool(entity.governs_property(save_path, save)).is_true()
+	# The entity-level accessor the lint runs on finds the derived set that
+	# governs the persisted column's live target.
+	var save_path := entity.property_path(player, &"position")
+	assert_bool(entity.governs_property(save_path)).is_true()
 
 
 func test_overlap_resolves_at_post_ready() -> void:
@@ -108,11 +104,13 @@ func test_overlap_resolves_at_post_ready() -> void:
 
 	_assert_overlap(player)
 
-	# Authority divergence: the governing synchronizer is server (1), the body
-	# carries the controller's (client) authority. Reading the SOURCE node's
-	# authority would therefore misclassify `position` as client-trusted.
-	var state := player.get_node("StateSync") as StateSynchronizer
-	assert_int(state.get_multiplayer_authority()).is_equal(1)
+	# Authority divergence: the state stream's trust comes from the set's write
+	# policy, while the body carries the controller's (client) node authority.
+	# Reading the SOURCE node's authority would therefore misclassify `position`
+	# as client-trusted.
+	var entity := NetwEntity.of(player)
+	assert_int(entity.state_binding.set.policy) \
+			.is_equal(NetwScriptModel.Policy.AUTHORITY)
 	assert_int(player.get_multiplayer_authority()).is_not_equal(1)
 
 

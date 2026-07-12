@@ -1,8 +1,12 @@
-## Integration tests for [SaveComponent] with real multiplayer.
+## Integration tests for persistence with real multiplayer.
+##
+## A spawned player's [member NetwEntity.persistence] engine flushes its persisted
+## columns to the database and hydrates them back, reading and writing the live
+## scene the whole time.
 class_name TestSaveFlow
 extends NetwTestSuite
 
-const SPAWNER_PATH := "TestPlayerWithSave/MultiplayerEntity"
+const SPAWNER_PATH := "TestPlayerWithSave"
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -59,68 +63,48 @@ func _spawn_save_player() -> Node2D:
 		SPAWNER_PATH,
 	) as Node2D
 
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.database = db
-	save_comp.table_name = &"players"
+	player.set_meta(
+		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+	)
 	await get_tree().process_frame
-
 	return player
 
 
-func test_setup_initializes_sync_and_tracks_position() -> void:
+func _engine(player: Node) -> NetwPersistenceInterface.PersistenceEngine:
+	return NetwEntity.of(player).persistence
+
+
+func test_engine_present_and_tracks_position() -> void:
 	var player := await _spawn_save_player()
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
+	var engine := _engine(player)
 
-	assert_that(save_comp._initialized).is_true()
-	assert_that(save_comp.has_virtual_property(&"position")).is_true()
-	assert_that(save_comp.record.has_value(&"position")).is_true()
+	assert_that(engine).is_not_null()
+	assert_that(engine.columns_empty()).is_false()
+	assert_that(engine.database()).is_same(db)
 
 
-func test_pull_and_push_round_trip_scene_position() -> void:
+func test_gather_and_apply_round_trip_scene_position() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(50, 75)
 
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.pull_from_scene()
+	var engine := _engine(player)
+	assert_that(engine.gather().get(&"position")).is_equal(Vector2(50, 75))
 
-	assert_that(save_comp.record.get_value(&"position")).is_equal(
-		Vector2(50, 75),
-	)
-
-	save_comp.record.set_value(&"position", Vector2(99, 99))
-	save_comp.push_to_scene()
+	engine.apply({ &"position": Vector2(99, 99) })
 	assert_that(player.position).is_equal(Vector2(99, 99))
 
-	player.position = Vector2(33, 44)
-	save_comp.pull_from_scene()
-	player.position = Vector2.ZERO
-	save_comp.push_to_scene()
-	assert_that(player.position).is_equal(Vector2(33, 44))
 
-
-func test_database_and_serialized_round_trips_restore_position() -> void:
+func test_database_round_trip_restores_position() -> void:
 	var player := await _spawn_save_player()
 	player.position = Vector2(10, 20)
 
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	save_comp.pull_from_scene()
-	var err: Error = await save_comp._flush()
+	var engine := _engine(player)
+	var err: Error = await engine.flush()
 	assert_that(err).is_equal(OK)
 
-	var entity_id := save_comp._get_entity_id()
-	var raw: Dictionary = backend.find_by_id(&"players", entity_id)
+	var raw: Dictionary = backend.find_by_id(&"players_save", engine._record_id())
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 	player.position = Vector2.ZERO
-	save_comp.record.set_value(&"position", Vector2.ZERO)
-	save_comp.hydrate(raw)
+	await engine.hydrate()
 	assert_that(player.position).is_equal(Vector2(10, 20))
-
-	player.position = Vector2(55, 66)
-	var bytes := save_comp._serialize_scene()
-	assert_that(bytes.size() > 0).is_true()
-
-	player.position = Vector2.ZERO
-	save_comp._deserialize_scene(bytes)
-
-	assert_that(player.position).is_equal(Vector2(55, 66))

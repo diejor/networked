@@ -3,11 +3,11 @@
 ## [NetwAction] pairs a local [member predict] effect with a reliable server
 ## request. The server receives a [NetwAction.Context], validates at
 ## [member NetwAction.Context.view_tick], and either binds an authoritative
-## [MultiplayerEntity] result with [method NetwAction.Context.bind] or denies it
-## with [method NetwAction.Context.deny].
+## spawned [NetwEntity] result with [method NetwAction.Context.bind] or denies
+## it with [method NetwAction.Context.deny].
 ##
 ## [codeblock]
-## @onready var lag := Netw.ctx(self).lag_compensation
+## @onready var lag := Netw.of(self).lag_compensation
 ## @onready var place_bomb := lag.action(_place_bomb)
 ##
 ## func _ready() -> void:
@@ -37,8 +37,8 @@ enum TimingMode {
 	##
 	## This mode is owner-anchored. It guarantees only that the action owner's
 	## recorded state is ready at the view tick. It does not gate other entities.
-	## Cross-entity validation must use [method NetwLagCompensation.sample] or
-	## [method NetwLagCompensation.rewind] for those targets.
+	## Cross-entity validation must use [method NetwLagCompensationInterface.sample] or
+	## [method NetwLagCompensationInterface.rewind] for those targets.
 	##
 	## Determinism is a precondition, not a toggle. The placement agrees with the
 	## client only when consuming the same input yields the same state. Resolution
@@ -78,7 +78,7 @@ var timeout_ticks: int = 0
 ## assumptions. Opt into stricter modes per action.
 var timing_mode := TimingMode.IMMEDIATE
 
-var _lag: NetwLagCompensation
+var _lag: NetwLagCompensationInterface
 var _authority: Callable
 var _entity: NetwEntity
 var _target_path := NodePath("")
@@ -87,7 +87,7 @@ var _slot := 0
 
 
 func _init(
-		lag: NetwLagCompensation,
+		lag: NetwLagCompensationInterface,
 		authority: Callable,
 		slot: int,
 ) -> void:
@@ -112,8 +112,7 @@ func _init(
 func request(view_tick: int, data: Variant = null) -> void:
 	if not _entity or not _entity.is_controlled_locally:
 		return
-	var service := _service()
-	if not service:
+	if not _lag or not _lag.is_configured():
 		return
 
 	var target := _authority.get_object() as Node
@@ -130,14 +129,14 @@ func request(view_tick: int, data: Variant = null) -> void:
 	var revert_callable := _revert_callable(ghost)
 	var confirm_callable := _confirm_callable(ghost)
 	_lag.effects.arm(key, revert_callable, timeout_ticks)
-	service._watch_action(
+	_lag._watch_action(
 		key,
 		func() -> void:
 			confirm_callable.call()
 			_emit_confirmed(),
 		_emit_denied,
 	)
-	service._send_action_request(
+	_lag._send_action_request(
 		_target_path,
 		_method,
 		view_tick,
@@ -173,10 +172,6 @@ func _confirm_callable(ghost: Node) -> Callable:
 			node.queue_free()
 
 
-func _service() -> LagCompensation:
-	return _lag._service() if _lag else null
-
-
 func _emit_confirmed() -> void:
 	confirmed.emit()
 
@@ -195,9 +190,8 @@ func _tree_relative_path(target: Node) -> NodePath:
 ## Server-side action request context.
 ##
 ## The context carries the requester, clamped view tick, and correlation key.
-## Authority methods call [method bind] before adding a spawned
-## [MultiplayerEntity] to the tree, or [method deny] when validation rejects the
-## request.
+## Authority methods call [method bind] before adding a spawned entity to the
+## tree, or [method deny] when validation rejects the request.
 ##
 ## [codeblock]
 ## func _place_bomb(ctx: NetwAction.Context) -> void:
@@ -229,7 +223,7 @@ class Context extends RefCounted:
 
 
 	func _init(
-			service: LagCompensation,
+			service: NetwLagCompensationInterface,
 			p_requester: int,
 			p_view_tick: int,
 			p_requested_tick: int,
@@ -248,10 +242,10 @@ class Context extends RefCounted:
 	## action when the authoritative spawn arrives.
 	func bind(node: Node) -> void:
 		NetwEntity.bind(node, _key, 0)
-		var mp_entity := MultiplayerEntity.unwrap(node)
-		if mp_entity:
-			mp_entity.action_spawn_tick = view_tick
-			mp_entity.action_requester = requester
+		var entity := NetwEntity.ensure(node)
+		if entity:
+			entity.action_spawn_tick = view_tick
+			entity.action_requester = requester
 		_bound = true
 
 
@@ -265,8 +259,8 @@ class Context extends RefCounted:
 			service._deny_action_to(requester, _key)
 
 
-	func _service() -> LagCompensation:
+	func _service() -> NetwLagCompensationInterface:
 		return (
-				_service_ref.get_ref() as LagCompensation
+				_service_ref.get_ref() as NetwLagCompensationInterface
 				if _service_ref else null
 		)

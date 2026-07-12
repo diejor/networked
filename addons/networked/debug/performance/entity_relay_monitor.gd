@@ -1,9 +1,9 @@
 @tool
-## Exposes [RelayService] metrics as Godot [Performance] monitors, one group per
+## Exposes [NetwMultiplayer] carrier metrics as Godot [Performance] monitors, one group per
 ## [MultiplayerTree].
 ##
 ## This is a presentation adapter managed by the [DebugReporter]. It pulls
-## [method RelayService.monitor_snapshot] and turns cumulative counters into
+## [method NetwMultiplayer.monitor_snapshot] and turns cumulative counters into
 ## live rates, so monitoring overhead stays out of the core simulation loop.
 ## Work runs only while a debugger is attached and is throttled.
 ##
@@ -12,7 +12,7 @@
 ##   ┠╴ drops_unknown_route_rate
 ##   ┠╴ drops_not_live_rate
 ##   ┠╴ drops_no_node_rate
-##   ┖╴ active_senders
+##   ┖╴ derived_sets_active
 ## [/codeblock]
 class_name EntityRelayMonitor
 extends Node
@@ -46,7 +46,7 @@ func _exit_tree() -> void:
 	clear_all()
 
 
-## Tracks [param mt] so its [RelayService] is sampled each interval.
+## Tracks [param mt] so its [NetwMultiplayer] carrier is sampled each interval.
 func register_tree(mt: MultiplayerTree) -> void:
 	if mt not in _trees:
 		_trees.append(mt)
@@ -73,10 +73,9 @@ func _sample(elapsed: float) -> void:
 	for mt in _trees:
 		if not is_instance_valid(mt):
 			continue
-		var service := mt.get_service(RelayService) as RelayService
-		if not service:
+		if not mt.api:
 			continue
-		_sample_tree(_category(mt), service.monitor_snapshot(), elapsed)
+		_sample_tree(_category(mt), mt.api.monitor_snapshot(), elapsed)
 
 
 func _sample_tree(
@@ -97,7 +96,7 @@ func _sample_tree(
 		&"drops_unknown_route_rate": rates[&"drops_unknown_route"],
 		&"drops_not_live_rate": rates[&"drops_not_live"],
 		&"drops_no_node_rate": rates[&"drops_no_node"],
-		&"active_senders": metrics.get(&"active_senders", 0),
+		&"derived_sets_active": metrics.get(&"derived_sets_active", 0),
 	}
 	_ensure_registered(category)
 

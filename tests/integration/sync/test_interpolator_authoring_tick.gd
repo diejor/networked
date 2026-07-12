@@ -1,54 +1,50 @@
-## Integration test for [MultiplayerInterpolator] authoring-tick keying (Decision 8).
+## Integration test for [NetwInterpolationInterface] authoring tick keying.
 ##
-## When a single stamped [StateSynchronizer] drives an entity, the interpolator
-## keys received history by the packet's authoring [constant StampedSynchronizer.TICK]
-## instead of the receive tick. Under a delay the two differ, so a shooter can name
-## the server tick it actually displayed. This is the rewind-accuracy prerequisite.
+## When a single stamped derived state set drives an entity, the service keys
+## received history by the frame's authoring tick instead of the receive tick.
+## Under a delay the two differ, so a shooter can name the server tick it
+## displayed.
 class_name TestInterpolatorAuthoringTick
 extends NetwTestSuite
 
-var rig: SyncLoopbackRig
+var rig: DerivedLoopbackRig
 
 
 func _pos(t: int) -> Vector2:
 	return Vector2(t, -t)
 
 
-func _make_state_sync() -> StampedSynchronizer:
-	var sync := StateSynchronizer.new()
-	sync.register_property(
-		&"position",
-		NodePath(".:position"),
-		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
-		false,
-		true,
-	)
-	return sync
-
-
-func test_keys_history_by_authoring_tick() -> void:
-	rig = SyncLoopbackRig.new()
-	await rig.setup(self, _make_state_sync)
-
+# Configures the position interpolator on the client node and drives the server
+# state stream under a clean delay, so the authoring tick lags the receive tick.
+func _drive_delayed_stream() -> NetwEntity:
+	var entity := NetwEntity.of(rig.client_node)
 	var interp := MultiplayerInterpolator.new()
 	interp.name = "Interp"
-	interp.property_modes = { &"position": MultiplayerInterpolator.Mode.LERP }
+	interp.property_interpolators = {
+		&"position": NetwInterpolate.new().lerp().smooth(0.0),
+	}
 	rig.client_node.add_child(interp)
 	interp.owner = rig.client_node
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
-	var server_sync := rig.server_sync as StateSynchronizer
+	var server_binding := NetwEntity.of(rig.server_node).state_binding
 	rig.server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
-			server_sync.authored_tick = t
+			server_binding.authored_tick = t
 			rig.server_node.position = _pos(t),
 	)
 
-	# A clean delay so the authoring tick lags the receive tick.
 	rig.delay_server_to_client(5)
 	rig.sync_ticks(60)
+	return entity
 
-	var buf := interp.get_buffer(&"position")
+
+func test_keys_history_by_authoring_tick() -> void:
+	rig = DerivedLoopbackRig.new()
+	await rig.setup(self)
+	var entity := await _drive_delayed_stream()
+
+	var buf := entity.interpolation.get_buffer(&"position")
 	assert_bool(buf != null).is_true()
 	var newest := buf.newest_tick()
 	assert_int(newest).is_greater(0)
@@ -60,31 +56,17 @@ func test_keys_history_by_authoring_tick() -> void:
 
 
 func test_displayed_authoring_tick_names_a_past_shown_tick() -> void:
-	rig = SyncLoopbackRig.new()
-	await rig.setup(self, _make_state_sync)
-
-	var interp := MultiplayerInterpolator.new()
-	interp.name = "Interp"
-	interp.property_modes = { &"position": MultiplayerInterpolator.Mode.LERP }
-	rig.client_node.add_child(interp)
-	interp.owner = rig.client_node
-	await (Engine.get_main_loop() as SceneTree).process_frame
-
-	var server_sync := rig.server_sync as StateSynchronizer
-	rig.server_clock.on_tick.connect(
-		func(_d: float, t: int) -> void:
-			server_sync.authored_tick = t
-			rig.server_node.position = _pos(t),
-	)
-
-	rig.delay_server_to_client(5)
-	rig.sync_ticks(60)
+	rig = DerivedLoopbackRig.new()
+	await rig.setup(self)
+	var entity := await _drive_delayed_stream()
 	# Advance the interpolation playhead so a displayed tick exists to name.
 	await (Engine.get_main_loop() as SceneTree).process_frame
 
-	var view := interp.displayed_authoring_tick()
-	# A server authoring tick is named, it is a real recorded key, and it trails the
-	# live server tick (the interpolation playhead is half a round trip behind).
+	var view := entity.interpolation.displayed_authoring_tick()
+	# A server authoring tick is named, it is a real recorded key, and it
+	# trails the live server tick.
 	assert_int(view).is_greater_equal(0)
-	assert_vector(interp.get_buffer(&"position").get_at(view)).is_equal(_pos(view))
+	assert_vector(
+		entity.interpolation.get_buffer(&"position").get_at(view),
+	).is_equal(_pos(view))
 	assert_int(view).is_less(rig.server_clock.tick)

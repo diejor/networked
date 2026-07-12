@@ -212,9 +212,10 @@ func delete_namespace(slot: String) -> Error:
 ## Flushes the queue and waits for acknowledgment, bounded by [param timeout_s].
 ##
 ## A write returns before it reaches Nakama, so a quit or a player leave would
-## otherwise drop the last [member flush_interval] window. The [SaveComponent]
-## shutdown path calls this so that final batch lands. Returns [constant OK] when
-## the queue drained or [constant ERR_TIMEOUT] when it did not within the bound.
+## otherwise drop the last [member flush_interval] window. The
+## [NetwPersistenceInterface] shutdown path calls this so that final batch lands.
+## Returns [constant OK] when the queue drained or [constant ERR_TIMEOUT] when it
+## did not within the bound.
 func drain(timeout_s: float = 5.0) -> Error:
 	var loop := Engine.get_main_loop() as SceneTree
 	var deadline := Time.get_ticks_msec() + int(timeout_s * 1000.0)

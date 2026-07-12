@@ -5,8 +5,8 @@
 class_name TestTPFlow
 extends NetwTestSuite
 
-## Node path from level root to the [MultiplayerEntity] spawner.
-const SPAWNER_PATH := "TestPlayerFull/MultiplayerEntity"
+## Node path from level root to the player spawn template.
+const SPAWNER_PATH := "TestPlayerFull"
 
 var harness: NetwTestHarness
 var client0: MultiplayerTree
@@ -34,6 +34,7 @@ func before_test() -> void:
 			.with_root(Node2D) \
 			.with_multiplayer_entity() \
 			.with_save(db, &"players") \
+			.with_save_property(&"position") \
 			.with_tp(level_path, "PlayerSpawner") \
 			.with_player_sync(
 				SyncConfigBuilder.new().property("..:position", true),
@@ -89,11 +90,9 @@ func _spawn_tp_player(
 
 
 func _set_player_database(player: Node) -> void:
-	var save_comp: SaveComponent = player.get_node("%SaveComponent")
-	if save_comp:
-		save_comp.database = db
-		save_comp.table_name = &"players"
-		NetwEntity.of(player).contribute_save_property(player, &"position", &"position")
+	player.set_meta(
+		NetwPersistenceInterface.PersistenceEngine.META_DATABASE, db,
+	)
 
 
 func _tp_target(scene_path: String, node_path: String) -> SceneNodePath:

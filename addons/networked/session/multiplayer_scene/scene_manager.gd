@@ -223,7 +223,7 @@ func _enter_tree() -> void:
 	spawn_path = "."
 	add_to_group("scene_managers")
 
-	var mt := NetwServices.register(self, MultiplayerSceneManager)
+	var mt := NetwService.register(self, MultiplayerSceneManager)
 	assert(
 		is_instance_valid(mt),
 		"SceneManager must be a descendant of a MultiplayerTree",
@@ -239,7 +239,7 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwServices.unregister(self, MultiplayerSceneManager)
+	var mt := NetwService.unregister(self, MultiplayerSceneManager)
 	assert(
 		is_instance_valid(mt),
 		"SceneManager must be a descendant of a MultiplayerTree",
@@ -447,9 +447,15 @@ func _resolve_hydrated_spawn_scene(
 		player: Node,
 		fallback_scene: MultiplayerScene,
 ) -> MultiplayerScene:
-	var save: SaveComponent = player.get_node_or_null("%SaveComponent")
-	if save:
-		save.hydrate_from_db()
+	var mt := MultiplayerTree.resolve(self)
+	var api := mt.api if mt else null
+	var entity := NetwEntity.of(player)
+	if api and entity:
+		var engine := api.persistence.engine_for(entity)
+		if engine and engine.wants_spawn_hydration():
+			# The row applies before the SPAWN frame snapshots spawn state, so
+			# persisted on_spawn fields ride the existing carrier to every peer.
+			await engine.hydrate()
 	var tp: TPComponent = player.get_node_or_null("%TPComponent")
 	if not tp or tp.current_scene_name.is_empty():
 		return fallback_scene
@@ -546,7 +552,7 @@ func _on_configured() -> void:
 # Mirror of [method _on_configured]. Despawns every active scene so a re-host
 # rebuilds from empty, restores the spawnable list the [member scene_paths]
 # getter consumed, and frees the debug viewports node. Freeing each scene runs
-# its [InterestGate]'s _exit_tree, which unregisters from [InterestService] and
+# its [InterestGate]'s _exit_tree, which unregisters from [NetwInterestInterface] and
 # clears the "layer already has a bound gate" error on the second session.
 func _on_session_ended() -> void:
 	for scene: MultiplayerScene in active_scenes.values().duplicate():

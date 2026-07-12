@@ -44,7 +44,7 @@ func test_spawned_player_joins_scene_with_identity() -> void:
 	var expected_id := client0.multiplayer_peer.get_unique_id()
 	assert_that(player.get_multiplayer_authority()).is_equal(expected_id)
 
-	var client_comp := MultiplayerEntity.unwrap(player)
+	var client_comp := NetwEntity.of(player)
 	assert_that(client_comp.entity_id).is_equal("alice")
 
 	var peer_id := client0.multiplayer_peer.get_unique_id()
@@ -83,8 +83,8 @@ func test_clients_admit_each_other_replicas() -> void:
 	)
 	var peer_id_0 := client0.multiplayer_peer.get_unique_id()
 	var peer_id_1 := client1.multiplayer_peer.get_unique_id()
-	var service0 := client0.get_service(InterestService) as InterestService
-	var service1 := client1.get_service(InterestService) as InterestService
+	var service0 := client0.api.interest
+	var service1 := client1.api.interest
 	assert_that(
 		service0.can_peer_see_entity(
 			peer_id_0,
@@ -131,11 +131,13 @@ func test_nested_scene_late_path_binding_and_record_forwarding() -> void:
 	var player := custom_harness.spawn_player(custom_client, packed_scene)
 	await custom_harness.wait_for_player(custom_client, custom_level_builder.scene_name)
 
-	var mp_entity := MultiplayerEntity.unwrap(player)
+	var mp_entity := NetwEntity.of(player)
 	assert_that(mp_entity).is_not_null()
 
-	var expected_path := NodePath("Weapon:ammo")
-	assert_that(mp_entity.replication_config.has_property(expected_path)).is_true()
+	var weapon_node := player.get_node("Weapon")
+	var cfg := NetwScriptModel.get_node_property_configs(weapon_node).get(&"ammo") \
+			as NetwScriptModel.SyncConfig
+	assert_that(cfg != null and cfg.is_spawn_state).is_true()
 
 	await custom_harness.teardown()
 
@@ -149,4 +151,4 @@ class TestWeaponComponent extends Node:
 		if what == NOTIFICATION_PARENTED:
 			var entity := NetwEntity.resolve(self)
 			if entity:
-				entity.contribute_spawn_property(self, &"ammo")
+				Netw.configure_property(self, &"ammo").on_spawn()

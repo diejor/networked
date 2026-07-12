@@ -5,9 +5,9 @@ Scenes and players
 
 Networked separates the "world" from the "players in it". The
 :ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` decides which
-levels exist on which peer and when, while the
-:ref:`MultiplayerEntity <class_MultiplayerEntity>` decides which actors enter
-those levels and on whose authority. This page works through both, with the
+levels exist on which peer and when, while :ref:`NetwEntity <class_NetwEntity>`
+decides which actors enter those levels and on whose authority. This page
+works through both, with the
 :ref:`MultiplayerScene <class_MultiplayerScene>` container in the middle as
 the glue.
 
@@ -36,12 +36,12 @@ The manager supports two complementary controls per level:
   want late joiners to find the level instantly or whether the level is
   expensive to keep alive.
 
-For a single-scene project, you do not need to think about any of this.
-Dropping a scene with a :ref:`MultiplayerEntity <class_MultiplayerEntity>`
-descendant directly under the tree makes Networked auto-configure a
-:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` with that scene as its only spawnable, in
-:ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` mode. The first time you need a second level (a lobby plus a
-match, say) you'll add the manager explicitly and configure both there.
+A single-scene project still needs an explicit
+:ref:`MultiplayerSceneManager <class_MultiplayerSceneManager>` child under the
+tree, configured with the level as its only spawnable scene in
+:ref:`ON_STARTUP <class_MultiplayerSceneManager_constant_ON_STARTUP>` mode.
+The first time you need a second level (a lobby plus a match, say) you add
+its scene config alongside the first.
 
 The MultiplayerScene container
 ------------------------------
@@ -65,82 +65,90 @@ through the synchronizer and the
 :godot:`MultiplayerSpawner <MultiplayerSpawner>` you already configured
 on the level.
 
-The MultiplayerEntity
----------------------
+The entity record
+------------------
 
-The :ref:`MultiplayerEntity <class_MultiplayerEntity>` is the one piece of
-the addon every gameplay scene touches. It extends
-:godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` so it can be
-authored visually in the *Replication* panel, but the runtime treats every
-configured property as **spawn-only**: the only thing the component
-guarantees is that the property's value is present on the client when the
-entity enters the tree. Continuous replication is the job of additional
-sibling :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` nodes
-that you configure for that purpose.
+:ref:`NetwEntity <class_NetwEntity>` is the identity, control, and spawn
+record every networked actor carries. It is not a node: it attaches itself as
+metadata on the entity root the first time any sibling script resolves it, so
+it adds no extra node to your scene tree. The runtime treats a marked
+property as **spawn-only**: the only thing a
+:ref:`on_spawn() <class_NetwScriptModel>` mark guarantees is that the
+property's value is present on the client when the entity enters the tree.
+Continuous replication is the job of sibling
+:godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` nodes or
+``.state()``/``.input()``/``.broadcast()`` marks that you configure for that
+purpose.
 
 This separation is deliberate. The spawn snapshot needs to be small,
 strictly server-driven, and decoded before the node's
 :godot:`_ready() <Node#class_node_private_method__ready>` runs. Ongoing replication
 has different traffic patterns and different authority rules. Sharing one
-node for both jobs leads to spawn packets that secretly drift over time --
+channel for both jobs leads to spawn packets that secretly drift over time --
 exactly the kind of bug "I added it in the inspector and it worked" has
 trouble surviving.
 
 Authority modes
 ~~~~~~~~~~~~~~~
 
-The component's :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>`
+:ref:`NetwEntity.initial_controller <class_NetwEntity>`
 controls who is in charge of the entity's :godot:`owner <Node#class_node_property_owner>` node at spawn:
 
-- :ref:`SERVER <class_MultiplayerEntity_constant_SERVER>`: the server peer (id 1) is the multiplayer authority. Use
+- ``SERVER``: the server peer (id 1) is the multiplayer authority. Use
   this for NPCs, level props, and anything that should remain
   server-authoritative.
-- :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>`: the represented peer (parsed from the entity's name in the
+- ``REPRESENTED_PEER``: the represented peer (parsed from the entity's name in the
   form ``entity_id|peer_id``) is the multiplayer authority. This is the
   setting for player avatars where the owning client reads input and the
   server only validates.
 
-Regardless of the owner's authority, the *synchronizer itself* always sits
-on the server. That asymmetry is what lets the server issue spawn and
-despawn commands for client-authoritative entities without playing
-permission games. It owns the synchronizer, the synchronizer owns the
-spawn list, and the entity rides along.
+Set it from the entity root's own ``_init()``:
+
+.. tabs::
+ .. code-tab:: gdscript GDScript
+
+    func _init() -> void:
+        var entity := NetwEntity.resolve(self)
+        entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+
+The server always issues spawn and despawn commands over the addon's own
+transport, regardless of which peer controls the owner node. That is what
+lets the server manage client-authoritative entities without playing
+permission games.
 
 Spawn lifecycle signals
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Sibling components that only need decoded identity can connect to
-:ref:`spawning <class_MultiplayerEntity_signal_spawning>` or
-:ref:`spawned <class_MultiplayerEntity_signal_spawned>` in the editor.
+:ref:`NetwEntity.spawning <class_NetwEntity>` or
+:ref:`NetwEntity.spawned <class_NetwEntity>` in code.
 ``spawning`` runs once after identity, authority, and spawn properties are
 applied. ``spawned`` runs once after scene registration and the owner
 finishes :godot:`_ready() <Node#class_node_private_method__ready>`.
 
 Use
 :godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`
-only when the component must also contribute spawn properties. From that
-hook, call :ref:`contribute_spawn_property() <class_NetwEntity>` with the
-source node and property the synchronizer should bundle:
+to mark a property so its value rides the spawn packet. From that hook,
+call :ref:`Netw.configure_property() <class_Networked>` on the property and
+chain ``.on_spawn()``:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
     func _notification(what: int) -> void:
         if what == NOTIFICATION_PARENTED:
-            var entity := Netw.ctx(self).entity
-            entity.contribute_spawn_property(self, &"health")
-            entity.spawning.connect(_on_spawning)
+            Netw.configure_property(self, &"health").on_spawn()
+            NetwEntity.resolve(self).spawning.connect(_on_spawning)
 
     func _on_spawning() -> void:
         if multiplayer.is_server():
             hydrate_from_db()
 
-The ordering is important: contributions still must happen in
-:godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`, because Godot reads the synchronizer's
-replication config between scene instantiation and tree entry. Connecting
-to :ref:`spawning <class_MultiplayerEntity_signal_spawning>` and adding
-properties from inside it is too late. The spawn packet has already been
-serialized.
+The ordering is important: the mark still must happen in
+:godot:`NOTIFICATION_PARENTED <Node#class_node_constant_notification_parented>`, because the spawn pipeline reads marked
+spawn state between scene instantiation and tree entry. Connecting
+to :ref:`spawning <class_NetwEntity>` and marking properties from inside it
+is too late. The spawn packet has already been encoded.
 
 .. warning::
 
@@ -155,29 +163,30 @@ Spawning and despawning
 
 Most spawns happen inside the addon: a client connects, the server
 accepts their :ref:`NetwParticipant <class_NetwParticipant>`, and
-:ref:`spawn_player() <class_MultiplayerEntity_method_spawn_player>` drops a
+:ref:`NetwEntity.instantiate_player() <class_NetwEntity>` drops a
 copy of the template into the target
 :ref:`MultiplayerScene <class_MultiplayerScene>`. For everything else (NPCs, projectiles, loot) there are two helpers:
 
-- :ref:`spawn_under() <class_MultiplayerEntity_method_spawn_under>`: the
+- :ref:`NetwEntity.spawn_under() <class_NetwEntity>`: the
   simple case: clone the template under a parent and give it an entity id.
-- :ref:`instantiate_from() <class_MultiplayerEntity_method_instantiate_from>`:
-  the configurable case: clone the template, run a callback on the copy
-  before it enters the tree, and let the caller add it to the scene.
+- :ref:`NetwEntity.instantiate_from() <class_NetwEntity>`:
+  the configurable case: clone the template, run a callback on the copy's
+  entity record before it enters the tree, and let the caller add it to the
+  scene.
 
 Both are server-only. The copy goes through the same spawn lifecycle as a
 player would: it picks up the spawn snapshot, runs
-:ref:`spawning <class_MultiplayerEntity_signal_spawning>`, registers with
+:ref:`spawning <class_NetwEntity>`, registers with
 the scene's synchronizer, finishes :godot:`_ready() <Node#class_node_private_method__ready>`,
 and finally fires :ref:`spawned <class_NetwEntity>`.
 
 Despawning is symmetric:
-:ref:`despawn() <class_MultiplayerEntity_method_despawn>` flushes the
-:ref:`SaveComponent <class_SaveComponent>` (unless you ask it not to),
+:ref:`NetwEntity.despawn() <class_NetwEntity>` flushes
+:ref:`NetwPersistenceInterface <class_NetwPersistenceInterface>` state (unless you ask it not to),
 forces authority back to the server so visibility updates settle cleanly,
 and frees the owner. The reason string you pass through
-``MultiplayerEntity.DespawnOpts`` shows up in logs and in the
-:ref:`despawning <class_MultiplayerEntity_signal_despawning>` signal, so
+``NetwEntity.DespawnOpts`` shows up in logs and in the
+:ref:`despawning <class_NetwEntity>` signal, so
 custom systems (achievements, death cams, kill feeds) can pivot on it
 without parsing strings out of the engine.
 
@@ -188,13 +197,13 @@ Putting the pieces together, a minimal client-authoritative player scene
 contains:
 
 - A :godot:`CharacterBody2D <CharacterBody2D>` (or 3D equivalent) with the
-  movement script.
-- A :ref:`MultiplayerEntity <class_MultiplayerEntity>` with :ref:`initial_controller <class_MultiplayerEntity_property_initial_controller>`
-  set to :ref:`REPRESENTED_PEER <class_MultiplayerEntity_constant_REPRESENTED_PEER>` and the body's position listed as a spawn property.
+  movement script, whose ``_init()`` resolves the entity and sets
+  ``initial_controller`` to ``REPRESENTED_PEER``, and marks the body's
+  position with ``.on_spawn()``.
 - A sibling :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` for
   continuous state (position, animation frame, weapon held).
-- Optionally, a :ref:`SaveComponent <class_SaveComponent>` so the player's
-  data persists across reconnects, and a
+- Optionally, :ref:`Netw.configure_persistence() <class_Networked>` so the
+  player's data persists across reconnects, and a
   :ref:`MultiplayerInterpolator <class_MultiplayerInterpolator>` on remote copies to
   smooth out the snapshotted position between server ticks.
 

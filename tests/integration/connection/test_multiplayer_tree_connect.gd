@@ -3,8 +3,8 @@
 class_name TestMultiplayerTreeConnect
 extends NetwTestSuite
 
-## Path from the level root to the [MultiplayerEntity] spawn template.
-const SPAWNER_PATH := "TestPlayerFull/MultiplayerEntity"
+## Path from the level root to the player spawn template.
+const SPAWNER_PATH := "TestPlayerFull"
 
 var harness: NetwTestHarness
 var player_builder: PlayerBuilder
@@ -50,14 +50,10 @@ func test_host_starts_server_and_joins() -> void:
 	assert_that(server_node).is_instanceof(MultiplayerTree)
 	var server_tree := server_node as MultiplayerTree
 
-	var services := server_tree.find_children(
-		"*",
-		"InterestService",
-		true,
-		false,
-	)
-	assert_that(services.size()).is_equal(1)
-	assert_that(server_tree.get_service(InterestService)).is_equal(services[0])
+	# Interest is no longer a mounted service node. The interface is owned by
+	# the tree's api and always present.
+	assert_that(server_tree.api.interest).is_not_null()
+	assert_that(server_tree.api.interest).is_instanceof(NetwInterestInterface)
 
 
 func test_listen_server_auto_connect_player_spawns_player() -> void:

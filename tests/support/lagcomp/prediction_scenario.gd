@@ -3,7 +3,7 @@
 ## Wraps [NetwTestHarness] with a [MultiplayerClock] and a mounted [LagCompensation]
 ## node on both peers, then composes matched [LagCompSimBody]
 ## pairs through
-## [PlayerBuilder] so the real [StateSynchronizer], [InputSynchronizer], and
+## [PlayerBuilder] so the real derived state and input sets and the
 ## [PredictionComponent] run end to end. A [LockstepStepper] drives both clocks
 ## in process, so corrections, replay depth, and divergence are deterministic and
 ## a scenario reads like its retired spike did.
@@ -28,10 +28,10 @@ const DISPLAY_OFFSET := 3
 var inner: NetwTestHarness
 var server: MultiplayerTree
 var client: MultiplayerTree
-var server_clock: MultiplayerClock
-var client_clock: MultiplayerClock
-var server_sim: LagCompensation
-var client_sim: LagCompensation
+var server_clock: NetwClockInterface
+var client_clock: NetwClockInterface
+var server_sim: NetwLagCompensationInterface
+var client_sim: NetwLagCompensationInterface
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -40,8 +40,6 @@ var _tickrate: int
 var _client_peer_id: int
 var _entities: Array[PredictedEntity] = []
 var _entity_counter: int = 0
-var state_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
-var input_transport: PackedSynchronizer.Transport = PackedSynchronizer.Transport.STOCK
 
 ## Entity-root type composed for each predicted pair through [PlayerBuilder].
 ##
@@ -74,20 +72,20 @@ func setup(
 	client = await inner.add_client()
 	server = inner.server()
 	server_clock = await inner.add_clock(tickrate, display_offset)
-	client_clock = client.get_service(MultiplayerClock) as MultiplayerClock
+	client_clock = client.api.clock
 	server_clock.manual_tick = true
 	client_clock.manual_tick = true
 	_client_peer_id = client.multiplayer_peer.get_unique_id()
 
 	# The service is no longer auto-created, so mount the node on both peers.
 	server_sim = inner.add_lag_compensation()
-	client_sim = client.get_service(LagCompensation) as LagCompensation
+	client_sim = client.api.lag_compensation
 	await _tree.process_frame
 
 	# Freeze both clocks under lockstep so every tick is driven by run(), with no
 	# stray physics-frame ticks polluting the deterministic schedule.
 	_stepper = LockstepStepper.new(
-		[server_clock, client_clock] as Array[MultiplayerClock],
+		[server_clock, client_clock] as Array[NetwClockInterface],
 		[server.multiplayer, client.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,
@@ -111,31 +109,38 @@ func add_predicted_entity(
 	var ename := "Predicted%d" % _entity_counter
 	var builder := PlayerBuilder.new(ename) \
 			.with_root(body_type) \
-			.with_state(state_props, state_transport) \
-			.with_input(input_props, input_transport) \
+			.with_state(state_props) \
+			.with_input(input_props) \
 			.with_prediction(missing_policy, epsilon)
 
 	var server_root := builder.build() as LagCompSimBody
 	var client_root := builder.build() as LagCompSimBody
 
 	# Identity and controller pinned before tree entry so each peer resolves its
-	# role (PREDICT on the client, CONSUME on the server) in _ready.
+	# role (PREDICT on the client, CONSUME on the server) in _ready. A bound
+	# entity_id declares a real entity, so the rig activates LIVE (authority
+	# application, scene registration) rather than staying an inert unbound node.
 	for root: LagCompSimBody in [server_root, client_root]:
 		var entity := NetwEntity.of(root)
+		entity.entity_id = StringName(ename)
 		entity.peer_id = _client_peer_id
 		entity.controller = _client_peer_id
 
 	server.add_child(server_root)
 	client.add_child(client_root)
 
-	var server_liveness := server.get_service(LivenessService) as LivenessService
-	var client_liveness := client.get_service(LivenessService) as LivenessService
-	var server_entity := NetwEntity.of(server_root)
-	var client_entity := NetwEntity.of(client_root)
-	if server_liveness and client_liveness:
-		var route := server_liveness.allocate_route(server_entity)
-		server_liveness.bind_route(route, server_entity)
-		client_liveness.bind_route(route, client_entity)
+	# The state set is server-authored (node authority always the server) and
+	# the input set is controller-authored (entity.controller, read by role
+	# resolution) - two independent axes. Node authority tracking
+	# entity.controller is the entity-wide default (matches REPRESENTED_PEER
+	# player entities), so pin server_root's authority back explicitly rather
+	# than changing that default for this rig's decoupled case.
+	# SMELL(authority-pin): the state/control axes collapse onto node authority
+	# today, so a server-authored client-controlled entity must re-pin. Route-keyed
+	# authorship settles it later.
+	server_root.set_multiplayer_authority(MultiplayerPeer.TARGET_PEER_SERVER)
+
+	NetwBench.bind_shared_route(server_root, [client_root])
 
 	await _tree.process_frame
 
@@ -175,9 +180,9 @@ func run_until(predicate: Callable, limit: int = 600) -> int:
 ## Runs [param ticks] to settle the link, then clears [param p]'s metrics so a
 ## test asserts on steady state.
 ##
-## The real [InputSynchronizer] carries one stale first packet that the fully
+## The real input stream carries one stale first packet that the fully
 ## virtual spike doubles never modeled, so "clean delivery never corrects" holds
-## only after the link warms up. The virtual [constant StampedSynchronizer.TICK]
+## only after the link warms up. The authoring-tick
 ## stamp is read live when the packet flushes, but the real payload property the
 ## owning client drives (here [member LagCompSimBody.motion]) is captured one send
 ## behind. The first packet therefore pairs a fresh stamp with the pre-authored
@@ -235,7 +240,7 @@ func feed_server_input(
 		tick: int,
 		input: Dictionary,
 ) -> void:
-	p.server_input.record(tick, _normalize(input))
+	p.server_prediction.record_server_input(tick, _normalize(input))
 
 
 ## Runs one server consume step for [param p] at [param tick].

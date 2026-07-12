@@ -25,13 +25,13 @@
 ## sight.add_viewer(observer_peer_id)
 ##
 ## # Observer client: react to what this peer can see.
-## var sight := Netw.ctx(self).interest.layer(&"sight")
+## var sight := Netw.of(self).interest.layer(&"sight")
 ## sight.entity_visible.connect(func(entity):
 ##     add_marker(entity.owner)
 ## )
 ##
 ## # Owner client: react to who can see this entity.
-## Netw.ctx(self).entity.observer_entered.connect(func(layer_id, peer_id):
+## NetwEntity.of(self).observer_entered.connect(func(layer_id, peer_id):
 ##     show_seen_by(peer_id)
 ## )
 ## [/codeblock]
@@ -82,7 +82,7 @@ signal gate_bound(gate: Object)
 ## Emitted when the bound [InterestGate] detaches.
 signal gate_unbound(gate: Object)
 
-## Stable id used by [NetwInterest] to index this layer.
+## Stable id used by [NetwInterestInterface] to index this layer.
 var layer_id: StringName
 
 ## Composition policy. See [enum Policy].
@@ -224,7 +224,7 @@ func has_entity(entity: NetwEntity) -> bool:
 
 
 # Idempotent client-side membership path for bound gates. Unlike the
-# unbound RPC transition sink, this notifies InterestService so local
+# unbound relay transition sink, this notifies NetwInterestInterface so local
 # synchronizer visibility filters are installed.
 func _client_track_entity(entity: NetwEntity) -> void:
 	assert(
@@ -307,7 +307,7 @@ func verdict_for(peer_id: int) -> bool:
 ## [code]transitions_total[/code] is cumulative since this layer was created, so
 ## the monitor reads it as a delta over an interval to surface churn.
 ## [code]visible_edges[/code] is the count of admitted (entity, peer) pairs cached
-## by the [InterestDriver].
+## by the [NetwInterestLayer.InterestDriver].
 ## [codeblock]
 ## {
 ##   ┠╴ viewers: int            # size of viewers
@@ -366,8 +366,8 @@ func _emit_transitions(result: InterestDriver.Result) -> void:
 		t.entity.interest_enter.emit(t.peer)
 
 
-func _service() -> InterestService:
-	return _service_ref.get_ref() as InterestService if _service_ref else null
+func _service() -> NetwInterestInterface:
+	return _service_ref.get_ref() as NetwInterestInterface if _service_ref else null
 
 
 ## Associates [param gate] with this layer for client-side admission.
@@ -413,7 +413,7 @@ func bound_gate() -> Object:
 ## cached state advances.
 ##
 ## [b]Engine-free:[/b] depends only on [NetwEntity] and
-## [InterestPolicy]. Unit tests construct a driver directly without
+## [NetwInterestLayer.InterestPolicy]. Unit tests construct a driver directly without
 ## any multiplayer peer.
 ##
 ## [codeblock]

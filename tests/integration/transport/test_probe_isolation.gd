@@ -92,10 +92,10 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 
 	# Pending peers drain once clients close + auth_timeout reaps stragglers.
 	@warning_ignore("redundant_await")
-	await assert_func(host_api, "get_authenticating_peers") \
-			.wait_until(int((host_api.auth_timeout + 1.0) * 1000)) \
+	await assert_func(host_api.inner, "get_authenticating_peers") \
+			.wait_until(int((host_api.inner.auth_timeout + 1.0) * 1000)) \
 			.is_equal(PackedInt32Array())
-	assert_array(host_api.get_authenticating_peers()).is_empty()
+	assert_array(host_api.inner.get_authenticating_peers()).is_empty()
 	assert_array(host_api.get_peers()).is_empty()
 
 	await EnetTestSupport.stop_tree(host_tree)

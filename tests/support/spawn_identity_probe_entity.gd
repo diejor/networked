@@ -1,5 +1,7 @@
+## Test double recording [NetwEntity] lifecycle-signal ordering relative to
+## this component's own tree notifications.
 class_name SpawnIdentityProbeEntity
-extends MultiplayerEntity
+extends Node
 
 @export var identity_packet: Dictionary = { }
 
@@ -7,38 +9,26 @@ var samples: Array[Dictionary] = []
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_PARENTED and not Engine.is_editor_hint():
-		_record_sample(&"parented_before_super")
-		var entity := Netw.ctx(self).entity
-		if entity:
-			entity.contribute_spawn_property(self, &"entity_id")
-			entity.contribute_spawn_property(self, &"identity_packet")
-			entity.contribute_spawn_property(self, &"peer_id")
-			if not entity.owner_tree_entered.is_connected(
-				_on_owner_tree_entered,
-			):
-				entity.owner_tree_entered.connect(_on_owner_tree_entered)
-	super._notification(what)
-	if what == NOTIFICATION_PARENTED and not Engine.is_editor_hint():
-		if not spawning.is_connected(_on_spawning):
-			spawning.connect(_on_spawning)
-		_record_sample(&"parented_after_super")
+	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
+		return
+	_record_sample(&"parented")
+	var entity := NetwEntity.resolve(self)
+	if not entity:
+		return
+	entity.initial_controller = NetwEntity.InitialController.REPRESENTED_PEER
+	Netw.configure_property(self, &"identity_packet").on_spawn()
+	if not entity.spawning.is_connected(_on_spawning):
+		entity.spawning.connect(_on_spawning)
 
 
 func _enter_tree() -> void:
 	_record_sample(&"enter_tree_before_super")
-	super._enter_tree()
 	_record_sample(&"enter_tree_after_super")
 
 
 func _ready() -> void:
 	_record_sample(&"ready_before_super")
-	super._ready()
 	_record_sample(&"ready_after_super")
-
-
-func _on_owner_tree_entered() -> void:
-	_record_sample(&"owner_tree_entered")
 
 
 func _on_spawning() -> void:
@@ -59,8 +49,5 @@ func _record_sample(stage: StringName) -> void:
 		{
 			"stage": stage,
 			"packet": identity_packet.duplicate(true),
-			"entity_id": entity_id,
-			"peer_id": peer_id,
-			"root_path": root_path,
 		},
 	)

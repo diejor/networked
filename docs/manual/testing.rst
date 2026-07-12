@@ -172,7 +172,7 @@ that participant's copy of a player with
 
     const MAIN := preload("res://examples/quick_start/Main.tscn")
     const LEVEL_1_SPAWN := (
-        "uid://bqi7mvxdnvgch::Player/%MultiplayerEntity"
+        "uid://bqi7mvxdnvgch::Player"
     )
 
     var game: NetwGameHarness

@@ -87,7 +87,7 @@ limits/debugger/max_chars_per_second=262144
 
 [networked]
 
-logging/active_profile="uid://dd2xtj1kbwpm7"
+logging/active_profile="uid://44kyyxwgimkd"
 webrtc/turn_credentials_url="https://bomber.diejorarr.workers.dev/"
 tests/nakama_host="127.0.0.1"
 

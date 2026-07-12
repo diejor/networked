@@ -1,13 +1,13 @@
 ## Server-only lag-comp rewind rig: host, a clock, a mounted [LagCompensation]
 ## node, and a [LockstepStepper].
 ##
-## A server-authoritative [StateSynchronizer]-only entity is recorded every tick,
+## A server-authoritative state-set-only entity is recorded every tick,
 ## so it is rewindable by default and a scene rewind can read where a target was.
 ## This rig owns the server-only ritual the sim-integration suites used to
 ## hand-roll (host, add the clock, mount the [LagCompensation] node, drive the
 ## [LockstepStepper], spawn a rewindable entity) so a test reads as the rewind
 ## claim, not the setup. Sample and rewind access stays on
-## [member MultiplayerTree.lag_compensation].
+## [member NetwMultiplayer.lag_compensation].
 ##
 ## [codeblock]
 ## var r := RewindScenario.new()
@@ -15,7 +15,7 @@
 ## var e := await r.spawn_state_entity("Target")
 ## r.move_along(e, func(i: int) -> Vector2: return Vector2(i * 8.0, 0.0), 24)
 ## var view_tick := r.clock.tick - 8
-## var past := r.server.lag_compensation.sample(e, view_tick).position
+## var past := r.server.api.lag_compensation.sample(e, view_tick).position
 ## [/codeblock]
 class_name RewindScenario
 extends RefCounted
@@ -25,8 +25,8 @@ const DISPLAY_OFFSET := 3
 
 var inner: NetwTestHarness
 var server: MultiplayerTree
-var clock: MultiplayerClock
-var sim: LagCompensation
+var clock: NetwClockInterface
+var sim: NetwLagCompensationInterface
 
 var _suite: NetwTestSuite
 var _tree: SceneTree
@@ -59,7 +59,7 @@ func setup(
 
 	# Freeze the clock under lockstep so every tick is driven by run() / move_along().
 	_stepper = LockstepStepper.new(
-		[clock] as Array[MultiplayerClock],
+		[clock] as Array[NetwClockInterface],
 		[server.multiplayer] as Array[MultiplayerAPI],
 		inner.session(),
 		tickrate,
@@ -68,29 +68,33 @@ func setup(
 
 ## Spawns a server-authoritative state-synced entity with no prediction.
 ##
-## [method PlayerBuilder.with_state] composes the [StateSynchronizer] alone, so
-## registration is driven by state-sync presence, not a [PredictionComponent].
+## The [StateSyncBody] root declares a position state set alone, so timeline
+## registration is driven by state-set presence, not a [PredictionComponent].
 func spawn_state_entity(
 		entity_name: String = "Target",
 		props: Array[StringName] = [&"position"],
 ) -> NetwEntity:
 	var node := PlayerBuilder.new(entity_name) \
-			.with_root(Node2D) \
+			.with_root(StateSyncBody) \
 			.with_state(props) \
 			.build()
+	# A bound entity_id declares a real entity, so the rig activates LIVE
+	# (authority application, scene registration) rather than staying an inert
+	# unbound node. This rig has no "|"-separated name to hydrate one from.
+	NetwEntity.of(node).entity_id = StringName(entity_name)
 	server.add_child(node)
 	await _tree.process_frame
 	return NetwEntity.of(node)
 
 
-## Spawns a state-synced entity that also carries a [MultiplayerEntity], so it can
-## be despawned with [member MultiplayerEntity.DespawnOpts.linger].
+## Spawns a state-synced entity whose controller is player-represented, so it
+## can be despawned with [member NetwEntity.DespawnOpts.linger].
 func spawn_despawnable_entity(
 		entity_name: String = "Linger",
 		props: Array[StringName] = [&"position"],
 ) -> Node2D:
 	var node := PlayerBuilder.new(entity_name) \
-			.with_root(Node2D) \
+			.with_root(StateSyncBody) \
 			.with_multiplayer_entity() \
 			.with_state(props) \
 			.build()

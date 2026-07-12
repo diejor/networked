@@ -1,43 +1,22 @@
 ## Base class for all networked addon components.
 ##
-## Provides instance-method access to session services via
-## [method get_context], which returns a [NetwContext] safe
+## Provides instance-method access to session services by resolving the
+## component's [NetwMultiplayer] through [method Netw.of], which stays valid
 ## across node renames.
 @icon("res://addons/networked/assets/NetwComponent.svg")
 class_name NetwComponent
 extends Node
 
-var _context: NetwContext
-
-
-## Returns a [NetwContext] for this component's multiplayer session.
-## Returns [code]null[/code] if the session is not yet established.
-func get_context() -> NetwContext:
-	var scene := MultiplayerTree.scene_for_node(self)
-	if is_instance_valid(scene):
-		return scene.get_context()
-
-	var mt := MultiplayerTree.for_node(self)
-	if not mt:
-		mt = MultiplayerTree.resolve(self)
-	if not mt:
-		return null
-
-	if _context == null or not _context.is_valid():
-		_context = NetwContext.new(mt)
-	return _context
-
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.
-## Prefer [method get_context] for new code; this shim exists for compatibility.
 func get_multiplayer_tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
 
 
 ## Returns the [MultiplayerSceneManager] for this session.
 func get_scene_manager() -> MultiplayerSceneManager:
-	var ctx := get_context()
-	return ctx.services.scene_manager if ctx else null
+	var api := Netw.of(self)
+	return api.scene_manager if api else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local
@@ -49,32 +28,33 @@ func get_tp_layer() -> TPLayerAPI:
 	var mt := get_multiplayer_tree()
 	if not mt or not mt.is_local_client:
 		return null
-	var ctx := get_context()
-	if not ctx:
+	var api := Netw.of(self)
+	if not api:
 		return null
-	var tp_layer: TPLayerAPI = ctx.services.get_service(TPLayerAPI)
-	return tp_layer
+	return api.get_service(TPLayerAPI) as TPLayerAPI
 
 
-## Returns the [MultiplayerClock] for this session.
-func get_multiplayer_clock() -> MultiplayerClock:
-	var ctx := get_context()
-	return ctx.services.clock if ctx else null
+## Returns the [NetwClockInterface] for this session.
+func get_multiplayer_clock() -> NetwClockInterface:
+	var api := Netw.of(self)
+	if not api or not api.clock.is_configured():
+		return null
+	return api.clock
 
 
 ## Returns the session service registered for [param type], or
 ## [code]null[/code].
 func get_service(type: Script) -> Node:
-	var ctx := get_context()
-	return ctx.services.get_service(type) if ctx else null
+	var api := Netw.of(self)
+	return api.get_service(type) if api else null
 
 
 ## Returns the [NetwPeerContext] for the local peer.
 func get_peer_context() -> NetwPeerContext:
-	var ctx := get_context()
-	if not ctx:
+	var api := Netw.of(self)
+	if not api:
 		return null
-	return ctx.services.get_peer_context(self.multiplayer.get_unique_id())
+	return api.get_peer_context(self.multiplayer.get_unique_id())
 
 
 ## Returns the typed bucket for [param bucket_type] from the local peer's

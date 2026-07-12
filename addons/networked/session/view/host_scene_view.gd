@@ -38,7 +38,7 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	super._enter_tree()
-	_mt = NetwServices.register(self, HostSceneView)
+	_mt = NetwService.register(self, HostSceneView)
 	if not _mt:
 		return
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -54,7 +54,7 @@ func _exit_tree() -> void:
 		return
 	_display_source.dispose()
 	_mt = null
-	NetwServices.unregister(self, HostSceneView)
+	NetwService.unregister(self, HostSceneView)
 	super._exit_tree()
 
 
@@ -91,6 +91,4 @@ func _announce_view(viewport: SubViewport) -> void:
 	var player := local_entity.owner
 	if not viewport.is_ancestor_of(player):
 		return
-	var entity := local_entity.multiplayer_entity
-	if entity:
-		entity.notify_view_activated()
+	local_entity.view_activated.emit()

@@ -145,7 +145,7 @@ func _enter_tree() -> void:
 	_wrapper.connect_signal("p2p_session_connect_fail", _on_p2p_connect_fail)
 	_wrapper.connect_signal("network_connection_status_changed", _on_network_connection_status_changed)
 
-	NetwServices.register(self)
+	NetwService.register(self)
 
 	var mt := MultiplayerTree.resolve(self)
 	if mt:
@@ -175,7 +175,7 @@ func _exit_tree() -> void:
 		_wrapper.leave_lobby(_lobby_id)
 		_lobby_id = 0
 
-	NetwServices.unregister(self)
+	NetwService.unregister(self)
 
 
 func _process(_dt: float) -> void:

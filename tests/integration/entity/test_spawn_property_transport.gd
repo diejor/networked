@@ -37,10 +37,15 @@ func test_self_property_decodes_before_spawn_lifecycle() -> void:
 	assert_that(_probe(server_player).identity_packet["marker"]) \
 			.is_equal("ordering")
 	assert_that(client_probe.identity_packet["marker"]).is_equal("ordering")
-	assert_that(client_probe.has_marker_at(&"parented_after_super", "ordering")) \
+	# Internal PARENTED fires during instantiate, before any state can exist
+	# by causality, so the marker is still absent there. The spawn pipeline
+	# applies spawn state while the node is orphaned (I2), so every hook from
+	# tree entry onward sees it, a strengthening over the native
+	# enter-tree-window apply that this case used to pin.
+	assert_that(client_probe.has_marker_at(&"parented", "ordering")) \
 			.is_false()
-	assert_that(client_probe.has_marker_at(&"owner_tree_entered", "ordering")) \
-			.is_false()
+	assert_that(client_probe.has_marker_at(&"spawning", "ordering")) \
+			.is_true()
 	assert_that(
 		client_probe.has_marker_at(&"enter_tree_before_super", "ordering"),
 	) \
@@ -89,20 +94,23 @@ func test_template_state_stays_unbound_without_identity_packet() -> void:
 	var probe := _probe(template)
 
 	assert_that(probe.identity_packet.is_empty()).is_true()
-	assert_that(probe.is_template).is_true()
+	# A bare instance with no bound identity and no editor owner stays UNBOUND
+	# and inert. It never becomes a live entity, and it is not a template.
+	assert_that(NetwEntity.of(template).stage).is_equal(NetwEntity.Stage.UNBOUND)
+	assert_that(NetwEntity.of(template).is_template).is_false()
 
 
 func test_identity_packet_can_drive_record_without_encoded_name() -> void:
 	var peer_id := client0.multiplayer_peer.get_unique_id()
 	var template := player_scene.instantiate()
-	var player := MultiplayerEntity.instantiate_from(
+	var player := NetwEntity.instantiate_from(
 		template,
-		func(entity: MultiplayerEntity) -> void:
-			var probe := entity as SpawnIdentityProbeEntity
-			probe.owner.name = "CosmeticPlayer"
+		func(entity: NetwEntity) -> void:
+			entity.owner.name = "CosmeticPlayer"
+			var probe := _probe(entity.owner)
 			probe.identity_packet = _identity_packet(&"packet_player", peer_id)
-			probe.entity_id = &"packet_player"
-			probe.peer_id = peer_id
+			entity.entity_id = &"packet_player"
+			entity.peer_id = peer_id
 	)
 	template.free()
 	var scene := harness.scene_on_server(level_builder.scene_name)
@@ -126,10 +134,10 @@ func _spawn_probe_player(client: MultiplayerTree, marker: String) -> Node:
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var username: String = client.get_meta(&"_harness_username")
 	var template := player_scene.instantiate()
-	var player := MultiplayerEntity.instantiate_from(
+	var player := NetwEntity.instantiate_from(
 		template,
-		func(entity: MultiplayerEntity) -> void:
-			var probe := entity as SpawnIdentityProbeEntity
+		func(entity: NetwEntity) -> void:
+			var probe := _probe(entity.owner)
 			probe.identity_packet = _identity_packet(StringName(username), peer_id)
 			probe.identity_packet["marker"] = marker
 	)
@@ -145,8 +153,7 @@ func _make_probe_player_scene() -> PackedScene:
 	root.name = "SpawnIdentityProbePlayer"
 
 	var probe := SpawnIdentityProbeEntity.new()
-	probe.initial_controller = MultiplayerEntity.InitialController.REPRESENTED_PEER
-	probe.set_meta("_custom_type_script", "uid://spawnidentityprobe")
+	probe.name = "SpawnIdentityProbeEntity"
 	SceneAssembly.attach(root, probe, root)
 
 	var sync := MultiplayerSynchronizer.new()
@@ -179,4 +186,4 @@ func _packet(marker: String) -> Dictionary:
 
 
 func _probe(node: Node) -> SpawnIdentityProbeEntity:
-	return MultiplayerEntity.unwrap(node) as SpawnIdentityProbeEntity
+	return node.get_node("SpawnIdentityProbeEntity") as SpawnIdentityProbeEntity

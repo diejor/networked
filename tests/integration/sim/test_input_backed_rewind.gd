@@ -2,7 +2,7 @@
 ##
 ## Server-consumed prediction applies client input by input tick, so the
 ## server-side [NetwTimeline] must key that resulting state by the same timeline
-## the predicting client uses. Otherwise [method NetwLagCompensation.sample]
+## the predicting client uses. Otherwise [method NetwLagCompensationInterface.sample]
 ## reads a stale server-clock slot even when the input has arrived.
 class_name TestInputBackedRewind
 extends NetwTestSuite

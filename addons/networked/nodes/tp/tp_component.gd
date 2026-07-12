@@ -119,19 +119,15 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_PARENTED or Engine.is_editor_hint():
 		return
 
-	var entity := Netw.ctx(self).entity
+	var entity := NetwEntity.resolve(self)
 	if not entity or not entity.owner:
 		return
 
-	entity.contribute_spawn_property(self, &"current_scene_path")
 	# current_scene_path is server-owned: a forged client value is a teleport
-	# exploit, so it must never ride a client to server channel.
-	entity.contribute_save_property(
-		self,
-		&"current_scene_path",
-		&"current_scene_path",
-		SaveComponent.SaveMode.SNAPSHOT,
-	)
+	# exploit, so it rides no lane (authority-written, no sync axis) and reaches
+	# clients only through the spawn frame. It persists into the entity's row when
+	# its archetype declares Netw.configure_persistence.
+	Netw.configure_property(self, &"current_scene_path").on_spawn().persisted()
 
 
 func _ready() -> void:
@@ -233,26 +229,9 @@ func _do_teleport(
 	# is a sibling CanvasLayer, so its AnimationPlayer keeps ticking.
 	_tp_guard = AreaReparentGuard.new(owner)
 
-	# On listen-server host the initiator is the server: scene state is
-	# already authoritative locally, so the save round-trip would just
-	# serialize and deserialize into the same node.
-	var is_host := multiplayer.is_server()
-	var save_component: SaveComponent = owner.get_node_or_null("%SaveComponent")
-	if save_component and not is_host:
-		save_component.push_to.call_deferred(MultiplayerPeer.TARGET_PEER_SERVER, true)
-		var timer := get_tree().create_timer(5.0)
-		if await Async.timeout(save_component.push_acknowledged, timer):
-			stalled.emit(&"save_ack_timeout")
-
 	var tp_layer := get_tp_layer()
 	if tp_layer:
 		await tp_layer.teleport_out()
-
-	# Don't restrict visibility on the server (listen-server case): doing so
-	# kills public_visibility on the canonical synchronizers and the player
-	# becomes permanently invisible to remote clients after reparent.
-	if not multiplayer.is_server():
-		SynchronizersCache.sync_only_server(owner)
 
 	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -372,19 +351,19 @@ func _reparent_player(
 	var username := player.name
 	var to_scene_name := to_scene.level.name
 	var tp_component: TPComponent = player.get_node("%TPComponent")
-	var entity := MultiplayerEntity.unwrap(player)
+	var entity := NetwEntity.of(player)
 
 	_dbg.info("Reparenting player %s to scene %s" % [username, to_scene_name])
 
 	if not entity:
 		_dbg.error(
-			"Cannot reparent player %s. MultiplayerEntity is missing.",
+			"Cannot reparent player %s. NetwEntity is missing.",
 			[username],
 			func(m): push_error(m),
 		)
 		return
 
-	var opts := MultiplayerEntity.ReparentOpts.new()
+	var opts := NetwEntity.ReparentOpts.new()
 	opts.reason = &"teleport"
 	opts.target_global_position = tp_component._resolve_snap_pos(to_scene.level, tp_path)
 	entity.reparent_to(to_scene.level, opts)
@@ -400,10 +379,10 @@ func _teleported(scene: Node, tp_path: String) -> void:
 
 	var snap_pos := _resolve_snap_pos(scene, tp_path)
 	_dbg.debug("Teleport server-side complete. Snapped to %s" % [str(snap_pos)])
-	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
-	if save:
-		save.pull_from_scene()
-		save.flush()
+	var entity := NetwEntity.of(owner)
+	var engine := entity.persistence if entity else null
+	if engine:
+		engine.flush()
 
 	# Defer only the client notification - the assert guarantees the player is
 	# fully in tree, which is true synchronously after reparent_to.
@@ -423,16 +402,6 @@ func _resolve_snap_pos(scene: Node, tp_path: String) -> Variant:
 		if tp_node:
 			snap_pos = tp_node.get("global_position")
 	return snap_pos
-
-
-# Relays a push acknowledgment from the server back to the client's SaveComponent.
-# Safe to send through TPComponent (unlike SaveComponent which has visibility
-# restrictions that block server -> client RPCs).
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_push_ack() -> void:
-	var save: SaveComponent = owner.get_node_or_null("%SaveComponent")
-	if save:
-		save.push_acknowledged.emit()
 
 
 @rpc("any_peer", "call_local", "reliable")

@@ -3,7 +3,7 @@ class_name TestInterestMonitorSnapshot
 extends NetwTestSuite
 
 var mt: MultiplayerTree
-var service: InterestService
+var service: NetwInterestInterface
 
 
 func before_test() -> void:
@@ -11,7 +11,7 @@ func before_test() -> void:
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	service = mt.get_service(InterestService) as InterestService
+	service = mt.api.interest
 
 
 func test_layer_snapshot_counts_viewers_entities_edges_transitions() -> void:

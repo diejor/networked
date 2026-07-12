@@ -1,20 +1,18 @@
-## Unit tests for [LivenessService] and [NetwLiveness] facade.
+## Unit tests for [NetwLivenessInterface].
 class_name TestLivenessService
 extends NetwTestSuite
 
-const LivenessService := preload("res://addons/networked/session/liveness/liveness_service.gd")
-
 var mt: MultiplayerTree
-var service: LivenessService
+var service: NetwLivenessInterface
 
 
-## Set up a fresh MultiplayerTree and LivenessService.
+## Set up a fresh MultiplayerTree and its liveness interface.
 func before_test() -> void:
 	mt = MultiplayerTree.new()
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
-	service = mt.get_service(LivenessService) as LivenessService
+	service = mt.api.liveness
 
 
 ## Verify that route allocation is monotonic and starts at 1.
@@ -48,8 +46,8 @@ func test_bind_transitions_to_live() -> void:
 
 	service.bind_route(route, entity)
 
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
-	assert_that(service.state_of(entity)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
+	assert_that(service.state_of(entity)).is_equal(NetwLivenessInterface.State.LIVE)
 	assert_that(service.route_of(entity)).is_equal(route)
 
 
@@ -57,49 +55,41 @@ func test_bind_transitions_to_live() -> void:
 func test_despawn_linger_transitions() -> void:
 	var owner_node := Node2D.new()
 	var entity := NetwEntity.ensure(owner_node)
-	var me := MultiplayerEntity.new()
-	owner_node.add_child(me)
-	me.owner = owner_node # Explicit owner set before tree entry
-	entity.multiplayer_entity = me
 
-	add_child(owner_node) # Tree entry triggers _on_owner_tree_entered
+	add_child(owner_node) # Tree entry triggers _handle_tree_entered
 	auto_free(owner_node)
 
 	var route := service.allocate_route(entity)
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
-	var opts := MultiplayerEntity.DespawnOpts.new()
+	var opts := NetwEntity.DespawnOpts.new()
 	opts.linger = true
 	opts.linger_seconds = 0.05
 
-	me.despawn(opts)
+	entity.despawn(opts)
 	assert_that(service.route_state(route)).is_equal(
-		LivenessService.State.LINGERING
+		NetwLivenessInterface.State.LINGERING
 	)
 
 	# Wait for linger timer to fire and node to exit tree
 	await owner_node.tree_exited
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.DEAD)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.DEAD)
 
 
 ## Verify that plain despawning transitions state: LIVE -> DEAD immediately.
 func test_plain_despawn_transitions() -> void:
 	var owner_node := Node2D.new()
 	var entity := NetwEntity.ensure(owner_node)
-	var me := MultiplayerEntity.new()
-	owner_node.add_child(me)
-	me.owner = owner_node # Explicit owner set before tree entry
-	entity.multiplayer_entity = me
 
 	add_child(owner_node)
 	auto_free(owner_node)
 
 	var route := service.allocate_route(entity)
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
-	me.despawn()
+	entity.despawn()
 	await owner_node.tree_exited
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.DEAD)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.DEAD)
 
 
 ## Verify that reparenting does not transition the state to DEAD.
@@ -110,13 +100,13 @@ func test_reparent_does_not_kill_route() -> void:
 	auto_free(owner_node)
 
 	var route := service.allocate_route(entity)
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
 	# Simulate reparenting in flight
-	entity.reparenting = MultiplayerEntity.ReparentOpts.new()
+	entity.reparenting = NetwEntity.ReparentOpts.new()
 
 	owner_node.get_parent().remove_child(owner_node)
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
 	# Cleanup
 	owner_node.free()
@@ -167,12 +157,12 @@ func test_session_ended_leaves_no_residue() -> void:
 	add_child(owner_node)
 	auto_free(owner_node)
 	var route := service.allocate_route(entity)
-	assert_that(service.route_state(route)).is_equal(LivenessService.State.LIVE)
+	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
 	mt.session_ended.emit()
 	await get_tree().process_frame # deferred clear
 
 	assert_that(service.route_state(route)).is_equal(
-		LivenessService.State.UNKNOWN
+		NetwLivenessInterface.State.UNKNOWN
 	)
 	assert_that(service._route_counter).is_equal(0)

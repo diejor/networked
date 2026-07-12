@@ -19,7 +19,7 @@
 ## gate.layer_id = &"arena:1"
 ## arena_root.add_child(gate)
 ##
-## var layer := Netw.ctx(self).interest.layer(&"arena:1")
+## var layer := Netw.of(self).interest.layer(&"arena:1")
 ## layer.add_viewer(player.peer_id)
 ## [/codeblock]
 class_name InterestGate
@@ -155,7 +155,7 @@ func apply_snapshot(
 
 
 ## Writes [param new_viewers] and [param new_policy] without touching
-## per-peer visibility. Used by [InterestService] to stage gate data
+## per-peer visibility. Used by [NetwInterestInterface] to stage gate data
 ## ahead of split admit/revoke visibility passes.
 func apply_snapshot_data(
 		new_viewers: PackedInt32Array,
@@ -319,8 +319,8 @@ func _is_server() -> bool:
 	return multiplayer.is_server()
 
 
-func _service() -> InterestService:
+func _service() -> NetwInterestInterface:
 	var mt := MultiplayerTree.resolve(self)
-	if not mt:
+	if not mt or not mt.api:
 		return null
-	return mt.get_service(InterestService) as InterestService
+	return mt.api.interest

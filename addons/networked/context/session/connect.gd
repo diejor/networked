@@ -3,7 +3,7 @@
 ## This is your entry point for everything that happens [i]before[/i] a match
 ## begins, discovering servers (typed-in addresses and directory lobbies like
 ## Steam), probing them for status, and finally hosting or joining. Once you
-## are in a session, use [NetwTree] for in-game operations.
+## are in a session, use [NetwMultiplayer] for in-game operations.
 ##
 ## [br][br]
 ## Most methods here take or return a [JoinTarget]: one
@@ -15,7 +15,7 @@
 ## Grab one from any node descendant of a [MultiplayerTree] and wire up the 
 ## signals you care about:
 ## [codeblock]
-## var connect := Netw.ctx(self).connect
+## var connect := Netw.of(self).connect
 ##
 ## # Keep the UI in sync as servers come and go.
 ## connect.target_added.connect(_on_server_found)

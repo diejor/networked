@@ -99,6 +99,24 @@ static func _ensure_initialized() -> void:
 		_recompute_min_level()
 
 
+## Re-reads the active profile from [code]ProjectSettings[/code] into the live
+## base configuration.
+##
+## The one-time [method initialize] guard means a profile reassignment never
+## re-reads [constant SETTING_ACTIVE_PROFILE] on its own, so a long-lived
+## process keeps the profile it first loaded. Call this after the active
+## profile changes so the process adopts the new [member current_level] and
+## [member module_levels] immediately.
+## [codeblock]
+## ProjectSettings.set_setting(NetwLog.SETTING_ACTIVE_PROFILE, uid)
+## NetwLog.reload_active_profile()
+## [/codeblock]
+static func reload_active_profile() -> void:
+	_ensure_initialized()
+	_load_active_profile()
+	_recompute_min_level()
+
+
 static func _load_active_profile() -> void:
 	if not ProjectSettings.has_setting(SETTING_ACTIVE_PROFILE):
 		return

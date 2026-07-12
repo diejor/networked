@@ -94,9 +94,10 @@ func test_builder_shape_flow() -> void:
 	assert_that(builder.player_name).is_equal(&"TestPlayer")
 	var live: Node2D = auto_free(builder.build()) as Node2D
 	assert_that(live.name).is_equal("TestPlayer")
-	var spawner: Node = live.get_node("MultiplayerEntity")
-	assert_that(spawner).is_not_null()
-	assert_that(spawner.owner).is_equal(live)
+	var entity := NetwEntity.of(live)
+	assert_that(entity).is_not_null()
+	assert_that(entity.initial_controller) \
+			.is_equal(NetwEntity.InitialController.REPRESENTED_PEER)
 	var sync_node: Node = live.get_node("PlayerSync")
 	assert_that(sync_node).is_not_null()
 	assert_that(sync_node.owner).is_equal(live)
@@ -188,17 +189,6 @@ func _assert_scenes_match(node1: Node, node2: Node) -> void:
 		var scenes2 := sp2.get("_spawnable_scenes") as PackedStringArray
 		assert_that(scenes2.size()).is_equal(scenes1.size())
 
-	if (
-			node1.get_class() == "MultiplayerEntity"
-			or node2.get_class() == "MultiplayerEntity"
-	):
-		assert_that(node2.get("initial_controller")) \
-				.is_equal(node1.get("initial_controller"))
-
-	if node1.get_class() == "SaveComponent" or node2.get_class() == "SaveComponent":
-		assert_that(node2.get("database")).is_equal(node1.get("database"))
-		assert_that(node2.get("table_name")).is_equal(node1.get("table_name"))
-
 	assert_that(node2.get_child_count()).is_equal(node1.get_child_count())
 	for child1 in node1.get_children():
 		var child2 := node2.get_node_or_null(NodePath(child1.name))
@@ -270,8 +260,10 @@ func test_player_builder_with_custom_synchronizer() -> void:
 
 
 func test_player_builder_with_lag_comp() -> void:
+	# with_state / with_input attach nothing: the marked root script owns the
+	# derived sets, and the builder asserts the marks cover the declared props.
 	var builder := PlayerBuilder.new("LagCompPlayer") \
-			.with_root(Node2D) \
+			.with_root(LagCompSimBody) \
 			.with_state([&"position"]) \
 			.with_input([&"motion", &"bombing"]) \
 			.with_prediction(
@@ -280,57 +272,44 @@ func test_player_builder_with_lag_comp() -> void:
 			)
 	var live: Node2D = auto_free(builder.build()) as Node2D
 
-	# An entity record exists for the synchronizers to resolve on attach.
+	# An entity record exists for the prediction component to resolve on attach.
 	var entity := NetwEntity.of(live)
 	assert_that(entity).is_not_null()
-	# Steer the entity before tree entry so input authority binds to the
-	# controller when _ready runs.
-	entity.controller = 7
 
-	var state := live.get_node("StateSync") as StateSynchronizer
-	assert_that(state).is_not_null()
-	assert_that(state.has_virtual_property(&"position")).is_true()
+	var script := live.get_script() as Script
+	var state_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_STATE)
+	assert_that(state_set).is_not_null()
+	assert_bool(&"position" in state_set.keys()).is_true()
 
-	var input := live.get_node("Inputs/InputSync") as InputSynchronizer
-	assert_that(input).is_not_null()
-	assert_that(input.has_virtual_property(&"motion")).is_true()
-	assert_that(input.has_virtual_property(&"bombing")).is_true()
+	var input_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_INPUT)
+	assert_that(input_set).is_not_null()
+	assert_bool(&"motion" in input_set.keys()).is_true()
+	assert_bool(&"bombing" in input_set.keys()).is_true()
 
 	var prediction := live.get_node("PredictionComponent") as PredictionComponent
 	assert_that(prediction).is_not_null()
 	assert_that(prediction.missing_policy) \
 			.is_equal(PredictionComponent.MissingInput.REPEAT_LAST)
 	assert_that(prediction.divergence_epsilon).is_equal(0.05)
-
-	# Run _ready by entering the tree, then assert the resolved authority and
-	# the slots the lifecycle wired.
-	add_child(live)
-	await get_tree().process_frame
-	assert_that(state.get_multiplayer_authority()).is_equal(1)
-	assert_that(input.get_multiplayer_authority()).is_equal(7)
-	assert_that(entity.state).is_equal(state)
-	assert_that(entity.input).is_equal(input)
-	assert_that(entity.prediction).is_equal(prediction)
-	remove_child(live)
+	# The node carries config; the entity handle is the config facade the engine
+	# reads. It exists (never null) but stays unregistered until wired in a session.
+	assert_that(entity.prediction).is_not_null()
 
 
 func test_player_builder_lag_comp_composes_with_entity_and_interest() -> void:
 	var builder := PlayerBuilder.new("LagCompComposed") \
-			.with_root(Node2D) \
+			.with_root(LagCompSimBody) \
 			.with_multiplayer_entity() \
 			.with_interest([&"default"]) \
 			.with_state([&"position"]) \
 			.with_input([&"motion"]) \
 			.with_prediction()
 	var live: Node2D = auto_free(builder.build()) as Node2D
-	assert_that(live.get_node("MultiplayerEntity")).is_not_null()
+	assert_that(NetwEntity.of(live)).is_not_null()
 	assert_that(live.get_node("InterestComponent")).is_not_null()
-	assert_that(live.get_node("StateSync")).is_not_null()
-	assert_that(live.get_node("Inputs/InputSync")).is_not_null()
 	assert_that(live.get_node("PredictionComponent")).is_not_null()
-	# Every lag-comp node is owned by the root so pack() captures it.
-	assert_that(live.get_node("StateSync").owner).is_equal(live)
-	assert_that(live.get_node("Inputs/InputSync").owner).is_equal(live)
+	# The lag-comp node is owned by the root so pack() captures it.
+	assert_that(live.get_node("PredictionComponent").owner).is_equal(live)
 
 
 func _assert_identical_shape(node1: Node, node2: Node) -> void:

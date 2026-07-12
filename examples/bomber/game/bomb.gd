@@ -7,11 +7,11 @@ var from_player: int = 0
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_PARENTED:
 		return
-	var entity := Netw.ctx(self).entity
+	var entity := NetwEntity.resolve(self)
 	if not entity:
 		return
-	entity.contribute_spawn_property(self, &"position")
-	entity.contribute_spawn_property(self, &"from_player")
+	Netw.configure_property(self, &"position").on_spawn()
+	Netw.configure_property(self, &"from_player").on_spawn()
 
 
 # Called from the animation.
@@ -31,8 +31,9 @@ func explode() -> void:
 				p.position,
 			)
 			query.hit_from_inside = true
+			# intersect_ray returns an empty Dictionary on a miss.
 			var result := world_state.intersect_ray(query)
-			if result.collider is not TileMap:
+			if result.get(&"collider") is not TileMap:
 				# Exploded can only be called by the authority,
 				# but will also be called locally.
 				p.exploded.rpc(from_player)

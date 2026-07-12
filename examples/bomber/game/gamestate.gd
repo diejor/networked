@@ -14,22 +14,22 @@ signal connection_succeeded()
 signal game_ended()
 signal game_error(what: String)
 
-@onready var ctx: NetwContext = Netw.ctx(self)
+@onready var ctx: NetwMultiplayer = Netw.of(self)
 
 var world: MultiplayerScene:
 	get:
-		if not ctx or not ctx.services:
+		if not ctx:
 			return null
-		var sm := ctx.services.scene_manager
+		var sm := ctx.scene_manager
 		if not sm:
 			return null
 		return sm.active_scenes.get(&"World") as MultiplayerScene
 
 var lobby: MultiplayerScene:
 	get:
-		if not ctx or not ctx.services:
+		if not ctx:
 			return null
-		var sm := ctx.services.scene_manager
+		var sm := ctx.scene_manager
 		if not sm:
 			return null
 		return sm.active_scenes.get(&"Lobby") as MultiplayerScene
@@ -43,7 +43,7 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 	players[participant.peer_id] = participant.username
 	player_list_changed.emit()
 	var lobby_scene := lobby
-	if ctx.tree.is_server() and is_instance_valid(lobby_scene):
+	if ctx.is_server() and is_instance_valid(lobby_scene):
 		lobby_scene.admit(participant)
 
 
@@ -73,9 +73,9 @@ func join_game(ip: String, _player_name: String) -> void:
 	jp.username = _player_name
 
 	var target := JoinTarget.new()
-	target.backend = ctx.tree.backend
+	target.backend = ctx.backend
 	target.address = ip
-	ctx.tree.join(target, jp)
+	ctx.join(target, jp)
 
 
 func host_game(_player_name: String) -> void:
@@ -83,7 +83,7 @@ func host_game(_player_name: String) -> void:
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 
-	ctx.tree.host(jp)
+	ctx.host(jp)
 
 
 @rpc("any_peer", "call_local")
@@ -105,7 +105,7 @@ func get_player_list() -> Array:
 ## Starts the match by moving lobby participants into [code]World[/code].
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	var sm := ctx.services.scene_manager
+	var sm := ctx.scene_manager
 	var world_scene := sm.activate_scene(&"World")
 	var lobby_scene := lobby
 	assert(is_instance_valid(world_scene))
@@ -121,7 +121,7 @@ func end_game() -> void:
 	var peer_active := mp != null \
 			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if peer_active and multiplayer.is_server() and is_instance_valid(world):
-		var sm := ctx.services.scene_manager
+		var sm := ctx.scene_manager
 		var lobby_scene := lobby
 		if is_instance_valid(lobby_scene):
 			lobby_scene.move_participants(world.participants)
@@ -132,10 +132,10 @@ func end_game() -> void:
 
 
 func setup_connections() -> void:
-	ctx.tree.participant_joined.connect(_on_participant_joined)
-	ctx.tree.peer_disconnected.connect(_on_peer_disconnected)
-	ctx.tree.connected_to_server.connect(_on_connected_ok)
-	ctx.tree.server_disconnected.connect(_on_server_disconnected)
+	ctx.participant_joined.connect(_on_participant_joined)
+	ctx.peer_disconnected.connect(_on_peer_disconnected)
+	ctx.connected_to_server.connect(_on_connected_ok)
+	ctx.server_disconnected.connect(_on_server_disconnected)
 
 
 func get_player_color(p_name: String) -> Color:

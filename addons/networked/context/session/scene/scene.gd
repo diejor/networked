@@ -1,15 +1,15 @@
 ## Scene-scoped facade providing player tracking, lifecycle signals, and
 ## server operations.
 ##
-## Access via [method NetwComponent.get_context] or
-## [method NetwScene.for_node]. Holds a [WeakRef] to the underlying
-## [MultiplayerScene] - check [method is_valid] before use.
+## Access via [method NetwScene.for_node] or [member MultiplayerScene.netw_scene].
+## Holds a [WeakRef] to the underlying [MultiplayerScene] - check
+## [method is_valid] before use.
 ## [codeblock]
-## var ctx := get_context()
+## var scene := NetwScene.for_node(self)
 ##
 ## # Wait for players then count down
-## await ctx.scene.wait_for_players(4)
-## var cd := ctx.scene.start_countdown(10)
+## await scene.wait_for_players(4)
+## var cd := scene.start_countdown(10)
 ## await cd.finished
 ## start_match()
 ## [/codeblock]
@@ -62,7 +62,6 @@ signal countdown_cancelled()
 # ---------------------------------------------------------------------------
 
 var _scene_ref: WeakRef
-var _tree: NetwTree
 var _admission_layer: NetwInterestLayer
 var _admission_tree: MultiplayerTree
 var _pending_admitted_peers: Dictionary[int, bool] = { }
@@ -119,24 +118,20 @@ var scene_name: StringName:
 		return StringName(scene.level.name)
 
 
-## Returns the [NetwTree] that owns this scene, or [code]null[/code].
+## Returns the [NetwMultiplayer] session that owns this scene, or
+## [code]null[/code].
 ##
-## Use this to access tree-level APIs (e.g., [method NetwTree.is_listen_server])
-## from scene-scoped code.
-func tree() -> NetwTree:
-	if _tree == null or not _tree.is_valid():
-		var scene := _scene_ref.get_ref() as MultiplayerScene
-		if is_instance_valid(scene):
-			var mt := MultiplayerTree.for_node(scene)
-			if mt:
-				_tree = NetwTree.new(mt)
-	return _tree
+## Use this to access session-level APIs (e.g.,
+## [method NetwMultiplayer.is_listen_server]) from scene-scoped code.
+func tree() -> NetwMultiplayer:
+	var scene := _scene_ref.get_ref() as MultiplayerScene
+	return NetwMultiplayer.of(scene) if is_instance_valid(scene) else null
 
 ## The peer IDs currently connected to this scene.
 ##
 ## Use this to enumerate peers when sending custom broadcast RPCs:
 ## [codeblock]
-## for peer_id in ctx.scene.peers:
+## for peer_id in scene.peers:
 ##     _rpc_notify.rpc_id(peer_id, message)
 ## [/codeblock]
 var peers: Array[int]:
@@ -223,8 +218,8 @@ func wait_for_participants(n: int) -> void:
 ##
 ## Returns [code]null[/code] if [param node] is not inside an active [Scene].
 static func for_node(node: Node) -> NetwScene:
-	var ctx := NetwContext.for_node(node)
-	return ctx.scene if ctx and ctx.has_scene() else null
+	var scene_node := MultiplayerTree.scene_for_node(node)
+	return scene_node.netw_scene if is_instance_valid(scene_node) else null
 
 # ---------------------------------------------------------------------------
 # Lifecycle cleanup
@@ -463,12 +458,12 @@ func _clear_current_scene_if_still_current(
 
 func _bind_client_admission_layer(scene: MultiplayerScene) -> void:
 	var mt := MultiplayerTree.for_node(scene)
-	if mt == null or mt.interest == null:
+	if mt == null or mt.api == null:
 		return
 	_admission_tree = mt
 	if not mt.participant_joined.is_connected(_on_tree_participant_joined):
 		mt.participant_joined.connect(_on_tree_participant_joined)
-	var l := mt.interest.layer(scene.scene_layer_id())
+	var l := mt.api.interest.layer(scene.scene_layer_id())
 	if l == null:
 		return
 	_admission_layer = l
@@ -504,14 +499,14 @@ func _get_peer_id(node: Node) -> int:
 ## signals, which are broadcast automatically.
 ## [codeblock]
 ## # Server:
-## var cd := ctx.scene.start_countdown(10)
+## var cd := scene.start_countdown(10)
 ## await cd.finished
 ## start_match()
 ##
 ## # Client (connect before the server starts the countdown):
-## ctx.scene.countdown_started.connect(func(n): $Timer.text = str(n))
-## ctx.scene.countdown_tick.connect(func(n): $Timer.text = str(n))
-## ctx.scene.countdown_finished.connect(start_match)
+## scene.countdown_started.connect(func(n): $Timer.text = str(n))
+## scene.countdown_tick.connect(func(n): $Timer.text = str(n))
+## scene.countdown_finished.connect(start_match)
 ## [/codeblock]
 class Countdown:
 	extends RefCounted
@@ -624,7 +619,7 @@ class MoveBatch:
 ## Clients call [method set_ready]. The server broadcasts the change to all peers.
 ## [codeblock]
 ## # Game scene screen (runs on all peers):
-## var gate := ctx.scene.create_readiness_gate()
+## var gate := scene.create_readiness_gate()
 ## gate.participant_ready_changed.connect(_refresh_ready_ui)
 ## gate.all_ready.connect(_on_everyone_ready)
 ##
@@ -732,9 +727,8 @@ class Readiness:
 			all_ready.emit()
 
 
-	func _tree() -> NetwTree:
+	func _tree() -> NetwMultiplayer:
 		var scene := _scene_ref.get_ref() as MultiplayerScene
 		if not is_instance_valid(scene):
 			return null
-		var mt := MultiplayerTree.for_node(scene)
-		return NetwTree.new(mt) if mt else null
+		return NetwMultiplayer.of(scene)

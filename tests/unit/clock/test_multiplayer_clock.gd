@@ -1,25 +1,27 @@
-## Unit tests for [MultiplayerClock].
+## Unit tests for the [NetwClockInterface] tick engine and the
+## [MultiplayerClock] configurator node.
 ##
-## Covers derived properties, calibration paths, [signal clock_synchronized],
+## Covers derived properties, calibration paths,
+## [signal NetwClockInterface.clock_synchronized],
 ## [method MultiplayerClock.for_node], and the isolated tick loop.
 class_name TestMultiplayerClock
 extends NetwTestSuite
 
-func _make_clock(tickrate: int = 30) -> MultiplayerClock:
-	var clock := MultiplayerClock.new()
+func _make_clock(tickrate: int = 30) -> NetwClockInterface:
+	var clock := NetwClockInterface.new()
+	clock._configured = true
 	clock.tickrate = tickrate
-	return auto_free(clock)
+	return clock
 
 
-func _make_clock_in_tree(
+func _make_engine(
 		tickrate: int = 10,
 		use_physics_interpolation: bool = true,
-) -> MultiplayerClock:
-	var clock := MultiplayerClock.new()
+) -> NetwClockInterface:
+	var clock := NetwClockInterface.new()
+	clock._configured = true
 	clock.tickrate = tickrate
 	clock.use_physics_interpolation = use_physics_interpolation
-	add_child(clock)
-	auto_free(clock)
 	return clock
 
 
@@ -47,14 +49,14 @@ func test_calibration_modes() -> void:
 		[10, 11],
 	]:
 		var clock := _make_clock()
-		clock.sync_mode = MultiplayerClock.SyncMode.SNAP
+		clock.sync_mode = NetwClockInterface.SyncMode.SNAP
 		clock.is_synchronized = true
 		clock.tick = row[0]
 		clock._calibrate(row[1])
 		assert_that(clock.tick).is_equal(row[1])
 
 	var stretch := _make_clock(30)
-	stretch.sync_mode = MultiplayerClock.SyncMode.STRETCH
+	stretch.sync_mode = NetwClockInterface.SyncMode.STRETCH
 	stretch.is_synchronized = true
 	stretch.tick = 10
 	stretch._tick_accumulator = 0.0
@@ -67,7 +69,7 @@ func test_calibration_modes() -> void:
 
 func test_stretch_nudge_and_synchronization_signal() -> void:
 	var clock := _make_clock(30)
-	clock.sync_mode = MultiplayerClock.SyncMode.STRETCH
+	clock.sync_mode = NetwClockInterface.SyncMode.STRETCH
 	clock.is_synchronized = true
 	clock.stretch_nudge_factor = 0.5
 	clock.panic_snap_threshold = 100
@@ -109,7 +111,8 @@ func test_for_node_lookup() -> void:
 	var api := node.multiplayer as SceneMultiplayer
 	assert_that(api).is_not_null()
 
-	var clock := _make_clock()
+	var clock := MultiplayerClock.new()
+	auto_free(clock)
 	api.set_meta(&"_multiplayer_clock", clock)
 
 	assert_that(MultiplayerClock.for_node(node)).is_same(clock)
@@ -117,31 +120,31 @@ func test_for_node_lookup() -> void:
 	api.remove_meta(&"_multiplayer_clock")
 
 
-func test_physics_process_tick_loop() -> void:
+func test_physics_step_tick_loop() -> void:
 	for row in [
 		[0.05, 0],
 		[0.10, 1],
 	]:
-		var clock := _make_clock_in_tree(10)
+		var clock := _make_engine(10)
 		var start_tick := clock.tick
-		clock._physics_process(row[0])
+		clock.physics_step(row[0])
 		assert_that(clock.tick).is_equal(start_tick + row[1])
 
 	for row in [
 		[0.10, 0.0],
 		[0.15, 0.5],
 	]:
-		var clock := _make_clock_in_tree(10, false)
-		clock._physics_process(row[0])
+		var clock := _make_engine(10, false)
+		clock.physics_step(row[0])
 		assert_that(clock.tick_factor).is_equal_approx(row[1], 0.01)
 
 	for row in [
 		[0.35, 100, 3],
 		[1.0, 2, 2],
 	]:
-		var clock := _make_clock_in_tree(10)
+		var clock := _make_engine(10)
 		clock.max_ticks_per_frame = row[1]
 
 		var counter := SignalCounter.watch(clock.on_tick)
-		clock._physics_process(row[0])
+		clock.physics_step(row[0])
 		assert_that(counter.count).is_equal(row[2])

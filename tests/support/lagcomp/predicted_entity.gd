@@ -1,11 +1,12 @@
 ## Handle for one predicted entity standing across a real loopback.
 ##
 ## [PredictionScenario] returns this after composing a matched
-## [LagCompSimBody] pair, one per peer, each carrying a real [StateSynchronizer],
-## [InputSynchronizer], and [PredictionComponent]. It proxies the metrics a
-## scenario asserts on (corrections, replay depth, fire counts, divergence) off
-## the live components and the [PredictionObserver], so a test reads the same
-## vocabulary the retired spike doubles exposed.
+## [LagCompSimBody] pair, one per peer, each declaring a derived state and input
+## set and carrying a [PredictionComponent]. It proxies the metrics a scenario
+## asserts on (corrections, replay depth, fire counts, divergence) off the live
+## [NetwLagCompensationInterface.PredictionHandle] pair and the
+## [PredictionObserver], so a test reads the same vocabulary the retired spike
+## doubles exposed.
 class_name PredictedEntity
 extends RefCounted
 
@@ -17,12 +18,12 @@ var client_root: LagCompSimBody
 var server_entity: NetwEntity
 var client_entity: NetwEntity
 
-var server_state: StateSynchronizer
-var client_state: StateSynchronizer
-var server_input: InputSynchronizer
-var client_input: InputSynchronizer
-var server_prediction: PredictionComponent
-var client_prediction: PredictionComponent
+var server_state: NetwSyncSetBinding
+var client_state: NetwSyncSetBinding
+var server_input: NetwSyncSetBinding
+var client_input: NetwSyncSetBinding
+var server_prediction: NetwLagCompensationInterface.PredictionHandle
+var client_prediction: NetwLagCompensationInterface.PredictionHandle
 
 ## Divergence recorder bound to the client predictor.
 var observer: PredictionObserver
@@ -107,10 +108,10 @@ func _bind(server_node: LagCompSimBody, client_node: LagCompSimBody) -> void:
 
 # Resolves the component slots once both roots are in tree and wired.
 func _resolve_slots() -> void:
-	server_state = server_entity.state
-	client_state = client_entity.state
-	server_input = server_entity.input
-	client_input = client_entity.input
+	server_state = server_entity.state_binding
+	client_state = client_entity.state_binding
+	server_input = server_entity.input_binding
+	client_input = client_entity.input_binding
 	server_prediction = server_entity.prediction
 	client_prediction = client_entity.prediction
 
@@ -142,7 +143,7 @@ func server_sample_at(tick: int) -> NetwSnapshot:
 	var scenario := _scenario as PredictionScenario
 	if not scenario or not scenario.server:
 		return NetwSnapshot.new()
-	return scenario.server.lag_compensation.sample(server_entity, tick)
+	return scenario.server.api.lag_compensation.sample(server_entity, tick)
 
 
 ## Runs the scenario past RTT with no input and asserts the client body

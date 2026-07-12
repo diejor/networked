@@ -2,9 +2,9 @@
 ##
 ## Reacts to [constant NetwTreeEvent.Kind.PLAYER_SPAWNED] on server authority and
 ## delegates the structural checks to [TopologyValidator] (expected sync count,
-## cache/live consistency, [SaveComponent], [MultiplayerEntity], and authority
-## assignments). A non-empty error set fails the active span and emits a
-## [NetwTopologyManifest] through the finding pipeline.
+## cache/live consistency, identity, and authority assignments). A non-empty
+## error set fails the active span and emits a [NetwTopologyManifest] through
+## the finding pipeline.
 class_name TopologyNetValidator
 extends NetwValidator
 

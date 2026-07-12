@@ -7,7 +7,7 @@ extends CanvasLayer
 
 @onready var _status: Label = %StatusLabel
 @onready var _browser: ConnectBrowser = %ConnectBrowser
-@onready var _ctx: NetwContext = Netw.ctx(self)
+@onready var _ctx: NetwMultiplayer = Netw.of(self)
 
 var _activity: DiscordActivityService
 
@@ -17,17 +17,17 @@ func _ready() -> void:
 	# ConnectSession by ancestry (deferred, so it dodges the tree's child-setup
 	# window). No bind() needed, and eager .connect access here would trip the
 	# "parent busy" service assertion.
-	_ctx.tree.local_scene_changed.connect(_on_local_scene_changed)
-	_ctx.tree.session_ended.connect(_show_browser)
-	_ctx.tree.server_disconnecting.connect(_on_server_disconnecting)
-	_ctx.tree.server_disconnected.connect(_on_server_disconnected)
+	_ctx.local_scene_changed.connect(_on_local_scene_changed)
+	_ctx.session_ended.connect(_show_browser)
+	_ctx.server_disconnecting.connect(_on_server_disconnecting)
+	_ctx.server_disconnected.connect(_on_server_disconnected)
 
-	var gamestate := _ctx.services.get_service(BomberGamestate) as BomberGamestate
+	var gamestate := _ctx.get_service(BomberGamestate) as BomberGamestate
 	gamestate.game_error.connect(_on_game_error)
 
 	_status.visible = false
 
-	var activity := _ctx.services.get_service(DiscordActivityService) \
+	var activity := _ctx.get_service(DiscordActivityService) \
 			as DiscordActivityService
 	if activity != null and activity.in_discord():
 		_activity = activity
@@ -96,7 +96,7 @@ func _on_activity_session_lost(reason: String) -> void:
 
 func _on_game_error(text: String) -> void:
 	_set_status(text)
-	if not _ctx.tree.is_online():
+	if not _ctx.is_online():
 		_show_browser()
 
 

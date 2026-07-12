@@ -42,15 +42,15 @@ that does not, does not. An entity can participate in any number of
 layers, if any layer admits a peer to that entity, the peer sees it.
 
 Layers do not exist in the tree. They are pure state living inside the
-:ref:`NetwInterest <class_NetwInterest>` facade exposed at
-:ref:`MultiplayerTree.interest <class_MultiplayerTree_property_interest>`,
+:ref:`NetwInterestInterface <class_NetwInterestInterface>` facade exposed at
+:ref:`NetwMultiplayer.interest <class_NetwMultiplayer_property_interest>`,
 keyed by :godot:`StringName <StringName>`. You ask for a layer by id and
 get one back; the system creates it on first access.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    var sight := Netw.ctx(self).interest.layer(&"sight")
+    var sight := Netw.of(self).interest.layer(&"sight")
     sight.add_viewer(observer_peer_id)
 
 
@@ -151,7 +151,7 @@ once per (entity, peer) visibility change.
  .. code-tab:: gdscript GDScript
 
     # Server: react when a peer gains admission to an entity through a layer.
-    var sight := Netw.ctx(self).interest.layer(&"sight")
+    var sight := Netw.of(self).interest.layer(&"sight")
     sight.interest_enter.connect(func(entity, peer_id):
         analytics.peer_saw(peer_id, entity.entity_id)
     )
@@ -167,7 +167,7 @@ need to know which transport delivered the transition.
  .. code-tab:: gdscript GDScript
 
     # Client: react when an entity becomes locally visible on a layer.
-    var sight := Netw.ctx(self).interest.layer(&"sight")
+    var sight := Netw.of(self).interest.layer(&"sight")
     sight.entity_visible.connect(func(entity):
         add_marker(entity.owner)
     )
@@ -215,7 +215,7 @@ leave range.
 
     # Region root has an InterestGate child with layer_id = &"aoi:zone_a".
     var gate: InterestGate = $AoIZoneA/InterestGate
-    var layer := gate._layer  # or Netw.ctx(self).interest.layer(&"aoi:zone_a")
+    var layer := gate._layer  # or Netw.of(self).interest.layer(&"aoi:zone_a")
 
     # Proximity system tick:
     for peer_id in peers_in_range_of_zone_a():
@@ -250,7 +250,7 @@ entity has its own visibility rules) or by a team/role.
 
     # Per-entity stealth gate placed on the entity's scene root.
     var gate: InterestGate = stealth_root.get_node("InterestGate")
-    var layer := Netw.ctx(self).interest.layer(&"stealth:%d" % entity.peer_id)
+    var layer := Netw.of(self).interest.layer(&"stealth:%d" % entity.peer_id)
 
     # Server-side gameplay rule: detect-stealth proc applies.
     if has_detect_stealth(observer_peer):

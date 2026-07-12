@@ -53,8 +53,9 @@ func test_snap_adopts_authority_without_replay() -> void:
 	await s.setup(self)
 	var p := await s.add_predicted_entity()
 	# Force SNAP on the working closed-form rig: the no-replay branch is body-type
-	# independent, so this exercises it without a real physics body.
-	p.client_prediction._correction = SNAP
+	# independent, so this exercises it without a real physics body. The engine
+	# re-resolves the mode from this config on the next correction.
+	p.client_prediction.correction_mode = SNAP
 	s.latency_both(4)
 	s.hold_input(p, RIGHT)
 	s.run(30)

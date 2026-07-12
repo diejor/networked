@@ -31,8 +31,8 @@ var nakama_socket:
 		return _nakama_socket
 	set(_v):
 		pass
-var _match_state: int = MatchState.DISCONNECTED
-var match_state: int:
+var _match_state: MatchState = MatchState.DISCONNECTED
+var match_state: MatchState:
 	get:
 		return _match_state
 	set(_v):

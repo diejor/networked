@@ -62,13 +62,13 @@ func test_spawn_dict_round_trips() -> void:
 	var original := JoinPayload.new()
 	original.username = &"valeria"
 	original.spawn = EntitySpawnPolicy.from_scene_node_path(
-		_spawner_path(&"Level1", "Players/MultiplayerEntity"),
+		_spawner_path(&"Level1", "Players/PlayerRoot"),
 	).to_dict()
 
 	var restored := _round_trip(original)
 	assert_that(StringName(restored.spawn.get("scene_name"))).is_equal(&"Level1")
 	assert_that(restored.spawn.get("spawner_path")) \
-			.is_equal(NodePath("Players/MultiplayerEntity"))
+			.is_equal(NodePath("Players/PlayerRoot"))
 	assert_that(restored.spawn.get(SpawnPolicy._POLICY_SCRIPT_KEY)) \
 			.is_equal("EntitySpawnPolicy")
 
