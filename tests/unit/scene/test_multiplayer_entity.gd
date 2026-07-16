@@ -1,5 +1,4 @@
-## Tests for [NetwEntity] identity, spawn-envelope, and controller lifecycle
-## behavior.
+## Tests for [NetwEntity] identity and controller lifecycle behavior.
 class_name TestNetwEntityIdentity
 extends NetwTestSuite
 
@@ -19,7 +18,7 @@ func test_identity_name_parsing() -> void:
 	assert_that(NetwEntity.parse_entity("a|b|c")).is_equal(&"")
 
 
-func test_bind_and_spawn_identity_envelope() -> void:
+func test_bind_stamps_identity() -> void:
 	var root: Node2D = auto_free(Node2D.new())
 	root.name = "Player"
 
@@ -27,63 +26,6 @@ func test_bind_and_spawn_identity_envelope() -> void:
 
 	var entity := NetwEntity.of(root)
 	assert_that(root.name).is_equal("valeria|42")
-	assert_that(entity.entity_id).is_equal(&"valeria")
-	assert_that(entity.peer_id).is_equal(42)
-
-	var rj := ResolvedJoin.new()
-	rj.username = &"valeria"
-	rj.peer_id = 42
-	var source := {
-		"spawn_index": 7,
-	}
-
-	var data := NetwSpawn.decorate_spawn(source, rj)
-	var netw: Dictionary = data["_netw"]
-	var spawn_identity := NetwSpawn.spawn_identity(data)
-
-	assert_that(NetwSpawn._spawn_identity_error(data)).is_empty()
-	assert_that(NetwSpawn._is_spawn_envelope(NetwSpawn._spawn_envelope(rj))) \
-			.is_true()
-	assert_that(NetwSpawn._is_spawn_envelope({ })).is_false()
-	assert_that(
-		NetwSpawn._is_spawn_envelope(
-			{
-				"_netw": { "entity_id": "", "peer_id": 42 },
-				"data": { },
-			},
-		),
-	).is_false()
-	assert_that(source.has("_netw")).is_false()
-	assert_that(data["spawn_index"]).is_equal(7)
-	assert_that(netw["entity_id"]).is_equal(&"valeria")
-	assert_that(netw["peer_id"]).is_equal(42)
-	assert_that(spawn_identity.entity_id).is_equal(&"valeria")
-	assert_that(spawn_identity.peer_id).is_equal(42)
-
-
-func test_wrap_spawn_binds_identity_and_strips_envelope() -> void:
-	var rj := ResolvedJoin.new()
-	rj.username = &"valeria"
-	rj.peer_id = 42
-	var payload := PackedByteArray([1, 2, 3])
-	var envelope := NetwSpawn._spawn_envelope(rj, payload)
-	var received: Array[Variant] = []
-	var wrapped := NetwSpawn.wrap_spawn(
-		func(spawn_payload: Variant) -> Node:
-			received.append(spawn_payload)
-			var player := Node2D.new()
-			player.name = "Player"
-			return player
-	)
-
-	var player := wrapped.call(envelope) as Node
-	auto_free(player)
-	var entity := NetwEntity.of(player)
-	var clean := received[0] as PackedByteArray
-
-	assert_that(wrapped.get_method()).is_equal(&"_wrapped_spawn")
-	assert_that(clean).is_equal(payload)
-	assert_that(player.name).is_equal("valeria|42")
 	assert_that(entity.entity_id).is_equal(&"valeria")
 	assert_that(entity.peer_id).is_equal(42)
 
@@ -205,44 +147,35 @@ func test_scene_tracking_requires_own_entity_record() -> void:
 	assert_that(scene.tracked_nodes.has(child)).is_true()
 
 
-func _make_player_root(peer_id: int) -> Node2D:
-	var root: Node2D = auto_free(Node2D.new())
-	root.name = "valeria|%d" % peer_id
-	NetwEntity.ensure(root)
-	return root
-
-
-func test_envelope_route_binds_before_tree_entry() -> void:
+func test_route_binds_before_tree_entry() -> void:
 	var mt := MultiplayerTree.new()
 	mt.name = "TestTree"
 	add_child(mt)
 	auto_free(mt)
 	var liveness := mt.api.liveness
 
-	# 1. Reserve a route on the server
 	var route := liveness.reserve_route()
 	assert_that(route).is_greater(0)
-
-	# 2. Build spawn envelope
-	var rj := ResolvedJoin.new()
-	rj.username = &"player1"
-	rj.peer_id = 42
-	var envelope := NetwSpawn._spawn_envelope(rj, null, route)
-
-	# 3. Simulate wrap_spawn callback
-	var spawn_identity := NetwSpawn.spawn_identity(envelope)
 
 	var root := Node2D.new()
 	root.name = "player1"
 	auto_free(root)
 
-	# Bind identity and the reserved route BEFORE entering the tree
-	spawn_identity.bind(root)
+	# Bind identity and the reserved route BEFORE entering the tree. The
+	# direct route write is enough: the record re-binds from it at tree entry.
+	NetwEntity.bind(root, &"player1", 42)
+	var entity := NetwEntity.of(root)
+	entity.route = route
 
-	# Add to the tree to trigger tree-entry route binding
+	# Add to the tree to trigger tree-entry route binding.
 	mt.add_child(root)
 
-	# 4. Verify that route is bound correctly
-	var entity := NetwEntity.of(root)
 	assert_that(liveness.route_of(entity)).is_equal(route)
 	assert_that(liveness.entity_of(route)).is_equal(entity)
+
+
+func _make_player_root(peer_id: int) -> Node2D:
+	var root: Node2D = auto_free(Node2D.new())
+	root.name = "valeria|%d" % peer_id
+	NetwEntity.ensure(root)
+	return root

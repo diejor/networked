@@ -80,9 +80,10 @@
 ##
 ## [b]Owning identity before the tree[/b]
 ## [br]A spawned [Node] must own its identity before it enters the tree.
-## [NetwSpawn] carries it through a [MultiplayerSpawner] call
-## ([method NetwSpawn.wrap_spawn] with [method NetwSpawn.spawn_for]), and
-## [method bind] stamps it when identity rides the [member Node.name] channel. A
+## Replicated spawns carry it in the SPAWN frame and stamp it during
+## reconstruction, and [method bind] stamps it when identity rides the
+## [member Node.name] channel — call it inside a
+## [member MultiplayerSpawner.spawn_function] before returning the node. A
 ## [MultiplayerScene] with [member MultiplayerScene.gate] requires each spawned
 ## [Node] to own its record, which [method ensure] provides before
 ## [method MultiplayerScene.track_node].
@@ -332,7 +333,7 @@ var peer_id := 0
 ## Compact wire route naming this entity in [NetwLivenessInterface], or
 ## [code]0[/code] when unroutable.
 ##
-## Decoded from the [method NetwSpawn.wrap_spawn] envelope or the SPAWN header.
+## Decoded from the SPAWN header.
 ## [NetwFrameEnvelope] frames carry this value instead of a node
 ## path, so a packet can always be addressed even while the node it targets is
 ## still spawning. See [method NetwLivenessInterface.route_of] for lookups by
@@ -389,8 +390,8 @@ func _stamp_multiplayer(api: NetwMultiplayer) -> void:
 
 
 # Sets entity_id/peer_id from owner.name when a caller has not already bound
-# them (the wrap_spawn/bind contract runs before add_child, so this is
-# normally a no-op by the time tree entry reaches here).
+# them (the bind contract runs before add_child, so this is normally a
+# no-op by the time tree entry reaches here).
 func _hydrate_identity_once() -> void:
 	if not is_instance_valid(owner):
 		return

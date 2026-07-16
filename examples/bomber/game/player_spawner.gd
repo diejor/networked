@@ -9,7 +9,7 @@ const PLAYER_SCENE := preload("res://examples/bomber/game/player.tscn")
 
 
 func _ready() -> void:
-	spawn_function = NetwSpawn.wrap_spawn(_spawn_player)
+	spawn_function = _spawn_player
 	if multiplayer.is_server():
 		NetwScene.for_node(self).participant_entered.connect(_on_participant_entered)
 		for participant: NetwParticipant in NetwScene.for_node(self).participants:
@@ -34,12 +34,11 @@ func spawn_participant(participant: NetwParticipant) -> void:
 			return a.peer_id < b.peer_id
 	)
 	var spawn_index := maxi(ordered.find(participant), 0)
-	var data := {
+	spawn({
 		peer_id = participant.peer_id,
 		spawn_index = spawn_index,
 		username = participant.username,
-	}
-	NetwSpawn.spawn_for(self, participant, data)
+	})
 
 
 func _spawn_player(data: Dictionary) -> Node:
@@ -47,6 +46,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	var peer_id := int(data.peer_id)
 	var username := str(data.username)
 	var spawn_index := int(data.spawn_index)
+	NetwEntity.bind(player, StringName(username), peer_id)
 
 	var world := NetwScene.for_node(self).level
 	var score := world.get_node("Score")

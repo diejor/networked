@@ -114,9 +114,9 @@ func _check_identity(node: Node) -> Array[String]:
 	if entity.entity_id.is_empty():
 		errs.append(
 			(
-					"spawned entity has no identity. Wrap your " +
-					"spawn_function with NetwEntity.wrap_spawn or bind " +
-					"identity before returning"
+					"spawned entity has no identity. Call " +
+					"NetwEntity.bind(node, entity_id, peer_id) inside " +
+					"your spawn_function before returning the node"
 			),
 		)
 	return errs
