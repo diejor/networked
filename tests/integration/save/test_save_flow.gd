@@ -102,7 +102,7 @@ func test_database_round_trip_restores_position() -> void:
 	var err: Error = await engine.flush()
 	assert_that(err).is_equal(OK)
 
-	var raw: Dictionary = backend.find_by_id(&"players_save", engine._record_id())
+	var raw: Dictionary = backend._find_by_id(&"players_save", engine._record_id())
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 	player.position = Vector2.ZERO

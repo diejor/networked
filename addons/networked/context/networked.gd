@@ -138,8 +138,251 @@ static func is_test_env() -> bool:
 	return res
 
 # ---------------------------------------------------------------------------
-# Facade v2 — configuration builders and registry
+# Configuration builders and registry
 # ---------------------------------------------------------------------------
+
+
+## The project-wide provider a probe reply is built from, and the script that
+## registered it. Held statically because a game registers it from
+## [method Object._init] before any session exists. A [NetwServerInfo] carries
+## no live state, so one provider serves every session that lacks a per-session
+## override.
+static var _server_info_provider: Callable
+static var _server_info_provider_script: Script
+
+
+## Registers the project-wide provider that builds the [NetwServerInfo] a probe
+## answers with.
+##
+## [param provider] takes the resolved [NetwMultiplayer] and returns a
+## [NetwServerInfo]. Register it from [method Object._init] on a script present
+## in both builds. A session with no provider and no per-session override answers
+## with [method NetwServerInfo.from_session]. Registering from a second script
+## asserts, matching every single-slot registrar.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_server_info(func(api: NetwMultiplayer) -> NetwServerInfo:
+##         var info := NetwServerInfo.new()
+##         info.motd = "Friday night session"
+##         info.players = api.participants.size()
+##         info.max_players = 8
+##         return info)
+## [/codeblock]
+static func configure_server_info(provider: Callable) -> void:
+	var object := provider.get_object()
+	var script: Script = object.get_script() if object else null
+	assert(
+		_server_info_provider_script == null
+			or _server_info_provider_script == script,
+		"configure_server_info: already registered by another script.",
+	)
+	_server_info_provider = provider
+	_server_info_provider_script = script
+
+
+## Returns the project-wide server-info provider, or an invalid [Callable] when
+## none was registered. [NetwProbeResponder] consults it after a per-session
+## override and before [method NetwServerInfo.from_session].
+static func resolve_server_info_provider() -> Callable:
+	return _server_info_provider
+
+
+## The project-wide join handler, the [NetwScriptModel.ConnectConfig] carrying its
+## wire schema, and the script that registered it. Held statically because a game
+## registers the handler from [method Object._init] before any session exists.
+static var _join_handler: Callable
+static var _join_config: NetwScriptModel.ConnectConfig
+static var _join_handler_script: Script
+
+
+## Registers the project-wide server handler invoked once for each accepted join
+## and returns its [NetwScriptModel.ConnectConfig] for optional
+## [method NetwScriptModel.ConnectConfig.quantize] of the wire args.
+##
+## The handler's first parameter is the framework-owned [ResolvedJoin]. Its
+## remaining parameters are the wire schema a joining client fills with typed
+## args ([member JoinPayload.arg_values]). Register it from [method Object._init]
+## on a script present in both builds. With no registration and no per-session
+## override, a session resolves the built-in [NetwDefaultJoin]. Registering from
+## a second script asserts.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_join(spawn_at)
+##
+## func spawn_at(rj: ResolvedJoin, point: StringName, team: int) -> MultiplayerScene:
+##     ...
+## [/codeblock]
+## [br][br][b]Server Only.[/b]
+static func configure_join(handler: Callable) -> NetwScriptModel.ConnectConfig:
+	var object := handler.get_object()
+	var script: Script = object.get_script() if object else null
+	assert(
+		_join_handler_script == null or _join_handler_script == script,
+		"configure_join: already registered by another script.",
+	)
+	_join_handler = handler
+	_join_handler_script = script
+	var cfg := NetwScriptModel.ConnectConfig.new()
+	cfg.context_script = script
+	cfg.context_name = handler.get_method()
+	_join_config = cfg
+	return cfg
+
+
+## Returns the project-wide join handler, or an invalid [Callable] when none was
+## registered. [NetwSessionInterface] consults it after a per-session override
+## and before the built-in [NetwDefaultJoin].
+static func resolve_join_handler() -> Callable:
+	return _join_handler
+
+
+## Returns the wire-arg quantizers declared for the project-wide join handler.
+static func resolve_join_quantizers() -> Array:
+	return _join_config.quantizers if _join_config else []
+
+
+## The project-wide auth-flow factory and the script that registered it. Held
+## statically because a game registers it from [method Object._init] before any
+## session exists. Each session calls the factory to construct its own
+## [NetwAuthFlow], so per-attempt state never leaks between sessions.
+static var _auth_factory: Callable
+static var _auth_factory_script: Script
+
+
+## Registers the project-wide factory that builds a [NetwAuthFlow] per session.
+##
+## [param factory] takes the resolved [NetwMultiplayer] and returns a fresh
+## [NetwAuthFlow]. Register it from [method Object._init] on a script present in
+## both builds. With no factory and no per-session override, a session admits
+## peers without verifying credentials, trusting the client-claimed username. A
+## user-set [member NetwMultiplayer.auth_callback] still takes precedence over
+## the flow. Registering from a second script asserts.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_auth(func(api: NetwMultiplayer) -> NetwAuthFlow:
+##         return SteamAuthFlow.new(api))
+## [/codeblock]
+static func configure_auth(factory: Callable) -> void:
+	var object := factory.get_object()
+	var script: Script = object.get_script() if object else null
+	assert(
+		_auth_factory_script == null or _auth_factory_script == script,
+		"configure_auth: already registered by another script.",
+	)
+	_auth_factory = factory
+	_auth_factory_script = script
+
+
+## Returns the project-wide auth-flow factory, or an invalid [Callable] when none
+## was registered. [NetwSessionInterface] consults it after a per-session
+## override to construct the session's flow.
+static func resolve_auth_factory() -> Callable:
+	return _auth_factory
+
+
+## Installs the server policy used by [method NetwSceneInterface.request_change].
+##
+## [param handler] must be bound beneath an active Networked session. It
+## receives [code](participant, scene_name, args)[/code] and returns
+## [code]true[/code] to allow the request.
+## [br][br][b]Server Only.[/b]
+static func configure_scene_change(handler: Callable) -> void:
+	var object := handler.get_object()
+	assert(object is Node, "Scene change policy must be bound to a Node.")
+	var api := NetwMultiplayer.of(object as Node)
+	assert(api != null, "Scene change policy requires an active session.")
+	api.scenes.set_change_request_handler(handler)
+
+
+## Marks [param scene_type]'s root script as a multiplayer scene, so
+## [method is_multiplayer_scene] reports it.
+##
+## This is a lightweight declaration, not an authorization. It never decides
+## whether a client may reach the scene, which is always the
+## [method configure_scene_change] policy's call. Register from the scene root's
+## [method Object._static_init] so loading the script marks it, letting a
+## dedicated server introspect it without instantiating. At minimum, mark every
+## scene the session replicates; add [method configure_multiplayer_scene] to opt
+## the scene into the native-change on-ramp.
+## [codeblock]
+## static func _static_init() -> void:
+##     Netw.mark_multiplayer_scene(Arena)
+## [/codeblock]
+static func mark_multiplayer_scene(scene_type: Variant) -> void:
+	var script := _resolve_scene_script(scene_type)
+	assert(
+		script != null,
+		"mark_multiplayer_scene: expected a scene root script or class.",
+	)
+	NetwScriptModel._multiplayer_scene_marks[script] = true
+
+
+## Returns whether [param script] is a registered multiplayer scene root.
+##
+## Convenience introspection, backed by [method mark_multiplayer_scene] and
+## [method configure_multiplayer_scene]. It is never an authorization gate.
+static func is_multiplayer_scene(script: Script) -> bool:
+	return NetwScriptModel.is_scene_marked(script)
+
+
+## Opts scene instance [param node] into the native-change on-ramp and returns
+## its fluent [NetwScriptModel.SceneMarkConfig].
+##
+## Call from the scene root's [method Object._init] so every instantiation,
+## framework spawn or native [method Node.change_scene_to_file], carries the
+## detach hook. On a native change during a live session the hook detaches the
+## local instance and issues a [method NetwSceneInterface.request_change_path]; a
+## framework spawn is recognized through
+## [member NetwReplicationInterface.is_applying_remote_frame] and left alone.
+## The server still decides the request through [method configure_scene_change].
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_multiplayer_scene(self).timeout(8.0)
+## [/codeblock]
+static func configure_multiplayer_scene(
+		node: Node,
+) -> NetwScriptModel.SceneMarkConfig:
+	assert(
+		node != null,
+		"configure_multiplayer_scene: a scene root node is required.",
+	)
+	var script := node.get_script() as Script
+	var config := NetwScriptModel.get_scene_config(script)
+	if config == null:
+		config = NetwScriptModel.SceneMarkConfig.new()
+		config.context_script = script
+		NetwScriptModel._multiplayer_scene_configs[script] = config
+	node.tree_entered.connect(
+		_on_marked_scene_entered.bind(node),
+		CONNECT_ONE_SHOT,
+	)
+	return config
+
+
+# Runs the detach decision table when a marked instance enters the tree.
+static func _on_marked_scene_entered(node: Node) -> void:
+	if not is_instance_valid(node):
+		return
+	var sessions := NetwMultiplayer.live_sessions()
+	if sessions.size() != 1:
+		# No session, or an ambiguous multi-session host (the test harness). A
+		# native run stays local until exactly one session owns the presentation.
+		return
+	var api := sessions[0]
+	if api.replication.is_applying_remote_frame:
+		return
+	if api.state != NetwSessionInterface.State.ONLINE:
+		return
+	api.scenes._handle_native_scene_entry(node)
+
+
+# Resolves a scene root script from a class, a script, or a scripted instance.
+static func _resolve_scene_script(scene_type: Variant) -> Script:
+	if scene_type is Script:
+		return scene_type
+	if scene_type is Object:
+		return (scene_type as Object).get_script() as Script
+	return null
 
 
 ## Registers RPC config for the callable script method and returns the fluent
@@ -449,7 +692,7 @@ static func configure_signal(sig: Signal) -> NetwScriptModel.EventConfig:
 	return opt
 
 # ---------------------------------------------------------------------------
-# Facade v2 — rpc, requests, var sync, signals verbs
+# Rpc, requests, var sync, and signals verbs
 # ---------------------------------------------------------------------------
 
 
@@ -604,7 +847,6 @@ static func _resolve_rpc_interface(callable: Callable) -> NetwRpcInterface:
 		Netw.dbg.error("No session found for node '%s'.", [node.name])
 		return null
 	return api.rpc_interface
-
 
 # ---------------------------------------------------------------------------
 # Spawn verbs

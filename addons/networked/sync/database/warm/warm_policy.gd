@@ -9,7 +9,7 @@
 ## class_name WarmPlayersOnly
 ## extends WarmPolicy
 ##
-## func plan_table(table: StringName, _columns: Array[StringName]) -> WarmRequest:
+## func _plan_table(table: StringName, _columns: Array[StringName]) -> WarmRequest:
 ##     return WarmRequest.all() if table == &"players" else WarmRequest.none()
 ## [/codeblock]
 @abstract
@@ -21,4 +21,4 @@ extends Resource
 ## Called once per registered table at [code]_initialize_backend[/code].
 ## Synchronous backends ignore the result, so a policy can never break a read.
 @abstract
-func plan_table(table: StringName, columns: Array[StringName]) -> WarmRequest
+func _plan_table(table: StringName, columns: Array[StringName]) -> WarmRequest

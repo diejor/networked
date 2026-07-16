@@ -26,7 +26,7 @@ func _init(half_extents: Vector2 = Vector2(8, 8)) -> void:
 	add_child(shape)
 
 
-## The permanent simulation contract (architecture §4.4). Input is on the live
+## The permanent simulation contract. Input is on the live
 ## [member motion] property, applied by the framework. The [param delta] arg is
 ## carried but unused here: move_and_slide integrates with
 ## get_physics_process_delta_time() internally, which is exactly the rate

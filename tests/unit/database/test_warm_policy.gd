@@ -11,14 +11,14 @@ class WarmSpyBackend extends TestMemoryBackend:
 	var warm_calls: Array = []
 
 
-	func warm(directives: Array) -> Error:
+	func _warm(directives: Array) -> Error:
 		warm_calls.append(directives)
 		return OK
 
 
 # Warms only the players table, leaving every other table lazy.
 class PlayersOnlyPolicy extends WarmPolicy:
-	func plan_table(table: StringName, _columns: Array[StringName]) -> WarmRequest:
+	func _plan_table(table: StringName, _columns: Array[StringName]) -> WarmRequest:
 		return WarmRequest.all() if table == &"players" else WarmRequest.none()
 
 

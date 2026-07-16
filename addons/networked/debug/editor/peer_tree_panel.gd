@@ -33,13 +33,13 @@ const _EMBED_BUTTON_ID := 7002
 ## Injected by [NetworkedDebuggerUI] before this node enters the scene tree.
 var session: DebuggerSession
 
-# Role chip glyph per [enum MultiplayerTree.Role], drawn right-aligned on the
+# Role chip glyph per [enum NetwSessionInterface.Role], drawn right-aligned on the
 # peer row by [method _draw_peer_chips].
 const _ROLE_GLYPH := {
-	MultiplayerTree.Role.NONE: "○ NONE",
-	MultiplayerTree.Role.CLIENT: "▸ CLIENT",
-	MultiplayerTree.Role.DEDICATED_SERVER: "▣ DEDICATED",
-	MultiplayerTree.Role.LISTEN_SERVER: "◈ LISTEN",
+	NetwSessionInterface.Role.NONE: "○ NONE",
+	NetwSessionInterface.Role.CLIENT: "▸ CLIENT",
+	NetwSessionInterface.Role.DEDICATED_SERVER: "▣ DEDICATED",
+	NetwSessionInterface.Role.LISTEN_SERVER: "◈ LISTEN",
 }
 
 # [Dictionary] mapping [code]peer_key[/code] to its bold peer-root [TreeItem].
@@ -108,7 +108,7 @@ func add_peer(
 		peer_key: String,
 		username: String,
 		tree_name: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 		color: Color,
 		is_remote: bool,
 		peer_id: int,
@@ -202,7 +202,7 @@ func update_identity(peer_key: String, username: String) -> void:
 		return
 	var info: Dictionary = session.get_peers().get(peer_key, { })
 	var tree_name: String = info.get("tree_name", "")
-	var role: MultiplayerTree.Role = info.get("role", MultiplayerTree.Role.NONE)
+	var role: NetwSessionInterface.Role = info.get("role", NetwSessionInterface.Role.NONE)
 	_update_display(peer_key, tree_name, username, role)
 	queue_redraw()
 	_refresh_status_line(peer_key)
@@ -404,7 +404,7 @@ func _update_display(
 		peer_key: String,
 		tree_name: String,
 		username: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 ) -> void:
 	if peer_key not in _peer_tree_items:
 		return
@@ -427,7 +427,7 @@ func _refresh_status_line(peer_key: String) -> void:
 	var item: TreeItem = _status_items[peer_key]
 	item.set_text(0, _status_line_text(online, peer_id, is_remote))
 	# A string cell takes one color, so the whole line (dot included) tints by
-	# status. CONNECTING (yellow) needs MultiplayerTree.State on the wire, which
+	# status. CONNECTING (yellow) needs NetwSessionInterface.State on the wire, which
 	# the editor doesn't receive yet, so only ONLINE/OFFLINE are distinguished.
 	item.set_custom_color(0, _status_color(online))
 
@@ -452,11 +452,11 @@ func _status_line_text(online: bool, peer_id: int, is_remote: bool) -> String:
 
 func _role_chip_color(role: int) -> Color:
 	match role:
-		MultiplayerTree.Role.DEDICATED_SERVER:
+		NetwSessionInterface.Role.DEDICATED_SERVER:
 			return Color(0.95, 0.65, 0.25)
-		MultiplayerTree.Role.LISTEN_SERVER:
+		NetwSessionInterface.Role.LISTEN_SERVER:
 			return Color(0.40, 0.82, 0.55)
-		MultiplayerTree.Role.CLIENT:
+		NetwSessionInterface.Role.CLIENT:
 			return Color(0.45, 0.68, 0.95)
 		_:
 			return Color(0.60, 0.60, 0.62)
@@ -468,13 +468,13 @@ func _draw_peer_chips(item: TreeItem, rect: Rect2) -> void:
 	var meta: Variant = item.get_metadata(0)
 	if not meta is Dictionary:
 		return
-	var role: int = meta.get("role", MultiplayerTree.Role.NONE)
+	var role: int = meta.get("role", NetwSessionInterface.Role.NONE)
 	var username: String = meta.get("username", "")
 	var peer_color: Color = meta.get("color", Color.WHITE)
 
 	var chips: Array[TreeChips.Chip] = []
 	# Username has no meaning for a dedicated server (no local player there).
-	if not username.is_empty() and role != MultiplayerTree.Role.DEDICATED_SERVER:
+	if not username.is_empty() and role != NetwSessionInterface.Role.DEDICATED_SERVER:
 		chips.append(TreeChips.Chip.new(username, peer_color))
 	chips.append(TreeChips.Chip.new(_ROLE_GLYPH.get(role, "○ NONE"), _role_chip_color(role)))
 

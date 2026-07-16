@@ -1,8 +1,8 @@
 ## Abstract base class for client-side teleport transition overlays.
 ##
 ## Automatically registers itself with [NetwService] when added to the tree.
-## Subclasses implement [method teleport_out] (fade/cover outgoing scene) and
-## [method teleport_in] (reveal incoming scene). Both methods are awaitable.
+## Subclasses implement [method _teleport_out] (fade/cover outgoing scene) and
+## [method _teleport_in] (reveal incoming scene). Both methods are awaitable.
 @abstract
 class_name TPLayerAPI
 extends CanvasLayer
@@ -57,12 +57,12 @@ func _exit_tree() -> void:
 
 ## Plays the outgoing transition (cover the screen). Awaitable.
 @abstract
-func teleport_out() -> void
+func _teleport_out() -> void
 
 
 ## Plays the incoming transition (reveal the screen). Awaitable.
 @abstract
-func teleport_in() -> void
+func _teleport_in() -> void
 
 
 func _on_multiplayer_configured() -> void:
@@ -72,7 +72,7 @@ func _on_multiplayer_configured() -> void:
 	var mt := get_multiplayer_tree()
 	if not mt:
 		return
-	if mt.role == MultiplayerTree.Role.DEDICATED_SERVER:
+	if mt.role == NetwSessionInterface.Role.DEDICATED_SERVER:
 		queue_free()
 		return
 	if not mt.local_participant_joined.is_connected(_on_local_participant_joined):
@@ -82,7 +82,7 @@ func _on_multiplayer_configured() -> void:
 # Plays the arrival animation when the local peer's player first appears.
 # Presentation stays inside the presentation node.
 func _on_local_participant_joined(_participant: NetwParticipant) -> void:
-	teleport_in()
+	_teleport_in()
 
 
 ## Returns the [MultiplayerTree] that owns this component's multiplayer session.

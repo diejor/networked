@@ -95,6 +95,14 @@ func _api() -> NetwMultiplayer:
 	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
 
 
+## Whether the spawn pipeline is synchronously placing a replicated node right
+## now. A marked scene's detach hook reads this at [signal Node.tree_entered]
+## to tell a framework spawn from a native [method Node.change_scene_to_file].
+var is_applying_remote_frame: bool:
+	get:
+		return _spawn_pipeline._applying_remote_frame
+
+
 ## Registers [param handler] to receive payloads for [param channel].
 ##
 ## [param handler] is called as:
@@ -133,7 +141,7 @@ func derived_group(route: int) -> Array[NetwSyncSetBinding]:
 ## Forwards [param peer_id]'s advanced datagram ack to
 ## [method NetwSyncPipeline.note_peer_ack], called by
 ## [method NetwMultiplayer._note_state_ack] whenever the peer's confirmed seq
-## advances, so the masked lane's per-recipient baselines (§5.6) promote.
+## advances, so the masked lane's per-recipient baselines promote.
 func note_peer_ack(peer_id: int, acked_seq: int) -> void:
 	_sync_pipeline.note_peer_ack(peer_id, acked_seq)
 
@@ -195,8 +203,11 @@ func broadcast_control(entity: NetwEntity, peer: int) -> void:
 	var payload := w.to_bytes()
 	for peer_id: int in api.liveness.live_peers(entity):
 		send_to(
-			peer_id, entity.route,
-			NetwFrameEnvelope.Channel.CONTROL_APPLY, payload, true,
+			peer_id,
+			entity.route,
+			NetwFrameEnvelope.Channel.CONTROL_APPLY,
+			payload,
+			true,
 		)
 
 
@@ -204,8 +215,11 @@ func broadcast_control(entity: NetwEntity, peer: int) -> void:
 ## [br][br][b]Player request.[/b]
 func request_control(entity: NetwEntity) -> void:
 	send_to(
-		MultiplayerPeer.TARGET_PEER_SERVER, entity.route,
-		NetwFrameEnvelope.Channel.CONTROL_REQUEST, PackedByteArray(), true,
+		MultiplayerPeer.TARGET_PEER_SERVER,
+		entity.route,
+		NetwFrameEnvelope.Channel.CONTROL_REQUEST,
+		PackedByteArray(),
+		true,
 	)
 
 
@@ -220,7 +234,7 @@ func flush_all_buffers() -> void:
 
 
 # Flushes one peer's aggregated buffer, reporting the assigned unreliable seq
-# to the sync pipeline so a masked-delta send staged this pass (§5.6) commits
+# to the sync pipeline so a masked-delta send staged this pass commits
 # its pending row under the seq that will carry its acknowledgment. A reliable
 # flush or an empty buffer reports nothing, matching send_packet's -1 sentinel.
 func _flush_buffer(peer_id: int, reliable: bool) -> void:
@@ -322,6 +336,22 @@ func _dispatch_frame(
 				_spawn_pipeline._handle_despawn_frame(payload, sender)
 			NetwFrameEnvelope.Channel.REPARENT:
 				_spawn_pipeline._handle_reparent_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_JOIN:
+				api.session._handle_join_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_ACCEPT:
+				api.session._handle_accept_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_ROSTER:
+				api.session._handle_roster_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_PAUSE:
+				api.session._handle_pause_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_UNPAUSE:
+				api.session._handle_unpause_frame(sender)
+			NetwFrameEnvelope.Channel.SESSION_KICKED:
+				api.session._handle_kicked_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_SCENE_REQUEST:
+				api.scenes._handle_scene_request_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_SCENE_RESULT:
+				api.scenes._handle_scene_result_frame(payload, sender)
 			_:
 				if channel >= 100 and channel <= 254:
 					var handler: Callable = _handlers.get(channel, Callable())
@@ -594,7 +624,6 @@ func counters() -> Dictionary:
 	result.merge(_spawner_compat.counters())
 	result.merge(_sync_compat.counters())
 	return result
-
 
 #region Spawn
 

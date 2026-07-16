@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b7n8w2marked01"]
+
+[ext_resource type="Script" path="res://tests/support/scene/marked_test_scene.gd" id="1_mrk"]
+
+[node name="MarkedTestScene" type="Node"]
+script = ExtResource("1_mrk")

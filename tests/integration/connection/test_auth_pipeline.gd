@@ -1,4 +1,4 @@
-## Integration tests for the [NetwAuth] and [NetwIdentityBucket] flow.
+## Integration tests for the [NetwAuthFlow] and [NetwIdentityBucket] flow.
 class_name TestAuthPipeline
 extends NetwTestSuite
 
@@ -34,11 +34,11 @@ func before_test() -> void:
 
 func test_prepare_failure_aborts_connect() -> void:
 	var auth := _FailingPrepareAuth.new()
-	client_tree.auth_provider = auth
+	client_tree.api.session.set_auth_flow(auth)
 
-	var target := JoinTarget.new()
-	target.backend = client_tree.backend
-	target.address = client_tree.backend.get_join_address()
+	var target := NetwConnectTarget.new()
+	target.scheme = client_tree.scheme
+	target.address = "localhost"
 
 	var err := await client_tree.join_or_host(
 		target,
@@ -64,15 +64,15 @@ func test_listen_server_host_gets_identity() -> void:
 
 
 func test_no_auth_provider_trusts_client_username() -> void:
-	server.auth_provider = null
-	client_tree.auth_provider = null
+	server.api.session.set_auth_flow(null)
+	client_tree.api.session.set_auth_flow(null)
 
 	var participants: Array[NetwParticipant] = []
 	server.participant_joined.connect(func(p): participants.append(p))
 	monitor_signals(server, false)
-	var target := JoinTarget.new()
-	target.backend = client_tree.backend
-	target.address = client_tree.backend.get_join_address()
+	var target := NetwConnectTarget.new()
+	target.scheme = client_tree.scheme
+	target.address = "localhost"
 
 	var err := await client_tree.join_or_host(
 		target,
@@ -97,9 +97,9 @@ func _join_payload(username: String) -> JoinPayload:
 	)
 
 
-## Auth provider whose prepare always fails.
+## Auth flow whose prepare always fails.
 class _FailingPrepareAuth:
-	extends NetwAuth
+	extends NetwAuthFlow
 
 	func prepare(_payload: JoinPayload) -> Error:
 		return ERR_UNAUTHORIZED

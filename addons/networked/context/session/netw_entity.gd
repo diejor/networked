@@ -89,12 +89,10 @@
 class_name NetwEntity
 extends RefCounted
 
-
 #region Constants and enums
 
 # Metadata key that stores the [NetwEntity] record on an entity root.
 const _META_KEY := &"netw_entity"
-
 
 ## Whether an entity represents a joined peer or the server, derived from
 ## [member peer_id].
@@ -106,7 +104,6 @@ enum Ownership {
 	SERVER,
 }
 
-
 ## Whether an entity is server controlled or peer controlled, derived from
 ## [member controller]. See [enum ControlKind].
 enum ControlKind {
@@ -115,7 +112,6 @@ enum ControlKind {
 	## Server controlled entity. [member controller] is [code]0[/code].
 	SERVER_CONTROLLED,
 }
-
 
 ## Initial control rule applied when an entity first spawns.
 ##
@@ -136,7 +132,6 @@ enum InitialController {
 	REPRESENTED_PEER,
 }
 
-
 ## Whether players can ask the server to transfer control.
 ##
 ## [enum NetwEntity.Transfer] does not grant ownership locally. A request always
@@ -156,7 +151,6 @@ enum Transfer {
 	REQUESTABLE,
 }
 
-
 ## Lifetime rule for an entity whose controller disconnects.
 ##
 ## This rule only applies when the disconnected peer controls the entity
@@ -175,7 +169,6 @@ enum DisconnectRule {
 	## The entity despawns when the controller disconnects.
 	DESPAWN,
 }
-
 
 ## Lifecycle position of the record, a stored fact rather than a guess from
 ## identity shape.
@@ -211,7 +204,6 @@ enum Stage {
 	FREED,
 }
 
-
 # Legal edges of the stage machine. A reparent is not an edge: the record keeps
 # its LIVE stage across the move, tracked by reparenting instead. An UNBOUND or
 # ARMED record can enter DESPAWNING because a route can be bound by hand before
@@ -226,14 +218,12 @@ const _STAGE_EDGES := {
 	Stage.FREED: [],
 }
 
-
 # Meta key marking an editor/assembly-placed spawn-point template child whose
 # identity is intentionally unbound, the declared-template channel for scenes
 # assembled without editor ownership on the child root.
 const _SPAWN_TEMPLATE_META := &"_networked_spawn_template"
 
 #endregion
-
 
 #region Signals
 
@@ -242,11 +232,9 @@ const _SPAWN_TEMPLATE_META := &"_networked_spawn_template"
 ## running.
 signal spawning
 
-
 ## Emitted once after scene registration and the owner's [method Node._ready]
 ## complete.
 signal spawned
-
 
 ## Emitted right before [method despawn] tears the entity down, carrying the
 ## despawn [param reason]. Listeners such as [NetwLivenessInterface] read
@@ -254,12 +242,10 @@ signal spawned
 ## mode.
 signal despawning(reason: StringName)
 
-
 ## Emitted once on arrival at [constant Stage.FREED], for real teardowns only.
 ## A [method reparent_to] leaves the tree without emitting this, since the
 ## record stays [constant Stage.LIVE] across the move.
 signal despawned
-
 
 ## Emitted when this entity becomes visible to [param peer_id].
 ##
@@ -269,10 +255,8 @@ signal despawned
 ## needs the layer that caused the transition.
 signal interest_enter(peer_id: int)
 
-
 ## Emitted when this entity stops being visible to [param peer_id].
 signal interest_exit(peer_id: int)
-
 
 ## Emitted on the owner client when another peer [param peer_id]
 ## gains visibility of this entity through [param layer_id].
@@ -281,21 +265,17 @@ signal interest_exit(peer_id: int)
 ## Requires [member InterestComponent.report_observers] on the server.
 signal observer_entered(layer_id: StringName, peer_id: int)
 
-
 ## Emitted on the owner client when [param peer_id] stops observing
 ## this entity through [param layer_id].
 signal observer_left(layer_id: StringName, peer_id: int)
 
-
 ## Emitted when [member controller] changes.
 signal control_changed(previous_peer: int, peer: int)
-
 
 ## Emitted on the server when a peer requests control through
 ## [method request_control]. Gameplay code may inspect [param request] and
 ## call [method ControlRequest.deny] before the default grant path runs.
 signal control_requested(peer_id: int, request: ControlRequest)
-
 
 ## Emitted after this entity's authority has settled.
 ##
@@ -304,32 +284,41 @@ signal control_requested(peer_id: int, request: ControlRequest)
 ## service registration here so reparenting self-heals without
 ## [method Node.request_ready].
 ##
+## A move with a [member ReparentOpts.target_global_position] is a position
+## discontinuity. A camera or node that smooths or interpolates its position
+## must drop that history here, or it pans across the gap. Reset whatever your
+## view uses ([method Camera2D.reset_smoothing], a [Camera3D] rig's own
+## interpolation, or [method Node.reset_physics_interpolation]). A
+## [TPComponent] teleport delivers its destination pose separately, so reset on
+## [signal TPComponent.teleport_committed] instead for that path.
+## [codeblock]
+## NetwEntity.of(self).reparented.connect(func(_opts): reset_smoothing())
+## [/codeblock]
+##
 ## [param reparent] is [code]null[/code] for a fresh spawn, or the in-flight
 ## [NetwEntity.ReparentOpts] for a reparent.
 signal reparented(reparent: ReparentOpts)
 
-
 ## Announces that this entity's player is now the locally displayed view.
 ##
-## Driven by the local display ([HostSceneView] on a listen-server host) whenever
-## this player's scene becomes the one shown on this peer, on the initial display
-## and on every return. Whatever owns the camera reacts here however it wants
-## ([method Camera2D.make_current], a custom rig, or a PhantomCamera host
-## priority), so the display system never needs to know the camera type.
+## Driven by the local display ([HostSceneView] on a listen-server host)
+## whenever this player's scene becomes the one shown on this peer, on the
+## initial display and on every return. The player lives in an offscreen
+## viewport under
+## [constant NetwSceneConfig.Concurrency.CONCURRENT]. When this signal has no
+## connections, [HostSceneView] makes the first conventional camera current.
+## Connect it to take ownership with a custom camera rig.
 signal view_activated
 
 #endregion
-
 
 #region Identity
 
 ## [member Node.owner] that holds this entity.
 var owner: Node
 
-
 ## Stable display/save/debug label for this entity.
 var entity_id: StringName = &""
-
 
 ## Peer id of the participant this entity represents, or [code]0[/code] for a
 ## server-owned entity (NPC, prop, world object).
@@ -339,7 +328,6 @@ var entity_id: StringName = &""
 ## [method despawn] when its peer disconnects. This is the source of the
 ## player test. See [member is_player].
 var peer_id := 0
-
 
 ## Compact wire route naming this entity in [NetwLivenessInterface], or
 ## [code]0[/code] when unroutable.
@@ -351,7 +339,6 @@ var peer_id := 0
 ## entity and [method NetwLivenessInterface.entity_of] for the reverse.
 var route := 0
 
-
 var _multiplayer_ref: WeakRef
 
 
@@ -360,7 +347,6 @@ var _multiplayer_ref: WeakRef
 func _on_identity_hydrated() -> void:
 	components.hydrate()
 	components.reconcile()
-
 
 ## The [NetwMultiplayer] session this entity belongs to, or [code]null[/code]
 ## when it has none (an offline rig, or an orphan before activation).
@@ -376,6 +362,16 @@ func _on_identity_hydrated() -> void:
 var multiplayer: NetwMultiplayer:
 	get:
 		return _multiplayer_ref.get_ref() as NetwMultiplayer if _multiplayer_ref else null
+
+## The replicated scene containing [member owner], or [code]null[/code].
+var scene: MultiplayerScene:
+	get:
+		if not is_instance_valid(owner):
+			return null
+		var api := multiplayer
+		if api:
+			return api.scenes.scene_of(owner)
+		return MultiplayerScene.of(owner)
 
 
 # Stores the session handle once. A null api is ignored (a manual flow arms
@@ -404,7 +400,6 @@ func _hydrate_identity_once() -> void:
 		peer_id = parse_peer(owner.name)
 
 #endregion
-
 
 #region Statics
 
@@ -547,12 +542,11 @@ static func _collect_spawn_state_onto(template: Node, copy: Node) -> void:
 		var source: Node = entry["node"]
 		var prop: StringName = entry["prop"]
 		var target := copy if source == template \
-				else copy.get_node_or_null(template.get_path_to(source))
+		else copy.get_node_or_null(template.get_path_to(source))
 		if is_instance_valid(target):
 			target.set(prop, source.get(prop))
 
 #endregion
-
 
 #region Archetype config
 
@@ -572,7 +566,6 @@ static func _collect_spawn_state_onto(template: Node, copy: Node) -> void:
 ## for props, NPCs, and player entities the server should steer at spawn.
 var initial_controller := InitialController.SERVER
 
-
 ## Player request policy for control transfer.
 ##
 ## An archetype config field written in the entity root's [code]_init[/code]
@@ -581,7 +574,6 @@ var initial_controller := InitialController.SERVER
 ## [method request_control]. The server emits [signal control_requested] before
 ## granting the request.
 var transfer := Transfer.FIXED
-
 
 ## Controller disconnect behavior for non-player control.
 ##
@@ -593,16 +585,13 @@ var on_controller_disconnect := DisconnectRule.REVERT_TO_SERVER
 
 #endregion
 
-
 #region Control
 
 var _controller := 0
 
-
 # An explicit controller write happened before arm, so the initial_controller
 # rule must not overwrite it.
 var _controller_configured := false
-
 
 ## Peer that currently steers this entity. [code]0[/code] means the server.
 ##
@@ -620,16 +609,14 @@ var _controller_configured := false
 var controller: int:
 	get:
 		return _controller if _controller_configured \
-				else _initial_controller_value()
+		else _initial_controller_value()
 	set(value):
 		_set_controller_internal(value)
-
 
 ## Derived from [member controller]. See [enum ControlKind].
 var control_kind: ControlKind:
 	get:
 		return ControlKind.PEER_CONTROLLED if controller != 0 else ControlKind.SERVER_CONTROLLED
-
 
 ## [code]true[/code] when the local peer controls this entity.
 var is_controlled_locally: bool:
@@ -640,7 +627,6 @@ var is_controlled_locally: bool:
 			return false
 		return controller == owner.multiplayer.get_unique_id()
 
-
 ## Participant steering [member controller], or [code]null[/code].
 ##
 ## This is independent from [member participant]. A server-owned entity can be
@@ -649,13 +635,11 @@ var controller_participant: NetwParticipant:
 	get:
 		return multiplayer.participant(controller) if controller != 0 and multiplayer else null
 
-
 ## Logical tick that produced this spawned action result.
 ##
 ## [code]-1[/code] means the entity did not come from [NetwAction]. Rides the
 ## SPAWN frame header directly.
 var action_spawn_tick: int = -1
-
 
 ## Peer that requested the [NetwAction] result, or [code]0[/code]. Rides the
 ## SPAWN frame header directly.
@@ -831,7 +815,6 @@ func _handle_control_apply(peer: int) -> void:
 
 #endregion
 
-
 #region Classification
 
 ## Whether this peer may author state for this entity and run its server-only
@@ -857,12 +840,10 @@ var participant: NetwParticipant:
 	get:
 		return multiplayer.participant(peer_id) if peer_id != 0 and multiplayer else null
 
-
 ## Derived from [member peer_id]. See [enum Ownership].
 var ownership: Ownership:
 	get:
 		return Ownership.PEER if peer_id != 0 else Ownership.SERVER
-
 
 ## [code]true[/code] when this entity represents a participant rather than a
 ## server-owned entity. The canonical player test across the addon. Equivalent
@@ -880,7 +861,6 @@ var is_player: bool:
 
 #endregion
 
-
 #region Stage and lifecycle
 
 ## The active [method reparent_to], or [code]null[/code].
@@ -889,7 +869,6 @@ var is_player: bool:
 ## [code]_exit_tree[/code] consumers can tell a reparent from a despawn.
 var reparenting: ReparentOpts = null
 
-
 ## [code]true[/code] when this record is a declared editor factory scene. A
 ## one-line read of [member stage]. Templates are deactivated on tree entry and
 ## skip the spawning lifecycle.
@@ -897,9 +876,7 @@ var is_template: bool:
 	get:
 		return _stage == Stage.TEMPLATE
 
-
 var _stage := Stage.UNBOUND
-
 
 ## Current lifecycle position. Read-only. Written only through the record's
 ## asserting internal transition, so an illegal edge is a loud debug error.
@@ -908,9 +885,7 @@ var stage: Stage:
 	get:
 		return _stage
 
-
 var _ready_once_fired: bool = false
-
 
 var _owner_exiting_tree: bool = false
 
@@ -928,7 +903,8 @@ func _transition(to: Stage) -> void:
 	assert(
 		(_STAGE_EDGES[_stage] as Array).has(to),
 		"illegal stage transition %s -> %s" % [
-			Stage.keys()[_stage], Stage.keys()[to],
+			Stage.keys()[_stage],
+			Stage.keys()[to],
 		],
 	)
 	_stage = to
@@ -960,7 +936,6 @@ func arm(api: NetwMultiplayer = null) -> void:
 		_set_controller_internal(_initial_controller_value())
 	_apply_control()
 	_transition(Stage.ARMED)
-
 
 ## The [DespawnOpts] of the [method despawn] currently in flight, or
 ## [code]null[/code] outside a despawn. Set for the duration of the
@@ -1010,7 +985,6 @@ func _go_live_if_armed() -> void:
 	_handle_tree_entered()
 	if owner.is_node_ready() and not _ready_once_fired:
 		_on_owner_ready()
-
 
 # ---------------------------------------------------------------------------
 # Control transfer rides a CONTROL_REQUEST/CONTROL_APPLY
@@ -1153,7 +1127,6 @@ func _handle_tree_exiting() -> void:
 
 #endregion
 
-
 #region Verbs
 
 ## Spawns a copy of [member owner]'s scene under [param parent] (defaults to
@@ -1210,7 +1183,9 @@ func spawn_player(participant: NetwParticipant, scene: MultiplayerScene) -> Node
 ##
 ## This [NetwEntity] stays alive across the move. Components can read
 ## [member reparenting] in [code]_exit_tree[/code] and re-register from
-## [signal reparented] after the owner enters its new parent. When the move
+## [signal reparented] after the owner enters its new parent, which is also
+## where a smoothing or interpolating camera drops its history so a
+## [member ReparentOpts.target_global_position] jump does not pan. When the move
 ## crosses [MultiplayerScene] boundaries, this method performs the scene
 ## admission and tracking handoff around [method Node.reparent].
 ## [codeblock]
@@ -1227,8 +1202,8 @@ func reparent_to(new_parent: Node, opts: ReparentOpts = null) -> void:
 	if opts == null:
 		opts = ReparentOpts.new()
 
-	var source_scene := MultiplayerTree.scene_for_node(owner)
-	var destination_scene := MultiplayerTree.scene_for_node(new_parent)
+	var source_scene := MultiplayerScene.of(owner)
+	var destination_scene := MultiplayerScene.of(new_parent)
 
 	reparenting = opts
 	if _is_cross_scene_player_reparent(source_scene, destination_scene):
@@ -1357,35 +1332,25 @@ func _remote_despawn(reason: StringName, linger_seconds: float) -> void:
 
 #endregion
 
-
 #region Handles and bindings
 
 var _interest_gate_ref: WeakRef
 
-
 var _timeline_ref: WeakRef
-
 
 var _interpolation: NetwInterpolationInterface.Handle
 
-
 var _prediction: NetwLagCompensationInterface.PredictionHandle
-
 
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
 
-
 var _synchronizers_dirty: bool = true
-
 
 var _parent_entity_resolved: bool = false
 
-
 var _parent_entity_ref: WeakRef
 
-
 var _components: ComponentTable
-
 
 ## The entity's component-ID routing table, mapping each registered sub-node to
 ## a stable 1-byte id so an entity RPC or a masked sync frame addresses it
@@ -1430,7 +1395,6 @@ func property_path(
 		return NodePath("")
 	return NodePath("%s:%s" % [rel, property])
 
-
 ## The entity's [NetwPersistenceInterface.PersistenceEngine], or [code]null[/code]
 ## when its archetype declared no [method Netw.configure_persistence].
 ##
@@ -1468,7 +1432,6 @@ func _derived_binding(record: int) -> NetwSyncSetBinding:
 			return candidate
 	return null
 
-
 ## The entity's derived state [NetwSyncSetBinding], the registry set handle a
 ## script declares with [method NetwScriptModel.PropertyConfig.state]. Resolves
 ## through the session, so it is [code]null[/code] before the owner is in a
@@ -1477,7 +1440,6 @@ func _derived_binding(record: int) -> NetwSyncSetBinding:
 var state_binding: NetwSyncSetBinding:
 	get:
 		return _derived_binding(NetwSyncSet.Record.RECORD_STATE)
-
 
 ## The entity's derived input [NetwSyncSetBinding], the registry set handle a
 ## script declares with [method NetwScriptModel.PropertyConfig.input]. Resolves
@@ -1488,7 +1450,6 @@ var input_binding: NetwSyncSetBinding:
 	get:
 		return _derived_binding(NetwSyncSet.Record.RECORD_INPUT)
 
-
 ## The entity's derived broadcast [NetwSyncSetBinding], the registry set handle a
 ## script declares with [method NetwScriptModel.PropertyConfig.broadcast]. Resolves
 ## through the session, [code]null[/code] before the owner is in a
@@ -1498,17 +1459,15 @@ var broadcast_binding: NetwSyncSetBinding:
 	get:
 		return _derived_binding(NetwSyncSet.Record.RECORD_BROADCAST)
 
-
 ## The ancestor visibility gate ([InterestGate]) that admits this entity's
 ## scene, or [code]null[/code]. Written by [MultiplayerScene], read by
 ## [NetwInterestInterface]. Weakref-backed, so it clears when the gate frees.
 var interest_gate: InterestGate:
 	get:
 		return _interest_gate_ref.get_ref() as InterestGate if _interest_gate_ref \
-				else null
+		else null
 	set(value):
 		_interest_gate_ref = weakref(value) if value else null
-
 
 ## The entity's per-entity tick-keyed [NetwTimeline] of state and input
 ## snapshots, published by [NetwLagCompensationInterface], or [code]null[/code].
@@ -1518,7 +1477,6 @@ var timeline: NetwTimeline:
 		return _timeline_ref.get_ref() as NetwTimeline if _timeline_ref else null
 	set(value):
 		_timeline_ref = weakref(value) if value else null
-
 
 ## Entity level prediction handle.
 ##
@@ -1537,7 +1495,6 @@ var prediction: NetwLagCompensationInterface.PredictionHandle:
 			_prediction._bind(self)
 		return _prediction
 
-
 ## Entity level interpolation handle.
 ##
 ## [NetwInterpolationInterface] reads this handle for visual root, display
@@ -1549,7 +1506,6 @@ var interpolation: NetwInterpolationInterface.Handle:
 			_interpolation = NetwInterpolationInterface.Handle.new()
 			_interpolation._bind(self)
 		return _interpolation
-
 
 # ---------------------------------------------------------------------------
 # Synchronizer wiring
@@ -1653,7 +1609,6 @@ func _walk_for_parent_entity() -> NetwEntity:
 
 #endregion
 
-
 #region Inner classes
 
 ## The component-ID routing table for one [NetwEntity].
@@ -1686,8 +1641,8 @@ class ComponentTable:
 
 	var _entity_ref: WeakRef
 	var _registered: Array[Node] = []
-	var _by_id: Dictionary[int, NodePath] = {}
-	var _by_path: Dictionary[NodePath, int] = {}
+	var _by_id: Dictionary[int, NodePath] = { }
+	var _by_path: Dictionary[NodePath, int] = { }
 
 
 	func _init(entity: NetwEntity) -> void:

@@ -12,15 +12,15 @@
 ## └── NakamaDatabase             # write-behind cache over Nakama storage.
 ##
 ## # A concrete backend overrides the five @abstract methods:
-## func initialize(schema: Dictionary, slot: String) -> Error
-## func upsert(table: StringName, id: StringName, data: Dictionary) -> Error
-## func find_by_id(table: StringName, id: StringName) -> Dictionary
-## func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]
-## func delete(table: StringName, id: StringName) -> Error
+## func _initialize(schema: Dictionary, slot: String) -> Error
+## func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error
+## func _find_by_id(table: StringName, id: StringName) -> Dictionary
+## func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]
+## func _delete(table: StringName, id: StringName) -> Error
 ## [/codeblock]
 ##
-## [method commit], [method warm], [method list_namespaces], and
-## [method delete_namespace] ship with working defaults. See
+## [method _commit], [method _warm], [method _list_namespaces], and
+## [method _delete_namespace] ship with working defaults. See
 ## [member NetwDatabase.slots] for the slot namespace model.
 @abstract
 class_name NetwDatabaseBackend
@@ -35,19 +35,19 @@ extends Resource
 ## [param slot] is the save namespace selected by [member NetwDatabase.slots].
 ## Backends compose it into their own storage prefix. It is not part of the
 ## record id.
-@abstract func initialize(schema: Dictionary, slot: String) -> Error
+@abstract func _initialize(schema: Dictionary, slot: String) -> Error
 
 
 ## Writes or updates a single record in [param table] identified by [param id].
 ##
 ## Only the keys present in [param data] are written; existing keys not present
 ## in [param data] are preserved (merge, not replace).
-@abstract func upsert(table: StringName, id: StringName, data: Dictionary) -> Error
+@abstract func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error
 
 
 ## Commits a batch of upsert [param operations] as one unit.
 ##
-## The default loops [method upsert] in order and returns the first error.
+## The default loops [method _upsert] in order and returns the first error.
 ## Network backends may coalesce the batch into one round trip.
 ## [codeblock]
 ## Array
@@ -56,9 +56,9 @@ extends Resource
 ##     ├── id (StringName)
 ##     └── data (Dictionary)
 ## [/codeblock]
-func commit(operations: Array) -> Error:
+func _commit(operations: Array) -> Error:
 	for entry in operations:
-		var err := upsert(entry.table, entry.id, entry.data)
+		var err := _upsert(entry.table, entry.id, entry.data)
 		if err != OK:
 			return err
 	return OK
@@ -71,7 +71,7 @@ func commit(operations: Array) -> Error:
 ## └── column_name (StringName)
 ##     └── value (Variant)
 ## [/codeblock]
-@abstract func find_by_id(table: StringName, id: StringName) -> Dictionary
+@abstract func _find_by_id(table: StringName, id: StringName) -> Dictionary
 
 
 ## Returns all records in [param table] that match every key/value pair in
@@ -82,12 +82,12 @@ func commit(operations: Array) -> Error:
 ##     └── column_name (StringName)
 ##         └── value (Variant)
 ## [/codeblock]
-@abstract func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]
+@abstract func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]
 
 
 ## Permanently removes the record for [param id] from [param table].
 ## Returns [constant OK] even if the record did not exist (idempotent).
-@abstract func delete(table: StringName, id: StringName) -> Error
+@abstract func _delete(table: StringName, id: StringName) -> Error
 
 
 ## Pre-loads records into the backend's cache according to [param directives].
@@ -101,7 +101,7 @@ func commit(operations: Array) -> Error:
 ##     └── request (WarmRequest)
 ## [/codeblock]
 @warning_ignore("unused_parameter")
-func warm(directives: Array) -> Error:
+func _warm(directives: Array) -> Error:
 	return OK
 
 
@@ -109,7 +109,7 @@ func warm(directives: Array) -> Error:
 ##
 ## Powers [method NetwDatabase.SlotEngine.list]. The default backend keeps no
 ## namespaces and returns an empty array.
-func list_namespaces() -> Array[StringName]:
+func _list_namespaces() -> Array[StringName]:
 	return [] as Array[StringName]
 
 
@@ -118,7 +118,7 @@ func list_namespaces() -> Array[StringName]:
 ## Powers [method NetwDatabase.SlotEngine.delete]. Idempotent. The default
 ## backend has no namespaces and returns [constant OK].
 @warning_ignore("unused_parameter")
-func delete_namespace(slot: String) -> Error:
+func _delete_namespace(slot: String) -> Error:
 	return OK
 
 
@@ -143,14 +143,14 @@ class Dict:
 	var _namespace: String = ""
 
 
-	func initialize(_schema: Dictionary, slot: String = "") -> Error:
+	func _initialize(_schema: Dictionary, slot: String = "") -> Error:
 		_namespace = slot
 		if not _data.has(_namespace):
 			_data[_namespace] = { }
 		return OK
 
 
-	func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+	func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 		var ns := _ns()
 		if not ns.has(table):
 			ns[table] = { }
@@ -164,14 +164,14 @@ class Dict:
 		return OK
 
 
-	func find_by_id(table: StringName, id: StringName) -> Dictionary:
+	func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 		var ns := _ns()
 		if ns.has(table) and ns[table].has(id):
 			return ns[table][id].duplicate()
 		return { }
 
 
-	func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+	func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 		var ns := _ns()
 		if not ns.has(table):
 			return []
@@ -185,21 +185,21 @@ class Dict:
 		return results
 
 
-	func delete(table: StringName, id: StringName) -> Error:
+	func _delete(table: StringName, id: StringName) -> Error:
 		var ns := _ns()
 		if ns.has(table):
 			ns[table].erase(id)
 		return OK
 
 
-	func list_namespaces() -> Array[StringName]:
+	func _list_namespaces() -> Array[StringName]:
 		var out: Array[StringName] = []
 		for key in _data:
 			out.append(StringName(key))
 		return out
 
 
-	func delete_namespace(slot: String) -> Error:
+	func _delete_namespace(slot: String) -> Error:
 		_data.erase(slot)
 		return OK
 

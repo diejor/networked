@@ -54,15 +54,15 @@ func _dec(r: NetwBitBuffer.Reader) -> float:
 	return min_limit + float(q) * resolution_step
 
 
-func supports_type(type: Variant.Type) -> bool:
+func _supports_type(type: Variant.Type) -> bool:
 	return type in [TYPE_FLOAT, TYPE_INT, TYPE_VECTOR2, TYPE_VECTOR3]
 
 
-## Implements [method NetwQuantize.write], snapping each [Vector3] or [Vector2]
+## Implements [method NetwQuantize._write], snapping each [Vector3] or [Vector2]
 ## axis (or a scalar) to the [member resolution_step] grid before packing it.
-func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
+func _write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	assert(
-		supports_type(typeof(value) as Variant.Type),
+		_supports_type(typeof(value) as Variant.Type),
 		"NetwQuantizeFixed: Unsupported type %s." % type_string(typeof(value)),
 	)
 	match typeof(value):
@@ -77,11 +77,11 @@ func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 			_enc(w, float(value))
 
 
-## Implements [method NetwQuantize.read], reconstructing the value of
+## Implements [method NetwQuantize._read], reconstructing the value of
 ## [param type] from its grid index.
-func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
+func _read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeFixed: Unsupported type %s." % type_string(type),
 	)
 	match type:
@@ -95,11 +95,11 @@ func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 			return _dec(r)
 
 
-## Implements [method NetwQuantize.bit_width]: the grid-addressing bits per
+## Implements [method NetwQuantize._bit_width]: the grid-addressing bits per
 ## component, tripled for a [Vector3], or doubled for a [Vector2].
-func bit_width(type: Variant.Type) -> int:
+func _bit_width(type: Variant.Type) -> int:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeFixed: Unsupported type %s." % type_string(type),
 	)
 	var b := _bits()
@@ -112,11 +112,11 @@ func bit_width(type: Variant.Type) -> int:
 			return b
 
 
-## Implements [method NetwQuantize.max_error]: half a [member resolution_step] per axis,
+## Implements [method NetwQuantize._max_error]: half a [member resolution_step] per axis,
 ## combined as a magnitude for a [Vector3] or [Vector2].
-func max_error(type: Variant.Type) -> float:
+func _max_error(type: Variant.Type) -> float:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeFixed: Unsupported type %s." % type_string(type),
 	)
 	var axis := resolution_step * 0.5

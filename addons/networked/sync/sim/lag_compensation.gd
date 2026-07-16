@@ -71,17 +71,23 @@ const _MAX_BIND_ATTEMPTS := 600
 ## through [member NetwMultiplayer.lag_compensation] rather than this node.
 var _interface: NetwLagCompensationInterface
 
+# The typed payload registered with the API, retained so the matching
+# object_configuration_remove passes the same resource.
+var _config: NetwLagCompensationConfig
+
 var _clock: NetwClockInterface
 var _bind_attempts: int = 0
 
 
-func service_type() -> Script:
+func _service_type() -> Script:
 	return LagCompensation
 
 
-func service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(mt: MultiplayerTree) -> void:
 	if mt.api:
-		mt.api.object_configuration_add(self, self)
+		_interface = mt.api.lag_compensation
+		_config = _build_config()
+		mt.api.object_configuration_add(self, _config)
 	if not mt.session_entered.is_connected(_on_session_entered):
 		mt.session_entered.connect(_on_session_entered)
 	if mt.is_online():
@@ -91,7 +97,7 @@ func service_entered(mt: MultiplayerTree) -> void:
 		tree.node_added.connect(_on_node_added)
 
 
-func service_exiting(mt: MultiplayerTree) -> void:
+func _service_exiting(mt: MultiplayerTree) -> void:
 	var tree := get_tree()
 	if tree and tree.node_added.is_connected(_on_node_added):
 		tree.node_added.disconnect(_on_node_added)
@@ -101,17 +107,18 @@ func service_exiting(mt: MultiplayerTree) -> void:
 			NetwFrameEnvelope.Channel.ACTION,
 			Callable(),
 		)
-		mt.api.object_configuration_remove(self, self)
+		if _config:
+			mt.api.object_configuration_remove(self, _config)
 
 
-## Binds this configurator to [param iface], pushing the full export snapshot.
-## Called by [NetwMultiplayer] when the node registers through
-## [method MultiplayerAPI.object_configuration_add].
-func attach_interface(iface: NetwLagCompensationInterface) -> void:
-	_interface = iface
-	iface._node = self
-	iface.max_future_action_ticks = max_future_action_ticks
-	iface.input_gate_deadline_ticks = input_gate_deadline_ticks
+# Snapshots the current exports into the typed payload the interface configures
+# from. Export setters keep pushing live edits straight to the interface, so
+# this runs once per registration.
+func _build_config() -> NetwLagCompensationConfig:
+	var config := NetwLagCompensationConfig.new()
+	config.max_future_action_ticks = max_future_action_ticks
+	config.input_gate_deadline_ticks = input_gate_deadline_ticks
+	return config
 
 
 func _on_session_entered() -> void:

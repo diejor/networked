@@ -2,10 +2,10 @@
 class_name AddPopup
 extends PopupPanel
 
-signal submitted(target: JoinTarget)
+signal submitted(target: NetwConnectTarget)
 
-var _templates: Array[BackendPeer] = []
-var _editing: JoinTarget = null
+var _transports: Array[NetwTransport] = []
+var _editing: NetwConnectTarget = null
 
 @onready var _title: Label = %TitleLabel
 @onready var _backend_picker: OptionButton = %BackendPicker
@@ -21,12 +21,12 @@ func _ready() -> void:
 	exclusive = true
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
-	_backend_picker.item_selected.connect(_on_backend_changed)
+	_backend_picker.item_selected.connect(_on_transport_changed)
 
 
-## Sets the backend templates offered in the picker.
-func set_templates(templates: Array[BackendPeer]) -> void:
-	_templates = templates
+## Sets the transports offered in the picker.
+func set_transports(transports: Array[NetwTransport]) -> void:
+	_transports = transports
 
 
 ## Opens the popup as an empty Add Server form.
@@ -36,76 +36,70 @@ func open_add() -> void:
 	_confirm_button.text = "Add"
 	_address_edit.text = ""
 	_name_edit.text = ""
-	_populate_backend_picker()
+	_populate_transport_picker()
 	_refresh_address_hint()
 	popup_centered()
 
 
 ## Opens the popup as an Edit form populated from [param target].
-func open_edit(target: JoinTarget) -> void:
+func open_edit(target: NetwConnectTarget) -> void:
 	_editing = target
 	_title.text = "Edit server"
 	_confirm_button.text = "Save"
 	_address_edit.text = target.address
 	_name_edit.text = target.display_name
-	_populate_backend_picker()
-	_select_template_for(target.backend)
+	_populate_transport_picker()
+	_select_transport_for(target.scheme)
 	_refresh_address_hint()
 	popup_centered()
 
 
-func _populate_backend_picker() -> void:
+func _populate_transport_picker() -> void:
 	_backend_picker.clear()
-	for backend in _templates:
-		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
+	for transport in _transports:
+		_backend_picker.add_item(transport._display_name())
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
 
-func _select_template_for(backend: BackendPeer) -> void:
-	if backend == null:
-		return
-	for i in _templates.size():
-		var t := _templates[i]
-		if t.get_script() == backend.get_script() and t.get_script() != null:
-			_backend_picker.selected = i
-			return
-		if t.get_class() == backend.get_class() and t.get_script() == null:
+func _select_transport_for(scheme: StringName) -> void:
+	for i in _transports.size():
+		if _transports[i].scheme() == scheme:
 			_backend_picker.selected = i
 			return
 
 
-func _selected_template() -> BackendPeer:
-	if _templates.is_empty():
+func _selected_transport() -> NetwTransport:
+	if _transports.is_empty():
 		return null
 	var idx := maxi(0, _backend_picker.selected)
-	if idx >= _templates.size():
+	if idx >= _transports.size():
 		return null
-	return _templates[idx]
+	return _transports[idx]
 
 
-func _on_backend_changed(_index: int) -> void:
+func _on_transport_changed(_index: int) -> void:
 	_refresh_address_hint()
 
 
 func _refresh_address_hint() -> void:
-	var template := _selected_template()
-	if template == null:
+	var transport := _selected_transport()
+	if transport == null:
 		_address_edit.placeholder_text = ""
 		_address_edit.tooltip_text = ""
 		return
-	var hint := template.get_address_hint()
+	var hint := transport._address_hint()
 	_address_edit.placeholder_text = hint.placeholder
 	_address_edit.tooltip_text = hint.help_text
 
 
 func _on_confirm() -> void:
-	var template := _selected_template()
-	if template == null:
+	var transport := _selected_transport()
+	if transport == null:
 		return
-	var target: JoinTarget = _editing if _editing else JoinTarget.new()
+	var target: NetwConnectTarget = _editing if _editing else NetwConnectTarget.new()
+	target.scheme = transport.scheme()
 	target.address = _address_edit.text
-	target.backend = template
 	var typed_name := _name_edit.text.strip_edges()
 	target.display_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
 

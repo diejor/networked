@@ -35,8 +35,8 @@ func test_spawn_edge_race() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
-		sm.add_spawnable_scene(player_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
+		sm.register_scene_path(player_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 
@@ -73,8 +73,8 @@ func test_despawn_edge_race() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
-		sm.add_spawnable_scene(player_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
+		sm.register_scene_path(player_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 
@@ -98,7 +98,7 @@ func test_despawn_edge_race() -> void:
 	# Assert that route is dead on server
 	var server_liveness: NetwLivenessInterface = server.api.liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD
+		NetwLivenessInterface.State.DEAD,
 	)
 
 	# Step client to receive the despawn packet and update route state
@@ -107,7 +107,7 @@ func test_despawn_edge_race() -> void:
 	# Verify route is no longer live on client
 	var client_liveness: NetwLivenessInterface = client.api.liveness
 	assert_that(client_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD
+		NetwLivenessInterface.State.DEAD,
 	)
 
 	# Verify the client carrier drops frames on a dead route under drops_not_live
@@ -123,8 +123,8 @@ func test_linger_variant() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
-		sm.add_spawnable_scene(player_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
+		sm.register_scene_path(player_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 
@@ -148,7 +148,7 @@ func test_linger_variant() -> void:
 	# Server route should be LINGERING
 	var server_liveness: NetwLivenessInterface = server.api.liveness
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.LINGERING
+		NetwLivenessInterface.State.LINGERING,
 	)
 
 	# Frame a carrier on the lingering route and send it to the server carrier
@@ -167,7 +167,7 @@ func test_linger_variant() -> void:
 
 	# Route is now dead on server
 	assert_that(server_liveness.route_state(route)).is_equal(
-		NetwLivenessInterface.State.DEAD
+		NetwLivenessInterface.State.DEAD,
 	)
 
 

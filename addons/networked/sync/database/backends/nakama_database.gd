@@ -1,8 +1,8 @@
 ## [NetwDatabaseBackend] that persists records to Nakama storage, host-only.
 ##
 ## Nakama storage has no partial-field update and every write is a network round
-## trip, so this backend never blocks a gameplay write. [method upsert],
-## [method commit], and [method delete] mutate an in-memory mirror of the open
+## trip, so this backend never blocks a gameplay write. [method _upsert],
+## [method _commit], and [method _delete] mutate an in-memory mirror of the open
 ## slot and return [constant OK] at once, while a debounced loop flushes the
 ## dirty records every [member flush_interval] seconds. A read serves the mirror
 ## first and falls back to a remote fetch only on a miss.
@@ -68,10 +68,10 @@ var _running: bool = false
 # ── NetwDatabaseBackend overrides ────────────────────────────────────────
 
 
-## Overrides [method NetwDatabaseBackend.initialize] to declare the schema,
+## Overrides [method NetwDatabaseBackend._initialize] to declare the schema,
 ## open the specified save [param slot], register it in the slot index, and
 ## start the debounced flush loop.
-func initialize(schema: Dictionary, slot: String = "") -> Error:
+func _initialize(schema: Dictionary, slot: String = "") -> Error:
 	_schema = schema
 	_slot = slot if not slot.is_empty() else "default"
 	_cache.clear()
@@ -87,9 +87,9 @@ func initialize(schema: Dictionary, slot: String = "") -> Error:
 	return OK
 
 
-## Overrides [method NetwDatabaseBackend.upsert] to write or update a record
+## Overrides [method NetwDatabaseBackend._upsert] to write or update a record
 ## in the local cache and mark it dirty for the next debounced flush.
-func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	var bucket := _cache_table(table)
 	if not bucket.has(id):
 		bucket[id] = { }
@@ -101,10 +101,10 @@ func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	return OK
 
 
-## Overrides [method NetwDatabaseBackend.find_by_id] to read a record from the
+## Overrides [method NetwDatabaseBackend._find_by_id] to read a record from the
 ## local cache, falling back to a remote read from Nakama storage if it is not
 ## cached.
-func find_by_id(table: StringName, id: StringName) -> Dictionary:
+func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	if _cache.has(table) and _cache[table].has(id):
 		return _cache[table][id].duplicate()
 
@@ -123,9 +123,9 @@ func find_by_id(table: StringName, id: StringName) -> Dictionary:
 	return record.duplicate()
 
 
-## Overrides [method NetwDatabaseBackend.find_all] to return all cached
+## Overrides [method NetwDatabaseBackend._find_all] to return all cached
 ## records matching [param filter].
-func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	if not _cache.has(table):
 		return results
@@ -136,9 +136,9 @@ func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	return results
 
 
-## Overrides [method NetwDatabaseBackend.delete] to remove a record from the
+## Overrides [method NetwDatabaseBackend._delete] to remove a record from the
 ## local cache and queue its deletion on Nakama during the next flush.
-func delete(table: StringName, id: StringName) -> Error:
+func _delete(table: StringName, id: StringName) -> Error:
 	if _cache.has(table):
 		_cache[table].erase(id)
 	if _dirty.has(table):
@@ -147,9 +147,9 @@ func delete(table: StringName, id: StringName) -> Error:
 	return OK
 
 
-## Overrides [method NetwDatabaseBackend.warm] to pre-load database records
+## Overrides [method NetwDatabaseBackend._warm] to pre-load database records
 ## into the local cache according to the provided [param directives].
-func warm(directives: Array) -> Error:
+func _warm(directives: Array) -> Error:
 	if not await _ensure_session():
 		return ERR_CANT_CONNECT
 	for directive in directives:
@@ -171,7 +171,7 @@ func warm(directives: Array) -> Error:
 ## Lists registered save-slot names from the Nakama slot index.
 ##
 ## See [member NetwDatabase.slots] for the slot namespace model.
-func list_namespaces() -> Array[StringName]:
+func _list_namespaces() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if not await _ensure_session():
 		return out
@@ -184,7 +184,7 @@ func list_namespaces() -> Array[StringName]:
 ##
 ## Also removes the slot from the Nakama slot index. See
 ## [member NetwDatabase.slots] for the slot namespace model.
-func delete_namespace(slot: String) -> Error:
+func _delete_namespace(slot: String) -> Error:
 	if slot.is_empty():
 		return ERR_INVALID_PARAMETER
 	if not await _ensure_session():

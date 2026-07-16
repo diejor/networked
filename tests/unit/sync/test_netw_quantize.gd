@@ -4,9 +4,9 @@ extends NetwTestSuite
 
 func _roundtrip(q: NetwQuantize, value: Variant, type: Variant.Type) -> Variant:
 	var w := NetwBitBuffer.Writer.new()
-	q.write(w, value)
+	q._write(w, value)
 	var r := NetwBitBuffer.Reader.new(w.to_bytes())
-	return q.read(r, type)
+	return q._read(r, type)
 
 
 func _fixed(
@@ -44,9 +44,9 @@ func test_bits_scalar_and_vector() -> void:
 		Vector3(0.25, -0.75, 0.5),
 		Vector3(0.01, 0.01, 0.01),
 	)
-	assert_int(q.bit_width(TYPE_VECTOR3)).is_equal(24)
-	assert_int(q.bit_width(TYPE_VECTOR2)).is_equal(16)
-	assert_int(q.bit_width(TYPE_FLOAT)).is_equal(8)
+	assert_int(q._bit_width(TYPE_VECTOR3)).is_equal(24)
+	assert_int(q._bit_width(TYPE_VECTOR2)).is_equal(16)
+	assert_int(q._bit_width(TYPE_FLOAT)).is_equal(8)
 
 	# A symmetric range round-trips its center exactly, so a value at rest on one
 	# axis (pure horizontal motion) does not pick up quant noise on the other.
@@ -83,10 +83,10 @@ func test_max_error_matches_resolution() -> void:
 	# Fixed: half a step per axis, magnitude across a Vector2.
 	var fixed := NetwQuantizeFixed.new()
 	fixed.resolution_step = 0.5
-	assert_float(fixed.max_error(TYPE_FLOAT)).is_equal_approx(0.25, 0.0001)
-	assert_float(fixed.max_error(TYPE_VECTOR2)) \
+	assert_float(fixed._max_error(TYPE_FLOAT)).is_equal_approx(0.25, 0.0001)
+	assert_float(fixed._max_error(TYPE_VECTOR2)) \
 			.is_equal_approx(0.25 * sqrt(2.0), 0.0001)
-	assert_float(fixed.max_error(TYPE_VECTOR3)) \
+	assert_float(fixed._max_error(TYPE_VECTOR3)) \
 			.is_equal_approx(0.25 * sqrt(3.0), 0.0001)
 
 	# Bits: half the grid spacing (span / 2^bits) per axis.
@@ -94,13 +94,13 @@ func test_max_error_matches_resolution() -> void:
 	bits.bit_count = 8
 	bits.min_limit = -1.0
 	bits.max_limit = 1.0
-	assert_float(bits.max_error(TYPE_FLOAT)).is_equal_approx(
+	assert_float(bits._max_error(TYPE_FLOAT)).is_equal_approx(
 		2.0 / 256.0 * 0.5,
 		0.0001,
 	)
-	assert_float(bits.max_error(TYPE_VECTOR2)) \
+	assert_float(bits._max_error(TYPE_VECTOR2)) \
 			.is_equal_approx(2.0 / 256.0 * 0.5 * sqrt(2.0), 0.0001)
-	assert_float(bits.max_error(TYPE_VECTOR3)) \
+	assert_float(bits._max_error(TYPE_VECTOR3)) \
 			.is_equal_approx(
 				2.0 / 256.0 * 0.5 * sqrt(3.0),
 				0.0001,
@@ -110,13 +110,13 @@ func test_max_error_matches_resolution() -> void:
 	var off_grid := 0.3123
 	var decoded: float = _roundtrip(bits, off_grid, TYPE_FLOAT)
 	assert_float(absf(decoded - off_grid)).is_less_equal(
-		bits.max_error(TYPE_FLOAT),
+		bits._max_error(TYPE_FLOAT),
 	)
 
 	# Angle: half the angular resolution in radians.
 	var angle := NetwQuantizeAngle.new()
 	angle.bit_count = 8
-	assert_float(angle.max_error(TYPE_FLOAT)).is_equal_approx(
+	assert_float(angle._max_error(TYPE_FLOAT)).is_equal_approx(
 		TAU / 256.0 * 0.5,
 		0.0001,
 	)
@@ -130,7 +130,7 @@ func test_angle_wraps() -> void:
 	assert_float(_roundtrip(q, PI, TYPE_FLOAT)).is_equal_approx(PI, 0.03)
 	# TAU wraps back to ~0
 	assert_float(_roundtrip(q, TAU, TYPE_FLOAT)).is_equal_approx(0.0, 0.03)
-	assert_int(q.bit_width(TYPE_FLOAT)).is_equal(8)
+	assert_int(q._bit_width(TYPE_FLOAT)).is_equal(8)
 
 
 func test_quaternion_uses_smallest_three_layout() -> void:
@@ -141,9 +141,9 @@ func test_quaternion_uses_smallest_three_layout() -> void:
 	var value := Quaternion(axis, 1.234)
 	var got: Quaternion = _roundtrip(q, value, TYPE_QUATERNION)
 
-	assert_int(q.bit_width(TYPE_QUATERNION)).is_equal(38)
+	assert_int(q._bit_width(TYPE_QUATERNION)).is_equal(38)
 	assert_float(_angle_error(value, got)).is_less_equal(
-		q.max_error(TYPE_QUATERNION),
+		q._max_error(TYPE_QUATERNION),
 	)
 
 
@@ -164,7 +164,7 @@ func test_transform_2d_composes_origin_rotation_and_scale() -> void:
 	)
 	var got: Transform2D = _roundtrip(q, value, TYPE_TRANSFORM2D)
 
-	assert_int(q.bit_width(TYPE_TRANSFORM2D)).is_equal(38)
+	assert_int(q._bit_width(TYPE_TRANSFORM2D)).is_equal(38)
 	assert_vector(got.origin).is_equal(Vector2(3.25, -4.5))
 	assert_float(got.get_rotation()).is_equal_approx(value.get_rotation(), 0.002)
 	assert_vector(got.get_scale()).is_equal_approx(
@@ -189,11 +189,11 @@ func test_transform_3d_composes_origin_rotation_and_scale() -> void:
 
 	var got: Transform3D = _roundtrip(q, value, TYPE_TRANSFORM3D)
 
-	assert_int(q.bit_width(TYPE_TRANSFORM3D)).is_equal(77)
+	assert_int(q._bit_width(TYPE_TRANSFORM3D)).is_equal(77)
 	assert_vector(got.origin).is_equal(Vector3(1.25, -2.5, 3.75))
 	assert_float(
 		_angle_error(rotation, got.basis.get_rotation_quaternion()),
-	).is_less_equal(rotation_quantizer.max_error(TYPE_QUATERNION))
+	).is_less_equal(rotation_quantizer._max_error(TYPE_QUATERNION))
 	assert_vector(got.basis.get_scale()).is_equal_approx(
 		value.basis.get_scale(),
 		Vector3(0.001, 0.001, 0.001),

@@ -250,7 +250,7 @@ func _exit_tree() -> void:
 ## [br][br]
 ## Offline phase of two-phase registration: creates the [TreeProbe] so the
 ## tree is observed from [code]_enter_tree[/code] at
-## [constant MultiplayerTree.Role.NONE], and emits the first wire session
+## [constant NetwSessionInterface.Role.NONE], and emits the first wire session
 ## registration at that role so the editor's peer registry can show the tree
 ## before it connects. Registers no performance monitors yet. The online
 ## upgrade happens in [method finalize_tree].
@@ -271,7 +271,7 @@ func register_tree(mt: MultiplayerTree) -> void:
 
 	# Snapshot a clean template while the tree is still offline (no runtime
 	# scenes) and before the probe below attaches. Duplicating the live tree
-	# later would drag in the probe and runtime-spawned nodes (§ runtime-MT).
+	# later would drag in the probe and runtime-spawned nodes.
 	# Only an attached editor can trigger a spawn, so skip the cost otherwise.
 	if _has_local_session() and not _templates.has(tree_name):
 		var template := mt.duplicate() as MultiplayerTree
@@ -389,9 +389,7 @@ func report_session_registered(mt: MultiplayerTree) -> void:
 	if not is_instance_valid(mt):
 		return
 
-	var backend_class := ""
-	if mt.backend and mt.backend.get_script():
-		backend_class = mt.backend.get_script().get_global_name()
+	var backend_class := String(mt.scheme)
 
 	var event := NetwSessionEvent.new()
 	event.tree_name = mt.get_tree_name()
@@ -401,13 +399,13 @@ func report_session_registered(mt: MultiplayerTree) -> void:
 	)
 	event.role = mt.role
 	event.is_server = (
-			mt.is_host if mt.role != MultiplayerTree.Role.NONE else false
+			mt.is_host if mt.role != NetwSessionInterface.Role.NONE else false
 	)
 	event.backend_class = backend_class
 	event.rid = reporter_id
 	# get_unique_id() returns 1 for a default MultiplayerAPI with no peer, so an
 	# offline tree would look like "peer 1, online". Gate both on a live session.
-	var is_online := mt.state == MultiplayerTree.State.ONLINE
+	var is_online := mt.state == NetwSessionInterface.State.ONLINE
 	event.online = is_online
 	event.peer_id = mt.multiplayer_api.get_unique_id() if \
 	(is_online and mt.multiplayer_api) else 0
@@ -640,9 +638,7 @@ func _on_request_snapshot() -> void:
 func _emit_current_state() -> void:
 	for mt: MultiplayerTree in _trees:
 		var tree_name := mt.get_tree_name()
-		var backend_class := ""
-		if mt.backend and mt.backend.get_script():
-			backend_class = mt.backend.get_script().get_global_name()
+		var backend_class := String(mt.scheme)
 
 		var event := NetwSessionEvent.new()
 		event.tree_name = tree_name
@@ -652,7 +648,7 @@ func _emit_current_state() -> void:
 		)
 		event.role = mt.role
 		event.is_server = (
-				mt.is_host if mt.role != MultiplayerTree.Role.NONE else false
+				mt.is_host if mt.role != NetwSessionInterface.Role.NONE else false
 		)
 		event.backend_class = backend_class
 		event.rid = reporter_id
@@ -664,7 +660,7 @@ func _emit_current_state() -> void:
 		if not is_instance_valid(ctx):
 			continue
 
-		if mt.role != MultiplayerTree.Role.NONE and mt.is_host:
+		if mt.role != NetwSessionInterface.Role.NONE and mt.is_host:
 			# Server sends topology for all active players.
 			for player in mt.get_all_players():
 				ctx.send_topology_snapshot(player.owner)
@@ -834,9 +830,9 @@ func _close_spawned_window(window: Window) -> void:
 	var pw := window as ParticipantWindow
 	var mt: MultiplayerTree = pw.tree if pw else null
 	if is_instance_valid(mt):
-		if mt.state == MultiplayerTree.State.CONNECTING:
+		if mt.state == NetwSessionInterface.State.CONNECTING:
 			mt.abort_join()
-		elif mt.state != MultiplayerTree.State.OFFLINE:
+		elif mt.state != NetwSessionInterface.State.OFFLINE:
 			await mt.leave()
 
 	if is_instance_valid(window):
@@ -1111,10 +1107,10 @@ func _fill_base(
 	# Merge base keys into any manifest-specific extras a detector pre-set, so a
 	# finding can populate network_state before the pipeline fills the base.
 	m.network_state["is_server"] = (
-			mt.is_host if (is_instance_valid(mt) and mt.role != MultiplayerTree.Role.NONE) else false
+			mt.is_host if (is_instance_valid(mt) and mt.role != NetwSessionInterface.Role.NONE) else false
 	)
 	m.network_state["role"] = \
-	mt.role if is_instance_valid(mt) else MultiplayerTree.Role.NONE
+	mt.role if is_instance_valid(mt) else NetwSessionInterface.Role.NONE
 	m.network_state["role_name"] = _role_name(mt)
 	m.network_state["tree_name"] = mt.get_tree_name() if is_instance_valid(mt) else ""
 	m.network_state["peer_id"] = mt.multiplayer_api.get_unique_id() if \
@@ -1124,8 +1120,8 @@ func _fill_base(
 
 func _role_name(mt: MultiplayerTree) -> String:
 	if not is_instance_valid(mt):
-		return MultiplayerTree.Role.keys()[MultiplayerTree.Role.NONE]
-	return MultiplayerTree.Role.keys()[mt.role]
+		return NetwSessionInterface.Role.keys()[NetwSessionInterface.Role.NONE]
+	return NetwSessionInterface.Role.keys()[mt.role]
 
 
 # Pauses the engine if break is enabled.

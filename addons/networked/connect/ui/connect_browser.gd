@@ -3,16 +3,17 @@
 ##
 ## Drop this scene into your lobby, point it at your [MultiplayerTree], and
 ## players can browse saved servers, watch live status, host a new game, or
-## join one with no glue code. Under the hood it drives the tree's canonical
-## [ConnectSession] through a [NetwConnect] for you.
+## join one with no glue code. Under the hood it drives the session's
+## [NetwConnect] (a [NetwConnector] plus a [NetwDiscovery]) for you, pumping it
+## each frame so view-pumped transports and eased progress advance.
 ##
 ## [br][br]
 ## The browser finds its session in three steps, first wins: an explicit
 ## [method bind], then the [member tree] export, then its own ancestry. Drop it
 ## under the tree for zero config, or hand a parent owned facade through
-## [method bind] when it lives elsewhere in the scene. Lobby directories are
-## discovered from the tree by [ConnectSession], so there is no per directory
-## wiring here.
+## [method bind] when it lives elsewhere in the scene. Transports come from the
+## [NetwConnector] registry and lobby directories from the session's service
+## registry, so there is no per browser wiring here.
 class_name ConnectBrowser
 extends Control
 
@@ -48,16 +49,12 @@ const _ROW_MENU_REMOVE := Menu.ID_REMOVE
 ## Default server name used when none is provided.
 const PLACEHOLDER_SERVER_NAME := "My Server"
 
-## The [MultiplayerTree] whose canonical [ConnectSession] this browser
-## drives, accessed through a [NetwConnect] facade.
+## The [MultiplayerTree] whose canonical [NetwConnect] this browser drives.
 ##
 ## Resolution order is [method bind] first, then this export, then the
 ## browser's own ancestry. Leave it unset when the browser is a descendant of
 ## the tree or when a parent calls [method bind].
 @export var tree: MultiplayerTree
-
-## Backends offered by the Add Server and Host popups.
-@export var backend_templates: Array[BackendPeer] = []
 
 ## Spawner picker choices shown in the Host / Join popup.
 @export_custom(
@@ -72,7 +69,7 @@ var spawner_options: Array[SceneNodePath] = []
 @export var hide_when_session_active: bool = true
 
 ## Path used to load and persist saved targets shown by this browser.
-@export var server_list_path: String = ConnectSession.DEFAULT_SERVER_LIST_PATH
+@export var server_list_path: String = NetwServerList.DEFAULT_PATH
 
 var _add_popup: AddPopup
 var _host_popup: HostPopup
@@ -81,8 +78,7 @@ var _join_direct_popup: JoinDirectPopup
 var _connecting_popup: ConnectingPopup
 var _row_menu: Menu
 
-var _tree: MultiplayerTree
-var _rows: Dictionary = { } # JoinTarget -> ConnectBrowserRow
+var _rows: Dictionary = { } # NetwConnectTarget -> ConnectBrowserRow
 var _selected_row: ConnectBrowserRow
 var _last_username: String = "Player"
 var _last_join_payload: JoinPayload = null
@@ -162,6 +158,13 @@ func _exit_tree() -> void:
 	_unbind_session_signals()
 
 
+func _process(delta: float) -> void:
+	# The facade owner pumps the connector so a view-pumped transport (WebRTC
+	# signaling) and eased progress advance while an attempt is in flight.
+	if _connect != null and _connect.is_valid():
+		_connect.poll(delta)
+
+
 ## Drives this browser from [param connect], the resolved [NetwConnect] for the
 ## target tree. Prefer this over the [member tree] export when the browser does
 ## not sit under the [MultiplayerTree]. A parent typically calls
@@ -181,6 +184,8 @@ func _setup_session() -> void:
 		_connect = _bound_connect
 	else:
 		_connect = Netw.of(tree if tree != null else self).connect
+	if _connect == null:
+		return
 	_session_ready = true
 	_connect.load_server_list(server_list_path)
 	_bind_session_signals()
@@ -252,7 +257,7 @@ func _rebuild_from_session() -> void:
 	_update_counter()
 
 
-func _add_row(target: JoinTarget) -> void:
+func _add_row(target: NetwConnectTarget) -> void:
 	var row := _ROW_SCENE.instantiate() as ConnectBrowserRow
 	_list_box.add_child(row)
 	row.bind_target(target)
@@ -265,14 +270,14 @@ func _add_row(target: JoinTarget) -> void:
 	_rows[target] = row
 
 
-func _on_target_added(target: JoinTarget) -> void:
+func _on_target_added(target: NetwConnectTarget) -> void:
 	if _rows.has(target):
 		return
 	_add_row(target)
 	_update_counter()
 
 
-func _on_target_removed(target: JoinTarget) -> void:
+func _on_target_removed(target: NetwConnectTarget) -> void:
 	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.queue_free()
@@ -282,7 +287,7 @@ func _on_target_removed(target: JoinTarget) -> void:
 	_update_counter()
 
 
-func _on_target_updated(target: JoinTarget, result: BackendPeer.ProbeResult) -> void:
+func _on_target_updated(target: NetwConnectTarget, result: NetwProbeResult) -> void:
 	var row: ConnectBrowserRow = _rows.get(target)
 	if row != null:
 		row.set_result(result)
@@ -295,7 +300,7 @@ func _update_counter() -> void:
 	_empty_state.visible = total == 0
 
 
-func _on_row_selected(_target: JoinTarget, row: ConnectBrowserRow) -> void:
+func _on_row_selected(_target: NetwConnectTarget, row: ConnectBrowserRow) -> void:
 	if _selected_row and is_instance_valid(_selected_row):
 		_selected_row.button_pressed = false
 	_selected_row = row
@@ -324,7 +329,7 @@ func _update_details() -> void:
 	var t := _selected_row.target
 	var r := _selected_row.result
 	var is_saved := _connect.saved_targets.has(t)
-	var unavailable := t.backend != null and not t.backend.is_available()
+	var unavailable := not _connect.is_target_available(t)
 
 	# Update the Header elements
 	_details_header.visible = true
@@ -333,11 +338,7 @@ func _update_details() -> void:
 	_details_remove_button.disabled = not is_saved
 	_details_join_button.disabled = unavailable
 	_details_name_label.text = _selected_row._display_name()
-
-	var backend_label := "unknown"
-	if t.backend != null:
-		backend_label = ConnectBrowser.format_backend_label(t.backend)
-	_details_badge_label.text = backend_label
+	_details_badge_label.text = ConnectBrowser.format_scheme_label(t.scheme)
 
 	# Update Details Status Dot
 	if unavailable:
@@ -378,7 +379,7 @@ func _create_detail_item(
 
 
 func _on_row_context_requested(
-		_target: JoinTarget,
+		_target: NetwConnectTarget,
 		row: ConnectBrowserRow,
 		screen_position: Vector2,
 ) -> void:
@@ -401,7 +402,7 @@ func _on_row_menu_id_pressed(id: int) -> void:
 			_remove_selected()
 
 
-func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
+func _on_row_activated(_target: NetwConnectTarget, row: ConnectBrowserRow) -> void:
 	if row == null or row.target == null:
 		return
 	_on_row_selected(row.target, row)
@@ -410,13 +411,13 @@ func _on_row_activated(_target: JoinTarget, row: ConnectBrowserRow) -> void:
 
 
 func _on_add_pressed() -> void:
-	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
+	_add_popup.set_transports(_connect.available_transports())
 	_add_popup.open_add()
 
 
 func _on_join_direct_pressed() -> void:
 	_join_direct_popup.open_join_direct(
-		ConnectSession.available_templates(backend_templates),
+		_connect.available_transports(),
 		spawner_options,
 		_last_username,
 	)
@@ -431,7 +432,7 @@ func _on_host_pressed() -> void:
 	if _connect == null:
 		return
 	_host_popup.open_host(
-		ConnectSession.hostable_templates(backend_templates),
+		_connect.hostable_transports(),
 		spawner_options,
 		_last_username,
 	)
@@ -451,7 +452,7 @@ func _open_edit_for_selected() -> void:
 	)
 	if not is_saved:
 		return
-	_add_popup.set_templates(ConnectSession.available_templates(backend_templates))
+	_add_popup.set_transports(_connect.available_transports())
 	_add_popup.open_edit(_selected_row.target)
 
 
@@ -461,7 +462,7 @@ func _remove_selected() -> void:
 	_connect.remove_target(_selected_row.target, true)
 
 
-func _on_target_submitted(target: JoinTarget) -> void:
+func _on_target_submitted(target: NetwConnectTarget) -> void:
 	if not _connect.saved_targets.has(target):
 		_connect.add_target(target, true)
 	else:
@@ -471,7 +472,7 @@ func _on_target_submitted(target: JoinTarget) -> void:
 
 
 func _on_host_submitted(
-		config: ConnectHostConfig,
+		config: NetwHostConfig,
 		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
@@ -480,7 +481,7 @@ func _on_host_submitted(
 
 
 func _on_join_submitted(payload: JoinPayload) -> void:
-	var target: JoinTarget = null
+	var target: NetwConnectTarget = null
 	if _selected_row != null:
 		target = _selected_row.target
 	if target == null:
@@ -489,7 +490,7 @@ func _on_join_submitted(payload: JoinPayload) -> void:
 
 
 func _on_join_direct_submitted(
-		target: JoinTarget,
+		target: NetwConnectTarget,
 		payload: JoinPayload,
 ) -> void:
 	_join_with_preflight(target, payload)
@@ -508,8 +509,8 @@ func _on_session_left() -> void:
 		show()
 
 
-func _on_join_failed(target: JoinTarget, result: BackendPeer.ConnectResult) -> void:
-	if result != null and result.status == BackendPeer.ConnectResult.Status.ABORTED:
+func _on_join_failed(target: NetwConnectTarget, result: NetwConnectResult) -> void:
+	if result != null and result.status == NetwConnectResult.Status.ABORTED:
 		_hide_connecting_overlay()
 		return
 	var msg := ConnectBrowser.format_connect_error(result)
@@ -519,7 +520,7 @@ func _on_join_failed(target: JoinTarget, result: BackendPeer.ConnectResult) -> v
 
 
 func _on_join_progress(
-		_target: JoinTarget,
+		_target: NetwConnectTarget,
 		step: StringName,
 		message: String,
 		ratio: float,
@@ -527,7 +528,7 @@ func _on_join_progress(
 	_connecting_popup.update_progress(step, message, ratio)
 
 
-func _show_connecting_overlay(target: JoinTarget) -> void:
+func _show_connecting_overlay(target: NetwConnectTarget) -> void:
 	_connecting_popup.open_connecting(target)
 	$VBox.modulate.a = 0.5
 
@@ -542,17 +543,17 @@ func _on_popup_cancelled() -> void:
 
 
 func _join_with_preflight(
-		target: JoinTarget,
+		target: NetwConnectTarget,
 		payload: JoinPayload,
 ) -> void:
 	_hide_banner()
 	_last_join_payload = payload
 	_last_username = String(payload.username)
-	if target.backend != null and not target.backend.is_available():
+	if not _connect.is_target_available(target):
 		_show_banner("This transport is not available on this platform.")
 		return
 	var result := _connect.get_result(target)
-	if result != null and result.status == BackendPeer.ProbeResult.Status.INCOMPATIBLE:
+	if result != null and result.status == NetwProbeResult.Status.INCOMPATIBLE:
 		_show_banner(
 			"Incompatible game build; this server runs a different version.",
 		)
@@ -583,27 +584,27 @@ func _hide_banner() -> void:
 		_banner.visible = false
 
 
-func _status_text(result: BackendPeer.ProbeResult) -> String:
+func _status_text(result: NetwProbeResult) -> String:
 	if result == null:
 		return "..."
 	match result.status:
-		BackendPeer.ProbeResult.Status.OK:
+		NetwProbeResult.Status.OK:
 			return "OK"
-		BackendPeer.ProbeResult.Status.BUSY:
+		NetwProbeResult.Status.BUSY:
 			return "BUSY"
-		BackendPeer.ProbeResult.Status.UNREACHABLE:
+		NetwProbeResult.Status.UNREACHABLE:
 			return "UNREACHABLE"
-		BackendPeer.ProbeResult.Status.TIMEOUT:
+		NetwProbeResult.Status.TIMEOUT:
 			return "TIMEOUT"
-		BackendPeer.ProbeResult.Status.UNSUPPORTED:
+		NetwProbeResult.Status.UNSUPPORTED:
 			return "UNSUPPORTED"
-		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
+		NetwProbeResult.Status.INCOMPATIBLE:
 			return "INCOMPATIBLE"
 		_:
 			return "ERROR"
 
 
-func _players_text(result: BackendPeer.ProbeResult) -> String:
+func _players_text(result: NetwProbeResult) -> String:
 	if result == null or result.info == null:
 		return "-"
 	return "%d/%d" % [result.info.players, result.info.max_players]
@@ -621,43 +622,21 @@ func _on_details_join_pressed() -> void:
 	_open_join_for_selected()
 
 
-## Human-readable label for a [BackendPeer] template (class name or
-## resource filename).
-static func format_backend_label(backend: BackendPeer) -> String:
-	if backend == null:
+## Human-readable label for a transport [param scheme], such as
+## [code]&"enet"[/code] -> "Enet". "-" when empty.
+static func format_scheme_label(scheme: StringName) -> String:
+	var text := String(scheme)
+	if text.is_empty():
 		return "-"
-	if backend.has_method("get_display_name"):
-		var custom_name := backend.get_display_name()
-		if not custom_name.is_empty() and custom_name != "Generic":
-			return custom_name
-	var name: String
-	if backend.resource_path.is_empty() or "::" in backend.resource_path:
-		name = _backend_class_name(backend)
-	else:
-		name = backend.resource_path.get_file().get_basename()
-	if name.ends_with("Backend"):
-		name = name.trim_suffix("Backend")
-	elif name.ends_with("_backend"):
-		name = name.trim_suffix("_backend")
-	elif name.ends_with("-backend"):
-		name = name.trim_suffix("-backend")
-	return name
+	return text.capitalize()
 
 
-## Displayable address for [param target] — its explicit address if
-## set, otherwise the backend's join URL / address. "-" when nothing
-## is known.
-static func format_address(target: JoinTarget) -> String:
+## Displayable address for [param target]. Either its explicit address, or "-".
+static func format_address(target: NetwConnectTarget) -> String:
 	if target == null:
 		return "-"
 	var address := target.address.strip_edges()
-	if not address.is_empty():
-		return address
-	if target.backend == null:
-		return "-"
-	if target.backend.has_method("build_url"):
-		return str(target.backend.call("build_url", ""))
-	return target.backend.get_join_address()
+	return address if not address.is_empty() else "-"
 
 
 ## Label for a [SceneNodePath] spawner option in the picker.
@@ -670,21 +649,19 @@ static func format_spawner_label(path: SceneNodePath) -> String:
 
 
 ## Returns a user-friendly error string for [param result].
-##
-## Maps the [BackendPeer.ConnectResult] status and details to friendly descriptions.
-static func format_connect_error(result: BackendPeer.ConnectResult) -> String:
+static func format_connect_error(result: NetwConnectResult) -> String:
 	if result == null:
 		return "Unknown error."
 	match result.status:
-		BackendPeer.ConnectResult.Status.OK:
+		NetwConnectResult.Status.OK:
 			return "Success."
-		BackendPeer.ConnectResult.Status.TIMED_OUT:
+		NetwConnectResult.Status.TIMED_OUT:
 			return "Connection timed out."
-		BackendPeer.ConnectResult.Status.REFUSED:
+		NetwConnectResult.Status.REFUSED:
 			return "Connection refused."
-		BackendPeer.ConnectResult.Status.ABORTED:
+		NetwConnectResult.Status.ABORTED:
 			return "Connection aborted by user."
-		BackendPeer.ConnectResult.Status.UNREACHABLE:
+		NetwConnectResult.Status.UNREACHABLE:
 			match result.detail:
 				&"TURN_UNREACHABLE":
 					return "Relay server unreachable."
@@ -708,8 +685,8 @@ static func format_connect_error(result: BackendPeer.ConnectResult) -> String:
 			return "Connection failed."
 
 
-## Returns an optional second line for useful [BackendPeer.ConnectResult] diagnostics.
-static func format_connect_detail(result: BackendPeer.ConnectResult) -> String:
+## Returns an optional second line for useful [NetwConnectResult] diagnostics.
+static func format_connect_detail(result: NetwConnectResult) -> String:
 	if result == null:
 		return ""
 	var stats: Dictionary = result.diagnostics.get("candidates", { })
@@ -723,10 +700,3 @@ static func format_connect_detail(result: BackendPeer.ConnectResult) -> String:
 	if bool(result.diagnostics.get("relay_used", false)):
 		return "Only relay candidates were gathered."
 	return ""
-
-
-static func _backend_class_name(backend: BackendPeer) -> String:
-	var script := backend.get_script()
-	if script and not script.get_global_name().is_empty():
-		return script.get_global_name()
-	return backend.get_class()

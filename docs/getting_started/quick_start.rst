@@ -147,7 +147,7 @@ where they want to spawn:
 
         var join := JoinPayload.new()
         join.username = "alice"
-        join.spawn = EntitySpawnPolicy.from_scene_node_path(spawner_path).to_dict()
+        join.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawner_path)
 
         var target := JoinTarget.new()
         target.backend = client.backend
@@ -163,12 +163,14 @@ call :ref:`join() <class_MultiplayerTree_method_join>` instead.
 
 .. tip::
 
-    Assigning the tree's :ref:`spawn_policy <class_MultiplayerTree_property_spawn_policy>`
-    to an :ref:`EntitySpawnPolicy <class_EntitySpawnPolicy>` (as
-    ``JoinPayload.spawn`` does above through ``EntitySpawnPolicy.from_scene_node_path``)
-    is what makes joining players spawn automatically. Leave ``spawn_policy``
-    unset to control spawning yourself from
-    :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>` instead.
+    The built-in :ref:`NetwDefaultJoin <class_NetwDefaultJoin>` handler spawns a
+    joining player at the template named by
+    :ref:`arg_values <class_JoinPayload_property_arg_values>`, so filling those
+    args is what makes players spawn automatically. Send no args to control
+    spawning yourself from
+    :ref:`participant_joined <class_MultiplayerTree_signal_participant_joined>`, or
+    register a custom server handler with
+    :ref:`Netw.configure_join() <class_Netw_method_configure_join>`.
 
 Press :kbd:`F5` to launch the project. Then, from the editor, choose
 :menu:`Debug > Run Multiple Instances` and set it to ``2``. Run the project

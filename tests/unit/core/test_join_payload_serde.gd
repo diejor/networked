@@ -1,7 +1,8 @@
 ## Scalar round-trip tests for [JoinPayload].
 ##
 ## Covers the fields whose serialization is a pure value copy: username,
-## peer_id, is_debug, and the opaque [member JoinPayload.spawn] dictionary.
+## peer_id, is_debug, and the wire-encoded join args ([member JoinPayload.arg_bytes]
+## plus [member JoinPayload.schema_hash]).
 class_name TestJoinPayloadSerde
 extends NetwTestSuite
 
@@ -46,37 +47,36 @@ func test_default_is_debug_is_false() -> void:
 	assert_that(restored.is_debug).is_false()
 
 
-func test_empty_spawn_round_trips_to_empty() -> void:
-	# A payload with no spawn intent must deserialize into an empty
-	# dictionary, not null and not a stale value.
+func test_empty_args_round_trip_to_empty() -> void:
+	# A payload with no join intent must deserialize into empty arg bytes and a
+	# zero schema hash, not null and not a stale value.
 	var original := JoinPayload.new()
 	original.username = &"valeria"
 
 	var restored := _round_trip(original)
-	assert_that(restored.spawn).is_equal({ })
+	assert_that(restored.arg_bytes.is_empty()).is_true()
+	assert_int(restored.schema_hash).is_equal(0)
 
 
-func test_spawn_dict_round_trips() -> void:
-	# The opaque spawn dictionary (a SpawnPolicy.to_dict payload) must survive
-	# serialize/deserialize verbatim, including StringName and NodePath values.
+func test_arg_bytes_and_hash_round_trip() -> void:
+	# The encoded join args and their schema hash must survive
+	# serialize/deserialize verbatim.
 	var original := JoinPayload.new()
 	original.username = &"valeria"
-	original.spawn = EntitySpawnPolicy.from_scene_node_path(
-		_spawner_path(&"Level1", "Players/PlayerRoot"),
-	).to_dict()
+	original.arg_bytes = PackedByteArray([3, 1, 4, 1, 5, 9])
+	original.schema_hash = 987654321
 
 	var restored := _round_trip(original)
-	assert_that(StringName(restored.spawn.get("scene_name"))).is_equal(&"Level1")
-	assert_that(restored.spawn.get("spawner_path")) \
-			.is_equal(NodePath("Players/PlayerRoot"))
-	assert_that(restored.spawn.get(SpawnPolicy._POLICY_SCRIPT_KEY)) \
-			.is_equal("EntitySpawnPolicy")
+	assert_that(restored.arg_bytes).is_equal(PackedByteArray([3, 1, 4, 1, 5, 9]))
+	assert_int(restored.schema_hash).is_equal(987654321)
 
 
-func _spawner_path(scene_name: StringName, node_path: String) -> SceneNodePath:
-	# from_scene_node_path reads get_scene_name()/node_path; a UID-less path is
-	# enough to exercise the dictionary round trip without touching disk.
-	var snp := SceneNodePath.new()
-	snp.scene_path = "res://%s.tscn" % scene_name
-	snp.node_path = node_path
-	return snp
+func test_arg_values_are_transient() -> void:
+	# arg_values is the live client-side input encoded by the session before
+	# transmission, so it must not itself ride the wire.
+	var original := JoinPayload.new()
+	original.username = &"valeria"
+	original.arg_values = [&"Level1", NodePath("Players/PlayerRoot")]
+
+	var restored := _round_trip(original)
+	assert_that(restored.arg_values).is_equal([])

@@ -64,19 +64,32 @@ func refresh() -> void:
 func _resolve() -> SubViewport:
 	if not _tree:
 		return null
-	if _tree.role == MultiplayerTree.Role.NONE:
+	if _tree.role == NetwSessionInterface.Role.NONE:
 		return null
-	if _tree.role == MultiplayerTree.Role.CLIENT:
+	if _tree.role == NetwSessionInterface.Role.CLIENT:
 		return _fallback
-	if _tree.role != MultiplayerTree.Role.LISTEN_SERVER:
+	if _tree.role != NetwSessionInterface.Role.LISTEN_SERVER:
 		return null
 
 	var player := _find_local_player()
 	if is_instance_valid(player):
-		var scene := MultiplayerTree.scene_for_node(player)
+		var scene := MultiplayerScene.of(player)
 		var viewport := scene as Node as SubViewport if scene else null
 		if viewport:
 			return viewport
+	return _local_scene_viewport()
+
+
+# With no local player entity yet (a lobby roster, a between-scenes host, a
+# spectator), presents the scene the local participant was admitted to rather
+# than an arbitrary active scene, so the host window matches
+# [member NetwSceneInterface.current_scene] instead of the first spawned world.
+func _local_scene_viewport() -> SubViewport:
+	var api := _tree.api if _tree else null
+	var current := api.scenes.current_scene if api else null
+	var viewport := current as Node as SubViewport if current else null
+	if viewport:
+		return viewport
 	return _find_active_viewport()
 
 
@@ -106,7 +119,7 @@ func _find_local_player() -> Node:
 
 
 func _find_active_viewport() -> SubViewport:
-	if not _tree or _tree.role != MultiplayerTree.Role.LISTEN_SERVER:
+	if not _tree or _tree.role != NetwSessionInterface.Role.LISTEN_SERVER:
 		return null
 	var sm := _tree.get_service(MultiplayerSceneManager)
 	if not sm:
@@ -140,6 +153,8 @@ func _subscribe_tree() -> void:
 		_tree.session_ended.connect(_on_session_ended)
 	if not _tree.local_player_changed.is_connected(_on_local_player_changed):
 		_tree.local_player_changed.connect(_on_local_player_changed)
+	if not _tree.local_scene_changed.is_connected(_on_local_scene_changed):
+		_tree.local_scene_changed.connect(_on_local_scene_changed)
 	_subscribe_scene_manager()
 
 
@@ -152,11 +167,13 @@ func _unsubscribe_tree() -> void:
 		_tree.session_ended.disconnect(_on_session_ended)
 	if _tree.local_player_changed.is_connected(_on_local_player_changed):
 		_tree.local_player_changed.disconnect(_on_local_player_changed)
+	if _tree.local_scene_changed.is_connected(_on_local_scene_changed):
+		_tree.local_scene_changed.disconnect(_on_local_scene_changed)
 	_unsubscribe_scene_manager()
 
 
 func _subscribe_scene_manager() -> void:
-	if not _tree or _tree.role != MultiplayerTree.Role.LISTEN_SERVER:
+	if not _tree or _tree.role != NetwSessionInterface.Role.LISTEN_SERVER:
 		return
 	var sm := _tree.get_service(MultiplayerSceneManager)
 	if not sm:
@@ -240,6 +257,10 @@ func _unwatch_local_player() -> void:
 func _on_local_player_changed(player: NetwEntity) -> void:
 	if player != null and is_instance_valid(player.owner):
 		_watch_local_player(player.owner)
+	_refresh_deferred()
+
+
+func _on_local_scene_changed(_from: NetwScene, _to: NetwScene) -> void:
 	_refresh_deferred()
 
 

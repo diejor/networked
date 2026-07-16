@@ -1,73 +1,14 @@
 [gd_scene format=3 uid="uid://bi445hl7e416b"]
 
-[ext_resource type="Script" uid="uid://cgyucu72xh732" path="res://addons/networked/transport/websocket_backend.gd" id="2_7ue45"]
 [ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
-[ext_resource type="Script" uid="uid://c23dshrfms8i3" path="res://addons/networked/session/spawn/entity_spawn_policy.gd" id="3_873qn"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
-[ext_resource type="Script" uid="uid://pnt2d2aysp0s" path="res://addons/networked/session/debug_join_config.gd" id="5_y6djk"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_03owx"]
-[ext_resource type="Script" uid="uid://di4qtwvgux111" path="res://addons/networked/transport/backend_peer.gd" id="7_7ue45"]
 [ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="8_7ue45"]
-[ext_resource type="Script" uid="uid://dqd358q7xpmeq" path="res://addons/networked/transport/enet_backend.gd" id="8_lpgch"]
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_dgpls"]
-[ext_resource type="Script" uid="uid://covt80wkpucga" path="res://addons/networked/transport/webrtc/tracker_webrtc_backend.gd" id="10_xg3i6"]
-[ext_resource type="Script" uid="uid://bp177r3yltt54" path="res://addons/networked/transport/local/local_backend.gd" id="13_7ehqo"]
-[ext_resource type="Script" uid="uid://wbpaoljt4w77" path="res://addons/networked/addons/nakama/nakama_backend.gd" id="15_bvhe8"]
-
-[sub_resource type="Resource" id="Resource_csjse"]
-script = ExtResource("2_7ue45")
-simulate_lag = true
-one_way_delay_min = 5.0
-one_way_delay_max = 25.0
-lag_packet_loss_percent = 5.0
-metadata/_custom_type_script = "uid://cgyucu72xh732"
-
-[sub_resource type="Resource" id="Resource_433w5"]
-script = ExtResource("3_873qn")
-metadata/_custom_type_script = "uid://c23dshrfms8i3"
-
-[sub_resource type="Resource" id="Resource_873qn"]
-script = ExtResource("3_lgr22")
-scene_path = "uid://bqi7mvxdnvgch"
-node_path = "Player"
-
-[sub_resource type="Resource" id="Resource_p4ss6"]
-script = ExtResource("3_873qn")
-spawn_point = SubResource("Resource_873qn")
-metadata/_custom_type_script = "uid://c23dshrfms8i3"
-
-[sub_resource type="Resource" id="Resource_lfwvc"]
-script = ExtResource("5_y6djk")
-spawn = SubResource("Resource_p4ss6")
-metadata/_custom_type_script = "uid://pnt2d2aysp0s"
-
-[sub_resource type="Resource" id="Resource_k3bnk"]
-script = ExtResource("8_lpgch")
-simulate_lag = true
-one_way_delay_max = 200.0
-lag_packet_loss_percent = 1.0
-metadata/_custom_type_script = "uid://dqd358q7xpmeq"
-
-[sub_resource type="Resource" id="Resource_xg3i6"]
-script = ExtResource("2_7ue45")
-one_way_delay_min = 100.0
-metadata/_custom_type_script = "uid://cgyucu72xh732"
-
-[sub_resource type="Resource" id="Resource_7ehqo"]
-script = ExtResource("10_xg3i6")
-one_way_delay_min = 100.0
-metadata/_custom_type_script = "uid://covt80wkpucga"
-
-[sub_resource type="Resource" id="Resource_y6djk"]
-script = ExtResource("13_7ehqo")
-metadata/_custom_type_script = "uid://bp177r3yltt54"
-
-[sub_resource type="Resource" id="Resource_dgpls"]
-script = ExtResource("15_bvhe8")
-metadata/_custom_type_script = "uid://wbpaoljt4w77"
+[ext_resource type="Script" uid="uid://did8chdklg30f" path="res://examples/quick_start/scene_change_policy.gd" id="16_scene_change"]
 
 [sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
@@ -78,30 +19,28 @@ node_path = "Player"
 
 [node name="Client" type="Node" parent="." unique_id=185172770]
 script = ExtResource("2_r0du0")
-backend = SubResource("Resource_csjse")
 app_id = &"6fd508jx9fxvnyf"
-spawn_policy = SubResource("Resource_433w5")
-debug_join = SubResource("Resource_lfwvc")
 metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
 
 [node name="MultiplayerClock" type="Node" parent="Client" unique_id=498939000]
 script = ExtResource("7_03owx")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="MultiplayerSceneManager" type="MultiplayerSpawner" parent="Client" unique_id=726132212]
-_spawnable_scenes = PackedStringArray("uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77")
-spawn_path = NodePath(".")
+[node name="MultiplayerSceneManager" type="Node" parent="Client" unique_id=726132212]
 script = ExtResource("7_trn2v")
-scene_config/Level1/load_mode = 1
-scene_config/Level1/empty_action = 1
-scene_config/Level2/load_mode = 1
-scene_config/Level2/empty_action = 1
+scene_paths = Array[String](["uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77"])
+initial_scene_paths = Array[String](["uid://bqi7mvxdnvgch"])
+concurrency = 1
 metadata/_custom_type_script = "uid://lb7h272e5fhb"
+
+[node name="SceneChangePolicy" type="Node" parent="Client" unique_id=1526465286]
+script = ExtResource("16_scene_change")
 
 [node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
 [node name="WebTorrentDirectory" type="Node" parent="Client" unique_id=667483632]
 script = ExtResource("8_xoeqs")
+signaling_namespace = null
 browser_filter_uid = "networked-example-quick-start"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
@@ -123,6 +62,5 @@ offset_left = -442.0
 offset_top = -247.0
 offset_right = 442.0
 offset_bottom = 247.0
-backend_templates = Array[ExtResource("7_7ue45")]([SubResource("Resource_k3bnk"), SubResource("Resource_xg3i6"), SubResource("Resource_7ehqo"), SubResource("Resource_y6djk"), SubResource("Resource_dgpls")])
 spawner_options = Array[ExtResource("3_lgr22")]([SubResource("Resource_2dmkd")])
 server_list_path = "user://quick_start/servers.tres"

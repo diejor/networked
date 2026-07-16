@@ -117,9 +117,9 @@ URL or transport-specific fields.
 A typical local flow looks like this:
 
 1. Validate the payload (username non-empty, spawner path resolvable).
-2. Run the auth pipeline on the payload, if an
-   :ref:`auth_provider <class_MultiplayerTree_property_auth_provider>` is
-   assigned.
+2. Run the auth pipeline on the payload, if a
+   :ref:`NetwAuthFlow <class_NetwAuthFlow>` is registered with
+   :ref:`Netw.configure_auth() <class_Netw_method_configure_auth>`.
 3. (:ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` only) call
    :ref:`probe_server_info() <class_BackendPeer_method_probe_server_info>`
    against the address. An :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`

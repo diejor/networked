@@ -21,15 +21,15 @@ func bits(p_bits: int) -> NetwQuantizeAngle:
 	return self
 
 
-func supports_type(type: Variant.Type) -> bool:
+func _supports_type(type: Variant.Type) -> bool:
 	return type in [TYPE_FLOAT, TYPE_INT]
 
 
-## Implements [method NetwQuantize.write], wrapping the angle from 0
+## Implements [method NetwQuantize._write], wrapping the angle from 0
 ## to [constant @GDScript.TAU] before packing it into [member bit_count] bits.
-func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
+func _write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	assert(
-		supports_type(typeof(value) as Variant.Type),
+		_supports_type(typeof(value) as Variant.Type),
 		"NetwQuantizeAngle: Unsupported type %s." % type_string(typeof(value)),
 	)
 	var levels := 1 << bit_count
@@ -37,12 +37,12 @@ func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	w.put_bits(int(round(f * levels)) % levels, bit_count)
 
 
-## Implements [method NetwQuantize.read], decoding the angle back
+## Implements [method NetwQuantize._read], decoding the angle back
 ## from 0 to [constant @GDScript.TAU]. The angle is scalar, so
 ## [param type] must be scalar.
-func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
+func _read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeAngle: Unsupported type %s." % type_string(type),
 	)
 	var q := r.get_bits(bit_count)
@@ -50,21 +50,21 @@ func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	return int(round(angle)) if type == TYPE_INT else angle
 
 
-## Implements [method NetwQuantize.bit_width]: always [member bit_count],
+## Implements [method NetwQuantize._bit_width]: always [member bit_count],
 ## independent of [param type].
-func bit_width(type: Variant.Type) -> int:
+func _bit_width(type: Variant.Type) -> int:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeAngle: Unsupported type %s." % type_string(type),
 	)
 	return bit_count
 
 
-## Implements [method NetwQuantize.max_error]: half the angular resolution
+## Implements [method NetwQuantize._max_error]: half the angular resolution
 ## ([code]TAU / 2^bits[/code]) in radians.
-func max_error(type: Variant.Type) -> float:
+func _max_error(type: Variant.Type) -> float:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeAngle: Unsupported type %s." % type_string(type),
 	)
 	return TAU / float(1 << bit_count) * 0.5

@@ -4,13 +4,13 @@ extends RefCounted
 
 var tree_name: String
 var username: String = ""
-var role: MultiplayerTree.Role = MultiplayerTree.Role.NONE
+var role: NetwSessionInterface.Role = NetwSessionInterface.Role.NONE
 var is_server: bool = false
 var backend_class: String = ""
 var rid: String = ""
 var peer_id: int = 0
 
-## True only once the tree reaches [constant MultiplayerTree.State.ONLINE]. The
+## True only once the tree reaches [constant NetwSessionInterface.State.ONLINE]. The
 ## offline phase of two-phase registration reports [code]false[/code] so the
 ## editor shows the tree as not-yet-connected instead of assuming registration
 ## implies a live peer.
@@ -27,7 +27,7 @@ func to_dict() -> Dictionary:
 		"tree_name": tree_name,
 		"username": username,
 		"role": role,
-		"role_name": MultiplayerTree.Role.keys()[role],
+		"role_name": NetwSessionInterface.Role.keys()[role],
 		"peer_id": peer_id,
 		"online": online,
 	}

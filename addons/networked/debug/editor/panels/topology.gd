@@ -124,7 +124,7 @@ func _apply_identity(d: Dictionary) -> void:
 	var peer_id: int = d.get("peer_id", 0)
 	var scene: String = d.get("scene_name", "-")
 	var role := _role_from_payload(d)
-	var mode_str: String = d.get("role_name", MultiplayerTree.Role.keys()[role])
+	var mode_str: String = d.get("role_name", NetwSessionInterface.Role.keys()[role])
 
 	var username: String = d.get("username", "-")
 
@@ -139,12 +139,12 @@ func _apply_identity(d: Dictionary) -> void:
 		_node_btn.disabled = node_path.is_empty() or not on_node_inspect.is_valid()
 
 
-func _role_from_payload(d: Dictionary) -> MultiplayerTree.Role:
+func _role_from_payload(d: Dictionary) -> NetwSessionInterface.Role:
 	if d.has("role"):
-		return d.get("role", MultiplayerTree.Role.NONE)
+		return d.get("role", NetwSessionInterface.Role.NONE)
 	if d.get("is_server", false):
-		return MultiplayerTree.Role.DEDICATED_SERVER
-	return MultiplayerTree.Role.CLIENT
+		return NetwSessionInterface.Role.DEDICATED_SERVER
+	return NetwSessionInterface.Role.CLIENT
 
 # --- Synchronizer tree --------------------------------------------------------
 

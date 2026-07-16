@@ -12,12 +12,12 @@ var delete_calls: Array[Dictionary] = []
 var _store: Dictionary = { }
 
 
-func initialize(schema: Dictionary, slot: String = "") -> Error:
+func _initialize(schema: Dictionary, slot: String = "") -> Error:
 	init_calls.append({ schema = schema, slot = slot })
 	return OK
 
 
-func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	upsert_calls.append({ table = table, id = id, data = data.duplicate() })
 	if not _store.has(table):
 		_store[table] = { }
@@ -29,14 +29,14 @@ func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	return OK
 
 
-func find_by_id(table: StringName, id: StringName) -> Dictionary:
+func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	find_calls.append({ table = table, id = id })
 	if not _store.has(table):
 		return { }
 	return (_store[table].get(id, { }) as Dictionary).duplicate()
 
 
-func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	if not _store.has(table):
 		return []
 	var results: Array[Dictionary] = []
@@ -52,7 +52,7 @@ func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	return results
 
 
-func delete(table: StringName, id: StringName) -> Error:
+func _delete(table: StringName, id: StringName) -> Error:
 	delete_calls.append({ table = table, id = id })
 	if _store.has(table):
 		_store[table].erase(id)

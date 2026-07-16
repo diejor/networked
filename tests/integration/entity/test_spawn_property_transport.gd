@@ -18,7 +18,7 @@ func before_test() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 	client0 = await harness.add_client()

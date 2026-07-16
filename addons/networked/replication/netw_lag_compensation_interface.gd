@@ -174,6 +174,16 @@ func _api() -> NetwMultiplayer:
 	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
 
 
+## Applies [param config] to the engine and binds [param node] as the
+## configurator. Called by [NetwMultiplayer] when a [LagCompensation] registers
+## its [NetwLagCompensationConfig] through
+## [method MultiplayerAPI.object_configuration_add].
+func configure(node: LagCompensation, config: NetwLagCompensationConfig) -> void:
+	_node = node
+	max_future_action_ticks = config.max_future_action_ticks
+	input_gate_deadline_ticks = config.input_gate_deadline_ticks
+
+
 ## True once a [LagCompensation] configurator has registered. Until then every
 ## query returns its safe empty result and every action is denied.
 func is_configured() -> bool:

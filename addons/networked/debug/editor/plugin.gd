@@ -162,7 +162,7 @@ func _on_peer_registered(
 		peer_key: String,
 		_display_name: String,
 		tree_name: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 		_color: Color,
 		is_remote: bool,
 		_peer_id: int,
@@ -190,7 +190,7 @@ func _on_peer_registered(
 # [br][br]
 # [signal DebuggerSession.peer_identity_changed] fires both for a username
 # edit and for a role transition (e.g. an offline tree at
-# [constant MultiplayerTree.Role.NONE] finishing its connect). A username-only
+# [constant NetwSessionInterface.Role.NONE] finishing its connect). A username-only
 # change resolves to the same base_id and is a no-op. A role change assigns a
 # fresh stable_id and migrates any pin/geometry state so a tree registered
 # offline keeps its window treatment once it goes live.
@@ -210,7 +210,7 @@ func _on_peer_identity_changed(
 	if info.is_empty():
 		return
 
-	var role: MultiplayerTree.Role = info.get("role", MultiplayerTree.Role.NONE)
+	var role: NetwSessionInterface.Role = info.get("role", NetwSessionInterface.Role.NONE)
 	var tree_name: String = info.get("tree_name", "")
 	var new_base := _base_stable_id_for(peer_key, tree_name, role)
 	var old_sid: String = _peer_stable_id.get(peer_key, "")
@@ -249,10 +249,10 @@ func _migrate_stable_id(old_sid: String, new_sid: String) -> void:
 func _base_stable_id_for(
 		peer_key: String,
 		tree_name: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 ) -> String:
 	var source_path: String = peer_key.get_slice("|", 0)
-	var role_name: String = MultiplayerTree.Role.keys()[role].to_lower()
+	var role_name: String = NetwSessionInterface.Role.keys()[role].to_lower()
 	return "%s|%s|%s" % [source_path, tree_name, role_name]
 
 

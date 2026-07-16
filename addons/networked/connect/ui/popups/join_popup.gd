@@ -56,7 +56,7 @@ func _on_confirm() -> void:
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"
 	var spawner := _selected_spawner()
 	if spawner != null:
-		payload.spawn = EntitySpawnPolicy.from_scene_node_path(spawner).to_dict()
+		payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawner)
 
 	hide()
 	submitted.emit(payload)

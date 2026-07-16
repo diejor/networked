@@ -72,8 +72,8 @@ func join_game(ip: String, _player_name: String) -> void:
 	var jp := JoinPayload.new()
 	jp.username = _player_name
 
-	var target := JoinTarget.new()
-	target.backend = ctx.backend
+	var target := NetwConnectTarget.new()
+	target.scheme = ctx.tree.scheme
 	target.address = ip
 	ctx.join(target, jp)
 

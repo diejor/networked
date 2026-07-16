@@ -49,7 +49,7 @@ var _then_callbacks: Array[Callable] = []
 var _catch_callbacks: Array[Callable] = []
 
 
-## Initializes the group promise, waiting on responses from [param peers].
+# Initializes the group promise, waiting on responses from peers.
 func _init(peers: Array[int]) -> void:
 	expected_peers = peers.duplicate()
 	if expected_peers.is_empty():

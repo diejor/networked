@@ -174,7 +174,7 @@ static func _encode_value(
 		quantizer: NetwQuantize,
 ) -> void:
 	if quantizer:
-		quantizer.write(w, value)
+		quantizer._write(w, value)
 		return
 	var t := _type_byte(value)
 	w.put_aligned_u8(t)
@@ -212,7 +212,7 @@ static func _decode_value(
 		quantizer: NetwQuantize,
 ) -> Variant:
 	if quantizer:
-		return quantizer.read(r, type as Variant.Type)
+		return quantizer._read(r, type as Variant.Type)
 	var t := r.get_aligned_u8()
 	match t:
 		T_BOOL:

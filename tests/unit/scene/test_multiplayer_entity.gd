@@ -41,12 +41,12 @@ func test_bind_and_spawn_identity_envelope() -> void:
 	var netw: Dictionary = data["_netw"]
 	var spawn_identity := NetwSpawn.spawn_identity(data)
 
-	assert_that(NetwEntity._spawn_identity_error(data)).is_empty()
-	assert_that(NetwEntity._is_spawn_envelope(NetwEntity._spawn_envelope(rj))) \
+	assert_that(NetwSpawn._spawn_identity_error(data)).is_empty()
+	assert_that(NetwSpawn._is_spawn_envelope(NetwSpawn._spawn_envelope(rj))) \
 			.is_true()
-	assert_that(NetwEntity._is_spawn_envelope({ })).is_false()
+	assert_that(NetwSpawn._is_spawn_envelope({ })).is_false()
 	assert_that(
-		NetwEntity._is_spawn_envelope(
+		NetwSpawn._is_spawn_envelope(
 			{
 				"_netw": { "entity_id": "", "peer_id": 42 },
 				"data": { },
@@ -66,7 +66,7 @@ func test_wrap_spawn_binds_identity_and_strips_envelope() -> void:
 	rj.username = &"valeria"
 	rj.peer_id = 42
 	var payload := PackedByteArray([1, 2, 3])
-	var envelope := NetwEntity._spawn_envelope(rj, payload)
+	var envelope := NetwSpawn._spawn_envelope(rj, payload)
 	var received: Array[Variant] = []
 	var wrapped := NetwSpawn.wrap_spawn(
 		func(spawn_payload: Variant) -> Node:
@@ -227,7 +227,7 @@ func test_envelope_route_binds_before_tree_entry() -> void:
 	var rj := ResolvedJoin.new()
 	rj.username = &"player1"
 	rj.peer_id = 42
-	var envelope := NetwEntity._spawn_envelope(rj, null, route)
+	var envelope := NetwSpawn._spawn_envelope(rj, null, route)
 
 	# 3. Simulate wrap_spawn callback
 	var spawn_identity := NetwSpawn.spawn_identity(envelope)

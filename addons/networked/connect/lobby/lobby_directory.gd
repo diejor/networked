@@ -1,19 +1,19 @@
 ## Service contract for lobby discovery providers.
 ##
 ## A [LobbyDirectory] lists, hosts, and joins provider lobbies. It never installs
-## peers on the tree. [method host_lobby] and [method join_lobby_peer] return a
+## peers on the tree. [method _host_lobby] and [method _join_lobby_peer] return a
 ## connected [MultiplayerPeer] for the caller to adopt.
 ##
 ## [br][br]
-## [ConnectSession] collects every [LobbyDirectory] service through
-## [method MultiplayerTree.get_services]. [method capabilities] tells a browser
+## [NetwDiscovery] binds every [LobbyDirectory] service through
+## [method NetwMultiplayer.get_services]. [method _capabilities] tells a browser
 ## which controls the provider can honor.
 ## [codeblock]
 ## MultiplayerTree
 ## └── LobbyDirectory
-##     ├── list_lobbies() -> lobby_list_updated
-##     ├── host_lobby(options) -> MultiplayerPeer
-##     └── join_lobby_peer(id) -> MultiplayerPeer
+##     ├── _list_lobbies() -> lobby_list_updated
+##     ├── _host_lobby(options) -> MultiplayerPeer
+##     └── _join_lobby_peer(id) -> MultiplayerPeer
 ## [/codeblock]
 @abstract
 class_name LobbyDirectory
@@ -34,7 +34,7 @@ enum Visibility {
 	PRIVATE,
 }
 
-## Bit flags returned by [method capabilities].
+## Bit flags returned by [method _capabilities].
 ##
 ## Browsers use [method supports] to hide controls the provider cannot honor.
 ## [codeblock]
@@ -55,7 +55,7 @@ enum Capability {
 ## Plain data for one discoverable lobby.
 ##
 ## [signal lobby_list_updated] emits arrays of [LobbyDirectory.LobbyInfo].
-## [method make_join_target] turns one entry into a [JoinTarget].
+## [method _make_connect_target] turns one entry into a [NetwConnectTarget].
 ## [codeblock]
 ## LobbyInfo
 ## ├── id
@@ -89,7 +89,7 @@ class LobbyInfo:
 	## When [code]false[/code], joining is expected to fail.
 	@export var joinable: bool = true
 
-	## Provider-specific metadata copied into [JoinTarget].
+	## Provider-specific metadata copied into [NetwConnectTarget].
 	@export var metadata: Dictionary = { }
 
 
@@ -116,7 +116,7 @@ class LobbyInfo:
 		return info
 
 
-## Inputs to [method host_lobby].
+## Inputs to [method _host_lobby].
 ##
 ## A directory reads only the fields its provider can honor. [member max_players]
 ## of [code]0[/code] means "use the directory default".
@@ -151,7 +151,7 @@ class HostOptions:
 		opts.max_players = max_players
 		return opts
 
-## Emitted after [method list_lobbies] resolves.
+## Emitted after [method _list_lobbies] resolves.
 ##
 ## UIs should replace their current rows with [param lobbies].
 signal lobby_list_updated(lobbies: Array[LobbyDirectory.LobbyInfo])
@@ -167,25 +167,25 @@ signal provider_unavailable(reason: String)
 ##
 ## The base directory advertises nothing. A browser calls [method supports] to
 ## gate controls.
-func capabilities() -> int:
+func _capabilities() -> int:
 	return 0
 
 
-## Returns [code]true[/code] when [method capabilities] includes [param cap].
+## Returns [code]true[/code] when [method _capabilities] includes [param cap].
 func supports(cap: Capability) -> bool:
-	return (capabilities() & cap) != 0
+	return (_capabilities() & cap) != 0
 
 
 ## Requests an updated lobby list.
 ##
 ## Results arrive through [signal lobby_list_updated].
 @abstract
-func list_lobbies() -> void
+func _list_lobbies() -> void
 
 
 ## Leaves the current lobby, if any. Idempotent.
 @abstract
-func leave_lobby() -> void
+func _leave_lobby() -> void
 
 
 ## Resolves [param peer_id] to a display name.
@@ -202,22 +202,44 @@ func get_local_member_name() -> String:
 	return "Player"
 
 
-## Returns a [JoinTarget] for [param lobby].
+
+## Returns a pure-data [NetwConnectTarget] for [param lobby].
 ##
-## The target should carry the provider address and matching [BackendPeer].
-@abstract
-func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget
+## [NetwDiscovery] reads this to turn a discovered lobby into a browse row that
+## [NetwConnector] can join. The base maps [method _scheme] and
+## [method _lobby_address] into the target and copies the lobby metadata, so a
+## directory whose lobbies join by numeric id needs only to override
+## [method _scheme].
+func _make_connect_target(lobby: LobbyDirectory.LobbyInfo) -> NetwConnectTarget:
+	var target := NetwConnectTarget.new()
+	target.scheme = _scheme()
+	target.address = _lobby_address(lobby)
+	target.display_name = lobby.lobby_name
+	target.metadata = lobby.metadata.duplicate()
+	return target
+
+
+## Returns the transport scheme this directory's lobbies join through, such as
+## [code]&"steam"[/code]. Empty on the base, which no transport recognizes.
+func _scheme() -> StringName:
+	return &""
+
+
+## Returns the transport address [method _make_connect_target] writes for
+## [param lobby]. Defaults to the lobby id, which the id-addressed providers use.
+func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
+	return str(lobby.id)
 
 
 ## Creates a lobby and returns a connected host [MultiplayerPeer].
 ##
 ## Returns [code]null[/code] on failure.
 @abstract
-func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer
+func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer
 
 
 ## Joins an existing lobby and returns a connected [MultiplayerPeer].
 ##
 ## Returns [code]null[/code] on failure.
 @abstract
-func join_lobby_peer(lobby_id: int) -> MultiplayerPeer
+func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer

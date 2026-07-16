@@ -106,7 +106,8 @@ yourself. The
 :ref:`join_or_host() <class_MultiplayerTree_method_join_or_host>` flows
 do it for you. But you can intercept any step:
 
-- Provide an :ref:`auth_provider <class_NetwAuth>` to validate
+- Register a :ref:`NetwAuthFlow <class_NetwAuthFlow>` with
+  :ref:`Netw.configure_auth() <class_Netw_method_configure_auth>` to validate
   credentials before the join is accepted.
 - Subclass :ref:`SessionRoster <class_SessionRoster>` to customise username
   collisions, kick policies, or roster persistence.

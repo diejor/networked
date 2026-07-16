@@ -19,21 +19,25 @@ func _pending_count(state: Dictionary) -> int:
 
 
 func test_probes_do_not_register_peers() -> void:
-	var host := await EnetTestSupport.start_host(self, null, 0.2)
+	var host := await EnetTestSupport.start_host(self, Callable(), 0.2)
 	assert_that(host).is_not_empty()
 
 	var host_tree: MultiplayerTree = host.tree
 	var host_api := host_tree.api
+	var application_packets: Array[PackedByteArray] = []
+	host_api.auth_callback = func(
+			_peer_id: int,
+			data: PackedByteArray,
+	) -> void:
+		application_packets.append(data)
 	host_api.peer_connected.connect(_on_peer_connected)
 	monitor_signals(host_api, false)
 
-	var client_backend := EnetTestSupport.make_client_backend(host.port)
+	var client_tree := EnetTestSupport.make_client_tree(self, host.port)
+	var target := EnetTestSupport.make_connect_target(host.port)
 	for i in 5:
-		var result: BackendPeer.ProbeResult = await client_backend.probe_server_info(
-			"127.0.0.1",
-			1.0,
-		)
-		assert_int(result.status).is_equal(BackendPeer.ProbeResult.Status.OK)
+		var result: NetwProbeResult = await client_tree.connector.probe(target)
+		assert_int(result.status).is_equal(NetwProbeResult.Status.OK)
 		assert_array(host_api.get_peers()).is_empty()
 
 	@warning_ignore("redundant_await")
@@ -43,6 +47,7 @@ func test_probes_do_not_register_peers() -> void:
 
 	assert_array(_connected_peers).is_empty()
 	assert_array(host_api.get_peers()).is_empty()
+	assert_array(application_packets).is_empty()
 
 	host_api.peer_connected.disconnect(_on_peer_connected)
 	await EnetTestSupport.stop_tree(host_tree)
@@ -50,26 +55,32 @@ func test_probes_do_not_register_peers() -> void:
 
 # Helper method to run a single probe query as a regular method. This avoids
 # GDScript lambda capture/closure GC bugs with concurrent asynchronous awaits.
-func _run_probe(backend: ENetBackend, results: Array, state: Dictionary) -> void:
-	var r: BackendPeer.ProbeResult = await backend.probe_server_info("127.0.0.1", 2.0)
+func _run_probe(
+		client_tree: MultiplayerTree,
+		target: NetwConnectTarget,
+		results: Array,
+		state: Dictionary,
+) -> void:
+	var r: NetwProbeResult = await client_tree.connector.probe(target)
 	results.append(r)
 	state.pending -= 1
 
 
 func test_concurrent_probes_drain_and_some_return_busy() -> void:
-	var host := await EnetTestSupport.start_host(self, null, 0.2)
+	var host := await EnetTestSupport.start_host(self, Callable(), 0.2)
 	assert_that(host).is_not_empty()
 
 	var host_tree: MultiplayerTree = host.tree
 	var host_api := host_tree.api
 
-	var client_backend := EnetTestSupport.make_client_backend(host.port)
+	var client_tree := EnetTestSupport.make_client_tree(self, host.port)
+	var target := EnetTestSupport.make_connect_target(host.port)
 	var probe_count := 20
-	var results: Array[BackendPeer.ProbeResult] = []
+	var results: Array[NetwProbeResult] = []
 	var state := { pending = probe_count }
 
 	for i in probe_count:
-		_run_probe(client_backend, results, state)
+		_run_probe(client_tree, target, results, state)
 		await get_tree().process_frame
 
 	@warning_ignore("redundant_await")
@@ -81,9 +92,9 @@ func test_concurrent_probes_drain_and_some_return_busy() -> void:
 	var busy_count := 0
 	for r in results:
 		match r.status:
-			BackendPeer.ProbeResult.Status.OK:
+			NetwProbeResult.Status.OK:
 				ok_count += 1
-			BackendPeer.ProbeResult.Status.BUSY:
+			NetwProbeResult.Status.BUSY:
 				busy_count += 1
 	# Beyond the rate window, the rest are answered BUSY.
 	assert_int(ok_count).is_greater(0)

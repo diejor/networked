@@ -131,7 +131,7 @@ var _participants: Array = []
 
 # Wires the core transport-restriction probe as soon as this script loads, which
 # (because a scene loads all its scripts before instancing any node) happens
-# before any directory checks should_register. So WebRTC/native directories see
+# before any directory checks _should_register. So WebRTC/native directories see
 # the embed verdict and stay dormant in the iframe. A build that never references
 # this class never loads it, so a normal game pays nothing.
 static func _static_init() -> void:
@@ -172,18 +172,18 @@ func device_id() -> String:
 
 # Registration is bound to actually being embedded, so a normal build keeps its
 # usual backends and never pays for the Discord path.
-func should_register() -> bool:
+func _should_register() -> bool:
 	return in_discord()
 
 
-func service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(mt: MultiplayerTree) -> void:
 	if rendezvous == null:
 		Netw.dbg.warn("DiscordActivityService: rendezvous unset.")
 	else:
 		# The rendezvous owns its transport, so it installs whatever core seams
 		# that backend needs. The service never reaches into a backend itself.
 		rendezvous.bind(mt)
-	var nakama_auth := mt.auth_provider as NakamaAuth
+	var nakama_auth := mt.api.session.auth_flow as NakamaAuth
 	if nakama_auth != null:
 		# get_nakama_session() add_childs the session node, which fails if the
 		# tree is still setting up its children when this service registers.
@@ -439,7 +439,7 @@ func _subscribe_activity_events() -> void:
 # Static, lazy embed detection backing NetwService.transport_restricted_probe, so
 # WebRTC/native directories (WebTorrent, Steam) stay dormant in the iframe. It
 # checks the browser instance_id query. Called when a directory checks
-# should_register at enter-tree, by which time JavaScriptBridge is live, so it
+# _should_register at enter-tree, by which time JavaScriptBridge is live, so it
 # never runs JS at class-load time.
 static func _detect_embedded() -> bool:
 	if OS.has_feature("web") or OS.get_name() == "Web":
@@ -545,7 +545,7 @@ func _on_session_dropped() -> void:
 
 
 # Resolves the instance id once through _resolve_instance. Memoized so
-# should_register and the public getters agree.
+# _should_register and the public getters agree.
 func _detect() -> void:
 	if _detected:
 		return

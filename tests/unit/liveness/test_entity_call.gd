@@ -358,7 +358,7 @@ func test_component_table_divergence_guard() -> void:
 	var fake_peer := LocalMultiplayerPeer.new()
 	fake_peer.create_client(2)
 	mt.api.inner.multiplayer_peer = fake_peer
-	mt.role = MultiplayerTree.Role.CLIENT
+	mt.role = NetwSessionInterface.Role.CLIENT
 
 	# Trigger client-side hydrated check
 	entity._on_identity_hydrated()
@@ -462,7 +462,7 @@ func test_txn_book_disconnect_sweep() -> void:
 	api.rpc_interface._txn_book.register(42, promise, 2, 99999)
 
 	# Simulate peer 2 disconnecting
-	api._on_tree_peer_disconnected(2)
+	api._clear_disconnected_peer(2)
 
 	assert_that(promise.is_completed).is_false()
 	assert_that(promise.is_failed).is_true()

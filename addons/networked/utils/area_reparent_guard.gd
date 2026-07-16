@@ -67,6 +67,15 @@ func flush(frames: int = 2) -> void:
 		await tree.physics_frame
 
 
+## Restores the body's [member Node.process_mode] while keeping its collision
+## masks suppressed. Lets a body resume processing (input, physics, a following
+## camera) during a reveal without regaining physics-server overlap, so a later
+## [method release] still clears the phantom-signal window. Idempotent.
+func resume_processing() -> void:
+	if is_instance_valid(_body) and _body.process_mode != _prior_mode:
+		_body.process_mode = _prior_mode
+
+
 ## Restores the body's prior [member Node.process_mode] and collision masks.
 ## Safe to call more than once. Subsequent calls are no-ops.
 func release() -> void:

@@ -102,50 +102,17 @@ func test_activate_scene_falls_back_to_name_when_no_spawn_data() -> void:
 	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
 
 
-func test_freeze_empty_action_applied_after_custom_spawn() -> void:
+func test_custom_spawn_stays_active_while_initially_empty() -> void:
 	_set_spawn_fn(
 		func(_data: Variant) -> Node:
 			return level_builder.packed.instantiate()
 	)
-
-	server_mgr.spawn(level_builder.resource_path)
-	await get_tree().process_frame
-
-	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
-	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
-
-
-func test_destroy_empty_action_removes_scene_after_custom_spawn() -> void:
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			return level_builder.packed.instantiate()
-	)
-	server_mgr.set_scene_lifecycle_policy(
-		level_builder.scene_name,
-		MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		MultiplayerSceneManager.EmptyAction.DESTROY,
-	)
-
-	server_mgr.spawn(level_builder.resource_path)
-	await get_tree().process_frame
-
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
-
-
-func test_keep_active_empty_action_leaves_level_processing_after_custom_spawn(
-) -> void:
-	_set_spawn_fn(
-		func(_data: Variant) -> Node:
-			return level_builder.packed.instantiate()
-	)
-	server_mgr.set_scene_lifecycle_policy(
-		level_builder.scene_name,
-		MultiplayerSceneManager.LoadMode.ON_DEMAND,
-		MultiplayerSceneManager.EmptyAction.KEEP_ACTIVE,
-	)
+	var emptied: Array[MultiplayerScene] = []
+	harness.server().api.scenes.scene_emptied.connect(emptied.append)
 
 	server_mgr.spawn(level_builder.resource_path)
 	await get_tree().process_frame
 
 	var scene := server_mgr.active_scenes.get(level_builder.scene_name) as MultiplayerScene
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
+	assert_array(emptied).is_empty()

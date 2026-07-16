@@ -219,12 +219,12 @@ static func for_node(node: Node) -> NetwInterpolationInterface:
 #region Service
 
 ## Returns the service script type for registration.
-func service_type() -> Script:
+func _service_type() -> Script:
 	return NetwInterpolationInterface
 
 
 ## Connects this service to the session clock and liveness registry.
-func service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(mt: MultiplayerTree) -> void:
 	process_priority = 100
 	if not mt.session_entered.is_connected(_on_session_entered):
 		mt.session_entered.connect(_on_session_entered)
@@ -235,7 +235,7 @@ func service_entered(mt: MultiplayerTree) -> void:
 
 
 ## Disconnects this service from the session clock and liveness registry.
-func service_exiting(mt: MultiplayerTree) -> void:
+func _service_exiting(mt: MultiplayerTree) -> void:
 	if mt.session_entered.is_connected(_on_session_entered):
 		mt.session_entered.disconnect(_on_session_entered)
 	if mt.session_ended.is_connected(_on_session_ended):

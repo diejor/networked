@@ -59,7 +59,7 @@ func _on_peer_registered(
 		peer_key: String,
 		display_name: String,
 		tree_name: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 		color: Color,
 		is_remote: bool,
 		peer_id: int,

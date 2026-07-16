@@ -103,7 +103,7 @@ func _host_and_commit(
 		payload: JoinPayload,
 		wrapper: NakamaWrapper,
 ) -> Error:
-	tree.backend = _target_for("").make_backend_instance()
+	tree.scheme = &"nakama"
 	var opts := LobbyDirectory.HostOptions.make(
 		"Discord Activity",
 		LobbyDirectory.Visibility.PRIVATE,
@@ -211,10 +211,10 @@ func _normalized_device_id() -> String:
 	return device_id.left(128)
 
 
-func _target_for(match_id: String) -> JoinTarget:
-	var target := JoinTarget.new()
+func _target_for(match_id: String) -> NetwConnectTarget:
+	var target := NetwConnectTarget.new()
+	target.scheme = &"nakama"
 	target.display_name = "Discord Activity"
 	target.address = match_id
-	target.backend = NakamaBackend.new()
 	target.metadata = { "instance_match_id": match_id }
 	return target

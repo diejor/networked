@@ -58,6 +58,112 @@ var liveness: NetwLivenessInterface
 ## Visibility and interest facade for this tree. See [NetwInterestInterface].
 var interest: NetwInterestInterface
 
+## The session lifecycle machine, driven by peer assignment. Never
+## [code]null[/code]. See [NetwSessionInterface].
+var session: NetwSessionInterface
+
+## The replicated-scene registry and operation surface. Never
+## [code]null[/code]. See [NetwSceneInterface].
+var scenes: NetwSceneInterface
+
+## Handles application-defined authentication packets after Networked
+## classifies its reserved protocol frames.
+##
+## Networked always owns [member SceneMultiplayer.auth_callback] on
+## [member inner] so same-port probes remain isolated from session peers. Set
+## this callback instead of reaching through [member inner]. Probe packets are
+## consumed internally and every other packet is forwarded unchanged. When
+## set, this callback takes precedence over the configured [NetwAuthFlow].
+var auth_callback: Callable = Callable():
+	set(value):
+		auth_callback = value
+		if session:
+			session.set_auth_callback(value)
+
+## Seconds an authenticating peer may remain pending before Godot disconnects
+## it. Mirrors [member SceneMultiplayer.auth_timeout].
+var auth_timeout: float:
+	get:
+		return inner.auth_timeout
+	set(value):
+		inner.auth_timeout = value
+
+## Root path used by the wrapped replicator for relative node addressing.
+## Mirrors [member SceneMultiplayer.root_path].
+var root_path: NodePath:
+	get:
+		return inner.root_path
+	set(value):
+		inner.root_path = value
+
+## Whether RPC payloads may decode serialized objects.
+## Mirrors [member SceneMultiplayer.allow_object_decoding].
+var allow_object_decoding: bool:
+	get:
+		return inner.allow_object_decoding
+	set(value):
+		inner.allow_object_decoding = value
+
+## Whether new peer connections are rejected.
+## Mirrors [member SceneMultiplayer.refuse_new_connections].
+var refuse_new_connections: bool:
+	get:
+		return inner.refuse_new_connections
+	set(value):
+		inner.refuse_new_connections = value
+
+## Whether the server relays peer packets between clients.
+## Mirrors [member SceneMultiplayer.server_relay].
+var server_relay: bool:
+	get:
+		return inner.server_relay
+	set(value):
+		inner.server_relay = value
+
+## Maximum reliable replication packet size in bytes.
+## Mirrors [member SceneMultiplayer.max_sync_packet_size].
+var max_sync_packet_size: int:
+	get:
+		return inner.max_sync_packet_size
+	set(value):
+		inner.max_sync_packet_size = value
+
+## Maximum unreliable replication packet size in bytes.
+## Mirrors [member SceneMultiplayer.max_delta_packet_size].
+var max_delta_packet_size: int:
+	get:
+		return inner.max_delta_packet_size
+	set(value):
+		inner.max_delta_packet_size = value
+
+## Emitted when Godot begins authenticating [param peer_id]. Application auth
+## code can answer through [method send_auth] and [method complete_auth].
+signal peer_authenticating(peer_id: int)
+
+## Emitted when Godot rejects or times out [param peer_id] during
+## authentication.
+signal peer_authentication_failed(peer_id: int)
+
+## Emitted when a [Node] registers as a session service through
+## [method register_service], so the connect kit and game code can react to a
+## late-added service instead of scanning the tree for it.
+signal service_registered(service: Node)
+
+## Emitted when a service leaves through [method unregister_service].
+signal service_unregistered(service: Node)
+
+# Per-session service registry. Lives on the API so any node reaches it through
+# node.multiplayer with per-branch scoping for free, and a bare API with no tree
+# still answers get_service. See NetwService for the sealed registration base.
+var _services: ServiceRegistry = ServiceRegistry.new()
+
+# The connected-peer roster and per-peer participant handles. They live on the
+# API so a bare session with no tree still answers get_participant and
+# get_peer_context. Participants are keyed by peer id and read their accepted
+# join, identity, and context back through this same API.
+var _roster: SessionRoster = SessionRoster.new()
+var _participants: Dictionary[int, NetwParticipant] = { }
+
 # The one weakref in this design. Resolved through [member tree].
 var _tree_ref: WeakRef
 
@@ -73,9 +179,30 @@ var tree: MultiplayerTree:
 	get:
 		return _tree_ref.get_ref() as MultiplayerTree if _tree_ref else null
 
+# Cache backing for [member root], and the path it was resolved for so a
+# root_path change (mount, adopt_inner) self-invalidates without a reset hook.
+var _root: Node
+var _root_path: NodePath
+
+## The node the replicator roots relative addressing at, resolved from
+## [member inner]'s [member SceneMultiplayer.root_path] the same way the native
+## replicator resolves its own. In every shipped configuration this is the
+## owning [MultiplayerTree], but it stays valid when no tree owns the API. The
+## resolved node is cached and re-resolves only if it was freed or
+## [member SceneMultiplayer.root_path] changed.
+var root: Node:
+	get:
+		if is_instance_valid(_root) and inner.root_path == _root_path:
+			return _root
+		_root_path = inner.root_path
+		var scene_tree := Engine.get_main_loop() as SceneTree
+		_root = scene_tree.root.get_node_or_null(_root_path) if scene_tree else null
+		return _root
+
 
 func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = null) -> void:
 	inner = inner_api if inner_api else SceneMultiplayer.new()
+	var adopted_auth_callback := inner.auth_callback
 	# The tree weakref is set before any interface constructs so an interface
 	# _init can already read api.tree.
 	if owner_tree:
@@ -87,6 +214,16 @@ func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = nul
 	persistence = NetwPersistenceInterface.new(self)
 	liveness = NetwLivenessInterface.new(self)
 	interest = NetwInterestInterface.new(self)
+	session = NetwSessionInterface.new(self)
+	scenes = NetwSceneInterface.new(self)
+	scenes.local_scene_changed.connect(local_scene_changed.emit)
+	session.session_entered.connect(session_entered.emit)
+	session.session_ended.connect(session_ended.emit)
+	session.session_ended.connect(_on_session_ended)
+	session.paused.connect(tree_paused.emit)
+	session.unpaused.connect(tree_unpaused.emit)
+	session.kicked.connect(kicked.emit)
+	auth_callback = adopted_auth_callback
 	# Dead routes drop their unreliable-property sequence records so they never
 	# outlive the entity they track.
 	liveness.entity_dead.connect(replication.clear_route)
@@ -94,6 +231,13 @@ func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = nul
 	# interface, so an inert clock simply never fires it.
 	clock.after_tick.connect(_on_clock_tick)
 	_bind_inner_signals()
+	# A roster row exists for every connected peer, joined or not, so the roster
+	# is native peer truth the join frame only enriches. Retiring the row rides
+	# the same relayed peer_disconnected the freshness books clear on.
+	peer_connected.connect(_ensure_participant_row)
+	# Per-peer teardown rides this extension's own relayed peer_disconnected, so a
+	# bare API with no owning tree still clears freshness books and RPC state.
+	peer_disconnected.connect(_clear_disconnected_peer)
 	if owner_tree:
 		_bind_tree_signals(owner_tree)
 	_session_refs.append(weakref(self))
@@ -129,7 +273,7 @@ static func live_sessions() -> Array[NetwMultiplayer]:
 ## [code]null[/code] off-tree, outside a [MultiplayerTree] branch, or before
 ## the tree has installed its API.
 static func of(node: Node) -> NetwMultiplayer:
-	if not node.is_inside_tree():
+	if node == null or not node.is_inside_tree():
 		return null
 	return node.multiplayer as NetwMultiplayer
 
@@ -147,6 +291,14 @@ func _bind_inner_signals() -> void:
 		inner.connection_failed.connect(_on_inner_connection_failed)
 	if not inner.server_disconnected.is_connected(_on_inner_server_disconnected):
 		inner.server_disconnected.connect(_on_inner_server_disconnected)
+	if not inner.peer_authenticating.is_connected(_on_inner_peer_authenticating):
+		inner.peer_authenticating.connect(_on_inner_peer_authenticating)
+	if not inner.peer_authentication_failed.is_connected(
+		_on_inner_peer_authentication_failed,
+	):
+		inner.peer_authentication_failed.connect(
+			_on_inner_peer_authentication_failed,
+		)
 
 
 func _unbind_inner_signals() -> void:
@@ -162,6 +314,14 @@ func _unbind_inner_signals() -> void:
 		inner.connection_failed.disconnect(_on_inner_connection_failed)
 	if inner.server_disconnected.is_connected(_on_inner_server_disconnected):
 		inner.server_disconnected.disconnect(_on_inner_server_disconnected)
+	if inner.peer_authenticating.is_connected(_on_inner_peer_authenticating):
+		inner.peer_authenticating.disconnect(_on_inner_peer_authenticating)
+	if inner.peer_authentication_failed.is_connected(
+		_on_inner_peer_authentication_failed,
+	):
+		inner.peer_authentication_failed.disconnect(
+			_on_inner_peer_authentication_failed,
+		)
 
 
 # Re-emits [member inner]'s connection-lifecycle signals on this extension, the
@@ -188,12 +348,39 @@ func _on_inner_server_disconnected() -> void:
 	server_disconnected.emit()
 
 
+func _on_inner_peer_authenticating(peer_id: int) -> void:
+	peer_authenticating.emit(peer_id)
+
+
+func _on_inner_peer_authentication_failed(peer_id: int) -> void:
+	peer_authentication_failed.emit(peer_id)
+
+
+## True once [method dispose] has begun a deliberate teardown.
+##
+## The session machine reads this so a peer this extension closes itself during
+## teardown is never mistaken for a spontaneous server crash, which is the only
+## drop that ends the session reactively.
+func is_disposing() -> bool:
+	return _disposing
+
+# Set true the moment dispose() begins, so the session machine can tell a local
+# teardown from a server crash. See is_disposing().
+var _disposing: bool = false
+
+
 ## Breaks the signal-connection cycles between this extension and the
 ## [RefCounted] objects it owns ([member inner], [member clock]) so the whole
 ## group can be released, since a signal connection strong-references its
 ## target. Called by [MultiplayerTree] when the tree is deleted. The extension
 ## is unusable afterwards.
 func dispose() -> void:
+	_disposing = true
+	auth_callback = Callable()
+	if scenes.local_scene_changed.is_connected(local_scene_changed.emit):
+		scenes.local_scene_changed.disconnect(local_scene_changed.emit)
+	scenes.dispose()
+	session.dispose()
 	_unbind_inner_signals()
 	if clock.after_tick.is_connected(_on_clock_tick):
 		clock.after_tick.disconnect(_on_clock_tick)
@@ -201,6 +388,8 @@ func dispose() -> void:
 		liveness.entity_dead.disconnect(replication.clear_route)
 	replication.dispose()
 	rpc_interface.dispose()
+	_services.clear()
+	clear_roster()
 
 
 ## Replaces [member inner] in place, rebinding this same [NetwMultiplayer]
@@ -211,10 +400,51 @@ func dispose() -> void:
 func adopt_inner(new_inner: SceneMultiplayer) -> void:
 	if new_inner == inner:
 		return
+	if new_inner.auth_callback.is_valid():
+		auth_callback = new_inner.auth_callback
 	_unbind_inner_signals()
 	inner = new_inner
 	_bind_inner_signals()
+	session.adopt_inner(inner)
 
+
+## Sends application authentication [param data] to [param peer_id].
+##
+## Forwards to [method SceneMultiplayer.send_auth]. Networked reserves its own
+## framed packets, so application payloads must not use an [AuthProtocol]
+## header.
+func send_auth(peer_id: int, data: PackedByteArray) -> Error:
+	return inner.send_auth(peer_id, data)
+
+
+## Completes local authentication for [param peer_id].
+func complete_auth(peer_id: int) -> Error:
+	return inner.complete_auth(peer_id)
+
+
+## Returns peer ids currently waiting in Godot's authentication phase.
+func get_authenticating_peers() -> PackedInt32Array:
+	return inner.get_authenticating_peers()
+
+
+## Disconnects [param peer_id] from the session.
+func disconnect_peer(peer_id: int) -> void:
+	inner.disconnect_peer(peer_id)
+
+
+## Clears the wrapped [SceneMultiplayer] replication state.
+func clear() -> void:
+	inner.clear()
+
+
+## Sends application bytes through the wrapped [SceneMultiplayer].
+func send_bytes(
+		bytes: PackedByteArray,
+		peer_id: int = 0,
+		mode: MultiplayerPeer.TransferMode = MultiplayerPeer.TRANSFER_MODE_RELIABLE,
+		channel: int = 0,
+) -> Error:
+	return inner.send_bytes(bytes, peer_id, mode, channel)
 
 #region Carrier
 
@@ -281,7 +511,7 @@ var _standalone_acks_out: int = 0
 ## on. Aggregated sends arrive here from
 ## [method NetwReplicationInterface.send_to]. Returns the assigned unreliable
 ## seq, or [code]-1[/code] for a reliable send or a dropped/empty packet, so a
-## caller staging masked-delta rows (§5.6) can key them by the seq that will
+## caller staging masked-delta rows can key them by the seq that will
 ## carry their acknowledgment.
 func send_packet(peer_id: int, bytes: PackedByteArray, reliable: bool) -> int:
 	if bytes.is_empty():
@@ -318,12 +548,12 @@ func send_packet(peer_id: int, bytes: PackedByteArray, reliable: bool) -> int:
 			framed[0] = NetwFrameEnvelope.CARRIER_MAGIC_UNRELIABLE
 			framed.encode_u16(1, seq)
 	framed.append_array(bytes)
+	var transfer_mode := MultiplayerPeer.TRANSFER_MODE_RELIABLE \
+	if reliable else MultiplayerPeer.TRANSFER_MODE_UNRELIABLE
 	inner.send_bytes(
 		framed,
 		peer_id,
-		MultiplayerPeer.TRANSFER_MODE_RELIABLE
-		if reliable
-		else MultiplayerPeer.TRANSFER_MODE_UNRELIABLE,
+		transfer_mode,
 	)
 	return assigned_seq
 
@@ -380,7 +610,7 @@ func _note_inbound_seq(sender: int, seq: int) -> void:
 # Records [param ack] as [param peer]'s confirmation of our sends when it is newer
 # across the u16 half window. The confirmed seq only advances, so a stalled echo
 # from a silent peer holds its baseline rather than corrupting it. Advancing it
-# promotes peer's masked-lane in-flight rows through the pipeline (§5.6); a
+# promotes peer's masked-lane in-flight rows through the pipeline; a
 # stalled ack (this branch not taken) correctly leaves those rows untouched.
 func _note_state_ack(peer: int, ack: int) -> void:
 	if not _peer_state_ack.has(peer) \
@@ -397,7 +627,7 @@ static func _seq_is_fresher(a: int, b: int) -> bool:
 
 ## Returns the freshest datagram seq [param peer] has echoed as held, or
 ## [code]-1[/code] when that peer has acked nothing. The masked delta lane reads
-## this as each recipient's confirmed baseline seq (§5.6).
+## this as each recipient's confirmed baseline seq.
 func peer_state_ack(peer: int) -> int:
 	return int(_peer_state_ack.get(peer, -1))
 
@@ -477,7 +707,7 @@ func _receive_tick() -> int:
 ##   ┠╴ sends_dropped_unroutable: int # sender: target not in a NetwEntity
 ##   ┠╴ sends_dropped_not_live: int   # sender: target has no live route
 ##   ┠╴ derived_sets_active: int    # derived set bindings on the tick pump
-##   ┠╴ masked_frames_out: int      # masked-lane volatile frames sent (§5.6)
+##   ┠╴ masked_frames_out: int      # masked-lane volatile frames sent
 ##   ┠╴ masked_frames_full: int     # of those, every field masked in (gain edge or loss heal)
 ##   ┠╴ sync_sets_active: int       # consumed stock synchronizers on the pump
 ##   ┠╴ sync_frames_out: int        # consumed SYNC frames sent
@@ -549,7 +779,7 @@ func monitor_snapshot() -> Dictionary:
 # Drops all per-session state so the tick pump has nothing to touch after the
 # session tears down. Deferred to avoid mutating registries mid-teardown,
 # mirroring NetwLivenessInterface.
-func _on_tree_session_ended() -> void:
+func _on_session_ended() -> void:
 	_clear_session_state.call_deferred()
 
 
@@ -562,7 +792,7 @@ func _clear_session_state() -> void:
 	rpc_interface.clear_session()
 
 
-func _on_tree_peer_disconnected(peer_id: int) -> void:
+func _clear_disconnected_peer(peer_id: int) -> void:
 	# A reconnecting peer restarts its datagram sequence, so neither side may
 	# keep the old connection's freshness state against it.
 	_unreliable_send_seqs.erase(peer_id)
@@ -573,7 +803,6 @@ func _on_tree_peer_disconnected(peer_id: int) -> void:
 	rpc_interface.handle_disconnect(peer_id)
 
 #endregion
-
 
 #region Session surface
 
@@ -596,86 +825,107 @@ signal kicked(reason: String)
 signal tree_paused(reason: String)
 ## Emitted on every peer when the game is unpaused via [method unpause].
 signal tree_unpaused()
-## Emitted when the session reaches [constant MultiplayerTree.State.ONLINE] and
-## services are ready. Pairs with [signal session_ended].
+## Emitted when the session reaches
+## [constant NetwSessionInterface.State.ONLINE] with its role resolved. Pairs
+## with [signal session_ended].
 signal session_entered()
-## Emitted when the session leaves [constant MultiplayerTree.State.ONLINE] and
-## tears down. Pairs with [signal session_entered].
+## Emitted when the session leaves
+## [constant NetwSessionInterface.State.ONLINE]. Pairs with
+## [signal session_entered].
 signal session_ended()
 
 
-# Relays the owning tree's session signals onto this extension once at
-# construction, so consumers bind to a single session object instead of
-# reaching for a per-call facade bundle.
+# Relays tree-only post-connection signals that have not reached their
+# interface homes yet. Core scene and session signals originate above.
 func _bind_tree_signals(mt: MultiplayerTree) -> void:
-	mt.participant_joined.connect(participant_joined.emit)
-	mt.local_participant_joined.connect(local_participant_joined.emit)
-	mt.local_scene_changed.connect(local_scene_changed.emit)
+	# participant_joined originates on the session machine (session._admit), not
+	# the tree, so it is not relayed here.
 	mt.server_disconnecting.connect(server_disconnecting.emit)
 	mt.kick_requested.connect(kick_requested.emit)
-	mt.kicked.connect(kicked.emit)
-	mt.tree_paused.connect(tree_paused.emit)
-	mt.tree_unpaused.connect(tree_unpaused.emit)
-	mt.session_entered.connect(session_entered.emit)
-	mt.session_ended.connect(session_ended.emit)
-	mt.session_ended.connect(_on_tree_session_ended)
-	mt.peer_disconnected.connect(_on_tree_peer_disconnected)
 
-
-## Pre-game connect / server browser facade over the tree's canonical
-## [ConnectSession]. Built lazily on first access (and memoized) so repeated
-## access does not stack signal relays. [code]null[/code] when no enclosing
-## [MultiplayerTree] is found. See [NetwConnect].
+## Pre-game connect / server browser facade over this session's
+## [NetwConnector] and [NetwDiscovery]. Built lazily on first access (and
+## memoized) so repeated access does not stack signal relays. See [NetwConnect].
 var connect: NetwConnect:
 	get:
 		if _connect:
 			return _connect
-		var mt := tree
-		if not is_instance_valid(mt):
-			return null
-		var session := mt.get_connect_session()
-		if session == null:
-			return null
-		_connect = NetwConnect.new(session)
+		_connect = NetwConnect.new(self)
 		return _connect
 
-## The [MultiplayerSceneManager] service, or [code]null[/code].
+## The registered [MultiplayerSceneManager], or [code]null[/code].
 var scene_manager: MultiplayerSceneManager:
 	get:
-		var mt := tree
-		return mt.get_service(MultiplayerSceneManager) if mt else null
+		return scenes.manager
 
 ## The [NetwInterpolationInterface] service, or [code]null[/code].
 var interpolation: NetwInterpolationInterface:
 	get:
-		var mt := tree
-		if not mt:
-			return null
-		var service := mt.get_service(NetwInterpolationInterface) \
+		var service := get_service(NetwInterpolationInterface) \
 				as NetwInterpolationInterface
 		if service:
 			return service
+		var mt := tree
 		return mt.find_service_node(NetwInterpolationInterface) \
-				as NetwInterpolationInterface
+				as NetwInterpolationInterface if mt else null
 
 
-## Returns the [NetwPeerContext] for [param peer_id].
+## Returns the [NetwPeerContext] for [param peer_id], creating one on first
+## access.
 func get_peer_context(peer_id: int) -> NetwPeerContext:
-	var mt := tree
-	return mt.get_peer_context(peer_id) if mt else null
+	return _roster.get_peer_context(peer_id)
+
+
+## Returns [code]true[/code] if a [NetwPeerContext] exists for [param peer_id].
+func has_peer_context(peer_id: int) -> bool:
+	return _roster.has_peer_context(peer_id)
+
+
+## Returns the accepted [ResolvedJoin] for [param peer_id], or [code]null[/code].
+func get_accepted_join(peer_id: int) -> ResolvedJoin:
+	return _roster.get_accepted_join(peer_id)
+
+
+## Registers [param service] as a session service, keyed by [param type] or its
+## own script. Idempotent for the same instance. Fires [signal service_registered].
+func register_service(service: Node, type: Script = null) -> void:
+	_services.register_service(service, type)
+	service_registered.emit(service)
+
+
+## Unregisters [param service]. Fires [signal service_unregistered].
+func unregister_service(service: Node, type: Script = null) -> void:
+	_services.unregister_service(service, type)
+	service_unregistered.emit(service)
 
 
 ## Returns the service registered for [param type], or [code]null[/code].
 func get_service(type: Script) -> Node:
-	var mt := tree
-	return mt.get_service(type) if mt else null
+	return _services.get_service(type)
 
 
 ## Returns every registered service whose script is [param base] or a
-## subclass of it. See [method MultiplayerTree.get_services].
+## subclass of it, in registration order.
 func get_services(base: Script) -> Array[Node]:
-	var mt := tree
-	return mt.get_services(base) if mt else []
+	return _services.get_services(base)
+
+
+## Clears the whole service registry. Called during teardown.
+func clear_services() -> void:
+	_services.clear()
+
+
+## Retires [param peer_id] from the roster and drops its participant handle.
+func forget_peer(peer_id: int) -> void:
+	_roster.forget_peer(peer_id)
+	_participants.erase(peer_id)
+
+
+## Clears the connected-peer roster and every participant handle. Called during
+## session teardown so a same-session re-host starts from an empty roster.
+func clear_roster() -> void:
+	_roster.clear()
+	_participants.clear()
 
 ## All active player identities across all scenes or the sceneless world.
 var all_players: Array[NetwEntity]:
@@ -686,14 +936,52 @@ var all_players: Array[NetwEntity]:
 ## Accepted participants known by this peer.
 var participants: Array[NetwParticipant]:
 	get:
-		var mt := tree
-		return mt.get_participants() if mt else []
+		return get_participants()
 
 
 ## Returns the [NetwParticipant] for [param peer_id], or [code]null[/code].
 func participant(peer_id: int) -> NetwParticipant:
-	var mt := tree
-	return mt.get_participant(peer_id) if mt else null
+	return get_participant(peer_id)
+
+
+## Returns the [NetwParticipant] for [param peer_id], or [code]null[/code]. A
+## participant exists once its peer has an accepted [ResolvedJoin].
+func get_participant(peer_id: int) -> NetwParticipant:
+	if get_accepted_join(peer_id) == null:
+		return null
+	if not _participants.has(peer_id):
+		_participants[peer_id] = NetwParticipant.new(self, peer_id)
+	return _participants[peer_id]
+
+
+## Every accepted participant known by this peer.
+func get_participants() -> Array[NetwParticipant]:
+	var result: Array[NetwParticipant] = []
+	for rj: ResolvedJoin in _roster.get_accepted_joins():
+		var accepted := get_participant(rj.peer_id)
+		if accepted:
+			result.append(accepted)
+	return result
+
+## Every connected peer as a roster row, joined or not.
+##
+## A row exists from the moment a peer connects. The join frame enriches it with
+## a [ResolvedJoin], which is what promotes the row into [member participants]
+## and [method get_participant]. This is the whole roster, the un-joined
+## observers included.
+var connected_participants: Array[NetwParticipant]:
+	get:
+		var result: Array[NetwParticipant] = []
+		for peer_id: int in _participants:
+			result.append(_participants[peer_id])
+		return result
+
+
+# Opens a roster row for a freshly connected peer. The row carries only the peer
+# id until a join frame enriches it, so an un-joined peer is still a known row.
+func _ensure_participant_row(peer_id: int) -> void:
+	if not _participants.has(peer_id):
+		_participants[peer_id] = NetwParticipant.new(self, peer_id)
 
 
 ## Returns [code]true[/code] if this tree is acting as a listen-server host.
@@ -701,8 +989,7 @@ func participant(peer_id: int) -> NetwParticipant:
 ## Use this as the single source of truth for all listen-server checks
 ## instead of comparing [member MultiplayerTree.role] directly.
 func is_listen_server() -> bool:
-	var mt := tree
-	return mt.role == MultiplayerTree.Role.LISTEN_SERVER if mt else false
+	return session.role == NetwSessionInterface.Role.LISTEN_SERVER
 
 ## The original name of the [MultiplayerTree] node.
 var tree_name: String:
@@ -713,8 +1000,7 @@ var tree_name: String:
 
 ## Returns [code]true[/code] if the multiplayer peer is in an active connection.
 func is_online() -> bool:
-	var mt := tree
-	return mt.is_online() if mt else false
+	return session.state == NetwSessionInterface.State.ONLINE
 
 
 ## Starts the instance as a network host using [param join_payload].
@@ -728,7 +1014,7 @@ func host(join_payload: JoinPayload) -> Error:
 ##
 ## See [method MultiplayerTree.join].
 func join(
-		target: JoinTarget,
+		target: NetwConnectTarget,
 		join_payload: JoinPayload,
 		timeout: float = 5.0,
 		quiet: bool = false,
@@ -743,7 +1029,7 @@ func join(
 ##
 ## See [method MultiplayerTree.join_or_host].
 func join_or_host(
-		target: JoinTarget,
+		target: NetwConnectTarget,
 		join_payload: JoinPayload,
 ) -> Error:
 	var mt := tree
@@ -751,23 +1037,15 @@ func join_or_host(
 		return ERR_UNCONFIGURED
 	return await mt.join_or_host(target, join_payload)
 
-## The tree's configured [BackendPeer], or [code]null[/code].
-var backend: BackendPeer:
-	get:
-		var mt := tree
-		return mt.backend if mt else null
-
 ## The current connection state.
-var state: MultiplayerTree.State:
+var state: NetwSessionInterface.State:
 	get:
-		var mt := tree
-		return mt.state if mt else MultiplayerTree.State.OFFLINE
+		return session.state
 
 ## The current role in the session.
-var role: MultiplayerTree.Role:
+var role: NetwSessionInterface.Role:
 	get:
-		var mt := tree
-		return mt.role if mt else MultiplayerTree.Role.NONE
+		return session.role
 
 ## The local player identity for this tree, or [code]null[/code].
 var local_player: NetwEntity:
@@ -778,8 +1056,7 @@ var local_player: NetwEntity:
 ## Accepted [NetwParticipant] for this tree, or [code]null[/code].
 var local_participant: NetwParticipant:
 	get:
-		var mt := tree
-		return mt.local_participant if mt else null
+		return get_participant(get_unique_id())
 
 
 ## Resolves the correct spawn location and causal token for a new player.
@@ -795,18 +1072,14 @@ func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
 ## The pause is sent to each connected peer individually.
 ## [br][br][b]Server Only.[/b]
 func pause(reason: String = "") -> void:
-	var mt := tree
-	if mt:
-		mt.pause(reason)
+	session.pause(reason)
 
 
 ## Unpauses the game on every peer via [code]get_tree().paused = false[/code].
 ##
 ## [br][br][b]Server Only.[/b]
 func unpause() -> void:
-	var mt := tree
-	if mt:
-		mt.unpause()
+	session.unpause()
 
 
 ## Disconnects [param peer_id] from the session.
@@ -815,9 +1088,7 @@ func unpause() -> void:
 ## the connection is closed.
 ## [br][br][b]Server Only.[/b]
 func kick(peer_id: int, reason: String = "") -> void:
-	var mt := tree
-	if mt:
-		mt.kick(peer_id, reason)
+	session.kick(peer_id, reason)
 
 
 ## Asks the server to kick [param peer_id].
@@ -833,10 +1104,7 @@ func request_kick(peer_id: int, reason: String = "") -> void:
 ## Saves game state, closes the multiplayer peer, and waits for the server
 ## to acknowledge leaving.
 func leave() -> void:
-	var mt := tree
-	if not mt:
-		return
-	await mt.leave()
+	await session.leave()
 
 
 ## Asks the server for permission to leave.
@@ -860,7 +1128,6 @@ func notify_shutdown(reason: String = "") -> void:
 
 #endregion
 
-
 func _poll() -> Error:
 	var err := inner.poll()
 	liveness.poll()
@@ -871,12 +1138,11 @@ func _poll() -> Error:
 	return err
 
 
-## Intercepts native [code]@rpc[/code] dispatch. A call on a node inside a live
-## [NetwEntity] is upgraded to a route-addressed [NetwRpcInterface] call, so it
-## inherits liveness gating and interest-scoped fan-out and never races the
-## target's spawn edge the way a NodePath-addressed native RPC does. Every other
-## call, including session-lifecycle RPCs on nodes outside any entity, rides
-## [member inner] unchanged.
+# Intercepts native @rpc dispatch. A call on a node inside a live NetwEntity is
+# upgraded to a route-addressed NetwRpcInterface call, so it inherits liveness
+# gating and interest-scoped fan-out and never races the target's spawn edge the
+# way a NodePath-addressed native RPC does. Every other call, including
+# session-lifecycle RPCs on nodes outside any entity, rides inner unchanged.
 func _rpc(peer: int, object: Object, method: StringName, args: Array) -> Error:
 	if object is Node:
 		var entity := NetwEntity.of(object)
@@ -890,51 +1156,75 @@ func _rpc(peer: int, object: Object, method: StringName, args: Array) -> Error:
 # configurators bind their owned interface here. Unrecognized configurations
 # always forward to inner.
 func _object_configuration_add(object: Object, configuration: Variant) -> Error:
-	if configuration is MultiplayerClock:
-		(configuration as MultiplayerClock).attach_interface(clock)
+	if configuration is NetwClockConfig:
+		clock.configure(object as MultiplayerClock, configuration as NetwClockConfig)
 		clock._configured = true
 		return OK
-	if configuration is LagCompensation:
-		(configuration as LagCompensation).attach_interface(lag_compensation)
+	if configuration is NetwLagCompensationConfig:
+		lag_compensation.configure(
+			object as LagCompensation,
+			configuration as NetwLagCompensationConfig,
+		)
 		lag_compensation._configured = true
+		return OK
+	if configuration is NetwSessionConfig:
+		session.configure(configuration as NetwSessionConfig)
+		return OK
+	if configuration is NetwSceneConfig:
+		scenes.configure(
+			object as MultiplayerSceneManager,
+			configuration as NetwSceneConfig,
+		)
 		return OK
 	# A spawner registration is consumed, not forwarded, so the native
 	# replicator never tracks the node and a double spawn is unrepresentable.
 	# The node replicates through the Networked pipeline via NetwSpawnerCompat.
 	if configuration is MultiplayerSpawner:
 		return replication._spawner_compat.consume(
-			object as Node, configuration as MultiplayerSpawner
+			object as Node,
+			configuration as MultiplayerSpawner,
 		)
 	# A synchronizer registration is consumed, not forwarded, so the native
 	# replicator never tracks the node and its sync loop iterates empty sets.
 	# The node synchronizes through the Networked pump via NetwSyncCompat.
 	if configuration is MultiplayerSynchronizer and object is Node:
 		return replication._sync_compat.consume(
-			object as Node, configuration as MultiplayerSynchronizer
+			object as Node,
+			configuration as MultiplayerSynchronizer,
 		)
 	return inner.object_configuration_add(object, configuration)
 
 
 func _object_configuration_remove(object: Object, configuration: Variant) -> Error:
-	if configuration is MultiplayerClock:
+	if configuration is NetwClockConfig:
 		clock._configured = false
 		return OK
-	if configuration is LagCompensation:
+	if configuration is NetwLagCompensationConfig:
 		lag_compensation._configured = false
+		return OK
+	if configuration is NetwSessionConfig:
+		session.deconfigure()
+		return OK
+	if configuration is NetwSceneConfig:
+		scenes.deconfigure(object as MultiplayerSceneManager)
 		return OK
 	if configuration is MultiplayerSpawner:
 		return replication._spawner_compat.consume_remove(
-			object as Node, configuration as MultiplayerSpawner
+			object as Node,
+			configuration as MultiplayerSpawner,
 		)
 	if configuration is MultiplayerSynchronizer and object is Node:
 		return replication._sync_compat.consume_remove(
-			object as Node, configuration as MultiplayerSynchronizer
+			object as Node,
+			configuration as MultiplayerSynchronizer,
 		)
 	return inner.object_configuration_remove(object, configuration)
 
 
 func _set_multiplayer_peer(p_peer: MultiplayerPeer) -> void:
 	inner.multiplayer_peer = p_peer
+	# The session machine reacts to the one edge every connect path crosses.
+	session.on_peer_assigned(p_peer)
 
 
 func _get_multiplayer_peer() -> MultiplayerPeer:

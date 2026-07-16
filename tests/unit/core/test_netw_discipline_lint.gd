@@ -1,18 +1,37 @@
-## Lint: the record stays wire-free, no native name is shadowed, and every test
-## that forces production state carries a SMELL tag.
+## Lint: the record stays wire-free, no native name is shadowed, every test that
+## forces production state carries a SMELL tag, and core interfaces never reach
+## through the service registry for their collaborators.
 ##
-## These three greps pin invariants prose cannot enforce. The record half of the
-## entity pair never touches the wire, so codec, buffer, and frame types stay out
-## of [NetwEntity]. A GDScript func may not shadow a non-virtual native name, the
-## static-dispatch hazard behind [method MultiplayerAPI.is_server]. And a test
-## that reaches past the public flow to force production state tags itself, so a
-## new monkey-patch cannot land silently and the tag sweep only ratchets.
+## These greps pin invariants prose cannot enforce. The record half of the entity
+## pair never touches the wire, so codec, buffer, and frame types stay out of
+## [NetwEntity]. A GDScript func may not shadow a non-virtual native name, the
+## static-dispatch hazard behind [method MultiplayerAPI.is_server]. A test that
+## reaches past the public flow to force production state tags itself, so a new
+## monkey-patch cannot land silently and the tag sweep only ratchets. And the
+## service registry stays a discovery surface for the kit and game code, never
+## ambient context for the core, so a core interface that wants a collaborator
+## takes it through typed config registration, never a
+## [method NetwMultiplayer.get_service] lookup.
 class_name TestNetwDisciplineLint
 extends NetwTestSuite
 
 const ADDON_ROOT := "res://addons/networked"
 const TESTS_ROOT := "res://tests"
 const RECORD_PATH := "res://addons/networked/context/session/netw_entity.gd"
+
+# The core interfaces live here. The service registry itself lives on
+# NetwMultiplayer, which defines the query and surfaces it as typed convenience
+# accessors, so that one file is the sole legitimate query site.
+const REPLICATION_ROOT := "res://addons/networked/replication"
+const REGISTRY_HOME := "res://addons/networked/replication/netw_multiplayer.gd"
+
+# Service-registry query call sites a core interface must not contain. Registering
+# a service is fine, only reaching back through the registry to find one is the
+# ambient-context pattern this bans.
+const REGISTRY_QUERY_PATTERNS: Array[String] = [
+	"get_service(",
+	"get_services(",
+]
 
 # Wire types the record must never name in code. The record reaches the wire only
 # through an api call or a signal the machinery observes.
@@ -59,6 +78,25 @@ func test_no_addon_script_shadows_a_native_name() -> void:
 		for name in FORBIDDEN_NAMES:
 			if text.contains("func %s(" % name):
 				offenders.append("%s defines func %s()" % [path, name])
+	assert_that(offenders).is_empty()
+
+
+func test_core_interfaces_never_query_the_service_registry() -> void:
+	var offenders: Array[String] = []
+	for path in _gd_files(REPLICATION_ROOT):
+		if path == REGISTRY_HOME:
+			continue
+		var lines := FileAccess.get_file_as_string(path).split("\n")
+		for i in lines.size():
+			var line: String = lines[i]
+			# A comment may name a query method by concept, only code may not.
+			if line.strip_edges().begins_with("#"):
+				continue
+			for pattern in REGISTRY_QUERY_PATTERNS:
+				if line.contains(pattern):
+					offenders.append(
+						"%s:%d queries the registry with '%s'" % [path, i + 1, pattern]
+					)
 	assert_that(offenders).is_empty()
 
 

@@ -230,9 +230,8 @@ static func clear_cache(target_node: Node) -> void:
 		target_node.remove_meta(META_KEY)
 
 
-## Connects [signal Node.child_entered_tree] to [method clear_cache] on
-## [param node] exactly once, so adding a new
-## [MultiplayerSynchronizer] child auto-invalidates the cache.
+# Connects child_entered_tree to clear_cache on node exactly once, so adding a
+# new MultiplayerSynchronizer child auto-invalidates the cache.
 static func _connect_invalidation(node: Node) -> void:
 	const CONNECTED_META := &"_sc_invalidation_connected"
 	if node.has_meta(CONNECTED_META):

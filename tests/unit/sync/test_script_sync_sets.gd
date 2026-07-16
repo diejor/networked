@@ -18,7 +18,7 @@
 ## [method NetwSyncPipeline.apply_payload] (and their
 ## [method NetwSyncSetBinding.snapshot_payload] /
 ## [method NetwSyncSetBinding.apply_payload] handles) a prediction step records and
-## reconciles against, plus the masked per-recipient volatile diff lane (§5.6):
+## reconciles against, plus the masked per-recipient volatile diff lane:
 ## [method NetwSyncSetBinding.masked_delta]'s gain-edge heal and ack-gated
 ## baseline advance, and [method NetwSyncSetBinding.apply_volatile]'s merge of a
 ## partial masked frame onto the receiver's own last-decoded row.
@@ -667,7 +667,7 @@ func test_masked_sugar_writes_through_and_conflicts_with_windowed() -> void:
 	var set := NetwSyncSet.from_property_configs(configs, STATE)
 	assert_bool(set.masked).is_true()
 
-	# masked() and windowed() are mutually exclusive (§5.6); the derivation warns
+	# masked() and windowed() are mutually exclusive; the derivation warns
 	# and drops masked rather than crash or silently combine both.
 	var conflicting: Dictionary = {
 		&"move": _prop().input().masked().windowed(3),
@@ -726,7 +726,7 @@ func test_masked_delta_never_advances_a_baseline_until_the_send_is_acked() -> vo
 	binding.commit_masked_pending(2, 500, first["row"])
 	# No ack yet: the peer's confirmed baseline is still absent, so the very
 	# same value masks in again rather than silently going quiet, the
-	# never-diff-against-an-unconfirmed-row guarantee (§5.6).
+	# never-diff-against-an-unconfirmed-row guarantee.
 	var second := binding.masked_delta(0, 2, 11, -1)
 	assert_int((second["bytes"] as PackedByteArray).size()).is_greater(0)
 

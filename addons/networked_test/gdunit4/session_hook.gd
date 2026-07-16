@@ -141,6 +141,9 @@ func _reset_global_test_state() -> void:
 	if Engine.get_physics_ticks_per_second() != _baseline_physics_ticks:
 		Engine.set_physics_ticks_per_second(_baseline_physics_ticks)
 
+	# Sole owner of shared-session cleanup: this runs before and after every
+	# test, so each case starts from a null shared regardless of how the prior
+	# one left it.
 	if LocalLoopbackSession.shared:
 		LocalLoopbackSession.shared.reset()
 		LocalLoopbackSession.shared = null
@@ -180,13 +183,10 @@ func _assert_clean_state(event: GdUnitEvent) -> void:
 		)
 		NetwTrace.reset()
 
-	if LocalLoopbackSession.shared != null:
-		push_error(
-			"TEST ISOLATION LEAK [%s]: LocalLoopbackSession.shared was " +
-			"not cleared." % [event.test_name()],
-		)
-		LocalLoopbackSession.shared.reset()
-		LocalLoopbackSession.shared = null
+	# LocalLoopbackSession.shared is not asserted here. Unlike orphaned root
+	# children or trace spans, a lingering shared pointer never crosses into the
+	# next test because _reset_global_test_state clears it before every case.
+	# A harness releases it symmetrically in its own teardown.
 
 
 func _track_resource_delta(event: GdUnitEvent) -> void:

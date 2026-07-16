@@ -23,7 +23,7 @@ var sprint: StringName = "sprint"
 
 
 ## Returns all tracked action names by scanning [code]@export_custom[/code] properties with hint [code]"input"[/code].
-func get_inputs() -> Array:
+func _get_inputs() -> Array:
 	var filter := func(prop: Dictionary) -> bool:
 		return prop.hint_string == &"input"
 	var map := func(prop: Dictionary) -> StringName:

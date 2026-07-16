@@ -1,14 +1,14 @@
 ## In-process [WebRTCSignaler] test double that shortcuts signaling.
 ##
-## Two instances sharing a room id hand each [method WebRTCSignaler.send] call
+## Two instances sharing a room id hand each [method WebRTCSignaler._send] call
 ## straight to the other's [signal WebRTCSignaler.received]. No trackers or
 ## sockets exist, so a real [WebRTCSession] handshake runs over loopback ICE
 ## with signaling offline. Routing reads only [param to_multiplayer_id], which
 ## the session always fills even before it has learned an address.
 ## [codeblock]
-## host:   open("", 1)            # generates a room id
-## client: open(room, client_id)  # joins the same room
-## send(to_multiplayer_id, addr, kind, payload) -> peer.received(...)
+## host:   _open("", 1)           # generates a room id
+## client: _open(room, client_id)  # joins the same room
+## _send(to_multiplayer_id, addr, kind, payload) -> peer.received(...)
 ## [/codeblock]
 class_name PairedWebRTCSignaler
 extends WebRTCSignaler
@@ -20,7 +20,7 @@ var _room := ""
 var _local_id := 0
 
 
-func open(p_room_id: String, local_multiplayer_id: int) -> Error:
+func _open(p_room_id: String, local_multiplayer_id: int) -> Error:
 	_local_id = local_multiplayer_id
 	_room = p_room_id if not p_room_id.is_empty() else _generate_room()
 	if not _rooms.has(_room):
@@ -30,19 +30,19 @@ func open(p_room_id: String, local_multiplayer_id: int) -> Error:
 	return OK
 
 
-func room_id() -> String:
+func _room_id() -> String:
 	return _room
 
 
-func local_signaler_id() -> String:
+func _local_signaler_id() -> String:
 	return str(_local_id)
 
 
-func poll(_dt: float) -> void:
+func _poll(_dt: float) -> void:
 	pass
 
 
-func close() -> void:
+func _close() -> void:
 	if _rooms.has(_room):
 		var peers: Array = _rooms[_room]
 		peers.erase(self)
@@ -51,7 +51,7 @@ func close() -> void:
 	_room = ""
 
 
-func send(
+func _send(
 		to_multiplayer_id: int,
 		_to_signaler_id: String,
 		kind: String,
@@ -59,7 +59,7 @@ func send(
 ) -> void:
 	for other in _rooms.get(_room, []):
 		if other != self and other._local_id == to_multiplayer_id:
-			other.received.emit(_local_id, local_signaler_id(), kind, payload)
+			other.received.emit(_local_id, _local_signaler_id(), kind, payload)
 
 
 func _generate_room() -> String:

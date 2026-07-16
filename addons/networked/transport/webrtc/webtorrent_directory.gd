@@ -27,13 +27,13 @@
 ## focused, so fully peer-to-peer web rooms may disappear from discovery or
 ## stall during joins until the host tab is visible again.
 ## [br][br]
-## Add as a child of [MultiplayerTree] and register with
-## [method ConnectSession.register_directory]. The directory advertises whatever
-## room the tree is hosting whenever it reaches
+## Add as a child of [MultiplayerTree] and it binds itself as a
+## [LobbyDirectory] service that [NetwDiscovery] picks up. The directory
+## advertises whatever room the tree is hosting whenever it reaches
 ## [constant MultiplayerTree.ONLINE] as a host over a [WebRTCBackend], so
-## the [ConnectSession] host path
+## the [WebRTCBackend] host path
 ## ([code]tree.backend = TrackerWebRTCBackend.new()[/code]) and
-## [method host_lobby] both light up the board automatically. Browsers join
+## [method _host_lobby] both light up the board automatically. Browsers join
 ## through [method make_join_target], which stamps a [TrackerWebRTCBackend] with
 ## the room hash.
 @tool
@@ -41,22 +41,28 @@ class_name WebTorrentDirectory
 extends LobbyDirectory
 
 ## WebTorrent compatible tracker URLs used for the board, shared with the
-## [TrackerWebRTCBackend] the directory stamps onto join targets.
+## [TrackerWebRTCTransport] the directory targets over the [code]&"webrtc"[/code]
+## scheme.
 @export var trackers: Array[String] = [
 	"wss://tracker.openwebtorrent.com",
 	"wss://tracker.webtorrent.dev",
 	"wss://tracker.btorrent.xyz",
 ]
 
+## Namespace isolating signaling and room codes on public networks, stamped into
+## the host's [member MultiplayerTree.params] and every join target's metadata so
+## the [TrackerWebRTCTransport] scopes its tracker swarm to this game.
+@export var signaling_namespace: String = ""
+
 ## Tag stamped on every room card and required on received cards, so different
 ## games do not pollute each other's board. Also seeds the board hash.
 @export var browser_filter_uid: String = "networked"
 
-## Maximum room members advertised by [method host_lobby].
+## Maximum room members advertised by [method _host_lobby].
 @export_range(1, 250, 1, "or_greater", "suffix:players") \
 		var max_clients: int = 8
 
-## Seconds [method list_lobbies] collects room cards before emitting
+## Seconds [method _list_lobbies] collects room cards before emitting
 ## [signal LobbyDirectory.lobby_list_updated].
 @export_range(0.5, 10.0, 0.1, "suffix:s") var browse_window: float = 2.5
 
@@ -65,7 +71,7 @@ extends LobbyDirectory
 
 ## Seconds the board stays warm after the last interest (advertising or
 ## browsing) before its tracker sockets close. Set to 0 to close immediately
-## once idle. [method list_lobbies] and [method advertise_room] reopen on demand.
+## once idle. [method _list_lobbies] and [method advertise_room] reopen on demand.
 @export_range(0, 120) var board_idle_timeout: float = 30.0
 
 ## Distinct offers emitted per board announce. A WebTorrent tracker pairs one
@@ -105,7 +111,7 @@ var _restricted := false
 const BOARD_RECONNECT_COOLDOWN := 5.0
 
 
-func should_register() -> bool:
+func _should_register() -> bool:
 	# A node re-initializes its process flag after _enter_tree, so a
 	# set_process(false) here would not stick. Latch the flags and gate the board
 	# work in _process so the directory never opens live tracker sockets under a
@@ -117,7 +123,7 @@ func should_register() -> bool:
 	return not _is_test_env and not _restricted
 
 
-func service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(mt: MultiplayerTree) -> void:
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
 	_bind_tree_signals(mt)
@@ -125,7 +131,7 @@ func service_entered(mt: MultiplayerTree) -> void:
 	_ensure_tracker()
 
 
-func service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_mt: MultiplayerTree) -> void:
 	if _tracker:
 		_release_tracker()
 
@@ -193,7 +199,7 @@ func _keep_board_warm(dt: float) -> void:
 		_ensure_tracker()
 
 
-func list_lobbies() -> void:
+func _list_lobbies() -> void:
 	if Netw.is_test_env():
 		return
 	# The board stays warm, so browsing only opens a fresh collect window.
@@ -213,25 +219,24 @@ func list_lobbies() -> void:
 
 ## The board only backs discovery: no identity graph means no friends-only,
 ## invites, or persona resolution.
-func capabilities() -> int:
+func _capabilities() -> int:
 	return LobbyDirectory.Capability.BROWSE
 
 
-func leave_lobby() -> void:
+func _leave_lobby() -> void:
 	stop_advertising()
 	_collecting = false
 
 
-func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
-	var target := JoinTarget.new()
-	target.display_name = lobby.lobby_name
-	target.address = String(lobby.metadata.get("room_hash", ""))
-	target.metadata = lobby.metadata.duplicate()
-	target.backend = _make_backend()
-	var ns := String(lobby.metadata.get("signaling_namespace", ""))
-	if not ns.is_empty():
-		target.backend.signaling_namespace = ns
-	return target
+
+## WebTorrent rooms join through the [code]&"webrtc"[/code] transport by room
+## hash. The signaling namespace rides in [member NetwConnectTarget.metadata].
+func _scheme() -> StringName:
+	return &"webrtc"
+
+
+func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
+	return String(lobby.metadata.get("room_hash", ""))
 
 
 ## Hosts a room per [param options]. A [constant LobbyDirectory.Visibility.PUBLIC]
@@ -241,7 +246,7 @@ func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 ## advertised, so it is reachable only by sharing its room hash.
 ## [constant LobbyDirectory.Visibility.FRIENDS_ONLY] has no identity graph here,
 ## so it warns and degrades to PRIVATE.
-func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	if Netw.is_test_env():
 		return null
 	var tree := MultiplayerTree.resolve(self)
@@ -257,7 +262,12 @@ func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 		_pending_visibility = LobbyDirectory.Visibility.PRIVATE
 	_pending_max = options.max_players if options.max_players > 0 else max_clients
 	_pending_room_name = options.server_name
-	tree.backend = _make_backend()
+	
+	tree.scheme = &"webrtc"
+	tree.params = {
+		"signaling_namespace": signaling_namespace,
+	}
+
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
 	var err: Error = await tree.host(payload)
@@ -272,23 +282,26 @@ func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	return tree.api.multiplayer_peer
 
 
-func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	if Netw.is_test_env():
 		return null
 	var room_hash := String(_id_to_hash.get(lobby_id, ""))
 	if room_hash.is_empty():
 		Netw.dbg.warn(
 			"WebTorrentDirectory: join_lobby_peer unknown id %d. " +
-			"Call list_lobbies first or join through make_join_target.",
+			"Call list_lobbies first.",
 			[lobby_id],
 		)
 		return null
 	var tree := MultiplayerTree.resolve(self)
 	if tree == null:
 		return null
-	var target := JoinTarget.new()
+	var target := NetwConnectTarget.new()
+	target.scheme = &"webrtc"
 	target.address = room_hash
-	target.backend = _make_backend()
+	target.metadata = {
+		"signaling_namespace": signaling_namespace,
+	}
 	var payload := JoinPayload.new()
 	payload.username = get_local_member_name()
 	var err: Error = await tree.join(target, payload)
@@ -305,7 +318,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 ## with capacity [param max_players].
 ##
 ## Called automatically when the tree hosts over a [WebRTCBackend]. Call it
-## directly only when driving the host path outside [method host_lobby].
+## directly only when driving the host path outside [method _host_lobby].
 func advertise_room(
 		room_hash: String,
 		server_name: String,
@@ -355,29 +368,34 @@ func _bind_tree_signals(mt: MultiplayerTree) -> void:
 
 
 func _on_tree_state_changed(
-		_old: MultiplayerTree.State,
-		new_state: MultiplayerTree.State,
+		_old: NetwSessionInterface.State,
+		new_state: NetwSessionInterface.State,
 ) -> void:
-	if new_state == MultiplayerTree.State.ONLINE:
+	if new_state == NetwSessionInterface.State.ONLINE:
 		var mt := MultiplayerTree.resolve(self)
-		if mt and mt.is_host and mt.backend is WebRTCBackend:
+		if mt and mt.is_host:
 			# A PRIVATE host stays off the board: unlisted, join-by-hash only.
 			if _pending_visibility == LobbyDirectory.Visibility.PUBLIC:
-				var backend := mt.backend as WebRTCBackend
 				var room_name := _pending_room_name
-				if room_name.is_empty() and backend.get_active_host_options():
-					room_name = backend.get_active_host_options().server_name
+				if room_name.is_empty():
+					room_name = "WebRTC Room"
+
+				var join_addr := ""
+				if mt.api and mt.api.connect and mt.api.connect.peer_view:
+					join_addr = mt.api.connect.peer_view.join_address()
+				if join_addr.is_empty():
+					join_addr = _room_hash
 
 				var capacity := _pending_max if _pending_max > 0 else max_clients
 				advertise_room(
-					backend.get_join_address(),
+					join_addr,
 					room_name,
 					capacity,
 				)
 			_pending_room_name = ""
 			_pending_visibility = LobbyDirectory.Visibility.PUBLIC
 			_pending_max = 0
-	elif new_state == MultiplayerTree.State.OFFLINE:
+	elif new_state == NetwSessionInterface.State.OFFLINE:
 		stop_advertising()
 
 
@@ -533,8 +551,8 @@ func _emit_collected() -> void:
 func _room_card() -> Dictionary:
 	var ns := ""
 	var mt := MultiplayerTree.resolve(self)
-	if mt and mt.backend is WebRTCBackend:
-		ns = (mt.backend as WebRTCBackend).signaling_namespace
+	if mt:
+		ns = mt.params.get("signaling_namespace", signaling_namespace)
 	return {
 		"t": "room",
 		"hash": _room_hash,
@@ -586,12 +604,6 @@ func _announce_with_card(card: Dictionary) -> Dictionary:
 		"offers": offers,
 	}
 
-
-func _make_backend() -> WebRTCBackend:
-	var template := TrackerWebRTCBackend.new()
-	template.trackers = trackers
-	# clone() runs copy_from, so trackers/server_name/ice_servers all ride along.
-	return template.clone()
 
 
 func _generate_hash() -> String:

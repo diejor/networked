@@ -126,17 +126,16 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 	# Manually enrich the tree root's snapshot with service-level data.
 	# This keeps the MultiplayerTree core clean while providing rich context.
 	var session_state: Dictionary = {
-		"is_server": mt.role == MultiplayerTree.Role.DEDICATED_SERVER or mt.role == MultiplayerTree.Role.LISTEN_SERVER,
+		"is_server": mt.role == NetwSessionInterface.Role.DEDICATED_SERVER or mt.role == NetwSessionInterface.Role.LISTEN_SERVER,
 		"role": mt.role,
-		"role_name": MultiplayerTree.Role.keys()[mt.role],
+		"role_name": NetwSessionInterface.Role.keys()[mt.role],
 		"peer_id": \
 		mt.multiplayer_api.get_unique_id() if mt.multiplayer_api else 0,
 		"connected_peers": \
 		mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 		"active_scenes": \
 		sm.active_scenes.keys() if sm else [],
-		"backend": \
-		mt.backend.get_script().get_global_name() if mt.backend else "None",
+		"backend": String(mt.scheme),
 		"active_scene": get_active_scene_path(),
 	}
 
@@ -698,11 +697,11 @@ func _on_local_player_changed(player: NetwEntity) -> void:
 
 
 func _on_role_changed(
-		old_state: MultiplayerTree.State,
-		new_state: MultiplayerTree.State,
+		old_state: NetwSessionInterface.State,
+		new_state: NetwSessionInterface.State,
 ) -> void:
 	var mt := _mt_ref.get_ref() as MultiplayerTree
-	var role := mt.role if is_instance_valid(mt) else MultiplayerTree.Role.NONE
+	var role := mt.role if is_instance_valid(mt) else NetwSessionInterface.Role.NONE
 	_dispatch(
 		NetwTreeEvent.Kind.ROLE_CHANGED,
 		null,

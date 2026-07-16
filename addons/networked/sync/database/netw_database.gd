@@ -230,7 +230,7 @@ func _initialize_backend() -> void:
 		)
 		return
 	@warning_ignore("redundant_await")
-	var err := await backend.initialize(_schema, String(slots.current()))
+	var err := await backend._initialize(_schema, String(slots.current()))
 	if err != OK:
 		Netw.dbg.error(
 			"NetwDatabase: backend initialization failed. " +
@@ -241,7 +241,7 @@ func _initialize_backend() -> void:
 		return
 
 	@warning_ignore("redundant_await")
-	await backend.warm(_build_warm_directives())
+	await backend._warm(_build_warm_directives())
 
 
 ## Warms [param table] into the backend cache per [param request] at runtime.
@@ -253,7 +253,7 @@ func warm(table: StringName, request: WarmRequest) -> Error:
 	if not backend:
 		return ERR_UNCONFIGURED
 	@warning_ignore("redundant_await")
-	return await backend.warm([{ table = table, request = request }])
+	return await backend._warm([{ table = table, request = request }])
 
 
 # Asks the policy for one directive per registered table. Returns an empty batch
@@ -264,7 +264,7 @@ func _build_warm_directives() -> Array:
 		return directives
 	for table: StringName in _schema:
 		var columns: Array[StringName] = _schema[table]
-		var request := warm_policy.plan_table(table, columns)
+		var request := warm_policy._plan_table(table, columns)
 		if request and request.kind != WarmRequest.Kind.NONE:
 			directives.append({ table = table, request = request })
 	return directives
@@ -405,7 +405,7 @@ func _find_by_id(table: StringName, id: StringName, out_error: Array = [OK]) -> 
 		return { }
 
 	@warning_ignore("redundant_await")
-	var record := await backend.find_by_id(table, id)
+	var record := await backend._find_by_id(table, id)
 	var hit := not record.is_empty()
 	record_loaded.emit(table, id, hit)
 
@@ -442,7 +442,7 @@ func _find_all(table: StringName, filter: Dictionary = { }) -> Array[Dictionary]
 		)
 		return []
 	@warning_ignore("redundant_await")
-	return await backend.find_all(table, filter)
+	return await backend._find_all(table, filter)
 
 
 ## Permanently removes [param id] from [param table].
@@ -460,7 +460,7 @@ func _delete_internal(table: StringName, id: StringName) -> Error:
 		)
 		return ERR_UNCONFIGURED
 	@warning_ignore("redundant_await")
-	return await backend.delete(table, id)
+	return await backend._delete(table, id)
 
 # ── SlotEngine ────────────────────────────────────────────────────────────────
 
@@ -519,7 +519,7 @@ class SlotEngine:
 		if not db or not db.backend:
 			return [] as Array[StringName]
 		@warning_ignore("redundant_await")
-		return await db.backend.list_namespaces()
+		return await db.backend._list_namespaces()
 
 
 	## Permanently removes [param slot] and every record under it.
@@ -530,7 +530,7 @@ class SlotEngine:
 		if not db or not db.backend:
 			return ERR_UNCONFIGURED
 		@warning_ignore("redundant_await")
-		return await db.backend.delete_namespace(String(slot))
+		return await db.backend._delete_namespace(String(slot))
 
 
 	# Freezes the slot choice once the backend initializes.
@@ -562,11 +562,11 @@ class TransactionContext:
 		_queue.append({ table = table, id = id, data = data })
 
 
-	## Flushes all queued operations to [param backend] as one batch.
-	## Returns the first error encountered, or [constant OK].
+	# Flushes all queued operations to backend as one batch, returning the first
+	# error encountered, or OK.
 	func _commit(backend: NetwDatabaseBackend) -> Error:
 		@warning_ignore("redundant_await")
-		return await backend.commit(_queue)
+		return await backend._commit(_queue)
 
 
 ## A typed read/write interface for a single database table.

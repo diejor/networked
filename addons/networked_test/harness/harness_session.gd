@@ -17,21 +17,15 @@ enum Entry {
 
 ## Transport seam for harness session entry.
 ##
-## Implementations build a [BackendPeer], build a [JoinTarget], and tear down
+## Implementations build a [NetwConnectTarget], and tear down
 ## transport state associated with a [MultiplayerTree].
 class BackendAdapter:
-	## Builds a backend template for a [MultiplayerTree].
-	func make_backend() -> BackendPeer:
-		assert(false, "BackendAdapter.make_backend must be implemented.")
-		return null
-
-
-	## Builds a [JoinTarget] for [param tree] and [param address].
-	func make_join_target(
+	## Builds a [NetwConnectTarget] for [param tree] and [param address].
+	func make_connect_target(
 			tree: MultiplayerTree,
 			address: String = "",
-	) -> JoinTarget:
-		assert(false, "BackendAdapter.make_join_target must be implemented.")
+	) -> NetwConnectTarget:
+		assert(false, "BackendAdapter.make_connect_target must be implemented.")
 		return null
 
 
@@ -57,22 +51,14 @@ class LoopbackAdapter:
 		_session = session
 
 
-	## Builds a [LocalLoopbackBackend] wired to the harness session.
-	func make_backend() -> BackendPeer:
-		var backend := LocalLoopbackBackend.new()
-		backend.session = _session
-		return backend
-
-
-	## Builds a [JoinTarget] for [param tree]'s local loopback backend.
-	func make_join_target(
+	## Builds a [NetwConnectTarget] for [param tree]'s local loopback backend.
+	func make_connect_target(
 			tree: MultiplayerTree,
 			address: String = "",
-	) -> JoinTarget:
-		var target := JoinTarget.new()
-		target.backend = tree.backend
-		target.address = address if not address.is_empty() \
-		else tree.backend.get_join_address()
+	) -> NetwConnectTarget:
+		var target := NetwConnectTarget.new()
+		target.scheme = tree.scheme
+		target.address = address if not address.is_empty() else "localhost"
 		return target
 
 
@@ -86,33 +72,35 @@ func session() -> LocalLoopbackSession:
 
 
 ## Resets the owned [LocalLoopbackSession].
+##
+## Clears the process-global [member LocalLoopbackSession.shared] when it still
+## points at this session, so a torn-down harness leaves no shared pointer for
+## the next test to inherit.
 func reset() -> void:
 	if _session:
 		_session.reset()
+	if LocalLoopbackSession.shared == _session:
+		LocalLoopbackSession.shared = null
 
 
-## Builds a [LocalLoopbackBackend] wired to [method session].
-func make_backend() -> LocalLoopbackBackend:
-	return _adapter.make_backend() as LocalLoopbackBackend
-
-
-## Applies local loopback defaults and installs [method make_backend].
+## Applies local loopback defaults and configures local scheme.
 func adopt_tree(
 		tree: MultiplayerTree,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 ) -> void:
 	tree.desired_role = role
 	tree.auto_host_headless = false
 	tree.debug_join = null
-	tree.backend = make_backend()
+	tree.scheme = &"local"
+	LocalLoopbackSession.shared = _session
 
 
-## Builds a [JoinTarget] for [param tree]'s local loopback backend.
-func make_join_target(
+## Builds a [NetwConnectTarget] for [param tree]'s local loopback backend.
+func make_connect_target(
 		tree: MultiplayerTree,
 		address: String = "",
-) -> JoinTarget:
-	return _adapter.make_join_target(tree, address)
+) -> NetwConnectTarget:
+	return _adapter.make_connect_target(tree, address)
 
 
 ## Connects [param tree] through [param entry].
@@ -129,12 +117,12 @@ func connect_tree(
 	match entry:
 		Entry.JOIN:
 			return await tree.join(
-				active_adapter.make_join_target(tree),
+				active_adapter.make_connect_target(tree),
 				payload,
 			)
 		Entry.JOIN_OR_HOST:
 			return await tree.join_or_host(
-				active_adapter.make_join_target(tree),
+				active_adapter.make_connect_target(tree),
 				payload,
 			)
 		Entry.HOST:
@@ -155,14 +143,16 @@ func disconnect_tree(tree: MultiplayerTree) -> int:
 
 	var peer := tree.multiplayer_peer as LocalMultiplayerPeer
 	var peer_id := tree.multiplayer_peer.get_unique_id()
-	tree.state = MultiplayerTree.State.DISCONNECTING
+	tree.state = NetwSessionInterface.State.DISCONNECTING
 	if peer:
 		_session.release_inbound_packets(peer)
 	tree.multiplayer_peer.close()
 	return peer_id
 
 
-## Builds a [JoinPayload] for [param username] and [param spawn].
+## Builds a [JoinPayload] for [param username] and [param spawn] intent, where
+## [param spawn] is a [SceneNodePath] template, a ready [JoinPayload] whose args
+## are copied, or an [Array] of typed join args.
 func build_join_payload(
 		username: String,
 		spawn: Variant = null,
@@ -170,13 +160,11 @@ func build_join_payload(
 	var payload := JoinPayload.new()
 	payload.username = username
 	if spawn is JoinPayload:
-		payload.spawn = spawn.spawn
+		payload.arg_values = (spawn as JoinPayload).arg_values.duplicate(true)
 	elif spawn is SceneNodePath:
-		payload.spawn = EntitySpawnPolicy.from_scene_node_path(spawn).to_dict()
-	elif spawn is SpawnPolicy:
-		payload.spawn = spawn.to_dict()
-	elif spawn is Dictionary:
-		payload.spawn = spawn
+		payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawn)
+	elif spawn is Array:
+		payload.arg_values = (spawn as Array).duplicate(true)
 	return payload
 
 

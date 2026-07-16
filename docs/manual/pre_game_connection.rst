@@ -84,25 +84,27 @@ The reply is a :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>` wh
 :ref:`status <class_BackendPeer_ProbeResult_property_status>` is one of :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`,
 :ref:`UNREACHABLE <class_BackendPeer_ProbeResult_constant_UNREACHABLE>`, :ref:`TIMEOUT <class_BackendPeer_ProbeResult_constant_TIMEOUT>`, :ref:`UNSUPPORTED <class_BackendPeer_ProbeResult_constant_UNSUPPORTED>`, :ref:`BUSY <class_BackendPeer_ProbeResult_constant_BUSY>`, or :ref:`ERROR <class_BackendPeer_ProbeResult_constant_ERROR>`. On
 :ref:`OK <class_BackendPeer_ProbeResult_constant_OK>`, :ref:`info <class_BackendPeer_ProbeResult_property_info>` is a populated
-:ref:`ServerDescriptor.Info <class_ServerDescriptor_Info>` (player count, motd, game mode, a
+:ref:`NetwServerInfo <class_NetwServerInfo>` (player count, motd, game mode, a
 metadata bag for custom fields).
 
-Hosts customize what gets reported by assigning a
-:ref:`ServerDescriptor <class_ServerDescriptor>` to
-:ref:`server_info_source <class_MultiplayerTree_property_server_info_source>`
-on the tree. The default
-(:ref:`DefaultServerDescriptor <class_DefaultServerDescriptor>`) reports a
-live player count and marks :ref:`ServerDescriptor.Info.is_local_listener <class_ServerDescriptor_Info_property_is_local_listener>` as ``true`` so callers can
-tell a live local host from a closed port. Override for richer metadata:
+Hosts customize what gets reported by registering a provider with
+:ref:`Netw.configure_server_info() <class_Netw_method_configure_server_info>`
+from ``_init()``. The default
+(:ref:`NetwServerInfo.from_session() <class_NetwServerInfo_method_from_session>`)
+reports a live player count and marks
+:ref:`is_local_listener <class_NetwServerInfo_property_is_local_listener>` as
+``true`` so callers can tell a live local host from a closed port. Override for
+richer metadata:
 
 .. code-block:: gdscript
 
-    class_name BomberServerInfoSource extends ServerDescriptor
+    func _init() -> void:
+        Netw.configure_server_info(_describe)
 
-    func build_server_info(tree: MultiplayerTree) -> ServerDescriptor.Info:
-        var info := ServerDescriptor.Info.new()
+    func _describe(api: NetwMultiplayer) -> NetwServerInfo:
+        var info := NetwServerInfo.new()
         info.is_local_listener = true
-        info.players = tree.get_participants().size()
+        info.players = api.participants.size()
         info.max_players = 8
         info.game_mode = &"capture-the-flag"
         info.motd = "Friday night session"
@@ -167,7 +169,7 @@ Both probes and normal client hellos ride the same
 a 4-byte magic prefix on the first packet:
 
 - :ref:`NHEL <class_AuthProtocol_property_MAGIC_HELLO>` - *Networked Hello*. A normal client opening a session. The
-  configured :ref:`NetwAuth <class_NetwAuth>`'s payload (if
+  configured :ref:`NetwAuthFlow <class_NetwAuthFlow>`'s payload (if
   any) is wrapped inside.
 - :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` - *Networked Probe*. A transient browser/probe peer requesting
   server metadata.
@@ -193,8 +195,8 @@ The probe lifecycle is **client-owned**:
 2. Client sends :ref:`NPRB <class_AuthProtocol_property_MAGIC_PROBE>` in the :godot:`peer_authenticating <SceneMultiplayer>` callback.
 3. Server's :godot:`auth_callback <SceneMultiplayer>` decodes the magic and
    dispatches ``NPRB`` to :ref:`AuthProtocol.Responder <class_AuthProtocol_Responder>`,
-   which builds a :ref:`ServerDescriptor.Info <class_ServerDescriptor_Info>` from the configured
-   :ref:`ServerDescriptor <class_ServerDescriptor>` and sends the reply.
+   which builds a :ref:`NetwServerInfo <class_NetwServerInfo>` from the resolved
+   server-info provider and sends the reply.
 4. Client decodes the reply, returns the
    :ref:`BackendPeer.ProbeResult <class_BackendPeer_ProbeResult>`, and closes its peer.
 5. Server sees the peer disconnect (or :godot:`auth_timeout <SceneMultiplayer>` reaps it) and

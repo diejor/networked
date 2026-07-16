@@ -14,10 +14,10 @@ var peer_id: int
 ## The player's display name.
 var username: StringName
 
-## Opaque spawn intent, interpreted server-side by
-## [member MultiplayerTree.spawn_policy]. Empty when no spawn intent
-## was provided. See [member JoinPayload.spawn].
-var spawn: Dictionary = { }
+## Typed join args the session's registered handler receives after this
+## [ResolvedJoin]. Empty when no join intent was provided. See
+## [member JoinPayload.arg_values].
+var arg_values: Array = []
 
 ## Whether this connection used debug initialization data.
 var is_debug: bool
@@ -29,7 +29,7 @@ func serialize() -> PackedByteArray:
 	var dict: Dictionary = {
 		peer_id = peer_id,
 		username = username,
-		spawn = spawn,
+		arg_values = arg_values,
 		is_debug = is_debug,
 	}
 	return var_to_bytes(dict)
@@ -42,6 +42,6 @@ static func deserialize(bytes: PackedByteArray) -> ResolvedJoin:
 	var rj := ResolvedJoin.new()
 	rj.peer_id = data.peer_id
 	rj.username = data.username
-	rj.spawn = data.get("spawn", { })
+	rj.arg_values = data.get("arg_values", [])
 	rj.is_debug = data.get("is_debug", false)
 	return rj

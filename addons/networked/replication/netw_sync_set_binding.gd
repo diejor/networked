@@ -29,7 +29,7 @@ var _node_ref: WeakRef
 # The retained lane's dirty-poll engine, keyed by this binding.
 var _watch_book: NetwWatchBook = NetwWatchBook.new()
 
-# Sender side of the masked volatile lane (§5.6), unused unless
+# Sender side of the masked volatile lane, unused unless
 # [member NetwSyncSet.masked] is set. peer -> the last full row that peer is
 # provably confirmed to hold; absent means never confirmed, the gain edge that
 # heals with a full row.
@@ -398,7 +398,7 @@ func retain_baselines(recipients: Array) -> void:
 ## peer not in [param recipients], the masked lane's counterpart of
 ## [method retain_baselines]: a peer that regains the route or re-admits
 ## interest heals with a full row instead of diffing against a stale one
-## (§5.6's keyframe-on-gain rule).
+## under the keyframe-on-gain rule.
 func retain_masked_baselines(recipients: Array) -> void:
 	for peer: int in _masked_confirmed.keys().duplicate():
 		if peer not in recipients:

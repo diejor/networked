@@ -279,14 +279,16 @@ func is_live_for(peer_id: int, entity: NetwEntity) -> bool:
 ## [param entity]. On a client this is always the server. This is the
 ## recipient list [NetwReplicationInterface] fans carriers out to.
 func live_peers(entity: NetwEntity) -> Array[int]:
-	var mt := _tree()
-	if not mt:
-		return []
-	if not mt.is_server:
+	var api := _api()
+	# An offline session self-dispatches through the loopback, and a client sends
+	# only to the server, so both resolve to the single local recipient. Only a
+	# connected server fans out to the peers live for the route.
+	var peer := api.inner.multiplayer_peer
+	if peer == null or peer is OfflineMultiplayerPeer or not api.is_server():
 		return [1]
 
 	var out: Array[int] = []
-	for p in _api().get_peers():
+	for p in api.get_peers():
 		if is_live_for(p, entity):
 			out.append(p)
 	return out
@@ -454,11 +456,6 @@ func _transition_to_dead(route: int) -> void:
 
 func _api() -> NetwMultiplayer:
 	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
-
-
-func _tree() -> MultiplayerTree:
-	var api := _api()
-	return api.tree if api else null
 
 
 # Authority comes from the API, never the tree. The API answers server offline

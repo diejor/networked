@@ -232,12 +232,12 @@ func create_socket():
 
 
 ## Registers this node under the [NakamaSessionService] key.
-func service_type() -> Script:
+func _service_type() -> Script:
 	return NakamaSessionService
 
 
 ## Calls [method leave] when the service exits the tree.
-func service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_mt: MultiplayerTree) -> void:
 	leave()
 
 

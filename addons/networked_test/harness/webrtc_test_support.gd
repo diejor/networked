@@ -3,11 +3,11 @@
 ## The helper embodies the [NetwHarnessSession.BackendAdapter] shape. It is
 ## kept static until a second WebRTC harness consumer needs an adapter instance.
 ## [br][br]
-## [NetwTestHarness] is built around [LocalLoopbackBackend] and does not
+## [NetwTestHarness] is built around the [LocalTransport] and does not
 ## generalize to a real [WebRTCSession]. This helper mirrors [EnetTestSupport]
-## for the complementary case. It hosts and joins real [MultiplayerTree]s over
-## a [PairedWebRTCBackend], so the WebRTC handshake runs over loopback ICE with
-## signaling shortcut in process. No trackers or sockets are touched.
+## for the complementary case, hosting and joining real [MultiplayerTree]s over
+## the [code]&"webrtc"[/code] scheme so the [WebRTCSession] handshake runs end to
+## end through [MultiplayerTree].
 ## [codeblock]
 ## var host := await WebRTCTestSupport.start_host(self)
 ## var client := WebRTCTestSupport.make_client_tree(self)
@@ -17,27 +17,30 @@
 class_name WebRTCTestSupport
 extends RefCounted
 
-## Builds and hosts a [MultiplayerTree] backed by [PairedWebRTCBackend].
+## Builds and hosts a [MultiplayerTree] backed by paired WebRTC.
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerTree]),
-## [code]backend[/code] (the host backend the tree duplicated), and
 ## [code]room[/code] (the generated room id clients join with).
 static func start_host(parent: Node) -> Dictionary:
 	var tree := MultiplayerTree.new()
 	tree.name = "WebRTCHost"
 	tree.auto_host_headless = false
-	tree.backend = _make_backend()
+	tree.scheme = &"webrtc"
 	parent.add_child(tree)
+	_install_paired_transport(tree)
 
 	var err: Error = await tree._open_host(true)
 	if err != OK:
 		push_error("WebRTCTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
 		return { }
+	var room := ""
+	var view := tree.connector.peer_view if tree.connector else null
+	if view:
+		room = view.join_address()
 	return {
 		tree = tree,
-		backend = tree.backend,
-		room = tree.backend.get_join_address(),
+		room = room,
 	}
 
 
@@ -50,18 +53,26 @@ static func make_client_tree(
 	var tree := MultiplayerTree.new()
 	tree.name = "WebRTCClient%s" % name_suffix
 	tree.auto_host_headless = false
-	tree.backend = _make_backend()
+	tree.scheme = &"webrtc"
 	parent.add_child(tree)
+	_install_paired_transport(tree)
 	return tree
 
 
-## Builds a [JoinTarget] pointing [param client] at [param room].
+# Overrides tree's connector to signal through the in-process
+# PairedWebRTCSignaler instead of the shipped WebTorrent tracker, so the real
+# WebRTCSession handshake runs with no tracker or socket.
+static func _install_paired_transport(tree: MultiplayerTree) -> void:
+	tree.connector.transports = [PairedWebRTCTransport.new()]
+
+
+## Builds a [NetwConnectTarget] pointing [param client] at [param room].
 static func make_join_target(
 		client: MultiplayerTree,
 		room: String,
-) -> JoinTarget:
-	var target := JoinTarget.new()
-	target.backend = client.backend
+) -> NetwConnectTarget:
+	var target := NetwConnectTarget.new()
+	target.scheme = client.scheme
 	target.address = room
 	return target
 
@@ -72,14 +83,12 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	if not is_instance_valid(tree):
 		return
 	var scene_tree := tree.get_tree()
-	if scene_tree and tree.backend is WebRTCBackend:
+	var view := tree.connector.peer_view if tree.connector else null
+	if scene_tree and view:
 		# Let the join handshake's trailing reliable RPCs flush over open
-		# channels before resetting the SCTP streams. Closing first leaves
-		# api.poll() dispatching request_join_player into a closed channel
-		# whenever the host has not finished the handshake yet, which is the
-		# slow-machine ordering CI hits.
+		# channels before resetting the SCTP streams.
 		await NetwTestSuite.drain_frames(scene_tree, 8)
-		(tree.backend as WebRTCBackend).close_channels()
+		view.close()
 		await NetwTestSuite.drain_frames(scene_tree)
 	tree.queue_free()
 	if scene_tree:
@@ -130,10 +139,3 @@ static func clear_optional_sctp_reset_error() -> void:
 		if "SctpTransport::sendReset" in entry._message \
 				and "errno=2" in entry._message:
 			monitor.erase_log_entry(entry)
-
-
-# Offline ice_servers keep the loopback handshake from reaching the network.
-static func _make_backend() -> PairedWebRTCBackend:
-	var backend := PairedWebRTCBackend.new()
-	backend.ice_servers = []
-	return backend

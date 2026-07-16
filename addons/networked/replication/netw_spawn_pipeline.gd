@@ -119,6 +119,11 @@ var park_timeout_seconds: float = 5.0
 # during the park cancels the spawn with net result zero.
 var _parked_spawn_routes: Dictionary[int, bool] = { }
 
+# True only while this pipeline synchronously places a replicated node, so a
+# marked scene's tree_entered hook tells a framework spawn from a native
+# change_scene. Read through NetwReplicationInterface.is_applying_remote_frame.
+var _applying_remote_frame := false
+
 # Coalesces visibility-change signals into one end-of-frame sweep.
 var _visibility_sweep_scheduled := false
 
@@ -203,6 +208,19 @@ func _run_visibility_sweep() -> void:
 		return
 	var peers := api.inner.get_peers()
 	var routes := _spawn_book.spawned.keys()
+
+	# A reparent refreshes a record's parent and spawner anchors in
+	# _send_reparent, which is deferred and can trail this sweep on the same
+	# frame. Encoding a gained peer's SPAWN or judging a kept peer's visibility
+	# from the stale anchors then either parks that peer's SPAWN on a spawner in
+	# the scene it never joined, or despawns the mover from its own just-moved
+	# entity. Refresh every in-tree record here so the sweep always reads the
+	# live topology.
+	for route: int in routes:
+		var record: NetwSpawnBook.SpawnRecord = _spawn_book.spawned[route]
+		var node := record.node()
+		if node and node.is_inside_tree():
+			_refresh_record_anchors(record, node)
 
 	for route: int in routes:
 		var record: NetwSpawnBook.SpawnRecord = _spawn_book.spawned[route]
@@ -644,7 +662,11 @@ func _despawn_tracked_route(route: int) -> void:
 	_schedule_carrier_flush()
 
 
-func _send_reparent(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
+# Re-derives a record's parent route and, for a consumed spawner, its spawner
+# anchor from the node's live tree position. A reparent has no observable edge
+# on either, so any code that reads the record after a move must refresh first
+# or it addresses the origin scene the node already left.
+func _refresh_record_anchors(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 	var api := _api()
 	if not api:
 		return
@@ -656,6 +678,13 @@ func _send_reparent(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 	# or the sweep re-encode and late-join replay hand new observers a spawner
 	# anchor inside a scene they were never admitted to.
 	api.replication._spawner_compat.reanchor_record(record, node)
+
+
+func _send_reparent(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
+	var api := _api()
+	if not api:
+		return
+	_refresh_record_anchors(record, node)
 	if not api.inner.multiplayer_peer:
 		return
 	var mt := api.tree
@@ -1146,7 +1175,10 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 	_spawn_book.enroll_recv(route, node)
 	if recv_spawner:
 		api.replication._spawner_compat.note_recv(route, recv_spawner)
+	var was_applying := _applying_remote_frame
+	_applying_remote_frame = true
 	parent.add_child(node)
+	_applying_remote_frame = was_applying
 	if recv_spawner:
 		api.replication._spawner_compat.emit_spawned(recv_spawner, node)
 
@@ -1228,11 +1260,14 @@ func _handle_reparent_frame(payload: PackedByteArray, sender: int) -> void:
 		return
 	if node.get_parent():
 		node.get_parent().remove_child(node)
+	var was_applying := _applying_remote_frame
+	_applying_remote_frame = true
 	parent.add_child(node)
+	_applying_remote_frame = was_applying
 	# A route-stable reparent keeps the node live, so the liveness bus never
 	# re-fires entity_live for the destination scene. Enroll the node in its new
 	# scene here the same way the bus would on a fresh spawn.
-	var dest_scene := MultiplayerTree.scene_for_node(node)
+	var dest_scene := MultiplayerScene.of(node)
 	if dest_scene:
 		if entity.peer_id != 0:
 			dest_scene.register_player(entity)
@@ -1298,7 +1333,7 @@ func _park_spawn(payload: PackedByteArray, dep_route: int, route: int) -> void:
 
 # Two-level reference addressing: a target inside a routed entity encodes as
 # (route, subpath from that entity's root), anything else as a path from the
-# MultiplayerTree node. Returns false when the target cannot be addressed.
+# replication root node. Returns false when the target cannot be addressed.
 func _encode_anchor(w: NetwBitBuffer.Writer, target: Node) -> bool:
 	var api := _api()
 	if not api or not is_instance_valid(target):
@@ -1310,11 +1345,11 @@ func _encode_anchor(w: NetwBitBuffer.Writer, target: Node) -> bool:
 		NetwCodec.put_varint(w, route)
 		_put_str(w, String(entity.owner.get_path_to(target)))
 		return true
-	var mt := api.tree
-	if not mt or not (target == mt or mt.is_ancestor_of(target)):
+	var root := api.root
+	if not root or not (target == root or root.is_ancestor_of(target)):
 		return false
 	w.put_aligned_u8(0)
-	_put_str(w, String(mt.get_path_to(target)))
+	_put_str(w, String(root.get_path_to(target)))
 	return true
 
 
@@ -1335,8 +1370,8 @@ func _resolve_anchor(anchor: Dictionary) -> Node:
 		if not entity or not is_instance_valid(entity.owner):
 			return null
 		return entity.owner.get_node_or_null(String(anchor["path"]))
-	var mt := api.tree
-	return mt.get_node_or_null(String(anchor["path"])) if mt else null
+	var root := api.root
+	return root.get_node_or_null(String(anchor["path"])) if root else null
 
 
 # A scene reconstructs from its resource UID when it has one, which is stable
@@ -1384,19 +1419,11 @@ func _get_str(r: NetwBitBuffer.Reader) -> String:
 	return r.get_aligned_bytes(size).get_string_from_utf8()
 
 
-# Offline trees count as server, mirroring the liveness allocator guard, so
-# unit rigs without a peer can exercise the server-only verbs.
+# The API answers server offline and in a mid-connect disconnected window, so
+# unit rigs without a peer still exercise the server-only verbs, tree or not.
 func _is_server_authority() -> bool:
 	var api := _api()
-	var mt := api.tree if api else null
-	if not is_instance_valid(mt):
-		return true
-	if not mt.multiplayer_api or mt.multiplayer_peer == null:
-		return true
-	if mt.multiplayer_peer.get_connection_status() \
-			== MultiplayerPeer.CONNECTION_DISCONNECTED:
-		return true
-	return mt.multiplayer_api.is_server()
+	return api.is_server() if api else true
 
 
 ## Drops all per-session spawn state. Called by

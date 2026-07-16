@@ -92,7 +92,7 @@ var _sends_dropped_not_live: int = 0
 var _property_signal_router: _PropertySignalRouter
 
 # Sender: peer_id -> Array[{binding, row}] staged this pass by a masked-lane
-# send (§5.6), pending the seq the tick's flush assigns. Committed into the
+# send, pending the seq the tick's flush assigns. Committed into the
 # binding's in-flight ring by commit_pending_masked once the flush reports a
 # seq, so an overflow-triggered early flush mid-pump and the tick's final
 # flush each commit only the rows staged since the last flush for that peer.
@@ -400,7 +400,7 @@ func derived_group(
 
 
 # Stages [param row] for [param binding]'s masked send to [param peer_id] this
-# pass, pending the seq the tick's flush assigns (§5.6).
+# pass, pending the seq the tick's flush assigns.
 func _stage_pending_masked(peer_id: int, binding: NetwSyncSetBinding, row: Dictionary) -> void:
 	var list: Array = _pending_masked.get_or_add(peer_id, [])
 	list.append({"binding": binding, "row": row})
@@ -765,7 +765,7 @@ static func volatile_flags(set: NetwSyncSet) -> int:
 ## frame is malformed. A predicting client passes [param write] false so the
 ## authoritative row reconciles rather than snapping the predicted body.
 ## [br][br]
-## A [constant NetwFrameEnvelope.SYNC_FLAG_MASKED] frame (§5.6) carries only the
+## A [constant NetwFrameEnvelope.SYNC_FLAG_MASKED] frame carries only the
 ## fields that differ from the recipient's confirmed baseline, so [param last_row]
 ## supplies the rest: the caller's own last-decoded row, merged with the
 ## frame's masked subset to rebuild a complete row. This must be the caller's

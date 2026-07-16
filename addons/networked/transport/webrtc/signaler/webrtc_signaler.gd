@@ -7,11 +7,11 @@
 ## [code]multiplayer_id[/code]s. The signaler maps those to whatever transport
 ## address it uses and keeps that mapping to itself.
 ## [codeblock]
-## session.signal_out.connect(signaler.send)      # multiplayer_id + opaque addr
+## session.signal_out.connect(signaler._send)     # multiplayer_id + opaque addr
 ## signaler.received.connect(session.deliver)
 ##
-## signaler.open(room_id, local_multiplayer_id)    # host passes id 1
-## room := signaler.room_id()                      # host: generated room hash
+## signaler._open(room_id, local_multiplayer_id)   # host passes id 1
+## room := signaler._room_id()                     # host: generated room hash
 ## [/codeblock]
 ##
 ## [br][br]
@@ -44,26 +44,26 @@ signal unreachable
 
 ## Opens signaling for [param room_id] as [param local_multiplayer_id]. A host
 ## passes id 1 and may leave [param room_id] empty for the signaler to generate.
-## Read the generated id back with [method room_id].
+## Read the generated id back with [method _room_id].
 @abstract
-func open(room_id: String, local_multiplayer_id: int) -> Error
+func _open(room_id: String, local_multiplayer_id: int) -> Error
 
 
 ## Drives the signaling transport for one frame.
 @abstract
-func poll(_dt: float) -> void
+func _poll(_dt: float) -> void
 
 
 ## Releases the signaling transport.
 @abstract
-func close() -> void
+func _close() -> void
 
 
 ## Sends [param payload] of [param kind] toward [param to_multiplayer_id]. An
 ## empty [param to_signaler_id] means the address is not yet known, which a
 ## discovery-capable signaler treats as room-directed.
 @abstract
-func send(
+func _send(
 		to_multiplayer_id: int,
 		to_signaler_id: String,
 		kind: String,
@@ -73,16 +73,16 @@ func send(
 
 ## Returns this peer's own transport address.
 @abstract
-func local_signaler_id() -> String
+func _local_signaler_id() -> String
 
 
 ## Returns the active room identifier, normalized or generated during
-## [method open].
+## [method _open].
 @abstract
-func room_id() -> String
+func _room_id() -> String
 
 
 ## Notifies the signaler that the native WebRTC link to [param _multiplayer_id]
 ## is up, so it may wind down signaling. Override when relevant.
-func on_session_connected(_multiplayer_id: int) -> void:
+func _on_session_connected(_multiplayer_id: int) -> void:
 	pass

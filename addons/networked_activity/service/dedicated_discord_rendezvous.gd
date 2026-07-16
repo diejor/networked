@@ -3,9 +3,9 @@
 ## There is no shared store and no client-side host election. The client joins
 ## the dedicated server, and the server groups rooms by [code]instance[/code].
 ## [codeblock]
-## JoinTarget
+## NetwConnectTarget
+## ├── scheme = &"ws"
 ## ├── address = "wss://<public_host>/?instance=<instance_id>"
-## ├── backend = WebSocketBackend
 ## └── metadata.instance_id = instance_id
 ## [/codeblock]
 class_name DedicatedDiscordRendezvous
@@ -30,18 +30,15 @@ func connect_session(
 	if public_host.is_empty():
 		Netw.dbg.warn("DedicatedDiscordRendezvous: public_host unset.")
 		return ERR_UNCONFIGURED
+	tree.scheme = &"ws"
 	return await tree.join(_target_for(instance_id), payload)
 
 
-# Builds a join target with the instance id carried in the query string.
-func _target_for(instance_id: String) -> JoinTarget:
-	var backend := WebSocketBackend.new()
-	backend.public_host = public_host
-	backend.port = port
-
-	var target := JoinTarget.new()
+# Builds a connect target with the instance id carried in the query string.
+func _target_for(instance_id: String) -> NetwConnectTarget:
+	var target := NetwConnectTarget.new()
+	target.scheme = &"ws"
 	target.display_name = "Discord Activity"
 	target.address = "wss://%s/?instance=%s" % [public_host, instance_id]
-	target.backend = backend
 	target.metadata = { "instance_id": instance_id }
 	return target

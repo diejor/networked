@@ -1,18 +1,18 @@
-## One row in the [ConnectBrowser]. Renders a [JoinTarget] and its
-## latest [BackendPeer.ProbeResult].
+## One row in the [ConnectBrowser]. Renders a [NetwConnectTarget] and its
+## latest [NetwProbeResult].
 class_name ConnectBrowserRow
 extends PanelContainer
 
-signal selected(target: JoinTarget)
+signal selected(target: NetwConnectTarget)
 signal context_requested(
-		target: JoinTarget,
+		target: NetwConnectTarget,
 		row: ConnectBrowserRow,
 		screen_position: Vector2,
 )
-signal activated(target: JoinTarget, row: ConnectBrowserRow)
+signal activated(target: NetwConnectTarget, row: ConnectBrowserRow)
 
-var target: JoinTarget
-var result: BackendPeer.ProbeResult
+var target: NetwConnectTarget
+var result: NetwProbeResult
 
 @onready var _name_label: Label = %NameLabel
 @onready var _badge_label: Label = %BadgeLabel
@@ -35,12 +35,12 @@ func _ready() -> void:
 	_refresh()
 
 
-func bind_target(p_target: JoinTarget) -> void:
+func bind_target(p_target: NetwConnectTarget) -> void:
 	target = p_target
 	_refresh()
 
 
-func set_result(p_result: BackendPeer.ProbeResult) -> void:
+func set_result(p_result: NetwProbeResult) -> void:
 	result = p_result
 	_refresh()
 
@@ -88,22 +88,8 @@ func _refresh() -> void:
 
 	_name_label.text = _display_name()
 	_address_label.text = ConnectBrowser.format_address(target)
-
-	var backend_label := "unknown"
-	if target.backend != null:
-		backend_label = ConnectBrowser.format_backend_label(target.backend)
-	_badge_label.text = backend_label
-
-	if target.backend != null and not target.backend.is_available():
-		_render_unavailable()
-		return
+	_badge_label.text = ConnectBrowser.format_scheme_label(target.scheme)
 	_render_metrics()
-
-
-func _render_unavailable() -> void:
-	_players_label.text = "-"
-	_ping_label.text = "-"
-	_status_dot.bind_unavailable()
 
 
 func _render_metrics() -> void:
@@ -114,7 +100,7 @@ func _render_metrics() -> void:
 		return
 
 	match result.status:
-		BackendPeer.ProbeResult.Status.OK:
+		NetwProbeResult.Status.OK:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]
@@ -124,23 +110,23 @@ func _render_metrics() -> void:
 					"%d ms" % result.latency_ms
 					if result.latency_ms >= 0 else "."
 			)
-		BackendPeer.ProbeResult.Status.BUSY:
+		NetwProbeResult.Status.BUSY:
 			_players_label.text = "FULL"
 			_ping_label.text = "-"
-		BackendPeer.ProbeResult.Status.UNREACHABLE:
+		NetwProbeResult.Status.UNREACHABLE:
 			_players_label.text = "-"
 			_ping_label.text = "-"
-		BackendPeer.ProbeResult.Status.TIMEOUT:
+		NetwProbeResult.Status.TIMEOUT:
 			_players_label.text = "-"
 			_ping_label.text = "-"
-		BackendPeer.ProbeResult.Status.UNSUPPORTED:
+		NetwProbeResult.Status.UNSUPPORTED:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]
 					if info else "-"
 			)
 			_ping_label.text = "."
-		BackendPeer.ProbeResult.Status.INCOMPATIBLE:
+		NetwProbeResult.Status.INCOMPATIBLE:
 			var info := result.info
 			_players_label.text = (
 					"%d/%d" % [info.players, info.max_players]

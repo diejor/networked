@@ -29,6 +29,9 @@ func _ready() -> void:
 		queue_free()
 		return
 	NetwEntity.of(self).view_activated.connect(_on_view)
+	# A teleport snaps the player to another scene, so drop the smoothing history
+	# on the commit or the view pans across the gap during the reveal.
+	%TPComponent.teleport_committed.connect(reset_smoothing)
 
 func _on_view() ->  void:
 	make_current()

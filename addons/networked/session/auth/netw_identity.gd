@@ -1,6 +1,6 @@
-## Validated player identity produced by an auth provider.
+## Validated player identity produced by an auth flow.
 ##
-## Returned by [method NetwAuth.authenticate] and stored in
+## Carried by an [AuthResult] from [method NetwAuthFlow.verify] and stored in
 ## [NetwIdentityBucket]. [AuthCoordinator] treats [member username] as
 ## server-authoritative when [MultiplayerTree] accepts a player.
 class_name NetwIdentity

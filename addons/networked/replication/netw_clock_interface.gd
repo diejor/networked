@@ -205,6 +205,26 @@ var is_stable: bool:
 		return _stats.is_stable
 
 
+## Applies [param config] to the engine and binds [param node] as the protocol
+## endpoint. Called by [NetwMultiplayer] when a [MultiplayerClock] registers its
+## [NetwClockConfig] through [method MultiplayerAPI.object_configuration_add].
+func configure(node: MultiplayerClock, config: NetwClockConfig) -> void:
+	_node = node
+	tickrate = config.tickrate
+	max_ticks_per_frame = config.max_ticks_per_frame
+	stall_threshold = config.stall_threshold
+	use_physics_interpolation = config.use_physics_interpolation
+	sync_mode = config.sync_mode
+	panic_snap_threshold = config.panic_snap_threshold
+	stretch_nudge_factor = config.stretch_nudge_factor
+	ping_interval = config.ping_interval
+	display_offset = config.display_offset
+	jitter_multiplier = config.jitter_multiplier
+	jitter_window = config.jitter_window
+	jitter_stability_threshold = config.jitter_stability_threshold
+	enable_drift_logging = config.enable_drift_logging
+
+
 ## True once a [MultiplayerClock] configurator has registered. Until then the
 ## engine is inert: [member tick] stays 0 and no tick signal fires.
 func is_configured() -> bool:
@@ -406,7 +426,7 @@ func _handle_handshake_reply(payload: PackedByteArray, sender: int) -> void:
 		match _node.tickrate_mismatch_action:
 			0:
 				Netw.dbg.warn(
-					"MultiplayerClock: tickrate mismatch — local=%d server=%d" % \
+					"MultiplayerClock: tickrate mismatch, local=%d server=%d" % \
 							[tickrate, server_tickrate],
 					func(m): push_warning(m)
 				)

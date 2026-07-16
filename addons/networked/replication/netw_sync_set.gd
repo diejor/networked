@@ -214,7 +214,7 @@ var audience: Audience = Audience.AUDIENCE_PUBLIC
 
 ## Whether the volatile lane rides the masked per-recipient diff
 ## ([constant NetwFrameEnvelope.SYNC_FLAG_MASKED]) instead of a shared broadcast
-## row (§5.6). Illegal combined with [member window], since a redundant sample
+## row. Illegal combined with [member window], since a redundant sample
 ## already defeats masking; [method from_property_configs] warns and forces
 ## this back to [code]false[/code] when both are set.
 var masked: bool = false

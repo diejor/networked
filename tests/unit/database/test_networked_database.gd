@@ -5,7 +5,7 @@ class_name TestNetwDatabase
 extends NetwTestSuite
 
 class FailingBackend extends TestMemoryBackend:
-	func upsert(
+	func _upsert(
 			_table: StringName,
 			_id: StringName,
 			_data: Dictionary,

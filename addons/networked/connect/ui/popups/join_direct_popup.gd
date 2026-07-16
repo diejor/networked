@@ -2,9 +2,9 @@
 class_name JoinDirectPopup
 extends PopupPanel
 
-signal submitted(target: JoinTarget, payload: JoinPayload)
+signal submitted(target: NetwConnectTarget, payload: JoinPayload)
 
-var _templates: Array[BackendPeer] = []
+var _transports: Array[NetwTransport] = []
 var _spawner_options: Array[SceneNodePath] = []
 
 @onready var _backend_picker: OptionButton = %BackendPicker
@@ -22,30 +22,30 @@ func _ready() -> void:
 	exclusive = true
 	_confirm_button.pressed.connect(_on_confirm)
 	_cancel_button.pressed.connect(hide)
-	_backend_picker.item_selected.connect(_on_backend_changed)
+	_backend_picker.item_selected.connect(_on_transport_changed)
 
 
 ## Opens the direct join popup.
 func open_join_direct(
-		templates: Array[BackendPeer],
+		transports: Array[NetwTransport],
 		spawner_options: Array[SceneNodePath],
 		default_username: String,
 ) -> void:
-	_templates = templates
+	_transports = transports
 	_spawner_options = spawner_options.duplicate()
 	_address_edit.text = ""
 	_username_edit.text = default_username
-	_populate_backend_picker()
+	_populate_transport_picker()
 	_populate_spawner_picker()
 	_spawner_row.visible = not _spawner_options.is_empty()
 	_refresh_address_hint()
 	popup_centered()
 
 
-func _populate_backend_picker() -> void:
+func _populate_transport_picker() -> void:
 	_backend_picker.clear()
-	for backend in _templates:
-		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
+	for transport in _transports:
+		_backend_picker.add_item(transport._display_name())
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
@@ -58,13 +58,13 @@ func _populate_spawner_picker() -> void:
 		_spawner_picker.selected = 0
 
 
-func _selected_template() -> BackendPeer:
-	if _templates.is_empty():
+func _selected_transport() -> NetwTransport:
+	if _transports.is_empty():
 		return null
 	var idx := maxi(0, _backend_picker.selected)
-	if idx >= _templates.size():
+	if idx >= _transports.size():
 		return null
-	return _templates[idx]
+	return _transports[idx]
 
 
 func _selected_spawner() -> SceneNodePath:
@@ -76,28 +76,28 @@ func _selected_spawner() -> SceneNodePath:
 	return _spawner_options[idx]
 
 
-func _on_backend_changed(_index: int) -> void:
+func _on_transport_changed(_index: int) -> void:
 	_refresh_address_hint()
 
 
 func _refresh_address_hint() -> void:
-	var template := _selected_template()
-	if template == null:
+	var transport := _selected_transport()
+	if transport == null:
 		_address_edit.placeholder_text = ""
 		_address_edit.tooltip_text = ""
 		return
-	var hint := template.get_address_hint()
+	var hint := transport._address_hint()
 	_address_edit.placeholder_text = hint.placeholder
 	_address_edit.tooltip_text = hint.help_text
 
 
 func _on_confirm() -> void:
-	var template := _selected_template()
-	if template == null:
+	var transport := _selected_transport()
+	if transport == null:
 		return
-	var target := JoinTarget.new()
+	var target := NetwConnectTarget.new()
+	target.scheme = transport.scheme()
 	target.address = _address_edit.text
-	target.backend = template
 	target.display_name = ConnectBrowser.format_address(target)
 
 	var payload := JoinPayload.new()
@@ -105,7 +105,7 @@ func _on_confirm() -> void:
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"
 	var spawner := _selected_spawner()
 	if spawner != null:
-		payload.spawn = EntitySpawnPolicy.from_scene_node_path(spawner).to_dict()
+		payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawner)
 
 	hide()
 	submitted.emit(target, payload)

@@ -37,6 +37,10 @@ func test_server_spawns_scene_after_host() -> void:
 	var spawned_scene: MultiplayerScene = server_mgr.active_scenes.values()[0]
 	assert_that(spawned_scene).is_not_null()
 	assert_that(spawned_scene is MultiplayerScene).is_true()
+	var scenes := harness.server().api.scenes
+	assert_object(harness.server().api.scene_manager).is_same(server_mgr)
+	assert_object(scenes.scene(level_builder.scene_name)).is_same(spawned_scene)
+	assert_object(scenes.scene_of(spawned_scene.level)).is_same(spawned_scene)
 
 
 func test_two_clients_both_connect_to_server_with_scene() -> void:

@@ -14,9 +14,9 @@ var _activity: DiscordActivityService
 
 func _ready() -> void:
 	# The browser is a descendant of the tree now, so it self-resolves its own
-	# ConnectSession by ancestry (deferred, so it dodges the tree's child-setup
-	# window). No bind() needed, and eager .connect access here would trip the
-	# "parent busy" service assertion.
+	# NetwConnect facade by ancestry (deferred, so it dodges the tree's
+	# child-setup window). No bind() needed, and eager .connect access here would
+	# trip the "parent busy" service assertion.
 	_ctx.local_scene_changed.connect(_on_local_scene_changed)
 	_ctx.session_ended.connect(_show_browser)
 	_ctx.server_disconnecting.connect(_on_server_disconnecting)

@@ -36,6 +36,11 @@ static var _signal_configs: Dictionary = { }
 static var _spawn_fn_configs: Dictionary = { } # Script -> { method: SyncConfig }
 static var _despawn_configs: Dictionary = { } # Script -> DespawnConfig
 static var _persistence_configs: Dictionary = { } # Script -> PersistenceConfig
+# Bare marks from Netw.mark_multiplayer_scene (Script -> true). Introspection
+# only, never an authorization gate.
+static var _multiplayer_scene_marks: Dictionary = { }
+# On-ramp configs from Netw.configure_multiplayer_scene (Script -> SceneMarkConfig).
+static var _multiplayer_scene_configs: Dictionary = { }
 
 # Node-instance overlay: property configs for nodes that carry no script (a
 # bare Node2D tracked by a synchronizer) or that need a per-instance override.
@@ -97,6 +102,22 @@ static func get_signal_config(
 ## Returns every RPC config declared for [param script].
 static func get_rpc_configs(script: Script) -> Dictionary:
 	return _rpc_configs.get(script, { }) if script else { }
+
+
+## Returns the [NetwScriptModel.SceneMarkConfig] declared for [param script]
+## through [method Netw.configure_multiplayer_scene], or [code]null[/code].
+static func get_scene_config(script: Script) -> SceneMarkConfig:
+	return _multiplayer_scene_configs.get(script, null) if script else null
+
+
+## Returns whether [param script] is registered as a multiplayer scene root by
+## either [method Netw.mark_multiplayer_scene] or
+## [method Netw.configure_multiplayer_scene].
+static func is_scene_marked(script: Script) -> bool:
+	if script == null:
+		return false
+	return _multiplayer_scene_marks.has(script) \
+			or _multiplayer_scene_configs.has(script)
 
 
 ## Returns every property config declared for [param script].
@@ -442,8 +463,8 @@ static func write_values(
 			continue
 		var q: NetwQuantize = quantizers[i] if i < quantizers.size() else null
 		var t: int = types[i] if i < types.size() else TYPE_NIL
-		var quantized := q != null and q.supports_type(t) \
-				and q.supports_type(typeof(values[i]) as Variant.Type)
+		var quantized := q != null and q._supports_type(t) \
+				and q._supports_type(typeof(values[i]) as Variant.Type)
 		if quantized:
 			w.put_aligned_u8(1)
 			NetwCodec.encode_value(w, values[i], q)
@@ -548,6 +569,41 @@ static func read_call_args(
 		arg_types: Array,
 ) -> Array:
 	return read_values(r, quantizers, arg_types)
+
+
+## Validates a per-position [param quantizers] list against a parallel
+## [param types] list, warning and returning [code]false[/code] on the first
+## quantizer that cannot pack its declared type. A null quantizer slot or a
+## [constant TYPE_NIL] type is always accepted. Shared by
+## [NetwScriptModel.SyncConfig] and [NetwScriptModel.ConnectConfig] so both
+## surfaces enforce one rule. [param context_name] and [param context_script]
+## only name the site in the warning.
+static func validate_quantizers(
+		quantizers: Array,
+		types: Array,
+		context_name: StringName,
+		context_script: Script,
+) -> bool:
+	for i in quantizers.size():
+		var q: NetwQuantize = quantizers[i]
+		if q == null:
+			continue
+		var t: int = types[i] if i < types.size() else TYPE_NIL
+		if t != TYPE_NIL and not q._supports_type(t):
+			Netw.dbg.warn(
+				"SyncConfig.quantize: Quantizer of type '%s' "
+				+ "does not support the declared type '%s' for "
+				+ "'%s' on script '%s'.",
+				[
+					q.get_class(),
+					type_string(t),
+					context_name,
+					context_script.resource_path.get_file() if context_script else "",
+				],
+				func(m): push_warning(m)
+			)
+			return false
+	return true
 
 
 ## Shared delivery axes for one replicated property, signal, or RPC.
@@ -867,26 +923,12 @@ class SyncConfig:
 				context_name,
 			)
 
-		for i in quantizers.size():
-			var q: NetwQuantize = quantizers[i]
-			if q == null:
-				continue
-			var t: int = types[i] if i < types.size() else TYPE_NIL
-			if t != TYPE_NIL and not q.supports_type(t):
-				Netw.dbg.warn(
-					"SyncConfig.quantize: Quantizer of type '%s' "
-					+ "does not support the declared type '%s' for "
-					+ "'%s' on script '%s'.",
-					[
-						q.get_class(),
-						type_string(t),
-						context_name,
-						context_script.resource_path.get_file(),
-					],
-					func(m): push_warning(m)
-				)
-				return false
-		return true
+		return NetwScriptModel.validate_quantizers(
+			quantizers,
+			types,
+			context_name,
+			context_script,
+		)
 
 
 	func _validate_interpolator_support() -> bool:
@@ -923,7 +965,7 @@ class SyncConfig:
 			if interp == null:
 				continue
 			var t: int = types[i] if i < types.size() else TYPE_NIL
-			if t != TYPE_NIL and not interp.supports_type(t):
+			if t != TYPE_NIL and not interp._supports_type(t):
 				Netw.dbg.warn(
 					"SyncConfig.interpolate: Interpolator does not "
 					+ "support the declared type '%s' for '%s' on "
@@ -1238,6 +1280,79 @@ class EventConfig:
 	extends SyncConfig
 
 
+## The connect-lifecycle face of a typed handler registered before any session
+## exists, returned by [method Netw.configure_join].
+##
+## A join handler's first parameter is framework-owned (the [ResolvedJoin]), so
+## its wire schema is the remaining parameters. [method quantize] bit-packs those
+## wire arguments with a per-position [NetwQuantize] list aligned to the sliced
+## schema, validated at registration through
+## [method NetwScriptModel.validate_quantizers]. A null slot leaves an argument on
+## the self-describing fallback.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_join(spawn_at) \
+##         .quantize([null, NetwQuantizeBits.new().bits(4).limits(0, 8)])
+##
+## func spawn_at(rj: ResolvedJoin, point: StringName, team: int) -> void:
+##     ...
+## [/codeblock]
+class ConnectConfig:
+	extends RefCounted
+
+	## The script declaring the registered handler, the source of the wire
+	## schema.
+	var context_script: Script = null
+
+	## The handler method name whose parameters (after the [ResolvedJoin] slice)
+	## form the wire schema.
+	var context_name: StringName = &""
+
+	## Per-argument [NetwQuantize] list aligned to the wire schema.
+	var quantizers: Array = []
+
+
+	## Bit-packs the wire arguments with a per-position [NetwQuantize] list,
+	## parallel to the handler parameters after the [ResolvedJoin] slice.
+	func quantize(p_quantizers: Variant) -> ConnectConfig:
+		var new_list: Array
+		if p_quantizers is Array:
+			new_list = p_quantizers
+		elif p_quantizers is NetwQuantize:
+			new_list = [p_quantizers]
+		else:
+			assert(
+				false,
+				"quantize: Expected NetwQuantize or Array of NetwQuantize",
+			)
+			return self
+		quantizers = new_list
+		assert(
+			_validate_quantizer_support(),
+			"ConnectConfig: Incompatible quantizer configured.",
+		)
+		return self
+
+
+	# The wire schema is the handler parameters after the framework-owned
+	# ResolvedJoin, so quantizers align to the sliced type list.
+	func _validate_quantizer_support() -> bool:
+		if context_name.is_empty():
+			return true
+		var types := NetwScriptModel.get_method_arg_types(
+			context_script,
+			context_name,
+		)
+		if not types.is_empty():
+			types = types.slice(1)
+		return NetwScriptModel.validate_quantizers(
+			quantizers,
+			types,
+			context_name,
+			context_script,
+		)
+
+
 ## Despawn policy for one entity script, registered through
 ## [method Netw.configure_despawn]. Applied by receiving peers when a
 ## [constant NetwFrameEnvelope.Channel.DESPAWN] frame removes the node.
@@ -1271,6 +1386,51 @@ class DespawnConfig:
 	## route reports [constant NetwLivenessInterface.State.LINGERING].
 	func linger(seconds: float) -> DespawnConfig:
 		linger_seconds = seconds
+		return self
+
+
+## Client-side on-ramp config for one scene root script, registered through
+## [method Netw.configure_multiplayer_scene]. It carries the presentation knobs
+## the detach hook reads when a native [method Node.change_scene_to_file]
+## converts into a [method NetwSceneInterface.request_change_path].
+##
+## This config is not an authorization record. Whether a client may reach a
+## scene is decided server side by the [method Netw.configure_scene_change]
+## policy, never by the presence of this mark.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_multiplayer_scene(self) \
+##             .on_pending(_loading_screen) \
+##             .timeout(8.0)
+## [/codeblock]
+class SceneMarkConfig:
+	extends RefCounted
+
+	## The scene root script this config applies to.
+	var context_script: Script = null
+
+	## Method name whose return value is installed as the placeholder while a
+	## request is pending, or empty for the framework blank node.
+	var pending_method: StringName = &""
+
+	## Seconds the client request waits before resolving
+	## [constant NetwScenePromise.Result.TIMED_OUT]. [code]0.0[/code] uses
+	## [constant NetwSceneInterface.DEFAULT_REQUEST_DEADLINE].
+	var deadline: float = 0.0
+
+
+	## Names the method whose return value presents while the request is
+	## pending, such as a loading screen. Stored by name so the callable only
+	## names the method on the scene root.
+	func on_pending(callable: Callable) -> SceneMarkConfig:
+		pending_method = callable.get_method()
+		return self
+
+
+	## Sets the request deadline in [param seconds] before the promise resolves
+	## [constant NetwScenePromise.Result.TIMED_OUT].
+	func timeout(seconds: float) -> SceneMarkConfig:
+		deadline = seconds
 		return self
 
 

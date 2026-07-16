@@ -20,7 +20,8 @@ func _exit_tree() -> void:
 	if _reporter:
 		_reporter.queue_free()
 		_reporter = null
-	Netw.dbg.unregister_reporter(self)
+	if Netw.dbg:
+		Netw.dbg.unregister_reporter(self)
 
 
 ## Enables or disables the heavy debug reporter.

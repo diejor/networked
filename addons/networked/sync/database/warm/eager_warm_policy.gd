@@ -13,8 +13,8 @@ extends WarmPolicy
 ## Write-behind backends use the returned request to mirror the whole table
 ## before regular reads fall back to lazy fetch-on-miss.
 ## [codeblock]
-## plan_table(&"players", columns) -> WarmRequest.all()
-## plan_table(&"world", columns)   -> WarmRequest.all()
+## _plan_table(&"players", columns) -> WarmRequest.all()
+## _plan_table(&"world", columns)   -> WarmRequest.all()
 ## [/codeblock]
-func plan_table(_table: StringName, _columns: Array[StringName]) -> WarmRequest:
+func _plan_table(_table: StringName, _columns: Array[StringName]) -> WarmRequest:
 	return WarmRequest.all()

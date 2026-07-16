@@ -6,8 +6,8 @@
 ## [member tree] is a constant anchor while [member node] is the per-event
 ## subject the consumer resolves context from.
 ## [br][br]
-## In Phase 0 this is dispatched but not yet routed to validators. The validator
-## registry that consumes it by [enum Kind] lands in a later phase.
+## This event is dispatched but not yet routed to validators. A validator
+## registry that consumes it by [enum Kind] is not wired up yet.
 @tool
 class_name NetwTreeEvent
 extends RefCounted
@@ -22,14 +22,14 @@ enum Kind {
 	PLAYER_SPAWNED, ## A player spawned; [member node] is the player root.
 	LOCAL_PLAYER_CHANGED, ## The local authority player changed; [member node] is its owner or null.
 	CLOCK_PONG, ## A clock pong was captured; [member data] carries the pong payload.
-	ROLE_CHANGED, ## The tree's [enum MultiplayerTree.Role] changed; [member data] carries old/new.
+	ROLE_CHANGED, ## The tree's [enum NetwSessionInterface.Role] changed; [member data] carries old/new.
 }
 
 ## The kind of observation this event carries.
 var kind: Kind
 
 ## The probe's tree. Always present, even for an offline tree at
-## [constant MultiplayerTree.Role.NONE].
+## [constant NetwSessionInterface.Role.NONE].
 var tree: MultiplayerTree
 
 ## The primary subject node (player or scene). Null for peer and clock events,

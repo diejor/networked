@@ -158,6 +158,38 @@ enum Channel {
 	## [constant REPARENT] fan to). Reliable, entity-routed, payload is the
 	## new controller peer id.
 	CONTROL_APPLY = 22,
+	## A joining peer's serialized [JoinPayload], client to server. Reliable,
+	## route [code]0[/code]. The session-scoped join handshake rides the carrier
+	## rather than a node [code]@rpc[/code], so a session with no
+	## [MultiplayerTree] node still joins. Answered with [constant SESSION_ACCEPT]
+	## and [constant SESSION_ROSTER].
+	SESSION_JOIN = 23,
+	## One accepted [ResolvedJoin], server to every peer. Reliable, route
+	## [code]0[/code]. Enriches the recipient's roster row and fires
+	## [signal NetwMultiplayer.participant_joined].
+	SESSION_ACCEPT = 24,
+	## The full accepted roster ([code]var_to_bytes[/code] of an
+	## [code]Array[PackedByteArray][/code] of [ResolvedJoin]s), server to a newly
+	## accepted peer. Reliable, route [code]0[/code]. Backfills every participant
+	## admitted before the recipient connected.
+	SESSION_ROSTER = 25,
+	## Server pause notification. Reliable, route [code]0[/code].
+	SESSION_PAUSE = 26,
+	## Server unpause notification. Reliable, route [code]0[/code].
+	SESSION_UNPAUSE = 27,
+	## Server kick notification sent before disconnecting the target peer.
+	## Reliable, route [code]0[/code].
+	SESSION_KICKED = 28,
+	## A player's scene change request, client to server. Reliable, route
+	## [code]0[/code]. The session-scoped scene handshake rides the carrier
+	## rather than a node [code]@rpc[/code], so a session whose
+	## [MultiplayerSceneManager] has not spawned still asks. Answered with
+	## [constant SESSION_SCENE_RESULT].
+	SESSION_SCENE_REQUEST = 29,
+	## The server-authored outcome of one scene request, server to the
+	## requesting peer. Reliable, route [code]0[/code]. Carries the request id
+	## and the [enum NetwScenePromise.Result].
+	SESSION_SCENE_RESULT = 30,
 }
 
 

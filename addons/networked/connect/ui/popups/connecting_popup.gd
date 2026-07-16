@@ -17,17 +17,17 @@ func _ready() -> void:
 
 
 ## Displays the connecting screen and updates details from [param target].
-func open_connecting(target: JoinTarget) -> void:
+func open_connecting(target: NetwConnectTarget) -> void:
 	_cancel_button.text = "Cancel"
 	_progress.visible = false
-	var backend_name := ConnectBrowser.format_backend_label(target.backend)
+	var scheme_name := ConnectBrowser.format_scheme_label(target.scheme)
 	var display_addr := target.address.strip_edges()
 	if display_addr.is_empty():
-		_title.text = "Connecting to %s server..." % backend_name
+		_title.text = "Connecting to %s server..." % scheme_name
 	else:
 		_title.text = (
 				"Connecting to %s server at %s..."
-				% [backend_name, display_addr]
+				% [scheme_name, display_addr]
 		)
 	popup_centered()
 

@@ -22,28 +22,28 @@ func after_test() -> void:
 
 
 func test_adapter_helper_flow() -> void:
-	var backend := session.make_backend()
-	assert_that(backend.session).is_same(session.session())
+	var tree := _make_tree(NetwSessionInterface.Role.CLIENT, "ConnectTargetTree")
+	session.adopt_tree(tree, NetwSessionInterface.Role.CLIENT)
+	assert_that(tree.scheme).is_equal(&"local")
 
-	var tree := _make_tree(MultiplayerTree.Role.CLIENT, "JoinTargetTree")
-	var target := session.make_join_target(tree)
-	assert_that(target.backend).is_same(tree.backend)
+	var target := session.make_connect_target(tree)
+	assert_that(target.scheme).is_equal(&"local")
 	assert_that(target.address).is_equal("localhost")
 
-	target = session.make_join_target(tree, "room-1")
-	assert_that(target.backend).is_same(tree.backend)
+	target = session.make_connect_target(tree, "room-1")
+	assert_that(target.scheme).is_equal(&"local")
 	assert_that(target.address).is_equal("room-1")
 
 	var payload := session.build_join_payload("valeria")
 	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_empty()
+	assert_that(payload.arg_values).is_empty()
 
 	var source := JoinPayload.new()
 	source.username = "ignored"
-	source.spawn = { &"scene": "arena" }
+	source.arg_values = [&"arena", NodePath("Players/Root")]
 	payload = session.build_join_payload("valeria", source)
 	assert_that(payload.username).is_equal("valeria")
-	assert_that(payload.spawn).is_equal(source.spawn)
+	assert_that(payload.arg_values).is_equal(source.arg_values)
 
 
 func test_link_conditions_for_sender() -> void:
@@ -74,7 +74,7 @@ func test_link_conditions_for_sender() -> void:
 
 func test_connect_entry_flow() -> void:
 	var server := _make_tree(
-		MultiplayerTree.Role.DEDICATED_SERVER,
+		NetwSessionInterface.Role.DEDICATED_SERVER,
 		"ConnectHost",
 	)
 	var err: Error = await session.connect_tree(
@@ -83,9 +83,9 @@ func test_connect_entry_flow() -> void:
 	)
 	assert_that(err).is_equal(OK)
 	assert_bool(server.is_online()).is_true()
-	assert_that(server.role).is_equal(MultiplayerTree.Role.DEDICATED_SERVER)
+	assert_that(server.role).is_equal(NetwSessionInterface.Role.DEDICATED_SERVER)
 
-	var client := _make_tree(MultiplayerTree.Role.CLIENT, "ConnectJoinClient")
+	var client := _make_tree(NetwSessionInterface.Role.CLIENT, "ConnectJoinClient")
 	err = await session.connect_tree(
 		client,
 		NetwHarnessSession.Entry.JOIN,
@@ -93,12 +93,12 @@ func test_connect_entry_flow() -> void:
 	)
 	assert_that(err).is_equal(OK)
 	assert_bool(client.is_online()).is_true()
-	assert_that(client.role).is_equal(MultiplayerTree.Role.CLIENT)
+	assert_that(client.role).is_equal(NetwSessionInterface.Role.CLIENT)
 
 	await _reset_session()
 
 	var join_or_host := _make_tree(
-		MultiplayerTree.Role.LISTEN_SERVER,
+		NetwSessionInterface.Role.LISTEN_SERVER,
 		"ConnectJoinOrHost",
 	)
 	err = await session.connect_tree(
@@ -108,12 +108,12 @@ func test_connect_entry_flow() -> void:
 	)
 	assert_that(err).is_equal(OK)
 	assert_bool(join_or_host.is_online()).is_true()
-	assert_that(join_or_host.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
+	assert_that(join_or_host.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
 
 	await _reset_session()
 
 	var host_player := _make_tree(
-		MultiplayerTree.Role.LISTEN_SERVER,
+		NetwSessionInterface.Role.LISTEN_SERVER,
 		"ConnectHostPlayer",
 	)
 	err = await session.connect_tree(
@@ -123,15 +123,15 @@ func test_connect_entry_flow() -> void:
 	)
 	assert_that(err).is_equal(OK)
 	assert_bool(host_player.is_online()).is_true()
-	assert_that(host_player.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
+	assert_that(host_player.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
 
 
 func test_disconnect_tree_closes_peer_and_releases_held_packets() -> void:
 	var server := _make_tree(
-		MultiplayerTree.Role.DEDICATED_SERVER,
+		NetwSessionInterface.Role.DEDICATED_SERVER,
 		"DisconnectServer",
 	)
-	var client := _make_tree(MultiplayerTree.Role.CLIENT, "DisconnectClient")
+	var client := _make_tree(NetwSessionInterface.Role.CLIENT, "DisconnectClient")
 	var host_err: Error = await session.connect_tree(
 		server,
 		NetwHarnessSession.Entry.OPEN_HOST,
@@ -156,14 +156,14 @@ func test_disconnect_tree_closes_peer_and_releases_held_packets() -> void:
 	var closed_id := session.disconnect_tree(client)
 
 	assert_that(closed_id).is_equal(peer_id)
-	assert_that(client.state).is_equal(MultiplayerTree.State.DISCONNECTING)
+	assert_that(client.state).is_equal(NetwSessionInterface.State.DISCONNECTING)
 	assert_that(peer.get_unique_id()).is_equal(0)
 	assert_that(session.session()._held_peers.has(peer)).is_false()
 	assert_that(session.session()._links_by_peer.has(peer)).is_false()
 
 
 func _make_tree(
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 		tree_name: String,
 ) -> MultiplayerTree:
 	var tree := MultiplayerTree.new()

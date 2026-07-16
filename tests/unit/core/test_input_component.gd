@@ -11,12 +11,12 @@ const ACTIONS := [
 ]
 
 
-# Records gather() invocations so the tick-aligned refresh seam can be asserted.
+# Records _gather() invocations so the tick-aligned refresh seam can be asserted.
 class _GatherProbe extends MoveInputComponent:
 	var gather_calls := 0
 
 
-	func gather() -> void:
+	func _gather() -> void:
 		gather_calls += 1
 
 

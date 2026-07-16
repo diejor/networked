@@ -151,6 +151,10 @@ signal pong_received(data: Dictionary)
 ## [member NetwMultiplayer.clock] rather than this node.
 var _interface: NetwClockInterface
 
+# The typed payload registered with the API, retained so the matching
+# object_configuration_remove passes the same resource.
+var _config: NetwClockConfig
+
 
 ## Locates the [MultiplayerClock] registered on the node's multiplayer API.
 static func for_node(node: Node) -> MultiplayerClock:
@@ -163,13 +167,15 @@ static func for_node(node: Node) -> MultiplayerClock:
 
 #region ── Lifecycle ───────────────────────────────────────────────────────────
 
-func service_type() -> Script:
+func _service_type() -> Script:
 	return MultiplayerClock
 
 
-func service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(mt: MultiplayerTree) -> void:
 	if mt.api:
-		mt.api.object_configuration_add(self, self)
+		_interface = mt.api.clock
+		_config = _build_config()
+		mt.api.object_configuration_add(self, _config)
 
 	if not mt.session_entered.is_connected(_on_tree_configured):
 		mt.session_entered.connect(_on_tree_configured)
@@ -181,9 +187,9 @@ func service_entered(mt: MultiplayerTree) -> void:
 		_on_tree_configured.call_deferred()
 
 
-func service_exiting(mt: MultiplayerTree) -> void:
-	if mt.api:
-		mt.api.object_configuration_remove(self, self)
+func _service_exiting(mt: MultiplayerTree) -> void:
+	if mt.api and _config:
+		mt.api.object_configuration_remove(self, _config)
 
 	if mt.session_entered.is_connected(_on_tree_configured):
 		mt.session_entered.disconnect(_on_tree_configured)
@@ -192,25 +198,25 @@ func service_exiting(mt: MultiplayerTree) -> void:
 		mt.session_entered.disconnect(configured.emit)
 
 
-## Binds this configurator to [param iface], pushing the full export snapshot.
-## Called by [NetwMultiplayer] when the node registers through
-## [method MultiplayerAPI.object_configuration_add].
-func attach_interface(iface: NetwClockInterface) -> void:
-	_interface = iface
-	iface._node = self
-	iface.tickrate = tickrate
-	iface.max_ticks_per_frame = max_ticks_per_frame
-	iface.stall_threshold = stall_threshold
-	iface.use_physics_interpolation = use_physics_interpolation
-	iface.sync_mode = sync_mode
-	iface.panic_snap_threshold = panic_snap_threshold
-	iface.stretch_nudge_factor = stretch_nudge_factor
-	iface.ping_interval = ping_interval
-	iface.display_offset = display_offset
-	iface.jitter_multiplier = jitter_multiplier
-	iface.jitter_window = jitter_window
-	iface.jitter_stability_threshold = jitter_stability_threshold
-	iface.enable_drift_logging = enable_drift_logging
+# Snapshots the current exports into the typed payload the interface configures
+# from. Export setters keep pushing live edits straight to the interface, so
+# this runs once per registration.
+func _build_config() -> NetwClockConfig:
+	var config := NetwClockConfig.new()
+	config.tickrate = tickrate
+	config.max_ticks_per_frame = max_ticks_per_frame
+	config.stall_threshold = stall_threshold
+	config.use_physics_interpolation = use_physics_interpolation
+	config.sync_mode = sync_mode
+	config.panic_snap_threshold = panic_snap_threshold
+	config.stretch_nudge_factor = stretch_nudge_factor
+	config.ping_interval = ping_interval
+	config.display_offset = display_offset
+	config.jitter_multiplier = jitter_multiplier
+	config.jitter_window = jitter_window
+	config.jitter_stability_threshold = jitter_stability_threshold
+	config.enable_drift_logging = enable_drift_logging
+	return config
 
 
 func _physics_process(delta: float) -> void:

@@ -183,7 +183,7 @@ func test_controller_disconnect_policy_flow() -> void:
 func _setup_harness(target: NetwTestHarness) -> void:
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
 		return sm
 	await target.setup_factory(sm_factory)
 	client0 = await target.add_client()

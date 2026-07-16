@@ -8,9 +8,9 @@
 ## [codeblock]
 ## MultiplayerTree
 ## └── SteamLobbyDirectory
-##     ├── list_lobbies() -> lobby_list_updated
-##     ├── host_lobby(options) -> SteamMultiplayerPeer
-##     └── join_lobby_peer(id) -> SteamMultiplayerPeer
+##     ├── _list_lobbies() -> lobby_list_updated
+##     ├── _host_lobby(options) -> SteamMultiplayerPeer
+##     └── _join_lobby_peer(id) -> SteamMultiplayerPeer
 ## [/codeblock]
 class_name SteamLobbyDirectory
 extends LobbyDirectory
@@ -56,7 +56,7 @@ var _pending_join_lobby_id: int = 0
 var _init_ok: bool = false
 var _joining: bool = false
 
-## Emitted when Steam reports a connection failure during [method join_lobby_peer].
+## Emitted when Steam reports a connection failure during [method _join_lobby_peer].
 signal peer_connect_failed(reason: String)
 signal _lobby_created_internal(peer: MultiplayerPeer)
 signal _lobby_joined_internal(peer: MultiplayerPeer)
@@ -190,7 +190,7 @@ func is_ready() -> bool:
 
 ## Steam backs every lobby tier: browse, friends-only visibility, overlay
 ## invites, and persona resolution.
-func capabilities() -> int:
+func _capabilities() -> int:
 	return (
 			LobbyDirectory.Capability.BROWSE
 			| LobbyDirectory.Capability.FRIENDS_ONLY_SUPPORT
@@ -247,8 +247,8 @@ func get_local_member_name() -> String:
 ## Requests Steam lobby rows for [member browser_filter_uid].
 ##
 ## Results arrive through [signal LobbyDirectory.lobby_list_updated].
-func list_lobbies() -> void:
-	if not _guard_ready("list_lobbies"):
+func _list_lobbies() -> void:
+	if not _guard_ready("_list_lobbies"):
 		lobby_list_updated.emit([] as Array[LobbyDirectory.LobbyInfo])
 		return
 	_pending_list = true
@@ -269,7 +269,7 @@ func list_lobbies() -> void:
 
 
 ## Leaves the active Steam lobby and clears the current peer.
-func leave_lobby() -> void:
+func _leave_lobby() -> void:
 	_joining = false
 	_pending_join_lobby_id = 0
 	if _lobby_id == 0 or not _wrapper:
@@ -279,15 +279,10 @@ func leave_lobby() -> void:
 	_peer = null
 
 
-## Builds a [JoinTarget] whose address is the Steam lobby id.
-func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
-	var target := JoinTarget.new()
-	target.display_name = lobby.lobby_name
-	target.address = str(lobby.id)
-	target.metadata = lobby.metadata.duplicate()
-	var steam_backend := SteamBackend.new()
-	target.backend = steam_backend
-	return target
+
+## Steam lobbies join through the [code]&"steam"[/code] transport by lobby id.
+func _scheme() -> StringName:
+	return &"steam"
 
 
 ## Creates a Steam lobby and returns a connected host peer.
@@ -295,8 +290,8 @@ func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
 ## [member LobbyDirectory.HostOptions.visibility] maps to a Steam lobby type.
 ## [member LobbyDirectory.HostOptions.max_players] falls back to
 ## [member max_clients] when it is [code]0[/code].
-func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
-	if not _guard_ready("host_lobby"):
+func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+	if not _guard_ready("_host_lobby"):
 		return null
 	if _lobby_id != 0:
 		Netw.dbg.warn(
@@ -322,12 +317,12 @@ func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 ##
 ## Returns [code]null[/code] when Steam is unavailable, the id is invalid, the
 ## local account owns the lobby, or the join times out.
-func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
-	if not _guard_ready("join_lobby_peer"):
+func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+	if not _guard_ready("_join_lobby_peer"):
 		return null
 	if lobby_id <= 0:
 		Netw.dbg.warn(
-			"SteamLobbyDirectory: join_lobby_peer invalid ID %d",
+			"SteamLobbyDirectory: _join_lobby_peer invalid ID %d",
 			[lobby_id],
 		)
 		return null
@@ -339,8 +334,8 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 		return null
 	if _pending_join_lobby_id != 0:
 		Netw.dbg.debug(
-			"SteamLobbyDirectory: ignoring join_lobby_peer(%d); " +
-			"join_lobby_peer(%d) is still pending.",
+			"SteamLobbyDirectory: ignoring _join_lobby_peer(%d); " +
+			"_join_lobby_peer(%d) is still pending.",
 			[lobby_id, _pending_join_lobby_id],
 		)
 		return null
@@ -355,7 +350,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var timed_out := await Async.timeout(_lobby_joined_internal, timer)
 	if timed_out:
 		_joining = false
-		Netw.dbg.error("SteamLobbyDirectory: join_lobby_peer timed out.")
+		Netw.dbg.error("SteamLobbyDirectory: _join_lobby_peer timed out.")
 		return null
 	if _peer == null:
 		_joining = false
@@ -381,7 +376,7 @@ func _on_tree_peer_changed(_peer_id: int) -> void:
 
 
 func _on_tree_server_disconnecting(_reason: String) -> void:
-	leave_lobby()
+	_leave_lobby()
 
 
 func _guard_ready(op: String) -> bool:

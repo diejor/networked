@@ -6,7 +6,7 @@
 ## never a merge and no authority flags are needed.
 ##
 ## [codeblock]
-## # Reconciliation on the owning client (architecture §4.3):
+## # Reconciliation on the owning client:
 ## var predicted := timeline.latest_state_at_or_before(ack + 1)
 ## if diverged(predicted, authoritative):
 ##     for entry in timeline.inputs_in_range(ack + 1, now):

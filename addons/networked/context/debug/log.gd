@@ -150,8 +150,7 @@ static func _load_active_profile() -> void:
 		)
 
 
-## Fixes a double-prefix written by an earlier version of the editor panel.
-## ([code]uid://uid://...[/code]).
+# Fixes a double-prefix (uid://uid://...) written by an earlier editor panel.
 static func _fix_profile_path(path: String) -> String:
 	if path.begins_with("uid://uid://"):
 		return path.substr("uid://".length())
@@ -657,9 +656,8 @@ static func _get_context() -> Dictionary:
 	return { "module": "", "site": "" }
 
 
-## Converts a script path to a dot-separated module identifier.
-## Scripts inside the addon are stored relative to the addon root so overrides
-## survive the addon directory being moved.
+# Converts a script path to a dot-separated module identifier. Addon scripts are
+# stored relative to the addon root so overrides survive the addon being moved.
 static func _module_from_path(path: String) -> String:
 	var p := path.replace("res://", "").trim_suffix("/")
 	if p.ends_with(".gd"):

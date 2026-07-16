@@ -30,21 +30,19 @@ func before_test() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 	client = await harness.add_client()
 
 
 func test_default_scene_wraps_level_and_context() -> void:
-	var server := harness.server()
-	var scene_node_name := "%sScene" % level_builder.scene_name
-	var scene := server.get_node_or_null("SceneManager/" + scene_node_name)
+	var manager := harness.server_scene_manager()
+	var scene := manager.active_scenes.get(level_builder.scene_name) \
+			as MultiplayerScene
 	assert_that(scene).is_not_null()
 
-	var level := server.get_node_or_null(
-		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],
-	)
+	var level := scene.level
 	assert_that(level).is_not_null()
 
 	var ctx := Netw.of(level)
@@ -53,7 +51,6 @@ func test_default_scene_wraps_level_and_context() -> void:
 
 
 func test_player_spawns_in_level_after_join() -> void:
-	var server := harness.server()
 	var username: String = client.get_meta(&"_harness_username")
 	var peer_id := client.multiplayer_peer.get_unique_id()
 	var join_payload := harness.make_spawn_payload(
@@ -62,19 +59,17 @@ func test_player_spawns_in_level_after_join() -> void:
 		spawner_path,
 	)
 
-	client.request_join.rpc_id(
-		MultiplayerPeer.TARGET_PEER_SERVER,
-		join_payload.serialize(),
-	)
+	client.submit_join(join_payload)
 
 	var rj := ResolvedJoin.new()
 	rj.username = username
 	rj.peer_id = peer_id
 	var player_name := NetwEntity.name_for(rj)
-	var scene_node_name := "%sScene" % level_builder.scene_name
-	var level := server.get_node_or_null(
-		"SceneManager/%s/%s" % [scene_node_name, level_builder.scene_name],
-	)
+	var manager := harness.server_scene_manager()
+	var scene := manager.active_scenes.get(level_builder.scene_name) \
+			as MultiplayerScene
+	assert_that(scene).is_not_null()
+	var level := scene.level
 
 	@warning_ignore("redundant_await")
 	await assert_func(level, "get_node_or_null", [player_name]) \

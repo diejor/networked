@@ -30,7 +30,7 @@ var set_bomb: StringName = "set_bomb"
 
 
 ## Returns the action names tracked by this bomber control component.
-func get_inputs() -> Array:
+func _get_inputs() -> Array:
 	return [
 		move_left,
 		move_right,
@@ -43,7 +43,7 @@ func get_inputs() -> Array:
 ## Refreshes [member motion] and [member bombing] from tracked input state each
 ## tick. Called by [method InputComponent.gather] at
 ## [signal NetwClockInterface.before_tick] on the controlling client.
-func gather() -> void:
+func _gather() -> void:
 	motion = get_vector2(
 		move_left,
 		move_right,

@@ -50,7 +50,7 @@ enum Mode {
 
 
 ## Returns [code]true[/code] when this spec can smooth [param type].
-func supports_type(type: Variant.Type) -> bool:
+func _supports_type(type: Variant.Type) -> bool:
 	return type in [
 		TYPE_FLOAT,
 		TYPE_VECTOR2,

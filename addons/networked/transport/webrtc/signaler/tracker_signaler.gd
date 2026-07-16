@@ -15,8 +15,8 @@
 ## that one message, matching the non-trickle [WebRTCSession].
 ## [codeblock]
 ## TrackerSignaler.new(trackers)
-## open("", 1)                     # host: generates info_hash
-## open(room_hash, client_id)      # client: normalizes the hash
+## _open("", 1)                    # host: generates info_hash
+## _open(room_hash, client_id)     # client: normalizes the hash
 ##
 ## host peer_id   = info_hash[0..10] + "0000000001"  (derivable by clients)
 ## client peer_id = rand10          + multiplayer_id.pad_zeros(10)
@@ -42,7 +42,7 @@ var _tracker: WebTorrentTrackerClient = null
 var _tracker_shared := false
 var _is_server := false
 var _info_hash := ""
-var _room_id := ""
+var _room := ""
 var _local_peer_id := ""
 var _local_godot_id := 0
 # The host's derived address, so a client sends its offer straight to it.
@@ -73,24 +73,24 @@ func _init(
 	room_code_characters = p_characters
 
 
-func open(p_room_id: String, local_multiplayer_id: int) -> Error:
+func _open(p_room_id: String, local_multiplayer_id: int) -> Error:
 	_local_godot_id = local_multiplayer_id
 	_is_server = local_multiplayer_id == 1
 	if _is_server:
 		# The signaler owns room-id generation; room semantics are its own.
 		if not signaling_namespace.is_empty():
-			_room_id = _generate_short_code()
+			_room = _generate_short_code()
 		else:
-			_room_id = _generate_hash()
+			_room = _generate_hash()
 	else:
-		_room_id = p_room_id
+		_room = p_room_id
 
 	if not signaling_namespace.is_empty():
-		_info_hash = (signaling_namespace + ":" + _room_id).sha1_text().substr(0, 20)
-	elif _room_id.length() != 20:
-		_info_hash = _room_id.sha1_text().substr(0, 20)
+		_info_hash = (signaling_namespace + ":" + _room).sha1_text().substr(0, 20)
+	elif _room.length() != 20:
+		_info_hash = _room.sha1_text().substr(0, 20)
 	else:
-		_info_hash = _room_id
+		_info_hash = _room
 
 	# The peer_id derives from the room hash for the host, so it must be known.
 	_local_peer_id = _generate_peer_id(local_multiplayer_id)
@@ -100,20 +100,20 @@ func open(p_room_id: String, local_multiplayer_id: int) -> Error:
 		_server_wt_id = _host_peer_id()
 	Netw.dbg.debug(
 		"TrackerSignaler: opening room %s as id %d (peer_id %s...).",
-		[_room_id, local_multiplayer_id, _local_peer_id.substr(0, 6)],
+		[_room, local_multiplayer_id, _local_peer_id.substr(0, 6)],
 	)
 	return _connect_trackers()
 
 
-func room_id() -> String:
-	return _room_id
+func _room_id() -> String:
+	return _room
 
 
-func local_signaler_id() -> String:
+func _local_signaler_id() -> String:
 	return _local_peer_id
 
 
-func poll(dt: float) -> void:
+func _poll(dt: float) -> void:
 	if _tracker == null:
 		return
 	_tracker.poll()
@@ -122,7 +122,7 @@ func poll(dt: float) -> void:
 	_process_signaling_close_delay(dt)
 
 
-func close() -> void:
+func _close() -> void:
 	_pending_directed.clear()
 	if _tracker:
 		_send_stop()
@@ -142,7 +142,7 @@ func _send_stop() -> void:
 	)
 
 
-func on_session_connected(multiplayer_id: int) -> void:
+func _on_session_connected(multiplayer_id: int) -> void:
 	# Wind down signaling once the native link to the host is up.
 	if not _is_server and multiplayer_id == 1:
 		Netw.dbg.trace("TrackerSignaler: native link up, delaying close.")
@@ -153,7 +153,7 @@ func on_session_connected(multiplayer_id: int) -> void:
 # Relays an outbound offer or answer as a directed message in the answer slot the
 # tracker forwards verbatim. Candidates already ride bundled in the payload, so
 # the candidate kind has nothing left to send.
-func send(
+func _send(
 		_to_multiplayer_id: int,
 		to_signaler_id: String,
 		kind: String,

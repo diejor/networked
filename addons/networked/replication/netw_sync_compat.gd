@@ -257,7 +257,7 @@ func pump() -> void:
 	# A clock can tick before the session assigns a role, and with no role there
 	# are no live routes to gather for, so the pump has nothing to do and must
 	# not read the role-dependent host flag yet.
-	if mt and mt.role == MultiplayerTree.Role.NONE:
+	if mt and mt.role == NetwSessionInterface.Role.NONE:
 		return
 	var host := not mt or mt.is_host
 

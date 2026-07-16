@@ -218,7 +218,7 @@ func wait_for_participants(n: int) -> void:
 ##
 ## Returns [code]null[/code] if [param node] is not inside an active [Scene].
 static func for_node(node: Node) -> NetwScene:
-	var scene_node := MultiplayerTree.scene_for_node(node)
+	var scene_node := MultiplayerScene.of(node)
 	return scene_node.netw_scene if is_instance_valid(scene_node) else null
 
 # ---------------------------------------------------------------------------
@@ -553,7 +553,7 @@ class Countdown:
 		cancelled.emit()
 
 
-	## Starts ticking. Called internally by [method NetwScene.start_countdown].
+	# Starts ticking. Called internally by NetwScene.start_countdown.
 	func _start() -> void:
 		_running = true
 		_schedule_tick()

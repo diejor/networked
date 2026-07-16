@@ -11,12 +11,12 @@ func teleport_animation(animation: Callable) -> void:
 	await transition_anim.animation_finished
 
 
-func teleport_in() -> void:
+func _teleport_in() -> void:
 	var anim: Callable = transition_anim.play_backwards.bind("tp")
 	await teleport_animation(anim)
 
 
-func teleport_out() -> void:
+func _teleport_out() -> void:
 	var anim: Callable = transition_anim.play.bind("tp")
 	await teleport_animation(anim)
 

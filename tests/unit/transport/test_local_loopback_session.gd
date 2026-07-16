@@ -87,28 +87,6 @@ func test_peer_lifecycle_flow() -> void:
 	LocalLoopbackSession.shared = null
 
 
-func test_backend_probe_flow() -> void:
-	var backend := LocalLoopbackBackend.new()
-	backend.session = session
-
-	@warning_ignore("redundant_await")
-	var missing: BackendPeer.ProbeResult = await backend.probe_server_info("")
-	assert_int(missing.status).is_equal(
-		BackendPeer.ProbeResult.Status.UNSUPPORTED,
-	)
-
-	session.get_server_peer()
-	session.create_client_peer()
-	session.server_app_id = &"test-app"
-
-	@warning_ignore("redundant_await")
-	var live: BackendPeer.ProbeResult = await backend.probe_server_info("")
-	assert_int(live.status).is_equal(BackendPeer.ProbeResult.Status.OK)
-	assert_that(live.info.is_local_listener).is_true()
-	assert_that(live.info.players).is_equal(1)
-	assert_that(live.info.app_id).is_equal(&"test-app")
-
-
 func test_delay_flow() -> void:
 	var pair := _make_connected_pair()
 	var server: LocalMultiplayerPeer = pair[0]

@@ -74,7 +74,7 @@ func test_server_read_snapshot_persists_live_value() -> void:
 	var engine := NetwEntity.of(server_player).persistence
 	await engine.flush()
 
-	var raw: Dictionary = db.backend.find_by_id(&"security", engine._record_id())
+	var raw: Dictionary = db.backend._find_by_id(&"security", engine._record_id())
 	assert_that(raw.get(&"position")).is_equal(Vector2(10, 20))
 
 

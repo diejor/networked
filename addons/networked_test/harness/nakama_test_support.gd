@@ -31,9 +31,12 @@ static func start_host(
 		push_error("NakamaTestSupport: host failed: %s" % error_string(err))
 		tree.queue_free()
 		return { }
+	var room := ""
+	if tree.connector and tree.connector.peer_view:
+		room = tree.connector.peer_view.join_address()
 	return {
 		tree = tree,
-		room = tree.backend.get_join_address(),
+		room = room,
 	}
 
 
@@ -45,13 +48,13 @@ static func make_client_tree(
 	return _make_tree(parent, "NakamaClient_%s" % username, username)
 
 
-## Builds a [JoinTarget] pointing [param client] at [param room].
+## Builds a [NetwConnectTarget] pointing [param client] at [param room].
 static func make_join_target(
 		client: MultiplayerTree,
 		room: String,
-) -> JoinTarget:
-	var target := JoinTarget.new()
-	target.backend = client.backend
+) -> NetwConnectTarget:
+	var target := NetwConnectTarget.new()
+	target.scheme = client.scheme
 	target.address = room
 	return target
 
@@ -63,10 +66,10 @@ static func stop_tree(tree: MultiplayerTree) -> void:
 	var scene_tree := tree.get_tree()
 	var dir := directory(tree)
 	if dir != null:
-		# leave_lobby is a coroutine when it deletes a hosted browse card, so
+		# _leave_lobby is a coroutine when it deletes a hosted browse card, so
 		# await it before freeing the tree or the storage delete races the
 		# facade teardown.
-		await dir.leave_lobby()
+		await dir._leave_lobby()
 	tree.queue_free()
 	if scene_tree:
 		await NetwTestSuite.drain_frames(scene_tree, 5)
@@ -88,9 +91,12 @@ static func host_scene(
 		push_error("NakamaTestSupport: host scene failed: %s" % error_string(err))
 		scene.queue_free()
 		return { }
+	var room := ""
+	if tree.connector and tree.connector.peer_view:
+		room = tree.connector.peer_view.join_address()
 	return {
 		tree = tree,
-		room = tree.backend.get_join_address(),
+		room = room,
 		scene = scene,
 	}
 
@@ -117,14 +123,14 @@ static func join_scene(
 	return tree
 
 
-## Builds a [JoinPayload] for [param username].
+## Builds a [JoinPayload] for [param username] with typed join [param args].
 static func payload(
 		username: String,
-		spawn: Dictionary = { },
+		args: Array = [],
 ) -> JoinPayload:
 	var p := JoinPayload.new()
 	p.username = StringName(username)
-	p.spawn = spawn.duplicate(true)
+	p.arg_values = args.duplicate(true)
 	return p
 
 
@@ -142,9 +148,9 @@ static func _make_tree(
 
 static func _configure_tree(tree: MultiplayerTree, username: String) -> void:
 	tree.auto_host_headless = false
-	tree.desired_role = MultiplayerTree.Role.LISTEN_SERVER
+	tree.desired_role = NetwSessionInterface.Role.LISTEN_SERVER
 	_attach_directory(tree, username)
-	tree.backend = NakamaBackend.new()
+	tree.scheme = &"nakama"
 
 
 static func _attach_directory(tree: MultiplayerTree, username: String) -> void:
@@ -191,11 +197,11 @@ static func _collect_nodes(root: Node) -> Array[Node]:
 	return nodes
 
 
-static func _level_1_spawn() -> Dictionary:
+static func _level_1_spawn() -> Array:
 	var path := SceneNodePath.new(
 		"uid://bqi7mvxdnvgch::Player"
 	)
-	return EntitySpawnPolicy.from_scene_node_path(path).to_dict()
+	return NetwDefaultJoin.args_from_scene_node_path(path)
 
 
 static func _run_prefix() -> String:

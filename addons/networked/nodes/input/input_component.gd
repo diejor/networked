@@ -1,6 +1,6 @@
 ## Abstract base component for multiplayer-aware input handling.
 ##
-## Subclass this and implement [method get_inputs] to return the list of action names your
+## Subclass this and implement [method _get_inputs] to return the list of action names your
 ## component tracks. Processing is automatically disabled on non-authoritative peers.
 ## [codeblock]
 ## class_name MoveInputComponent
@@ -9,7 +9,7 @@
 ## @export_custom(PROPERTY_HINT_INPUT_NAME, &"input")
 ## var move_left: StringName = "move_left"
 ##
-## func get_inputs() -> Array:
+## func _get_inputs() -> Array:
 ##     return [move_left, ...]
 ## [/codeblock]
 @abstract
@@ -35,7 +35,7 @@ var _dbg: NetwHandle = Netw.dbg.handle(self)
 
 
 ## Returns the list of action name strings this component should track.
-@abstract func get_inputs() -> Array
+@abstract func _get_inputs() -> Array
 
 
 # The controlling peer keeps latching input under PROCESS_MODE_ALWAYS so an
@@ -76,19 +76,19 @@ func _ready() -> void:
 ## the tick's gathered input, never a stale poll. The base is a no-op, so a
 ## subclass that only emits [signal tick_snapshot] needs no override.
 ## [codeblock]
-## func gather() -> void:
+## func _gather() -> void:
 ##     motion = get_vector2(move_left, move_right, move_up, move_down)
 ##     bombing = is_down(set_bomb)
 ## [/codeblock]
-func gather() -> void:
+func _gather() -> void:
 	pass
 
 
-## Builds the initial [member state] dictionary from [method get_inputs].
+## Builds the initial [member state] dictionary from [method _get_inputs].
 func build_state_dict_from_actions() -> Dictionary[StringName, bool]:
 	var _state: Dictionary[StringName, bool]
 
-	for action in get_inputs():
+	for action in _get_inputs():
 		_state[action] = false
 
 	assert(
@@ -118,7 +118,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_before_tick(_delta: float, _t: int) -> void:
-	gather()
+	_gather()
 
 
 func _on_tick(_delta: float, t: int) -> void:

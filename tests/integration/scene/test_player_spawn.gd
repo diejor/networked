@@ -28,7 +28,7 @@ func before_test() -> void:
 	harness = make_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(level_builder.resource_path)
+		sm.register_initial_scene_path(level_builder.resource_path)
 		return sm
 	await harness.setup_factory(sm_factory)
 	client0 = await harness.add_client("alice")
@@ -123,7 +123,7 @@ func test_nested_scene_late_path_binding_and_record_forwarding() -> void:
 	var custom_harness := make_unmanaged_harness()
 	var sm_factory := func() -> MultiplayerSceneManager:
 		var sm := NetwTestSuite.create_scene_manager()
-		sm.add_spawnable_scene(custom_level_builder.resource_path)
+		sm.register_initial_scene_path(custom_level_builder.resource_path)
 		return sm
 	await custom_harness.setup_factory(sm_factory)
 	var custom_client := await custom_harness.add_client("carol")

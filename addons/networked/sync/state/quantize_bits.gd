@@ -58,17 +58,17 @@ func _dec(r: NetwBitBuffer.Reader) -> float:
 	return min_limit + f * (max_limit - min_limit)
 
 
-## Implements [method NetwQuantize.supports_type].
-func supports_type(type: Variant.Type) -> bool:
+## Implements [method NetwQuantize._supports_type].
+func _supports_type(type: Variant.Type) -> bool:
 	return type in [TYPE_FLOAT, TYPE_INT, TYPE_VECTOR2, TYPE_VECTOR3]
 
 
-## Implements [method NetwQuantize.write], packing each [Vector3] or [Vector2]
+## Implements [method NetwQuantize._write], packing each [Vector3] or [Vector2]
 ## axis (or a scalar) into [member bit_count] bits across
 ## [member min_limit]..[member max_limit].
-func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
+func _write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	assert(
-		supports_type(typeof(value) as Variant.Type),
+		_supports_type(typeof(value) as Variant.Type),
 		"NetwQuantizeBits: Unsupported type %s." % type_string(typeof(value)),
 	)
 	match typeof(value):
@@ -83,11 +83,11 @@ func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 			_enc(w, float(value))
 
 
-## Implements [method NetwQuantize.read], reconstructing the value of
+## Implements [method NetwQuantize._read], reconstructing the value of
 ## [param type] from [member bit_count] bits per component.
-func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
+func _read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeBits: Unsupported type %s." % type_string(type),
 	)
 	match type:
@@ -101,11 +101,11 @@ func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 			return _dec(r)
 
 
-## Implements [method NetwQuantize.bit_width]: [member bit_count] per component,
+## Implements [method NetwQuantize._bit_width]: [member bit_count] per component,
 ## tripled for a [Vector3], or doubled for a [Vector2].
-func bit_width(type: Variant.Type) -> int:
+func _bit_width(type: Variant.Type) -> int:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeBits: Unsupported type %s." % type_string(type),
 	)
 	match type:
@@ -117,12 +117,12 @@ func bit_width(type: Variant.Type) -> int:
 			return bit_count
 
 
-## Implements [method NetwQuantize.max_error]: half the grid spacing
+## Implements [method NetwQuantize._max_error]: half the grid spacing
 ## ([code]span / 2^bits[/code]) per axis, combined as a magnitude for a
 ## [Vector3] or [Vector2].
-func max_error(type: Variant.Type) -> float:
+func _max_error(type: Variant.Type) -> float:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeBits: Unsupported type %s." % type_string(type),
 	)
 	var axis := (max_limit - min_limit) / float(1 << bit_count) * 0.5

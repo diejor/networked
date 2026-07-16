@@ -1,4 +1,4 @@
-## CharacterBody2D replay coherence for ack reconciliation (architecture §9.2).
+## CharacterBody2D replay coherence for ack reconciliation.
 ## Single-peer, real-physics, no networking.
 ##
 ## Reconciliation restores an authoritative snapshot and replays the local
@@ -112,7 +112,7 @@ func test_move_and_slide_uses_physics_delta_not_arg() -> void:
 	# move_and_slide integrates with get_physics_process_delta_time(), ignoring
 	# the _network_tick delta arg. So one replayed tick advances exactly one
 	# physics tick of motion: replay equals wall-clock time only when
-	# tickrate == physics rate, which is why §8.1 pins the bomber first cut to 60.
+	# tickrate == physics rate, which is why the bomber first cut is pinned to 60.
 	_make_arena(false)
 	var body := await _make_body(Vector2(0, 0))
 

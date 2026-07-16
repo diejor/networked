@@ -122,8 +122,8 @@ func step(step_label: String, data: Dictionary = { }) -> NetwSpan:
 
 ## Records a non-fatal warning checkpoint within this span without closing it.
 ## [br][br]
-## Use this for conditions that are suspicious but not immediately fatal —
-## the span stays OPEN for further steps. For a fatal outcome, use [method fail].
+## Use this for conditions that are suspicious but not immediately fatal. The
+## span stays OPEN for further steps. For a fatal outcome, use [method fail].
 ## [br][br]
 ## Sends [code]networked:span_step_warn[/code] and emits [method push_warning].
 func step_warn(

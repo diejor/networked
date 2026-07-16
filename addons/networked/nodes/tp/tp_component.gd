@@ -24,9 +24,19 @@ signal teleport_initiated(target_tp: SceneNodePath, corr: NetwCorrelation)
 ## [code]&"save_ack_timeout"[/code].
 signal stalled(reason: StringName)
 
-## Emitted when the local player's teleport is committed by the server and the
-## client snaps to the destination. Fires before the transition-in animation
-## and physics/processing are restored.
+## Emitted after the local player snaps to the destination and its processing
+## resumes, at the start of the transition-in reveal.
+##
+## A teleport is a position discontinuity, so a view that smooths or interpolates
+## its position must drop its history here or it pans across the inter-scene gap
+## as the reveal fades in. The player is already processing again by this point,
+## so the reset lands during the reveal instead of waiting for it to finish.
+## Reset whatever your camera uses: [method Camera2D.reset_smoothing], a
+## [Camera3D] rig's own interpolation, or [method Node.reset_physics_interpolation].
+## [codeblock]
+## func _ready() -> void:
+##     %TPComponent.teleport_committed.connect(reset_smoothing)
+## [/codeblock]
 signal teleport_committed
 
 ## Emitted (client) once the full local commit sequence finishes: transition-in
@@ -185,7 +195,9 @@ static func _resolve_scene_name(path_or_uid: String) -> String:
 ## completes. Safe to [operator await] across the delete+respawn cycle.
 ##
 ## If a teleport is already active or still settling, the request is ignored
-## and the promise resolves on the next frame.
+## and the promise resolves on the next frame. A camera or interpolated view
+## resets its smoothing on [signal teleport_committed] so the reveal shows the
+## destination instead of panning from the origin.
 func teleport(target_tp: SceneNodePath) -> TeleportPromise:
 	var promise := TeleportPromise.new()
 	if _tp_mutex.is_locked() or is_settling():
@@ -223,15 +235,16 @@ func _do_teleport(
 	current_scene_path = target_tp.scene_path
 
 	# Disable processing and mask the body off the PhysicsServer for the
-	# whole teleport. Suppresses phantom Area2D/3D enter/exit signals
-	# during reparent (godot#14578) and freezes input/physics/animations
-	# until the reveal completes in _rpc_teleport_committed. The TPLayer
-	# is a sibling CanvasLayer, so its AnimationPlayer keeps ticking.
+	# transition-out and reparent. Suppresses phantom Area2D/3D enter/exit
+	# signals during reparent (godot#14578) and freezes input/physics/animations
+	# until the destination snaps in _rpc_teleport_committed, which resumes
+	# processing for the reveal and keeps only collision masked until it ends.
+	# The TPLayer is a sibling CanvasLayer, so its AnimationPlayer keeps ticking.
 	_tp_guard = AreaReparentGuard.new(owner)
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
-		await tp_layer.teleport_out()
+		await tp_layer._teleport_out()
 
 	_request_teleport.rpc_id(
 		MultiplayerPeer.TARGET_PEER_SERVER,
@@ -277,7 +290,7 @@ func _request_teleport(
 		return
 
 	var player := owner
-	var from_scene := MultiplayerTree.scene_for_node(player) as MultiplayerScene
+	var from_scene := MultiplayerScene.of(player)
 	if not from_scene:
 		from_scene = scene_manager.active_scenes.get(from_scene_name)
 	if not from_scene:
@@ -413,20 +426,26 @@ func _rpc_teleport_committed(snap_pos: Variant) -> void:
 	var peer_id := multiplayer.get_unique_id()
 
 	_dbg.info("Teleport committed. Snapping local player to %s" % [str(snap_pos)])
-	teleport_committed.emit()
 	owner.set("global_position", snap_pos)
+	# Lift the processing freeze at the destination pose but keep collision
+	# suppressed, so the player and its camera are live through the reveal while
+	# the body still cannot trip the destination teleporter. The mutex and the
+	# settle window remain the double-teleport guards. Emit after resuming so a
+	# view that resets on this signal is already processing when it re-baselines.
+	if _tp_guard:
+		_tp_guard.resume_processing()
+	teleport_committed.emit()
 
 	var tp_layer := get_tp_layer()
 	if tp_layer:
-		await tp_layer.teleport_in()
+		await tp_layer._teleport_in()
 
-	# Open the settle window before restoring physics so the first
-	# body_entered the destination area fires after release lands
-	# inside the window.
+	# Open the settle window before restoring collision so the first
+	# body_entered the destination area fires inside the window.
 	_settle_until_msec = Time.get_ticks_msec() + int(settle_seconds * 1000.0)
 
-	# Restore physics and processing only after the reveal completes, so
-	# the player stays still and invisible to areas under the fade-in.
+	# Restore collision only after the reveal completes, so the arrival cannot
+	# trip an overlapping teleporter until the settle window covers it.
 	if _tp_guard:
 		_tp_guard.release()
 		_tp_guard = null

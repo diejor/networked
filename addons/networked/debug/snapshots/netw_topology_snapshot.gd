@@ -108,7 +108,7 @@ var username: String = ""
 var peer_id: int = 0
 var lobby_name: String = ""
 var active_scene: String = ""
-var role: MultiplayerTree.Role = MultiplayerTree.Role.NONE
+var role: NetwSessionInterface.Role = NetwSessionInterface.Role.NONE
 var is_server: bool = false
 
 ## Cache diagnostic data: [code]{"hit": bool, "hooked": bool}[/code].
@@ -131,7 +131,7 @@ func to_dict() -> Dictionary:
 		"lobby_name": lobby_name,
 		"active_scene": active_scene,
 		"role": role,
-		"role_name": MultiplayerTree.Role.keys()[role],
+		"role_name": NetwSessionInterface.Role.keys()[role],
 		"is_server": is_server,
 		"cache_info": cache_info,
 		"synchronizers": syncs,
@@ -148,11 +148,11 @@ static func from_dict(d: Dictionary) -> NetwTopologySnapshot:
 	snap.lobby_name = d.get("lobby_name", "")
 	snap.active_scene = d.get("active_scene", "")
 	if d.has("role"):
-		snap.role = d.get("role", MultiplayerTree.Role.NONE)
+		snap.role = d.get("role", NetwSessionInterface.Role.NONE)
 	elif d.get("is_server", false):
-		snap.role = MultiplayerTree.Role.DEDICATED_SERVER
+		snap.role = NetwSessionInterface.Role.DEDICATED_SERVER
 	else:
-		snap.role = MultiplayerTree.Role.CLIENT
+		snap.role = NetwSessionInterface.Role.CLIENT
 	snap.is_server = d.get("is_server", false)
 	snap.cache_info = d.get("cache_info", { })
 	for sd: Dictionary in d.get("synchronizers", []):

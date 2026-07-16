@@ -3,7 +3,7 @@
 ## Declares a server-authored [code]position[/code] state set through
 ## [method Netw.configure_property] with [method NetwScriptModel.PropertyConfig.masked]
 ## instead of [StateSyncBody]'s shared-broadcast default, so the pump computes
-## and sends a per-recipient masked frame (§5.6) rather than one shared row.
+## and sends a per-recipient masked frame rather than one shared row.
 class_name MaskedStateSyncBody
 extends Node2D
 

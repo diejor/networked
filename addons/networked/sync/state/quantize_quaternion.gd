@@ -26,7 +26,7 @@ func bits(p_bits: int) -> NetwQuantizeQuaternion:
 	return self
 
 
-func supports_type(type: Variant.Type) -> bool:
+func _supports_type(type: Variant.Type) -> bool:
 	return type == TYPE_QUATERNION
 
 
@@ -51,10 +51,10 @@ func _components(q: Quaternion) -> Array[float]:
 	return [q.x, q.y, q.z, q.w]
 
 
-## Implements [method NetwQuantize.write], packing a normalized [Quaternion].
-func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
+## Implements [method NetwQuantize._write], packing a normalized [Quaternion].
+func _write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 	assert(
-		supports_type(typeof(value) as Variant.Type),
+		_supports_type(typeof(value) as Variant.Type),
 		"NetwQuantizeQuaternion: Unsupported type %s." % type_string(
 			typeof(value),
 		),
@@ -74,10 +74,10 @@ func write(w: NetwBitBuffer.Writer, value: Variant) -> void:
 			_enc_component(w, components[i])
 
 
-## Implements [method NetwQuantize.read], reconstructing a [Quaternion].
-func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
+## Implements [method NetwQuantize._read], reconstructing a [Quaternion].
+func _read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeQuaternion: Unsupported type %s." % type_string(type),
 	)
 	var largest := r.get_bits(2)
@@ -98,21 +98,21 @@ func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant:
 	).normalized()
 
 
-## Implements [method NetwQuantize.bit_width]: two index bits plus three
+## Implements [method NetwQuantize._bit_width]: two index bits plus three
 ## quantized components.
-func bit_width(type: Variant.Type) -> int:
+func _bit_width(type: Variant.Type) -> int:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeQuaternion: Unsupported type %s." % type_string(type),
 	)
 	return 2 + bit_count * 3
 
 
-## Implements [method NetwQuantize.max_error]: a conservative angular error in
+## Implements [method NetwQuantize._max_error]: a conservative angular error in
 ## radians after reconstructing the omitted component.
-func max_error(type: Variant.Type) -> float:
+func _max_error(type: Variant.Type) -> float:
 	assert(
-		supports_type(type),
+		_supports_type(type),
 		"NetwQuantizeQuaternion: Unsupported type %s." % type_string(type),
 	)
 	var axis := _COMPONENT_LIMIT / float(_component_count() - 1)

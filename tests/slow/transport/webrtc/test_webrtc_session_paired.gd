@@ -24,7 +24,7 @@ func test_paired_signaler_reaches_native_connection() -> void:
 
 	assert_int(err).is_equal(OK)
 	assert_bool(client.is_online()).is_true()
-	assert_int(client.role).is_equal(MultiplayerTree.Role.CLIENT)
+	assert_int(client.role).is_equal(NetwSessionInterface.Role.CLIENT)
 
 	var res := client.last_connect_result
 	assert_that(res).is_not_null()

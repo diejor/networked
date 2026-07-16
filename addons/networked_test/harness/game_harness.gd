@@ -3,6 +3,11 @@
 ## [method add_host], [method add_client], and [method sync_ticks] drive real
 ## game scenes through one [LocalLoopbackSession]. Per peer input lives on the
 ## returned [NetwSceneRunner].
+##
+## A game scene may author its own [MultiplayerTree] or carry none. When the
+## instantiated scene holds no tree, [method add_host] and [method add_client]
+## wrap it in a harness-constructed [MultiplayerTree], one per participant
+## window, so a scene the game natively swaps needs no authored session node.
 class_name NetwGameHarness
 extends Node
 
@@ -51,9 +56,9 @@ func setup() -> void:
 
 ## Adds a listen server host participant.
 ##
-## [param spawn] may be a [SceneNodePath], [JoinPayload], [Dictionary], or
-## [code]null[/code]. When [param spawn] is a [JoinPayload], only
-## [member JoinPayload.spawn] is used. [param username] stays authoritative.
+## [param spawn] may be a [SceneNodePath], [JoinPayload], [Array] of typed join
+## args, or [code]null[/code]. When [param spawn] is a [JoinPayload], only
+## [member JoinPayload.arg_values] is used. [param username] stays authoritative.
 func add_host(
 		username: String = "host",
 		wait_for_player: bool = true,
@@ -62,7 +67,7 @@ func add_host(
 	assert(host == null, "NetwGameHarness.add_host: host already exists.")
 	var runner := _create_runner(
 		username,
-		MultiplayerTree.Role.LISTEN_SERVER,
+		NetwSessionInterface.Role.LISTEN_SERVER,
 	)
 	host = runner
 
@@ -82,16 +87,16 @@ func add_host(
 
 ## Adds a client participant connected to [method add_host].
 ##
-## [param spawn] may be a [SceneNodePath], [JoinPayload], [Dictionary], or
-## [code]null[/code]. When [param spawn] is a [JoinPayload], only
-## [member JoinPayload.spawn] is used. [param username] stays authoritative.
+## [param spawn] may be a [SceneNodePath], [JoinPayload], [Array] of typed join
+## args, or [code]null[/code]. When [param spawn] is a [JoinPayload], only
+## [member JoinPayload.arg_values] is used. [param username] stays authoritative.
 func add_client(
 		username: String,
 		wait_for_player: bool = true,
 		spawn: Variant = null,
 ) -> NetwSceneRunner:
 	assert(host != null, "NetwGameHarness.add_client: add host first.")
-	var runner := _create_runner(username, MultiplayerTree.Role.CLIENT)
+	var runner := _create_runner(username, NetwSessionInterface.Role.CLIENT)
 
 	var err: Error = await _loopback.connect_tree(
 		runner.tree,
@@ -340,7 +345,7 @@ func teardown() -> void:
 
 func _create_runner(
 		username: String,
-		role: MultiplayerTree.Role,
+		role: NetwSessionInterface.Role,
 ) -> NetwSceneRunner:
 	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
 	slot.name = "Window_%s" % username
@@ -348,9 +353,15 @@ func _create_runner(
 
 	var scene := _main_scene.instantiate()
 	var tree := _find_single_multiplayer_tree(scene)
+	var runner_root: Node = scene
+	if tree == null:
+		tree = MultiplayerTree.new()
+		tree.name = &"MultiplayerTree"
+		tree.add_child(scene)
+		runner_root = tree
 	_adopt_tree(tree, role)
 
-	var runner := NetwSceneRunner.new(scene, slot, StringName(username))
+	var runner := NetwSceneRunner.new(runner_root, slot, StringName(username))
 	runner.tree = tree
 	runner.slot.tree = tree
 	runner.slot.username = StringName(username)
@@ -360,7 +371,7 @@ func _create_runner(
 	return runner
 
 
-func _adopt_tree(tree: MultiplayerTree, role: MultiplayerTree.Role) -> void:
+func _adopt_tree(tree: MultiplayerTree, role: NetwSessionInterface.Role) -> void:
 	_loopback.adopt_tree(tree, role)
 
 
@@ -390,7 +401,7 @@ func _loopback_peer_for(
 		peer != null,
 		(
 				"NetwGameHarness.%s: link simulation requires "
-				+ "LocalLoopbackBackend."
+				+ "the local transport scheme."
 		) % method_name,
 	)
 	return peer
@@ -405,12 +416,14 @@ func _find_single_multiplayer_tree(scene: Node) -> MultiplayerTree:
 	for node in _collect_nodes(scene):
 		if node is MultiplayerTree:
 			found.append(node)
+	# Zero is the tree-less on-ramp: the caller wraps the scene in a
+	# harness-constructed tree. More than one is always an authoring error.
 	assert(
-		found.size() == 1,
-		"NetwGameHarness: expected exactly one MultiplayerTree. Found %d." %
+		found.size() <= 1,
+		"NetwGameHarness: expected at most one MultiplayerTree. Found %d." %
 		found.size(),
 	)
-	return found[0]
+	return found[0] if found.size() == 1 else null
 
 
 func _collect_nodes(root: Node) -> Array[Node]:

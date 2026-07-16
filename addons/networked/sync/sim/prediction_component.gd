@@ -197,7 +197,7 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 		var codec: NetwQuantize = field.quantizer
 		if not codec:
 			continue
-		var floor_error := codec.max_error(typeof(owner.get(field.key)) as Variant.Type)
+		var floor_error := codec._max_error(typeof(owner.get(field.key)) as Variant.Type)
 		var epsilon := _epsilon_for(field.key)
 		if epsilon < floor_error:
 			out.append(

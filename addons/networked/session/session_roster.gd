@@ -33,11 +33,11 @@ func get_accepted_join(peer_id: int) -> ResolvedJoin:
 
 
 ## Stores resolved join data. Returns [code]true[/code] if it was newly added,
-## or updated from a spawn-less state to a spawn-carrying state.
+## or enriched from an argless state to an arg-carrying state.
 func remember_accepted_join(rj: ResolvedJoin) -> bool:
 	if _accepted_joins.has(rj.peer_id):
 		var existing := _accepted_joins[rj.peer_id]
-		if existing.spawn.is_empty() and not rj.spawn.is_empty():
+		if existing.arg_values.is_empty() and not rj.arg_values.is_empty():
 			_accepted_joins[rj.peer_id] = rj
 			return true
 		return false

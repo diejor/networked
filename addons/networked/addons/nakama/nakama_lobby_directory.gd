@@ -11,8 +11,8 @@
 ##     └── relay match
 ##         └── peer 1 = host
 ## [/codeblock]
-## [method host_lobby] writes browse metadata to Nakama storage because relay
-## matches only expose match ids and member counts. [method list_lobbies] merges
+## [method _host_lobby] writes browse metadata to Nakama storage because relay
+## matches only expose match ids and member counts. [method _list_lobbies] merges
 ## that storage with [method NakamaWrapper.list_matches].
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
@@ -65,7 +65,7 @@ extends LobbyDirectory
 ##
 ## [method to_dict] is stored by [method NakamaWrapper.write_lobby_card].
 ## [method to_lobby_info] creates the browse entry returned by
-## [method list_lobbies].
+## [method _list_lobbies].
 ## [codeblock]
 ## Storage
 ## └── match_id
@@ -149,7 +149,7 @@ var _session_bound: bool = false # shared session resolved lazily on first conne
 
 
 ## Initializes the internal [NakamaWrapper].
-func service_entered(_mt: MultiplayerTree) -> void:
+func _service_entered(_mt: MultiplayerTree) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
 		Netw.dbg.warn("NakamaLobbyDirectory: Nakama addon not present.")
@@ -160,7 +160,7 @@ func service_entered(_mt: MultiplayerTree) -> void:
 
 
 ## Cleans up the hosted match and relay socket.
-func service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_mt: MultiplayerTree) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
 			_wrapper.delete_lobby_card(_hosted_match_id)
@@ -173,11 +173,11 @@ func service_exiting(_mt: MultiplayerTree) -> void:
 ##
 ## [constant LobbyDirectory.Visibility.PRIVATE] skips the card and stays
 ## join-by-id only.
-func host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
+func _host_lobby(options: LobbyDirectory.HostOptions) -> MultiplayerPeer:
 	if not await _ensure_connected():
 		return null
 	_wrapper.create_match()
-	var peer := await _await_match("host_lobby")
+	var peer := await _await_match("_host_lobby")
 	if peer != null:
 		await _publish_card(options)
 	return peer
@@ -224,10 +224,10 @@ func join_match_peer(match_id: String) -> MultiplayerPeer:
 	return await _await_match("join_match_peer")
 
 
-## Joins a browse entry by the synthetic id from [method list_lobbies].
+## Joins a browse entry by the synthetic id from [method _list_lobbies].
 ##
 ## Use [method join_match_peer] when the relay match id is already known.
-func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
+func _join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 	var mid := String(_id_to_match.get(lobby_id, ""))
 	if mid.is_empty():
 		Netw.dbg.warn(
@@ -243,7 +243,7 @@ func join_lobby_peer(lobby_id: int) -> MultiplayerPeer:
 ##
 ## Stored browse cards provide metadata. [method NakamaWrapper.list_matches]
 ## provides live member counts. Cards whose match has ended are skipped.
-func list_lobbies() -> void:
+func _list_lobbies() -> void:
 	if not await _ensure_connected():
 		lobby_list_updated.emit([] as Array[LobbyDirectory.LobbyInfo])
 		return
@@ -270,12 +270,12 @@ func list_lobbies() -> void:
 
 ## Returns the [enum LobbyDirectory.Capability] flags this directory honors:
 ## browse and persona resolution.
-func capabilities() -> int:
+func _capabilities() -> int:
 	return LobbyDirectory.Capability.BROWSE | LobbyDirectory.Capability.FRIEND_NAMES
 
 
 ## Deletes the host browse card and leaves the relay match.
-func leave_lobby() -> void:
+func _leave_lobby() -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
 			await _wrapper.delete_lobby_card(_hosted_match_id)
@@ -284,14 +284,14 @@ func leave_lobby() -> void:
 	_peer = null
 
 
-## Stamps a [JoinTarget] whose address is the relay match id.
-func make_join_target(lobby: LobbyDirectory.LobbyInfo) -> JoinTarget:
-	var target := JoinTarget.new()
-	target.display_name = lobby.lobby_name
-	target.address = String(lobby.metadata.get("match_id", str(lobby.id)))
-	target.metadata = lobby.metadata.duplicate()
-	target.backend = NakamaBackend.new()
-	return target
+
+## Nakama lobbies join through the [code]&"nakama"[/code] transport by match id.
+func _scheme() -> StringName:
+	return &"nakama"
+
+
+func _lobby_address(lobby: LobbyDirectory.LobbyInfo) -> String:
+	return String(lobby.metadata.get("match_id", str(lobby.id)))
 
 
 ## Returns the active relay match id for [method MultiplayerTree.join].
@@ -330,8 +330,8 @@ func _ensure_connected() -> bool:
 	if _wrapper.is_ready():
 		return true
 	# Bind the shared account lazily, after tree setup. add_child inside the
-	# service_entered window fails while the tree is still building its children,
-	# so this mirrors get_connect_session's lazy resolution.
+	# _service_entered window fails while the tree is still building its children,
+	# so the shared account resolves lazily instead.
 	if not _session_bound:
 		_session_bound = true
 		var mt := MultiplayerTree.resolve(self)

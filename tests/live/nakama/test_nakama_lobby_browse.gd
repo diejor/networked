@@ -38,7 +38,7 @@ func after_test() -> void:
 
 func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 	var host_dir := await _make_dir("valeria")
-	var peer := await host_dir.host_lobby(
+	var peer := await host_dir._host_lobby(
 		LobbyDirectory.HostOptions.make(
 			"Valeria's Game",
 			LobbyDirectory.Visibility.PUBLIC,
@@ -74,7 +74,7 @@ func test_public_lobby_round_trips_then_clears_on_leave() -> void:
 
 func test_private_lobby_is_unlisted_but_joinable() -> void:
 	var host_dir := await _make_dir("valeria")
-	var peer := await host_dir.host_lobby(
+	var peer := await host_dir._host_lobby(
 		LobbyDirectory.HostOptions.make(
 			"Secret",
 			LobbyDirectory.Visibility.PRIVATE,
@@ -119,7 +119,7 @@ func _browse(dir: NakamaLobbyDirectory) -> Array:
 			done[0] = true,
 		CONNECT_ONE_SHOT,
 	)
-	dir.list_lobbies()
+	dir._list_lobbies()
 	await _await(func() -> bool: return done[0], "browse to resolve")
 	return captured
 

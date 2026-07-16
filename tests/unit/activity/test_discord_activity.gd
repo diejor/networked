@@ -8,22 +8,22 @@ func test_discord_instance_state_flow() -> void:
 	injected.fake_instance_id = "room1"
 	injected.fake_device_id = "alice"
 	assert_bool(injected.in_discord()).is_true()
-	assert_bool(injected.should_register()).is_true()
+	assert_bool(injected._should_register()).is_true()
 	assert_str(injected.instance_id()).is_equal("room1")
 	assert_str(injected.device_id()).is_equal("alice")
 
 	var dormant := DiscordActivityService.new()
 	auto_free(dormant)
 	assert_bool(dormant.in_discord()).is_false()
-	assert_bool(dormant.should_register()).is_false()
+	assert_bool(dormant._should_register()).is_false()
 	assert_str(dormant.instance_id()).is_equal("")
 
 	var tree := MultiplayerTree.new()
 	var service := DiscordActivityService.new()
 	auto_free(tree)
 	auto_free(service)
-	service.service_entered(tree)
-	assert_object(tree.auth_provider).is_null()
+	service._service_entered(tree)
+	assert_object(tree.api.session.auth_flow).is_null()
 	assert_object(service.rendezvous).is_null()
 
 	tree = MultiplayerTree.new()
@@ -79,7 +79,7 @@ func test_dedicated_rendezvous_flow() -> void:
 	var target := rdv._target_for("room1")
 	assert_object(target).is_not_null()
 	assert_str(target.address).is_equal("wss://game.example.com/?instance=room1")
-	assert_object(target.backend).is_instanceof(WebSocketBackend)
+	assert_str(target.scheme).is_equal("ws")
 
 	rdv.public_host = ""
 	var err: Error = await rdv.connect_session("room1", null, null)
@@ -93,10 +93,10 @@ func test_nakama_auth_identity_flow() -> void:
 	auto_free(tree)
 	auto_free(service)
 	service.rendezvous = DedicatedDiscordRendezvous.new()
-	tree.auth_provider = auth
-	service.service_entered(tree)
+	tree.api.session.set_auth_flow(auth)
+	service._service_entered(tree)
 	await get_tree().process_frame
-	assert_object(tree.auth_provider).is_same(auth)
+	assert_object(tree.api.session.auth_flow).is_same(auth)
 	assert_object(auth._session).is_same(tree.get_nakama_session())
 	assert_object(auth._tree).is_same(tree)
 
@@ -121,16 +121,16 @@ func test_nakama_auth_identity_flow() -> void:
 	auth.bind_session(fake_session)
 	var prep_err := await auth.prepare(JoinPayload.new())
 	assert_int(prep_err).is_equal(OK)
-	var identity := auth.authenticate(2, auth.get_credentials(JoinPayload.new()))
-	_assert_identity(identity, "nk-user-1", "Diego")
-	assert_str(String(identity.service)).is_equal("nakama")
+	var result := auth.verify(2, auth.credentials(JoinPayload.new()))
+	_assert_identity(result.identity, "nk-user-1", "Diego")
+	assert_str(String(result.identity.service)).is_equal("nakama")
 
 	auth = _bound_nakama_auth("", "")
 	fake_session = _FakeNakamaSession.new()
 	auth.bind_session(fake_session)
-	identity = auth.authenticate(2, auth.get_credentials(JoinPayload.new()))
-	assert_object(identity).is_null()
-	assert_str(auth.rejection_reason).is_equal(
+	result = auth.verify(2, auth.credentials(JoinPayload.new()))
+	assert_bool(result.accepted).is_false()
+	assert_str(result.rejection_reason).is_equal(
 		"Peer Nakama identity not found in presence",
 	)
 
@@ -139,7 +139,7 @@ func test_nakama_auth_identity_flow() -> void:
 	fake_session._uid = "nk-host-1"
 	fake_session._uname = "HostAlice"
 	auth.bind_session(fake_session)
-	identity = auth.get_host_identity()
+	var identity := auth.host_identity()
 	_assert_identity(identity, "nk-host-1", "HostAlice")
 
 

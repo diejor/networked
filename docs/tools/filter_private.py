@@ -128,8 +128,22 @@ def _is_allowed(root: ET.Element, allowed_names: set[str], allowed_auto: set[str
     return False
 
 
+def _method_has_doc(elem: ET.Element) -> bool:
+    """A method is documented when its <description> has non-whitespace text."""
+    desc = elem.find("description")
+    if desc is None:
+        return False
+    return bool((desc.text or "").strip())
+
+
 def filter_private_elements(root: ET.Element) -> None:
-    """Remove any member element whose name starts with '_'."""
+    """Remove private _-prefixed members.
+
+    Methods are the exception: a _-prefixed method that carries a ## doc
+    comment (a non-empty <description>) is a documented virtual override point
+    and is kept. Every other member kind, and any undocumented _-method, is
+    removed.
+    """
     parent_tags = [
         "members", "constructors", "methods", "operators",
         "signals", "constants", "annotations",
@@ -146,8 +160,11 @@ def filter_private_elements(root: ET.Element) -> None:
         for child_tag in child_tags:
             for elem in parent.findall(child_tag):
                 name = elem.get("name", "")
-                if name.startswith("_"):
-                    parent.remove(elem)
+                if not name.startswith("_"):
+                    continue
+                if child_tag == "method" and _method_has_doc(elem):
+                    continue
+                parent.remove(elem)
 
 
 DEFAULT_ADDONS = ("networked", "networked_test")

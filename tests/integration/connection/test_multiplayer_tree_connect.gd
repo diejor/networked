@@ -65,7 +65,7 @@ func test_listen_server_auto_connect_player_spawns_player() -> void:
 		),
 	)
 
-	assert_that(tree.role).is_equal(MultiplayerTree.Role.LISTEN_SERVER)
+	assert_that(tree.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
 
 	var player := await harness.wait_for_player(tree, level_builder.scene_name)
 	assert_that(player).is_not_null()
@@ -76,16 +76,16 @@ func test_join_fail_fast_on_offline_address() -> void:
 	var tree := MultiplayerTree.new()
 	add_child(tree)
 
-	var target := JoinTarget.new()
-	target.backend = ENetBackend.new()
+	var target := NetwConnectTarget.new()
+	target.scheme = &"enet"
 	target.address = "127.0.0.1"
 
 	var payload := JoinPayload.new()
 	payload.username = "offline_client"
 
 	tree.state_changed.connect(
-		func(_old: MultiplayerTree.State, new: MultiplayerTree.State) -> void:
-			if new != MultiplayerTree.State.CONNECTING:
+		func(_old: NetwSessionInterface.State, new: NetwSessionInterface.State) -> void:
+			if new != NetwSessionInterface.State.CONNECTING:
 				return
 			var trigger_failure: Callable
 			trigger_failure = func() -> void:

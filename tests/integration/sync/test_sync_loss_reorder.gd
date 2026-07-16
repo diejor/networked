@@ -139,7 +139,7 @@ func test_state_stream_applies_strictly_forward_under_reorder() -> void:
 
 
 func test_masked_state_stream_never_corrupts_under_loss_and_converges() -> void:
-	# The masked lane (§5.6) diffs each recipient's frame against its own
+	# The masked lane diffs each recipient's frame against its own
 	# confirmed baseline, advanced only once the datagram carrying it is
 	# acked. Seeded loss on the downlink proves the never-corrupts guarantee
 	# end to end: a dropped ack must never let the client apply a value that

@@ -1,10 +1,17 @@
 class_name MultiplayerScene
 extends Node
-## Container for one replicated level scene.
+## Container for one replicated level scene and its admission boundary.
 ##
 ## [member level], [member gate], and [member layer] define one admission
-## boundary. Clients receive the subtree only after [method connect_peer] or
-## [method register_player] admits their peer.
+## boundary. A client receives the subtree only after [method connect_peer] or
+## [method register_player] admits its peer, and a participant is admitted to
+## exactly one scene at a time. The container's runtime root is chosen by
+## [member NetwSceneConfig.concurrency] because two scenes active at once in one
+## [SceneTree] would otherwise share a physics world and collide. Under
+## [constant NetwSceneConfig.Concurrency.CONCURRENT] a hosting peer carries this
+## script on a world-owning [SubViewport]. Under
+## [constant NetwSceneConfig.Concurrency.SINGLE], and on every client, the root
+## is a plain [Node] because only one scene is ever mounted.
 ## [codeblock]
 ## var node := template_entity.instantiate_player(participant)
 ## var player := NetwEntity.of(node)
@@ -73,6 +80,21 @@ var _players_by_peer: Dictionary[int, WeakRef] = { }
 var _tracked_nodes: Dictionary[Node, bool] = { }
 
 
+## Returns the [MultiplayerScene] containing [param node], or [code]null[/code].
+static func of(node: Node) -> MultiplayerScene:
+	if not is_instance_valid(node):
+		return null
+	var api := NetwMultiplayer.of(node)
+	if api:
+		return api.scenes.scene_of(node)
+	var current := node
+	while current:
+		if current is MultiplayerScene:
+			return current as MultiplayerScene
+		current = current.get_parent()
+	return null
+
+
 ## Stable [NetwInterestLayer] id for [member level].
 ## [codeblock]
 ## &"scene:Arena"
@@ -92,7 +114,6 @@ var layer: NetwInterestLayer:
 		if id.is_empty():
 			return null
 		return api.interest.layer(id)
-
 
 ## The [NetwScene] facade for this scene, built once and memoized.
 ##
@@ -195,7 +216,7 @@ func _on_liveness_entity_live(_route: int, entity: NetwEntity) -> void:
 		return
 	if _tracked_nodes.has(entity.owner):
 		return
-	if MultiplayerTree.scene_for_node(entity.owner) != self:
+	if MultiplayerScene.of(entity.owner) != self:
 		return
 	if entity.peer_id != 0:
 		register_player(entity)

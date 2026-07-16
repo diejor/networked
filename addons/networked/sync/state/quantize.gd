@@ -26,23 +26,23 @@ extends Resource
 ##
 ## A subclass encodes by type: a [Vector2] writes each axis, a scalar writes
 ## one.
-@abstract func write(w: NetwBitBuffer.Writer, value: Variant) -> void
+@abstract func _write(w: NetwBitBuffer.Writer, value: Variant) -> void
 
 
-## Reads a value of [param type] back from [param r], inverting [method write].
-@abstract func read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant
+## Reads a value of [param type] back from [param r], inverting [method _write].
+@abstract func _read(r: NetwBitBuffer.Reader, type: Variant.Type) -> Variant
 
 
 ## Returns whether this quantizer can encode a value of [param type].
 ##
 ## Callers that quantize opportunistically (entity RPC arguments) ask this
-## before handing a value to [method write], so the set of encodable types
+## before handing a value to [method _write], so the set of encodable types
 ## stays owned by each quantizer instead of duplicated at the call site.
-@abstract func supports_type(type: Variant.Type) -> bool
+@abstract func _supports_type(type: Variant.Type) -> bool
 
 
 ## Returns the bit count this quantizer writes for a value of [param type].
-@abstract func bit_width(type: Variant.Type) -> int
+@abstract func _bit_width(type: Variant.Type) -> int
 
 
 ## Returns the worst-case round-trip error for a value of [param type].
@@ -51,7 +51,7 @@ extends Resource
 ## so it compares directly against a reconciliation deadzone
 ## ([member PredictionComponent.divergence_epsilon]). A correction threshold
 ## below this value triggers on quantization noise alone.
-@abstract func max_error(type: Variant.Type) -> float
+@abstract func _max_error(type: Variant.Type) -> float
 
 
 ## Returns whether [param other] encodes the identical bit layout: the same

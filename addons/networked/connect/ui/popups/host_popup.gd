@@ -2,9 +2,9 @@
 class_name HostPopup
 extends PopupPanel
 
-signal submitted(config: ConnectHostConfig, payload: JoinPayload)
+signal submitted(config: NetwHostConfig, payload: JoinPayload)
 
-var _templates: Array[BackendPeer] = []
+var _transports: Array[NetwTransport] = []
 var _spawner_options: Array[SceneNodePath] = []
 
 @onready var _backend_picker: OptionButton = %BackendPicker
@@ -24,26 +24,26 @@ func _ready() -> void:
 	_cancel_button.pressed.connect(hide)
 
 
-## Opens the host form with pre-populated backend and username details.
+## Opens the host form with pre-populated transport and username details.
 func open_host(
-		templates: Array[BackendPeer],
+		transports: Array[NetwTransport],
 		spawner_options: Array[SceneNodePath],
 		default_username: String,
 ) -> void:
-	_templates = templates
+	_transports = transports
 	_spawner_options = spawner_options.duplicate()
 	_name_edit.text = ""
 	_username_edit.text = default_username
-	_populate_backend_picker()
+	_populate_transport_picker()
 	_populate_spawner_picker()
 	_spawner_row.visible = not _spawner_options.is_empty()
 	popup_centered()
 
 
-func _populate_backend_picker() -> void:
+func _populate_transport_picker() -> void:
 	_backend_picker.clear()
-	for backend in _templates:
-		_backend_picker.add_item(ConnectBrowser.format_backend_label(backend))
+	for transport in _transports:
+		_backend_picker.add_item(transport._display_name())
 	if _backend_picker.item_count > 0:
 		_backend_picker.selected = 0
 
@@ -56,13 +56,13 @@ func _populate_spawner_picker() -> void:
 		_spawner_picker.selected = 0
 
 
-func _selected_template() -> BackendPeer:
-	if _templates.is_empty():
+func _selected_transport() -> NetwTransport:
+	if _transports.is_empty():
 		return null
 	var idx := maxi(0, _backend_picker.selected)
-	if idx >= _templates.size():
+	if idx >= _transports.size():
 		return null
-	return _templates[idx]
+	return _transports[idx]
 
 
 func _selected_spawner() -> SceneNodePath:
@@ -75,11 +75,11 @@ func _selected_spawner() -> SceneNodePath:
 
 
 func _on_confirm() -> void:
-	var template := _selected_template()
-	if template == null:
+	var transport := _selected_transport()
+	if transport == null:
 		return
-	var config := ConnectHostConfig.new()
-	config.backend = template
+	var config := NetwHostConfig.new()
+	config.scheme = transport.scheme()
 	var typed_name := _name_edit.text.strip_edges()
 	config.server_name = typed_name if not typed_name.is_empty() else ConnectBrowser.PLACEHOLDER_SERVER_NAME
 
@@ -88,7 +88,7 @@ func _on_confirm() -> void:
 	payload.username = StringName(typed) if not typed.is_empty() else &"Player"
 	var spawner := _selected_spawner()
 	if spawner != null:
-		payload.spawn = EntitySpawnPolicy.from_scene_node_path(spawner).to_dict()
+		payload.arg_values = NetwDefaultJoin.args_from_scene_node_path(spawner)
 
 	hide()
 	submitted.emit(config, payload)

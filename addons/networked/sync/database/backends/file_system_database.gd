@@ -24,7 +24,7 @@
 ## [/codeblock]
 ##
 ## A subdirectory under the slot root that no registered table claims is a ghost
-## table. [method initialize] reports each one through
+## table. [method _initialize] reports each one through
 ## [method @GlobalScope.push_warning] and never deletes data on its own.
 class_name FileSystemDatabase
 extends NetwDatabaseBackend
@@ -53,7 +53,7 @@ static func _clear_path_registry() -> void:
 ## (default) they are the compact binary [constant DictionaryRecordFormatSaver.BIN_EXT].
 @export var use_text_format: bool = false
 
-# Effective root after [method initialize] folds app_id and the save slot into
+# Effective root after [method _initialize] folds app_id and the save slot into
 # base_dir. Every record path resolves under this, never base_dir directly.
 var _root: String = ""
 
@@ -95,10 +95,10 @@ func _table_dir(table: StringName) -> String:
 # ── NetwDatabaseBackend overrides ────────────────────────────────────────
 
 
-## Overrides [method NetwDatabaseBackend.initialize] to fold [param slot] into the
+## Overrides [method NetwDatabaseBackend._initialize] to fold [param slot] into the
 ## storage root, create one subdirectory per schema table, and warn on any
 ## ghost-table directory the schema no longer claims.
-func initialize(schema: Dictionary, slot: String = "") -> Error:
+func _initialize(schema: Dictionary, slot: String = "") -> Error:
 	# Redirect res:// to user:// in exported builds.
 	if not OS.has_feature("editor") and base_dir.begins_with("res://"):
 		base_dir = base_dir.replace("res://", "user://")
@@ -176,7 +176,7 @@ func initialize(schema: Dictionary, slot: String = "") -> Error:
 ## Array[StringName]
 ## └── slot_name
 ## [/codeblock]
-func list_namespaces() -> Array[StringName]:
+func _list_namespaces() -> Array[StringName]:
 	var out: Array[StringName] = []
 	var app_dir := _app_dir()
 	var dir := DirAccess.open(app_dir)
@@ -195,7 +195,7 @@ func list_namespaces() -> Array[StringName]:
 ## Recursively removes the directory and all record files under [param slot].
 ##
 ## See [member NetwDatabase.slots] for the slot namespace model.
-func delete_namespace(slot: String) -> Error:
+func _delete_namespace(slot: String) -> Error:
 	if slot.is_empty():
 		return ERR_INVALID_PARAMETER
 	var slot_root := _root_for(slot)
@@ -226,9 +226,9 @@ func _remove_recursive(path: String) -> Error:
 	return DirAccess.remove_absolute(path)
 
 
-## Overrides [method NetwDatabaseBackend.upsert] to write a record to disk,
+## Overrides [method NetwDatabaseBackend._upsert] to write a record to disk,
 ## merging the new fields with the existing file's contents.
-func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
+func _upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 	var path := _path_for(table, id)
 
 	# Ensure the table directory exists (may have been added after initialize).
@@ -257,7 +257,7 @@ func upsert(table: StringName, id: StringName, data: Dictionary) -> Error:
 ## └── column_name (StringName)
 ##     └── value (Variant)
 ## [/codeblock]
-func find_by_id(table: StringName, id: StringName) -> Dictionary:
+func _find_by_id(table: StringName, id: StringName) -> Dictionary:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
 		return { }
@@ -276,7 +276,7 @@ func find_by_id(table: StringName, id: StringName) -> Dictionary:
 ##     └── column_name (StringName)
 ##         └── value (Variant)
 ## [/codeblock]
-func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
+func _find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	var table_dir := _table_dir(table)
 	if not DirAccess.dir_exists_absolute(table_dir):
 		return []
@@ -304,9 +304,9 @@ func find_all(table: StringName, filter: Dictionary) -> Array[Dictionary]:
 	return results
 
 
-## Overrides [method NetwDatabaseBackend.delete] to permanently remove a
+## Overrides [method NetwDatabaseBackend._delete] to permanently remove a
 ## record's file from disk.
-func delete(table: StringName, id: StringName) -> Error:
+func _delete(table: StringName, id: StringName) -> Error:
 	var path := _path_for(table, id)
 	if not ResourceLoader.exists(path):
 		return OK
