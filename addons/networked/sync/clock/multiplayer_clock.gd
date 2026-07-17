@@ -151,8 +151,7 @@ signal pong_received(data: Dictionary)
 ## [member NetwMultiplayer.clock] rather than this node.
 var _interface: NetwClockInterface
 
-# The typed payload registered with the API, retained so the matching
-# object_configuration_remove passes the same resource.
+# The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwClockConfig
 
 
@@ -188,8 +187,10 @@ func _service_entered(mt: MultiplayerTree) -> void:
 
 
 func _service_exiting(mt: MultiplayerTree) -> void:
-	if mt.api and _config:
-		mt.api.object_configuration_remove(self, _config)
+	# Detaching keeps the config registered, so freeing this node never stops
+	# the clock.
+	if mt.api:
+		mt.api.clock.detach_node(self)
 
 	if mt.session_entered.is_connected(_on_tree_configured):
 		mt.session_entered.disconnect(_on_tree_configured)

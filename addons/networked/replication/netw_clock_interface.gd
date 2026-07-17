@@ -231,6 +231,24 @@ func is_configured() -> bool:
 	return _configured
 
 
+## Clears [param node] as the clock's live endpoint while keeping its
+## [NetwClockConfig] registered.
+##
+## A [MultiplayerClock] lives inside a scene, so a scene change frees it. The
+## config outlives that node so [method is_configured] stays true and the clock
+## keeps running.
+## [codeblock]
+## # MultiplayerClock, leaving the tree:
+## api.clock.detach_node(self)
+## api.clock.is_configured()  # still true, the config stays
+## [/codeblock]
+## The clear only fires when [param node] is the current endpoint, so a node on
+## its way out never unbinds a [MultiplayerClock] that registered after it.
+func detach_node(node: MultiplayerClock) -> void:
+	if _node == node:
+		_node = null
+
+
 ## Test seam. Synchronously emits [param count] full ticks without consulting
 ## real time, mirroring the [method MultiplayerClock._physics_process] tick loop
 ## body so [signal before_tick], [signal on_tick], [signal after_tick] and
@@ -311,6 +329,26 @@ func physics_step(delta: float) -> void:
 		ticks_this_frame += 1
 
 	after_tick_loop.emit()
+
+
+## Advances the tick loop from the API poll while no [MultiplayerClock] drives
+## it, so a session keeps ticking after a scene change frees the clock.
+##
+## A [MultiplayerClock] pumps [method physics_step] every physics frame. With no
+## such node, the poll takes over and steps from wall-clock time between calls.
+## [codeblock]
+## # NetwMultiplayer._poll, every frame:
+## clock.poll_step()   # steps only when configured and no node is bound
+## [/codeblock]
+## The step yields the moment a [MultiplayerClock] rebinds through
+## [method detach_node]'s counterpart [method configure], so the two pumps never
+## both run.
+func poll_step() -> void:
+	var now := Time.get_ticks_usec()
+	if _node or manual_tick or not is_configured() or _last_physics_time_usec == 0:
+		_last_physics_time_usec = now
+		return
+	physics_step(float(now - _last_physics_time_usec) / 1_000_000.0)
 
 
 ## Accumulates the client ping cadence. Returns [code]true[/code] and resets

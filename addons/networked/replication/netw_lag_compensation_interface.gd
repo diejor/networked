@@ -138,9 +138,6 @@ signal action_gate_fallback(key: StringName, view_tick: int)
 var _api_ref: WeakRef
 # Flipped by NetwMultiplayer when a LagCompensation configurator registers.
 var _configured := false
-# The registered configurator node. Gates the server-authority paths as the
-# configured-presence proxy and backs export reads.
-var _node: LagCompensation
 # The session tick engine, bound by the configurator's clock binding.
 var _clock: NetwClockInterface
 
@@ -174,12 +171,13 @@ func _api() -> NetwMultiplayer:
 	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
 
 
-## Applies [param config] to the engine and binds [param node] as the
-## configurator. Called by [NetwMultiplayer] when a [LagCompensation] registers
-## its [NetwLagCompensationConfig] through
-## [method MultiplayerAPI.object_configuration_add].
+## Applies [param config] to the engine. Called by [NetwMultiplayer] when a
+## [LagCompensation] registers its [NetwLagCompensationConfig] through
+## [method MultiplayerAPI.object_configuration_add]. The values live here, not on
+## the node, so [method is_configured] stays true after a scene change frees the
+## configurator.
+@warning_ignore("unused_parameter")
 func configure(node: LagCompensation, config: NetwLagCompensationConfig) -> void:
-	_node = node
 	max_future_action_ticks = config.max_future_action_ticks
 	input_gate_deadline_ticks = config.input_gate_deadline_ticks
 
@@ -350,7 +348,7 @@ func tick_step(delta: float, tick: int) -> void:
 	_sweep_effect_timeouts(tick)
 	# The server holds the truth, so only it records authoritative history.
 	var api := _api()
-	if _node and api and api.is_server():
+	if _configured and api and api.is_server():
 		_recorder.record(_registry, _engines, tick)
 
 
@@ -365,7 +363,7 @@ func submit_action(
 		timing_mode: NetwAction.TimingMode,
 		requester: int,
 ) -> void:
-	var api := _api() if _node else null
+	var api := _api() if _configured else null
 	if requester == 0 and api and api.multiplayer_peer:
 		requester = api.get_unique_id()
 
@@ -480,7 +478,7 @@ func _send_action_request(
 		key: StringName,
 		timing_mode: NetwAction.TimingMode,
 ) -> void:
-	if not _node:
+	if not _configured:
 		return
 	# Routes are allocated server-side and learned from the spawn packet, so a
 	# remote requester only ever reads. A client-minted route would name a
@@ -522,7 +520,7 @@ func _send_action_request(
 
 
 func _deny_action_to(requester: int, key: StringName) -> void:
-	var api := _api() if _node else null
+	var api := _api() if _configured else null
 	var local_peer := api.get_unique_id() if api \
 			and api.multiplayer_peer else 0
 	if requester == 0 or requester == local_peer:
@@ -557,7 +555,7 @@ func _handle_action_carrier(
 		payload: PackedByteArray,
 		sender: int,
 ) -> void:
-	var api := _api() if _node else null
+	var api := _api() if _configured else null
 	if not api or not api.is_server():
 		return
 	var array = bytes_to_var(payload) as Array
@@ -581,7 +579,7 @@ func _handle_action_carrier(
 
 
 func _node_from_tree_path(path: NodePath) -> Node:
-	var api := _api() if _node else null
+	var api := _api() if _configured else null
 	var mt := api.tree if api else null
 	if not mt:
 		return null

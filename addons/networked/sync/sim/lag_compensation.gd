@@ -71,8 +71,7 @@ const _MAX_BIND_ATTEMPTS := 600
 ## through [member NetwMultiplayer.lag_compensation] rather than this node.
 var _interface: NetwLagCompensationInterface
 
-# The typed payload registered with the API, retained so the matching
-# object_configuration_remove passes the same resource.
+# The typed payload registered with the API on entry, snapshotting the exports.
 var _config: NetwLagCompensationConfig
 
 var _clock: NetwClockInterface
@@ -93,22 +92,14 @@ func _service_entered(mt: MultiplayerTree) -> void:
 	if mt.is_online():
 		_on_session_entered.call_deferred()
 	var tree := get_tree()
-	if tree and not tree.node_added.is_connected(_on_node_added):
-		tree.node_added.connect(_on_node_added)
+	if _interface and tree \
+			and not tree.node_added.is_connected(_interface._on_node_added):
+		tree.node_added.connect(_interface._on_node_added)
 
 
-func _service_exiting(mt: MultiplayerTree) -> void:
-	var tree := get_tree()
-	if tree and tree.node_added.is_connected(_on_node_added):
-		tree.node_added.disconnect(_on_node_added)
-	_unbind_clock()
-	if mt.api:
-		mt.api.replication.register_channel(
-			NetwFrameEnvelope.Channel.ACTION,
-			Callable(),
-		)
-		if _config:
-			mt.api.object_configuration_remove(self, _config)
+# No _service_exiting override. The channel, clock binding, node-added observer,
+# and config all target the interface, so they outlive this node and a scene
+# change that frees it leaves rewind running.
 
 
 # Snapshots the current exports into the typed payload the interface configures
@@ -144,30 +135,14 @@ func _try_bind_clock() -> void:
 	var clock := mt.api.clock if mt.api and mt.api.clock.is_configured() else null
 	if clock:
 		_clock = clock
+		# Bind the interface, not this node, so the tick loop survives a scene
+		# change that frees the node.
 		if _interface:
 			_interface._clock = clock
-		if not clock.on_tick.is_connected(_on_tick):
-			clock.on_tick.connect(_on_tick)
+			if not clock.on_tick.is_connected(_interface.tick_step):
+				clock.on_tick.connect(_interface.tick_step)
 		return
 	_bind_attempts += 1
 	if _bind_attempts <= _MAX_BIND_ATTEMPTS and is_inside_tree() \
 			and not get_tree().process_frame.is_connected(_try_bind_clock):
 		get_tree().process_frame.connect(_try_bind_clock, CONNECT_ONE_SHOT)
-
-
-func _unbind_clock() -> void:
-	if is_instance_valid(_clock) and _clock.on_tick.is_connected(_on_tick):
-		_clock.on_tick.disconnect(_on_tick)
-	_clock = null
-	if _interface:
-		_interface._clock = null
-
-
-func _on_tick(delta: float, tick: int) -> void:
-	if _interface:
-		_interface.tick_step(delta, tick)
-
-
-func _on_node_added(node: Node) -> void:
-	if _interface:
-		_interface._on_node_added(node)

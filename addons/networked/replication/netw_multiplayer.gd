@@ -243,11 +243,46 @@ func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = nul
 	_session_refs.append(weakref(self))
 
 
-## True while this extension is installed as the [MultiplayerAPI] for
-## [member tree]'s branch.
+## True while this extension is the installed [MultiplayerAPI].
+##
+## A tree-scoped session is active while it is [member tree]'s multiplayer. A
+## root-installed session (no tree, see [method install_as_default]) is active
+## while it is the [SceneTree] default.
 func is_active() -> bool:
 	var t := tree
-	return t != null and is_instance_valid(t) and t.multiplayer == self
+	if t != null and is_instance_valid(t):
+		return t.multiplayer == self
+	var loop := Engine.get_main_loop() as SceneTree
+	return loop != null and loop.get_multiplayer() == self
+
+
+## Installs a fresh [NetwMultiplayer] as [param scene_tree]'s default
+## [MultiplayerAPI] and returns it, so every node's [member Node.multiplayer]
+## resolves to the session and it survives a native scene change.
+##
+## The session has no [MultiplayerTree]. Spawns anchor at [code]/root[/code], a
+## sibling of [member SceneTree.current_scene], so a
+## [method SceneTree.change_scene_to_file] that frees the scene leaves the
+## session and its replicated content standing. This is the one-session shipping
+## mode. Multiplexed processes (the harness, the tiling rig) keep the stock
+## default and scope each session to a [MultiplayerTree] subtree instead.
+## [codeblock]
+## # once at startup (the networked/install_as_default setting does this):
+## NetwMultiplayer.install_as_default(get_tree())
+## multiplayer.multiplayer_peer = peer   # multiplayer is now the session
+## [/codeblock]
+static func install_as_default(scene_tree: SceneTree) -> NetwMultiplayer:
+	var api := NetwMultiplayer.new()
+	api.inner.root_path = ^"/root"
+	scene_tree.set_multiplayer(api)
+	return api
+
+
+## Restores a stock [SceneMultiplayer] as [param scene_tree]'s default, undoing
+## [method install_as_default]. A test that installs at the root calls this in
+## teardown so the override never leaks into the next test.
+static func uninstall_default(scene_tree: SceneTree) -> void:
+	scene_tree.set_multiplayer(SceneMultiplayer.new())
 
 
 ## Returns every [NetwMultiplayer] currently passing [method is_active], in
@@ -1130,6 +1165,7 @@ func notify_shutdown(reason: String = "") -> void:
 
 func _poll() -> Error:
 	var err := inner.poll()
+	clock.poll_step()
 	liveness.poll()
 	_frame_counter += 1
 	replication.on_poll()
