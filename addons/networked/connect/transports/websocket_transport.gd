@@ -26,8 +26,18 @@ func _can_view(peer: MultiplayerPeer) -> bool:
 	return peer is WebSocketMultiplayerPeer
 
 
+func _make_view(
+		peer: MultiplayerPeer,
+		attempt: NetwConnectAttempt = null,
+) -> NetwPeerView:
+	if not (peer is WebSocketMultiplayerPeer):
+		return null
+	var port := int(attempt.context.get("port", 0)) if attempt else 0
+	return WebSocketPeerView.new(peer, port)
+
+
 func _host(
-		_attempt: NetwConnectAttempt,
+		attempt: NetwConnectAttempt,
 		config: NetwHostConfig,
 ) -> MultiplayerPeer:
 	var port := int(config.params.get("port", DEFAULT_PORT))
@@ -41,6 +51,10 @@ func _host(
 			func(m): push_warning(m),
 		)
 		return null
+	# The peer never exposes its bound port, so the view reads it from the
+	# attempt's build context.
+	if attempt:
+		attempt.context["port"] = port
 	return peer
 
 

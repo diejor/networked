@@ -37,16 +37,50 @@ func join_address() -> String:
 	return ""
 
 
-## Returns a diagnostics snapshot for [param peer_id].
-func diagnostics(_peer_id: int) -> Dictionary:
+## The first non-loopback IPv4 address this machine exposes, falling back to
+## loopback so a single-machine session still renders a joinable address.
+## Address-bearing views compose it into [method join_address].
+static func lan_address() -> String:
+	for address in IP.get_local_addresses():
+		var ip := String(address)
+		if ip.begins_with("127.") or ip.contains(":"):
+			continue
+		return ip
+	return "127.0.0.1"
+
+
+## Returns a diagnostics snapshot for [param peer_id], or [code]{ }[/code] when
+## the transport records none.
+##
+## Keys are transport-owned, so a consumer reads only the ones it recognizes and
+## ignores the rest. [NetwConnectResult] carries the snapshot to the browser on
+## [member NetwConnectResult.diagnostics]. [WebRTCPeerView] answers the richest
+## shape:
+## [codeblock]
+## ┠╴ "phases": Dictionary        # connect milestones as msec timestamps
+## ┃   ┠╴ "offer_ms": int
+## ┃   ┠╴ "answer_ms": int
+## ┃   ┖╴ "native_ms": int
+## ┠╴ "candidates": Dictionary    # ICE candidate counts by type
+## ┃   ┠╴ "host": int
+## ┃   ┠╴ "srflx": int
+## ┃   ┖╴ "relay": int
+## ┖╴ "relay_used": bool          # true when only relay candidates connected
+## [/codeblock]
+@warning_ignore("unused_parameter")
+func diagnostics(peer_id: int) -> Dictionary:
 	return { }
 
 
-## Returns the current progress narration as [code]{ step, message }[/code].
-##
+## Returns the current progress narration for a connect UI.
+## [codeblock]
+## ┠╴ "step": StringName    # machine-readable phase, stable per transport
+## ┖╴ "message": String     # human-readable line shown to the player
+## [/codeblock]
 ## The generic view derives three coarse steps from
-## [method MultiplayerPeer.get_connection_status]. Rich transports read their own
-## signaler state.
+## [method MultiplayerPeer.get_connection_status]:
+## [code]&"disconnected"[/code], [code]&"connecting"[/code], and
+## [code]&"connected"[/code]. Rich transports read their own signaler state.
 func describe_progress() -> Dictionary:
 	var status := (
 			_peer.get_connection_status() if _peer \
@@ -64,7 +98,8 @@ func describe_progress() -> Dictionary:
 ## Pumps view state for [param dt] seconds.
 ##
 ## Pumped by [method NetwConnector.poll]. The generic view has nothing to pump.
-func poll(_dt: float) -> void:
+@warning_ignore("unused_parameter")
+func poll(dt: float) -> void:
 	pass
 
 

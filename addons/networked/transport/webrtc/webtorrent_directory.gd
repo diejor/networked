@@ -123,15 +123,17 @@ func _should_register() -> bool:
 	return not _is_test_env and not _restricted
 
 
-func _service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(api: NetwMultiplayer) -> void:
 	_board_hash = (browser_filter_uid + ":board").sha1_text().substr(0, 20)
 	_peer_id = _generate_peer_id()
-	_bind_tree_signals(mt)
+	var mt := api.root as MultiplayerTree
+	if mt:
+		_bind_tree_signals(mt)
 	# Keep the board connection warm so browse and advertise are instant.
 	_ensure_tracker()
 
 
-func _service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_api: NetwMultiplayer) -> void:
 	if _tracker:
 		_release_tracker()
 

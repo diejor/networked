@@ -5,6 +5,8 @@ extends NetwTestSuite
 func test_single_tree_does_not_add_a_host_view() -> void:
 	var tree := _tree_with_mode(NetwSceneConfig.Concurrency.SINGLE)
 	add_child(tree)
+	# The host view is created deferred, so let the idle callback run.
+	await get_tree().process_frame
 
 	assert_object(tree.get_node_or_null("HostSceneView")).is_null()
 
@@ -15,6 +17,8 @@ func test_single_tree_does_not_add_a_host_view() -> void:
 func test_concurrent_tree_adds_a_host_view() -> void:
 	var tree := _tree_with_mode(NetwSceneConfig.Concurrency.CONCURRENT)
 	add_child(tree)
+	# The host view is created deferred, so let the idle callback run.
+	await get_tree().process_frame
 
 	assert_object(tree.get_node_or_null("HostSceneView")).is_not_null()
 
@@ -30,7 +34,7 @@ func test_default_camera_adoption_makes_player_camera_current() -> void:
 	var camera := Camera2D.new()
 	player.add_child(camera)
 	viewport.add_child(player)
-	var view := auto_free(HostSceneView.new())
+	var view: HostSceneView = auto_free(HostSceneView.new())
 
 	view._adopt_camera(player, null)
 

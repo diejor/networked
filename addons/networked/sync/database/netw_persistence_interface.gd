@@ -97,9 +97,9 @@ func _arm_shutdown_guard() -> void:
 	if not _is_server():
 		return
 	var api := _api()
-	var mt := api.tree if api else null
-	if mt and mt.is_host and mt.get_tree():
-		mt.get_tree().set_auto_accept_quit(false)
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if api and api.is_host and scene_tree:
+		scene_tree.set_auto_accept_quit(false)
 
 
 # Final flush and deregister when a persisted entity leaves the tree, so a despawn
@@ -144,11 +144,11 @@ func handle_shutdown() -> void:
 		return
 	_shutting_down = true
 	var api := _api()
-	var mt := api.tree if api else null
-	if mt and mt.is_host:
-		mt.notify_shutdown("Server is shutting down.")
-		if mt.get_tree():
-			await mt.get_tree().create_timer(shutdown_notify_delay).timeout
+	var scene_tree := Engine.get_main_loop() as SceneTree
+	if api and api.is_host:
+		api.notify_shutdown("Server is shutting down.")
+		if scene_tree:
+			await scene_tree.create_timer(shutdown_notify_delay).timeout
 	var drained: Dictionary[NetwDatabase, bool] = { }
 	for entity in _engines.keys():
 		var engine := _engines[entity]
@@ -159,8 +159,8 @@ func handle_shutdown() -> void:
 				drained[engine.database()] = true
 	for db in drained:
 		await _drain_database(db)
-	if mt and mt.get_tree():
-		mt.get_tree().quit()
+	if scene_tree:
+		scene_tree.quit()
 
 
 # Drains a write-behind backend (e.g. NakamaDatabase) so its last flush window is

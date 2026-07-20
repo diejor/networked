@@ -152,9 +152,6 @@ func _begin_game(host: NetwSceneRunner) -> void:
 
 
 func _get_world(runner: NetwSceneRunner) -> MultiplayerScene:
-	if not runner or not runner.tree:
+	if not runner or not runner.tree or not runner.tree.api:
 		return null
-	var sm := runner.tree.get_service(MultiplayerSceneManager)
-	if not sm:
-		return null
-	return sm.active_scenes.get(&"World") as MultiplayerScene
+	return runner.tree.api.scenes.scene(&"World")

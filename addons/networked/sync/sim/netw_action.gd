@@ -181,10 +181,10 @@ func _emit_denied() -> void:
 
 
 func _tree_relative_path(target: Node) -> NodePath:
-	var mt := MultiplayerTree.resolve(target)
-	if not mt:
+	var api := NetwMultiplayer.of(target)
+	if api == null or api.root == null:
 		return NodePath("")
-	return mt.get_path_to(target)
+	return api.root.get_path_to(target)
 
 
 ## Server-side action request context.

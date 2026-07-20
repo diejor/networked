@@ -1,6 +1,7 @@
-## Unit tests for [MultiplayerSceneManager] level configuration.
+## Unit tests for [MultiplayerSceneManager] declaration snapshotting.
 ##
-## Covers declaration resources and wrapper construction.
+## The manager holds no runtime state. It only snapshots its exported rows into
+## a [NetwSceneConfig] for [NetwSceneInterface] to read.
 class_name TestSceneManagerConfig
 extends NetwTestSuite
 
@@ -17,7 +18,6 @@ func after_test() -> void:
 		mgr.free()
 	await super.after_test()
 
-#region Editor property routing
 
 func test_scene_uid_resolves_to_its_resource_path() -> void:
 	var path := "res://addons/networked_test/fixtures/TestLevel.tscn"
@@ -48,56 +48,10 @@ func test_scene_config_snapshots_initial_scenes() -> void:
 	assert_str(config.initial_scenes[0].resource_path).is_equal(path)
 
 
-func test_single_mode_rejects_a_second_active_scene() -> void:
-	mgr.concurrency = NetwSceneConfig.Concurrency.SINGLE
-	var active := MultiplayerScene.new()
-	active.name = &"Scene"
-	var level := Node.new()
-	level.name = &"First"
-	active.level = level
-	mgr.active_scenes[&"First"] = active
-	var accepted := mgr._can_spawn_scene(&"Second")
+func test_scene_config_carries_the_level_spawn_function() -> void:
+	var fn := func(_data: Variant) -> Node: return Node.new()
+	mgr.level_spawn_function = fn
 
-	assert_bool(accepted).is_false()
-	active.free()
+	var config := mgr._build_netw_scene_config()
 
-
-#endregion
-
-#region Wrapper construction
-
-func test_single_mode_builds_a_plain_wrapper() -> void:
-	mgr.concurrency = NetwSceneConfig.Concurrency.SINGLE
-	var scene: Variant = mgr._make_scene_wrapper(true)
-
-	assert_object(scene).is_instanceof(MultiplayerScene)
-	assert_bool(scene is SubViewport).is_false()
-	assert_object(scene.gate).is_instanceof(InterestGate)
-
-	scene.free()
-
-
-func test_concurrent_host_builds_an_isolated_wrapper() -> void:
-	mgr.concurrency = NetwSceneConfig.Concurrency.CONCURRENT
-	var scene: Variant = mgr._make_scene_wrapper(true)
-
-	assert_object(scene).is_instanceof(MultiplayerScene)
-	assert_bool(scene is SubViewport).is_true()
-	assert_bool((scene as SubViewport).own_world_3d).is_true()
-	assert_that((scene as SubViewport).render_target_update_mode).is_equal(
-		SubViewport.UPDATE_DISABLED,
-	)
-
-	scene.free()
-
-
-func test_concurrent_client_builds_a_plain_wrapper() -> void:
-	mgr.concurrency = NetwSceneConfig.Concurrency.CONCURRENT
-	var scene: Variant = mgr._make_scene_wrapper(false)
-
-	assert_object(scene).is_instanceof(MultiplayerScene)
-	assert_bool(scene is SubViewport).is_false()
-
-	scene.free()
-
-#endregion
+	assert_bool(config.level_spawn_function == fn).is_true()

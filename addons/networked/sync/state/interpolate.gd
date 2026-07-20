@@ -33,6 +33,18 @@ enum Mode {
 	SLERP = 3,
 }
 
+## Chooses what a channel shows past its newest received sample when the entity's
+## playhead forecasts.
+enum Tail {
+	## Extrapolates past the newest sample by its derivative, capped by
+	## [member NetwInterpolationInterface.Handle.max_forecast_ticks]. The
+	## derivative is [member project_by] when set, otherwise the finite
+	## difference of the last two samples.
+	AUTO = 0,
+	## Holds the newest sample and never projects, for discrete or flag values.
+	HOLD = 1,
+}
+
 ## Interpolation algorithm used for this value.
 @export var mode: Mode = Mode.LERP
 
@@ -47,6 +59,17 @@ enum Mode {
 ## Empty means the source property name for [method Netw.configure_property].
 ## RPC and signal arguments should set an explicit [member target].
 @export var target: StringName = &""
+
+## Tail policy under a forecasting playhead. [constant Tail.AUTO] projects,
+## [constant Tail.HOLD] never does. Ignored while the entity buffers.
+@export var forecast_tail: Tail = Tail.AUTO
+
+## Sibling channel whose sampled value is this channel's derivative.
+##
+## Empty falls back to the finite difference of the last two samples. Set it
+## through [method project_by] to a channel that replicates velocity at the same
+## authoring tick, so a torn pair never manufactures a phantom trajectory.
+@export var project_channel: StringName = &""
 
 
 ## Returns [code]true[/code] when this spec can smooth [param type].
@@ -99,4 +122,21 @@ func snap_at(distance: float) -> NetwInterpolate:
 ## Sets [member target] to [param property].
 func to(property: StringName) -> NetwInterpolate:
 	target = property
+	return self
+
+
+## Projects the forecast tail using sibling [param channel] as the derivative.
+##
+## The named channel should replicate this value's velocity at the same authoring
+## tick. Leaving it unset projects by finite difference instead.
+func project_by(channel: StringName) -> NetwInterpolate:
+	project_channel = channel
+	forecast_tail = Tail.AUTO
+	return self
+
+
+## Selects [constant Tail.HOLD] so the channel never projects past its newest
+## sample, for discrete or flag values that must not extrapolate.
+func hold() -> NetwInterpolate:
+	forecast_tail = Tail.HOLD
 	return self

@@ -150,7 +150,7 @@
 ## Unlike a property, an argument has no implicit source, so
 ## [member NetwInterpolate.target] must be set.
 class_name NetwInterpolationInterface
-extends NetwService
+extends RefCounted
 
 ## Selects the display role when automatic role resolution is not desired.
 enum DisplayRole {
@@ -174,6 +174,23 @@ enum PredictedMode {
 	BRACKETED = 1,
 }
 
+## Selects where on the timeline a remote entity renders.
+##
+## [constant FORECAST] projects along the last replicated velocity, which has no
+## knowledge of geometry, so a remote body projected toward a wall penetrates it
+## until the bounce sample arrives. A dynamic-body game with world collision should
+## keep remotes on [constant BUFFERED] (freeze on the newest truth rather than
+## extrapolate past it), the stance the racing example takes.
+enum TimelineMode {
+	## Renders behind the newest sample by the jitter buffer, always a delayed
+	## truth. This is the default and the only mode the server ever resolves.
+	BUFFERED = 0,
+	## Targets the newest sample and projects each channel across the gaps
+	## between snapshots, trading the buffer delay for extrapolation error. Collision
+	## blind, so prefer [constant BUFFERED] for a body that meets world geometry.
+	FORECAST = 1,
+}
+
 ## Channels a parented visual accepts as global-space writes.
 ##
 ## These are the channels with a per-channel global setter, so the smoothed
@@ -193,56 +210,62 @@ const _PUMP_BRACKETED := 2
 const _PUMP_CHASE := 3
 
 var _runtimes: Dictionary[int, _Runtime] = { }
-var _action_gates: Dictionary[int, _ActionGate] = { }
 var _clock: NetwClockInterface
 var _liveness: NetwLivenessInterface
 var _clock_connected := false
 var _clock_bind_attempts := 0
 var _liveness_connected := false
 var _last_update_frame := -1
+var _stats := NetwPumpStats.new()
 var _dbg: NetwHandle = Netw.dbg.handle(self)
 
-
-## Resolves the service for the [MultiplayerTree] enclosing [param node].
-static func for_node(node: Node) -> NetwInterpolationInterface:
-	var mt := MultiplayerTree.resolve(node)
-	if not mt:
-		return null
-	var service := mt.get_service(NetwInterpolationInterface) \
-			as NetwInterpolationInterface
-	if service:
-		return service
-	return mt.find_service_node(NetwInterpolationInterface) \
-			as NetwInterpolationInterface
+# The owning NetwMultiplayer. A weakref because the owner holds this interface
+# as a member, so a strong reference back would form a cycle neither side frees.
+var _api_ref: WeakRef
 
 
-#region Service
-
-## Returns the service script type for registration.
-func _service_type() -> Script:
-	return NetwInterpolationInterface
-
-
-## Connects this service to the session clock and liveness registry.
-func _service_entered(mt: MultiplayerTree) -> void:
-	process_priority = 100
-	if not mt.session_entered.is_connected(_on_session_entered):
-		mt.session_entered.connect(_on_session_entered)
-	if not mt.session_ended.is_connected(_on_session_ended):
-		mt.session_ended.connect(_on_session_ended)
-	_ensure_clock_connection()
+func _init(api: NetwMultiplayer = null) -> void:
+	_api_ref = weakref(api) if api else null
+	if api == null:
+		return
+	api.session_entered.connect(_on_session_entered)
+	api.session_ended.connect(_on_session_ended)
 	_ensure_liveness_connection()
+	_ensure_clock_connection()
 
 
-## Disconnects this service from the session clock and liveness registry.
-func _service_exiting(mt: MultiplayerTree) -> void:
-	if mt.session_entered.is_connected(_on_session_entered):
-		mt.session_entered.disconnect(_on_session_entered)
-	if mt.session_ended.is_connected(_on_session_ended):
-		mt.session_ended.disconnect(_on_session_ended)
-	_disconnect_clock()
-	_disconnect_liveness()
+func _api() -> NetwMultiplayer:
+	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
+
+
+## Releases every session binding so the owning session can free. Mirrors the
+## teardown the other session interfaces run from the session's own disposal.
+func dispose() -> void:
+	var api := _api()
+	if api:
+		if api.session_entered.is_connected(_on_session_entered):
+			api.session_entered.disconnect(_on_session_entered)
+		if api.session_ended.is_connected(_on_session_ended):
+			api.session_ended.disconnect(_on_session_ended)
+	if is_instance_valid(_clock) \
+			and _clock.after_tick.is_connected(_on_clock_tick):
+		_clock.after_tick.disconnect(_on_clock_tick)
+	if is_instance_valid(_liveness):
+		if _liveness.entity_live.is_connected(_on_entity_live):
+			_liveness.entity_live.disconnect(_on_entity_live)
+		if _liveness.entity_dead.is_connected(_on_entity_dead):
+			_liveness.entity_dead.disconnect(_on_entity_dead)
+	_clock = null
+	_liveness = null
+	_clock_connected = false
+	_liveness_connected = false
 	_clear_runtimes()
+
+
+## Resolves the interpolation runtime owned by [param node]'s session.
+static func for_node(node: Node) -> NetwInterpolationInterface:
+	var api := NetwMultiplayer.of(node)
+	return api.interpolation if api else null
 
 
 func _on_session_entered() -> void:
@@ -258,7 +281,7 @@ func _on_session_ended() -> void:
 # Resolves the tick engine, or null while no configurator has registered, so
 # callers keep today's no-clock fallback semantics against the inert interface.
 func _resolve_clock() -> NetwClockInterface:
-	var api := NetwMultiplayer.of(self)
+	var api := _api()
 	if api and api.clock.is_configured():
 		return api.clock
 	return null
@@ -274,27 +297,10 @@ func _ensure_clock_connection() -> void:
 		_clock = clock
 		_clock_connected = true
 		return
+	# The clock is inert until a configurator registers. The per-frame pump
+	# retries this bind each frame, bounded by the attempt cap, so no node-tree
+	# signal is needed to poll for it.
 	_clock_bind_attempts += 1
-	if _clock_bind_attempts > _MAX_CLOCK_BIND_ATTEMPTS:
-		return
-	if not is_inside_tree():
-		return
-	if get_tree().process_frame.is_connected(_ensure_clock_connection):
-		return
-	get_tree().process_frame.connect(
-		_ensure_clock_connection,
-		CONNECT_ONE_SHOT,
-	)
-
-
-func _disconnect_clock() -> void:
-	if not _clock_connected:
-		return
-	var clock := _resolve_clock()
-	if clock and clock.after_tick.is_connected(_on_clock_tick):
-		clock.after_tick.disconnect(_on_clock_tick)
-	_clock = null
-	_clock_connected = false
 
 
 # Cached session clock, resolved and memoized on first use.
@@ -310,7 +316,8 @@ func _get_clock() -> NetwClockInterface:
 func _ensure_liveness_connection() -> void:
 	if _liveness_connected:
 		return
-	var lv := NetwLivenessInterface.for_node(self)
+	var api := _api()
+	var lv := api.liveness if api else null
 	if not lv:
 		return
 	if not lv.entity_live.is_connected(_on_entity_live):
@@ -320,20 +327,6 @@ func _ensure_liveness_connection() -> void:
 	_liveness = lv
 	_liveness_connected = true
 
-
-func _disconnect_liveness() -> void:
-	if not _liveness_connected:
-		return
-	var lv := NetwLivenessInterface.for_node(self)
-	if lv:
-		if lv.entity_live.is_connected(_on_entity_live):
-			lv.entity_live.disconnect(_on_entity_live)
-		if lv.entity_dead.is_connected(_on_entity_dead):
-			lv.entity_dead.disconnect(_on_entity_dead)
-	_liveness = null
-	_liveness_connected = false
-
-#endregion
 
 #region Record seam
 
@@ -444,9 +437,6 @@ func _on_clock_tick(_delta: float, tick: int) -> void:
 #region Runtimes
 
 func _on_entity_live(route: int, entity: NetwEntity) -> void:
-	# The action-spawn display gate runs for every routed entity, even one that
-	# never builds an interpolation runtime, so it precedes the runtime filter.
-	_apply_action_gate(route, entity)
 	if not _entity_wants_runtime(entity):
 		return
 	var runtime := _runtime_for(route, entity)
@@ -504,112 +494,22 @@ func _on_entity_dead(route: int) -> void:
 	var runtime := _runtimes.get(route) as _Runtime
 	if runtime:
 		_disconnect_hooks(runtime.entity_hooks)
-		_clear_sync_feeds(runtime)
 		_apply_body_freeze(runtime, DisplayRole.DISABLED)
 	_runtimes.erase(route)
-	# The node is freeing, so drop its gate without revealing it.
-	_action_gates.erase(route)
-	_disconnect_action_reveal_if_idle()
 	NetwScriptModel.sweep_dead_overlays()
 
 
 func _clear_runtimes() -> void:
 	for runtime in _runtimes.values():
 		_disconnect_hooks(runtime.entity_hooks)
-		_clear_sync_feeds(runtime)
 		_apply_body_freeze(runtime, DisplayRole.DISABLED)
 	_runtimes.clear()
-	_action_gates.clear()
-	_disconnect_action_reveal_if_idle()
-
-
-# Hides a remote NetwAction result until the local display playhead reaches the
-# action tick, so a spawned effect appears in step with the displayed world
-# rather than the moment its frame arrived. The requester keeps its immediate
-# predicted presentation, and an entity that never came from an action, or whose
-# display already passed the tick, is never touched.
-func _apply_action_gate(route: int, entity: NetwEntity) -> void:
-	if _action_gates.has(route):
-		return
-	if entity.action_spawn_tick < 0 or _is_local_action_requester(entity):
-		return
-	var clock := _get_clock()
-	if not clock or clock.display_tick >= entity.action_spawn_tick:
-		return
-	var gate := _ActionGate.new()
-	gate.owner_ref = weakref(entity.owner)
-	gate.action_tick = entity.action_spawn_tick
-	if not _set_gate_visible(gate, false):
-		return
-	gate.hidden = true
-	_action_gates[route] = gate
-	if not clock.on_tick.is_connected(_on_action_reveal_tick):
-		clock.on_tick.connect(_on_action_reveal_tick)
-
-
-func _on_action_reveal_tick(_delta: float, tick: int) -> void:
-	var clock := _get_clock()
-	for gate_route in _action_gates.keys():
-		var gate := _action_gates[gate_route] as _ActionGate
-		var reached := true
-		if clock:
-			reached = maxi(0, tick - clock.display_offset) >= gate.action_tick
-		if reached:
-			_reveal_gate(gate_route)
-	_disconnect_action_reveal_if_idle()
-
-
-func _reveal_gate(route: int) -> void:
-	var gate := _action_gates.get(route) as _ActionGate
-	if not gate:
-		return
-	if gate.hidden:
-		_set_gate_visible(gate, gate.original_visible)
-		gate.hidden = false
-	_action_gates.erase(route)
-
-
-func _disconnect_action_reveal_if_idle() -> void:
-	if not _action_gates.is_empty():
-		return
-	var clock := _get_clock()
-	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
-		clock.on_tick.disconnect(_on_action_reveal_tick)
-
-
-func _is_local_action_requester(entity: NetwEntity) -> bool:
-	if entity.action_requester == 0:
-		return false
-	var api := NetwMultiplayer.of(self)
-	if not api or api.multiplayer_peer == null:
-		return false
-	return entity.action_requester == api.get_unique_id()
-
-
-# Sets the gated owner's visibility, capturing its original state on the first
-# hide so the reveal restores exactly what the scene declared. Returns
-# [code]false[/code] for a non-visual owner (a bare logic node), which the gate
-# then leaves alone.
-func _set_gate_visible(gate: _ActionGate, value: bool) -> bool:
-	var owner := gate.owner_ref.get_ref() as Node
-	if owner is CanvasItem:
-		var item := owner as CanvasItem
-		if not gate.hidden:
-			gate.original_visible = item.visible
-		item.visible = value
-		return true
-	if owner is Node3D:
-		var spatial := owner as Node3D
-		if not gate.hidden:
-			gate.original_visible = spatial.visible
-		spatial.visible = value
-		return true
-	return false
 
 
 func _route_of(entity: NetwEntity) -> int:
 	if not is_instance_valid(_liveness):
-		_liveness = NetwLivenessInterface.for_node(self)
+		var api := _api()
+		_liveness = api.liveness if api else null
 	if _liveness:
 		var route := _liveness.route_of(entity)
 		if route > 0:
@@ -718,7 +618,6 @@ func _rebuild_runtime(runtime: _Runtime) -> void:
 	var owner := runtime.owner()
 	if not entity or not is_instance_valid(owner):
 		return
-	_clear_sync_feeds(runtime)
 	runtime.states.clear()
 	runtime.states_by_key.clear()
 	runtime.states_by_target.clear()
@@ -845,6 +744,12 @@ func _ensure_state(
 	)
 	state.output = output
 
+	# The output writes back onto the sampled property when it has a source, no
+	# visual redirect took it elsewhere, and no .to() renamed the target. Harmless
+	# for a frozen REMOTE display, but a self-feeding drag for a PREDICTED or
+	# AUTHORITY pump, so the predicted kernels skip it and warn.
+	state.self_feedback = has_source and target == node and target_prop == source_prop
+
 	# A parented visual only escapes body drag on channels written in global
 	# space. Any other spatial channel is written locally and composes with
 	# the body, so a body snap drags it. Say so instead of degrading silently.
@@ -895,10 +800,10 @@ func _index_target(runtime: _Runtime, state: _PropertyState) -> void:
 
 #region Roles
 
-# Recomputes the pump on every call and applies the transition when it
-# changes. Always recomputing keeps the pump current without dirty tracking.
-# The inputs are cheap reads, and the authored-streams scan is bounded by the
-# entity's few cached synchronizers.
+# Recomputes the pump mode and applies the transition when it changes. Called on
+# the events that can change the role (liveness, control, reparent, rebuild,
+# handle writes, each record) rather than per frame, so the pump kernel never
+# scans control, authority, and streams.
 func _resolve_role(runtime: _Runtime) -> void:
 	var role := _resolve_display_role(runtime)
 	var pump := _pump_for(runtime, role)
@@ -914,8 +819,31 @@ func _resolve_role(runtime: _Runtime) -> void:
 
 	runtime.pump_mode = pump
 	_apply_body_freeze(runtime, role)
+	if _pump_is_predicted(pump):
+		_warn_self_feedback(runtime)
 	if pump == _PUMP_REMOTE:
 		_compute_sync_intervals(runtime)
+
+
+# Warns once per runtime when a predicted or authority pump owns a channel that
+# writes back onto its own sampled property. Those pumps skip the write (RC1), and
+# the author should redirect the display through a visual_root or a .to() target so
+# the smoothed value never re-enters the simulation.
+func _warn_self_feedback(runtime: _Runtime) -> void:
+	if runtime.warned_self_feedback:
+		return
+	for state in runtime.states:
+		if not state.self_feedback:
+			continue
+		runtime.warned_self_feedback = true
+		_dbg.warn(
+			"interpolation: channel '%s' on '%s' interpolates a locally simulated "
+			+ "property in place, so its smoothed output is skipped to keep it out "
+			+ "of the control loop. Redirect the display with a .to() target or a "
+			+ "visual_root to interpolate it.",
+			[state.target_prop, runtime.owner().name if runtime.owner() else "?"],
+		)
+		return
 
 
 func _pump_is_predicted(pump: int) -> bool:
@@ -976,7 +904,7 @@ func _authors_display_streams(runtime: _Runtime) -> bool:
 		if not sync.is_multiplayer_authority():
 			return false
 		found = true
-	var api := NetwMultiplayer.of(self)
+	var api := _api()
 	if api:
 		for binding in api.replication.derived_group(runtime.route):
 			var node := binding.node()
@@ -1004,7 +932,7 @@ func _authors_derived_stream(
 	if not is_instance_valid(node):
 		return false
 	if binding.set.record == NetwSyncSet.Record.RECORD_STATE:
-		var api := NetwMultiplayer.of(self)
+		var api := _api()
 		return api != null and api.get_unique_id() == 1
 	match binding.set.policy:
 		NetwScriptModel.Policy.AUTHORITY:
@@ -1060,7 +988,10 @@ func _apply_body_freeze(runtime: _Runtime, role: DisplayRole) -> void:
 
 #region Pump
 
-func _process(delta: float) -> void:
+## Advances every interpolation runtime one display frame, using [param delta]
+## as the frame time. The session drives this once per frame from its poll, so a
+## runtime smooths without the interface needing to be a node in the scene tree.
+func pump(delta: float) -> void:
 	var frame := Engine.get_process_frames()
 	if delta > 0.0 and frame == _last_update_frame:
 		return
@@ -1071,79 +1002,138 @@ func _process(delta: float) -> void:
 		_ensure_clock_connection()
 		return
 
-	var global_dt := clock.display_tick
-	var global_factor := clock.tick_factor
-	var frame_ticks := delta * clock.tickrate
-
+	# The shell captures timing once and hands every runtime the same snapshot,
+	# so no kernel ever reads the clock and a runtime pump depends only on plain
+	# frame scalars owned by that entity.
+	var timing := NetwDisplayTiming.capture(clock, delta)
+	_stats.reset()
+	# TODO: fan this loop out over runtime partitions once engine kernels can run
+	# off the main thread natively. Safe by construction: a runtime touches only
+	# its own state, pinned by the schedule-independence property test.
 	for runtime in _runtimes.values():
 		if runtime.disabled:
-			continue
-		_update_runtime(runtime, global_dt, global_factor, frame_ticks, delta)
+			# A disable_for window ends when the display clock crosses its
+			# deadline, the tick-space replacement for a SceneTreeTimer.
+			if runtime.disable_until_tick >= 0 \
+					and timing.display_tick >= runtime.disable_until_tick:
+				runtime.disabled = false
+				runtime.disable_until_tick = -1
+			else:
+				continue
+		_pump_runtime(runtime, timing, _stats)
 
 
-func _update_runtime(
+func _pump_runtime(
 		runtime: _Runtime,
-		global_dt: int,
-		global_factor: float,
-		frame_ticks: float,
-		delta: float,
+		timing: NetwDisplayTiming,
+		stats: NetwPumpStats,
 ) -> void:
 	if not runtime.owner():
 		return
-	_resolve_role(runtime)
+	# Role resolution is event-driven. It runs on entity liveness, control
+	# changes, reparenting, config rebuilds, handle writes, and every network
+	# record, so the pump only resolves a runtime that has never been resolved
+	# and never scans control, authority, and streams per frame.
+	if runtime.pump_mode == _PUMP_UNRESOLVED:
+		_resolve_role(runtime)
 	match runtime.pump_mode:
 		_PUMP_DISABLED:
 			return
 		_PUMP_CHASE:
-			_pump_chase(runtime, delta)
+			stats.runtimes += 1
+			_pump_chase(runtime, timing, stats)
 		_:
-			_pump_history(runtime, global_dt, global_factor, frame_ticks, delta)
+			stats.runtimes += 1
+			_pump_history(runtime, timing, stats)
 
 
 # Drives the remote and bracketed roles. Both sample the same history through
 # the playhead. Remote dilates the playhead, bracketed follows the raw tick.
 func _pump_history(
 		runtime: _Runtime,
-		global_dt: int,
-		global_factor: float,
-		frame_ticks: float,
-		delta: float,
+		timing: NetwDisplayTiming,
+		stats: NetwPumpStats,
 ) -> void:
 	var playhead := runtime.playhead
 	var trace := _should_trace(runtime)
 	var dt: int
 	var factor: float
+	var forecast := false
+	var max_forecast_ticks := 0
 	if runtime.pump_mode == _PUMP_REMOTE:
 		var handle := runtime.handle
+		forecast = handle != null and handle.timeline_mode == TimelineMode.FORECAST
+		if handle:
+			max_forecast_ticks = handle.max_forecast_ticks
 		if handle and handle.enable_smart_dilation:
-			_dilate_playhead(runtime, global_dt, frame_ticks, trace)
+			_dilate_playhead(runtime, timing, stats, trace)
 		else:
 			playhead.display_lag = 0.0
-		var time := (float(global_dt) + global_factor) - playhead.display_lag
+		var time := (float(timing.display_tick) + timing.tick_factor) \
+				- playhead.display_lag
 		dt = int(floor(time))
 		factor = time - float(dt)
 	else:
-		dt = maxi(0, global_dt - 1)
-		factor = global_factor
+		dt = maxi(0, timing.display_tick - 1)
+		factor = timing.tick_factor
 		playhead.display_lag = 0.0
 	playhead.display_tick = dt
+	stats.max_display_lag = maxf(stats.max_display_lag, playhead.display_lag)
 
 	var eit := playhead.expected_interval_ticks
 	for state in runtime.states:
+		# The bracketed pump runs on the peer that authors this stream (the server's
+		# authority, or a predicted body in bracketed mode). A self-feeding channel
+		# would sample its own simulation and write the smoothed value back onto it,
+		# so leave the sim value. A REMOTE display writes it harmlessly.
+		if state.self_feedback and runtime.pump_mode == _PUMP_BRACKETED:
+			continue
 		# An empty history has no stream to show. Defer to whatever wrote the
 		# property instead of clobbering it with a stale value.
 		if state.history.is_empty() or state.history.is_sleeping:
+			if state.history.is_sleeping:
+				stats.sleeping += 1
 			continue
+		# A HOLD channel never projects even while the entity forecasts. Others
+		# project by their project_by sibling read at this channel's newest tick,
+		# an atomic pair, and fall back to their own finite difference.
+		var project := forecast and (
+			state.spec == null
+			or state.spec.forecast_tail != NetwInterpolate.Tail.HOLD
+		)
+		var velocity: Variant = null
+		var has_velocity := false
+		if project and state.spec and state.spec.project_channel != &"":
+			var sibling: _PropertyState = \
+					runtime.states_by_key.get(state.spec.project_channel)
+			if sibling and not sibling.history.is_empty():
+				velocity = sibling.history.get_at(state.history.newest_tick())
+				has_velocity = velocity != null
 		var result: Variant = state.history.sample(
 			dt,
 			factor,
 			state.last_written,
 			eit,
+			project,
+			max_forecast_ticks,
+			timing.ticktime,
+			velocity,
+			has_velocity,
 		)
+		if state.history.last_projected:
+			stats.projecting += 1
+			stats.max_forecast_age = maxf(
+				stats.max_forecast_age,
+				state.history.last_project_age,
+			)
+		if state.history.is_sleeping:
+			stats.sleeping += 1
 		var weight := 1.0
 		if state.spec and state.spec.smoothing > 0.0:
-			weight = 1.0 - exp(-delta / state.spec.smoothing)
+			weight = 1.0 - exp(-timing.frame_delta / state.spec.smoothing)
 		result = state.history.smooth_toward(state.last_written, result, weight)
+		if state.history.snapped:
+			stats.snaps += 1
 		if trace:
 			_dbg.trace(
 				"Interp %s dt=%d lag=%.2f val=%s",
@@ -1154,10 +1144,20 @@ func _pump_history(
 
 
 # Eases each visual toward its live predicted body every frame.
-func _pump_chase(runtime: _Runtime, delta: float) -> void:
-	var weight := 1.0 - exp(-delta / _predicted_effective_smooth_time(runtime))
+func _pump_chase(
+		runtime: _Runtime,
+		timing: NetwDisplayTiming,
+		stats: NetwPumpStats,
+) -> void:
+	var weight := 1.0 - exp(
+			-timing.frame_delta / _predicted_effective_smooth_time(runtime, timing),
+	)
 	var trace := _should_trace(runtime)
 	for state in runtime.states:
+		# A self-feeding channel would smooth the live body against its own last
+		# output and write the drag back onto the simulation. Leave the sim value.
+		if state.self_feedback:
+			continue
 		if not is_instance_valid(state.source_obj):
 			continue
 		var value: Variant = state.source_obj.get(state.source_prop)
@@ -1177,17 +1177,17 @@ func _pump_chase(runtime: _Runtime, delta: float) -> void:
 
 func _dilate_playhead(
 		runtime: _Runtime,
-		global_dt: int,
-		frame_ticks: float,
+		timing: NetwDisplayTiming,
+		stats: NetwPumpStats,
 		trace: bool,
 ) -> void:
 	var playhead := runtime.playhead
 	var handle := runtime.handle
-	var raw_floor := _calculate_min_lag(runtime)
+	var raw_floor := _calculate_min_lag(runtime, timing)
 	playhead.smoothed_floor += (raw_floor - playhead.smoothed_floor) \
 			* handle.floor_smoothing
 
-	var effective_dt := int(floor(float(global_dt) - playhead.display_lag))
+	var effective_dt := int(floor(float(timing.display_tick) - playhead.display_lag))
 	var is_starving := false
 	var newest_tick := -1
 
@@ -1200,6 +1200,7 @@ func _dilate_playhead(
 			break
 
 	if is_starving:
+		stats.starving += 1
 		playhead.starvation_ticks += 1
 		for state in runtime.states:
 			state.history.is_sleeping = false
@@ -1208,7 +1209,7 @@ func _dilate_playhead(
 
 	if playhead.starvation_ticks >= handle.starvation_grace_frames:
 		playhead.display_lag = minf(
-			playhead.display_lag + frame_ticks * handle.starvation_growth,
+			playhead.display_lag + timing.frame_ticks * handle.starvation_growth,
 			playhead.smoothed_floor + handle.max_extra_dilation,
 		)
 	else:
@@ -1222,26 +1223,35 @@ func _dilate_playhead(
 		)
 
 
-func _calculate_min_lag(runtime: _Runtime) -> float:
-	var clock := _get_clock()
-	if not clock:
+func _calculate_min_lag(runtime: _Runtime, timing: NetwDisplayTiming) -> float:
+	var handle := runtime.handle
+	if handle and handle.timeline_mode == TimelineMode.FORECAST:
+		# Forecast targets the newest sample: no jitter buffer, the tail
+		# projection covers the snapshot gaps instead of a display delay.
 		return 0.0
 	var needed := float(runtime.playhead.expected_interval_ticks + 1)
 	var network_padding := float(
 		maxi(
 			0,
-			clock.recommended_display_offset - clock.display_offset,
+			timing.recommended_display_offset - timing.display_offset,
 		),
 	)
 	return maxf(
 		0.0,
-		needed - float(clock.display_offset) + network_padding,
+		needed - float(timing.display_offset) + network_padding,
 	)
+
+
+# Captures the timing snapshot for a shell-phase event (reset, rebuild) that
+# needs the lag floor between pumps. The pump path never calls this; it receives
+# its snapshot by value from the shell entry instead.
+func _capture_timing() -> NetwDisplayTiming:
+	return NetwDisplayTiming.capture(_get_clock(), 0.0)
 
 
 func _reset_runtime(runtime: _Runtime) -> void:
 	var playhead := runtime.playhead
-	var target_lag := _calculate_min_lag(runtime)
+	var target_lag := _calculate_min_lag(runtime, _capture_timing())
 	playhead.smoothed_floor = target_lag
 	playhead.display_lag = target_lag
 	playhead.starvation_ticks = 0
@@ -1311,20 +1321,22 @@ func _should_trace(runtime: _Runtime) -> bool:
 	return runtime.trace_frame == 0
 
 
-# The chase smoothing time, from the handle override or a clock-derived
+# The chase smoothing time, from the handle override or a timing-derived
 # default of most of one tick.
-func _predicted_effective_smooth_time(runtime: _Runtime) -> float:
+func _predicted_effective_smooth_time(
+		runtime: _Runtime,
+		timing: NetwDisplayTiming,
+) -> float:
 	var handle := runtime.handle
 	if handle and handle.predicted_smooth_time > 0.0:
 		return handle.predicted_smooth_time
-	var clock := _get_clock()
-	if clock:
-		return maxf(clock.ticktime * 0.85, 0.001)
+	if timing.ticktime > 0.0:
+		return maxf(timing.ticktime * 0.85, 0.001)
 	return 1.0 / 60.0
 
 #endregion
 
-#region Sync feeds (absorbed by NetwMultiplayer when the replication core lands)
+#region Sync interval and authorship (role resolution reads the sync shape)
 
 func _compute_sync_intervals(runtime: _Runtime) -> void:
 	var max_interval := 0.0
@@ -1372,140 +1384,15 @@ func _sync_replicates_tracked_property(
 	return false
 
 
-## Records a consumed plain synchronizer's just-applied values into history.
-## Called by [NetwSyncCompat] after it writes an incoming
-## [constant NetwFrameEnvelope.Channel.SYNC] or
-## [constant NetwFrameEnvelope.Channel.SYNC_DELTA] row onto the live nodes,
-## the receive-side feed the [signal MultiplayerSynchronizer.synchronized]
-## emission used to provide. Derived sets feed through
-## [method feed_derived_apply] instead.
-func feed_consumed_apply(route: int, sync: MultiplayerSynchronizer) -> void:
-	if not _sync_feeds_consumed(sync):
-		return
-	_on_native_sync(route, sync)
-
-
-## Records a derived set's just-applied values into history. Called by
-## [NetwSyncPipeline] after [method NetwSyncSetBinding.apply_volatile] returns
-## the decoded header, the derived counterpart of [method feed_consumed_apply].
-## A stamped set records each field at the header's authoring tick, the same
-## tick domain the stamped payload funnel fed, and a header with no payload row
-## (a retained delta decodes no tick) reads the just-written values back off the
-## node at the receive tick. Only a [constant NetwSyncSet.Audience.AUDIENCE_PUBLIC]
-## set feeds display history, so a server-only input stream never writes into a
-## display buffer, and the public third-peer input row rides this same feed.
-func feed_derived_apply(
-		route: int,
-		binding: NetwSyncSetBinding,
-		header: Dictionary,
-) -> void:
-	if binding.set.audience != NetwSyncSet.Audience.AUDIENCE_PUBLIC:
-		return
-	var runtime := _runtimes.get(route) as _Runtime
-	if not runtime:
-		return
-	var map := _derived_map_for(runtime, binding)
-	if map.is_empty():
-		return
-	var tick := int(header.get("tick", -1))
-	var authoring := binding.set.stamp != NetwSyncSet.Stamp.STAMP_NONE and tick >= 0
-	if not authoring:
-		var clock := _get_clock()
-		tick = clock.tick if clock else 0
-	var payload: Dictionary = header.get("payload", { })
-	if payload.is_empty():
-		# Only the retained lane applies without a payload row, and it never
-		# shares a field with the volatile lane, so the read-back stays in the
-		# receive-tick domain without mixing a stamped field's history.
-		for field in binding.set.fields:
-			if field.lane != NetwSyncSet.Lane.RETAINED or not map.has(field.key):
-				continue
-			var b: Array = map[field.key]
-			var node := b[0] as Node
-			if is_instance_valid(node):
-				_record(node, field.key, node.get(field.key), tick, b[2] as NetwInterpolate, false)
-		return
-	for key: StringName in payload:
-		if not map.has(key):
-			continue
-		var b: Array = map[key]
-		_record(b[0], b[1], payload[key], tick, b[2] as NetwInterpolate, authoring)
-
-
-# Resolves and caches the derived binding's [key -> [node, property, spec]] map,
-# dropping any field without an interpolator. Shares the sync source cache (keyed
-# by instance id, which never collides across object kinds) so a runtime rebuild
-# clears both. A derived field always reads and writes the declaring node under
-# its own key, so node and property are the binding's node and the field key.
-func _derived_map_for(runtime: _Runtime, binding: NetwSyncSetBinding) -> Dictionary:
-	var bid := binding.get_instance_id()
-	if runtime.sync_source_cache.has(bid):
-		return runtime.sync_source_cache[bid]
-	var map: Dictionary = { }
-	var node := binding.node()
-	if is_instance_valid(node):
-		for field in binding.set.fields:
-			var spec := NetwScriptModel.get_node_property_interpolator(node, field.key)
-			if spec:
-				map[field.key] = [node, field.key, spec]
-	runtime.sync_source_cache[bid] = map
-	return map
-
-
 # True for a plain display synchronizer whose receive path is the consumed
-# apply feed.
+# apply feed. Read by role resolution to tell an authored stream from a
+# received one.
 func _sync_feeds_consumed(sync: MultiplayerSynchronizer) -> bool:
 	if not sync.replication_config:
 		return false
 	if not sync.public_visibility:
 		return false
 	return true
-
-
-# Clears the cached receive-side binding maps so a rebuilt runtime re-resolves
-# its sources against the live tree.
-func _clear_sync_feeds(runtime: _Runtime) -> void:
-	runtime.sync_source_cache.clear()
-
-
-# Native receive adapter. A plain synchronizer carries no payload, so the value
-# native replication just wrote onto each node is read back at the receive tick.
-func _on_native_sync(route: int, sync: MultiplayerSynchronizer) -> void:
-	var runtime := _runtimes.get(route) as _Runtime
-	if not runtime:
-		return
-	var bindings := _binding_map_for(runtime, sync)
-	if bindings.is_empty():
-		return
-	var clock := _get_clock()
-	var tick := clock.tick if clock else 0
-	for key: StringName in bindings:
-		var b: Array = bindings[key]
-		var node := b[0] as Node
-		if not is_instance_valid(node):
-			continue
-		var prop := b[1] as StringName
-		_record(node, prop, node.get(prop), tick, b[2] as NetwInterpolate, false)
-
-
-# Resolves and caches the sync's configured [key -> [node, property, spec]]
-# bindings once, dropping any key without an interpolator. Both receive adapters
-# read this same map. Cleared on runtime rebuild.
-func _binding_map_for(runtime: _Runtime, sync: MultiplayerSynchronizer) -> Dictionary:
-	var sid := sync.get_instance_id()
-	if runtime.sync_source_cache.has(sid):
-		return runtime.sync_source_cache[sid]
-	var map: Dictionary = { }
-	var root := sync.get_node_or_null(sync.root_path)
-	if root:
-		for binding: Array in SynchronizersCache.display_bindings(sync, root):
-			var node := binding[1] as Node
-			var prop := binding[2] as StringName
-			var spec := NetwScriptModel.get_node_property_interpolator(node, prop)
-			if spec:
-				map[binding[0]] = [node, prop, spec]
-	runtime.sync_source_cache[sid] = map
-	return map
 
 #endregion
 
@@ -1550,6 +1437,17 @@ class Handle:
 
 	## Enables display lag adaptation for remote interpolation.
 	var enable_smart_dilation: bool = true
+
+	## Where on the timeline remote display renders. [constant TimelineMode.FORECAST]
+	## targets the newest sample and projects each [NetwInterpolate] channel across
+	## the snapshot gaps. Only [constant DisplayRole.REMOTE] entities forecast, so
+	## an authored or predicted display ignores this.
+	var timeline_mode: TimelineMode = TimelineMode.BUFFERED
+
+	## Ticks the display may project past its newest sample under
+	## [constant TimelineMode.FORECAST]. The projection age clamps here, so a
+	## stalled stream freezes at the cap instead of drifting away.
+	var max_forecast_ticks: int = 6
 
 	## Maximum extra ticks that display lag can grow while starving.
 	var max_extra_dilation: float = 0.0
@@ -1618,26 +1516,24 @@ class Handle:
 		return iface._get_buffer(runtime, property)
 
 
-	## Temporarily disables interpolation for [param duration] seconds.
-	func disable_for(duration: float) -> SceneTreeTimer:
+	## Temporarily disables interpolation for about [param duration] seconds.
+	##
+	## The runtime re-enables once the display clock crosses the tick deadline the
+	## duration implies, so the engine owns the timer through
+	## [member NetwDisplayTiming.display_tick] instead of a [SceneTreeTimer] bound
+	## to the scene tree.
+	func disable_for(duration: float) -> void:
+		var iface := _interface()
 		var runtime := _runtime()
-		var ent := entity()
-		if not runtime or not ent or not ent.owner:
-			return null
+		if not iface or not runtime:
+			return
 		runtime.disabled = true
 		reset()
-		var timer := ent.owner.get_tree().create_timer(duration)
-		var self_ref := weakref(self)
-		timer.timeout.connect(
-			func() -> void:
-				var handle := self_ref.get_ref() as Handle
-				if not handle:
-					return
-				var rt := handle._runtime()
-				if rt:
-					rt.disabled = false
-		)
-		return timer
+		var timing := iface._capture_timing()
+		var ticks := 1
+		if timing.ticktime > 0.0:
+			ticks = maxi(1, ceili(duration / timing.ticktime))
+		runtime.disable_until_tick = timing.display_tick + ticks
 
 
 	func _bind(bound_entity: NetwEntity) -> void:
@@ -1668,17 +1564,6 @@ class Handle:
 
 #region Runtime data
 
-# One suspended action-spawn owner, hidden until its display tick arrives. Held
-# by route in _action_gates. Weakref-backed so a freed owner clears itself.
-class _ActionGate:
-	extends RefCounted
-
-	var owner_ref: WeakRef
-	var hidden := false
-	var original_visible := true
-	var action_tick := -1
-
-
 class _Runtime:
 	extends RefCounted
 
@@ -1691,7 +1576,6 @@ class _Runtime:
 	var states_by_key: Dictionary[StringName, _PropertyState] = { }
 	var states_by_target: Dictionary[StringName, _PropertyState] = { }
 	var ambiguous_targets: Dictionary[StringName, bool] = { }
-	var sync_source_cache: Dictionary = { }
 	var pump_mode: int = _PUMP_UNRESOLVED
 	var rebuild_queued := false
 	var authoring_binding: NetwSyncSetBinding
@@ -1699,6 +1583,12 @@ class _Runtime:
 	var saved_freeze: Dictionary = { }
 	var entity_hooks: Array = []
 	var disabled := false
+	# Display tick past which a disable_for window re-enables the runtime, or -1
+	# when the runtime is not on a timed disable.
+	var disable_until_tick := -1
+	# Set once the self-feedback warning has fired, so it warns per runtime not per
+	# role resolution.
+	var warned_self_feedback := false
 
 
 	func entity() -> NetwEntity:
@@ -1720,6 +1610,12 @@ class _PropertyState:
 	var target_obj: Object
 	var target_prop: StringName
 	var authoring_ticks := false
+	# True when the output writes the very property it samples on the very object it
+	# samples it from, with no visual root and no .to() redirect. A REMOTE display
+	# writes it harmlessly (the body is frozen), but a PREDICTED or AUTHORITY pump
+	# that samples the live simulation and writes the smoothed value back onto it
+	# feeds the display filter into the control loop, so those pumps skip it.
+	var self_feedback := false
 	var last_written: Variant
 
 
@@ -1729,14 +1625,15 @@ class _PropertyState:
 		source_prop = other.source_prop
 		target_obj = other.target_obj
 		target_prop = other.target_prop
+		self_feedback = other.self_feedback
 		authoring_ticks = authoring_ticks or other.authoring_ticks
 
 #endregion
 
 #region Display engine
 
-# Per runtime display cursor. Carries signed display lag so a future forecast
-# policy can lead the newest tick the same way dilation trails it.
+# Per runtime display cursor. Carries signed display lag so a forecasting
+# playhead can lead the newest tick the same way dilation trails it.
 class _Playhead:
 	extends RefCounted
 
@@ -1748,8 +1645,10 @@ class _Playhead:
 
 
 # Per value ring buffer with a total resample. Sampling past the newest tick
-# holds the last value (the HOLD tail policy). The tick domain is fixed by the
-# first record and asserts on mixing authoring and receive ticks.
+# holds the last value under a buffered playhead, or projects it forward by its
+# derivative under a forecasting one, capped by the forecast tick budget. The
+# tick domain is fixed by the first record and asserts on mixing authoring and
+# receive ticks.
 class _History:
 	extends RefCounted
 
@@ -1758,10 +1657,21 @@ class _History:
 	var snap_distance := 0.0
 	var is_sleeping := false
 	var _tick_domain := -1
+	# The value type pins on the first record and holds for the channel's life,
+	# even across a teleport clear. A homogeneous history lets the native port
+	# specialize storage per type and keeps the typeof branch out of the sample
+	# hot loop.
+	var _value_type := TYPE_NIL
 	var _last_recorded: Variant
 	var _has_recorded := false
 	var _cached_prev := -1
 	var _search := PackedInt32Array([-1, -1])
+	# Set by the last sample: whether it projected past the newest tick and by how
+	# many ticks, plus whether it took a snap escape. The pump reads these into the
+	# stats record the same way it reads is_sleeping, so the kernel never counts.
+	var last_projected := false
+	var last_project_age := 0.0
+	var snapped := false
 
 
 	func record(tick: int, value: Variant, authoring_tick: bool) -> void:
@@ -1772,6 +1682,14 @@ class _History:
 			assert(
 				_tick_domain == domain,
 				"interpolation: mixing authoring and receive ticks",
+			)
+		var value_type := typeof(value)
+		if _value_type == TYPE_NIL:
+			_value_type = value_type
+		else:
+			assert(
+				_value_type == value_type,
+				"interpolation: channel value type changed",
 			)
 		if _has_recorded and value == _last_recorded:
 			return
@@ -1806,14 +1724,24 @@ class _History:
 
 
 	# Total resample at [param dt]+[param factor]. Before the first tick holds
-	# [param last_written], past the newest tick holds the newest value and may
-	# mark the history asleep.
+	# [param last_written]. Past the newest tick holds the newest value under a
+	# buffered playhead and may mark the history asleep, or projects it forward
+	# under a forecasting one. Projection reads [param explicit_velocity] when
+	# [param has_explicit_velocity] is set, otherwise the finite difference of the
+	# last two samples, and clamps the age to [param max_forecast_ticks].
 	func sample(
 			dt: int,
 			factor: float,
 			last_written: Variant,
 			expected_interval_ticks: int,
+			forecast := false,
+			max_forecast_ticks := 0,
+			ticktime := 0.0,
+			explicit_velocity: Variant = null,
+			has_explicit_velocity := false,
 	) -> Variant:
+		last_projected = false
+		snapped = false
 		buffer.find_bracketing_ticks(dt, _cached_prev, _search)
 		var prev_tick := _search[0]
 		var next_tick := _search[1]
@@ -1822,6 +1750,21 @@ class _History:
 			return last_written
 		if next_tick == -1:
 			var result: Variant = buffer.get_at(prev_tick)
+			# A forecasting playhead projects the tail. A stationary or
+			# unprojectable channel falls through to the buffered hold below, which
+			# is the only path that sleeps: a moving projection must keep writing.
+			if forecast and NetwProject.supports(typeof(result)):
+				var velocity: Variant = explicit_velocity if has_explicit_velocity \
+						else _finite_velocity(prev_tick, ticktime)
+				if velocity != null and not _velocity_negligible(velocity):
+					var age := clampf(
+						(float(dt) + factor) - float(prev_tick),
+						0.0,
+						float(max_forecast_ticks),
+					)
+					last_projected = true
+					last_project_age = age
+					return NetwProject.project(result, velocity, age * ticktime)
 			if not buffer.has_tick_after(prev_tick) \
 					and _is_close(last_written, result):
 				is_sleeping = true
@@ -1829,6 +1772,7 @@ class _History:
 		var p_val: Variant = buffer.get_at(prev_tick)
 		var n_val: Variant = buffer.get_at(next_tick)
 		if snap_distance > 0.0 and _snap(p_val, n_val, snap_distance):
+			snapped = true
 			return n_val
 		return _lerp_bracketed(
 			p_val,
@@ -1850,8 +1794,56 @@ class _History:
 		if weight >= 1.0:
 			return result
 		if snap_distance > 0.0 and _snap(last_written, result, snap_distance):
+			snapped = true
 			return result
 		return _interpolate(last_written, result, weight)
+
+
+	# The channel's velocity implied by its two newest samples, in units per
+	# second, matching the value type. Returns null when a second sample or a
+	# positive span is missing, which forces the caller to hold instead.
+	func _finite_velocity(newest: int, ticktime: float) -> Variant:
+		if ticktime <= 0.0:
+			return null
+		var older := buffer.bracketing_ticks(newest - 1).x
+		if older == -1 or older == newest:
+			return null
+		var span := float(newest - older) * ticktime
+		if span <= 0.0:
+			return null
+		var new_val: Variant = buffer.get_at(newest)
+		var old_val: Variant = buffer.get_at(older)
+		match typeof(new_val):
+			TYPE_FLOAT:
+				var d: float = angle_difference(old_val, new_val) \
+						if mode == NetwInterpolate.Mode.ANGLE \
+						else float(new_val) - float(old_val)
+				return d / span
+			TYPE_VECTOR2:
+				return ((new_val as Vector2) - (old_val as Vector2)) / span
+			TYPE_VECTOR3:
+				return ((new_val as Vector3) - (old_val as Vector3)) / span
+			TYPE_QUATERNION:
+				var delta := (new_val as Quaternion) * (old_val as Quaternion).inverse()
+				var angle := 2.0 * acos(clampf(delta.w, -1.0, 1.0))
+				if angle < 0.0001:
+					return Vector3.ZERO
+				var axis := Vector3(delta.x, delta.y, delta.z).normalized()
+				return axis * (angle / span)
+		return null
+
+
+	# True when a projected velocity is small enough that projecting it would not
+	# move the display, so the channel is free to hold and sleep instead.
+	func _velocity_negligible(velocity: Variant) -> bool:
+		match typeof(velocity):
+			TYPE_FLOAT:
+				return absf(velocity) < 0.0001
+			TYPE_VECTOR2:
+				return (velocity as Vector2).length() < 0.0001
+			TYPE_VECTOR3:
+				return (velocity as Vector3).length() < 0.0001
+		return false
 
 
 	func _lerp_bracketed(
@@ -1932,6 +1924,17 @@ class _Output:
 	var target_prop: StringName
 	var source_prop: StringName
 	var global_space := false
+
+
+	# The node writer runs on the shell: it sets Node properties and reads parent
+	# transforms for global-space output, so a runtime bound to it pumps on the
+	# main thread. A future RenderingServer writer returns ANY so swarm display
+	# can sample and emit off the main thread.
+	# TODO: add a RenderingServer writer backend (thread_class ANY) once entities
+	# can bind canvas-item or instance RIDs as display views, so swarm display
+	# never touches the SceneTree.
+	func thread_class() -> StringName:
+		return &"SHELL"
 
 
 	func owner() -> Node:

@@ -86,13 +86,13 @@ func test_clients_admit_each_other_replicas() -> void:
 	var service0 := client0.api.interest
 	var service1 := client1.api.interest
 	assert_that(
-		service0.can_peer_see_entity(
+		service0.participant_sees(
 			peer_id_0,
 			NetwEntity.of(client0_player1),
 		),
 	).is_true()
 	assert_that(
-		service1.can_peer_see_entity(
+		service1.participant_sees(
 			peer_id_1,
 			NetwEntity.of(client1_player0),
 		),

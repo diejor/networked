@@ -170,33 +170,31 @@ func _service_type() -> Script:
 	return MultiplayerClock
 
 
-func _service_entered(mt: MultiplayerTree) -> void:
-	if mt.api:
-		_interface = mt.api.clock
-		_config = _build_config()
-		mt.api.object_configuration_add(self, _config)
+func _service_entered(api: NetwMultiplayer) -> void:
+	_interface = api.clock
+	_config = _build_config()
+	api.object_configuration_add(self, _config)
 
-	if not mt.session_entered.is_connected(_on_tree_configured):
-		mt.session_entered.connect(_on_tree_configured)
+	if not api.session_entered.is_connected(_on_tree_configured):
+		api.session_entered.connect(_on_tree_configured)
 
-	if not mt.session_entered.is_connected(configured.emit):
-		mt.session_entered.connect(configured.emit)
+	if not api.session_entered.is_connected(configured.emit):
+		api.session_entered.connect(configured.emit)
 
-	if mt.is_online():
+	if api.is_online():
 		_on_tree_configured.call_deferred()
 
 
-func _service_exiting(mt: MultiplayerTree) -> void:
+func _service_exiting(api: NetwMultiplayer) -> void:
 	# Detaching keeps the config registered, so freeing this node never stops
 	# the clock.
-	if mt.api:
-		mt.api.clock.detach_node(self)
+	api.clock.detach_node(self)
 
-	if mt.session_entered.is_connected(_on_tree_configured):
-		mt.session_entered.disconnect(_on_tree_configured)
+	if api.session_entered.is_connected(_on_tree_configured):
+		api.session_entered.disconnect(_on_tree_configured)
 
-	if mt.session_entered.is_connected(configured.emit):
-		mt.session_entered.disconnect(configured.emit)
+	if api.session_entered.is_connected(configured.emit):
+		api.session_entered.disconnect(configured.emit)
 
 
 # Snapshots the current exports into the typed payload the interface configures

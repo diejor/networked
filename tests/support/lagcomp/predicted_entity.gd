@@ -89,6 +89,21 @@ var missing: int:
 	get:
 		return server_prediction.missing_count
 
+## Server ticks that consumed nothing with an empty queue.
+var starved: int:
+	get:
+		return server_prediction.starved_count
+
+## Server ticks that consumed nothing while rebuilding the de-jitter depth.
+var held: int:
+	get:
+		return server_prediction.held_count
+
+## Extra inputs the server drained beyond one-per-tick lockstep.
+var drained: int:
+	get:
+		return server_prediction.drained_count
+
 ## Last input tick the server acknowledged to the predicting client.
 var latest_ack: int:
 	get:

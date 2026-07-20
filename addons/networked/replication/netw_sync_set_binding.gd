@@ -26,7 +26,9 @@ var set: NetwSyncSet
 # The declaring node. A weakref so a freed node never keeps the binding alive.
 var _node_ref: WeakRef
 
-# The retained lane's dirty-poll engine, keyed by this binding.
+# The retained lane's single-stream dirty-poll engine.
+const _WATCH_KEY := 0
+
 var _watch_book: NetwWatchBook = NetwWatchBook.new()
 
 # Sender side of the masked volatile lane, unused unless
@@ -73,6 +75,18 @@ var authored_tick: int = -1
 ## [code]-1[/code] for the no-input-consumed sentinel. A prediction engine writes
 ## the last input tick the server has processed here.
 var reconcile_ack: int = -1
+
+## When true, the pump holds this pass's volatile row and sends nothing on the
+## volatile lane. The retained lane still pumps, so a reliable field lands on
+## schedule either way.
+##
+## A volatile frame is a truthful [code](tick, ack, payload)[/code] triple: the
+## payload is gathered live at send time, so it may only ship on a tick whose
+## [member reconcile_ack] advanced to match it. A prediction engine sets this on a
+## tick that consumed no input, where the body has coasted past the ack it would
+## otherwise re-stamp and the owning client would read the difference as its own
+## divergence.
+var suppress_volatile: bool = false
 
 ## The predicted [NetwTimeline] a windowed input set sources its redundancy window
 ## from. When set, the window is the unacked tail of this timeline rather than the
@@ -144,14 +158,16 @@ func _encode_windowed(ordinal: int, tick: int) -> PackedByteArray:
 	for i in range(_window_rows.size() - 1, -1, -1):
 		var row: Array = _window_rows[i]
 		samples.append([tick - int(row[0]), row[1]])
-	return NetwFrameEnvelope.encode_sync_frame({
-		"ordinal": ordinal,
-		"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
-		"samples": samples,
-		"quantizers": gathered[2],
-		"types": gathered[3],
-		"tick": tick,
-	})
+	return NetwFrameEnvelope.encode_sync_frame(
+		{
+			"ordinal": ordinal,
+			"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
+			"samples": samples,
+			"quantizers": gathered[2],
+			"types": gathered[3],
+			"tick": tick,
+		},
+	)
 
 
 # The prediction input window: the redundant samples are the unacked tail of the
@@ -187,14 +203,16 @@ func _encode_windowed_from_timeline(ordinal: int, tick: int) -> PackedByteArray:
 	var types: Array = []
 	for v in samples[0][1]:
 		types.append(typeof(v))
-	return NetwFrameEnvelope.encode_sync_frame({
-		"ordinal": ordinal,
-		"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
-		"samples": samples,
-		"quantizers": quantizers,
-		"types": types,
-		"tick": tick,
-	})
+	return NetwFrameEnvelope.encode_sync_frame(
+		{
+			"ordinal": ordinal,
+			"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
+			"samples": samples,
+			"quantizers": quantizers,
+			"types": types,
+			"tick": tick,
+		},
+	)
 
 
 # The VOLATILE fields in set order, the wire order the windowed lane encodes.
@@ -222,7 +240,11 @@ func apply_volatile(payload: PackedByteArray) -> Dictionary:
 		header = _apply_windowed(n, payload)
 	else:
 		header = NetwSyncPipeline.apply_volatile_frame(
-			n, set, payload, write_gate, _masked_last_row,
+			n,
+			set,
+			payload,
+			write_gate,
+			_masked_last_row,
 		)
 		if not header.is_empty():
 			_masked_last_row = header.get("payload", { })
@@ -260,7 +282,7 @@ func _apply_windowed(n: Node, payload: PackedByteArray) -> Dictionary:
 		var row: Dictionary = { }
 		for i in keys.size():
 			row[keys[i]] = values[i]
-		rows.append({"tick": tick - age, "payload": row})
+		rows.append({ "tick": tick - age, "payload": row })
 	if rows.is_empty():
 		return { }
 	# The freshest sample (age 0) snaps a display receiver. A gated receiver (the
@@ -312,7 +334,7 @@ func poll_retained() -> void:
 		values.append(n.get(field.key) if ok else null)
 	if values.is_empty():
 		return
-	_watch_book.poll(self, values, readable)
+	_watch_book.poll(_WATCH_KEY, values, readable)
 
 
 ## Returns the reliable [constant NetwFrameEnvelope.Channel.SYNC_DELTA] bytes for
@@ -321,12 +343,12 @@ func poll_retained() -> void:
 ## [NetwQuantize]. Returns an empty array when nothing changed, and advances the
 ## peer's baseline either way.
 func retained_delta(ordinal: int, peer: int) -> PackedByteArray:
-	if not _watch_book.is_inited(self):
+	if not _watch_book.is_inited(_WATCH_KEY):
 		return PackedByteArray()
-	var selected := _watch_book.mask_for(self, peer)
+	var selected := _watch_book.mask_for(_WATCH_KEY, peer)
 	var mask: int = selected[0]
 	var values: Array = selected[1]
-	_watch_book.commit(self, peer)
+	_watch_book.commit(_WATCH_KEY, peer)
 	if mask == 0:
 		return PackedByteArray()
 	# Select the codecs of the masked fields in set-bit order, so the reliable
@@ -357,7 +379,7 @@ func apply_retained_delta(payload: PackedByteArray) -> bool:
 	if not is_instance_valid(n):
 		return false
 	var r := NetwBitBuffer.Reader.new(payload)
-	NetwCodec.get_safe_varint(r)  # ordinal, already resolved to this binding
+	NetwCodec.get_safe_varint(r) # ordinal, already resolved to this binding
 	var mask := NetwCodec.get_safe_varint(r)
 	var retained := _retained_fields()
 	var indexes: Array[int] = []
@@ -391,7 +413,7 @@ func _retained_fields() -> Array:
 ## so a baseline never outlives a peer's visibility and suppresses its full-row
 ## heal on re-admission.
 func retain_baselines(recipients: Array) -> void:
-	_watch_book.retain_baselines(self, recipients)
+	_watch_book.retain_baselines(_WATCH_KEY, recipients)
 
 
 ## Drops the masked-lane confirmed baseline and in-flight ring held against any
@@ -411,7 +433,7 @@ func retain_masked_baselines(recipients: Array) -> void:
 ## Clears the retained peer baselines while keeping the polled row, so every
 ## recipient re-heals on the next delta after a session restart.
 func clear_baselines() -> void:
-	_watch_book.clear_baselines(self)
+	_watch_book.clear_baselines(_WATCH_KEY)
 
 
 ## Erases [param peer]'s retained baseline so a reconnecting peer heals fully.
@@ -461,16 +483,18 @@ func masked_delta(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
 	if mask == 0:
 		return { "bytes": PackedByteArray(), "row": row, "full": false }
 	var full := fields.is_empty() or mask == (1 << fields.size()) - 1
-	var bytes := NetwFrameEnvelope.encode_sync_frame({
-		"ordinal": ordinal,
-		"flags": NetwSyncPipeline.volatile_flags(set) | NetwFrameEnvelope.SYNC_FLAG_MASKED,
-		"values": values,
-		"quantizers": quantizers,
-		"types": types,
-		"tick": tick,
-		"ack": ack,
-		"mask": mask,
-	})
+	var bytes := NetwFrameEnvelope.encode_sync_frame(
+		{
+			"ordinal": ordinal,
+			"flags": NetwSyncPipeline.volatile_flags(set) | NetwFrameEnvelope.SYNC_FLAG_MASKED,
+			"values": values,
+			"quantizers": quantizers,
+			"types": types,
+			"tick": tick,
+			"ack": ack,
+			"mask": mask,
+		},
+	)
 	return { "bytes": bytes, "row": row, "full": full }
 
 

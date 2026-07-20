@@ -39,7 +39,7 @@ func _prop() -> NetwScriptModel.PropertyConfig:
 func test_state_set_collects_marked_fields_in_declaration_order() -> void:
 	var configs: Dictionary = {
 		&"position": _prop().state(),
-		&"health": _prop().retained(),  # unmarked for state
+		&"health": _prop().retained(), # unmarked for state
 		&"rotation": _prop().state(),
 	}
 	var set := NetwSyncSet.from_property_configs(configs, STATE)
@@ -72,9 +72,12 @@ func test_broadcast_set_derives_public_controller_tick_and_passes_masked() -> vo
 	# A broadcast frames the bare tick (it never reconciles, so an ack slot would
 	# be a lie), reaches every recipient, defaults to the controlling player, never
 	# windows, and passes masked through as the whole point of the kind.
-	var set := NetwSyncSet.from_property_configs({
-		&"aim_dir": _prop().broadcast().masked(),
-	}, BROADCAST)
+	var set := NetwSyncSet.from_property_configs(
+		{
+			&"aim_dir": _prop().broadcast().masked(),
+		},
+		BROADCAST,
+	)
 	assert_array(set.keys()).is_equal([&"aim_dir"])
 	assert_int(set.record).is_equal(BROADCAST)
 	assert_int(set.stamp).is_equal(NetwSyncSet.Stamp.STAMP_TICK)
@@ -85,9 +88,12 @@ func test_broadcast_set_derives_public_controller_tick_and_passes_masked() -> vo
 	assert_int(set.channel).is_equal(NetwFrameEnvelope.Channel.SYNC)
 
 	# A member policy override still wins the way it does for state.
-	var authed := NetwSyncSet.from_property_configs({
-		&"pose": _prop().broadcast().authority(),
-	}, BROADCAST)
+	var authed := NetwSyncSet.from_property_configs(
+		{
+			&"pose": _prop().broadcast().authority(),
+		},
+		BROADCAST,
+	)
 	assert_int(authed.policy).is_equal(NetwScriptModel.Policy.AUTHORITY)
 
 
@@ -96,9 +102,12 @@ func test_broadcast_forces_public_and_ignores_windowed() -> void:
 	# broadcast lints and stays public. A window heals against a redundant sample,
 	# which the masked lane replaces with its confirmed baseline, so windowed lints
 	# and is dropped.
-	var set := NetwSyncSet.from_property_configs({
-		&"aim": _prop().broadcast().audience(true).windowed(3),
-	}, BROADCAST)
+	var set := NetwSyncSet.from_property_configs(
+		{
+			&"aim": _prop().broadcast().audience(true).windowed(3),
+		},
+		BROADCAST,
+	)
 	assert_int(set.audience).is_equal(NetwSyncSet.Audience.AUDIENCE_PUBLIC)
 	assert_int(set.window).is_equal(0)
 
@@ -126,6 +135,7 @@ func test_register_derived_binds_a_broadcast_set_without_a_timeline() -> void:
 	assert_int(pipeline.counters()[&"derived_sets_active"]).is_equal(1)
 	assert_that(pipeline.derived_binding(node, BROADCAST)).is_not_null()
 	assert_that(pipeline.derived_binding(node, STATE)).is_null()
+	pipeline.dispose()
 
 
 func test_no_marked_field_derives_nothing() -> void:
@@ -139,7 +149,7 @@ func test_no_marked_field_derives_nothing() -> void:
 
 func test_field_lane_drives_watch() -> void:
 	var configs: Dictionary = {
-		&"position": _prop().state(),           # volatile by default
+		&"position": _prop().state(), # volatile by default
 		&"inventory": _prop().state().retained(),
 	}
 	var set := NetwSyncSet.from_property_configs(configs, STATE)
@@ -209,11 +219,13 @@ func test_schema_hash_is_deterministic_and_16_bit() -> void:
 func test_schema_hash_is_sensitive_to_order_membership_and_lane() -> void:
 	var base := _make_set([[&"a", NetwSyncSet.Lane.VOLATILE], [&"b", NetwSyncSet.Lane.VOLATILE]])
 	var reordered := _make_set([[&"b", NetwSyncSet.Lane.VOLATILE], [&"a", NetwSyncSet.Lane.VOLATILE]])
-	var extra := _make_set([
-		[&"a", NetwSyncSet.Lane.VOLATILE],
-		[&"b", NetwSyncSet.Lane.VOLATILE],
-		[&"c", NetwSyncSet.Lane.VOLATILE],
-	])
+	var extra := _make_set(
+		[
+			[&"a", NetwSyncSet.Lane.VOLATILE],
+			[&"b", NetwSyncSet.Lane.VOLATILE],
+			[&"c", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	var relaned := _make_set([[&"a", NetwSyncSet.Lane.VOLATILE], [&"b", NetwSyncSet.Lane.RETAINED]])
 	assert_int(base.schema_hash()).is_not_equal(reordered.schema_hash())
 	assert_int(base.schema_hash()).is_not_equal(extra.schema_hash())
@@ -237,10 +249,12 @@ func test_volatile_frame_round_trips_a_stamped_state_row() -> void:
 	auto_free(src)
 	src.position = Vector2(3, -4)
 	src.rotation = 1.5
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	set.stamp = NetwSyncSet.Stamp.STAMP_TICK_ACK
 
 	var bytes := NetwSyncPipeline.encode_volatile_frame(src, set, 2, 40, 37)
@@ -264,10 +278,12 @@ func test_volatile_frame_skips_the_retained_lane() -> void:
 	add_child(src)
 	auto_free(src)
 	src.position = Vector2(7, 8)
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"inventory", NetwSyncSet.Lane.RETAINED],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"inventory", NetwSyncSet.Lane.RETAINED],
+		],
+	)
 	var bytes := NetwSyncPipeline.encode_volatile_frame(src, set, 0, -1, -1)
 	var dst := Node2D.new()
 	add_child(dst)
@@ -327,6 +343,7 @@ func test_register_derived_binds_declared_state_and_input_sets() -> void:
 
 	pipeline.unregister_derived(node)
 	assert_int(pipeline.counters()[&"derived_sets_active"]).is_equal(0)
+	pipeline.dispose()
 
 
 func test_register_derived_ignores_a_scriptless_node() -> void:
@@ -336,6 +353,7 @@ func test_register_derived_ignores_a_scriptless_node() -> void:
 	auto_free(node)
 	pipeline.register_derived(node)
 	assert_int(pipeline.counters()[&"derived_sets_active"]).is_equal(0)
+	pipeline.dispose()
 
 
 func test_binding_retained_delta_heals_then_masks_changes() -> void:
@@ -394,7 +412,9 @@ func test_state_frame_carries_the_reconciliation_ack() -> void:
 	var binding := NetwSyncSetBinding.new(set, node)
 
 	var frame := NetwFrameEnvelope.decode_sync_frame(
-		binding.encode_volatile(0, 12, 9), [null], [TYPE_VECTOR2],
+		binding.encode_volatile(0, 12, 9),
+		[null],
+		[TYPE_VECTOR2],
 	)
 	assert_int(frame["flags"]).is_equal(
 		NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_ACKED,
@@ -403,7 +423,9 @@ func test_state_frame_carries_the_reconciliation_ack() -> void:
 	assert_int(frame["ack"]).is_equal(9)
 
 	var none := NetwFrameEnvelope.decode_sync_frame(
-		binding.encode_volatile(0, 13, -1), [null], [TYPE_VECTOR2],
+		binding.encode_volatile(0, 13, -1),
+		[null],
+		[TYPE_VECTOR2],
 	)
 	assert_int(none["ack"]).is_equal(-1)
 
@@ -418,7 +440,9 @@ func test_input_frame_carries_no_ack_slot() -> void:
 	node.rotation = 0.25
 	var set := NetwSyncSet.from_property_configs({ &"rotation": _prop().input() }, INPUT)
 	var frame := NetwFrameEnvelope.decode_sync_frame(
-		NetwSyncSetBinding.new(set, node).encode_volatile(0, 7, 4), [null], [TYPE_FLOAT],
+		NetwSyncSetBinding.new(set, node).encode_volatile(0, 7, 4),
+		[null],
+		[TYPE_FLOAT],
 	)
 	assert_int(frame["flags"]).is_equal(
 		NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
@@ -488,10 +512,12 @@ func test_gather_payload_reads_every_set_field() -> void:
 	auto_free(node)
 	node.position = Vector2(2, 5)
 	node.rotation = 0.75
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	var payload := NetwSyncPipeline.gather_payload(node, set)
 	assert_int(payload.size()).is_equal(2)
 	assert_that(payload[&"position"]).is_equal(Vector2(2, 5))
@@ -503,10 +529,12 @@ func test_gather_payload_skips_a_field_missing_on_the_node() -> void:
 	add_child(node)
 	auto_free(node)
 	node.position = Vector2(1, 1)
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"nonexistent", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"nonexistent", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	var payload := NetwSyncPipeline.gather_payload(node, set)
 	assert_int(payload.size()).is_equal(1)
 	assert_bool(payload.has(&"position")).is_true()
@@ -522,19 +550,25 @@ func test_apply_payload_writes_only_declared_fields() -> void:
 	node.position = Vector2(0, 0)
 	node.rotation = 0.0
 	var set := _make_set([[&"position", NetwSyncSet.Lane.VOLATILE]])
-	NetwSyncPipeline.apply_payload(node, set, {
-		&"position": Vector2(9, 9),
-		&"rotation": 3.0,  # not in the set, ignored
-	})
+	NetwSyncPipeline.apply_payload(
+		node,
+		set,
+		{
+			&"position": Vector2(9, 9),
+			&"rotation": 3.0, # not in the set, ignored
+		},
+	)
 	assert_that(node.position).is_equal(Vector2(9, 9))
 	assert_float(node.rotation).is_equal_approx(0.0, 0.0001)
 
 
 func test_binding_payload_snapshots_and_restores_between_nodes() -> void:
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	var src := Node2D.new()
 	add_child(src)
 	auto_free(src)
@@ -642,9 +676,9 @@ func test_binding_windowed_input_sources_the_predicted_timeline() -> void:
 	add_child(node)
 	auto_free(node)
 	var timeline := NetwTimeline.new()
-	timeline.record_input(8, {&"rotation": 0.8})
-	timeline.record_input(9, {&"rotation": 0.9})
-	timeline.record_input(10, {&"rotation": 1.0})
+	timeline.record_input(8, { &"rotation": 0.8 })
+	timeline.record_input(9, { &"rotation": 0.9 })
+	timeline.record_input(10, { &"rotation": 1.0 })
 	var binding := NetwSyncSetBinding.new(set, node)
 	binding.window_timeline = timeline
 	var bytes := binding.encode_volatile(0, 10, -1)
@@ -741,10 +775,12 @@ func test_masked_delta_masks_only_the_changed_field() -> void:
 	auto_free(node)
 	node.position = Vector2(1, 2)
 	node.rotation = 0.5
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	set.masked = true
 	var binding := NetwSyncSetBinding.new(set, node)
 
@@ -755,7 +791,9 @@ func test_masked_delta_masks_only_the_changed_field() -> void:
 	node.rotation = 1.5
 	var second := binding.masked_delta(0, 2, 11, -1)
 	var frame := NetwFrameEnvelope.decode_sync_frame(
-		second["bytes"], [null, null], [TYPE_VECTOR2, TYPE_FLOAT],
+		second["bytes"],
+		[null, null],
+		[TYPE_VECTOR2, TYPE_FLOAT],
 	)
 	# Bit 1 (rotation) alone, position untouched.
 	assert_int(frame["mask"]).is_equal(2)
@@ -767,13 +805,15 @@ func test_masked_apply_merges_a_partial_frame_onto_the_last_decoded_row() -> voi
 	auto_free(src)
 	src.position = Vector2(1, 2)
 	src.rotation = 0.5
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	set.masked = true
 	var src_binding := NetwSyncSetBinding.new(set, src)
-	var full := src_binding.masked_delta(0, 9, 10, -1)  # gain edge, full row
+	var full := src_binding.masked_delta(0, 9, 10, -1) # gain edge, full row
 
 	var dst := Node2D.new()
 	add_child(dst)
@@ -805,10 +845,12 @@ func test_masked_apply_merges_against_last_row_when_write_gate_is_off() -> void:
 	auto_free(src)
 	src.position = Vector2(1, 2)
 	src.rotation = 0.5
-	var set := _make_set([
-		[&"position", NetwSyncSet.Lane.VOLATILE],
-		[&"rotation", NetwSyncSet.Lane.VOLATILE],
-	])
+	var set := _make_set(
+		[
+			[&"position", NetwSyncSet.Lane.VOLATILE],
+			[&"rotation", NetwSyncSet.Lane.VOLATILE],
+		],
+	)
 	set.masked = true
 	var src_binding := NetwSyncSetBinding.new(set, src)
 	var full := src_binding.masked_delta(0, 9, 10, -1)
@@ -816,7 +858,7 @@ func test_masked_apply_merges_against_last_row_when_write_gate_is_off() -> void:
 	var dst := Node2D.new()
 	add_child(dst)
 	auto_free(dst)
-	dst.position = Vector2(99, 99)  # a diverging prediction
+	dst.position = Vector2(99, 99) # a diverging prediction
 	dst.rotation = 9.0
 	var dst_binding := NetwSyncSetBinding.new(set, dst)
 	dst_binding.write_gate = false
@@ -846,12 +888,13 @@ func test_advance_masked_ack_no_ops_on_a_peer_with_no_in_flight_rows() -> void:
 	var set := _make_set([[&"position", NetwSyncSet.Lane.VOLATILE]])
 	set.masked = true
 	var binding := NetwSyncSetBinding.new(set, node)
-	binding.advance_masked_ack(2, 500)  # must not error
+	binding.advance_masked_ack(2, 500) # must not error
 
 
 func test_commit_pending_masked_no_ops_when_nothing_was_staged() -> void:
 	var pipeline := NetwSyncPipeline.new(null)
-	pipeline.commit_pending_masked(2, 500)  # must not error
+	pipeline.commit_pending_masked(2, 500) # must not error
+	pipeline.dispose()
 
 
 func test_retain_masked_baselines_drops_a_peer_no_longer_a_recipient() -> void:
@@ -885,10 +928,10 @@ func test_binding_window_floor_trims_acknowledged_samples() -> void:
 	auto_free(node)
 	var timeline := NetwTimeline.new()
 	for t: int in [7, 8, 9, 10]:
-		timeline.record_input(t, {&"rotation": float(t)})
+		timeline.record_input(t, { &"rotation": float(t) })
 	var binding := NetwSyncSetBinding.new(set, node)
 	binding.window_timeline = timeline
-	binding.window_floor = 8  # the server already consumed through tick 8
+	binding.window_floor = 8 # the server already consumed through tick 8
 	var bytes := binding.encode_volatile(0, 10, -1)
 
 	var dst := Node2D.new()

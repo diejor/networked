@@ -189,7 +189,7 @@ func _init(api: NetwMultiplayer = null) -> void:
 	_auth = AuthCoordinator.new(api._roster if api else SessionRoster.new())
 	if api:
 		_auth.bind_api(api.inner)
-		_auth.set_tree(api.tree)
+		_auth.set_owner(api)
 		# A client peer is still mid-handshake at assignment, so the connect
 		# completes on the relayed connection signals rather than at the edge. A
 		# failed handshake returns to OFFLINE without ever entering ONLINE, and a
@@ -461,6 +461,57 @@ func submit_join(payload: JoinPayload) -> void:
 		)
 
 
+## Opens a listen or dedicated host over [param config] through the connect kit
+## and brings the session to [constant State.ONLINE].
+##
+## A host has no [signal MultiplayerAPI.connected_to_server] edge, so
+## [method on_peer_assigned] only auto-resolves a listen peer that already
+## reports [constant MultiplayerPeer.CONNECTION_CONNECTED] at assignment (an ENet
+## server). A transport whose peer reports connecting at assignment (the
+## in-process loopback bus) is finished here instead, so a root-installed session
+## with no owning [MultiplayerTree] hosts through its own verb rather than
+## delegating to a tree it does not have.
+## [codeblock]
+## var config := NetwHostConfig.new()
+## config.scheme = &"enet"
+## var err := await api.session.open_host(config)
+## [/codeblock]
+##
+## [br][br][b]Server Only.[/b]
+func open_host(config: NetwHostConfig) -> Error:
+	var api := _api()
+	if api == null:
+		return ERR_UNCONFIGURED
+	assert(state == State.OFFLINE, "Must be offline to host.")
+	if config == null or String(config.scheme).is_empty():
+		Netw.dbg.error(
+			"open_host: no transport scheme configured.",
+			[],
+			func(m): push_error(m),
+		)
+		return ERR_UNCONFIGURED
+
+	var attempt := api.connect.connector().host(config, null)
+	if not attempt.is_done():
+		await attempt.finished
+	var res: NetwConnectResult = attempt.result
+	if res == null or not res.is_ok():
+		if state == State.CONNECTING:
+			transition(State.OFFLINE)
+		return ERR_CANT_CREATE
+
+	# The connector assigns the listen peer, so on_peer_assigned may already have
+	# resolved a CONNECTED peer online. A peer still connecting at assignment
+	# leaves the machine in CONNECTING with no client edge to finish it, and a
+	# connector that reported ok without a peer edge leaves it OFFLINE. Both are
+	# driven to ONLINE here.
+	if state == State.OFFLINE:
+		transition(State.CONNECTING)
+	if state == State.CONNECTING:
+		_resolve_online()
+	return OK
+
+
 ## Flushes persistence, closes the active peer, and returns to
 ## [constant State.OFFLINE].
 func leave() -> void:
@@ -534,6 +585,76 @@ func kick(peer_id: int, reason: String = "") -> void:
 		)
 	if api.has_multiplayer_peer():
 		api.multiplayer_peer.disconnect_peer(peer_id)
+
+
+## Warns every peer that the server is shutting down.
+##
+## The notice rides [constant NetwFrameEnvelope.Channel.SESSION_SHUTDOWN] rather
+## than a node [code]@rpc[/code], so a root-installed session with no
+## [MultiplayerTree] still warns its clients before it tears down. Each recipient
+## fires [signal NetwMultiplayer.server_disconnecting].
+##
+## [br][br][b]Server Only.[/b]
+func notify_shutdown(reason: String = "") -> void:
+	var api := _api()
+	assert(_is_server_role(), "notify_shutdown() must be called on server authority.")
+	for peer_id: int in api.get_peers():
+		api.replication.send_to(
+			peer_id,
+			0,
+			NetwFrameEnvelope.Channel.SESSION_SHUTDOWN,
+			var_to_bytes(reason),
+			true,
+		)
+	_handle_shutdown_frame(var_to_bytes(reason), 1)
+
+
+## Asks the server to kick [param peer_id].
+##
+## The request rides [constant NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST]
+## rather than a node [code]@rpc[/code], so a session with no [MultiplayerTree]
+## still asks. The server fires [signal NetwMultiplayer.kick_requested] and
+## decides. A host asking submits to itself locally.
+##
+## [br][br][b]Player request.[/b]
+func request_kick(peer_id: int, reason: String = "") -> void:
+	var api := _api()
+	if api == null:
+		return
+	var payload := var_to_bytes([peer_id, reason])
+	if api.is_server():
+		_handle_kick_request_frame(payload, 1)
+	else:
+		api.replication.send_to(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST,
+			payload,
+			true,
+		)
+
+
+## Asks the server for permission to leave.
+##
+## The request rides [constant NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST].
+## The server fires [signal NetwMultiplayer.disconnect_requested] and decides.
+##
+## [br][br][b]Player request.[/b]
+func request_leave(reason: String = "") -> void:
+	var api := _api()
+	if api == null:
+		return
+	var payload := var_to_bytes(reason)
+	if api.is_server():
+		_handle_leave_request_frame(payload, 1)
+	else:
+		api.replication.send_to(
+			1,
+			0,
+			NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST,
+			payload,
+			true,
+		)
 
 
 # Consumes the prepared client join before sending it. Clearing first makes the
@@ -775,7 +896,7 @@ func run_join_handler(participant: NetwParticipant) -> void:
 		return
 	var scene = await handler.callv([rj] + rj.arg_values)
 	if scene is MultiplayerScene:
-		participant.current_scene = scene.netw_scene
+		participant.current_scene = scene
 
 
 # Client receive for one accepted participant, server to every peer.
@@ -821,6 +942,35 @@ func _handle_kicked_frame(payload: PackedByteArray, sender: int) -> void:
 	kicked.emit(str(bytes_to_var(payload)))
 
 
+# Fires the local shutdown notice from a server SESSION_SHUTDOWN frame.
+func _handle_shutdown_frame(payload: PackedByteArray, sender: int) -> void:
+	if sender != 1:
+		return
+	var api := _api()
+	if api:
+		api.server_disconnecting.emit(str(bytes_to_var(payload)))
+
+
+# Server receive for a client kick request. The frame sender is the requester;
+# the server decides whether to honor it through kick_requested.
+func _handle_kick_request_frame(payload: PackedByteArray, sender: int) -> void:
+	var api := _api()
+	if api == null or not api.is_server():
+		return
+	var data: Variant = bytes_to_var(payload)
+	if not data is Array or (data as Array).size() != 2:
+		return
+	api.kick_requested.emit(sender, int(data[0]), str(data[1]))
+
+
+# Server receive for a client leave request, decided through disconnect_requested.
+func _handle_leave_request_frame(payload: PackedByteArray, sender: int) -> void:
+	var api := _api()
+	if api == null or not api.is_server():
+		return
+	api.disconnect_requested.emit(sender, str(bytes_to_var(payload)))
+
+
 # Remembers an accepted join and announces it once. The owner's admission side
 # effects run off participant_admitted before the public participant_joined.
 func _admit(rj: ResolvedJoin) -> void:
@@ -833,6 +983,10 @@ func _admit(rj: ResolvedJoin) -> void:
 	if participant == null:
 		return
 	participant_admitted.emit(rj.peer_id)
+	# The session runs the join handler on admit, so a root-installed session
+	# with no MultiplayerTree still spawns joiners. Server-guarded inside.
+	if api.is_server():
+		run_join_handler(participant)
 	if rj.peer_id == api.get_unique_id():
 		api.local_participant_joined.emit(participant)
 	api.participant_joined.emit(participant)

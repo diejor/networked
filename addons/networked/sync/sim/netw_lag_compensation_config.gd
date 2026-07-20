@@ -12,7 +12,7 @@
 ## # core routes it to NetwLagCompensationInterface.configure(lag_node, config)
 ## [/codeblock]
 class_name NetwLagCompensationConfig
-extends Resource
+extends NetwObjectConfig
 
 ## Maximum number of ticks a player action may be scheduled ahead of the server
 ## clock before it is denied.

@@ -15,6 +15,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	var installed := get_tree().get_multiplayer() as NetwMultiplayer
+	if installed != null and installed != _original:
+		installed.dispose()
 	get_tree().set_multiplayer(_original)
 	super.after_test()
 
@@ -58,8 +61,8 @@ func test_tree_less_session_is_ready_to_arm() -> void:
 
 	# No MultiplayerTree: the session runs on its defaults, offline until a peer
 	# is assigned and a listen host once one connects.
-	assert_that(api.tree).is_null()
+	assert_that(api.root as MultiplayerTree).is_null()
 	assert_that(api.session.state).is_equal(NetwSessionInterface.State.OFFLINE)
 	assert_that(api.session.desired_role).is_equal(
-		NetwSessionInterface.Role.LISTEN_SERVER
+		NetwSessionInterface.Role.LISTEN_SERVER,
 	)

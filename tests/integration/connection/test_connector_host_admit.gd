@@ -1,11 +1,6 @@
 ## Guards the ConnectBrowser host path: hosting through the [NetwConnect] facade
 ## with a [JoinPayload] admits the host into its lobby scene and presents that
 ## scene, even when the lobby is a roster with no player entity.
-##
-## Regression guard for the browser-host case where a listen host was admitted
-## to the lobby but [ParticipantDisplaySource] fell back to the first active
-## world because no local player entity existed, leaving the host on an empty
-## world instead of the lobby.
 @tool
 class_name TestConnectorHostAdmit
 extends NetwTestSuite
@@ -14,9 +9,12 @@ const MAIN := preload("res://examples/bomber/main.tscn")
 
 
 func test_facade_host_presents_lobby_without_player_entity() -> void:
+	# The bomber main is tree-less, so the test wraps it in its own tree the
+	# way the game harness does for a scoped embedding.
+	var tree := MultiplayerTree.new()
+	add_child(tree)
 	var main := MAIN.instantiate()
-	add_child(main)
-	var tree := main.get_node("MultiplayerTree") as MultiplayerTree
+	tree.add_child(main)
 	await get_tree().process_frame
 
 	var facade := tree.api.connect
@@ -32,12 +30,10 @@ func test_facade_host_presents_lobby_without_player_entity() -> void:
 	for i in 40:
 		await get_tree().process_frame
 
-	var sm: MultiplayerSceneManager = tree.get_service(MultiplayerSceneManager)
+	var scenes := tree.api.scenes
 	var lobby_scene: MultiplayerScene = null
-	var world_scene: MultiplayerScene = null
-	if sm:
-		lobby_scene = sm.active_scenes.get(&"Lobby")
-		world_scene = sm.active_scenes.get(&"World")
+	if scenes:
+		lobby_scene = scenes.scene(&"Lobby")
 
 	# The host participant is admitted to the lobby, and the lobby is a roster
 	# with no player entity.
@@ -46,17 +42,10 @@ func test_facade_host_presents_lobby_without_player_entity() -> void:
 	assert_int(lobby_scene.participants.size()).is_equal(1)
 	assert_object(tree.local_player).is_null()
 
-	# The host window presents the lobby it was admitted to, not the first world.
-	var ds := ParticipantDisplaySource.new()
-	ds.configure(tree)
-	ds.refresh()
-	var resolved: SubViewport = ds.current
-	ds.dispose()
-	assert_bool(resolved == (lobby_scene as Node as SubViewport)) \
-			.override_failure_message(
-					"host display resolved to the world, not the lobby") \
-			.is_true()
-	assert_bool(resolved == (world_scene as Node as SubViewport)).is_false()
+	# The host presents the lobby it was admitted to. Bomber declares
+	# SINGLE concurrency, so the scene shows natively and current_scene is the
+	# presentation fact to pin.
+	assert_object(scenes.current_scene).is_equal(lobby_scene)
 
-	main.queue_free()
+	tree.queue_free()
 	await get_tree().process_frame

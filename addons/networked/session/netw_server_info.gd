@@ -12,22 +12,26 @@ extends Resource
 @export var metadata: Dictionary = { }
 
 
-## Builds the default probe reply from live session state on [param tree].
+## Builds the default probe reply from live session state on [param api].
 ##
-## Reports a live player count and marks [member is_local_listener] so a caller
-## can tell a live local host from a closed port. This is the built-in provider
-## a probe answers with when neither a per-session override nor a
-## [method Netw.configure_server_info] registration is present.
-static func from_session(tree: MultiplayerTree) -> NetwServerInfo:
+## Reports the live [method NetwMultiplayer.get_participants] count, the
+## [member NetwSessionInterface.app_id], and the player cap behind
+## [member NetwConnector.active_host_config], and marks
+## [member is_local_listener] so a caller can tell a live local host from a
+## closed port. This is the built-in provider a probe answers with when neither
+## a per-session override nor a [method Netw.configure_server_info] registration
+## is present.
+static func from_session(api: NetwMultiplayer) -> NetwServerInfo:
 	var info := NetwServerInfo.new()
 	info.is_local_listener = true
-	if tree:
-		info.players = tree.get_participants().size()
-		info.app_id = tree.app_id
-		if "max_clients" in tree.params:
-			info.max_players = tree.params.max_clients
-		elif "max_players" in tree.params:
-			info.max_players = tree.params.max_players
+	if api:
+		info.players = api.get_participants().size()
+		info.app_id = api.session.app_id
+		var connector := api.connect.connector() if api.connect else null
+		var config := connector.active_host_config if connector else null
+		if config:
+			info.max_players = config.max_players if config.max_players > 0 \
+					else int(config.params.get("max_clients", 0))
 	return info
 
 

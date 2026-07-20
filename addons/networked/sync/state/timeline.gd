@@ -71,6 +71,27 @@ func latest_state_at_or_before(tick: int) -> Dictionary:
 	return value if value is Dictionary else { }
 
 
+## Returns the tick [method latest_state_at_or_before] would read for
+## [param tick], or [code]-1[/code] when it would read nothing.
+##
+## Carry-forward means a read keyed at one tick can answer with a snapshot
+## recorded at an older one, so a caller comparing two peers at "the same tick"
+## is only truly matched when this returns the tick it asked for. Read it to
+## tell a matched comparison from one carried forward across a gap.
+## [codeblock]
+## var predicted := timeline.latest_state_at_or_before(ack + 1)
+## var staleness := ack + 1 - timeline.latest_state_tick_at_or_before(ack + 1)
+## # staleness == 0: the compare is matched-tick
+## [/codeblock]
+func latest_state_tick_at_or_before(tick: int) -> int:
+	if tick < _floor_tick:
+		return -1
+	var prev := state.bracketing_ticks(tick).x
+	if prev < _floor_tick or not (state.get_at(prev) is Dictionary):
+		return -1
+	return prev
+
+
 ## Returns the exact input snapshot at [param tick], or an empty [Dictionary].
 ##
 ## Input never carries forward: a missing tick is a deliberate "no action", not a

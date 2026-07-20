@@ -3,7 +3,7 @@ class_name TestLobbyIsolation
 extends NetwTestSuite
 
 var harness: NetwTestHarness
-var server_mgr: MultiplayerSceneManager
+var server_scenes: NetwSceneInterface
 var scene: MultiplayerScene
 var client0: MultiplayerTree
 var client1: MultiplayerTree
@@ -20,13 +20,13 @@ func before_test() -> void:
 	level_builder.pack()
 
 	harness.register_spawnable_scene(level_builder.packed)
-	server_mgr = harness.server_scene_manager()
+	server_scenes = harness.server().api.scenes
 
 	client0 = await harness.add_client()
 	client1 = await harness.add_client()
 
-	assert_that(server_mgr.active_scenes.size()).is_equal(1)
-	scene = server_mgr.active_scenes.values()[0]
+	assert_that(server_scenes.scenes.size()).is_equal(1)
+	scene = server_scenes.scenes.values()[0]
 
 
 func test_initial_visibility_and_connected_peers() -> void:
@@ -39,6 +39,13 @@ func test_initial_visibility_and_connected_peers() -> void:
 	assert_that(
 		scene.scene_visibility_filter(
 			MultiplayerPeer.TARGET_PEER_SERVER,
+		),
+	).is_false()
+	var scene_entity := NetwEntity.of(scene)
+	assert_bool(
+		harness.server().api.interest.wire_admits(
+			MultiplayerPeer.TARGET_PEER_SERVER,
+			scene_entity,
 		),
 	).is_true()
 	assert_that(scene.scene_visibility_filter(second_id)) \

@@ -12,7 +12,7 @@
 ## # core routes it to NetwClockInterface.configure(clock_node, config)
 ## [/codeblock]
 class_name NetwClockConfig
-extends Resource
+extends NetwObjectConfig
 
 ## How many simulation ticks to run per second.
 @export_custom(0, "suffix:frames") var tickrate: int = 30

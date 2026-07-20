@@ -45,13 +45,13 @@ func find_connect_races(
 	if not mt or not mt.multiplayer_api:
 		return []
 
-	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
-	if not sm:
+	var scenes := mt.api.scenes if mt.api else null
+	if not scenes:
 		return []
 
 	var races: Array[Dictionary] = []
-	for scene_name: StringName in sm.active_scenes:
-		var scene: MultiplayerScene = sm.active_scenes[scene_name]
+	for scene_name: StringName in scenes.scenes:
+		var scene: MultiplayerScene = scenes.scenes[scene_name]
 		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 			continue
 

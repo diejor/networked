@@ -272,28 +272,29 @@ func _pump_derived(
 			# A masked set's mask differs by recipient (each peer's own confirmed
 			# baseline), so the frame cannot be shared like the plain volatile row
 			# below; it is computed and sent per recipient.
-			for peer_id in recipients:
-				var masked := binding.masked_delta(
-					ordinal, peer_id, frame_tick, binding.reconcile_ack,
-				)
-				if masked.is_empty():
-					break
-				var masked_bytes: PackedByteArray = masked["bytes"]
-				if masked_bytes.is_empty():
-					continue
-				repl.send_to(
-					peer_id, route, NetwFrameEnvelope.Channel.SYNC,
-					masked_bytes, false, 0, "", true,
-				)
-				_stage_pending_masked(peer_id, binding, masked["row"])
-				_masked_frames_out += 1
-				if masked["full"]:
-					_masked_frames_full += 1
+			if not binding.suppress_volatile:
+				for peer_id in recipients:
+					var masked := binding.masked_delta(
+						ordinal, peer_id, frame_tick, binding.reconcile_ack,
+					)
+					if masked.is_empty():
+						break
+					var masked_bytes: PackedByteArray = masked["bytes"]
+					if masked_bytes.is_empty():
+						continue
+					repl.send_to(
+						peer_id, route, NetwFrameEnvelope.Channel.SYNC,
+						masked_bytes, false, 0, "", true,
+					)
+					_stage_pending_masked(peer_id, binding, masked["row"])
+					_masked_frames_out += 1
+					if masked["full"]:
+						_masked_frames_full += 1
 			# A confirmed baseline (or in-flight row) held against a peer no longer
 			# a recipient must not survive to its next admission, so absence heals
 			# the full masked row on gain, matching the retained lane's rule below.
 			binding.retain_masked_baselines(recipients)
-		else:
+		elif not binding.suppress_volatile:
 			var bytes := binding.encode_volatile(ordinal, frame_tick, binding.reconcile_ack)
 			if not bytes.is_empty():
 				for peer_id in recipients:
@@ -608,8 +609,7 @@ func _send_entity_event(
 	var repl := _repl()
 	if not repl:
 		return
-	var mt := api.tree if api else null
-	if mt and mt.is_host:
+	if api and api.is_host:
 		var liveness := api.liveness
 		for recipient in liveness.live_peers(frame["entity"]):
 			repl.send_to(recipient, frame["route"], channel, payload, reliable, frame["comp"], frame["path"])
@@ -883,7 +883,7 @@ func handle_derived_sync(
 	if header.is_empty():
 		return
 	_derived_frames_in += 1
-	_feed_derived_interpolation(route, binding, header)
+	_feed_derived_interpolation(binding, header)
 
 
 ## Applies one reliable [constant NetwFrameEnvelope.Channel.SYNC_DELTA] frame whose
@@ -911,21 +911,53 @@ func handle_derived_delta(
 		return
 	if binding.apply_retained_delta(payload):
 		_derived_frames_in += 1
-		_feed_derived_interpolation(route, binding, { })
+		_feed_derived_interpolation(binding, { })
 
 
 # Records a just-applied derived frame into display history, the derived mirror
 # of NetwSyncCompat._feed_interpolation. The binding has already applied and
-# fired its hook, so the interface reads a settled row.
+# fired its hook, so the feeder reads a settled row and hands the engine plain
+# data through its record door. A stamped set records each field at the header's
+# authoring tick, the same tick domain the stamped payload funnel fed; a header
+# with no payload row (a retained delta) reads the just-written values back off
+# the node at the receive tick. Only a public set feeds display, so a server-only
+# input stream never writes a display buffer.
 func _feed_derived_interpolation(
-		route: int,
 		binding: NetwSyncSetBinding,
 		header: Dictionary,
 ) -> void:
 	var api := _api()
 	var iface := api.interpolation if api else null
-	if iface:
-		iface.feed_derived_apply(route, binding, header)
+	if not iface:
+		return
+	if binding.set.audience != NetwSyncSet.Audience.AUDIENCE_PUBLIC:
+		return
+	var node := binding.node()
+	if not is_instance_valid(node):
+		return
+	# A derived field reads and writes the declaring node under its own key, so
+	# the mapping is a live per-field interpolator lookup. Resolving it each frame
+	# rather than caching lets a spec registered after the first frame take effect.
+	var tick := int(header.get("tick", -1))
+	var authoring := binding.set.stamp != NetwSyncSet.Stamp.STAMP_NONE and tick >= 0
+	if not authoring:
+		tick = api.clock.tick if api.clock.is_configured() else 0
+	var payload: Dictionary = header.get("payload", { })
+	if payload.is_empty():
+		# Only the retained lane applies without a payload row, and it never shares
+		# a field with the volatile lane, so the read-back stays in the receive-tick
+		# domain without mixing a stamped field's history.
+		for field in binding.set.fields:
+			if field.lane != NetwSyncSet.Lane.RETAINED:
+				continue
+			var spec := NetwScriptModel.get_node_property_interpolator(node, field.key)
+			if spec:
+				iface._record(node, field.key, node.get(field.key), tick, spec, false)
+		return
+	for key: StringName in payload:
+		var spec := NetwScriptModel.get_node_property_interpolator(node, key)
+		if spec:
+			iface._record(node, key, payload[key], tick, spec, authoring)
 
 
 # Resolves a unified ordinal to the derived binding it names on this peer, or
@@ -1153,8 +1185,7 @@ class _PropertySignalRouter:
 					false,
 				)
 
-		var mt := api.tree if api else null
-		if mt and mt.is_host:
+		if api and api.is_host:
 			var liveness := api.liveness
 			var route := liveness.route_of(entity)
 			var recipients := liveness.live_peers(entity)
@@ -1227,8 +1258,7 @@ class _PropertySignalRouter:
 		callable.callv([signal_name] + args)
 
 		var api := _sync._api()
-		var mt := api.tree if api else null
-		if mt and mt.is_host:
+		if api and api.is_host:
 			var liveness := api.liveness
 			var route := liveness.route_of(entity)
 			var recipients := liveness.live_peers(entity)

@@ -41,6 +41,55 @@ func test_generic_view_degrades() -> void:
 	assert_str(String(progress.get("step", &""))).is_equal("disconnected")
 
 
+func test_enet_view_reports_host_join_address() -> void:
+	var server := ENetMultiplayerPeer.new()
+	assert_int(server.create_server(0, 4)).is_equal(OK)
+	var view := ENetPeerView.new(server)
+	var address := view.join_address()
+	var port := server.host.get_local_port()
+	assert_bool(address.ends_with(":%d" % port)) \
+			.override_failure_message(
+					"host join_address '%s' should carry port %d" % [address, port]) \
+			.is_true()
+	view.close()
+	server.close()
+
+
+func test_websocket_view_reports_host_join_address() -> void:
+	var server := WebSocketMultiplayerPeer.new()
+	assert_int(server.create_server(38472)).is_equal(OK)
+	var view := WebSocketPeerView.new(server, 38472)
+	var address := view.join_address()
+	assert_bool(address.begins_with("ws://") and address.ends_with(":38472")) \
+			.override_failure_message(
+					"host join_address '%s' should be a ws:// URL on port 38472"
+					% address) \
+			.is_true()
+	# A view with no build context has no port, so it degrades to unshareable.
+	assert_str(WebSocketPeerView.new(server, 0).join_address()).is_equal("")
+	view.close()
+	server.close()
+
+
+func test_empty_address_renders_transport_placeholder() -> void:
+	var target := NetwConnectTarget.new()
+	target.scheme = &"enet"
+	assert_str(ConnectBrowser.format_address(target)).is_equal("localhost")
+	target.address = "10.0.0.5:21253"
+	assert_str(ConnectBrowser.format_address(target)).is_equal("10.0.0.5:21253")
+
+
+func test_probe_reply_carries_host_cap() -> void:
+	var api := NetwMultiplayer.new(SceneMultiplayer.new())
+	var config := NetwHostConfig.new()
+	config.scheme = &"enet"
+	config.params = {"max_clients": 8}
+	api.connect.connector().active_host_config = config
+	var info := NetwServerInfo.from_session(api)
+	assert_int(info.max_players).is_equal(8)
+	api.dispose()
+
+
 func test_per_instance_transport_override_resolves_by_scheme() -> void:
 	var connector := NetwConnector.new(null)
 	var fake := FakeTransport.new()

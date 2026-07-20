@@ -105,19 +105,18 @@ signal entity_dead(route: int)
 # strongly and both are reference counted.
 var _api_ref: WeakRef
 var _route_counter: int = 0
-var _routes: Dictionary[int, NetwEntity] = {}
-var _states: Dictionary[int, State] = {}
-var _entity_routes: Dictionary[NetwEntity, int] = {}
-var _pending_live: Dictionary[int, Array] = {}
+var _routes: Dictionary[int, NetwEntity] = { }
+var _states: Dictionary[int, State] = { }
+var _entity_routes: Dictionary[NetwEntity, int] = { }
+var _pending_live: Dictionary[int, Array] = { }
 var _frame_counter: int = 0
 
 
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
-	var mt := api.tree if api else null
-	if mt:
-		mt.peer_disconnected.connect(_on_peer_disconnected)
-		mt.session_ended.connect(_on_session_ended)
+	if api:
+		api.peer_disconnected.connect(_on_peer_disconnected)
+		api.session_ended.connect(_on_session_ended)
 
 
 ## Advances the liveness frame counter and sweeps expired [method when_live]
@@ -127,14 +126,19 @@ func poll() -> void:
 	_sweep_pending_live()
 
 
-## Resolves the [NetwLivenessInterface] for the [MultiplayerTree] enclosing
-## [param node], or [code]null[/code] when there is none. Quiet by design so
-## detached nodes and offline rigs degrade to unroutable.
+## Resolves the [NetwLivenessInterface] for the session enclosing [param node],
+## or [code]null[/code] when there is none. Quiet by design so detached nodes and
+## offline rigs degrade to unroutable.
+##
+## Resolves the session api directly, falling back to the enclosing tree when a
+## node's own multiplayer is not yet bound to the api at call time. A root install
+## has no tree, so the api-first resolve is what keeps liveness routed there.
 static func for_node(node: Node) -> NetwLivenessInterface:
-	var mt := MultiplayerTree.resolve(node)
-	if not mt or not mt.api:
-		return null
-	return mt.api.liveness
+	var api := NetwMultiplayer.of(node)
+	if api == null:
+		var mt := MultiplayerTree.resolve(node)
+		api = mt.api if mt else null
+	return api.liveness if api else null
 
 
 # Cleans up peer state when they disconnect.
@@ -271,8 +275,7 @@ func is_live_for(peer_id: int, entity: NetwEntity) -> bool:
 	if not interest.has_filter(entity):
 		return true
 
-	var admits := interest.committed_admits(entity)
-	return admits.get(peer_id, 0) > 0
+	return interest.wire_admits(peer_id, entity)
 
 
 ## Returns every peer currently passing [method is_live_for] for
@@ -325,12 +328,14 @@ func when_live(
 		deadline = _frame_counter + timeout
 
 	var list := _pending_live.get_or_add(route, [])
-	list.append({
-		&"cb": cb,
-		&"deadline": deadline,
-		&"use_clock": clock != null,
-		&"on_timeout": on_timeout,
-	})
+	list.append(
+		{
+			&"cb": cb,
+			&"deadline": deadline,
+			&"use_clock": clock != null,
+			&"on_timeout": on_timeout,
+		},
+	)
 
 
 # Resolves the tick engine, or null while no configurator has registered, so

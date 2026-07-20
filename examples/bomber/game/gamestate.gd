@@ -2,15 +2,13 @@ class_name BomberGamestate
 extends NetwService
 ## Manages the bomber game state as a session service.
 
-const DEFAULT_PORT = 10567
-const MAX_PEERS = 12
+const WORLD_SCENE := "res://examples/bomber/game/world.tscn"
+const LOBBY_SCENE := "res://examples/bomber/game/lobby_level.tscn"
 
 var player_name: String = "The Warrior"
 var players := { }
 
 signal player_list_changed()
-signal connection_failed()
-signal connection_succeeded()
 signal game_ended()
 signal game_error(what: String)
 
@@ -18,21 +16,11 @@ signal game_error(what: String)
 
 var world: MultiplayerScene:
 	get:
-		if not ctx:
-			return null
-		var sm := ctx.scene_manager
-		if not sm:
-			return null
-		return sm.active_scenes.get(&"World") as MultiplayerScene
+		return ctx.scenes.scene(&"World") if ctx else null
 
 var lobby: MultiplayerScene:
 	get:
-		if not ctx:
-			return null
-		var sm := ctx.scene_manager
-		if not sm:
-			return null
-		return sm.active_scenes.get(&"Lobby") as MultiplayerScene
+		return ctx.scenes.scene(&"Lobby") if ctx else null
 
 
 func _ready() -> void:
@@ -42,9 +30,16 @@ func _ready() -> void:
 func _on_participant_joined(participant: NetwParticipant) -> void:
 	players[participant.peer_id] = participant.username
 	player_list_changed.emit()
+	var target := _active_scene()
+	if ctx.is_server() and is_instance_valid(target):
+		target.admit(participant)
+
+
+# The single active scene a fresh participant enters: the lobby between
+# matches, the world while one runs.
+func _active_scene() -> MultiplayerScene:
 	var lobby_scene := lobby
-	if ctx.is_server() and is_instance_valid(lobby_scene):
-		lobby_scene.admit(participant)
+	return lobby_scene if is_instance_valid(lobby_scene) else world
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -54,36 +49,9 @@ func _on_peer_disconnected(id: int) -> void:
 	unregister_player(id)
 
 
-func _on_connected_ok() -> void:
-	connection_succeeded.emit()
-
-
 func _on_server_disconnected() -> void:
 	game_error.emit("Server disconnected")
 	end_game()
-
-
-func _on_connected_fail() -> void:
-	connection_failed.emit()
-
-
-func join_game(ip: String, _player_name: String) -> void:
-	player_name = _player_name
-	var jp := JoinPayload.new()
-	jp.username = _player_name
-
-	var target := NetwConnectTarget.new()
-	target.scheme = ctx.tree.scheme
-	target.address = ip
-	ctx.join(target, jp)
-
-
-func host_game(_player_name: String) -> void:
-	player_name = _player_name
-	var jp := JoinPayload.new()
-	jp.username = _player_name
-
-	ctx.host(jp)
 
 
 @rpc("any_peer", "call_local")
@@ -102,15 +70,12 @@ func get_player_list() -> Array:
 	return players.values()
 
 
-## Starts the match by moving lobby participants into [code]World[/code].
+## Starts the match through [method Netw.change_scene_to_file]. The session is
+## [constant NetwSceneConfig.Concurrency.SINGLE], so the change replaces the
+## lobby and carries every participant into [code]World[/code].
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	var sm := ctx.scene_manager
-	var world_scene := sm.activate_scene(&"World")
-	var lobby_scene := lobby
-	assert(is_instance_valid(world_scene))
-	assert(is_instance_valid(lobby_scene))
-	world_scene.move_participants(lobby_scene.participants)
+	Netw.change_scene_to_file(self, WORLD_SCENE)
 
 
 func end_game() -> void:
@@ -121,11 +86,7 @@ func end_game() -> void:
 	var peer_active := mp != null \
 			and mp.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 	if peer_active and multiplayer.is_server() and is_instance_valid(world):
-		var sm := ctx.scene_manager
-		var lobby_scene := lobby
-		if is_instance_valid(lobby_scene):
-			lobby_scene.move_participants(world.participants)
-		sm.retire_scene(&"World")
+		Netw.change_scene_to_file(self, LOBBY_SCENE)
 
 	game_ended.emit()
 	players.clear()
@@ -134,8 +95,19 @@ func end_game() -> void:
 func setup_connections() -> void:
 	ctx.participant_joined.connect(_on_participant_joined)
 	ctx.peer_disconnected.connect(_on_peer_disconnected)
-	ctx.connected_to_server.connect(_on_connected_ok)
 	ctx.server_disconnected.connect(_on_server_disconnected)
+	ctx.scenes.scene_spawned.connect(_on_scene_spawned)
+
+
+# The listen host is accepted before the startup scene spawns, so its
+# participant_joined admission finds no scene. Admission re-runs when the scene
+# arrives, keeping join order and scene order decoupled.
+func _on_scene_spawned(scene: MultiplayerScene) -> void:
+	if not ctx.is_server():
+		return
+	for participant: NetwParticipant in ctx.participants:
+		if participant.current_scene == null:
+			scene.admit(participant)
 
 
 func get_player_color(p_name: String) -> Color:

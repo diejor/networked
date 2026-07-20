@@ -105,6 +105,33 @@ func test_spawn_fn_recipe_round_trips_args_and_identity() -> void:
 	assert_that(client_node.get_parent().name).is_equal(&"Arena")
 
 
+func test_fn_registry_recipe_round_trips_host_less() -> void:
+	# Every peer registers the same id against its own host method, so the wire
+	# carries the id alone with no node anchor.
+	for mt: MultiplayerTree in [harness.server(), client0]:
+		var host := mt.get_node("FnHost") as NetwSpawnFnHost
+		mt.api.replication._spawn_pipeline.register_spawn_constructor(
+			&"probe", host._spawn_probe
+		)
+
+	var node := _replication()._spawn_pipeline.spawn_registered(
+		&"probe", ["regmark", 5]
+	) as NetwSpawnProbe
+	assert_that(node).is_not_null()
+	assert_int(node.fn_tier).is_equal(5)
+
+	var entity := NetwEntity.of(node)
+	assert_int(entity.route).is_greater(0)
+	_server_arena().add_child(node)
+
+	var client_node := await _wait_live(client0, entity.route) as NetwSpawnProbe
+	assert_that(client_node).is_not_null()
+	assert_int(client_node.fn_tier).is_equal(5)
+	assert_str(client_node.marker).is_equal("regmark")
+	assert_int(client_node.enter_tree_report["route"]).is_equal(entity.route)
+	assert_that(client_node.get_parent().name).is_equal(&"Arena")
+
+
 func test_despawn_reaches_liveness_and_receiver_hook() -> void:
 	var node := probe_scene.instantiate() as NetwSpawnProbe
 	var entity := _replication().replicate(node)

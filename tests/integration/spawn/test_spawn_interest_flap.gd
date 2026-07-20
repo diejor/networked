@@ -39,24 +39,149 @@ func test_interest_readmission_revives_route() -> void:
 
 	layer.add_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(
-		client0, route, NetwLivenessInterface.State.LIVE,
-	)).is_true()
+	assert_that(
+		await _wait_state(
+			client0,
+			route,
+			NetwLivenessInterface.State.LIVE,
+		),
+	).is_true()
 	_assert_books_converged(route, [client0])
 
 	layer.remove_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(
-		client0, route, NetwLivenessInterface.State.DEAD,
-	)).is_true()
+	assert_that(
+		await _wait_state(
+			client0,
+			route,
+			NetwLivenessInterface.State.DEAD,
+		),
+	).is_true()
 	_assert_books_converged(route, [client0])
 
 	layer.add_viewer(peer0)
 	interest.flush()
-	assert_that(await _wait_state(
-		client0, route, NetwLivenessInterface.State.LIVE,
-	)).is_true()
+	assert_that(
+		await _wait_state(
+			client0,
+			route,
+			NetwLivenessInterface.State.LIVE,
+		),
+	).is_true()
 	_assert_books_converged(route, [client0])
+
+
+func test_leave_policy_retain_custom_and_override() -> void:
+	var peer0 := client0.multiplayer_peer.get_unique_id()
+	var node := probe_scene.instantiate() as NetwSpawnProbe
+	var entity := _replication().replicate(node)
+	var route := entity.route
+	harness.server().get_node("Arena").add_child(node)
+
+	var interest := harness.server().api.interest
+	var layer := interest.layer_for(&"policy")
+	layer.default_leave_policy = NetwInterestInterface.LeavePolicy.RETAIN
+	layer.add_entity(entity)
+	layer.add_viewer(peer0)
+	interest.flush()
+	var client_node := await _wait_live(client0, route)
+	assert_that(client_node).is_not_null()
+
+	layer.remove_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 5)
+	assert_that(client0.api.liveness.route_state(route)) \
+			.is_equal(NetwLivenessInterface.State.LIVE)
+	assert_that(client0.api.liveness.node_of(route)).is_same(client_node)
+	_assert_books_converged(route, [client0])
+
+	layer.add_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 3)
+	var custom_calls: Array = []
+	entity.interest.on_leave_policy(
+		&"policy",
+		NetwInterestInterface.LeavePolicy.CUSTOM,
+		func(peer_id: int, layer_id: StringName):
+			custom_calls.append([peer_id, layer_id])
+	)
+	layer.remove_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 5)
+	assert_array(custom_calls).contains_exactly([[peer0, &"policy"]])
+	assert_that(client0.api.liveness.node_of(route)).is_same(client_node)
+	_assert_books_converged(route, [client0])
+
+	layer.add_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 3)
+	entity.interest.on_leave_policy(
+		&"policy",
+		NetwInterestInterface.LeavePolicy.DESPAWN,
+	)
+	layer.remove_viewer(peer0)
+	interest.flush()
+	assert_that(
+		await _wait_state(
+			client0,
+			route,
+			NetwLivenessInterface.State.DEAD,
+		),
+	).is_true()
+	_assert_books_converged(route, [client0])
+
+
+func test_ancestor_despawn_dominates_nested_retain() -> void:
+	var peer0 := client0.multiplayer_peer.get_unique_id()
+	var spawned := _spawn_nested_pair()
+	var parent: NetwEntity = spawned["parent_entity"]
+	var child: NetwEntity = spawned["child_entity"]
+	assert_that(await _wait_live(client0, child.route)).is_not_null()
+
+	var interest := harness.server().api.interest
+	var layer := interest.layer_for(&"nested_policy")
+	parent.interest.join(&"nested_policy").on_leave_policy(
+		&"nested_policy",
+		NetwInterestInterface.LeavePolicy.RETAIN,
+	)
+	child.interest.join(&"nested_policy").on_leave_policy(
+		&"nested_policy",
+		NetwInterestInterface.LeavePolicy.RETAIN,
+	)
+	layer.add_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 3)
+
+	layer.remove_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 5)
+	assert_that(client0.api.liveness.route_state(parent.route)) \
+			.is_equal(NetwLivenessInterface.State.LIVE)
+	assert_that(client0.api.liveness.route_state(child.route)) \
+			.is_equal(NetwLivenessInterface.State.LIVE)
+	_assert_books_converged(parent.route, [client0])
+	_assert_books_converged(child.route, [client0])
+
+	layer.add_viewer(peer0)
+	interest.flush()
+	await drain_frames(get_tree(), 3)
+	parent.interest.on_leave_policy(
+		&"nested_policy",
+		NetwInterestInterface.LeavePolicy.DESPAWN,
+	)
+	layer.remove_viewer(peer0)
+	interest.flush()
+	assert_that(
+		await _wait_state(
+			client0,
+			parent.route,
+			NetwLivenessInterface.State.DEAD,
+		),
+	).is_true()
+	assert_that(client0.api.liveness.route_state(child.route)) \
+			.is_equal(NetwLivenessInterface.State.DEAD)
+	_assert_books_converged(parent.route, [client0])
+	_assert_books_converged(child.route, [client0])
 
 
 func test_spawn_parked_on_dead_anchor_applies_on_revival() -> void:
@@ -171,7 +296,7 @@ func test_reparent_skips_peer_losing_visibility() -> void:
 		if c0_child and c0_child.get_parent() \
 				== client0.api.liveness.node_of(zone2_route) \
 				and client1.api.liveness.route_state(child_route) \
-				== NetwLivenessInterface.State.DEAD:
+						== NetwLivenessInterface.State.DEAD:
 			moved = true
 			break
 	assert_bool(moved).is_true()
@@ -210,7 +335,7 @@ func test_reparent_reanchors_consumed_spawner_recipe() -> void:
 			.is_equal(NetwLivenessInterface.State.UNKNOWN)
 
 	var unresolved := int(
-		client1.api.replication.counters()[&"drops_spawn_unresolved"]
+		client1.api.replication.counters()[&"drops_spawn_unresolved"],
 	)
 	mover.get_parent().remove_child(mover)
 	zone2.add_child(mover)
@@ -222,9 +347,11 @@ func test_reparent_reanchors_consumed_spawner_recipe() -> void:
 	assert_that(c1_mover.get_parent()) \
 			.is_equal(client1.api.liveness.node_of(zone2_route))
 	assert_that(record.spawner()).is_equal(zone2.get_node("Spawner"))
-	assert_int(int(
-		client1.api.replication.counters()[&"drops_spawn_unresolved"]
-	)).is_equal(unresolved)
+	assert_int(
+		int(
+			client1.api.replication.counters()[&"drops_spawn_unresolved"],
+		),
+	).is_equal(unresolved)
 
 	await drain_frames(get_tree(), 5)
 	assert_int(client1.api.liveness.pending_live_count()).is_equal(0)

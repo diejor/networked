@@ -159,7 +159,7 @@ func test_session_ended_leaves_no_residue() -> void:
 	var route := service.allocate_route(entity)
 	assert_that(service.route_state(route)).is_equal(NetwLivenessInterface.State.LIVE)
 
-	mt.session_ended.emit()
+	mt.api.session_ended.emit()
 	await get_tree().process_frame # deferred clear
 
 	assert_that(service.route_state(route)).is_equal(

@@ -13,10 +13,17 @@ func get_multiplayer_tree() -> MultiplayerTree:
 	return MultiplayerTree.resolve(self)
 
 
-## Returns the [MultiplayerSceneManager] for this session.
+## Returns the [MultiplayerSceneManager] for this session, resolved through the
+## service registry like any other [NetwService].
 func get_scene_manager() -> MultiplayerSceneManager:
 	var api := Netw.of(self)
-	return api.scene_manager if api else null
+	return api.get_service(MultiplayerSceneManager) as MultiplayerSceneManager if api else null
+
+
+## Returns the [NetwSceneInterface] for this session.
+func get_scenes() -> NetwSceneInterface:
+	var api := Netw.of(self)
+	return api.scenes if api else null
 
 
 ## Returns the [TPLayerAPI] for visual teleport transitions on the local
@@ -25,11 +32,8 @@ func get_scene_manager() -> MultiplayerSceneManager:
 func get_tp_layer() -> TPLayerAPI:
 	if not is_inside_tree() or not multiplayer:
 		return null
-	var mt := get_multiplayer_tree()
-	if not mt or not mt.is_local_client:
-		return null
 	var api := Netw.of(self)
-	if not api:
+	if not api or not api.is_local_client:
 		return null
 	return api.get_service(TPLayerAPI) as TPLayerAPI
 

@@ -119,6 +119,14 @@ var park_timeout_seconds: float = 5.0
 # during the park cancels the spawn with net result zero.
 var _parked_spawn_routes: Dictionary[int, bool] = { }
 
+# Receiver: spawner-consumed SPAWN frames parked because their consumed
+# spawner's scene subtree was not present when the frame arrived, keyed by route
+# to a { "payload", "deadline" } record. A path-anchored spawner has no route to
+# wait on through when_live, and a late-join replay can deliver a player before
+# the scene that holds its spawner, so these retry when a scene spawns rather
+# than dropping the player permanently.
+var _spawner_parked: Dictionary[int, Dictionary] = { }
+
 # True only while this pipeline synchronously places a replicated node, so a
 # marked scene's tree_entered hook tells a framework spawn from a native
 # change_scene. Read through NetwReplicationInterface.is_applying_remote_frame.
@@ -129,6 +137,14 @@ var _visibility_sweep_scheduled := false
 
 # Coalesces spawn-edge sends into one same-frame carrier flush.
 var _carrier_flush_scheduled := false
+
+# Host-less spawn constructors keyed by a stable id, registered by the API
+# subsystem that owns them. A Recipe.FN_REGISTRY spawn resolves its function
+# here instead of from a node anchor, so a manager-less session still spawns.
+var _spawn_constructors: Dictionary[StringName, Callable] = { }
+
+# Route -> a suspended action-spawn owner, hidden until its display tick arrives.
+var _action_gates: Dictionary[int, _ActionGate] = { }
 
 
 func _init(api: NetwMultiplayer) -> void:
@@ -174,10 +190,16 @@ func _replay_spawn_book(peer_id: int) -> void:
 			continue
 		record.recipients.append(peer_id)
 		api.replication.send_to(
-			peer_id, 0, NetwFrameEnvelope.Channel.SPAWN, payload, true, 0, "", true
+			peer_id,
+			0,
+			NetwFrameEnvelope.Channel.SPAWN,
+			payload,
+			true,
+			0,
+			"",
+			true,
 		)
 	_schedule_carrier_flush()
-
 
 #region Interest-driven visibility
 
@@ -203,8 +225,7 @@ func _run_visibility_sweep() -> void:
 	var api := _api()
 	if not api or not api.inner.multiplayer_peer:
 		return
-	var mt := api.tree
-	if not mt or not mt.is_online():
+	if not api.is_online():
 		return
 	var peers := api.inner.get_peers()
 	var routes := _spawn_book.spawned.keys()
@@ -239,8 +260,55 @@ func _run_visibility_sweep() -> void:
 					break
 			record.recipients.append(peer_id)
 			api.replication.send_to(
-				peer_id, 0, NetwFrameEnvelope.Channel.SPAWN, payload, true, 0, "", true
+				peer_id,
+				0,
+				NetwFrameEnvelope.Channel.SPAWN,
+				payload,
+				true,
+				0,
+				"",
+				true,
 			)
+
+	# Resolve leave behavior parent-first so an ancestor DESPAWN dominates a
+	# descendant override, while a retained ancestor keeps locally-visible
+	# descendants materialized with it.
+	var leave_effects: Dictionary[int, Dictionary] = { }
+	for route: int in routes:
+		var record: NetwSpawnBook.SpawnRecord = _spawn_book.spawned[route]
+		var node := record.node()
+		if not node or not node.is_inside_tree():
+			continue
+		var per_peer: Dictionary = { }
+		for peer_id in peers:
+			if peer_id not in record.recipients:
+				continue
+			if _spawn_desired_to(peer_id, record, node):
+				continue
+			var parent_effect: Dictionary = { }
+			if record.parent_route > 0:
+				parent_effect = leave_effects.get(record.parent_route, { }) \
+						.get(peer_id, { })
+			var parent_despawns := not parent_effect.is_empty() and (
+					bool(parent_effect[&"forced"])
+					or bool(parent_effect[&"decision"][&"despawn"])
+			)
+			var entity := NetwEntity.of(node)
+			var decision := { &"despawn": true, &"custom": [] }
+			var forced := false
+			if not parent_effect.is_empty() \
+					and _spawn_locally_desired_to(peer_id, node):
+				decision[&"despawn"] = parent_despawns
+				forced = parent_despawns
+			elif entity:
+				decision = api.interest._resolve_leave_decision(entity, peer_id)
+				forced = parent_despawns
+			per_peer[peer_id] = {
+				&"decision": decision,
+				&"forced": forced,
+			}
+		if not per_peer.is_empty():
+			leave_effects[route] = per_peer
 
 	for i in range(routes.size() - 1, -1, -1):
 		var route: int = routes[i]
@@ -254,7 +322,24 @@ func _run_visibility_sweep() -> void:
 		for peer_id in peers:
 			if peer_id not in record.recipients:
 				continue
-			if _spawn_visible_to(peer_id, record, node):
+			if _spawn_desired_to(peer_id, record, node):
+				continue
+			var effect: Dictionary = leave_effects.get(route, { }) \
+					.get(peer_id, { })
+			var decision: Dictionary = effect.get(
+				&"decision",
+				{ &"despawn": true, &"custom": [] },
+			)
+			var entity := NetwEntity.of(node)
+			if entity:
+				api.interest._commit_leave_decision(
+					entity,
+					peer_id,
+					decision,
+					bool(effect.get(&"forced", false)),
+				)
+			if not bool(decision[&"despawn"]) \
+					and not bool(effect.get(&"forced", false)):
 				continue
 			if payload.is_empty():
 				var w := NetwBitBuffer.Writer.new()
@@ -262,8 +347,16 @@ func _run_visibility_sweep() -> void:
 				payload = w.to_bytes()
 			record.recipients.erase(peer_id)
 			api.replication.send_to(
-				peer_id, 0, NetwFrameEnvelope.Channel.DESPAWN, payload, true, 0, "", true
+				peer_id,
+				0,
+				NetwFrameEnvelope.Channel.DESPAWN,
+				payload,
+				true,
+				0,
+				"",
+				true,
 			)
+	api.interest._finish_leave_sweep()
 	_schedule_carrier_flush()
 
 
@@ -280,13 +373,44 @@ func _spawn_visible_to(
 				_spawn_book.spawned.get(record.parent_route)
 		if parent and peer_id not in parent.recipients:
 			return false
+	return _spawn_locally_desired_to(peer_id, node)
+
+
+# Evaluates the desired ancestor chain without consulting materialized rows.
+# Revokes run child-first, while parent recipient rows still describe the old
+# materialized state. Using those rows would strand descendants as phantom
+# recipients after the parent despawns them through its subtree cascade.
+func _spawn_desired_to(
+		peer_id: int,
+		record: NetwSpawnBook.SpawnRecord,
+		node: Node,
+) -> bool:
+	if record.parent_route > 0:
+		var parent: NetwSpawnBook.SpawnRecord = \
+				_spawn_book.spawned.get(record.parent_route)
+		if parent:
+			var parent_node := parent.node()
+			if parent_node and not _spawn_desired_to(
+				peer_id,
+				parent,
+				parent_node,
+			):
+				return false
+	return _spawn_locally_desired_to(peer_id, node)
+
+
+# Computes this record's own admission terms without its ancestor clamp.
+func _spawn_locally_desired_to(peer_id: int, node: Node) -> bool:
 	var api := _api()
 	if not api:
 		return false
 	var entity := NetwEntity.of(node)
-	if entity and api.interest.has_filter(entity) \
-			and not api.interest.can_peer_see_entity(peer_id, entity):
-		return false
+	if entity:
+		if api.interest.has_committed_intent(entity):
+			return api.interest.wire_admits(peer_id, entity)
+		if api.interest.has_filter(entity) \
+				and not api.interest.wire_admits(peer_id, entity):
+			return false
 	return api.replication._sync_compat.synchronizer_verdict(peer_id, node)
 
 
@@ -308,9 +432,7 @@ func _run_carrier_flush() -> void:
 	if api:
 		api.replication.flush_all_buffers()
 
-
 #endregion
-
 
 ## Replicates the orphan [param node] to every connected peer, reconstructing
 ## it from its [member Node.scene_file_path]. The api-scoped form of
@@ -431,6 +553,51 @@ func spawn(fn: Callable, args: Array = [], owner: NetwParticipant = null) -> Nod
 	return node
 
 
+## Registers [param fn] as a host-less spawn constructor under [param id]. A
+## [method spawn_registered] call and its receivers resolve the function from
+## [param id] alone, so a session with no host node still reconstructs it.
+## [param fn]'s method must also be registered with
+## [method Netw.configure_spawn] so its arguments encode.
+func register_spawn_constructor(id: StringName, fn: Callable) -> void:
+	_spawn_constructors[id] = fn
+
+
+func _spawn_constructor(id: StringName) -> Callable:
+	return _spawn_constructors.get(id, Callable())
+
+
+## Constructs a node on every peer by running the constructor registered under
+## [param id] with [param args], returning the local node for the caller to
+## place. Mirrors [method spawn] but resolves the function from the registry
+## instead of a host node, so a manager-less session can spawn.
+## [br][br][b]Server Only.[/b]
+func spawn_registered(
+		id: StringName,
+		args: Array = [],
+		owner: NetwParticipant = null,
+) -> Node:
+	assert(
+		_is_server_authority(),
+		"spawn_registered is server-only",
+	)
+	var fn := _spawn_constructor(id)
+	assert(
+		fn.is_valid(),
+		"spawn_registered: no constructor registered under id '%s'" % id,
+	)
+	var node := fn.callv(args) as Node
+	assert(
+		node != null and not node.is_inside_tree(),
+		"spawn_registered: constructor '%s' must return an orphan node" % id,
+	)
+	var record := NetwSpawnBook.SpawnRecord.new()
+	record.recipe = NetwSpawnBook.Recipe.FN_REGISTRY
+	record.fn_registry_id = id
+	record.fn_args = args
+	_arm_authoritative_spawn(node, record, owner)
+	return node
+
+
 # Shared verb tail: allocates the route, stamps identity while the node is
 # orphaned, and arms the record for the end-of-frame flush on tree entry. A
 # consumed spawner node may already be in the tree at arm time (native
@@ -487,6 +654,70 @@ func _arm_authoritative_spawn(
 	return entity
 
 
+# Writes a spawn function's arguments using the quantizers and types declared
+# for its (script, method) through Netw.configure_spawn. Shared by the FN and
+# FN_REGISTRY recipes, which differ only in how they address the function.
+func _encode_fn_args(
+		w: NetwBitBuffer.Writer,
+		script: Script,
+		method: StringName,
+		fn_args: Array,
+) -> void:
+	var api := _api()
+	var cfg := NetwScriptModel.get_spawn_config(script, method)
+	var encoded_args := api.rpc_interface._encode_args(api.liveness, fn_args)
+	NetwScriptModel.write_values(
+		w,
+		encoded_args,
+		cfg.quantizers if cfg else [],
+		NetwScriptModel.get_method_arg_types(script, method),
+	)
+
+
+# Reads a spawn function's encoded arguments for its (script, method) config.
+# Returns null when the function is not registered through Netw.configure_spawn.
+func _read_fn_args(r: NetwBitBuffer.Reader, script: Script, method: StringName) -> Variant:
+	var cfg := NetwScriptModel.get_spawn_config(script, method)
+	if not cfg:
+		return null
+	return NetwScriptModel.read_values(
+		r,
+		cfg.quantizers,
+		NetwScriptModel.get_method_arg_types(script, method),
+	)
+
+
+# Materializes a spawn function's decoded arguments, resolving each NetwNodeRef
+# to its live node. Returns null and parks the spawn when a referenced route is
+# not yet live. Shared by the FN and FN_REGISTRY recipes.
+func _resolve_spawn_args(
+		encoded_args: Array,
+		payload: PackedByteArray,
+		route: int,
+		liveness: NetwLivenessInterface,
+) -> Variant:
+	var api := _api()
+	var args: Array = []
+	for encoded in encoded_args:
+		if encoded is NetwNodeRef:
+			var ref: NetwNodeRef = encoded
+			if _anchor_parks(liveness.route_state(ref.route)):
+				_park_spawn(payload, ref.route, route)
+				return null
+			var arg_entity := liveness.entity_of(ref.route)
+			var arg_node: Node = null
+			if arg_entity:
+				arg_node = api.replication.resolve_comp_node(
+					arg_entity,
+					ref.comp,
+					ref.path,
+				)
+			args.append(arg_node)
+		else:
+			args.append(encoded)
+	return args
+
+
 # The entity_id stem for an auto-assigned id: the scene basename, the spawn
 # function name, or the spawner node's scene or name.
 func _recipe_base(record: NetwSpawnBook.SpawnRecord, node: Node) -> String:
@@ -495,6 +726,8 @@ func _recipe_base(record: NetwSpawnBook.SpawnRecord, node: Node) -> String:
 			return record.scene_path.get_file().get_basename()
 		NetwSpawnBook.Recipe.FN:
 			return String(record.fn_method)
+		NetwSpawnBook.Recipe.FN_REGISTRY:
+			return String(record.fn_registry_id)
 		_:
 			if not node.scene_file_path.is_empty():
 				return node.scene_file_path.get_file().get_basename()
@@ -579,6 +812,8 @@ func _flush_armed_spawn(route: int) -> void:
 	record.parent_route = (
 			api.liveness.route_of(parent_entity) if api and parent_entity else 0
 	)
+	if api:
+		api.interest._sync_scene_membership(NetwEntity.of(node))
 	_spawn_book.spawned[route] = record
 	node.tree_exiting.connect(
 		_on_tracked_root_exiting.bind(route),
@@ -597,7 +832,14 @@ func _flush_armed_spawn(route: int) -> void:
 	record.recipients = recipients
 	for peer_id in recipients:
 		api.replication.send_to(
-			peer_id, 0, NetwFrameEnvelope.Channel.SPAWN, payload, true, 0, "", true
+			peer_id,
+			0,
+			NetwFrameEnvelope.Channel.SPAWN,
+			payload,
+			true,
+			0,
+			"",
+			true,
 		)
 	_schedule_carrier_flush()
 
@@ -647,8 +889,7 @@ func _despawn_tracked_route(route: int) -> void:
 	var api := _api()
 	if not api or not api.inner.multiplayer_peer:
 		return
-	var mt := api.tree
-	if not mt or not mt.is_online():
+	if not api.is_online():
 		return
 	var w := NetwBitBuffer.Writer.new()
 	NetwCodec.put_varint(w, route)
@@ -657,7 +898,14 @@ func _despawn_tracked_route(route: int) -> void:
 	for peer_id in record.recipients:
 		if peer_id in connected:
 			api.replication.send_to(
-				peer_id, 0, NetwFrameEnvelope.Channel.DESPAWN, payload, true, 0, "", true
+				peer_id,
+				0,
+				NetwFrameEnvelope.Channel.DESPAWN,
+				payload,
+				true,
+				0,
+				"",
+				true,
 			)
 	_schedule_carrier_flush()
 
@@ -674,6 +922,7 @@ func _refresh_record_anchors(record: NetwSpawnBook.SpawnRecord, node: Node) -> v
 	record.parent_route = (
 			api.liveness.route_of(parent_entity) if parent_entity else 0
 	)
+	api.interest._sync_scene_membership(NetwEntity.of(node))
 	# A consumed record's recipe must stay reconstructible from the destination,
 	# or the sweep re-encode and late-join replay hand new observers a spawner
 	# anchor inside a scene they were never admitted to.
@@ -687,8 +936,7 @@ func _send_reparent(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 	_refresh_record_anchors(record, node)
 	if not api.inner.multiplayer_peer:
 		return
-	var mt := api.tree
-	if not mt or not mt.is_online():
+	if not api.is_online():
 		return
 	var w := NetwBitBuffer.Writer.new()
 	NetwCodec.put_varint(w, record.route)
@@ -710,7 +958,14 @@ func _send_reparent(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 		if not _spawn_visible_to(peer_id, record, node):
 			continue
 		api.replication.send_to(
-			peer_id, 0, NetwFrameEnvelope.Channel.REPARENT, payload, true, 0, "", true
+			peer_id,
+			0,
+			NetwFrameEnvelope.Channel.REPARENT,
+			payload,
+			true,
+			0,
+			"",
+			true,
 		)
 	_schedule_carrier_flush()
 	# The new parent changes the book-derived ancestor clamp without firing any
@@ -765,7 +1020,19 @@ func _encode_spawn_frame(record: NetwSpawnBook.SpawnRecord, node: Node) -> Packe
 			var dbytes := var_to_bytes(record.custom_data)
 			NetwCodec.put_varint(w, dbytes.size())
 			w.put_aligned_bytes(dbytes)
-	else:
+	elif record.recipe == NetwSpawnBook.Recipe.FN_REGISTRY:
+		var fn := _spawn_constructor(record.fn_registry_id)
+		if not fn.is_valid():
+			Netw.dbg.error(
+				"NetwSpawnPipeline: no spawn constructor registered under id "
+				+ "'%s' for route %d",
+				[record.fn_registry_id, record.route],
+			)
+			return PackedByteArray()
+		_put_str(w, String(record.fn_registry_id))
+		var host := fn.get_object()
+		_encode_fn_args(w, host.get_script() as Script, fn.get_method(), record.fn_args)
+	elif record.recipe == NetwSpawnBook.Recipe.FN:
 		var host := record.fn_host()
 		if not host or not _encode_anchor(w, host):
 			Netw.dbg.error(
@@ -775,15 +1042,13 @@ func _encode_spawn_frame(record: NetwSpawnBook.SpawnRecord, node: Node) -> Packe
 			)
 			return PackedByteArray()
 		_put_str(w, String(record.fn_method))
-		var script := host.get_script() as Script
-		var cfg := NetwScriptModel.get_spawn_config(script, record.fn_method)
-		var encoded_args := api.rpc_interface._encode_args(api.liveness, record.fn_args)
-		NetwScriptModel.write_values(
-			w,
-			encoded_args,
-			cfg.quantizers if cfg else [],
-			NetwScriptModel.get_method_arg_types(script, record.fn_method),
+		_encode_fn_args(w, host.get_script() as Script, record.fn_method, record.fn_args)
+	else:
+		Netw.dbg.error(
+			"NetwSpawnPipeline: unknown spawn recipe %d for route %d",
+			[record.recipe, record.route],
 		)
+		return PackedByteArray()
 
 	var entries := _collect_spawn_state(node)
 	NetwCodec.put_varint(w, entries.size())
@@ -802,7 +1067,8 @@ func _encode_spawn_frame(record: NetwSpawnBook.SpawnRecord, node: Node) -> Packe
 			w.put_aligned_u8(255)
 			_put_str(w, String(node.get_path_to(source)))
 		NetwScriptModel.write_token(
-			w, api.replication._sync_pipeline._encode_prop_val(entity, source, prop)
+			w,
+			api.replication._sync_pipeline._encode_prop_val(entity, source, prop),
 		)
 		var quantizer: NetwQuantize = (
 				cfg.quantizers[0] if not cfg.quantizers.is_empty() else null
@@ -868,10 +1134,12 @@ func _collect_native_spawn_state(root: Node) -> Array[Dictionary]:
 				if not target:
 					continue
 				var subnames := NodePath(":" + prop.get_concatenated_subnames())
-				out.append({
-					"path": prop,
-					"value": target.get_indexed(subnames),
-				})
+				out.append(
+					{
+						"path": prop,
+						"value": target.get_indexed(subnames),
+					},
+				)
 		var children := n.get_children()
 		for i in range(children.size() - 1, -1, -1):
 			stack.append(children[i])
@@ -966,7 +1234,7 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 		var scene_path := _get_scene_recipe(r)
 		var packed: PackedScene = null
 		if not scene_path.is_empty() and (ResourceLoader.has_cached(scene_path) \
-				or ResourceLoader.exists(scene_path)):
+						or ResourceLoader.exists(scene_path)):
 			packed = load(scene_path) as PackedScene
 		if not packed:
 			Netw.dbg.warn(
@@ -985,12 +1253,10 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			return
 		recv_spawner = _resolve_anchor(spawner_anchor) as MultiplayerSpawner
 		if not recv_spawner:
-			Netw.dbg.warn(
-				"NetwSpawnPipeline: SPAWN for route %d cannot resolve its "
-				+ "consumed spawner",
-				[route],
-			)
-			_drops_spawn_unresolved += 1
+			# The scene subtree holding the spawner is not here yet (a late-join
+			# replay outran its scene, or a path anchor cannot park on a route).
+			# Wait for a scene to arrive rather than dropping the player.
+			_park_spawn_for_scene(payload, route)
 			return
 		var scene_index := NetwCodec.get_safe_varint(r) - 1
 		var data: Variant = null
@@ -998,7 +1264,9 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			var dlen := NetwCodec.get_safe_varint(r)
 			data = bytes_to_var(r.get_aligned_bytes(maxi(dlen, 0)))
 		node = api.replication._spawner_compat.instantiate(
-			recv_spawner, scene_index, data
+			recv_spawner,
+			scene_index,
+			data,
 		)
 		if not node:
 			Netw.dbg.warn(
@@ -1008,7 +1276,42 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
-	else:
+	elif recipe == NetwSpawnBook.Recipe.FN_REGISTRY:
+		var reg_id := StringName(_get_str(r))
+		var fn := _spawn_constructor(reg_id)
+		if not fn.is_valid():
+			Netw.dbg.warn(
+				"NetwSpawnPipeline: SPAWN for route %d names spawn "
+				+ "constructor '%s' that is not registered",
+				[route, reg_id],
+			)
+			_drops_spawn_unresolved += 1
+			return
+		var host := fn.get_object()
+		var script := host.get_script() as Script
+		var method := fn.get_method()
+		var encoded_args := _read_fn_args(r, script, method)
+		if encoded_args == null:
+			Netw.dbg.warn(
+				"NetwSpawnPipeline: SPAWN for route %d names constructor "
+				+ "'%s' whose arguments are not configured",
+				[route, reg_id],
+			)
+			_drops_spawn_unresolved += 1
+			return
+		var args = _resolve_spawn_args(encoded_args, payload, route, liveness)
+		if args == null:
+			return
+		node = fn.callv(args) as Node
+		if not node:
+			Netw.dbg.warn(
+				"NetwSpawnPipeline: spawn constructor '%s' did not "
+				+ "return a Node for route %d",
+				[reg_id, route],
+			)
+			_drops_spawn_unresolved += 1
+			return
+	elif recipe == NetwSpawnBook.Recipe.FN:
 		var host_anchor := _decode_anchor(r)
 		if int(host_anchor["route"]) > 0 \
 				and _anchor_parks(liveness.route_state(int(host_anchor["route"]))):
@@ -1025,8 +1328,8 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			return
 		var method := StringName(_get_str(r))
 		var script := host.get_script() as Script
-		var cfg := NetwScriptModel.get_spawn_config(script, method)
-		if not cfg:
+		var encoded_args := _read_fn_args(r, script, method)
+		if encoded_args == null:
 			Netw.dbg.warn(
 				"NetwSpawnPipeline: SPAWN for route %d names spawn "
 				+ "function '%s' that is not registered on '%s'",
@@ -1034,27 +1337,9 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
-		var encoded_args := NetwScriptModel.read_values(
-			r,
-			cfg.quantizers,
-			NetwScriptModel.get_method_arg_types(script, method),
-		)
-		var args: Array = []
-		for encoded in encoded_args:
-			if encoded is NetwNodeRef:
-				var ref: NetwNodeRef = encoded
-				if _anchor_parks(liveness.route_state(ref.route)):
-					_park_spawn(payload, ref.route, route)
-					return
-				var arg_entity := liveness.entity_of(ref.route)
-				var arg_node: Node = null
-				if arg_entity:
-					arg_node = api.replication.resolve_comp_node(
-						arg_entity, ref.comp, ref.path
-					)
-				args.append(arg_node)
-			else:
-				args.append(encoded)
+		var args = _resolve_spawn_args(encoded_args, payload, route, liveness)
+		if args == null:
+			return
 		node = host.callv(method, args) as Node
 		if not node:
 			Netw.dbg.warn(
@@ -1064,6 +1349,13 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 			)
 			_drops_spawn_unresolved += 1
 			return
+	else:
+		Netw.dbg.warn(
+			"NetwSpawnPipeline: SPAWN for route %d carries unknown recipe %d",
+			[route, recipe],
+		)
+		_drops_spawn_unresolved += 1
+		return
 
 	var parent := _resolve_anchor(parent_anchor)
 	if not parent:
@@ -1083,6 +1375,10 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 	entity.controller = controller
 	entity.action_spawn_tick = action_spawn_tick
 	entity.action_requester = action_requester
+	# An action spawn wires the display gate so the entity hides on its live edge
+	# until the local display reaches the action tick.
+	if action_spawn_tick >= 0:
+		_ensure_action_gate_connection()
 	entity.components.wire_hash = netw_table_hash
 	entity.route = route
 	# Seal the record and settle authority on the orphan, before add_child, so
@@ -1108,7 +1404,9 @@ func _try_apply_spawn(payload: PackedByteArray) -> void:
 		var prop: StringName
 		if prop_token is int:
 			prop = NetwScriptModel.get_property_name_by_id(
-					target.get_script() as Script, prop_token)
+				target.get_script() as Script,
+				prop_token,
+			)
 		else:
 			prop = StringName(prop_token)
 		if prop.is_empty() or not (prop in target):
@@ -1331,6 +1629,55 @@ func _park_spawn(payload: PackedByteArray, dep_route: int, route: int) -> void:
 	api.liveness.when_live(dep_route, retry, _park_timeout_ticks(), expire)
 
 
+# Parks a spawner-consumed SPAWN whose scene subtree is not present, retrying
+# when a scene spawns. Unlike a routed dependency, a consumed spawner is
+# addressed by a path this peer cannot yet resolve and has no route to wait on
+# through when_live, so the arrival of any scene is the retry trigger. The wait
+# is bounded by [member park_timeout_seconds] so an anchor that never resolves
+# still gives up instead of holding the payload forever.
+func _park_spawn_for_scene(payload: PackedByteArray, route: int) -> void:
+	var api := _api()
+	if not api or not api.scenes:
+		_drops_spawn_unresolved += 1
+		return
+	_spawn_deferrals += 1
+	_parked_spawn_routes[route] = true
+	_spawner_parked[route] = {
+		"payload": payload,
+		"deadline": Time.get_ticks_msec() + int(park_timeout_seconds * 1000.0),
+	}
+	if not api.scenes.scene_spawned.is_connected(_retry_scene_parked_spawns):
+		api.scenes.scene_spawned.connect(_retry_scene_parked_spawns)
+
+
+# Retries every scene-parked SPAWN when a scene arrives, since one new scene can
+# carry the spawner several parked players waited on. A DESPAWN that cleared the
+# route mid-park drops the entry, an expired wait gives up with a warning, and a
+# retry that still cannot resolve re-parks itself for the next scene.
+func _retry_scene_parked_spawns(_scene: MultiplayerScene) -> void:
+	var now := Time.get_ticks_msec()
+	for parked_route: int in _spawner_parked.keys():
+		if not _parked_spawn_routes.has(parked_route):
+			_spawner_parked.erase(parked_route)
+			continue
+		var entry: Dictionary = _spawner_parked[parked_route]
+		_spawner_parked.erase(parked_route)
+		_parked_spawn_routes.erase(parked_route)
+		if now >= int(entry["deadline"]):
+			_spawn_park_expired += 1
+			Netw.dbg.warn(
+				"NetwSpawnPipeline: SPAWN for route %d gave up waiting for its "
+				+ "consumed spawner's scene",
+				[parked_route],
+			)
+			continue
+		_try_apply_spawn(entry["payload"])
+	var api := _api()
+	if _spawner_parked.is_empty() and api and api.scenes \
+			and api.scenes.scene_spawned.is_connected(_retry_scene_parked_spawns):
+		api.scenes.scene_spawned.disconnect(_retry_scene_parked_spawns)
+
+
 # Two-level reference addressing: a target inside a routed entity encodes as
 # (route, subpath from that entity's root), anything else as a path from the
 # replication root node. Returns false when the target cannot be addressed.
@@ -1429,8 +1776,14 @@ func _is_server_authority() -> bool:
 ## Drops all per-session spawn state. Called by
 ## [method NetwReplicationInterface.clear_session].
 func clear_session() -> void:
+	var api := _api()
+	if api and api.scenes \
+			and api.scenes.scene_spawned.is_connected(_retry_scene_parked_spawns):
+		api.scenes.scene_spawned.disconnect(_retry_scene_parked_spawns)
+	_spawner_parked.clear()
 	_parked_spawn_routes.clear()
 	_spawn_book.clear()
+	_clear_action_gates()
 
 
 ## Drops [param route]'s armed and receive-side book traces when its
@@ -1439,6 +1792,138 @@ func clear_session() -> void:
 func clear_route(route: int) -> void:
 	_spawn_book.armed.erase(route)
 	_spawn_book.recv.erase(route)
+	if _action_gates.has(route):
+		_action_gates.erase(route)
+		_disconnect_action_reveal_if_idle()
+
+
+#region Action display gate
+
+# One suspended action-spawn owner, hidden until its display tick arrives. Held
+# by route in _action_gates. Weakref-backed so a freed owner clears itself.
+class _ActionGate:
+	extends RefCounted
+
+	var owner_ref: WeakRef
+	var hidden := false
+	var original_visible := true
+	var action_tick := -1
+
+
+# The display clock, or null while none is configured, so the gate degrades to a
+# no-op against a clockless session.
+func _gate_display_clock() -> NetwClockInterface:
+	var api := _api()
+	if api and api.clock.is_configured():
+		return api.clock
+	return null
+
+
+# Hides a remote NetwAction result until the local display playhead reaches the
+# action tick, so a spawned effect appears in step with the displayed world
+# rather than the moment its frame arrived. The requester keeps its immediate
+# predicted presentation, and an entity that never came from an action, or whose
+# display already passed the tick, is never touched. Reached from the spawn frame
+# through a liveness live edge so both the adopted and tree-entry bind paths gate.
+func _apply_action_gate(route: int, entity: NetwEntity) -> void:
+	if _action_gates.has(route):
+		return
+	if entity.action_spawn_tick < 0 or _is_local_action_requester(entity):
+		return
+	var clock := _gate_display_clock()
+	if not clock or clock.display_tick >= entity.action_spawn_tick:
+		return
+	var gate := _ActionGate.new()
+	gate.owner_ref = weakref(entity.owner)
+	gate.action_tick = entity.action_spawn_tick
+	if not _set_gate_visible(gate, false):
+		return
+	gate.hidden = true
+	_action_gates[route] = gate
+	if not clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.connect(_on_action_reveal_tick)
+
+
+func _on_action_reveal_tick(_delta: float, tick: int) -> void:
+	var clock := _gate_display_clock()
+	for gate_route in _action_gates.keys():
+		var gate := _action_gates[gate_route] as _ActionGate
+		var reached := true
+		if clock:
+			reached = maxi(0, tick - clock.display_offset) >= gate.action_tick
+		if reached:
+			_reveal_gate(gate_route)
+	_disconnect_action_reveal_if_idle()
+
+
+func _reveal_gate(route: int) -> void:
+	var gate := _action_gates.get(route) as _ActionGate
+	if not gate:
+		return
+	if gate.hidden:
+		_set_gate_visible(gate, gate.original_visible)
+		gate.hidden = false
+	_action_gates.erase(route)
+
+
+func _disconnect_action_reveal_if_idle() -> void:
+	if not _action_gates.is_empty():
+		return
+	var clock := _gate_display_clock()
+	if clock and clock.on_tick.is_connected(_on_action_reveal_tick):
+		clock.on_tick.disconnect(_on_action_reveal_tick)
+
+
+func _is_local_action_requester(entity: NetwEntity) -> bool:
+	if entity.action_requester == 0:
+		return false
+	var api := _api()
+	if not api or api.multiplayer_peer == null:
+		return false
+	return entity.action_requester == api.get_unique_id()
+
+
+# Sets the gated owner's visibility, capturing its original state on the first
+# hide so the reveal restores exactly what the scene declared. Returns
+# [code]false[/code] for a non-visual owner (a bare logic node), which the gate
+# then leaves alone.
+func _set_gate_visible(gate: _ActionGate, value: bool) -> bool:
+	var owner := gate.owner_ref.get_ref() as Node
+	if owner is CanvasItem:
+		var item := owner as CanvasItem
+		if not gate.hidden:
+			gate.original_visible = item.visible
+		item.visible = value
+		return true
+	if owner is Node3D:
+		var spatial := owner as Node3D
+		if not gate.hidden:
+			gate.original_visible = spatial.visible
+		spatial.visible = value
+		return true
+	return false
+
+
+# Ensures the liveness live edge drives the gate. Connected lazily from the spawn
+# frame so a session with no action spawns never wires it.
+func _ensure_action_gate_connection() -> void:
+	var api := _api()
+	var lv := api.liveness if api else null
+	if lv and not lv.entity_live.is_connected(_apply_action_gate):
+		lv.entity_live.connect(_apply_action_gate)
+
+
+# Clears every pending gate and drops the reveal and live connections, for
+# session teardown.
+func _clear_action_gates() -> void:
+	_action_gates.clear()
+	_disconnect_action_reveal_if_idle()
+	var api := _api()
+	var lv := api.liveness if api else null
+	if lv and lv.entity_live.is_connected(_apply_action_gate):
+		lv.entity_live.disconnect(_apply_action_gate)
+
+#endregion
 
 
 ## Returns this pipeline's contribution to

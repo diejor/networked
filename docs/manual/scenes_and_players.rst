@@ -50,14 +50,14 @@ When a level spawns, the manager wraps it in a
 :ref:`MultiplayerScene <class_MultiplayerScene>` and parents the actual
 level node underneath. The container does three useful things:
 
-1. It hooks every :godot:`MultiplayerSpawner <MultiplayerSpawner>` in the
-   level into the scene's :ref:`InterestGate <class_InterestGate>`
-   so per-peer visibility filters apply automatically. You get visibility
-   filtering for free without touching the engine API.
+1. It enrolls the wrapper and descendant entity roots in the scene's
+   :ref:`NetwInterestLayer <class_NetwInterestLayer>`. The wrapper row clamps
+   the subtree, so per-peer visibility applies automatically.
 2. It tracks the players currently inside the scene, emitting signals
    as they arrive or leave.
-3. It provides readiness gates (via :ref:`NetwScene <class_NetwScene>`) so
-   the game only starts once every player has finished loading.
+3. It provides readiness gates (via
+   :ref:`MultiplayerScene.create_readiness_gate() <class_MultiplayerScene_method_create_readiness_gate>`)
+   so the game only starts once every player has finished loading.
 
 You do not instantiate :ref:`MultiplayerScene <class_MultiplayerScene>`
 yourself. The scene manager creates them, and the wrapper does its work

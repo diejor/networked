@@ -1,14 +1,12 @@
 [gd_scene format=3 uid="uid://bi445hl7e416b"]
 
-[ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_r0du0"]
 [ext_resource type="Script" uid="uid://2ydebdu4do8m" path="res://addons/networked/addons/scene_node_path/source/scene_node_path.gd" id="3_lgr22"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_03owx"]
-[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="7_trn2v"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/connect/ui/connect_browser.tscn" id="8_7ue45"]
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_xoeqs"]
 [ext_resource type="PackedScene" uid="uid://vj1s4e7rbmsn" path="res://addons/networked/nodes/tp/TPLayer.tscn" id="9_k3bnk"]
 [ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/addons/nakama/nakama_lobby_directory.gd" id="10_dgpls"]
-[ext_resource type="Script" uid="uid://did8chdklg30f" path="res://examples/quick_start/scene_change_policy.gd" id="16_scene_change"]
+[ext_resource type="Script" uid="uid://b61sxpbmgca8q" path="res://examples/quick_start/quick_start_session.gd" id="16_session"]
 
 [sub_resource type="Resource" id="Resource_2dmkd"]
 script = ExtResource("3_lgr22")
@@ -16,43 +14,28 @@ scene_path = "uid://bqi7mvxdnvgch"
 node_path = "Player"
 
 [node name="Main" type="Node2D" unique_id=1724093845]
+script = ExtResource("16_session")
 
-[node name="Client" type="Node" parent="." unique_id=185172770]
-script = ExtResource("2_r0du0")
-app_id = &"6fd508jx9fxvnyf"
-metadata/_custom_type_script = "uid://c3yabfbvm8gyo"
-
-[node name="MultiplayerClock" type="Node" parent="Client" unique_id=498939000]
+[node name="MultiplayerClock" type="Node" parent="." unique_id=498939000]
 script = ExtResource("7_03owx")
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="MultiplayerSceneManager" type="Node" parent="Client" unique_id=726132212]
-script = ExtResource("7_trn2v")
-scene_paths = Array[String](["uid://bqi7mvxdnvgch", "uid://cthf7wjwb4n77"])
-initial_scene_paths = Array[String](["uid://bqi7mvxdnvgch"])
-concurrency = 1
-metadata/_custom_type_script = "uid://lb7h272e5fhb"
+[node name="TPLayer" parent="." unique_id=1002194750 instance=ExtResource("9_k3bnk")]
 
-[node name="SceneChangePolicy" type="Node" parent="Client" unique_id=1526465286]
-script = ExtResource("16_scene_change")
-
-[node name="TPLayer" parent="Client" unique_id=1002194750 instance=ExtResource("9_k3bnk")]
-
-[node name="WebTorrentDirectory" type="Node" parent="Client" unique_id=667483632]
+[node name="WebTorrentDirectory" type="Node" parent="." unique_id=667483632]
 script = ExtResource("8_xoeqs")
-signaling_namespace = null
 browser_filter_uid = "networked-example-quick-start"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
-[node name="NakamaLobbyDirectory" type="Node" parent="Client" unique_id=1882001972]
+[node name="NakamaLobbyDirectory" type="Node" parent="." unique_id=1882001972]
 script = ExtResource("10_dgpls")
 device_id = "quickstart-host-diego-001"
 local_member_name = "diegote"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
-[node name="CanvasLayer" type="CanvasLayer" parent="Client" unique_id=830099896]
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=830099896]
 
-[node name="ConnectBrowser" parent="Client/CanvasLayer" unique_id=653109877 instance=ExtResource("8_7ue45")]
+[node name="ConnectBrowser" parent="CanvasLayer" unique_id=653109877 instance=ExtResource("8_7ue45")]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5

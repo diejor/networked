@@ -7,8 +7,8 @@
 class_name TPLayerAPI
 extends CanvasLayer
 
-## Forwarded from [signal MultiplayerTree.session_entered]. Frees this node on
-## the server.
+## Forwarded from [signal NetwSessionInterface.session_entered]. Frees this node
+## on the server.
 signal configured
 
 ## Progress bar driven by the transition animation.
@@ -27,14 +27,10 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwService.register(self, TPLayerAPI)
-	assert(
-		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree",
-	)
-
-	if not mt.session_entered.is_connected(configured.emit):
-		mt.session_entered.connect(configured.emit)
+	NetwService.register(self, TPLayerAPI)
+	var api := Netw.of(self)
+	if api and not api.session.session_entered.is_connected(configured.emit):
+		api.session.session_entered.connect(configured.emit)
 
 
 func _ready() -> void:
@@ -45,14 +41,11 @@ func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
-	var mt := NetwService.unregister(self, TPLayerAPI)
-	assert(
-		is_instance_valid(mt),
-		"TPLayer must be a descendant of a MultiplayerTree",
-	)
+	var api := Netw.of(self)
+	if api and api.session.session_entered.is_connected(configured.emit):
+		api.session.session_entered.disconnect(configured.emit)
 
-	if mt.session_entered.is_connected(configured.emit):
-		mt.session_entered.disconnect(configured.emit)
+	NetwService.unregister(self, TPLayerAPI)
 
 
 ## Plays the outgoing transition (cover the screen). Awaitable.
@@ -69,14 +62,14 @@ func _on_multiplayer_configured() -> void:
 	# Dedicated servers have no viewport and never run client-side
 	# presentation. Listen-server hosts also act as a local client and
 	# must keep the layer alive to receive the teleport animation.
-	var mt := get_multiplayer_tree()
-	if not mt:
+	var api := Netw.of(self)
+	if api == null:
 		return
-	if mt.role == NetwSessionInterface.Role.DEDICATED_SERVER:
+	if api.role == NetwSessionInterface.Role.DEDICATED_SERVER:
 		queue_free()
 		return
-	if not mt.local_participant_joined.is_connected(_on_local_participant_joined):
-		mt.local_participant_joined.connect(_on_local_participant_joined)
+	if not api.local_participant_joined.is_connected(_on_local_participant_joined):
+		api.local_participant_joined.connect(_on_local_participant_joined)
 
 
 # Plays the arrival animation when the local peer's player first appears.

@@ -7,13 +7,13 @@
 ##   [method NetwMultiplayer.pause], [method NetwMultiplayer.kick],
 ##   [member NetwMultiplayer.role], [member NetwMultiplayer.participants].
 ## [br]- backend systems such as [member NetwMultiplayer.clock] and
-##   [member NetwMultiplayer.scene_manager], plus custom services you register
+##   [member NetwMultiplayer.scenes], plus custom services you register
 ##   yourself through [method NetwMultiplayer.get_service].
 ## [br]- [member NetwMultiplayer.connect]: pre-game connect / server browser
 ##   API (host, join, target list). See [NetwConnect].
 ## [br]- [member NetwMultiplayer.interest] and [member NetwMultiplayer.liveness].
 ## [br]For positional questions, [method NetwEntity.of] resolves the entity for a
-## node and [method NetwScene.for_node] resolves its scene.
+## node and [method MultiplayerScene.of] resolves its scene.
 ##
 ## [br][br]
 ## [b]Other Entry Points[/b]
@@ -141,7 +141,6 @@ static func is_test_env() -> bool:
 # Configuration builders and registry
 # ---------------------------------------------------------------------------
 
-
 ## The project-wide provider a probe reply is built from, and the script that
 ## registered it. Held statically because a game registers it from
 ## [method Object._init] before any session exists. A [NetwServerInfo] carries
@@ -173,7 +172,7 @@ static func configure_server_info(provider: Callable) -> void:
 	var script: Script = object.get_script() if object else null
 	assert(
 		_server_info_provider_script == null
-			or _server_info_provider_script == script,
+		or _server_info_provider_script == script,
 		"configure_server_info: already registered by another script.",
 	)
 	_server_info_provider = provider
@@ -185,7 +184,6 @@ static func configure_server_info(provider: Callable) -> void:
 ## override and before [method NetwServerInfo.from_session].
 static func resolve_server_info_provider() -> Callable:
 	return _server_info_provider
-
 
 ## The project-wide join handler, the [NetwScriptModel.ConnectConfig] carrying its
 ## wire schema, and the script that registered it. Held statically because a game
@@ -240,7 +238,6 @@ static func resolve_join_handler() -> Callable:
 static func resolve_join_quantizers() -> Array:
 	return _join_config.quantizers if _join_config else []
 
-
 ## The project-wide auth-flow factory and the script that registered it. Held
 ## statically because a game registers it from [method Object._init] before any
 ## session exists. Each session calls the factory to construct its own
@@ -280,26 +277,51 @@ static func resolve_auth_factory() -> Callable:
 	return _auth_factory
 
 
-## Installs the server policy used by [method NetwSceneInterface.request_change].
+## Changes scene the way [method SceneTree.change_scene_to_file] does, made
+## multiplayer-correct.
 ##
-## [param handler] must be bound beneath an active Networked session. It
-## receives [code](participant, scene_name, args)[/code] and returns
-## [code]true[/code] to allow the request.
-## [br][br][b]Server Only.[/b]
-static func configure_scene_change(handler: Callable) -> void:
-	var object := handler.get_object()
-	assert(object is Node, "Scene change policy must be bound to a Node.")
-	var api := NetwMultiplayer.of(object as Node)
-	assert(api != null, "Scene change policy requires an active session.")
-	api.scenes.set_change_request_handler(handler)
+## Server authority runs the change for the session. A client turns it into a
+## request the server policy decides. The returned [NetwScenePromise] carries the
+## outcome, the one thing the native call cannot. See
+## [method NetwSceneInterface.change_scene_to_file].
+## [codeblock]
+## var promise := Netw.change_scene_to_file(self, "res://match.tscn")
+## if await promise.completed != NetwScenePromise.Result.OK:
+##     status.text = "Could not start the match."
+## [/codeblock]
+static func change_scene_to_file(node: Node, path: String) -> NetwScenePromise:
+	return _scenes_of(node).change_scene_to_file(node, path)
+
+
+## Changes scene from a file-backed [PackedScene], mirroring
+## [method SceneTree.change_scene_to_packed]. See [method change_scene_to_file].
+static func change_scene_to_packed(
+		node: Node,
+		packed: PackedScene,
+) -> NetwScenePromise:
+	return _scenes_of(node).change_scene_to_packed(node, packed)
+
+
+## Re-enters the scene this peer presents, mirroring
+## [method SceneTree.reload_current_scene]. See [method change_scene_to_file].
+static func reload_current_scene(node: Node) -> NetwScenePromise:
+	return _scenes_of(node).reload_current_scene(node)
+
+
+# Resolves the scene interface owning [param node]'s session.
+static func _scenes_of(node: Node) -> NetwSceneInterface:
+	var api := NetwMultiplayer.of(node)
+	assert(api != null, "A scene change requires an active session.")
+	return api.scenes
 
 
 ## Marks [param scene_type]'s root script as a multiplayer scene, so
 ## [method is_multiplayer_scene] reports it.
 ##
 ## This is a lightweight declaration, not an authorization. It never decides
-## whether a client may reach the scene, which is always the
-## [method configure_scene_change] policy's call. Register from the scene root's
+## whether a client may reach the scene, which a
+## [signal NetwSceneInterface.change_requested] listener always has the final say
+## over. Register from the scene root's
 ## [method Object._static_init] so loading the script marks it, letting a
 ## dedicated server introspect it without instantiating. At minimum, mark every
 ## scene the session replicates; add [method configure_multiplayer_scene] to opt
@@ -328,13 +350,20 @@ static func is_multiplayer_scene(script: Script) -> bool:
 ## Opts scene instance [param node] into the native-change on-ramp and returns
 ## its fluent [NetwScriptModel.SceneMarkConfig].
 ##
-## Call from the scene root's [method Object._init] so every instantiation,
-## framework spawn or native [method Node.change_scene_to_file], carries the
-## detach hook. On a native change during a live session the hook detaches the
-## local instance and issues a [method NetwSceneInterface.request_change_path]; a
-## framework spawn is recognized through
-## [member NetwReplicationInterface.is_applying_remote_frame] and left alone.
-## The server still decides the request through [method configure_scene_change].
+## Call from the scene root's [method Object._init] so every instantiation
+## carries the detach hook. The hook rides the root's [signal Node.tree_entered],
+## so it fires the same whether the instance arrives through
+## [method SceneTree.change_scene_to_file] or
+## [method SceneTree.change_scene_to_packed]. On a native change during a live
+## session the hook detaches the local instance and issues a
+## [method NetwSceneInterface.request_change_path]; a framework spawn is
+## recognized through [member NetwReplicationInterface.is_applying_remote_frame]
+## and left alone. The server still decides the request through a
+## [signal NetwSceneInterface.change_requested] listener. The instance must be
+## file-backed, since the
+## request replicates by resource path, so an in-memory
+## [method SceneTree.change_scene_to_packed] pushes an error rather than a
+## silent desync.
 ## [codeblock]
 ## func _init() -> void:
 ##     Netw.configure_multiplayer_scene(self).timeout(8.0)
@@ -386,14 +415,14 @@ static func _resolve_scene_script(scene_type: Variant) -> Script:
 
 
 ## Registers RPC config for the callable script method and returns the fluent
-## [NetwScriptModel.EventConfig] builder.
+## [NetwScriptModel.SyncConfig] builder.
 ##
 ## Configuration is keyed per script, so every instance re-declares onto the
 ## same config from [method Object._init]. A sub-node target also registers
 ## itself as an entity component through
 ## [method NetwEntity.register_component], so an entity RPC addresses it by a
 ## 1-byte id instead of a path string.
-static func configure_rpc(callable: Callable) -> NetwScriptModel.EventConfig:
+static func configure_rpc(callable: Callable) -> NetwScriptModel.SyncConfig:
 	var obj := callable.get_object()
 	var method := callable.get_method()
 	var script: Script = obj.get_script() if obj else null
@@ -418,7 +447,7 @@ static func configure_rpc(callable: Callable) -> NetwScriptModel.EventConfig:
 	if methods_map.has(method):
 		return methods_map[method]
 
-	var opt := NetwScriptModel.EventConfig.new()
+	var opt := NetwScriptModel.SyncConfig.new()
 	opt.context_script = script
 	opt.context_name = method
 	opt.context_type = 0
@@ -560,6 +589,30 @@ static func configure_property(
 	return opt
 
 
+## Declares interest layers for [param node]'s entity and returns a fluent
+## [NetwInterestInterface.InterestConfig] builder.
+##
+## Call from [method Object._init] so every peer constructs the same local
+## labels and callbacks. Server authority applies the real layer membership.
+## Runtime membership changes use [member NetwEntity.interest] directly.
+## [codeblock]
+## func _init() -> void:
+##     Netw.configure_interest(self) \
+##             .layer( \
+##                 &"team:red", \
+##                 NetwInterestInterface.LeavePolicy.RETAIN, \
+##                 NetwInterestInterface.PerceptionPolicy.HIDE, \
+##             ) \
+##             .layer(&"sight") \
+##             .on_enter(_on_interest_enter)
+## [/codeblock]
+static func configure_interest(
+		node: Node,
+) -> NetwInterestInterface.InterestConfig:
+	var entity := NetwEntity.ensure(node)
+	return NetwInterestInterface.InterestConfig.new(entity.interest)
+
+
 # Registers a property-configured node's derived state and input sets with its
 # session once it is in the tree, where NetwMultiplayer.of resolves. A node
 # self-registers through its own tree_entered rather than a tree-wide scan, so a
@@ -665,7 +718,7 @@ static func _lint_property_overlaps(node: Node) -> void:
 ## func _init() -> void:
 ##     Netw.configure_signal(self.exploded)   # only the authority may broadcast it
 ## [/codeblock]
-static func configure_signal(sig: Signal) -> NetwScriptModel.EventConfig:
+static func configure_signal(sig: Signal) -> NetwScriptModel.SyncConfig:
 	var node := sig.get_object() as Node
 	assert(node != null, "configure_signal: Signal must be bound to a Node.")
 	var signal_name := sig.get_name()
@@ -683,7 +736,7 @@ static func configure_signal(sig: Signal) -> NetwScriptModel.EventConfig:
 	)
 	if sigs_map.has(signal_name):
 		return sigs_map[signal_name]
-	var opt := NetwScriptModel.EventConfig.new()
+	var opt := NetwScriptModel.SyncConfig.new()
 	opt.is_call_local = true
 	opt.context_script = script
 	opt.context_name = signal_name
@@ -798,10 +851,16 @@ static func sync_property(node: Node, property: StringName) -> void:
 ##
 ## The signal re-emits on the resolved node on each receiver, carrying the given
 ## flat arguments. The signal must be allowlisted with [method configure_signal],
-## whose emit policy decides whether this peer may drive it.
+## whose emit policy decides whether this peer may drive it. A registered signal
+## defaults to [method NetwScriptModel.SyncConfig.call_local], so this one call
+## fires the local listeners and every peer's copy. Calling [code]sig.emit()[/code]
+## alongside it would double-fire the local listeners.
 ## [codeblock]
-## exploded.emit()                       # local listeners
-## Netw.emit_entity_signal(exploded)     # and every peer's copy of this entity
+## Netw.emit_entity_signal(exploded)     # local listeners AND every peer's copy
+##
+## # only when the signal is configured .call_remote(): emit locally yourself
+## exploded.emit()
+## Netw.emit_entity_signal(exploded)     # remote peers only
 ## [/codeblock]
 static func emit_entity_signal(sig: Signal, args: Array = []) -> void:
 	var node := sig.get_object() as Node
@@ -825,11 +884,10 @@ static func _is_local_server(node: Node) -> bool:
 	return mp.is_server()
 
 
-# Resolves the [NetwMultiplayer] session for a node through its enclosing
-# [MultiplayerTree], so it also works while the branch API is not installed.
+# Resolves the [NetwMultiplayer] session installed on a node's branch, whether
+# it is scoped to a [MultiplayerTree] subtree or installed at the root default.
 static func _session_api(node: Node) -> NetwMultiplayer:
-	var mt := MultiplayerTree.resolve(node)
-	return mt.api if mt else null
+	return NetwMultiplayer.of(node)
 
 
 static func _resolve_rpc_interface(callable: Callable) -> NetwRpcInterface:
@@ -858,7 +916,7 @@ static func _resolve_rpc_interface(callable: Callable) -> NetwRpcInterface:
 ## A spawn function is registered like an RPC and invoked like one, except its
 ## returned orphan [Node] enters the spawn pipeline. It must live on a host
 ## object that exists on every peer and construct from its arguments only.
-## Values captured through [method NetwScriptModel.SyncConfig.on_spawn] apply
+## Values captured through [method NetwScriptModel.PropertyConfig.on_spawn] apply
 ## on receivers after the function runs, so arguments decide shape and spawn
 ## state carries state.
 ## [codeblock]
@@ -977,8 +1035,7 @@ static func spawn(fn: Callable, args: Array = [], owner: NetwParticipant = null)
 		host != null,
 		"Netw.spawn: the spawn function must be a method on a Node host.",
 	)
-	var mt := MultiplayerTree.resolve(host)
-	var api := mt.api if mt else null
+	var api := NetwMultiplayer.of(host)
 	if not api:
 		Netw.dbg.error(
 			"Netw.spawn: no session found for spawn function host '%s'.",

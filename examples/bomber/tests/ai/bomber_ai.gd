@@ -170,12 +170,9 @@ func _scan_world() -> WorldSnapshot:
 
 
 func _find_world() -> MultiplayerScene:
-	if not _runner or not _runner.tree:
+	if not _runner or not _runner.tree or not _runner.tree.api:
 		return null
-	var sm := _runner.tree.get_service(MultiplayerSceneManager)
-	if not sm:
-		return null
-	return sm.active_scenes.get(&"World") as MultiplayerScene
+	return _runner.tree.api.scenes.scene(&"World")
 
 
 func _to_cell(pos: Vector2) -> Vector2i:

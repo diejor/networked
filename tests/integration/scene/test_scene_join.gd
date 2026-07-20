@@ -29,16 +29,18 @@ func after_test() -> void:
 
 func test_server_spawns_scene_after_host() -> void:
 	# spawn_scenes() already ran synchronously inside host()
-	assert_that(server_mgr.active_scenes.size()).is_equal(1)
+	var scenes := harness.server().api.scenes
+	assert_that(scenes.scenes.size()).is_equal(1)
 
-	var key := String(server_mgr.active_scenes.keys()[0])
+	var key := String(scenes.scenes.keys()[0])
 	assert_that(key).is_equal(level_builder.scene_name)
 
-	var spawned_scene: MultiplayerScene = server_mgr.active_scenes.values()[0]
+	var spawned_scene: MultiplayerScene = scenes.scenes.values()[0]
 	assert_that(spawned_scene).is_not_null()
 	assert_that(spawned_scene is MultiplayerScene).is_true()
-	var scenes := harness.server().api.scenes
-	assert_object(harness.server().api.scene_manager).is_same(server_mgr)
+	assert_object(
+		harness.server().api.get_service(MultiplayerSceneManager),
+	).is_same(server_mgr)
 	assert_object(scenes.scene(level_builder.scene_name)).is_same(spawned_scene)
 	assert_object(scenes.scene_of(spawned_scene.level)).is_same(spawned_scene)
 

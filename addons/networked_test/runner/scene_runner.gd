@@ -81,11 +81,11 @@ func find_player(player_username: StringName) -> Node:
 			if _player_matches_username(player.owner, player_name):
 				return player.owner
 
-	var sm := tree.get_service(MultiplayerSceneManager)
-	if not sm:
+	var scenes := tree.api.scenes if tree.api else null
+	if not scenes:
 		return null
 
-	for active_scene: MultiplayerScene in sm.active_scenes.values():
+	for active_scene: MultiplayerScene in scenes.scenes.values():
 		for player: NetwEntity in active_scene.get_players():
 			if player != null and is_instance_valid(player.owner):
 				if _player_matches_username(player.owner, player_name):
@@ -162,12 +162,9 @@ func _reset_input_to_default() -> void:
 
 
 func _find_active_scene(scene_name: StringName) -> MultiplayerScene:
-	if not tree:
+	if not tree or not tree.api:
 		return null
-	var sm := tree.get_service(MultiplayerSceneManager)
-	if not sm:
-		return null
-	return sm.active_scenes.get(scene_name) as MultiplayerScene
+	return tree.api.scenes.scene(scene_name)
 
 
 func _active_waiter() -> NetwWaiter:

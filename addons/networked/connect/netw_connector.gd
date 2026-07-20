@@ -36,6 +36,11 @@ var link_conditions: NetwLinkConditions
 ## The attempt in flight, or [code]null[/code] when idle.
 var current_attempt: NetwConnectAttempt
 
+## The [NetwHostConfig] behind the live hosted peer, or [code]null[/code] while
+## this connector is not hosting. [method NetwServerInfo.from_session] reads it
+## so a probe reply carries the host's player cap.
+var active_host_config: NetwHostConfig
+
 
 # The owning session. Weakly held because the owner holds the connector.
 var _api_ref: WeakRef
@@ -91,6 +96,11 @@ static func _static_init() -> void:
 	add_transport(SteamTransport.new())
 
 
+## Binds this connector to [param api], the session whose peer its attempts
+## establish. The session is held weakly, so a connector never extends its
+## session's lifetime and [method api] answers [code]null[/code] once the
+## session frees. A connector constructed without a session still matches and
+## drives transports, which suits a rig exercising establishment alone.
 func _init(api: NetwMultiplayer = null) -> void:
 	_api_ref = weakref(api) if api else null
 
@@ -181,7 +191,7 @@ func _drive_join_or_host(
 		var a := api()
 		var desired_role := a.session.desired_role if a else NetwSessionInterface.Role.LISTEN_SERVER
 		if desired_role == NetwSessionInterface.Role.CLIENT:
-			var mt := a.tree if a else null
+			var mt := a.root as MultiplayerTree if a else null
 			if mt == null:
 				_drive_host(attempt, config, payload)
 				return
@@ -281,6 +291,9 @@ func _drive_join(
 		payload: JoinPayload,
 		_join_args: Array,
 ) -> void:
+	# A joining peer is not hosting, so a stale host config never leaks into a
+	# later session's probe replies.
+	active_host_config = null
 	var transport := _resolve_join(attempt.target)
 	if transport == null:
 		attempt.resolve(NetwConnectResult.error(
@@ -324,6 +337,7 @@ func _drive_host(
 	if peer == null:
 		attempt.resolve(NetwConnectResult.error("Transport produced no host peer."))
 		return
+	active_host_config = config
 	# A live host peer resolves the attempt here rather than in _enter_connecting,
 	# so the host player is admitted before the caller sees the session online.
 	var live := _enter_connecting(attempt, transport, peer, true)
@@ -345,36 +359,36 @@ func _admit_host_player(payload: JoinPayload) -> void:
 		return
 	if a.session.state != NetwSessionInterface.State.ONLINE:
 		return
-	var manager := a.scenes.manager if a.scenes else null
+	var manager := a.get_service(MultiplayerSceneManager)
 	if manager != null:
 		# Startup scenes spawn deferred on becoming server. Wait for them so the
 		# host player spawns into a live scene, mirroring the tree's host_ready
-		# gate. Bounded so a manager that already spawned never hangs.
-		await _await_startup_scenes(manager)
+		# gate. Bounded so a session that already spawned never hangs.
+		await _await_startup_scenes(a.scenes)
 	if a.session.state == NetwSessionInterface.State.ONLINE and a.is_server():
 		a.session.submit_join(payload)
 
 
-# Waits until [param manager] has spawned its startup scenes so the host player
-# is admitted into a live scene rather than the default presentation. Returns at
-# once when the manager already spawned (a re-host), otherwise waits for the
-# spawn signal or the scenes to appear, capped so a manager that never spawns
-# cannot hang the host.
-func _await_startup_scenes(manager: MultiplayerSceneManager) -> void:
-	if not manager.active_scenes.is_empty():
+# Waits until the session has spawned its startup scenes so the host player is
+# admitted into a live scene rather than the default presentation. Returns at
+# once when they already spawned (a re-host), otherwise waits for
+# [signal NetwSceneInterface.startup_scenes_spawned] or the scenes to appear,
+# capped so a session that never spawns cannot hang the host.
+func _await_startup_scenes(scene_api: NetwSceneInterface) -> void:
+	if not scene_api.scenes.is_empty():
 		return
 	var loop := Engine.get_main_loop() as SceneTree
 	if loop == null:
 		return
 	var fired := [false]
 	var cb := func() -> void: fired[0] = true
-	manager.startup_scenes_spawned.connect(cb, CONNECT_ONE_SHOT)
+	scene_api.startup_scenes_spawned.connect(cb, CONNECT_ONE_SHOT)
 	var guard := 0
-	while not fired[0] and manager.active_scenes.is_empty() and guard < 600:
+	while not fired[0] and scene_api.scenes.is_empty() and guard < 600:
 		await loop.process_frame
 		guard += 1
-	if manager.startup_scenes_spawned.is_connected(cb):
-		manager.startup_scenes_spawned.disconnect(cb)
+	if scene_api.startup_scenes_spawned.is_connected(cb):
+		scene_api.startup_scenes_spawned.disconnect(cb)
 
 
 # Runs the PREPARING stage, awaiting the session's credential preparation.

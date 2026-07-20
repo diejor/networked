@@ -160,9 +160,15 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	# The facade owner pumps the connector so a view-pumped transport (WebRTC
-	# signaling) and eased progress advance while an attempt is in flight.
-	if _connect != null and _connect.is_valid():
-		_connect.poll(delta)
+	# signaling) and eased progress advance while an attempt is in flight. A
+	# tree-scoped session shares its one connector with the tree, whose own
+	# _process already pumps it, so the browser self-pumps only when no tree does.
+	if _connect == null or not _connect.is_valid():
+		return
+	var a := _connect.api()
+	if a != null and (a.root as MultiplayerTree) != null:
+		return
+	_connect.poll(delta)
 
 
 ## Drives this browser from [param connect], the resolved [NetwConnect] for the
@@ -631,12 +637,23 @@ static func format_scheme_label(scheme: StringName) -> String:
 	return text.capitalize()
 
 
-## Displayable address for [param target]. Either its explicit address, or "-".
+## Displayable address for [param target]. Either its explicit address, the
+## owning transport's placeholder when an empty address means a local default,
+## or "-".
 static func format_address(target: NetwConnectTarget) -> String:
 	if target == null:
 		return "-"
 	var address := target.address.strip_edges()
-	return address if not address.is_empty() else "-"
+	if not address.is_empty():
+		return address
+	for transport in NetwConnector.get_transports():
+		if transport.scheme() != target.scheme:
+			continue
+		var hint := transport._address_hint()
+		if hint and hint.accepts_empty and not hint.placeholder.is_empty():
+			return hint.placeholder
+		break
+	return "-"
 
 
 ## Label for a [SceneNodePath] spawner option in the picker.

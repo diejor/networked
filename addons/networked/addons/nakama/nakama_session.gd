@@ -237,7 +237,7 @@ func _service_type() -> Script:
 
 
 ## Calls [method leave] when the service exits the tree.
-func _service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_api: NetwMultiplayer) -> void:
 	leave()
 
 

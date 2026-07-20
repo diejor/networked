@@ -31,13 +31,13 @@ func _scan(peer_id: int, mt: MultiplayerTree, probe: TreeProbe) -> void:
 	if not is_instance_valid(mt):
 		return
 
-	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
-	if not sm:
+	var scenes := mt.api.scenes if mt.api else null
+	if not scenes:
 		return
 
 	var zombies: Array[String] = []
-	for scene_name: StringName in sm.active_scenes:
-		var scene: MultiplayerScene = sm.active_scenes[scene_name]
+	for scene_name: StringName in scenes.scenes:
+		var scene: MultiplayerScene = scenes.scenes[scene_name]
 		if not is_instance_valid(scene) or not is_instance_valid(scene.level):
 			continue
 

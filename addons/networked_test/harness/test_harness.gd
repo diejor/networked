@@ -625,10 +625,10 @@ func register_spawnable_scene(scene: PackedScene, initial: bool = true) -> void:
 ##
 ## Empty [param scene_name] returns the first active scene.
 func scene_on_server(scene_name: StringName = "") -> MultiplayerScene:
-	var server_sm := server_scene_manager()
+	var scenes := server().api.scenes
 	if scene_name.is_empty():
-		return server_sm.active_scenes.values()[0]
-	return server_sm.active_scenes.get(scene_name)
+		return scenes.scenes.values()[0]
+	return scenes.scene(scene_name)
 
 
 ## Waits for [param scene_name] to become active on [param client].
@@ -636,14 +636,14 @@ func wait_for_scene(
 		client: MultiplayerTree,
 		scene_name: StringName,
 ) -> MultiplayerScene:
-	var sm := scene_manager_for(client)
+	var scenes := client.api.scenes
 	var timed_out := await _wait_until(
-		func() -> bool: return sm.active_scenes.has(scene_name),
+		func() -> bool: return scenes.scene(scene_name) != null,
 		"scene '%s' on client" % scene_name,
 	)
 	if timed_out:
 		return null
-	return sm.active_scenes.get(scene_name)
+	return scenes.scene(scene_name)
 
 
 ## Waits for a player in [param scene_name] on [param client].

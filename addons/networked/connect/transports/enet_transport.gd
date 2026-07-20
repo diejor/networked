@@ -27,6 +27,13 @@ func _can_view(peer: MultiplayerPeer) -> bool:
 	return peer is ENetMultiplayerPeer
 
 
+func _make_view(
+		peer: MultiplayerPeer,
+		_attempt: NetwConnectAttempt = null,
+) -> NetwPeerView:
+	return ENetPeerView.new(peer) if peer is ENetMultiplayerPeer else null
+
+
 func _host(
 		_attempt: NetwConnectAttempt,
 		config: NetwHostConfig,
@@ -42,6 +49,9 @@ func _host(
 			func(m): push_warning(m),
 		)
 		return null
+	# Record the resolved cap on the config so the probe reply reports the
+	# effective maximum, not the authored absence of one.
+	config.params["max_clients"] = max_clients
 	return peer
 
 

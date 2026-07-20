@@ -14,7 +14,7 @@
 ## api.object_configuration_add(manager_node, config)
 ## [/codeblock]
 class_name NetwSceneConfig
-extends Resource
+extends NetwObjectConfig
 
 ## Whether one or several scenes may be active in the session.
 enum Concurrency {
@@ -35,3 +35,11 @@ var scenes: Dictionary[StringName, PackedScene] = { }
 
 ## Optional spawn data keyed by scene name.
 var spawn_data: Dictionary[StringName, Variant] = { }
+
+## Optional custom level constructor. When valid, [NetwSceneInterface] calls it
+## with the activation data instead of instantiating a [PackedScene], so a game
+## builds its own level root while replication, membership, and the verbs stay
+## unchanged.
+##
+## Signature: [code]func(data: Variant) -> Node[/code]
+var level_spawn_function: Callable

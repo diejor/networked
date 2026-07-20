@@ -35,26 +35,40 @@ func test_hide_from_insiders_inverts_verdict() -> void:
 	assert_that(layer.verdict_for(7)).is_false()
 
 
-func test_entity_drive_emits_enter_and_exit() -> void:
+func test_server_peer_is_evaluated_as_an_ordinary_participant() -> void:
+	assert_bool(layer.verdict_for(1)).is_false()
+	layer.add_viewer(1)
+	assert_bool(layer.verdict_for(1)).is_true()
+	layer.set_policy(NetwInterestLayer.Policy.HIDE_FROM_INSIDERS)
+	assert_bool(layer.verdict_for(1)).is_false()
+
+
+func test_entity_transitions_emit_at_service_flush() -> void:
+	var mt := MultiplayerTree.new()
+	mt.name = "TestTransitionTree"
+	add_child(mt)
+	auto_free(mt)
+	var owned := mt.api.interest.layer(&"test")
 	var entity := _make_entity()
 	var enters: Array = []
 	var exits: Array = []
 	var on_enter := func(e, p): enters.append([e, p])
 	var on_exit := func(e, p): exits.append([e, p])
-	layer.interest_enter.connect(on_enter)
-	layer.interest_exit.connect(on_exit)
+	owned.interest_enter.connect(on_enter)
+	owned.interest_exit.connect(on_exit)
 
-	layer.add_entity(entity)
-	layer.add_viewer(7)
-	layer.drive_now([7])
+	owned.add_entity(entity)
+	owned.add_viewer(7)
+	mt.api.interest.flush_now()
 
 	assert_that(enters).contains_exactly([[entity, 7]])
 
-	layer.remove_entity(entity)
+	owned.remove_entity(entity)
+	mt.api.interest.flush_now()
 
 	assert_that(exits).contains_exactly([[entity, 7]])
-	layer.interest_enter.disconnect(on_enter)
-	layer.interest_exit.disconnect(on_exit)
+	owned.interest_enter.disconnect(on_enter)
+	owned.interest_exit.disconnect(on_exit)
 
 
 func test_idempotent_mutations_do_not_duplicate_signals() -> void:

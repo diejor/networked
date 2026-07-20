@@ -98,7 +98,7 @@ class CaptureTree:
 	extends MultiplayerTree
 
 	func _make_api() -> NetwMultiplayer:
-		return TestNetwMultiplayer.new(SceneMultiplayer.new(), self)
+		return TestNetwMultiplayer.new(SceneMultiplayer.new())
 
 
 var mt: MultiplayerTree

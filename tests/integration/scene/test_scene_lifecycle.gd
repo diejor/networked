@@ -3,7 +3,7 @@ class_name TestLobbyLifecycle
 extends NetwTestSuite
 
 var harness: NetwTestHarness
-var server_mgr: MultiplayerSceneManager
+var server_scenes: NetwSceneInterface
 var level_builder: LevelBuilder
 var level_2_builder: LevelBuilder
 
@@ -21,21 +21,21 @@ func before_test() -> void:
 
 	harness = make_harness()
 	await harness.setup_factory(NetwTestSuite.create_scene_manager)
-	server_mgr = harness.server_scene_manager()
+	server_scenes = harness.server().api.scenes
 	harness.register_spawnable_scene(level_builder.packed)
 	harness.register_spawnable_scene(level_2_builder.packed)
 	await harness.add_client()
 
 
 func test_scene_load_policy_flow() -> void:
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
-	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
+	assert_that(server_scenes.scene(level_builder.scene_name) != null).is_true()
+	assert_that(server_scenes.scene(level_2_builder.scene_name) != null).is_true()
 
-	server_mgr.spawn_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.size()).is_equal(2)
+	server_scenes.spawn_scene(level_builder.scene_name)
+	assert_that(server_scenes.scenes.size()).is_equal(2)
 
-	server_mgr.freeze_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
+	server_scenes.freeze(level_builder.scene_name)
+	assert_that(server_scenes.scene(level_builder.scene_name) != null).is_true()
 
 	var h2 := make_unmanaged_harness()
 	await h2.setup_factory(NetwTestSuite.create_scene_manager)
@@ -43,68 +43,68 @@ func test_scene_load_policy_flow() -> void:
 	h2.register_spawnable_scene(level_2_builder.packed, false)
 	await h2.add_client()
 
-	var mgr2 := h2.server_scene_manager()
-	assert_that(mgr2.active_scenes.has(level_builder.scene_name)).is_true()
-	assert_that(mgr2.active_scenes.has(level_2_builder.scene_name)).is_false()
+	var mgr2_scenes := h2.server().api.scenes
+	assert_that(mgr2_scenes.scene(level_builder.scene_name) != null).is_true()
+	assert_that(mgr2_scenes.scene(level_2_builder.scene_name) != null).is_false()
 	await h2.teardown()
 
 
 func test_scene_activation_cache_and_removal_flow() -> void:
-	server_mgr.destroy_scene(level_2_builder.scene_name)
+	server_scenes.destroy(level_2_builder.scene_name)
 	await get_tree().process_frame
 
 	var path := level_2_builder.resource_path
-	server_mgr.preload_scene(level_2_builder.scene_name)
+	server_scenes.preload_scene(level_2_builder.scene_name)
 
 	assert_that(path).is_not_empty()
 	assert_that(
-		server_mgr.is_scene_preloaded(level_2_builder.scene_name),
+		server_scenes.is_scene_preloaded(level_2_builder.scene_name),
 	).is_true()
 	assert_that(
-		server_mgr.active_scenes.has(level_2_builder.scene_name),
+		server_scenes.scene(level_2_builder.scene_name) != null,
 	).is_false()
 
-	server_mgr.spawn_scene(level_2_builder.scene_name)
+	server_scenes.spawn_scene(level_2_builder.scene_name)
 
 	assert_that(
-		server_mgr.is_scene_preloaded(level_2_builder.scene_name),
+		server_scenes.is_scene_preloaded(level_2_builder.scene_name),
 	).is_false()
-	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
+	assert_that(server_scenes.scene(level_2_builder.scene_name) != null).is_true()
 
-	server_mgr.destroy_scene(level_2_builder.scene_name)
+	server_scenes.destroy(level_2_builder.scene_name)
 	await get_tree().process_frame
 
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(level_2_builder.scene_name)
-	assert_that(server_mgr.active_scenes.has(level_2_builder.scene_name)).is_true()
+	await server_scenes.activate_scene(level_2_builder.scene_name)
+	assert_that(server_scenes.scene(level_2_builder.scene_name) != null).is_true()
 
-	var scene := server_mgr.active_scenes[level_builder.scene_name]
+	var scene := server_scenes.scene(level_builder.scene_name)
 	scene.level.process_mode = Node.PROCESS_MODE_DISABLED
 
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(level_builder.scene_name)
+	await server_scenes.activate_scene(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	server_mgr.freeze_scene(level_builder.scene_name)
+	server_scenes.freeze(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_DISABLED)
 
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(level_builder.scene_name)
+	await server_scenes.activate_scene(level_builder.scene_name)
 	assert_that(scene.level.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
-	server_mgr.destroy_scene(level_builder.scene_name)
+	server_scenes.destroy(level_builder.scene_name)
 	await get_tree().process_frame
 
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
+	assert_that(server_scenes.scene(level_builder.scene_name) != null).is_false()
 	assert_that(is_instance_valid(scene)).is_false()
 
-	server_mgr.spawn_scene(level_builder.scene_name)
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_true()
+	server_scenes.spawn_scene(level_builder.scene_name)
+	assert_that(server_scenes.scene(level_builder.scene_name) != null).is_true()
 
-	scene = server_mgr.active_scenes[level_builder.scene_name]
-	server_mgr.retire_scene(level_builder.scene_name, 2)
+	scene = server_scenes.scene(level_builder.scene_name)
+	server_scenes.retire(level_builder.scene_name, 2)
 
-	assert_that(server_mgr.active_scenes.has(level_builder.scene_name)).is_false()
+	assert_that(server_scenes.scene(level_builder.scene_name) != null).is_false()
 	assert_that(is_instance_valid(scene)).is_true()
 
 	await drain_frames(get_tree(), 3)
@@ -136,8 +136,8 @@ func test_api_scene_lifecycle_verbs_and_signals() -> void:
 
 func test_scene_emptied_reports_the_last_peer_leaving() -> void:
 	@warning_ignore("redundant_await")
-	await server_mgr.activate_scene(level_builder.scene_name)
-	var scene := server_mgr.active_scenes[level_builder.scene_name]
+	await server_scenes.activate_scene(level_builder.scene_name)
+	var scene := server_scenes.scene(level_builder.scene_name)
 	var emptied: Array[MultiplayerScene] = []
 	harness.server().api.scenes.scene_emptied.connect(emptied.append)
 	var player := _join_player()
@@ -171,7 +171,7 @@ func test_api_move_reparents_entity_and_updates_participant_scene() -> void:
 
 	assert_int(promise.result).is_equal(NetwScenePromise.Result.OK)
 	assert_object(player.get_parent()).is_same(destination.level)
-	assert_object(participant.current_scene.unwrap()).is_same(destination)
+	assert_object(participant.current_scene).is_same(destination)
 	assert_array(moved).contains([entity])
 
 
@@ -200,7 +200,7 @@ func test_single_change_to_moves_session_and_destroys_source() -> void:
 	assert_int(promise.result).is_equal(NetwScenePromise.Result.OK)
 	assert_object(destination).is_not_null()
 	assert_object(api.scenes.scene(level_builder.scene_name)).is_null()
-	assert_object(participant.current_scene.unwrap()).is_same(destination)
+	assert_object(participant.current_scene).is_same(destination)
 	await h.teardown()
 
 
@@ -215,15 +215,19 @@ func test_scene_change_requests_deny_supersede_and_allow() -> void:
 	h.register_spawnable_scene(level_builder.packed)
 	h.register_spawnable_scene(level_2_builder.packed, false)
 	var client := await h.add_client()
+	# A declared scene admits by default. A listener vetoes any request that does
+	# not carry the expected arg.
+	h.server().api.scenes.change_requested.connect(
+		func(rq: SceneChangeRequest) -> void:
+			if rq.args != [&"allow"]:
+				rq.deny(),
+	)
 	var first := client.api.scenes.request_change(level_2_builder.scene_name)
 	var denied := client.api.scenes.request_change(level_2_builder.scene_name)
 	await _wait_scene_promise(denied)
 
 	assert_int(first.result).is_equal(NetwScenePromise.Result.SUPERSEDED)
 	assert_int(denied.result).is_equal(NetwScenePromise.Result.DENIED)
-	h.server().api.scenes.set_change_request_handler(
-		func(_participant, _scene_name, args): return args == [&"allow"],
-	)
 	var allowed := client.api.scenes.request_change(
 		level_2_builder.scene_name,
 		[&"allow"],
@@ -249,12 +253,15 @@ func test_scene_change_path_request_denies_then_allows() -> void:
 	h.register_spawnable_scene(level_2_builder.packed, false)
 	var client := await h.add_client()
 	var path := level_2_builder.resource_path
+	# A raw path to an unmarked scene is deny-default, since nothing bounds it.
 	var denied := client.api.scenes.request_change_path(path)
 	await _wait_scene_promise(denied)
 
 	assert_int(denied.result).is_equal(NetwScenePromise.Result.DENIED)
-	h.server().api.scenes.set_change_request_handler(
-		func(_participant, _scene_ref, _args): return true,
+	# A listener may still allow it from trusted server code.
+	h.server().api.scenes.change_requested.connect(
+		func(rq: SceneChangeRequest) -> void:
+			rq.allow(),
 	)
 	var allowed := client.api.scenes.request_change_path(path)
 	await _wait_scene_promise(allowed)
@@ -266,7 +273,7 @@ func test_scene_change_path_request_denies_then_allows() -> void:
 	await h.teardown()
 
 
-func test_marked_path_request_still_needs_a_policy() -> void:
+func test_marked_path_request_admitted_without_a_policy() -> void:
 	var h := make_unmanaged_harness()
 	await h.setup_factory(
 		func() -> MultiplayerSceneManager:
@@ -279,20 +286,58 @@ func test_marked_path_request_still_needs_a_policy() -> void:
 	) as PackedScene
 	h.register_spawnable_scene(marked, false)
 	var client := await h.add_client()
-	# The mark opts the scene into the on-ramp; it does not authorize. Without a
-	# policy the request is denied like any other.
-	var denied := client.api.scenes.request_change_path(marked.resource_path)
-	await _wait_scene_promise(denied)
-	assert_int(denied.result).is_equal(NetwScenePromise.Result.DENIED)
-
-	# A policy honors it, and the concurrency mode drives the apply.
-	h.server().api.scenes.set_change_request_handler(
-		func(_participant, _scene_ref, _args): return true,
-	)
+	# The mark is the path allowlist, so a marked non-gated scene admits the
+	# request with no server-side code at all.
 	var allowed := client.api.scenes.request_change_path(marked.resource_path)
 	await _wait_scene_promise(allowed)
 	assert_int(allowed.result).is_equal(NetwScenePromise.Result.OK)
 	assert_object(h.server().api.scenes.scene(&"MarkedTestScene")).is_not_null()
+
+	# A listener can still veto a marked scene.
+	h.server().api.scenes.change_requested.connect(
+		func(rq: SceneChangeRequest) -> void:
+			rq.deny(),
+	)
+	var vetoed := client.api.scenes.request_change_path(marked.resource_path)
+	await _wait_scene_promise(vetoed)
+	assert_int(vetoed.result).is_equal(NetwScenePromise.Result.DENIED)
+	await h.teardown()
+
+
+func test_front_door_routes_authority_and_client() -> void:
+	var h := make_unmanaged_harness()
+	await h.setup_factory(
+		func() -> MultiplayerSceneManager:
+			var manager := NetwTestSuite.create_scene_manager()
+			manager.concurrency = NetwSceneConfig.Concurrency.SINGLE
+			return manager,
+	)
+	var marked := load(
+			"res://tests/support/scene/marked_test_scene.tscn",
+	) as PackedScene
+	h.register_spawnable_scene(level_builder.packed)
+	h.register_spawnable_scene(level_2_builder.packed, false)
+	h.register_spawnable_scene(marked, false)
+	var client := await h.add_client()
+
+	# Server authority applies the change directly, no request round trip.
+	var server := h.server()
+	var direct := server.api.scenes.change_scene_to_file(
+		server.api.root, level_2_builder.resource_path,
+	)
+	await _wait_scene_promise(direct)
+	assert_int(direct.result).is_equal(NetwScenePromise.Result.OK)
+	assert_object(server.api.scenes.scene(level_2_builder.scene_name)) \
+			.is_not_null()
+
+	# A client's front door becomes a request; the marked scene admits it with
+	# no server policy installed.
+	var requested := client.api.scenes.change_scene_to_file(
+		client.api.root, marked.resource_path,
+	)
+	await _wait_scene_promise(requested)
+	assert_int(requested.result).is_equal(NetwScenePromise.Result.OK)
+	assert_object(server.api.scenes.scene(&"MarkedTestScene")).is_not_null()
 	await h.teardown()
 
 
@@ -306,7 +351,7 @@ func _wait_scene_promise(promise: NetwScenePromise) -> void:
 
 func _join_player() -> Node:
 	var scene := (
-			server_mgr.active_scenes[level_builder.scene_name] as MultiplayerScene
+			server_scenes.scene(level_builder.scene_name) as MultiplayerScene
 	)
 	return _add_scene_player(scene, 1001, &"test_player")
 

@@ -88,6 +88,24 @@ enum CorrectionMode {
 	## predicted body resumes forward from truth and the display chase absorbs the
 	## snap.
 	SNAP,
+	## Ease a dynamic body onto the authoritative pose over several ticks with an
+	## error-smoothing spring, hard-snapping only past [member teleport_threshold].
+	## Pauses around contacts ([method notify_contact]) and while [member sleeping],
+	## so a wall bounce or a settled body is not sprung. The industry-standard answer
+	## to dynamic-body rubber banding.
+	SNAP_BLEND,
+}
+
+## How a [constant CorrectionMode.SNAP] restore places the authoritative state on
+## the body.
+enum RestoreMode {
+	## Restore the authoritative state verbatim at its own tick.
+	EXACT,
+	## Project each field that names a [member NetwInterpolate.project_channel]
+	## velocity sibling forward to the present tick before restoring, so a dynamic
+	## body lands near where it is instead of snapping back to a stale tick. The
+	## velocity must be replicated in the same state set.
+	EXTRAPOLATED,
 }
 
 ## Divergence above which a state receive triggers a correction.
@@ -112,8 +130,103 @@ enum CorrectionMode {
 ## [constant CorrectionMode.SNAP] for a dynamic one.
 @export var correction_mode: CorrectionMode = CorrectionMode.AUTO
 
+## How a [constant CorrectionMode.SNAP] restore lands on the body. See
+## [enum RestoreMode]. [constant RestoreMode.EXTRAPOLATED] carries a dynamic body
+## forward to the present tick through its replicated velocity, so it holds for a
+## body whose state set replicates velocity alongside the transform. Ignored under
+## [constant CorrectionMode.REPLAY].
+@export var snap_restore: RestoreMode = RestoreMode.EXACT
+
+## Ceiling in ticks on the age a [constant RestoreMode.EXTRAPOLATED] restore
+## projects across, so a server input cursor that falls behind never launches the
+## body along a huge extrapolation. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.max_restore_ticks].
+@export var max_restore_ticks: int = 6
+
 ## Server policy for a missing input tick. See [enum MissingInput].
 @export var missing_policy: MissingInput = MissingInput.STALL
+
+## How many queued input ticks the server may consume in one tick when it has
+## fallen behind. [code]1[/code] holds strict lockstep; a higher value lets the
+## consume cursor recover from a hitch instead of ratcheting behind forever.
+## Mirrors [member NetwLagCompensationInterface.PredictionHandle.max_consume_per_tick].
+@export_range(1, 8) var max_consume_per_tick: int = 1
+
+## How far the server's consume cursor may fall behind the freshest input before
+## it re-opens at the live edge instead of walking there.
+##
+## The cursor heals a lost tick by stepping over it one per server tick, which
+## never catches up to a controller authoring one per tick. A client that joins a
+## running session and re-anchors its clock opens exactly such a gap, and without
+## a ceiling its entity simulates forever without reconciling. [code]0[/code]
+## disables the recovery. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.max_consume_lag_ticks].
+@export_range(0, 600) var max_consume_lag_ticks: int = 60
+
+## Queued input ticks the server keeps standing as a de-jitter buffer instead of
+## consuming to empty. Input arrival phase drifts against the server's tick, and
+## with no slack every late packet starves a tick and every early one bursts,
+## which the authoritative body shows as slow-then-fast stutter. The depth is
+## maintained rather than warmed up once: a tick that would drop below it holds
+## and rebuilds the slack, and a drain trims a burst back down to it.
+## [code]1[/code] or [code]2[/code] absorbs the drift at the cost of that much
+## input latency.
+## Mirrors [member NetwLagCompensationInterface.PredictionHandle.consume_buffer_ticks].
+@export_range(0, 8) var consume_buffer_ticks: int = 0
+
+## State fields that a correction restores but that never trigger one on their own.
+##
+## A cosmetic scalar or a display-owned heading still reconciles to the
+## authoritative value when another field corrects, yet its own drift never
+## teleports the whole state set. Backs
+## [member NetwLagCompensationInterface.PredictionHandle.correction_trigger_excludes].
+@export var reconcile_only_fields: Array[StringName] = []
+
+## State fields that only a teleport-tier correction restores.
+##
+## A sub-threshold [constant CorrectionMode.SNAP_BLEND] correction leaves them on
+## the predicted body, so a contractive field that re-converges on its own (a
+## damped velocity, a lerp-toward scalar) is never rewound to the stale ack tick,
+## which under acceleration reads as losing speed on every correction. A
+## correction past [member teleport_threshold] still restores them. Pair with
+## [member reconcile_only_fields] so the field neither triggers nor rewinds below
+## the teleport tier. Backs
+## [member NetwLagCompensationInterface.PredictionHandle.teleport_only_restore].
+@export var teleport_only_restore_fields: Array[StringName] = []
+
+## Per-tick fraction of its remaining error that a field is eased toward
+## authority by, keyed by state field. Such a field is never written by a
+## sub-teleport correction, only pulled a little every tick.
+##
+## Use it for a field that drives the simulation but has no
+## [member NetwInterpolate.project_channel] derivative to project with, a
+## velocity above all. Restoring one writes the value it held at the ack tick,
+## which mid-manoeuvre forks the body again, while leaving it alone lets a fork
+## outlive every correction and keep regenerating the error. Around
+## [code]0.05[/code] converges over roughly twenty ticks without a visible step.
+## Backs [member NetwLagCompensationInterface.PredictionHandle.soft_restore_stiffness].
+@export var soft_restore_stiffness: Dictionary[StringName, float] = { }
+
+@export_group("Blend Correction")
+
+## Ticks a [constant CorrectionMode.SNAP_BLEND] correction eases the body onto the
+## authoritative pose over. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.blend_ticks].
+@export_range(1, 30) var blend_ticks: int = 8
+
+## Per-tick fraction of the remaining [constant CorrectionMode.SNAP_BLEND] error
+## applied each tick, the spring stiffness. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.blend_stiffness].
+@export_range(0.01, 1.0, 0.01) var blend_stiffness: float = 0.25
+
+## Pose error above which a [constant CorrectionMode.SNAP_BLEND] correction abandons
+## the spring and hard-teleports, in the pose field's own units. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold].
+@export var teleport_threshold: float = 2.0
+
+## Ticks a [method notify_contact] pauses non-teleport corrections for. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.collision_cooldown_ticks].
+@export_range(0, 30) var collision_cooldown_ticks: int = 6
 
 ## The simulation step, defaulting to the entity root's
 ## [code]_network_tick(delta, tick, is_fresh)[/code]. A delegating node may
@@ -175,9 +288,27 @@ func _exit_tree() -> void:
 # reference, so a code-side edit and the inspector rows stay in sync.
 func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void:
 	handle.correction_mode = correction_mode
+	handle.snap_restore = snap_restore
+	handle.max_restore_ticks = max_restore_ticks
 	handle.missing_policy = missing_policy
+	handle.max_consume_per_tick = max_consume_per_tick
+	handle.consume_buffer_ticks = consume_buffer_ticks
+	handle.max_consume_lag_ticks = max_consume_lag_ticks
+	handle.blend_ticks = blend_ticks
+	handle.blend_stiffness = blend_stiffness
+	handle.teleport_threshold = teleport_threshold
+	handle.collision_cooldown_ticks = collision_cooldown_ticks
 	handle.divergence_epsilon = divergence_epsilon
 	handle.divergence_epsilon_overrides = divergence_epsilon_overrides
+	var excludes: Dictionary[StringName, bool] = { }
+	for field: StringName in reconcile_only_fields:
+		excludes[field] = true
+	handle.correction_trigger_excludes = excludes
+	var teleport_only: Dictionary[StringName, bool] = { }
+	for field: StringName in teleport_only_restore_fields:
+		teleport_only[field] = true
+	handle.teleport_only_restore = teleport_only
+	handle.soft_restore_stiffness = soft_restore_stiffness
 	if simulate.is_valid():
 		handle.simulate = simulate
 
@@ -225,6 +356,22 @@ func _owner_state_set() -> NetwSyncSet:
 
 func _epsilon_for(key: StringName) -> float:
 	return divergence_epsilon_overrides.get(key, divergence_epsilon)
+
+
+## Opens a [member collision_cooldown_ticks] window pausing non-teleport
+## [constant CorrectionMode.SNAP_BLEND] corrections, so a contact transient is not
+## corrected through. Call it when the predicted body registers a collision.
+func notify_contact() -> void:
+	if _entity:
+		_entity.prediction.notify_contact()
+
+
+## Sets whether the authoritative body is asleep. Corrections pause while asleep so
+## reconciliation never nudges a sleeping body awake. Drive it from the dynamic
+## body's sleep state.
+func set_sleeping(value: bool) -> void:
+	if _entity:
+		_entity.prediction.sleeping = value
 
 
 ## Resolves [param mode] against [param body]'s type.

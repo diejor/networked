@@ -149,7 +149,7 @@ var _session_bound: bool = false # shared session resolved lazily on first conne
 
 
 ## Initializes the internal [NakamaWrapper].
-func _service_entered(_mt: MultiplayerTree) -> void:
+func _service_entered(_api: NetwMultiplayer) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
 		Netw.dbg.warn("NakamaLobbyDirectory: Nakama addon not present.")
@@ -160,7 +160,7 @@ func _service_entered(_mt: MultiplayerTree) -> void:
 
 
 ## Cleans up the hosted match and relay socket.
-func _service_exiting(_mt: MultiplayerTree) -> void:
+func _service_exiting(_api: NetwMultiplayer) -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
 			_wrapper.delete_lobby_card(_hosted_match_id)

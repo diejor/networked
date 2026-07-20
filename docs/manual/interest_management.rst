@@ -3,326 +3,255 @@
 Interest management
 ===================
 
-Once your project has more than one level, or more than one role for a peer,
-"every client sees everything" stops being adequate. Some peers should not
-receive certain entities at all. Some entities should appear and disappear
-as the game's rules change. Networked answers this with the *interest
-management system*: a small set of nodes and facades that decide, per peer
-and per entity, who is allowed to see what.
+Interest management decides which participant should see each networked
+entity. The server owns the decision. A
+:ref:`NetwInterestLayer <class_NetwInterestLayer>` supplies a viewer set, an
+entity set, and a composition policy. The
+:ref:`NetwInterestInterface <class_NetwInterestInterface>` combines every
+layer, native synchronizer visibility, and entity ancestry into one committed
+per-peer matrix.
 
-Two ideas anchor the whole system. The first is the
-:ref:`NetwInterestLayer <class_NetwInterestLayer>`: a named slice of
-"who can see whom" maintained on the server. The second is the
-:ref:`InterestGate <class_InterestGate>`: a node that ties a layer's state
-to a piece of the scene tree so Godot's replication can act on it. Most of
-this page is about how those two compose, what the public API on each one
-is for, and how the same primitives become area-of-interest filtering,
-stealth, or combat scenes depending on who calls which method when.
+The matrix has two consumers with deliberately different questions:
 
-The mental model
-----------------
+- ``wire_admits(peer_id, entity)`` asks whether replication may send the
+  entity. Server authority always knows every entity.
+- ``participant_sees(peer_id, entity)`` asks whether that participant's
+  committed row admits the entity. The listen host is evaluated like every
+  other player.
 
-An interest layer is three things:
+Gameplay normally calls
+``NetwEntity.of(node).interest.is_visible_to(peer_id)``. Replication code uses
+the wire query.
 
-- A **viewer set**: the peer ids participating in this layer. The server
-  maintains it through :ref:`add_viewer() <class_NetwInterestLayer_method_add_viewer>`
-  and :ref:`remove_viewer() <class_NetwInterestLayer_method_remove_viewer>`.
-- An **entity set**: the entities the layer controls visibility of.
-- A **policy** that combines the two:
+The layer model
+---------------
+
+A layer contains:
+
+- ``viewers``: peer ids maintained with
+  :ref:`add_viewer() <class_NetwInterestLayer_method_add_viewer>` and
+  :ref:`remove_viewer() <class_NetwInterestLayer_method_remove_viewer>`.
+- ``entities``: entity records maintained with
+  :ref:`add_entity() <class_NetwInterestLayer_method_add_entity>` and
+  :ref:`remove_entity() <class_NetwInterestLayer_method_remove_entity>`.
+- ``policy``:
   :ref:`HIDE_FROM_OUTSIDERS <class_NetwInterestLayer_constant_HIDE_FROM_OUTSIDERS>`
-  (viewers see the entities, outsiders do not) or
+  admits viewers, while
   :ref:`HIDE_FROM_INSIDERS <class_NetwInterestLayer_constant_HIDE_FROM_INSIDERS>`
-  (the inverse). The default is hide-from-outsiders, which is what almost
-  every gameplay layer wants.
+  admits everyone except viewers.
 
-From those three values the server derives a per-(peer, entity) visibility.
-A peer that satisfies the visibility for an entity receives that entity's
-:godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` traffic. A peer
-that does not, does not. An entity can participate in any number of
-layers, if any layer admits a peer to that entity, the peer sees it.
+Membership in several layers is an OR. Any admitting layer grants the peer's
+row. Entity ancestry is an AND: a denied parent clamps every descendant. A
+native :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` visibility
+decision is folded into that same row, so spawn and continuous state use one
+answer.
 
-Layers do not exist in the tree. They are pure state living inside the
-:ref:`NetwInterestInterface <class_NetwInterestInterface>` facade exposed at
-:ref:`NetwMultiplayer.interest <class_NetwMultiplayer_property_interest>`,
-keyed by :godot:`StringName <StringName>`. You ask for a layer by id and
-get one back; the system creates it on first access.
+Mutations commit together at the deferred end-of-frame flush. Queries keep
+reading the previous committed row until then. Use ``flush_now()`` in tests or
+before an in-frame spawn that must observe a new admission immediately.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
     var sight := Netw.of(self).interest.layer(&"sight")
+    sight.add_entity(target_entity)
     sight.add_viewer(observer_peer_id)
+    Netw.of(self).interest.flush_now()
 
+Declaring entity interest
+--------------------------
 
-Bound and unbound layers
-------------------------
-
-The single most important distinction in the system is whether a layer has
-an :ref:`InterestGate <class_InterestGate>` attached to it or not.
-
-A **bound** layer has an
-:ref:`InterestGate <class_InterestGate>` node placed inside a subtree the
-layer governs. The gate replicates the layer's viewers and policy to
-admitted clients through Godot's spawn-sync, and (because the gate is a
-:godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` whose visibility
-filter follows the layer's verdict) the engine's
-:godot:`MultiplayerSpawner <MultiplayerSpawner>` spawns or despawns the
-gate's parent subtree per peer. The gate is also where the **public
-membership API** lives:
-:ref:`track_entity() <class_InterestGate_method_track_entity>` and
-:ref:`untrack_entity() <class_InterestGate_method_untrack_entity>`.
-
-An **unbound** layer has no gate. It influences the wire only by changing
-each entity's synchronizer visibility. Membership and viewers are entirely
-server-side. Clients receive transition signals for unbound layers through
-a lightweight server-driven relay; they do not see the layer's viewer or
-entity sets directly.
-
-The rule of thumb:
-
-- If the workflow is *"this subtree should spawn for some peers and not for
-  others"*, use a **bound** layer with a gate.
-- If the workflow is *"this entity has an extra tag that affects who
-  receives its synchronizer"*, use an **unbound** layer and let the
-  server's admission engine do the rest.
-
-The gate as the public bound-layer API
---------------------------------------
-
-When you reach for a bound layer, you do not call
-:ref:`add_entity() <class_NetwInterestLayer_method_add_entity>` on the
-layer yourself, you call
-:ref:`track_entity() <class_InterestGate_method_track_entity>` on the
-gate. The gate then does the right thing on each side: it registers the
-entity with the layer on the server, and it admits the entity to the
-local client mirror on every admitted peer.
+Every :ref:`NetwEntity <class_NetwEntity>` owns one stable ``interest`` handle.
+Declare memberships from ``_init()`` so every peer constructs the same layer
+labels and local callbacks. Only server authority mutates the authoritative
+entity sets.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    # Server-side: bring this entity into the combat scene's layer.
-    combat_scene.gate.track_entity(entity)
+    func _init() -> void:
+        Netw.configure_interest(self) \
+            .layer(&"team:red") \
+            .layer(&"nearby") \
+            .on_enter(_on_interest_enter) \
+            .on_leave(_on_interest_leave)
 
-    # Server-side later: combat ended.
-    combat_scene.gate.untrack_entity(entity)
+    func _on_interest_enter(layer_id: StringName, peer_id: int) -> void:
+        pass
 
-The pair has two important properties.
+    func _on_interest_leave(layer_id: StringName, peer_id: int) -> void:
+        pass
 
-First, the calls are **idempotent**. Tracking an entity twice is a no-op;
-untracking one that isn't tracked is too. Lifecycle owners can call them
-from any reasonable place without coordinating with each other.
+Runtime systems may call ``entity.interest.join(layer_id)`` and
+``entity.interest.leave(layer_id)`` directly. Declarations survive tree exits
+and reattach when the entity enters another session.
 
-Second, the calls are **explicit**. Bound-layer membership is not
-discovered from the tree, derived from tags on the entity, or inferred from
-ancestor relationships. Whoever owns the workflow's lifecycle, the
-:ref:`MultiplayerScene <class_MultiplayerScene>` for a level, your combat
-orchestrator for a fight, your AoI system for a proximity bucket, makes
-the call when the entity should join, and the matching call when it should
-leave. The gate trusts the caller. This is what makes the same API serve
-"player walks into the level" and "player walks into combat" with no
-ceremony in the gate itself.
+Scene admission and ancestry
+----------------------------
 
-.. note::
+Each :ref:`MultiplayerScene <class_MultiplayerScene>` wrapper is an ordinary
+entity in its ``scene:<name>`` layer. Every descendant entity joins that scene
+layer when the spawn pipeline captures its parent anchor. Reparenting updates
+the old and new scene memberships automatically.
 
-   The structural relationship between the entity and the gate's subtree
-   is the caller's responsibility, not the gate's. A combat scene gate
-   admits any entity its orchestrator hands to it, the participants
-   don't have to be structurally inside the combat scene's subtree on the
-   server. What the gate guarantees is that the entity will be tracked on
-   every peer the gate admits, and untracked on every peer it doesn't.
+The wrapper's committed row therefore clamps its whole subtree. Calling
+``scene.connect_peer(peer_id)`` adds a viewer to the scene layer. Calling
+``scene.disconnect_peer(peer_id)`` removes it. There is no scene gate node and
+no replicated viewer list.
 
-Listening for transitions
--------------------------
+For an entity outside a managed scene, add it to a gameplay layer directly or
+declare the layer through ``Netw.configure_interest``.
 
-Three signal pairs cover the three different questions you might want to
-ask. They look adjacent on paper but answer genuinely different things.
-Pick by the question, not by the layer.
+Wire leave policy
+-----------------
 
-**"Did this peer just become able to see this entity?"** - server-side
-admission. Use
-:ref:`interest_enter <class_NetwInterestLayer_signal_interest_enter>` /
-:ref:`interest_exit <class_NetwInterestLayer_signal_interest_exit>` on the
-layer, or the per-entity rebroadcast at
-:ref:`NetwEntity.interest_enter <class_NetwEntity>` /
-:ref:`interest_exit <class_NetwEntity>`. These fire on the server only,
-once per (entity, peer) visibility change.
+When the aggregate row changes from admitted to denied, the wire leave policy
+decides what happens to an already materialized client node:
+
+- ``DESPAWN`` frees the peer's node. This is the default.
+- ``RETAIN`` keeps the same node with its last received state. Continuous
+  state resumes when admission returns.
+- ``CUSTOM`` retains the node and calls the configured server callback with
+  ``(peer_id, layer_id)``.
+
+A layer supplies ``default_leave_policy``. An entity override takes priority.
+An ancestor despawn still dominates a descendant retain policy because the
+descendant cannot exist without its replicated parent.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    # Server: react when a peer gains admission to an entity through a layer.
-    var sight := Netw.of(self).interest.layer(&"sight")
-    sight.interest_enter.connect(func(entity, peer_id):
-        analytics.peer_saw(peer_id, entity.entity_id)
+    func _init() -> void:
+        Netw.configure_interest(self).layer(
+            &"stealth",
+            NetwInterestInterface.LeavePolicy.RETAIN,
+        )
+
+    # CUSTOM structurally requires its callback.
+    entity.interest.on_leave_policy(
+        &"stealth",
+        NetwInterestInterface.LeavePolicy.CUSTOM,
+        _on_wire_leave,
     )
 
-**"Did I just gain or lose sight of this entity through this layer?"** -
-client-side local view. Use
-:ref:`entity_visible <class_NetwInterestLayer_signal_entity_visible>` /
-:ref:`entity_hidden <class_NetwInterestLayer_signal_entity_hidden>` on the
-layer. Works uniformly for bound and unbound layers, the caller does not
-need to know which transport delivered the transition.
-
-.. tabs::
- .. code-tab:: gdscript GDScript
-
-    # Client: react when an entity becomes locally visible on a layer.
-    var sight := Netw.of(self).interest.layer(&"sight")
-    sight.entity_visible.connect(func(entity):
-        add_marker(entity.owner)
-    )
-    sight.entity_hidden.connect(func(entity):
-        remove_marker(entity.owner)
-    )
-
-**"Did someone else just gain or lose visibility of me?"** -- owner-side
-awareness. Used for HUD elements such as "you are being watched" or
-"these peers can see your stealth indicator." Enable
-:ref:`report_observers <class_InterestComponent_property_report_observers>`
-on the entity's
-:ref:`InterestComponent <class_InterestComponent>` and connect to
-:ref:`NetwEntity.observer_entered <class_NetwEntity>` /
-:ref:`observer_left <class_NetwEntity>` on the owner client.
-
-These three pairs are computed from three different sources of truth.
-:ref:`interest_enter <class_NetwInterestLayer_signal_interest_enter>` and :ref:`interest_exit <class_NetwInterestLayer_signal_interest_exit>` come from the server's admission
-engine, they reflect what the server has decided, regardless of network
-delivery. :ref:`entity_visible <class_NetwInterestLayer_signal_entity_visible>` and :ref:`entity_hidden <class_NetwInterestLayer_signal_entity_hidden>` reflect what is
-currently spawned and admitted on the local client. :ref:`observer_entered <class_NetwEntity>`
-and :ref:`observer_left <class_NetwEntity>` are a server-relayed signal aimed specifically at
-the entity's owning peer.
-
-They agree in the common case and may diverge by design at edges, a
-listen-server host always has every entity replicated to its own process,
-for instance, so
-:ref:`entity_visible <class_NetwInterestLayer_signal_entity_visible>` will
-fire on the host for entities the host's character is not supposed to
-perceive. That is the right answer to the question "is this entity
-replicated to me on this layer," even though it is not the right answer to
-"should my character react to this entity." Perception, when you need it,
-is a separate concern with separate signals that read from the interest
-layer to make a local presentation decision.
-
-Worked example: area-of-interest filtering
-------------------------------------------
-
-A proximity AoI region is one bound layer per region, viewers updated by
-whatever proximity system you write, entities tracked as they enter and
-leave range.
-
-.. tabs::
- .. code-tab:: gdscript GDScript
-
-    # Region root has an InterestGate child with layer_id = &"aoi:zone_a".
-    var gate: InterestGate = $AoIZoneA/InterestGate
-    var layer := gate._layer  # or Netw.of(self).interest.layer(&"aoi:zone_a")
-
-    # Proximity system tick:
-    for peer_id in peers_in_range_of_zone_a():
-        layer.add_viewer(peer_id)
-    for peer_id in peers_who_left_zone_a():
-        layer.remove_viewer(peer_id)
-
-    # Entity lifecycle:
-    func _on_entity_entered_zone_a(entity: NetwEntity) -> void:
-        gate.track_entity(entity)
-
-    func _on_entity_left_zone_a(entity: NetwEntity) -> void:
-        gate.untrack_entity(entity)
-
-Clients in range receive the region's contents through Godot's spawn-sync;
-clients out of range do not. The
-:ref:`entity_visible <class_NetwInterestLayer_signal_entity_visible>` and
-:ref:`entity_hidden <class_NetwInterestLayer_signal_entity_hidden>` signals
-on the AoI layer fire automatically as entities cross the region boundary,
-so client-side HUD code (minimap markers, audio buses) can react without
-polling.
-
-Worked example: stealth
+Local perception policy
 -----------------------
 
-A stealthed entity uses a bound layer to restrict which peers receive its
-replication at all. The layer is keyed by the entity (so each stealthed
-entity has its own visibility rules) or by a team/role.
+The listen-server process must retain every authoritative entity, but the
+host's player should perceive only its honest participant row. A retained
+client has the same presentation problem. ``PerceptionPolicy`` applies one
+local solution to both cases:
+
+- ``HIDE`` snapshots every :godot:`CanvasItem <CanvasItem>` and
+  :godot:`Node3D <Node3D>` visibility value in the entity subtree, hides them,
+  and mutes its audio players. Admission restores the exact snapshot.
+- ``SHOW`` leaves presentation unchanged.
+- ``CUSTOM`` calls ``(visible, peer_id, layer_id)`` on local leave and enter.
+
+``HIDE`` never changes ``process_mode``, physics, or simulation authority. Use
+``CUSTOM`` for collision masks, minimap markers, fades, and other game-specific
+presentation.
+
+The layer default is ``HIDE``. Set ``default_perception_policy`` during
+symmetric setup on every peer when changing that default, because viewer sets
+and policies are server-private and are not replicated. A per-entity override
+declared from ``_init()`` is naturally symmetric:
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    # Per-entity stealth gate placed on the entity's scene root.
-    var gate: InterestGate = stealth_root.get_node("InterestGate")
-    var layer := Netw.of(self).interest.layer(&"stealth:%d" % entity.peer_id)
+    func _init() -> void:
+        Netw.configure_interest(self).layer(
+            &"stealth",
+            NetwInterestInterface.LeavePolicy.RETAIN,
+            NetwInterestInterface.PerceptionPolicy.SHOW,
+        )
 
-    # Server-side gameplay rule: detect-stealth proc applies.
-    if has_detect_stealth(observer_peer):
-        layer.add_viewer(observer_peer)
+    func configure_fade() -> void:
+        NetwEntity.of(self).interest.on_perception_policy(
+            &"stealth",
+            NetwInterestInterface.PerceptionPolicy.CUSTOM,
+            _on_perception,
+        )
 
-    # Entity self-enrolls so the gate controls its replication.
-    gate.track_entity(entity)
+    func _on_perception(
+        visible: bool,
+        _peer_id: int,
+        _layer_id: StringName,
+    ) -> void:
+        fade_to(1.0 if visible else 0.2)
 
-Peers admitted by the layer receive the entity; everyone else gets
-nothing. The structural fact that drives spawn/despawn is the gate's own
-visibility, which the layer's verdict controls.
+Transition surfaces
+-------------------
 
-For the listen-server host case, the server process must hold the
-entity's node, but the host's *character* should not perceive a stealthed
-opponent, the interest layer cannot help you. That is by design: the
-layer's job is replication. A local presentation filter that reads from
-the layer's viewer set and toggles ``visible`` or ``process_mode`` on the
-host's machine is the right tool, and it stays out of the IMS entirely.
+Use the signal pair that answers your question:
 
-Worked example: combat scenes
------------------------------
+- Server admission: ``NetwInterestLayer.interest_enter`` and
+  ``interest_exit`` receive ``(entity, peer_id)``.
+- Local client attribution: ``entity_visible`` and ``entity_hidden`` receive
+  the entity for the local participant's layer edge.
+- Entity callbacks: ``InterestHandle.on_enter`` and ``on_leave`` receive
+  ``(layer_id, peer_id)``.
+- Owner awareness: ``InterestHandle.on_observed`` and ``on_unobserved`` receive
+  another observer's peer id.
 
-A combat scene is the same primitive as a level scene: a node carrying a
-gate at its root, instantiated on the server, with viewers managed by the
-combat orchestrator and entities tracked as participants arrive.
+Clients learn only layer attribution for their own committed row and optional
+owner-awareness edges. They never receive another participant's row, viewer
+sets, or server policy inputs.
+
+Area-of-interest example
+------------------------
+
+An area system owns one layer per region. It updates viewers and membership;
+the interest engine handles spawn, state, and local transitions.
 
 .. tabs::
  .. code-tab:: gdscript GDScript
 
-    # Server-side combat orchestrator.
-    var combat := preload("res://gameplay/CombatScene.tscn").instantiate()
-    combat.gate.layer_id = &"combat:%d" % combat_id
-    add_child(combat)
+    var zone := Netw.of(self).interest.layer(&"aoi:zone_a")
 
-    for player in participants:
-        combat.gate.add_viewer(player.peer_id)
-        combat.gate.track_entity(player.entity)
+    func update_zone() -> void:
+        for peer_id in peers_entering_zone_a():
+            zone.add_viewer(peer_id)
+        for peer_id in peers_leaving_zone_a():
+            zone.remove_viewer(peer_id)
 
-    # ...combat runs, participants take actions...
+    func entity_entered(entity: NetwEntity) -> void:
+        zone.add_entity(entity)
 
-    # On end:
-    for player in participants:
-        combat.gate.untrack_entity(player.entity)
-    combat.queue_free()
+    func entity_left(entity: NetwEntity) -> void:
+        zone.remove_entity(entity)
 
-Spectators are peers added as viewers without being tracked as
-entities, they receive the combat scene but do not participate in its
-layer's entity set. Non-participant peers receive nothing and have no idea
-the scene exists.
+Stealth example
+---------------
 
-This is the same shape as :ref:`MultiplayerScene <class_MultiplayerScene>`
-uses for levels. The container differs (a level vs. a combat instance),
-the layer id differs, the lifecycle owner differs, but the gate API is
-identical.
+Use one layer per stealth group or target. Detection grants viewer membership.
+The honest host row and retained-client projection use the same perception
+configuration.
 
-What the interest system is not
--------------------------------
+.. tabs::
+ .. code-tab:: gdscript GDScript
 
-A few responsibilities live next to the IMS without being part of it:
+    var stealth := Netw.of(self).interest.layer(&"stealth:red")
+    stealth.default_leave_policy = \
+        NetwInterestInterface.LeavePolicy.RETAIN
 
-- **Gameplay rules**. The IMS asks the server's
-  :ref:`viewers <class_NetwInterestLayer_property_viewers>` and
-  :ref:`policy <class_NetwInterestLayer_property_policy>` for a verdict;
-  it does not decide who *should* be a viewer. Add and remove viewers
-  from your own systems -- AoI ticks, line-of-sight checks, party
-  membership, scripted reveal events.
-- **Local perception**. Whether the local character can hear, see, or
-  target an entity that is replicated to its peer is gameplay. The IMS
-  determines what arrives over the wire; perception is what the local
-  process does with it. Build perception as a small local node that reads
-  from a gate's viewer set, not as a parallel admission system.
-- **Continuous replication**. The IMS controls *whether* an entity's
-  synchronizers send to a peer. It does not control how often or what
-  delta strategy each synchronizer uses. Those remain configuration on
-  the :godot:`MultiplayerSynchronizer <MultiplayerSynchronizer>` nodes.
+    if observer_detects_target(observer_peer_id, target):
+        stealth.add_viewer(observer_peer_id)
+    else:
+        stealth.remove_viewer(observer_peer_id)
+
+Debugging checklist
+-------------------
+
+When visibility is surprising:
+
+1. Call ``layer.debug_dump(peer_id)`` to inspect the layer verdict.
+2. Call ``entity.interest.layer_ids()`` to check declared local labels.
+3. Compare ``participant_sees`` with ``wire_admits`` for a listen host.
+4. Confirm the mutation has reached ``flush()`` or call ``flush_now()`` in a
+   focused test.
+5. Check the parent entity. A denied ancestor always clamps the child.
+
+Interest decides whether a state stream may exist. Synchronizer frequency,
+quantization, and property selection remain replication configuration.

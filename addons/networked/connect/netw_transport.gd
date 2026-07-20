@@ -12,6 +12,7 @@
 ## │  (stateless) │                │ (owns build state)│              │ (owns peer   │
 ## └──────────────┘                └───────────────────┘              │  state)      │
 ## [/codeblock]
+@abstract
 class_name NetwTransport
 extends RefCounted
 
@@ -37,12 +38,14 @@ func scheme() -> StringName:
 
 
 ## Returns [code]true[/code] when this transport recognizes [param target].
-func _can_join(_target: NetwConnectTarget) -> bool:
+@warning_ignore("unused_parameter")
+func _can_join(target: NetwConnectTarget) -> bool:
 	return false
 
 
 ## Returns [code]true[/code] when this transport recognizes [param config].
-func _can_host(_config: NetwHostConfig) -> bool:
+@warning_ignore("unused_parameter")
+func _can_host(config: NetwHostConfig) -> bool:
 	return false
 
 
@@ -50,7 +53,8 @@ func _can_host(_config: NetwHostConfig) -> bool:
 ##
 ## [NetwConnector] uses this to resolve the [NetwPeerView] for a peer it did not
 ## build itself, such as one assigned directly by user code.
-func _can_view(_peer: MultiplayerPeer) -> bool:
+@warning_ignore("unused_parameter")
+func _can_view(peer: MultiplayerPeer) -> bool:
 	return false
 
 
@@ -58,9 +62,10 @@ func _can_view(_peer: MultiplayerPeer) -> bool:
 ##
 ## Reports progress and failures through [param attempt]. Returns [code]null[/code]
 ## to signal a build failure.
+@warning_ignore("unused_parameter")
 func _host(
-		_attempt: NetwConnectAttempt,
-		_config: NetwHostConfig,
+		attempt: NetwConnectAttempt,
+		config: NetwHostConfig,
 ) -> MultiplayerPeer:
 	return null
 
@@ -69,9 +74,10 @@ func _host(
 ##
 ## Reports progress and failures through [param attempt]. Returns [code]null[/code]
 ## to signal a build failure. The peer may still be handshaking on return.
+@warning_ignore("unused_parameter")
 func _join(
-		_attempt: NetwConnectAttempt,
-		_target: NetwConnectTarget,
+		attempt: NetwConnectAttempt,
+		target: NetwConnectTarget,
 ) -> MultiplayerPeer:
 	return null
 
@@ -82,16 +88,18 @@ func _join(
 ## this transport built the peer, and is [code]null[/code] for a registry-resolved
 ## view. The base returns [code]null[/code] so [NetwConnector] binds its generic
 ## view.
+@warning_ignore("unused_parameter")
 func _make_view(
-		_peer: MultiplayerPeer,
-		_attempt: NetwConnectAttempt = null,
+		peer: MultiplayerPeer,
+		attempt: NetwConnectAttempt = null,
 ) -> NetwPeerView:
 	return null
 
 
 ## Builds a throwaway probe peer for [param target], or [code]null[/code] when
 ## probing is unsupported.
-func _make_probe_peer(_target: NetwConnectTarget) -> MultiplayerPeer:
+@warning_ignore("unused_parameter")
+func _make_probe_peer(target: NetwConnectTarget) -> MultiplayerPeer:
 	return null
 
 
@@ -132,7 +140,8 @@ func _can_host_here() -> bool:
 ##
 ## Return [code]-1[/code] to declare the transport self-managed, leaving the
 ## terminal outcome to its own signals plus a safety-net ceiling.
-func _timeout_hint(_target: NetwConnectTarget) -> float:
+@warning_ignore("unused_parameter")
+func _timeout_hint(target: NetwConnectTarget) -> float:
 	return 5.0
 
 

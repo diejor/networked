@@ -131,8 +131,8 @@ func test_overlap_survives_teleport_reparent() -> void:
 	await assert_signal(promise).wait_until(1000).is_emitted("completed")
 
 	# Server reparented the same node.
-	var scene2: MultiplayerScene = harness.server_scene_manager() \
-			.active_scenes.get(level_2_builder.scene_name)
+	var scene2: MultiplayerScene = harness.server().api.scenes \
+			.scene(level_2_builder.scene_name)
 	assert_object(server_player.get_parent()).is_same(scene2.level)
 	await get_tree().process_frame
 

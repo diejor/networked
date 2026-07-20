@@ -40,11 +40,11 @@ func _init() -> void:
 	position_quantizer.resolution_step = 5.0
 	position_quantizer.min_limit = -500.0
 	position_quantizer.max_limit = 1500.0
-	Netw.configure_property(self, &"position").state().on_spawn().quantize(position_quantizer)
+	Netw.configure_property(self, &"position").state().masked().on_spawn().quantize(position_quantizer)
 	var velocity_quantizer := NetwQuantizeBits.new()
 	velocity_quantizer.min_limit = -90.0
 	velocity_quantizer.max_limit = 90.0
-	Netw.configure_property(self, &"velocity").state().quantize(velocity_quantizer)
+	Netw.configure_property(self, &"velocity").state().masked().quantize(velocity_quantizer)
 
 
 func _ready() -> void:
@@ -101,7 +101,7 @@ func _place_bomb(action_context: NetwAction.Context, pos: Vector2) -> void:
 	real.position = pos
 	real.from_player = entity.peer_id
 	action_context.bind(real)
-	$"../../Bombs".add_child(real)
+	MultiplayerScene.of(self).level.get_node(^"Bombs").add_child(real)
 
 
 func _process(_delta: float) -> void:

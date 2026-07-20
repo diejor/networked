@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://3a3852p4fypv"]
 
-[ext_resource type="Script" uid="uid://c3yabfbvm8gyo" path="res://addons/networked/session/multiplayer_tree.gd" id="2_wto4k"]
-[ext_resource type="Script" uid="uid://lb7h272e5fhb" path="res://addons/networked/session/multiplayer_scene/scene_manager.gd" id="4_p4o8j"]
+[ext_resource type="Script" uid="uid://dkbxtbmxegbkx" path="res://examples/bomber/game/bomber_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://domi8t23qrsdh" path="res://addons/networked/sync/clock/multiplayer_clock.gd" id="7_wto4k"]
 [ext_resource type="Script" uid="uid://d1xugn0ypbbto" path="res://addons/networked/transport/webrtc/webtorrent_directory.gd" id="8_p4o8j"]
@@ -17,55 +16,43 @@ script = ExtResource("12_rdv")
 metadata/_custom_type_script = "uid://xsdb520sm4wk"
 
 [node name="Main" type="Node" unique_id=68306203]
+script = ExtResource("1_sess")
 
-[node name="MultiplayerTree" type="Node" parent="." unique_id=842142872]
-unique_name_in_owner = true
-script = ExtResource("2_wto4k")
-scheme = &"ws"
-auto_host_headless = false
-app_id = &"7x283tsfmy1xpr4"
-
-[node name="MultiplayerSceneManager" type="Node" parent="MultiplayerTree" unique_id=274629760]
-script = ExtResource("4_p4o8j")
-scene_paths = Array[String](["uid://l523ox2awhi6", "res://examples/bomber/game/lobby_level.tscn"])
-initial_scene_paths = Array[String](["uid://l523ox2awhi6", "res://examples/bomber/game/lobby_level.tscn"])
-concurrency = 1
-
-[node name="Gamestate" type="Node" parent="MultiplayerTree" unique_id=487890910]
+[node name="Gamestate" type="Node" parent="." unique_id=487890910]
 unique_name_in_owner = true
 script = ExtResource("5_gbknk")
 
-[node name="MultiplayerClock" type="Node" parent="MultiplayerTree" unique_id=1936851771]
+[node name="MultiplayerClock" type="Node" parent="." unique_id=1936851771]
 script = ExtResource("7_wto4k")
 tickrate = 15
 metadata/_custom_type_script = "uid://domi8t23qrsdh"
 
-[node name="LagCompensation" type="Node" parent="MultiplayerTree" unique_id=1936851772]
+[node name="LagCompensation" type="Node" parent="." unique_id=1936851772]
 script = ExtResource("10_lagcomp")
 metadata/_custom_type_script = "uid://7rlemmqrhvw7"
 
-[node name="LobbyProviders" type="Node" parent="MultiplayerTree" unique_id=1033260268]
+[node name="LobbyProviders" type="Node" parent="." unique_id=1033260268]
 
-[node name="SteamLobbyDirectory" type="Node" parent="MultiplayerTree/LobbyProviders" unique_id=1067375394]
+[node name="SteamLobbyDirectory" type="Node" parent="LobbyProviders" unique_id=1067375394]
 script = ExtResource("9_p4o8j")
 allow_spacewar_fallback = true
 
-[node name="WebTorrentDirectory" type="Node" parent="MultiplayerTree/LobbyProviders" unique_id=1506380482]
+[node name="WebTorrentDirectory" type="Node" parent="LobbyProviders" unique_id=1506380482]
 script = ExtResource("8_p4o8j")
 browser_filter_uid = "networked-example-bomber"
 metadata/_custom_type_script = "uid://d1xugn0ypbbto"
 
-[node name="NakamaLobbyDirectory" type="Node" parent="MultiplayerTree/LobbyProviders" unique_id=592217180]
+[node name="NakamaLobbyDirectory" type="Node" parent="LobbyProviders" unique_id=592217180]
 script = ExtResource("10_ej8d4")
 device_id = "bomber-host-diego-001"
 local_member_name = "diegote"
 browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
-[node name="DiscordActivity" type="Node" parent="MultiplayerTree" unique_id=592217181]
+[node name="DiscordActivity" type="Node" parent="." unique_id=592217181]
 script = ExtResource("11_disc")
 client_id = "1519144648411447338"
 rendezvous = SubResource("Resource_disc_rdv")
 metadata/_custom_type_script = "uid://certc8teajoaj"
 
-[node name="Lobby" parent="MultiplayerTree" unique_id=125506540 instance=ExtResource("9_gbknk")]
+[node name="Lobby" parent="." unique_id=125506540 instance=ExtResource("9_gbknk")]

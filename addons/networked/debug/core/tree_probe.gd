@@ -121,7 +121,7 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 
 	# Priority 2: Session fallback (Tree Root)
 	var snap := NetwNodeSnapshot.from_node(mt)
-	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
+	var scenes := mt.api.scenes if mt.api else null
 
 	# Manually enrich the tree root's snapshot with service-level data.
 	# This keeps the MultiplayerTree core clean while providing rich context.
@@ -134,7 +134,7 @@ func build_crash_snapshot(span: NetwSpan) -> NetwNodeSnapshot:
 		"connected_peers": \
 		mt.multiplayer_api.get_peers() if mt.multiplayer_api else [],
 		"active_scenes": \
-		sm.active_scenes.keys() if sm else [],
+		scenes.scenes.keys() if scenes else [],
 		"backend": String(mt.scheme),
 		"active_scene": get_active_scene_path(),
 	}
@@ -537,12 +537,12 @@ func _disconnect_all() -> void:
 		if clock and clock.pong_received.is_connected(_on_clock_pong):
 			clock.pong_received.disconnect(_on_clock_pong)
 
-		var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
-		if is_instance_valid(sm):
-			if sm.scene_spawned.is_connected(_on_scene_spawned):
-				sm.scene_spawned.disconnect(_on_scene_spawned)
-			if sm.scene_despawned.is_connected(_on_scene_despawned):
-				sm.scene_despawned.disconnect(_on_scene_despawned)
+		var scenes := mt.api.scenes if mt.api else null
+		if scenes:
+			if scenes.scene_spawned.is_connected(_on_scene_spawned):
+				scenes.scene_spawned.disconnect(_on_scene_spawned)
+			if scenes.scene_despawned.is_connected(_on_scene_despawned):
+				scenes.scene_despawned.disconnect(_on_scene_despawned)
 
 
 func _on_mt_peer_connected(id: int) -> void:
@@ -582,14 +582,14 @@ func _on_configured() -> void:
 	if clock:
 		clock.pong_received.connect(_on_clock_pong)
 
-	var sm: MultiplayerSceneManager = mt.get_service(MultiplayerSceneManager)
-	if is_instance_valid(sm):
-		sm.scene_spawned.connect(_on_scene_spawned)
-		sm.scene_despawned.connect(_on_scene_despawned)
+	var scenes := mt.api.scenes if mt.api else null
+	if scenes:
+		scenes.scene_spawned.connect(_on_scene_spawned)
+		scenes.scene_despawned.connect(_on_scene_despawned)
 
 		# Retroactively hook scenes that spawned before this context was ready
 		# (e.g. ON_STARTUP).
-		for scene: MultiplayerScene in sm.active_scenes.values():
+		for scene: MultiplayerScene in scenes.scenes.values():
 			if not is_instance_valid(scene) or _hooked_scenes.has(scene):
 				continue
 			_scene_tokens[scene] = null # no causal token

@@ -148,11 +148,11 @@ func with_synchronizer(
 	return self
 
 
-## Configures the [InterestComponent] on the player entity.
+## Configures [member NetwEntity.interest] on the player entity.
 ##
-## Attaches an [InterestComponent] child node to the player, pre-configuring
-## it with the specified interest [param layers] and observer reporting mode
-## [param report_observers].
+## Bakes the specified interest [param layers] and observer reporting mode
+## [param report_observers] into the generated root script, so packing and
+## instantiation preserve the handle configuration without a marker node.
 func with_interest(
 		layers: Array[StringName] = [],
 		report_observers: bool = false,
@@ -234,7 +234,7 @@ func _assert_root_declares(
 	assert(
 		script != null,
 		"PlayerBuilder.%s requires a root script declaring the marks through "
-		% verb + "Netw.configure_property()." ,
+		% verb + "Netw.configure_property().",
 	)
 	var set := NetwSyncSet.from_script(script, record)
 	assert(
@@ -270,10 +270,26 @@ func _entity_root_script() -> GDScript:
 	lines.append("func _init() -> void:")
 	if chains_super:
 		lines.append("\tsuper()")
-	lines.append(
-		"\tNetwEntity.resolve(self).initial_controller ="
-		+ " NetwEntity.InitialController.REPRESENTED_PEER",
-	)
+	if _has_entity:
+		lines.append(
+			"\tNetwEntity.resolve(self).initial_controller ="
+			+ " NetwEntity.InitialController.REPRESENTED_PEER",
+		)
+	if _has_interest:
+		if _interest_layers.is_empty():
+			lines.append("\tNetw.configure_interest(self)")
+		else:
+			lines.append("\tvar interest := Netw.configure_interest(self)")
+			for layer_id in _interest_layers:
+				lines.append(
+					"\tinterest.layer(StringName(%s))"
+					% var_to_str(String(layer_id)),
+				)
+		if _interest_report:
+			lines.append(
+				"\tNetwEntity.resolve(self).interest"
+				+ "._set_report_observers(true)",
+			)
 	var script := GDScript.new()
 	script.source_code = "\n".join(lines) + "\n"
 	var err := script.reload()
@@ -293,7 +309,9 @@ func _script_defines_init(script: Script) -> bool:
 
 ## Composes and returns a live player node tree.
 func build() -> Node:
-	var root: Node = _entity_root_script().new() if _has_entity else _root_type.new()
+	var needs_root_config := _has_entity or _has_interest
+	var root: Node = _entity_root_script().new() \
+	if needs_root_config else _root_type.new()
 	root.name = _name
 
 	if _has_save:
@@ -325,13 +343,6 @@ func build() -> Node:
 		tp_comp.set("starting_scene_path", snp)
 		var _a3: Node = SceneAssembly.attach(root, tp_comp, root)
 
-	if _has_interest:
-		var interest_comp := InterestComponent.new()
-		interest_comp.name = "InterestComponent"
-		interest_comp.layer_ids = _interest_layers
-		interest_comp.report_observers = _interest_report
-		var _a5: Node = SceneAssembly.attach(root, interest_comp, root)
-
 	if _has_state or _has_input or _has_broadcast or _has_prediction:
 		# The prediction component resolves NetwEntity.of in NOTIFICATION_PARENTED,
 		# which fires on attach before tree entry, so the entity must exist on the
@@ -341,17 +352,26 @@ func build() -> Node:
 
 	if _has_state:
 		_assert_root_declares(
-			root, NetwSyncSet.Record.RECORD_STATE, _state_props, "with_state",
+			root,
+			NetwSyncSet.Record.RECORD_STATE,
+			_state_props,
+			"with_state",
 		)
 
 	if _has_input:
 		_assert_root_declares(
-			root, NetwSyncSet.Record.RECORD_INPUT, _input_props, "with_input",
+			root,
+			NetwSyncSet.Record.RECORD_INPUT,
+			_input_props,
+			"with_input",
 		)
 
 	if _has_broadcast:
 		_assert_root_declares(
-			root, NetwSyncSet.Record.RECORD_BROADCAST, _broadcast_props, "with_broadcast",
+			root,
+			NetwSyncSet.Record.RECORD_BROADCAST,
+			_broadcast_props,
+			"with_broadcast",
 		)
 
 	if _has_prediction:

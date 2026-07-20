@@ -9,8 +9,9 @@ The browser build is playable at
 
 ## What Changed
 
-- Player sessions are managed by `MultiplayerTree`.
-- The match scene is spawned through `MultiplayerSceneManager`.
+- The session mounts tree-less: a bootstrap script on the scene root declares
+  the session and its scenes, and the match scene is replicated through the
+  session's scene interface.
 - Player entities use `NetwEntity` based join payloads.
 - Web builds use WebRTC with WebTorrent tracker based lobby discovery.
 - Desktop builds can also use Steam lobbies when GodotSteam is available.

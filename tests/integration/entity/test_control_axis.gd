@@ -200,8 +200,8 @@ func _client_player(
 		viewer: MultiplayerTree,
 		represented: MultiplayerTree,
 ) -> Node:
-	var scene := harness.scene_manager_for(viewer) \
-			.active_scenes[level_builder.scene_name] as MultiplayerScene
+	var scene := viewer.api.scenes \
+			.scene(level_builder.scene_name) as MultiplayerScene
 	return _find_player(scene, harness.player_name_for(represented))
 
 

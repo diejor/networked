@@ -7,13 +7,13 @@ extends RefCounted
 ## scene membership independently from any spawned player node.
 
 ## Emitted when [member current_scene] changes.
-signal scene_changed(from: NetwScene, to: NetwScene)
+signal scene_changed(from: MultiplayerScene, to: MultiplayerScene)
 
 ## Peer id represented by this participant.
 var peer_id: int
 
 var _api_ref: WeakRef
-var _current_scene: NetwScene
+var _current_scene: MultiplayerScene
 
 
 func _init(api: NetwMultiplayer, id: int) -> void:
@@ -60,14 +60,12 @@ var is_debug: bool:
 		return rj.is_debug if rj else false
 
 ## Primary scene membership for this participant.
-var current_scene: NetwScene:
+var current_scene: MultiplayerScene:
 	get:
-		if _current_scene and _current_scene.is_valid():
-			return _current_scene
-		return null
+		return _current_scene if is_instance_valid(_current_scene) else null
 	set(value):
 		var from := current_scene
-		if _same_scene(from, value):
+		if from == value:
 			return
 		_current_scene = value
 		scene_changed.emit(from, value)
@@ -76,23 +74,15 @@ var current_scene: NetwScene:
 ## Moves this participant to [param dest] without touching any player node.
 ##
 ## [br][br][b]Server Only.[/b]
-func move_to(dest: NetwScene) -> void:
+func move_to(dest: MultiplayerScene) -> void:
 	var api := _api_ref.get_ref() as NetwMultiplayer
-	if not api or not dest or not dest.is_valid():
+	if not api or not is_instance_valid(dest):
 		return
 	assert(api.is_server(), "NetwParticipant.move_to() must be called on the server.")
 	var from := current_scene
-	if from == dest or (from and from.unwrap() == dest.unwrap()):
+	if from == dest:
 		return
 	current_scene = dest
-	if from and from.is_valid():
+	if is_instance_valid(from):
 		from.release(self)
 	dest.admit(self)
-
-
-func _same_scene(a: NetwScene, b: NetwScene) -> bool:
-	if a == b:
-		return true
-	if a == null or b == null:
-		return false
-	return a.unwrap() == b.unwrap()

@@ -36,19 +36,14 @@ func before_test() -> void:
 	server_scene = harness.scene_on_server(level_builder.scene_name)
 
 
-# Server-side helper: spawn client0's player and inject an
-# InterestComponent with [param report] on the server-side copy.
-# The flag is server-only; clients don't need their own copy.
-# `owner` is set so `%InterestComponent` resolves via the unique-
-# name path InterestComponent.of relies on.
-func _spawn_owner_with_component(report: bool) -> Node:
+# Spawns client0's player and configures observer awareness on the server.
+func _spawn_owner(report: bool) -> Node:
 	harness.spawn_player(client0, player_builder.packed)
 	var server_player := await harness.wait_for_player(
 		harness.server(),
 		level_builder.scene_name,
 	)
-	var component := server_player.get_node("InterestComponent") as InterestComponent
-	component.report_observers = report
+	NetwEntity.of(server_player).interest._set_report_observers(report)
 	# Spawn the player on the client too so the relay's path lookup
 	# resolves to a live node on the receiving side.
 	await harness.wait_for_player(client0, level_builder.scene_name)
@@ -56,7 +51,7 @@ func _spawn_owner_with_component(report: bool) -> Node:
 
 
 func test_relay_fires_on_unbound_layer() -> void:
-	var server_player := await _spawn_owner_with_component(true)
+	var server_player := await _spawn_owner(true)
 	var entity := NetwEntity.of(server_player)
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
@@ -77,13 +72,13 @@ func test_relay_fires_on_unbound_layer() -> void:
 	var left: Array = []
 	var visible: Array = []
 	var hidden: Array = []
-	owner_entity.observer_entered.connect(
-		func(layer_id: StringName, peer_id: int):
-			entered.append([layer_id, peer_id])
+	owner_entity.interest.on_observed(
+		func(peer_id: int):
+			entered.append(peer_id)
 	)
-	owner_entity.observer_left.connect(
-		func(layer_id: StringName, peer_id: int):
-			left.append([layer_id, peer_id])
+	owner_entity.interest.on_unobserved(
+		func(peer_id: int):
+			left.append(peer_id)
 	)
 	client1_layer.entity_visible.connect(
 		func(e: NetwEntity): visible.append(e)
@@ -101,8 +96,7 @@ func test_relay_fires_on_unbound_layer() -> void:
 			.is_emitted("observer_entered", [any(), any()])
 
 	assert_that(entered.size()).is_equal(1)
-	assert_that(String(entered[0][0])).is_equal("sight")
-	assert_that(entered[0][1]).is_equal(client1_peer)
+	assert_that(entered[0]).is_equal(client1_peer)
 	assert_that(visible.size()).is_equal(1)
 	assert_that(left.is_empty()).is_true()
 
@@ -113,13 +107,12 @@ func test_relay_fires_on_unbound_layer() -> void:
 			.is_emitted("observer_left", [any(), any()])
 
 	assert_that(left.size()).is_equal(1)
-	assert_that(String(left[0][0])).is_equal("sight")
-	assert_that(left[0][1]).is_equal(client1_peer)
+	assert_that(left[0]).is_equal(client1_peer)
 	assert_that(hidden.size()).is_equal(1)
 
 
 func test_relay_silent_when_flag_off() -> void:
-	var server_player := await _spawn_owner_with_component(false)
+	var server_player := await _spawn_owner(false)
 	var entity := NetwEntity.of(server_player)
 	await harness.admit_client_to_scene(client1, level_builder.scene_name)
 
@@ -146,11 +139,8 @@ func test_relay_silent_when_flag_off() -> void:
 			.is_not_emitted("observer_entered", [any(), any()])
 
 
-func test_relay_skipped_for_gated_layer() -> void:
-	# Gated layers replicate viewers via the gate's synced properties,
-	# so the owner can already enumerate observers locally. The relay
-	# must skip these to avoid double-counting.
-	var server_player := await _spawn_owner_with_component(true)
+func test_awareness_relay_is_identical_for_scene_layer() -> void:
+	var server_player := await _spawn_owner(true)
 	var entity := NetwEntity.of(server_player)
 
 	# The scene layer is gated (MultiplayerScene's gate). Use it.
@@ -172,5 +162,6 @@ func test_relay_skipped_for_gated_layer() -> void:
 	scene_layer.add_viewer(client1.multiplayer_peer.get_unique_id())
 	@warning_ignore("redundant_await")
 	await assert_signal(owner_entity) \
-			.wait_until(300) \
-			.is_not_emitted("observer_entered", [any(), any()])
+			.wait_until(1000) \
+			.is_emitted("observer_entered", [any(), any()])
+	assert_array(entered).contains_exactly([true])

@@ -35,6 +35,11 @@ enum Recipe {
 	## Issued by [NetwSyncCompat] when a consumed synchronizer's root has no
 	## [NetwEntity], so a synced node always has a route.
 	ADOPT = 3,
+	## The node reconstructs by invoking a spawn function the session registered
+	## under a stable id, resolved from the id alone with no host node. This is
+	## how a manager-less session spawns scenes, whose constructor lives on the
+	## API rather than a node.
+	FN_REGISTRY = 4,
 }
 
 ## Nodes stamped by a verb, waiting for tree entry. Keyed by route.
@@ -62,6 +67,9 @@ class SpawnRecord:
 	var fn_host_ref: WeakRef
 	var fn_method: StringName = &""
 	var fn_args: Array = []
+	## Registry id of the spawn function for a [constant Recipe.FN_REGISTRY]
+	## record. The session resolves it to a host-less constructor.
+	var fn_registry_id: StringName = &""
 	## The consumed [MultiplayerSpawner] for a [constant Recipe.SPAWNER] record.
 	var spawner_ref: WeakRef
 	## Index into the spawner's scene list, or [code]-1[/code] for a custom

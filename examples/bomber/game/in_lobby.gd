@@ -4,8 +4,8 @@ extends Control
 ##
 ## Lives inside lobby_level.tscn, so it resolves its own [NetwMultiplayer] through
 ## [method Netw.of] and is created and freed with the scene. The roster reflects
-## [member NetwScene.participants]; the host-only Start button moves everyone into
-## the World scene through [BomberGamestate].
+## [member MultiplayerScene.participants]; the host-only Start button moves everyone
+## into the World scene through [BomberGamestate].
 
 @onready var _member_list: ItemList = %MemberList
 @onready var _start_btn: Button = %StartButton
@@ -15,8 +15,9 @@ extends Control
 
 
 func _ready() -> void:
-	NetwScene.for_node(self).participant_entered.connect(_on_membership_changed)
-	NetwScene.for_node(self).participant_left.connect(_on_membership_changed)
+	var scene := MultiplayerScene.of(self)
+	scene.participant_entered.connect(_on_membership_changed)
+	scene.participant_left.connect(_on_membership_changed)
 	_start_btn.pressed.connect(_on_start_pressed)
 	_leave_btn.pressed.connect(_ctx.leave)
 	_refresh()
@@ -34,7 +35,7 @@ func _on_membership_changed(_participant: NetwParticipant) -> void:
 func _refresh() -> void:
 	_member_list.clear()
 	var local := _ctx.local_participant
-	var participants := NetwScene.for_node(self).participants
+	var participants := MultiplayerScene.of(self).participants
 	participants.sort_custom(
 		func(a: NetwParticipant, b: NetwParticipant) -> bool:
 			return a.peer_id < b.peer_id

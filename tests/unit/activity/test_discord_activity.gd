@@ -22,7 +22,7 @@ func test_discord_instance_state_flow() -> void:
 	var service := DiscordActivityService.new()
 	auto_free(tree)
 	auto_free(service)
-	service._service_entered(tree)
+	service._service_entered(tree.api)
 	assert_object(tree.api.session.auth_flow).is_null()
 	assert_object(service.rendezvous).is_null()
 
@@ -92,9 +92,12 @@ func test_nakama_auth_identity_flow() -> void:
 	var auth := NakamaAuth.new()
 	auto_free(tree)
 	auto_free(service)
+	# Mount the tree so its session resolves through api.root, the way a service
+	# under a live tree does, since the session no longer holds a tree back-ref.
+	add_child(tree)
 	service.rendezvous = DedicatedDiscordRendezvous.new()
 	tree.api.session.set_auth_flow(auth)
-	service._service_entered(tree)
+	service._service_entered(tree.api)
 	await get_tree().process_frame
 	assert_object(tree.api.session.auth_flow).is_same(auth)
 	assert_object(auth._session).is_same(tree.get_nakama_session())

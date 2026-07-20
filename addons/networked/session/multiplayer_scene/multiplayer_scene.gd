@@ -2,9 +2,11 @@ class_name MultiplayerScene
 extends Node
 ## Container for one replicated level scene and its admission boundary.
 ##
-## [member level], [member gate], and [member layer] define one admission
-## boundary. A client receives the subtree only after [method connect_peer] or
-## [method register_player] admits its peer, and a participant is admitted to
+## [member level] and [member layer] define one admission boundary. The wrapper
+## is an ordinary entity in that layer, and every descendant entity inherits
+## its committed row through the interest engine's parent clamp. A client
+## receives the subtree only after [method connect_peer] or
+## [method register_player] admits its peer. A participant is admitted to
 ## exactly one scene at a time. The container's runtime root is chosen by
 ## [member NetwSceneConfig.concurrency] because two scenes active at once in one
 ## [SceneTree] would otherwise share a physics world and collide. Under
@@ -22,33 +24,36 @@ extends Node
 ## scene.complete_player_reparent(player)
 ## [/codeblock]
 
-## [InterestGate] carrying admission state for [member layer].
-@export var gate: InterestGate
-
 ## Instantiated level root for this scene.
 ##
-## Assignment adds the level as a child, names this scene, binds
-## [member InterestGate.layer_id], and calls [method hook_spawn_signals].
+## Assignment adds the level as a child, names this scene, and calls
+## [method hook_spawn_signals].
 var level: Node:
 	set(value):
 		assert(not is_instance_valid(level))
 		level = value
 		name = level.name + name
-		if is_instance_valid(gate):
-			gate.layer_id = scene_layer_id()
 		add_child(level)
 		hook_spawn_signals(level)
 		level.owner = self
-		if is_instance_valid(gate):
-			NetwEntity.ensure(self).interest_gate = gate
-
-var _netw_scene: NetwScene
 
 ## Emitted when a tracked [Node] enters this scene.
 signal spawned(node: Node)
 
 ## Emitted when a tracked [Node] exits this scene.
 signal despawned(node: Node)
+
+## Emitted when a player identity is spawned into this scene.
+signal player_entered(player: NetwEntity)
+
+## Emitted when a player identity is despawned from this scene.
+signal player_left(player: NetwEntity)
+
+## Emitted when a participant is admitted to this scene.
+signal participant_entered(participant: NetwParticipant)
+
+## Emitted when a participant is released from this scene.
+signal participant_left(participant: NetwParticipant)
 
 ## Emitted when the server suspends this scene.
 signal suspended(reason: String)
@@ -71,13 +76,17 @@ signal peer_admitted(peer_id: int)
 ## Emitted when a peer is released from this scene.
 signal peer_released(peer_id: int)
 
-# Active readiness gates registered via NetwScene.
+# Active readiness gates registered via create_readiness_gate.
 var _readiness_gates: Array[WeakRef] = []
 # Held strongly while the countdown is running so the timer stays alive.
-var _active_countdown: NetwScene.Countdown
+var _active_countdown: Countdown
 # Players indexed by peer. Weak refs keep the scene from owning players.
 var _players_by_peer: Dictionary[int, WeakRef] = { }
 var _tracked_nodes: Dictionary[Node, bool] = { }
+# Client-side admission mirror the participant-fact handlers subscribe to.
+var _admission_layer: NetwInterestLayer
+# Peers admitted before their participant existed, retried on join.
+var _pending_admitted_peers: Dictionary[int, bool] = { }
 
 
 ## Returns the [MultiplayerScene] containing [param node], or [code]null[/code].
@@ -115,67 +124,97 @@ var layer: NetwInterestLayer:
 			return null
 		return api.interest.layer(id)
 
-## The [NetwScene] facade for this scene, built once and memoized.
+## The level scene root name for this scene.
 ##
-## [code]null[/code] until the scene is inside the live tree. Resolve it from
-## any node with [method NetwScene.for_node].
-var netw_scene: NetwScene:
+## Returns [code]&""[/code] until [member level] is assigned.
+var scene_name: StringName:
 	get:
-		if _netw_scene and _netw_scene.is_valid():
-			return _netw_scene
-		if not is_inside_tree():
+		if not is_instance_valid(level):
+			return &""
+		return StringName(level.name)
+
+## All player identities currently in this scene.
+##
+## Mirrors [method get_players] as a read-only property.
+var players: Array[NetwEntity]:
+	get:
+		return get_players()
+
+## The number of players currently in this scene.
+var player_count: int:
+	get:
+		return get_players().size()
+
+## The player identity owned by the local peer, or [code]null[/code].
+var local_player: NetwEntity:
+	get:
+		if not is_inside_tree() or multiplayer == null:
 			return null
-		if not MultiplayerTree.for_node(self):
-			Netw.dbg.error(
-				"Scene.netw_scene: MultiplayerTree not found.",
-				func(m): push_error(m)
-			)
-			return null
-		_netw_scene = NetwScene.new(self)
-		return _netw_scene
+		var local_id := multiplayer.get_unique_id()
+		for player: NetwEntity in get_players():
+			if player.peer_id == local_id:
+				return player
+		return null
+
+## The peer IDs currently admitted to this scene.
+##
+## Use this to enumerate peers when sending custom broadcast RPCs:
+## [codeblock]
+## for peer_id in scene.peers:
+##     _rpc_notify.rpc_id(peer_id, message)
+## [/codeblock]
+var peers: Array[int]:
+	get:
+		var result: Array[int] = []
+		result.assign(connected_peers.keys())
+		return result
 
 
 func _ready() -> void:
-	if not _is_server():
-		var _warm := netw_scene
 	_bind_admission_bus()
+	_bind_participant_facts()
 
 
 func _exit_tree() -> void:
 	_unbind_admission_bus()
+	_unbind_participant_facts()
 	_clear_participant_scene_membership()
 	if _active_countdown:
 		_active_countdown.cancel()
 		_active_countdown = null
-	if _netw_scene and _netw_scene.is_valid():
-		_netw_scene.close()
 
 
 func _clear_participant_scene_membership() -> void:
-	if netw_scene == null:
+	if not is_instance_valid(level):
 		return
-	var mt := MultiplayerTree.for_node(self)
-	if mt and mt.local_participant:
-		_clear_participant_current_scene(mt.local_participant)
+	var api := NetwMultiplayer.of(self)
+	if api and api.local_participant:
+		_clear_participant_current_scene(api.local_participant)
 	for participant: NetwParticipant in participants:
 		_clear_participant_current_scene(participant)
 
 
 func _clear_participant_current_scene(participant: NetwParticipant) -> void:
-	var current := participant.current_scene
-	if current and current.unwrap() == self:
+	if participant.current_scene == self:
 		participant.current_scene = null
 
 
 func _notify_participant_scene_released(participant: NetwParticipant) -> void:
-	var current := participant.current_scene
-	if current == null or current.unwrap() != self:
+	if participant.current_scene != self:
 		return
-	var mt := MultiplayerTree.for_node(self)
-	if mt:
-		mt._notify_local_scene_released(
+	var api := NetwMultiplayer.of(self)
+	if api == null:
+		return
+	var payload := var_to_bytes(scene_layer_id())
+	if participant.peer_id == api.get_unique_id():
+		api.scenes._handle_scene_released_frame(payload, 1)
+	else:
+		api.replication.send_to(
 			participant.peer_id,
-			scene_layer_id(),
+			0,
+			NetwFrameEnvelope.Channel.SESSION_SCENE_RELEASED,
+			payload,
+			true,
 		)
 
 
@@ -214,16 +253,169 @@ func _unbind_admission_bus() -> void:
 func _on_liveness_entity_live(_route: int, entity: NetwEntity) -> void:
 	if not is_instance_valid(entity) or not is_instance_valid(entity.owner):
 		return
-	if _tracked_nodes.has(entity.owner):
-		return
 	if MultiplayerScene.of(entity.owner) != self:
 		return
 	if entity.peer_id != 0:
+		if _players_by_peer.has(entity.peer_id) \
+				and _players_by_peer[entity.peer_id].get_ref() == entity.owner:
+			return
 		register_player(entity)
-	else:
+	elif not _tracked_nodes.has(entity.owner):
 		track_node(entity.owner)
 
-## Peer ids admitted to [member gate].
+
+# Wires the player and participant convenience signals. The server reads its
+# own admission signals. A client reads awareness for the scene wrapper.
+func _bind_participant_facts() -> void:
+	if not spawned.is_connected(_on_player_spawned):
+		spawned.connect(_on_player_spawned)
+	if not despawned.is_connected(_on_player_despawned):
+		despawned.connect(_on_player_despawned)
+	if multiplayer and multiplayer.is_server():
+		if not peer_admitted.is_connected(_on_participant_admitted):
+			peer_admitted.connect(_on_participant_admitted)
+		if not peer_released.is_connected(_on_participant_released):
+			peer_released.connect(_on_participant_released)
+		for peer_id: int in connected_peers:
+			_on_participant_admitted(peer_id)
+	else:
+		_bind_client_admission_layer()
+
+
+func _unbind_participant_facts() -> void:
+	if spawned.is_connected(_on_player_spawned):
+		spawned.disconnect(_on_player_spawned)
+	if despawned.is_connected(_on_player_despawned):
+		despawned.disconnect(_on_player_despawned)
+	if peer_admitted.is_connected(_on_participant_admitted):
+		peer_admitted.disconnect(_on_participant_admitted)
+	if peer_released.is_connected(_on_participant_released):
+		peer_released.disconnect(_on_participant_released)
+	if _admission_layer:
+		if _admission_layer.entity_visible.is_connected(
+			_on_scene_entity_visible,
+		):
+			_admission_layer.entity_visible.disconnect(
+				_on_scene_entity_visible,
+			)
+		if _admission_layer.entity_hidden.is_connected(
+			_on_scene_entity_hidden,
+		):
+			_admission_layer.entity_hidden.disconnect(_on_scene_entity_hidden)
+	var api := NetwMultiplayer.of(self)
+	if api and api.participant_joined.is_connected(_on_api_participant_joined):
+		api.participant_joined.disconnect(_on_api_participant_joined)
+
+
+# Clients learn admission from route awareness for the wrapper entity.
+func _bind_client_admission_layer() -> void:
+	var api := NetwMultiplayer.of(self)
+	if api == null:
+		return
+	if not api.participant_joined.is_connected(_on_api_participant_joined):
+		api.participant_joined.connect(_on_api_participant_joined)
+	var l := layer
+	if l == null:
+		return
+	_admission_layer = l
+	if not l.entity_visible.is_connected(_on_scene_entity_visible):
+		l.entity_visible.connect(_on_scene_entity_visible)
+	if not l.entity_hidden.is_connected(_on_scene_entity_hidden):
+		l.entity_hidden.connect(_on_scene_entity_hidden)
+	var scene_entity := NetwEntity.of(self)
+	if scene_entity and l.has_entity(scene_entity):
+		_admit_local_participant()
+
+
+func _on_scene_entity_visible(entity: NetwEntity) -> void:
+	if entity == NetwEntity.of(self):
+		_admit_local_participant()
+
+
+func _on_scene_entity_hidden(entity: NetwEntity) -> void:
+	if entity == NetwEntity.of(self):
+		_release_local_participant()
+
+
+func _admit_local_participant() -> void:
+	var api := NetwMultiplayer.of(self)
+	if api and api.local_participant:
+		_on_participant_admitted(api.local_participant.peer_id)
+
+
+func _release_local_participant() -> void:
+	var api := NetwMultiplayer.of(self)
+	if api and api.local_participant:
+		_on_participant_released(api.local_participant.peer_id)
+
+
+func _on_participant_admitted(peer_id: int) -> void:
+	var api := NetwMultiplayer.of(self)
+	if api == null:
+		return
+	var participant := api.participant(peer_id)
+	if participant == null:
+		_pending_admitted_peers[peer_id] = true
+		return
+	_pending_admitted_peers.erase(peer_id)
+	participant.current_scene = self
+	participant_entered.emit(participant)
+	_notify_gates_player_added(peer_id)
+
+
+func _on_participant_released(peer_id: int) -> void:
+	var api := NetwMultiplayer.of(self)
+	if api == null:
+		return
+	var participant := api.participant(peer_id)
+	if participant == null:
+		return
+	if participant.current_scene == self:
+		_clear_current_scene_if_still_current.call_deferred(
+			participant,
+			get_instance_id(),
+		)
+	participant_left.emit(participant)
+	_notify_gates_player_removed(peer_id)
+
+
+# A participant may be admitted before its roster row lands. Retries the
+# admission fact once the participant appears.
+func _on_api_participant_joined(participant: NetwParticipant) -> void:
+	if _admission_layer == null:
+		return
+	if participant != NetwMultiplayer.of(self).local_participant:
+		return
+	var scene_entity := NetwEntity.of(self)
+	if not scene_entity or not _admission_layer.has_entity(scene_entity):
+		return
+	_on_participant_admitted(participant.peer_id)
+
+
+# Clears membership only if this scene is still the participant's current one,
+# so a move that reassigns current_scene before the deferred call wins.
+func _clear_current_scene_if_still_current(
+		participant: NetwParticipant,
+		scene_instance_id: int,
+) -> void:
+	var current := participant.current_scene
+	if is_instance_valid(current) \
+			and current.get_instance_id() == scene_instance_id:
+		participant.current_scene = null
+
+
+func _on_player_spawned(node: Node) -> void:
+	var entity := NetwEntity.of(node)
+	if entity != null and entity in get_players():
+		player_entered.emit(entity)
+
+
+func _on_player_despawned(node: Node) -> void:
+	if _get_peer_id(node) == 0:
+		return
+	player_left.emit(NetwEntity.of(node))
+
+## Peer ids admitted through [member layer].
 var connected_peers: Dictionary[int, bool]:
 	get:
 		var l := layer
@@ -235,11 +427,11 @@ var connected_peers: Dictionary[int, bool]:
 var participants: Array[NetwParticipant]:
 	get:
 		var out: Array[NetwParticipant] = []
-		var mt := MultiplayerTree.for_node(self)
-		if mt == null:
+		var api := NetwMultiplayer.of(self)
+		if api == null:
 			return out
 		for peer_id: int in connected_peers:
-			var participant := mt.get_participant(peer_id)
+			var participant := api.get_participant(peer_id)
 			if participant:
 				out.append(participant)
 		return out
@@ -314,7 +506,7 @@ func admit(participant: NetwParticipant) -> void:
 		"MultiplayerScene.admit() must be called on the server.",
 	)
 	connect_peer(participant.peer_id)
-	_flush_gate_now()
+	_flush_interest_now()
 
 
 ## Releases [param participant] from this scene.
@@ -330,27 +522,24 @@ func release(participant: NetwParticipant) -> void:
 	)
 	_notify_participant_scene_released(participant)
 	disconnect_peer(participant.peer_id)
-	_flush_gate_now()
+	_flush_interest_now()
 
 
 ## Moves [param moving_participants] into this scene.
 ##
-## Returns a [NetwScene.MoveBatch] for observing arrivals.
+## Returns a [MultiplayerScene.MoveBatch] for observing arrivals.
 ## [br][br][b]Server Only.[/b]
 func move_participants(
 		moving_participants: Array[NetwParticipant],
-) -> NetwScene.MoveBatch:
+) -> MoveBatch:
 	assert(
 		multiplayer.is_server(),
 		"MultiplayerScene.move_participants() must be called on the server.",
 	)
-	var netw := netw_scene
-	if netw == null or not netw.is_valid():
-		return null
-	var batch := NetwScene.MoveBatch.new(moving_participants)
+	var batch := MoveBatch.new(moving_participants)
 	for participant: NetwParticipant in moving_participants:
 		if participant:
-			participant.move_to(netw)
+			participant.move_to(self)
 			batch._queue_arrival(participant)
 	batch._flush.call_deferred()
 	return batch
@@ -360,6 +549,20 @@ func move_participants(
 func wait_for_participants(n: int) -> void:
 	while participants.size() < n:
 		await peer_admitted
+
+
+## Suspends until at least [param n] players are present.
+func wait_for_players(n: int) -> void:
+	while get_players().size() < n:
+		await player_entered
+
+
+## Returns the player identity owned by [param peer_id], or [code]null[/code].
+func get_player_by_peer_id(peer_id: int) -> NetwEntity:
+	for player: NetwEntity in get_players():
+		if player.peer_id == peer_id:
+			return player
+	return null
 
 
 ## Broadcasts a soft-suspend notification to scene peers.
@@ -405,7 +608,7 @@ func resume() -> void:
 func start_countdown(
 		seconds: int,
 		tick_interval: float = 1.0,
-) -> NetwScene.Countdown:
+) -> Countdown:
 	assert(
 		seconds > 0,
 		"MultiplayerScene.start_countdown(): seconds must be > 0.",
@@ -419,7 +622,7 @@ func start_countdown(
 		"MultiplayerScene.start_countdown() must be called on the server.",
 	)
 	cancel_countdown()
-	var cd := NetwScene.Countdown.new(self, seconds, tick_interval)
+	var cd := Countdown.new(self, seconds, tick_interval)
 	_active_countdown = cd
 	cd.tick.connect(_on_countdown_tick)
 	cd.finished.connect(_on_countdown_finished)
@@ -447,8 +650,8 @@ func cancel_countdown() -> void:
 
 
 ## Creates a readiness gate for this scene.
-func create_readiness_gate() -> NetwScene.Readiness:
-	var readiness := NetwScene.Readiness.new(self)
+func create_readiness_gate() -> Readiness:
+	var readiness := Readiness.new(self)
 	_register_readiness_gate(readiness)
 	for participant: NetwParticipant in participants:
 		readiness._add_peer(participant.peer_id)
@@ -457,8 +660,7 @@ func create_readiness_gate() -> NetwScene.Readiness:
 
 ## Returns the admission verdict for [param peer_id].
 ##
-## The server reads [member layer]. Clients read the replicated
-## [member gate] mirror.
+## Server authority reads [member layer].
 func scene_visibility_filter(peer_id: int) -> bool:
 	var l := layer
 	if l == null:
@@ -483,8 +685,10 @@ func track_node(node: Node) -> void:
 		_debug_report_missing_own_entity(node, entity)
 		return
 	_tracked_nodes[node] = true
-	if is_instance_valid(gate):
-		gate.track_entity(entity)
+	if _is_server():
+		var scene_layer := layer
+		if scene_layer:
+			scene_layer.add_entity(entity)
 	var on_spawned := _on_spawned.bind(node)
 	if not node.tree_entered.is_connected(on_spawned):
 		node.tree_entered.connect(on_spawned)
@@ -498,10 +702,11 @@ func untrack_node(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
 	var peer_id := _get_peer_id(node)
-	if not node.is_inside_tree():
-		var entity := NetwEntity.of(node)
-		if entity and is_instance_valid(gate):
-			gate.untrack_entity(entity)
+	var entity := NetwEntity.of(node)
+	if entity and _is_server():
+		var scene_layer := layer
+		if scene_layer:
+			scene_layer.remove_entity(entity)
 	_tracked_nodes.erase(node)
 	var on_spawned := _on_spawned.bind(node)
 	if node.tree_entered.is_connected(on_spawned):
@@ -521,8 +726,6 @@ func _on_spawned(node: Node) -> void:
 	var entity := NetwEntity.of(node)
 	if _owns_entity_record(node, entity):
 		_tracked_nodes[node] = true
-		if is_instance_valid(gate):
-			gate.track_entity(entity)
 	else:
 		_debug_report_missing_own_entity(node, entity)
 	if node.is_inside_tree():
@@ -542,10 +745,6 @@ func _emit_spawned_on_entered(node: Node) -> void:
 func _on_despawned(node: Node) -> void:
 	if not is_instance_valid(node):
 		return
-	var entity := NetwEntity.of(node)
-	if _owns_entity_record(node, entity):
-		if is_instance_valid(gate):
-			gate.untrack_entity(entity)
 	_tracked_nodes.erase(node)
 	despawned.emit(node)
 
@@ -560,14 +759,12 @@ func _debug_report_missing_own_entity(
 ) -> void:
 	if not OS.is_debug_build():
 		return
-	if not is_instance_valid(gate):
-		return
 	var detail := "it resolved to no record"
 	if entity != null and is_instance_valid(entity.owner):
 		detail = "it resolved to ancestor '%s'" % entity.owner.name
 	var msg := (
 			"MultiplayerScene '%s': spawned node '%s' has no NetwEntity " +
-			"of its own. %s. Under a gated scene every spawned entity " +
+			"of its own. %s. Every scene-spawned entity " +
 			"needs its own identity. Call NetwEntity.ensure(node) before " +
 			"MultiplayerScene.track_node(node)."
 	)
@@ -603,8 +800,8 @@ func add_player(player: NetwEntity) -> void:
 
 ## Admits [param player]'s peer before [method Node.reparent].
 ##
-## Call this before moving a player into [member level] so [member gate]
-## visibility is flushed before spawn packets target the new scene.
+## Call this before moving a player into [member level] so the destination
+## wrapper row is flushed before spawn packets target the new scene.
 ## [codeblock]
 ## scene.prepare_player_reparent(NetwEntity.of(player))
 ## player.reparent(scene.level)
@@ -621,7 +818,7 @@ func prepare_player_reparent(player: NetwEntity) -> void:
 		return
 	_players_by_peer[peer_id] = weakref(player.owner)
 	connect_peer(peer_id)
-	_flush_gate_now()
+	_flush_interest_now()
 
 
 ## Completes a reparent after [param player] enters this scene.
@@ -653,7 +850,7 @@ func register_player(player: NetwEntity) -> void:
 	_players_by_peer[peer_id] = weakref(player.owner)
 	connect_peer(peer_id)
 	track_node(player.owner)
-	_flush_gate_now()
+	_flush_interest_now()
 	var bound := _on_player_exiting.bind(player.owner)
 	if not player.owner.tree_exiting.is_connected(bound):
 		player.owner.tree_exiting.connect(bound)
@@ -705,25 +902,16 @@ func _find_peer_for_player(player: Node) -> int:
 func _flush_interest_now() -> void:
 	if not _is_server():
 		return
-	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.api:
+	var api := NetwMultiplayer.of(self)
+	if not api:
 		return
-	mt.api.interest.flush()
-
-
-func _flush_gate_now() -> void:
-	if not _is_server():
-		return
-	var mt := MultiplayerTree.resolve(self)
-	if not mt or not mt.api:
-		return
-	mt.api.interest.flush_gates()
+	api.interest.flush_now()
 
 # Readiness gate helpers.
 
 
 # Registers a readiness gate to receive peer updates.
-func _register_readiness_gate(readiness_gate: NetwScene.Readiness) -> void:
+func _register_readiness_gate(readiness_gate: Readiness) -> void:
 	_cleanup_dead_gates()
 	_readiness_gates.append(weakref(readiness_gate))
 
@@ -739,7 +927,7 @@ func _handle_set_ready(peer_id: int, is_ready: bool) -> void:
 # Notifies all registered gates that a player entered the scene.
 func _notify_gates_player_added(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwScene.Readiness
+		var readiness_gate := wr.get_ref() as Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._add_peer(peer_id)
 
@@ -747,7 +935,7 @@ func _notify_gates_player_added(peer_id: int) -> void:
 # Notifies all registered gates that a player left the scene.
 func _notify_gates_player_removed(peer_id: int) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwScene.Readiness
+		var readiness_gate := wr.get_ref() as Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._remove_peer(peer_id)
 	_cleanup_dead_gates()
@@ -864,7 +1052,252 @@ func _rpc_request_set_ready(is_ready: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _rpc_receive_ready_changed(peer_id: int, is_ready: bool) -> void:
 	for wr: WeakRef in _readiness_gates:
-		var readiness_gate := wr.get_ref() as NetwScene.Readiness
+		var readiness_gate := wr.get_ref() as Readiness
 		if is_instance_valid(readiness_gate):
 			readiness_gate._receive_ready_changed(peer_id, is_ready)
 	_cleanup_dead_gates()
+
+
+## Server-driven countdown that ticks once per second.
+##
+## Obtain via [method MultiplayerScene.start_countdown] - do not construct
+## directly. Clients do not receive a return value; they listen to
+## [signal MultiplayerScene.countdown_started] and the subsequent
+## [signal MultiplayerScene.countdown_tick] /
+## [signal MultiplayerScene.countdown_finished] signals, which are broadcast
+## automatically.
+## [codeblock]
+## # Server:
+## var cd := scene.start_countdown(10)
+## await cd.finished
+## start_match()
+##
+## # Client (connect before the server starts the countdown):
+## scene.countdown_started.connect(func(n): $Timer.text = str(n))
+## scene.countdown_tick.connect(func(n): $Timer.text = str(n))
+## scene.countdown_finished.connect(start_match)
+## [/codeblock]
+class Countdown:
+	extends RefCounted
+
+	## Emitted each second with the remaining seconds (including 0 at the very end).
+	signal tick(seconds_left: int)
+	## Emitted when the countdown reaches zero.
+	signal finished()
+	## Emitted when [method cancel] is called before the countdown reaches zero.
+	signal cancelled()
+
+	var _scene_ref: WeakRef
+	var _seconds_left: int
+	var _tick_interval: float
+	var _running: bool = false
+
+
+	func _init(
+			scene: MultiplayerScene,
+			seconds: int,
+			tick_interval: float = 1.0,
+	) -> void:
+		_scene_ref = weakref(scene)
+		_seconds_left = seconds
+		_tick_interval = tick_interval
+
+
+	## Returns [code]true[/code] if the countdown is actively ticking.
+	func is_running() -> bool:
+		return _running
+
+	## The number of seconds remaining.
+	var seconds_left: int:
+		get:
+			return _seconds_left
+
+
+	## Cancels the countdown and emits [signal cancelled].
+	## Does nothing if the countdown is not running.
+	func cancel() -> void:
+		if not _running:
+			return
+		_running = false
+		cancelled.emit()
+
+
+	# Starts ticking. Called internally by MultiplayerScene.start_countdown.
+	func _start() -> void:
+		_running = true
+		_schedule_tick()
+
+
+	func _schedule_tick() -> void:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene) or not scene.is_inside_tree():
+			_running = false
+			return
+		scene.get_tree().create_timer(_tick_interval).timeout.connect(
+			_on_tick,
+			CONNECT_ONE_SHOT,
+		)
+
+
+	func _on_tick() -> void:
+		if not _running:
+			return
+		_seconds_left -= 1
+		tick.emit(_seconds_left)
+		if _seconds_left <= 0:
+			_running = false
+			finished.emit()
+		else:
+			_schedule_tick()
+
+
+## Server-side handle for a participant scene move.
+##
+## Obtain via [method MultiplayerScene.move_participants].
+class MoveBatch:
+	extends RefCounted
+
+	## Emitted as each participant is admitted to the destination scene.
+	signal participant_arrived(participant: NetwParticipant)
+	## Emitted after every participant has been admitted.
+	signal completed()
+
+	var _pending: int = 0
+	var _arrivals: Array[NetwParticipant] = []
+
+
+	func _init(participants: Array[NetwParticipant]) -> void:
+		_pending = participants.size()
+
+
+	func _queue_arrival(participant: NetwParticipant) -> void:
+		_pending = maxi(0, _pending - 1)
+		_arrivals.append(participant)
+
+
+	func _flush() -> void:
+		for participant: NetwParticipant in _arrivals:
+			participant_arrived.emit(participant)
+		_arrivals.clear()
+		completed.emit()
+
+
+## Per-scene readiness gate tracks which participants have confirmed ready.
+##
+## Obtain via [method MultiplayerScene.create_readiness_gate].
+## Clients call [method set_ready]. The server broadcasts the change to all peers.
+## [codeblock]
+## # Game scene screen (runs on all peers):
+## var gate := scene.create_readiness_gate()
+## gate.participant_ready_changed.connect(_refresh_ready_ui)
+## gate.all_ready.connect(_on_everyone_ready)
+##
+## # Player clicks "Ready":
+## gate.set_ready(true)
+## [/codeblock]
+class Readiness:
+	extends RefCounted
+
+	## Emitted on all peers when a participant's readiness state changes.
+	signal participant_ready_changed(participant: NetwParticipant, is_ready: bool)
+	## Emitted when every tracked participant is ready.
+	##
+	## This also emits when a not-ready participant leaves, if the remaining
+	## participants are all ready.
+	signal all_ready()
+
+	var _scene_ref: WeakRef
+	# Peer ID -> ready state. Populated as participants enter or leave.
+	var _readiness: Dictionary[int, bool] = { }
+
+
+	func _init(scene: MultiplayerScene) -> void:
+		_scene_ref = weakref(scene)
+
+
+	## Returns [code]true[/code] while the underlying [MultiplayerScene] is still alive.
+	func is_valid() -> bool:
+		return is_instance_valid(_scene_ref.get_ref())
+
+
+	## Returns [code]true[/code] if [param participant] has confirmed ready.
+	func is_ready(participant: NetwParticipant) -> bool:
+		if participant == null:
+			return false
+		return _readiness.get(participant.peer_id, false)
+
+
+	## Returns [code]true[/code] if [param participant] is tracked.
+	func tracks(participant: NetwParticipant) -> bool:
+		if participant == null:
+			return false
+		return _readiness.has(participant.peer_id)
+
+
+	## Returns all participants that have confirmed ready.
+	func get_ready_participants() -> Array[NetwParticipant]:
+		var result: Array[NetwParticipant] = []
+		var tree := _tree()
+		if tree == null:
+			return result
+		for id: int in _readiness:
+			if _readiness[id]:
+				var participant := tree.participant(id)
+				if participant:
+					result.append(participant)
+		return result
+
+
+	## Returns [code]true[/code] when every tracked participant is ready and
+	## there is at least one participant.
+	func are_all_ready() -> bool:
+		if _readiness.is_empty():
+			return false
+		for v: bool in _readiness.values():
+			if not v:
+				return false
+		return true
+
+
+	## Marks the local participant as ready or not ready.
+	##
+	## On a client this sends an RPC to the server. On the server/host it applies
+	## the change directly. The update is broadcast to all peers automatically.
+	func set_ready(ready: bool = true) -> void:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return
+		if scene.multiplayer.is_server():
+			scene._handle_set_ready(scene.multiplayer.get_unique_id(), ready)
+		else:
+			scene._rpc_request_set_ready.rpc_id(1, ready)
+
+
+	# Called internally by MultiplayerScene when the server broadcasts a readiness update.
+	func _receive_ready_changed(peer_id: int, is_ready: bool) -> void:
+		_readiness[peer_id] = is_ready
+		var tree := _tree()
+		var participant := tree.participant(peer_id) if tree else null
+		if participant:
+			participant_ready_changed.emit(participant, is_ready)
+		if are_all_ready():
+			all_ready.emit()
+
+
+	# Called internally when a participant enters the scene.
+	func _add_peer(peer_id: int) -> void:
+		if peer_id not in _readiness:
+			_readiness[peer_id] = false
+
+
+	# Called internally when a participant leaves the scene.
+	func _remove_peer(peer_id: int) -> void:
+		if _readiness.erase(peer_id) and are_all_ready():
+			all_ready.emit()
+
+
+	func _tree() -> NetwMultiplayer:
+		var scene := _scene_ref.get_ref() as MultiplayerScene
+		if not is_instance_valid(scene):
+			return null
+		return NetwMultiplayer.of(scene)

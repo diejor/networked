@@ -74,10 +74,9 @@ var _drops_uncaptured_custom: int = 0
 
 func _init(api: NetwMultiplayer) -> void:
 	_api_ref = weakref(api) if api else null
-	var mt := api.tree if api else null
-	if mt:
-		mt.session_entered.connect(_on_session_entered)
-		mt.session_ended.connect(_on_session_ended)
+	if api:
+		api.session_entered.connect(_on_session_entered)
+		api.session_ended.connect(_on_session_ended)
 
 
 func _api() -> NetwMultiplayer:
@@ -256,15 +255,15 @@ func reanchor_record(record: NetwSpawnBook.SpawnRecord, node: Node) -> void:
 	if current and current.is_inside_tree() \
 			and current.get_node_or_null(current.spawn_path) == parent:
 		return
-	var mt := _api().tree if _api() else null
-	if not is_instance_valid(mt):
+	var root := _api().root if _api() else null
+	if not is_instance_valid(root):
 		return
 	for sid: int in _spawners.keys():
 		var spawner := _spawners[sid].get_ref() as MultiplayerSpawner
 		if not is_instance_valid(spawner):
 			_spawners.erase(sid)
 			continue
-		if not spawner.is_inside_tree() or not mt.is_ancestor_of(spawner):
+		if not spawner.is_inside_tree() or not root.is_ancestor_of(spawner):
 			continue
 		if spawner.get_node_or_null(spawner.spawn_path) != parent:
 			continue
@@ -340,29 +339,28 @@ func _scene_index_for(spawner: MultiplayerSpawner, node: Node) -> int:
 # MultiplayerSynchronizer does; register_spawner inside consume() would then
 # be the sole discovery edge.
 func _on_session_entered() -> void:
-	var mt := _api().tree if _api() else null
-	if not is_instance_valid(mt):
+	var root := _api().root if _api() else null
+	if not is_instance_valid(root):
 		return
-	for spawner: Node in mt.find_children("*", "MultiplayerSpawner", true, false):
+	for spawner: Node in root.find_children("*", "MultiplayerSpawner", true, false):
 		register_spawner(spawner as MultiplayerSpawner)
-	var scene_tree := mt.get_tree()
+	var scene_tree := Engine.get_main_loop() as SceneTree
 	if scene_tree and not scene_tree.node_added.is_connected(_on_node_added):
 		scene_tree.node_added.connect(_on_node_added)
 
 
-# The node_added filter: only spawners inside this session's branch register,
-# so multi-tree hosts never cross-wrap another session's spawners.
+# The node_added filter: only spawners under this session's anchor register, so
+# multi-tree hosts never cross-wrap another session's spawners.
 func _on_node_added(node: Node) -> void:
 	if not (node is MultiplayerSpawner):
 		return
-	var mt := _api().tree if _api() else null
-	if is_instance_valid(mt) and mt.is_ancestor_of(node):
+	var root := _api().root if _api() else null
+	if is_instance_valid(root) and root.is_ancestor_of(node):
 		register_spawner(node as MultiplayerSpawner)
 
 
 func _on_session_ended() -> void:
-	var mt := _api().tree if _api() else null
-	var scene_tree := mt.get_tree() if is_instance_valid(mt) else null
+	var scene_tree := Engine.get_main_loop() as SceneTree
 	if scene_tree and scene_tree.node_added.is_connected(_on_node_added):
 		scene_tree.node_added.disconnect(_on_node_added)
 	_clear_session_state.call_deferred()

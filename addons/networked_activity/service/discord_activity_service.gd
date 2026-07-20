@@ -176,7 +176,12 @@ func _should_register() -> bool:
 	return in_discord()
 
 
-func _service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(api: NetwMultiplayer) -> void:
+	# This embed service is scoped to a tree (rendezvous transport, SDK parenting,
+	# tree-only drop signal). A root install resolves no tree, so it stays dormant.
+	var mt := api.root as MultiplayerTree
+	if mt == null:
+		return
 	if rendezvous == null:
 		Netw.dbg.warn("DiscordActivityService: rendezvous unset.")
 	else:

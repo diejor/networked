@@ -84,9 +84,8 @@
 ## reconstruction, and [method bind] stamps it when identity rides the
 ## [member Node.name] channel — call it inside a
 ## [member MultiplayerSpawner.spawn_function] before returning the node. A
-## [MultiplayerScene] with [member MultiplayerScene.gate] requires each spawned
-## [Node] to own its record, which [method ensure] provides before
-## [method MultiplayerScene.track_node].
+## [MultiplayerScene] requires each spawned [Node] to own its record, which
+## [method ensure] provides before [method MultiplayerScene.track_node].
 class_name NetwEntity
 extends RefCounted
 
@@ -263,7 +262,8 @@ signal interest_exit(peer_id: int)
 ## gains visibility of this entity through [param layer_id].
 ##
 ## Use this for owner-side UI such as "who can see me?" indicators.
-## Requires [member InterestComponent.report_observers] on the server.
+## Register through
+## [method NetwInterestInterface.InterestHandle.on_observed] on the server.
 signal observer_entered(layer_id: StringName, peer_id: int)
 
 ## Emitted on the owner client when [param peer_id] stops observing
@@ -1020,13 +1020,13 @@ func _handle_tree_entered() -> void:
 	_hydrate_identity_once()
 
 	# A manual bind flow, or an offline rig, arrives with no session stamped.
-	# Resolve it once here, the single remaining tree walk in the record, so
-	# every session-derived member below reads the stamped handle. A pipeline
-	# path already stamped it at arm.
+	# Resolve it once here so every session-derived member below reads the
+	# stamped handle, whether the session is tree-scoped or root-installed. A
+	# pipeline path already stamped it at arm.
 	if multiplayer == null:
-		var mt := MultiplayerTree.resolve(owner)
-		if mt:
-			_stamp_multiplayer(mt.api)
+		var found := NetwMultiplayer.of(owner)
+		if found:
+			_stamp_multiplayer(found)
 
 	# A pipeline path arms the record on the orphan before this entry. A manual
 	# bind flow arrives UNBOUND and arms here at first tree entry.
@@ -1335,13 +1335,13 @@ func _remote_despawn(reason: StringName, linger_seconds: float) -> void:
 
 #region Handles and bindings
 
-var _interest_gate_ref: WeakRef
-
 var _timeline_ref: WeakRef
 
 var _interpolation: NetwInterpolationInterface.Handle
 
 var _prediction: NetwLagCompensationInterface.PredictionHandle
+
+var _interest: NetwInterestInterface.InterestHandle
 
 var _synchronizers_cache: Array[MultiplayerSynchronizer] = []
 
@@ -1460,15 +1460,21 @@ var broadcast_binding: NetwSyncSetBinding:
 	get:
 		return _derived_binding(NetwSyncSet.Record.RECORD_BROADCAST)
 
-## The ancestor visibility gate ([InterestGate]) that admits this entity's
-## scene, or [code]null[/code]. Written by [MultiplayerScene], read by
-## [NetwInterestInterface]. Weakref-backed, so it clears when the gate frees.
-var interest_gate: InterestGate:
+## Entity-level interest membership and transition configuration.
+##
+## The handle is stable across accesses and tree exits. Membership declared
+## through [method NetwInterestInterface.InterestHandle.join] reattaches when
+## the entity enters a session, while callbacks registered through
+## [method NetwInterestInterface.InterestHandle.on_enter] and
+## [method NetwInterestInterface.InterestHandle.on_observed] follow the same
+## lifecycle. Wire and local presentation overrides live on this handle too.
+## Never [code]null[/code].
+var interest: NetwInterestInterface.InterestHandle:
 	get:
-		return _interest_gate_ref.get_ref() as InterestGate if _interest_gate_ref \
-		else null
-	set(value):
-		_interest_gate_ref = weakref(value) if value else null
+		if _interest == null:
+			_interest = NetwInterestInterface.InterestHandle.new()
+			_interest._bind(self)
+		return _interest
 
 ## The entity's per-entity tick-keyed [NetwTimeline] of state and input
 ## snapshots, published by [NetwLagCompensationInterface], or [code]null[/code].

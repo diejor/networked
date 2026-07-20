@@ -122,7 +122,6 @@ func test_scene_tracking_requires_own_entity_record() -> void:
 	var scene := MultiplayerScene.new()
 	scene.name = "Arena"
 	auto_free(scene)
-	scene.gate = auto_free(InterestGate.new())
 
 	var parent := Node2D.new()
 	var child := Node2D.new()

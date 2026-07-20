@@ -26,7 +26,7 @@
 class_name HostSceneView
 extends ParticipantView
 
-var _mt: MultiplayerTree
+var _api: NetwMultiplayer
 var _suppressed := false
 var _display_source := ParticipantDisplaySource.new()
 
@@ -37,9 +37,10 @@ func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 	super._enter_tree()
-	_mt = NetwService.register(self, HostSceneView)
-	if not _mt:
+	_api = NetwMultiplayer.of(self)
+	if not _api:
 		return
+	_api.register_service(self, HostSceneView)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	forward_unhandled_input = true
@@ -48,19 +49,20 @@ func _enter_tree() -> void:
 	# The current viewport can resolve before the local player spawns into it, so
 	# re-announce on local-player changes to adopt the camera without needing the
 	# viewport itself to change.
-	if not _mt.local_player_changed.is_connected(_on_local_player_changed):
-		_mt.local_player_changed.connect(_on_local_player_changed)
-	_display_source.configure(_mt)
+	if not _api.local_player_changed.is_connected(_on_local_player_changed):
+		_api.local_player_changed.connect(_on_local_player_changed)
+	_display_source.configure(_api)
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
-	if _mt and _mt.local_player_changed.is_connected(_on_local_player_changed):
-		_mt.local_player_changed.disconnect(_on_local_player_changed)
+	if _api and _api.local_player_changed.is_connected(_on_local_player_changed):
+		_api.local_player_changed.disconnect(_on_local_player_changed)
 	_display_source.dispose()
-	_mt = null
-	NetwService.unregister(self, HostSceneView)
+	if _api:
+		_api.unregister_service(self, HostSceneView)
+	_api = null
 	super._exit_tree()
 
 
@@ -100,9 +102,9 @@ func _on_display_source_changed(viewport: SubViewport) -> void:
 # (whatever implementation) can assert itself. Scoped to the player actually
 # under this viewport, so the spectator fallback never activates a stray view.
 func _announce_view(viewport: SubViewport) -> void:
-	if not is_instance_valid(viewport) or not _mt:
+	if not is_instance_valid(viewport) or not _api:
 		return
-	var local_entity := _mt.local_player
+	var local_entity := _api.local_player
 	if local_entity == null or not is_instance_valid(local_entity.owner):
 		return
 	var player := local_entity.owner

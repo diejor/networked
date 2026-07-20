@@ -1,0 +1,485 @@
+extends NetwTestSuite
+## Measures how far the predicted and authoritative car drift apart when every
+## timing difference between the peers has been removed.
+##
+## The loopback harness runs both peers in one process on one clock, so tick and
+## solver step align perfectly and each car receives the same input in the same
+## order. Whatever divergence survives that is the physics itself failing to
+## reproduce: same binary, same solver, same call sequence. Whatever divergence
+## appears live but not here is timing, not physics.
+##
+## Divergence is read at matched ticks, off
+## [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated] and
+## [member NetwLagCompensationInterface.PredictionHandle.last_field_divergence],
+## never by differencing the two nodes where they stand. The predicted car runs
+## ahead of the authoritative one by design, so a same-moment difference between
+## the two bodies is that lead plus the divergence with no way to separate them,
+## and the lead dominates. Only
+## [member NetwLagCompensationInterface.PredictionHandle.last_compare_staleness]
+## says whether a given sample was matched at all.
+##
+## This is a probe, not a gate. It prints a distribution and asserts only a very
+## loose ceiling, so it records the number rather than freezing it.
+
+const MAIN := preload("res://examples/racing/main.tscn")
+
+var game: NetwGameHarness
+
+
+func before_test() -> void:
+	game = make_game_harness(MAIN)
+	await game.setup()
+
+
+func test_reports_same_process_divergence_at_matched_ticks() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+	await game.sync_ticks(8)
+
+	var handle = own.entity.prediction
+	var by_field: Dictionary[StringName, Array] = { }
+	var staleness: Array[float] = []
+	handle.state_evaluated.connect(
+		func(_recv_tick: int, _ack: int, _divergence: float, _corrected: bool) -> void:
+			staleness.append(float(handle.last_compare_staleness))
+			for field: StringName in handle.last_field_divergence:
+				if not by_field.has(field):
+					by_field[field] = [] as Array[float]
+				by_field[field].append(handle.last_field_divergence[field])
+	)
+
+	# A sustained turn is where the campaign's live captures put the worst
+	# divergence, so the probe drives the same manoeuvre.
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+
+	# The same-moment difference the earlier probe reported, kept only so the two
+	# numbers print side by side: this one carries the prediction lead, the
+	# matched-tick report below does not.
+	var same_moment: Array[float] = []
+	for i in range(60):
+		await game.sync_ticks(2)
+		same_moment.append(
+			(own.sphere_angular_velocity - mirror.sphere_angular_velocity).length(),
+		)
+
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	for field: StringName in by_field:
+		_report("matched  %s" % field, by_field[field])
+	_report("same-moment  sphere_angular_velocity", same_moment)
+	_report("compare staleness (ticks)", staleness)
+
+	var matched := staleness.filter(func(s: float) -> bool: return s == 0.0).size()
+	print(
+		"[probe] matched-tick samples=%d/%d  corrections=%d" % [
+			matched, staleness.size(), handle.corrections,
+		],
+	)
+
+	assert_int(staleness.size()) \
+		.override_failure_message("no state was evaluated, the probe measured nothing") \
+		.is_greater(0)
+
+	# Loose ceiling only. A one-process run that diverged as hard as the live
+	# captures would mean the physics cannot reproduce itself at all, which is a
+	# different and much larger problem than any timing fix addresses.
+	var angular: Array[float] = by_field.get(&"sphere_angular_velocity", [] as Array[float])
+	assert_float(_median(angular)) \
+		.override_failure_message(
+			"same-process matched-tick angular divergence median %.4f rad/s"
+			% _median(angular),
+		).is_less(5.0)
+
+
+# Watches the predicted and authoritative bodies from the first tick they both
+# exist, with no input ever applied. Position error in every capture so far is a
+# standing offset rather than an accumulating drift, so this asks the question
+# that shape poses: are the two bodies apart the moment they appear, or does
+# something push them apart over the first few ticks. The per-axis split says
+# which, since a settling difference is vertical and a placement difference is
+# not. The other car's distance is recorded alongside because a predicted body
+# that contacts a body it does not predict resolves that contact differently on
+# each peer.
+func test_reports_spawn_gap_from_first_tick() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+	var other_on_client := await client.await_player(&"mario", 2.0)
+	var other_on_host := await host.await_player(&"mario", 2.0)
+
+	print("[spawn] no input is applied at any point in this measurement")
+	print("[spawn]   n   gap     dx      dy      dz     own.x   auth.x  d(luigi,mario) c/h  corr")
+	for i in range(40):
+		var delta: Vector3 = own.sphere_position - mirror.sphere_position
+		print(
+			"[spawn] %3d  %6.4f  %+6.3f  %+6.3f  %+6.3f  %7.3f  %7.3f   %6.3f %6.3f  %d" % [
+				i,
+				delta.length(),
+				delta.x,
+				delta.y,
+				delta.z,
+				own.sphere_position.x,
+				mirror.sphere_position.x,
+				own.sphere_position.distance_to(other_on_client.sphere_position),
+				mirror.sphere_position.distance_to(other_on_host.sphere_position),
+				own.entity.prediction.corrections,
+			],
+		)
+		await game.sync_ticks(1)
+
+	assert_bool(is_instance_valid(own)).is_true()
+
+
+# Diffs the two peers' drive terms every tick. The sphere is propelled by
+# [code]angular_velocity += vehicle_model.basis.x * linear_speed * 100 * delta[/code],
+# so the impulse depends on the model's whole orientation while only its yaw
+# travels in the state set. This records both peers' speed, full model rotation,
+# ground normal and resulting impulse side by side, so the term that differs is
+# read off rather than reasoned about. No input is applied.
+func test_reports_drive_term_divergence_per_tick() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+
+	const TICK_DELTA := 1.0 / 60.0
+	print("[drive] no input applied. o=own (predicted)  a=authoritative")
+	print(
+		"[drive]   n   spd_o  |dimp|   dnorm    dyaw  dpitch   droll   dangv  |"
+		+ "   |v_o|   |v_a|    |dv|      gap",
+	)
+	for i in range(30):
+		var rot_o: Vector3 = own.vehicle_model.rotation
+		var rot_a: Vector3 = mirror.vehicle_model.rotation
+		var basis_o: Vector3 = own.vehicle_model.global_transform.basis.x
+		var basis_a: Vector3 = mirror.vehicle_model.global_transform.basis.x
+		var imp_o: Vector3 = basis_o * (own.linear_speed * 100.0) * TICK_DELTA
+		var imp_a: Vector3 = basis_a * (mirror.linear_speed * 100.0) * TICK_DELTA
+		var norm_o: Vector3 = own.normal
+		var norm_a: Vector3 = mirror.normal
+		var vel_o: Vector3 = own.sphere_linear_velocity
+		var vel_a: Vector3 = mirror.sphere_linear_velocity
+		print(
+			"[drive] %3d %7.4f %7.4f %7.4f %7.4f %7.4f %7.4f %7.4f  |  %7.3f %7.3f %7.4f  %7.4f" % [
+				i,
+				own.linear_speed,
+				(imp_o - imp_a).length(),
+				(norm_o - norm_a).length(),
+				rot_o.y - rot_a.y,
+				rot_o.x - rot_a.x,
+				rot_o.z - rot_a.z,
+				own.sphere_angular_velocity.distance_to(mirror.sphere_angular_velocity),
+				vel_o.length(),
+				vel_a.length(),
+				(vel_o - vel_a).length(),
+				own.sphere_position.distance_to(mirror.sphere_position),
+			],
+		)
+		await game.sync_ticks(1)
+
+	assert_bool(is_instance_valid(own)).is_true()
+
+
+# Checks whether the rig itself manufactures the divergence it measures. Both
+# peers run in one process, so if their two copies of the same car share a
+# physics space they are two solid bodies, and a correction that lands the
+# predicted body on the authoritative pose puts them on top of each other. Two
+# overlapping spheres repel symmetrically, which would produce divergence no
+# amount of netcode could explain and which does not exist across two real
+# processes.
+func test_reports_whether_peers_share_a_physics_space() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+	await game.sync_ticks(4)
+
+	var own_world: World3D = own.sphere.get_world_3d()
+	var mirror_world: World3D = mirror.sphere.get_world_3d()
+	print("[space] own world  =%s  space=%s" % [own_world, own_world.space])
+	print("[space] auth world =%s  space=%s" % [mirror_world, mirror_world.space])
+	print("[space] same World3D object = %s" % [own_world == mirror_world])
+	print("[space] same physics space  = %s" % [own_world.space == mirror_world.space])
+	print(
+		"[space] global separation = %.4f  (two radius-0.5 spheres overlap below 1.0)"
+		% own.sphere.global_position.distance_to(mirror.sphere.global_position),
+	)
+	print(
+		"[space] own tree=%s  auth tree=%s" % [
+			own.get_tree(), mirror.get_tree(),
+		],
+	)
+
+	assert_bool(own_world.space == mirror_world.space) \
+		.override_failure_message(
+			"the two peers' bodies share a physics space, so each peer's copy of a"
+			+ " car collides with the other peer's copy and the rig manufactures"
+			+ " divergence that no real two-process session can produce",
+		).is_false()
+
+
+# Attributes every correction to the field that triggered it. The same-process
+# rig should be the best case there is, so a correction rate near one-in-two
+# says something is triggering that timing alignment cannot explain. This does
+# not interpret the number, it only says which field crossed its threshold and
+# how often, next to the threshold it crossed.
+func test_reports_correction_trigger_attribution() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	await host.await_player(&"luigi", 2.0)
+	await game.sync_ticks(8)
+
+	var handle = own.entity.prediction
+	# Counters live in reference types: a lambda captures a local by value, so an
+	# int incremented inside the handler would only ever move a private copy.
+	var corrected_flags: Array[bool] = []
+	var exceeded: Dictionary[StringName, int] = { }
+	var sole_trigger: Dictionary[StringName, int] = { }
+	handle.state_evaluated.connect(
+		func(_recv_tick: int, _ack: int, _divergence: float, corrected: bool) -> void:
+			corrected_flags.append(corrected)
+			var over: Array[StringName] = []
+			for field: StringName in handle.last_field_divergence:
+				if handle.correction_trigger_excludes.has(field):
+					continue
+				var limit: float = handle.divergence_epsilon_overrides.get(
+					field, handle.divergence_epsilon,
+				)
+				if handle.last_field_divergence[field] > limit:
+					over.append(field)
+					exceeded[field] = exceeded.get(field, 0) + 1
+			if over.size() == 1:
+				sole_trigger[over[0]] = sole_trigger.get(over[0], 0) + 1
+	)
+
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	for i in range(60):
+		await game.sync_ticks(2)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	var evaluations := corrected_flags.size()
+	var corrected_count := corrected_flags.filter(func(c: bool) -> bool: return c).size()
+	print(
+		"[trigger] base epsilon=%.4f  overrides=%s  excludes=%s" % [
+			handle.divergence_epsilon,
+			handle.divergence_epsilon_overrides,
+			handle.correction_trigger_excludes,
+		],
+	)
+	print(
+		"[trigger] evaluations=%d  corrected=%d  corrections_total=%d" % [
+			evaluations, corrected_count, handle.corrections,
+		],
+	)
+	for field: StringName in handle.last_field_divergence:
+		var limit: float = handle.divergence_epsilon_overrides.get(
+			field, handle.divergence_epsilon,
+		)
+		print(
+			"[trigger]   %-26s over threshold %3d/%d  (limit %.4f)  sole trigger %d" % [
+				field, exceeded.get(field, 0), evaluations, limit,
+				sole_trigger.get(field, 0),
+			],
+		)
+
+	assert_int(evaluations) \
+		.override_failure_message("no state was evaluated, the probe measured nothing") \
+		.is_greater(0)
+
+
+# Follows position divergence across each correction to see whether a correction
+# converges it or merely pushes it back below the trigger for a tick or two. A
+# correction that is immediately re-earned is a policy oscillating around a
+# threshold rather than a mechanism repairing an error.
+func test_reports_position_recovery_across_corrections() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	await host.await_player(&"luigi", 2.0)
+	await game.sync_ticks(8)
+
+	var handle = own.entity.prediction
+	var limit: float = handle.divergence_epsilon_overrides.get(
+		&"sphere_position", handle.divergence_epsilon,
+	)
+	# Reference types only: a lambda captures locals by value.
+	var divergence: Array[float] = []
+	var corrected_flags: Array[bool] = []
+	handle.state_evaluated.connect(
+		func(_recv_tick: int, _ack: int, _divergence: float, corrected: bool) -> void:
+			divergence.append(handle.last_field_divergence.get(&"sphere_position", 0.0))
+			corrected_flags.append(corrected)
+	)
+
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	for i in range(60):
+		await game.sync_ticks(2)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	print("[recovery] sphere_position trigger threshold %.4f" % limit)
+
+	# The mean error at each offset after a correction. A converging policy walks
+	# this down and keeps it down; a chattering one returns to the threshold.
+	const HORIZON := 6
+	for offset in range(HORIZON + 1):
+		var samples: Array[float] = []
+		for i in range(corrected_flags.size()):
+			if corrected_flags[i] and i + offset < divergence.size():
+				samples.append(divergence[i + offset])
+		if not samples.is_empty():
+			var over := samples.filter(func(d: float) -> bool: return d > limit).size()
+			print(
+				"[recovery]   +%d evals after a correction: mean=%7.4f  over threshold %d/%d" % [
+					offset, _mean(samples), over, samples.size(),
+				],
+			)
+
+	# How many evaluations a correction actually buys before the error is back
+	# over the trigger.
+	var recross: Array[float] = []
+	for i in range(corrected_flags.size()):
+		if not corrected_flags[i]:
+			continue
+		for d in range(1, divergence.size() - i):
+			if divergence[i + d] > limit:
+				recross.append(float(d))
+				break
+	if not recross.is_empty():
+		recross.sort()
+		print(
+			"[recovery] evals until back over threshold: median=%.1f  min=%.1f  max=%.1f  n=%d" % [
+				recross[recross.size() / 2], recross[0], recross[-1], recross.size(),
+			],
+		)
+
+	assert_int(divergence.size()) \
+		.override_failure_message("no state was evaluated, the probe measured nothing") \
+		.is_greater(0)
+
+
+# The measurement that isolates the solver. Corrections are switched off by
+# raising every divergence threshold out of reach, so nothing writes onto the
+# predicted body and the two cars simulate the same inputs freely from the same
+# start. The drift that accumulates is the physics failing to reproduce itself,
+# with no correction machinery mixed in.
+func test_reports_uncorrected_simulation_drift() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+
+	var handle = own.entity.prediction
+	var no_overrides: Dictionary[StringName, float] = { }
+	handle.divergence_epsilon = 1.0e9
+	handle.divergence_epsilon_overrides = no_overrides
+	handle.teleport_threshold = 1.0e9
+	handle.soft_restore_stiffness = no_overrides.duplicate()
+	await game.sync_ticks(8)
+
+	# The spawn-state audit. Two bodies that have received no input yet should be
+	# standing in the same place, so any gap here is a start-state difference that
+	# every later number inherits. The field list comes off the first evaluation
+	# rather than being written out, so it covers the whole replicated set.
+	print("[drift] spawn state, before any input:")
+	for field: StringName in handle.last_field_divergence:
+		var own_value: Variant = own.get(field)
+		var mirror_value: Variant = mirror.get(field)
+		print(
+			"[drift]   %-26s own=%s  authority=%s  gap=%s" % [
+				field, own_value, mirror_value, _gap(own_value, mirror_value),
+			],
+		)
+
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	for step in range(6):
+		await game.sync_ticks(20)
+		print(
+			"[drift] t=%5.2fs  angular=%7.4f  linear=%7.4f  position=%7.4f  corrections=%d" % [
+				(step + 1) * 20.0 / 60.0,
+				(own.sphere_angular_velocity - mirror.sphere_angular_velocity).length(),
+				(own.sphere_linear_velocity - mirror.sphere_linear_velocity).length(),
+				own.sphere_position.distance_to(mirror.sphere_position),
+				handle.corrections,
+			],
+		)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	assert_int(handle.corrections) \
+		.override_failure_message("the probe must not correct, or it measures nothing") \
+		.is_equal(0)
+
+
+func _gap(own_value: Variant, mirror_value: Variant) -> String:
+	if own_value is Vector3 and mirror_value is Vector3:
+		return "%.6f" % (own_value as Vector3).distance_to(mirror_value)
+	if own_value is float and mirror_value is float:
+		return "%.6f" % absf((own_value as float) - (mirror_value as float))
+	return "same" if own_value == mirror_value else "differs"
+
+
+func _report(label: String, samples: Array[float]) -> void:
+	if samples.is_empty():
+		print("[probe] %-34s no samples" % label)
+		return
+	var sorted_samples := samples.duplicate()
+	sorted_samples.sort()
+	var last := sorted_samples.size() - 1
+	print(
+		"[probe] %-34s median=%7.4f  p90=%7.4f  max=%7.4f  n=%d" % [
+			label,
+			_median(samples),
+			sorted_samples[mini(last, int(0.9 * sorted_samples.size()))],
+			sorted_samples[last],
+			samples.size(),
+		],
+	)
+
+
+func _mean(samples: Array[float]) -> float:
+	if samples.is_empty():
+		return 0.0
+	var total := 0.0
+	for value in samples:
+		total += value
+	return total / samples.size()
+
+
+func _median(samples: Array[float]) -> float:
+	if samples.is_empty():
+		return 0.0
+	var sorted_samples := samples.duplicate()
+	sorted_samples.sort()
+	return sorted_samples[sorted_samples.size() / 2]

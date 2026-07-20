@@ -17,7 +17,7 @@ func before_test() -> void:
 # the whole bomber loop for one peer: spawn, drive, get bombed, lose control.
 func test_match_player_moves_until_a_bomb_freezes_it() -> void:
 	var valeria := await game.add_host("valeria", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	await valeria.await_scene(&"World", 2.0)
 	var player := await valeria.await_player(&"valeria", 2.0) as Node2D
@@ -52,7 +52,7 @@ func test_match_player_moves_until_a_bomb_freezes_it() -> void:
 func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	var valeria_world := await valeria.await_scene(&"World")
 	var jose_world := await jose.await_scene(&"World")
@@ -92,7 +92,7 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	await valeria.await_scene(&"World")
 	var jose_world := await jose.await_scene(&"World")
@@ -129,7 +129,7 @@ func test_rough_link_keeps_bombs_reliable_and_positions_converging() -> void:
 func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	var world := await valeria.await_scene(&"World")
 	var jose_view := await jose.await_player(&"jose") as Node2D
@@ -166,7 +166,7 @@ func test_server_explosion_scores_rocks_and_stuns_players_across_peers() -> void
 func test_client_disconnect_keeps_match_running() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	await valeria.await_scene(&"World")
 	await valeria.await_player(&"jose")
@@ -213,6 +213,10 @@ func test_host_lobby_ui_spawns_inside_scene_with_roster() -> void:
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
+	# The Start button lives inside the lobby scene, so a real match start
+	# always begins from a spawned lobby. Awaiting it keeps a programmatic
+	# start from racing the startup scene spawn.
+	await host.await_scene(&"Lobby", 2.0)
 	var gamestate := host.tree.get_service(BomberGamestate) as BomberGamestate
 	assert_that(gamestate).is_not_null()
 	gamestate.begin_game()

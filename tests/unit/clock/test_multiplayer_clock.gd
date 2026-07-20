@@ -102,13 +102,54 @@ func test_stretch_nudge_and_synchronization_signal() -> void:
 	assert_that(counter.count).is_equal(1)
 
 
+# The calibration target tracks the server's continuous clock position, so a
+# ping arriving a fraction of a tick later moves the target by that fraction and
+# never by a whole tick. A quantized anchor would instead flip by one tick as the
+# arrival phase crossed a server tick boundary, and STRETCH would spend about a
+# second chasing each flip, sweeping the client's tick boundary through the
+# server's consume boundary as it went.
+func test_pong_target_follows_the_server_phase_continuously() -> void:
+	var targets: Array[float] = []
+	for phase in [0.0, 0.25, 0.5, 0.75]:
+		var clock := _make_clock(30)
+		clock.sync_mode = NetwClockInterface.SyncMode.STRETCH
+		clock.lead_ticks = 1.0
+		clock.is_synchronized = true
+		clock.tick = 100
+
+		clock.handle_pong(0.0, 100, phase)
+		targets.append(clock._target_tick_estimate)
+
+	# Zero RTT and a lead of one tick put the anchor exactly one tick ahead of
+	# the server, and each phase step carries it forward by that same fraction.
+	for i in targets.size():
+		assert_float(targets[i]) \
+			.override_failure_message(
+				"phase %.2f anchored at %.4f" % [i * 0.25, targets[i]],
+			).is_equal_approx(101.0 + i * 0.25, 0.01)
+
+
+# A pong seeds both the tick counter and the phase within it, so a first
+# calibration lands the local clock on the server's position rather than on the
+# tick boundary below it.
+func test_first_calibration_seeds_the_intra_tick_phase() -> void:
+	var clock := _make_clock(30)
+	clock.sync_mode = NetwClockInterface.SyncMode.STRETCH
+
+	clock._calibrate(40.5)
+
+	assert_that(clock.tick).is_equal(40)
+	assert_float(clock._tick_accumulator) \
+		.is_equal_approx(clock.ticktime * 0.5, 0.0001)
+
+
 func test_for_node_lookup() -> void:
 	var node := Node.new()
 	add_child(node)
 	auto_free(node)
 	assert_that(MultiplayerClock.for_node(node)).is_null()
 
-	var api := node.multiplayer as SceneMultiplayer
+	var api := node.multiplayer
 	assert_that(api).is_not_null()
 
 	var clock := MultiplayerClock.new()

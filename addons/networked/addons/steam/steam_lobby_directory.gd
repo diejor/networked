@@ -62,16 +62,21 @@ signal _lobby_created_internal(peer: MultiplayerPeer)
 signal _lobby_joined_internal(peer: MultiplayerPeer)
 
 
-func _enter_tree() -> void:
-	if Engine.is_editor_hint():
-		return
+# Steam is dormant under a test runner and in a relay-only embed (a Discord
+# iframe forbids the native client). The heavier init lives in
+# [method _service_entered] so this stays a cheap both-ends gate.
+func _should_register() -> bool:
 	if Netw.is_test_env():
-		return
-	# Steam needs the native client, so it cannot work in a relay-only embed
-	# (a Discord iframe). Stay dormant there.
+		return false
 	if NetwService.is_transport_restricted():
-		return
+		return false
+	return true
 
+
+# Steam allows one instance and one initialization per process. The service is
+# already registered when this runs, so a duplicate or a failed init unregisters
+# itself synchronously (no yield, so no observer ever sees the intermediate row).
+func _service_entered(api: NetwMultiplayer) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing and existing != self:
 		# A debugger-spawned tree legitimately carries a second copy; Steam allows
@@ -86,6 +91,7 @@ func _enter_tree() -> void:
 				"SteamLobbyDirectory: only one instance is allowed. " +
 				"Queueing duplicate for deletion.",
 			)
+		api.unregister_service(self, _service_type())
 		queue_free()
 		return
 	_instance = weakref(self)
@@ -99,6 +105,7 @@ func _enter_tree() -> void:
 		provider_unavailable.emit.call_deferred(
 			"GodotSteam singleton not found",
 		)
+		api.unregister_service(self, _service_type())
 		return
 
 	if not _has_steam_app_id():
@@ -114,6 +121,7 @@ func _enter_tree() -> void:
 				func(m): push_error(m)
 			)
 			provider_unavailable.emit.call_deferred(reason)
+			api.unregister_service(self, _service_type())
 			return
 
 	var init_res: Dictionary = _wrapper.steam_init_ex()
@@ -136,6 +144,7 @@ func _enter_tree() -> void:
 			func(m): push_warning(m)
 		)
 		provider_unavailable.emit.call_deferred(reason)
+		api.unregister_service(self, _service_type())
 		return
 
 	_wrapper.connect_signal("lobby_created", _on_lobby_created)
@@ -145,17 +154,12 @@ func _enter_tree() -> void:
 	_wrapper.connect_signal("p2p_session_connect_fail", _on_p2p_connect_fail)
 	_wrapper.connect_signal("network_connection_status_changed", _on_network_connection_status_changed)
 
-	NetwService.register(self)
-
-	var mt := MultiplayerTree.resolve(self)
+	var mt := api.root as MultiplayerTree
 	if mt:
 		_bind_tree_signals(mt)
 
 
-func _exit_tree() -> void:
-	if Engine.is_editor_hint():
-		return
-
+func _service_exiting(_api: NetwMultiplayer) -> void:
 	var existing: SteamLobbyDirectory = _instance.get_ref()
 	if existing == self:
 		_instance = weakref(null)
@@ -174,8 +178,6 @@ func _exit_tree() -> void:
 	if _lobby_id != 0 and _wrapper:
 		_wrapper.leave_lobby(_lobby_id)
 		_lobby_id = 0
-
-	NetwService.unregister(self)
 
 
 func _process(_dt: float) -> void:

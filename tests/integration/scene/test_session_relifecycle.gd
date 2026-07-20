@@ -42,10 +42,6 @@ func _listen_payload(username: String) -> JoinPayload:
 	)
 
 
-func _gate_count(tree: MultiplayerTree) -> int:
-	return tree.find_children("*", "InterestGate", true, false).size()
-
-
 func _host_listen_with_spawned_player(username: String) -> MultiplayerTree:
 	var tree := await harness.add_listen_server(_listen_payload(username))
 	await harness.wait_for_player(tree, level_builder.scene_name)
@@ -60,13 +56,12 @@ func _record_session_order(tree: MultiplayerTree) -> Array[String]:
 
 
 func _assert_session_teardown_empty(tree: MultiplayerTree) -> void:
-	var sm := tree.get_service(MultiplayerSceneManager)
+	var scenes := tree.api.scenes
 	var interest := tree.api.interest
 	assert_int(tree.state).is_equal(NetwSessionInterface.State.OFFLINE)
 	assert_int(tree.role).is_equal(NetwSessionInterface.Role.NONE)
-	assert_bool(sm.active_scenes.is_empty()).is_true()
+	assert_bool(scenes.scenes.is_empty()).is_true()
 	assert_bool(interest.all_layers().is_empty()).is_true()
-	assert_int(_gate_count(tree)).is_equal(0)
 
 
 func _rehost_with_spawned_player(
@@ -95,10 +90,10 @@ func _join_shared_backend_without_spawn(
 
 func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 	var tree := await _host_listen_with_spawned_player("valeria")
-	var sm := tree.get_service(MultiplayerSceneManager)
-	assert_bool(sm.active_scenes.is_empty()).is_false()
-	var first_gates := _gate_count(tree)
-	assert_int(first_gates).is_greater(0)
+	var scenes := tree.api.scenes
+	assert_bool(scenes.scenes.is_empty()).is_false()
+	var first_scene_count := scenes.scenes.size()
+	assert_int(first_scene_count).is_greater(0)
 
 	var order := _record_session_order(tree)
 
@@ -110,8 +105,8 @@ func test_rehost_on_same_tree_rebuilds_session_from_empty() -> void:
 
 	assert_int(tree.state).is_equal(NetwSessionInterface.State.ONLINE)
 	assert_int(tree.role).is_equal(NetwSessionInterface.Role.LISTEN_SERVER)
-	assert_bool(sm.active_scenes.is_empty()).is_false()
-	assert_int(_gate_count(tree)).is_equal(first_gates)
+	assert_bool(scenes.scenes.is_empty()).is_false()
+	assert_int(scenes.scenes.size()).is_equal(first_scene_count)
 	assert_array(order).is_equal(["ended", "entered"])
 
 
@@ -147,4 +142,4 @@ func test_disconnect_then_join_different_backend_on_same_tree() -> void:
 
 	assert_int(tree.state).is_equal(NetwSessionInterface.State.ONLINE)
 	assert_int(tree.role).is_equal(NetwSessionInterface.Role.CLIENT)
-	assert_int(_gate_count(tree)).is_equal(0)
+	assert_bool(tree.api.scenes.scenes.is_empty()).is_true()

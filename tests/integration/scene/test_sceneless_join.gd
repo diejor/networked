@@ -37,8 +37,8 @@ func before_test() -> void:
 
 
 func test_default_scene_wraps_level_and_context() -> void:
-	var manager := harness.server_scene_manager()
-	var scene := manager.active_scenes.get(level_builder.scene_name) \
+	var scenes := harness.server().api.scenes
+	var scene := scenes.scene(level_builder.scene_name) \
 			as MultiplayerScene
 	assert_that(scene).is_not_null()
 
@@ -65,8 +65,8 @@ func test_player_spawns_in_level_after_join() -> void:
 	rj.username = username
 	rj.peer_id = peer_id
 	var player_name := NetwEntity.name_for(rj)
-	var manager := harness.server_scene_manager()
-	var scene := manager.active_scenes.get(level_builder.scene_name) \
+	var scenes := harness.server().api.scenes
+	var scene := scenes.scene(level_builder.scene_name) \
 			as MultiplayerScene
 	assert_that(scene).is_not_null()
 	var level := scene.level

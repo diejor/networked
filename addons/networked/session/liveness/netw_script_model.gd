@@ -606,15 +606,15 @@ static func validate_quantizers(
 	return true
 
 
-## Shared delivery axes for one replicated property, signal, or RPC.
+## Delivery axes for one replicated signal, RPC, or property.
 ##
-## Every [method Netw.configure_rpc], [method Netw.configure_property], and
-## [method Netw.configure_signal] call returns a face of this builder, so one
-## fluent chain in [method Object._init] declares who may author the stream
+## [method Netw.configure_rpc] and [method Netw.configure_signal] return this
+## builder directly, while [method Netw.configure_property] returns the
+## [PropertyConfig] subtype that adds the property-only axes on top. One fluent
+## chain in [method Object._init] declares who may author the stream
 ## ([method authority], [method controller], [method any_peer]), how it travels
 ## ([method reliable], [method unreliable], [method quantize]), and what the
-## receiver does with it ([method defer_until], [method interpolate],
-## [method on_spawn]).
+## receiver does with it ([method defer_until], [method interpolate]).
 ## [codeblock]
 ## func _init() -> void:
 ##     Netw.configure_rpc(self.fire).unreliable().controller_only()
@@ -668,14 +668,6 @@ class SyncConfig:
 			is_call_local = val
 			_local_configured = true
 	var _local_configured := false
-
-	## If [code]true[/code], this configuration applies to a property.
-	var is_property: bool = false
-
-	## If [code]true[/code], the property's value rides the
-	## [constant NetwFrameEnvelope.Channel.SPAWN] frame and is applied on every
-	## receiving peer before the node enters the tree. See [method on_spawn].
-	var is_spawn_state: bool = false
 
 	# Context for warnings and validation checks
 	var context_script: Script = null
@@ -731,16 +723,8 @@ class SyncConfig:
 	## The signal/RPC is emitted/executed locally on the sender as well.
 	##
 	## [br][br][b]Note:[/b] [method Netw.configure_signal] configurations
-	## default to [method call_local]. Property synchronization ignores this
-	## configuration.
+	## default to [method call_local].
 	func call_local() -> SyncConfig:
-		if is_property:
-			Netw.dbg.warn(
-				"SyncConfig.call_local: call_local/call_remote has no effect "
-				+ "on properties since property assignments are "
-				+ "inherently local first.",
-				func(m): push_warning(m)
-			)
 		is_call_local = true
 		return self
 
@@ -748,17 +732,9 @@ class SyncConfig:
 	## The signal/RPC is only replicated to remote peers and not executed
 	## locally.
 	##
-	## [br][br][b]Note:[/b] [method Netw.configure_rpc] and
-	## [method Netw.configure_property] default to [method call_remote].
-	## Property synchronization ignores this configuration.
+	## [br][br][b]Note:[/b] [method Netw.configure_rpc] defaults to
+	## [method call_remote].
 	func call_remote() -> SyncConfig:
-		if is_property:
-			Netw.dbg.warn(
-				"SyncConfig.call_remote: call_local/call_remote has no effect "
-				+ "on properties since property assignments are "
-				+ "inherently local first.",
-				func(m): push_warning(m)
-			)
 		is_call_local = false
 		return self
 
@@ -780,20 +756,6 @@ class SyncConfig:
 	## (or the server).
 	func controller_only() -> SyncConfig:
 		is_controller_only = true
-		return self
-
-
-	## Marks this property as spawn state. The value is captured from the
-	## authority's instance when the [constant NetwFrameEnvelope.Channel.SPAWN]
-	## frame is snapshotted and applied on every receiving peer while the node
-	## is still orphaned, so [method Node._enter_tree] and
-	## [method Node._ready] read it on every peer.
-	## [codeblock]
-	## func _init() -> void:
-	##     Netw.configure_property(self, &"pet_name").on_spawn()
-	## [/codeblock]
-	func on_spawn() -> SyncConfig:
-		is_spawn_state = true
 		return self
 
 
@@ -1016,6 +978,16 @@ class PropertyConfig:
 
 	## Sentinel for an integer knob no member has written yet.
 	const UNSET := -1
+
+	## Always [code]true[/code] on a property config. Distinguishes a
+	## [PropertyConfig] from a plain [NetwScriptModel.SyncConfig] (the config an
+	## RPC or signal returns) when only the base type is known.
+	var is_property: bool = true
+
+	## If [code]true[/code], the property's value rides the
+	## [constant NetwFrameEnvelope.Channel.SPAWN] frame and is applied on every
+	## receiving peer before the node enters the tree. Set by [method on_spawn].
+	var is_spawn_state: bool = false
 
 	## The field's delivery lane: [constant NetwSyncSet.Lane.VOLATILE] freshest
 	## wins, [constant NetwSyncSet.Lane.RETAINED] reliable on change.
@@ -1262,22 +1234,52 @@ class PropertyConfig:
 		return self
 
 
+	## Marks this property as spawn state. The value is captured from the
+	## authority's instance when the [constant NetwFrameEnvelope.Channel.SPAWN]
+	## frame is snapshotted and applied on every receiving peer while the node
+	## is still orphaned, so [method Node._enter_tree] and
+	## [method Node._ready] read it on every peer.
+	## [codeblock]
+	## func _init() -> void:
+	##     Netw.configure_property(self, &"pet_name").on_spawn()
+	## [/codeblock]
+	func on_spawn() -> PropertyConfig:
+		is_spawn_state = true
+		return self
+
+
+	## Property assignments are inherently local first, so
+	## [method NetwScriptModel.SyncConfig.call_local] has no effect on a property
+	## and warns.
+	func call_local() -> SyncConfig:
+		Netw.dbg.warn(
+			"PropertyConfig.call_local: call_local/call_remote has no effect "
+			+ "on properties since property assignments are "
+			+ "inherently local first.",
+			func(m): push_warning(m)
+		)
+		return super()
+
+
+	## Property synchronization ignores the local-call axis, so
+	## [method NetwScriptModel.SyncConfig.call_remote] has no effect on a property
+	## and warns.
+	func call_remote() -> SyncConfig:
+		Netw.dbg.warn(
+			"PropertyConfig.call_remote: call_local/call_remote has no effect "
+			+ "on properties since property assignments are "
+			+ "inherently local first.",
+			func(m): push_warning(m)
+		)
+		return super()
+
+
 	func _warn_double_set(already: bool, axis: String) -> void:
 		if already:
 			Netw.dbg.warn(
 				"PropertyConfig: set-level %s configured multiple times" % axis,
 				func(m): push_warning(m)
 			)
-
-
-## The event face of [NetwScriptModel.SyncConfig], carrying the call semantics of
-## [method Netw.configure_rpc] and [method Netw.configure_signal].
-##
-## RPCs and signals share the deferral, controller-restriction, and local-call
-## model on [NetwScriptModel.SyncConfig], so this face exists to name the split rather than to
-## add surface. The property axes never apply to a call.
-class EventConfig:
-	extends SyncConfig
 
 
 ## The connect-lifecycle face of a typed handler registered before any session
@@ -1391,12 +1393,14 @@ class DespawnConfig:
 
 ## Client-side on-ramp config for one scene root script, registered through
 ## [method Netw.configure_multiplayer_scene]. It carries the presentation knobs
-## the detach hook reads when a native [method Node.change_scene_to_file]
+## the detach hook reads when a native [method SceneTree.change_scene_to_file]
 ## converts into a [method NetwSceneInterface.request_change_path].
 ##
 ## This config is not an authorization record. Whether a client may reach a
-## scene is decided server side by the [method Netw.configure_scene_change]
-## policy, never by the presence of this mark.
+## scene is decided server side by a [signal NetwSceneInterface.change_requested]
+## listener, never by the presence of this mark. The mark only makes a raw path
+## request reachable by default and gives a listener something to read through
+## [method Netw.is_multiplayer_scene].
 ## [codeblock]
 ## func _init() -> void:
 ##     Netw.configure_multiplayer_scene(self) \
@@ -1409,8 +1413,9 @@ class SceneMarkConfig:
 	## The scene root script this config applies to.
 	var context_script: Script = null
 
-	## Method name whose return value is installed as the placeholder while a
-	## request is pending, or empty for the framework blank node.
+	## Method name the detach hook calls on the scene root while a captured
+	## native change is pending, so the game presents its own loading UI. Its
+	## return value is ignored. Empty leaves the pending window unhandled.
 	var pending_method: StringName = &""
 
 	## Seconds the client request waits before resolving
@@ -1418,10 +1423,21 @@ class SceneMarkConfig:
 	## [constant NetwSceneInterface.DEFAULT_REQUEST_DEADLINE].
 	var deadline: float = 0.0
 
+	## When [code]true[/code], a request for this scene is deny-default, so a
+	## [signal NetwSceneInterface.change_requested] listener must
+	## [method SceneChangeRequest.allow] it. Set through [method gated].
+	var is_gated: bool = false
 
-	## Names the method whose return value presents while the request is
-	## pending, such as a loading screen. Stored by name so the callable only
-	## names the method on the scene root.
+	## When [code]true[/code], an admitted request for this scene replaces the
+	## whole session rather than moving one participant. Set through
+	## [method session_wide].
+	var is_session_wide: bool = false
+
+
+	## Names a side-effect method the detach hook calls while a captured native
+	## change is pending, such as one that shows a loading screen. The game
+	## undoes it on [signal NetwSceneInterface.native_change_settled]. Stored by
+	## name so the callable only names the method on the scene root.
 	func on_pending(callable: Callable) -> SceneMarkConfig:
 		pending_method = callable.get_method()
 		return self
@@ -1431,6 +1447,25 @@ class SceneMarkConfig:
 	## [constant NetwScenePromise.Result.TIMED_OUT].
 	func timeout(seconds: float) -> SceneMarkConfig:
 		deadline = seconds
+		return self
+
+
+	## Opts this scene into deny-default, so a
+	## [signal NetwSceneInterface.change_requested] listener must
+	## [method SceneChangeRequest.allow] every request for it. Without this, a
+	## declared or marked scene admits requests by default.
+	func gated() -> SceneMarkConfig:
+		is_gated = true
+		return self
+
+
+	## Declares that an admitted request for this scene replaces the whole
+	## session ([method NetwSceneInterface.change_to]) rather than moving the one
+	## requester. Session-wide requests stay deny-default, so a
+	## [signal NetwSceneInterface.change_requested] listener must
+	## [method SceneChangeRequest.allow] them.
+	func session_wide() -> SceneMarkConfig:
+		is_session_wide = true
 		return self
 
 

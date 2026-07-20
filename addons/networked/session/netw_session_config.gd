@@ -15,7 +15,7 @@
 ## # core routes it to NetwSessionInterface.configure(config)
 ## [/codeblock]
 class_name NetwSessionConfig
-extends Resource
+extends NetwObjectConfig
 
 ## Game-build tag that gates session admission.
 ##

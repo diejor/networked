@@ -305,11 +305,18 @@ func test_player_builder_lag_comp_composes_with_entity_and_interest() -> void:
 			.with_input([&"motion"]) \
 			.with_prediction()
 	var live: Node2D = auto_free(builder.build()) as Node2D
-	assert_that(NetwEntity.of(live)).is_not_null()
-	assert_that(live.get_node("InterestComponent")).is_not_null()
+	var entity := NetwEntity.of(live)
+	assert_that(entity).is_not_null()
+	assert_array(entity.interest.layer_ids()).contains_exactly([&"default"])
 	assert_that(live.get_node("PredictionComponent")).is_not_null()
 	# The lag-comp node is owned by the root so pack() captures it.
 	assert_that(live.get_node("PredictionComponent").owner).is_equal(live)
+
+	var packed: PackedScene = builder.pack()
+	var instance: Node = auto_free(packed.instantiate())
+	var packed_entity: NetwEntity = NetwEntity.of(instance)
+	assert_array(packed_entity.interest.layer_ids()) \
+			.contains_exactly([&"default"])
 
 
 func _assert_identical_shape(node1: Node, node2: Node) -> void:

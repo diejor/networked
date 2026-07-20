@@ -94,10 +94,9 @@ func _init(api: NetwMultiplayer) -> void:
 func _api() -> NetwMultiplayer:
 	return _api_ref.get_ref() as NetwMultiplayer if _api_ref else null
 
-
 ## Whether the spawn pipeline is synchronously placing a replicated node right
 ## now. A marked scene's detach hook reads this at [signal Node.tree_entered]
-## to tell a framework spawn from a native [method Node.change_scene_to_file].
+## to tell a framework spawn from a native [method SceneTree.change_scene_to_file].
 var is_applying_remote_frame: bool:
 	get:
 		return _spawn_pipeline._applying_remote_frame
@@ -316,10 +315,8 @@ func _dispatch_frame(
 	if route == 0:
 		# Peer-scoped protocol frames carry no entity route.
 		match channel:
-			NetwFrameEnvelope.Channel.INTEREST_VISIBILITY:
-				api.interest._handle_visibility_events(payload, sender)
-			NetwFrameEnvelope.Channel.INTEREST_OBSERVER:
-				api.interest._handle_observer_events(payload, sender)
+			NetwFrameEnvelope.Channel.INTEREST_AWARENESS:
+				api.interest._handle_awareness_events(payload, sender)
 			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE:
 				api.clock._handle_handshake(payload, sender)
 			NetwFrameEnvelope.Channel.CLOCK_HANDSHAKE_REPLY:
@@ -352,6 +349,14 @@ func _dispatch_frame(
 				api.scenes._handle_scene_request_frame(payload, sender)
 			NetwFrameEnvelope.Channel.SESSION_SCENE_RESULT:
 				api.scenes._handle_scene_result_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_SHUTDOWN:
+				api.session._handle_shutdown_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_SCENE_RELEASED:
+				api.scenes._handle_scene_released_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_KICK_REQUEST:
+				api.session._handle_kick_request_frame(payload, sender)
+			NetwFrameEnvelope.Channel.SESSION_LEAVE_REQUEST:
+				api.session._handle_leave_request_frame(payload, sender)
 			_:
 				if channel >= 100 and channel <= 254:
 					var handler: Callable = _handlers.get(channel, Callable())
@@ -658,6 +663,26 @@ func replicate(node: Node, owner: NetwParticipant = null) -> NetwEntity:
 ## [br][br][b]Server Only.[/b]
 func spawn(fn: Callable, args: Array = [], owner: NetwParticipant = null) -> Node:
 	return _spawn_pipeline.spawn(fn, args, owner)
+
+
+## Registers [param fn] as a host-less spawn constructor under [param id], so
+## [method spawn_registered] reconstructs it on every peer with no host node.
+func register_spawn_constructor(id: StringName, fn: Callable) -> void:
+	_spawn_pipeline.register_spawn_constructor(id, fn)
+
+
+## Constructs a node by running the constructor registered under [param id] with
+## [param args] on every peer, returning the local node for the caller to place.
+##
+## Mirrors [method spawn] but resolves the function from the registry instead of
+## a host node, so a session with no host node still spawns.
+## [br][br][b]Server Only.[/b]
+func spawn_registered(
+		id: StringName,
+		args: Array = [],
+		owner: NetwParticipant = null,
+) -> Node:
+	return _spawn_pipeline.spawn_registered(id, args, owner)
 
 
 ## Mints a route for [param root], a node every peer already holds at the same

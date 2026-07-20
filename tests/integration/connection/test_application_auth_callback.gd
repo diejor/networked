@@ -8,7 +8,7 @@ static var _response := PackedByteArray([0x4F, 0x4B])
 
 
 func test_custom_auth_connects_without_consuming_probes() -> void:
-	var host := await EnetTestSupport.start_host(self, null, 0.2)
+	var host := await EnetTestSupport.start_host(self, Callable(), 0.2)
 	assert_that(host).is_not_empty()
 
 	var host_tree: MultiplayerTree = host.tree

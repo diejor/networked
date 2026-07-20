@@ -66,6 +66,31 @@ var session: NetwSessionInterface
 ## [code]null[/code]. See [NetwSceneInterface].
 var scenes: NetwSceneInterface
 
+## The bootstrap phase of this session's authoring, advanced once by the
+## installing embedding through [method settle].
+##
+## Bootstrap ordering is owned, not emergent: every embedding runs the identical
+## [constant DECLARING] to [constant LIVE] sequence, so the resolve order no
+## longer depends on [method Node._enter_tree] traversal. Authoring registration
+## is only in-contract during [constant DECLARING].
+## [codeblock]
+## DECLARING   object_configuration_add lands scene and session configs
+## SETTLING    settle() resolves the winning declaration in one ordered step
+## LIVE        authoring resolved; session bring-up may proceed
+## [/codeblock]
+enum Phase {
+	## Nodes and scripts register configs through
+	## [method object_configuration_add]. Nothing acts on them yet.
+	DECLARING,
+	## The provider signalled the authored world is loaded; the session resolves
+	## the winning declarations as one ordered step.
+	SETTLING,
+	## Authoring resolved, session bring-up may proceed. Orthogonal to
+	## [enum NetwSessionInterface.State]: a [constant LIVE] session is still
+	## [constant NetwSessionInterface.State.OFFLINE] until it hosts or joins.
+	LIVE,
+}
+
 ## Handles application-defined authentication packets after Networked
 ## classifies its reserved protocol frames.
 ##
@@ -164,20 +189,12 @@ var _services: ServiceRegistry = ServiceRegistry.new()
 var _roster: SessionRoster = SessionRoster.new()
 var _participants: Dictionary[int, NetwParticipant] = { }
 
-# The one weakref in this design. Resolved through [member tree].
-var _tree_ref: WeakRef
-
 # Weak registry of every constructed extension, backing live_sessions().
 # Weakrefs because a strong static list would keep disposed sessions alive.
 static var _session_refs: Array[WeakRef] = []
 
 # Memoized backing for [member connect].
 var _connect: NetwConnect
-
-## The owning [MultiplayerTree], or [code]null[/code] after teardown.
-var tree: MultiplayerTree:
-	get:
-		return _tree_ref.get_ref() as MultiplayerTree if _tree_ref else null
 
 # Cache backing for [member root], and the path it was resolved for so a
 # root_path change (mount, adopt_inner) self-invalidates without a reset hook.
@@ -200,19 +217,16 @@ var root: Node:
 		return _root
 
 
-func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = null) -> void:
+func _init(inner_api: SceneMultiplayer = null) -> void:
 	inner = inner_api if inner_api else SceneMultiplayer.new()
 	var adopted_auth_callback := inner.auth_callback
-	# The tree weakref is set before any interface constructs so an interface
-	# _init can already read api.tree.
-	if owner_tree:
-		_tree_ref = weakref(owner_tree)
 	replication = NetwReplicationInterface.new(self)
 	rpc_interface = NetwRpcInterface.new(self, replication)
 	clock = NetwClockInterface.new(self)
 	lag_compensation = NetwLagCompensationInterface.new(self)
 	persistence = NetwPersistenceInterface.new(self)
 	liveness = NetwLivenessInterface.new(self)
+	interpolation = NetwInterpolationInterface.new(self)
 	interest = NetwInterestInterface.new(self)
 	session = NetwSessionInterface.new(self)
 	scenes = NetwSceneInterface.new(self)
@@ -227,6 +241,10 @@ func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = nul
 	# Dead routes drop their unreliable-property sequence records so they never
 	# outlive the entity they track.
 	liveness.entity_dead.connect(replication.clear_route)
+	# local_player follows the liveness bus so a root-installed session with no
+	# owning MultiplayerTree still tracks the represented entity.
+	liveness.entity_live.connect(_on_liveness_entity_live)
+	liveness.entity_dead.connect(_on_liveness_entity_dead)
 	# The tick pump binds once at construction. The signal lives on the
 	# interface, so an inert clock simply never fires it.
 	clock.after_tick.connect(_on_clock_tick)
@@ -238,18 +256,16 @@ func _init(inner_api: SceneMultiplayer = null, owner_tree: MultiplayerTree = nul
 	# Per-peer teardown rides this extension's own relayed peer_disconnected, so a
 	# bare API with no owning tree still clears freshness books and RPC state.
 	peer_disconnected.connect(_clear_disconnected_peer)
-	if owner_tree:
-		_bind_tree_signals(owner_tree)
 	_session_refs.append(weakref(self))
 
 
 ## True while this extension is the installed [MultiplayerAPI].
 ##
-## A tree-scoped session is active while it is [member tree]'s multiplayer. A
-## root-installed session (no tree, see [method install_as_default]) is active
-## while it is the [SceneTree] default.
+## A tree-scoped session is active while its owning [MultiplayerTree] holds it as
+## multiplayer. A root-installed session (no tree, see
+## [method install_as_default]) is active while it is the [SceneTree] default.
 func is_active() -> bool:
-	var t := tree
+	var t := root as MultiplayerTree
 	if t != null and is_instance_valid(t):
 		return t.multiplayer == self
 	var loop := Engine.get_main_loop() as SceneTree
@@ -279,10 +295,17 @@ static func install_as_default(scene_tree: SceneTree) -> NetwMultiplayer:
 
 
 ## Restores a stock [SceneMultiplayer] as [param scene_tree]'s default, undoing
-## [method install_as_default]. A test that installs at the root calls this in
-## teardown so the override never leaks into the next test.
+## [method install_as_default]. The installed session is closed and disposed,
+## so the provider releases its complete owned graph in one teardown call.
 static func uninstall_default(scene_tree: SceneTree) -> void:
+	var installed := scene_tree.get_multiplayer() as NetwMultiplayer
 	scene_tree.set_multiplayer(SceneMultiplayer.new())
+	if installed == null:
+		return
+	if installed.has_multiplayer_peer():
+		installed.multiplayer_peer.close()
+		installed.multiplayer_peer = null
+	installed.dispose()
 
 
 ## Returns every [NetwMultiplayer] currently passing [method is_active], in
@@ -410,21 +433,45 @@ var _disposing: bool = false
 ## target. Called by [MultiplayerTree] when the tree is deleted. The extension
 ## is unusable afterwards.
 func dispose() -> void:
+	if _disposing:
+		return
 	_disposing = true
 	auth_callback = Callable()
 	if scenes.local_scene_changed.is_connected(local_scene_changed.emit):
 		scenes.local_scene_changed.disconnect(local_scene_changed.emit)
 	scenes.dispose()
+	if session.session_entered.is_connected(session_entered.emit):
+		session.session_entered.disconnect(session_entered.emit)
+	if session.session_ended.is_connected(session_ended.emit):
+		session.session_ended.disconnect(session_ended.emit)
+	if session.session_ended.is_connected(_on_session_ended):
+		session.session_ended.disconnect(_on_session_ended)
+	if session.paused.is_connected(tree_paused.emit):
+		session.paused.disconnect(tree_paused.emit)
+	if session.unpaused.is_connected(tree_unpaused.emit):
+		session.unpaused.disconnect(tree_unpaused.emit)
+	if session.kicked.is_connected(kicked.emit):
+		session.kicked.disconnect(kicked.emit)
 	session.dispose()
 	_unbind_inner_signals()
 	if clock.after_tick.is_connected(_on_clock_tick):
 		clock.after_tick.disconnect(_on_clock_tick)
 	if liveness.entity_dead.is_connected(replication.clear_route):
 		liveness.entity_dead.disconnect(replication.clear_route)
+	if liveness.entity_live.is_connected(_on_liveness_entity_live):
+		liveness.entity_live.disconnect(_on_liveness_entity_live)
+	if liveness.entity_dead.is_connected(_on_liveness_entity_dead):
+		liveness.entity_dead.disconnect(_on_liveness_entity_dead)
+	if peer_connected.is_connected(_ensure_participant_row):
+		peer_connected.disconnect(_ensure_participant_row)
+	if peer_disconnected.is_connected(_clear_disconnected_peer):
+		peer_disconnected.disconnect(_clear_disconnected_peer)
+	interpolation.dispose()
 	replication.dispose()
 	rpc_interface.dispose()
 	_services.clear()
 	clear_roster()
+	_root = null
 
 
 ## Replaces [member inner] in place, rebinding this same [NetwMultiplayer]
@@ -496,6 +543,7 @@ var _received_packets: int = 0
 var _received_bytes: int = 0
 
 var _frame_counter: int = 0
+var _last_poll_usec: int = 0
 
 # The sender of the carrier frame currently being dispatched, or 0 when no
 # relayed dispatch is on the stack. NetwReplicationInterface._dispatch stamps it
@@ -848,12 +896,16 @@ func _clear_disconnected_peer(peer_id: int) -> void:
 signal participant_joined(participant: NetwParticipant)
 ## Emitted when this peer's participant has been accepted by the server.
 signal local_participant_joined(participant: NetwParticipant)
+## Emitted when [member local_player] is assigned or cleared.
+signal local_player_changed(player: NetwEntity)
 ## Emitted when [member local_participant] changes [member NetwParticipant.current_scene].
-signal local_scene_changed(from: NetwScene, to: NetwScene)
+signal local_scene_changed(from: MultiplayerScene, to: MultiplayerScene)
 ## Emitted on clients when the server notifies it is shutting down.
 signal server_disconnecting(reason: String)
 ## Emitted on the server when a client requests to kick a peer.
 signal kick_requested(requester_id: int, target_id: int, reason: String)
+## Emitted on the server when a client requests permission to leave.
+signal disconnect_requested(peer_id: int, reason: String)
 ## Emitted on the kicked peer when the server kicks them.
 signal kicked(reason: String)
 ## Emitted on every peer when the game is paused via [method pause].
@@ -868,15 +920,58 @@ signal session_entered()
 ## [constant NetwSessionInterface.State.ONLINE]. Pairs with
 ## [signal session_entered].
 signal session_ended()
+## Emitted when [member phase] advances. The installing embedding is the only
+## caller, through [method settle].
+signal phase_changed(phase: Phase)
+
+## The current bootstrap [enum Phase]. Read-only; the installing embedding
+## advances it once through [method settle]. Pairs with [signal phase_changed].
+var phase: Phase:
+	get:
+		return _phase
+
+var _phase: Phase = Phase.DECLARING
+
+# The one direct packed level a scoped embedding offers for automatic adoption,
+# captured by the provider before settle. Null under a root install.
+var _bare_level_candidate: Node
 
 
-# Relays tree-only post-connection signals that have not reached their
-# interface homes yet. Core scene and session signals originate above.
-func _bind_tree_signals(mt: MultiplayerTree) -> void:
-	# participant_joined originates on the session machine (session._admit), not
-	# the tree, so it is not relayed here.
-	mt.server_disconnecting.connect(server_disconnecting.emit)
-	mt.kick_requested.connect(kick_requested.emit)
+## Records the [param level] a scoped embedding offers as its default single
+## scene, consumed by the next [method settle]. The provider captures it
+## synchronously so a node dropped in after install never becomes the candidate.
+func offer_bare_level(level: Node) -> void:
+	_bare_level_candidate = level
+
+
+## Resolves this session's authored declarations as one ordered step and advances
+## [member phase] to [constant LIVE]. The installing embedding calls it once at
+## the first idle frame after install: a [MultiplayerTree] defers it from
+## [method Node._enter_tree] so the call lands after the enclosing authoring wave,
+## and the root autoload calls it on a one-shot [signal SceneTree.process_frame].
+## Idempotent, so a call after [constant DECLARING] returns without effect.
+func settle() -> void:
+	if _phase != Phase.DECLARING:
+		return
+	_set_phase(Phase.SETTLING)
+	_run_settle_resolve()
+	_set_phase(Phase.LIVE)
+
+
+func _set_phase(value: Phase) -> void:
+	if _phase == value:
+		return
+	_phase = value
+	phase_changed.emit(_phase)
+
+
+# The authoring resolution the embedding used to defer piecemeal from
+# _enter_tree, now one fixed-order step: adopt the offered bare level (which
+# fixes the resolved concurrency), then ensure the host scene view keyed on it.
+func _run_settle_resolve() -> void:
+	scenes._adopt_bare_level(_bare_level_candidate)
+	_bare_level_candidate = null
+	scenes._ensure_host_scene_view()
 
 ## Pre-game connect / server browser facade over this session's
 ## [NetwConnector] and [NetwDiscovery]. Built lazily on first access (and
@@ -888,21 +983,9 @@ var connect: NetwConnect:
 		_connect = NetwConnect.new(self)
 		return _connect
 
-## The registered [MultiplayerSceneManager], or [code]null[/code].
-var scene_manager: MultiplayerSceneManager:
-	get:
-		return scenes.manager
-
-## The [NetwInterpolationInterface] service, or [code]null[/code].
-var interpolation: NetwInterpolationInterface:
-	get:
-		var service := get_service(NetwInterpolationInterface) \
-				as NetwInterpolationInterface
-		if service:
-			return service
-		var mt := tree
-		return mt.find_service_node(NetwInterpolationInterface) \
-				as NetwInterpolationInterface if mt else null
+## The session's [NetwInterpolationInterface], pumped every frame from the
+## session poll. Owned for the session lifetime, so it needs no scene anchor.
+var interpolation: NetwInterpolationInterface
 
 
 ## Returns the [NetwPeerContext] for [param peer_id], creating one on first
@@ -965,8 +1048,7 @@ func clear_roster() -> void:
 ## All active player identities across all scenes or the sceneless world.
 var all_players: Array[NetwEntity]:
 	get:
-		var mt := tree
-		return mt.get_all_players() if mt else []
+		return scenes.get_all_players()
 
 ## Accepted participants known by this peer.
 var participants: Array[NetwParticipant]:
@@ -1029,7 +1111,7 @@ func is_listen_server() -> bool:
 ## The original name of the [MultiplayerTree] node.
 var tree_name: String:
 	get:
-		var mt := tree
+		var mt := root as MultiplayerTree
 		return mt.get_tree_name() if mt else ""
 
 
@@ -1039,9 +1121,25 @@ func is_online() -> bool:
 
 
 ## Starts the instance as a network host using [param join_payload].
-func host(join_payload: JoinPayload) -> Error:
-	var mt := tree
-	return await mt.host(join_payload) if mt else ERR_UNCONFIGURED
+##
+## A tree-scoped session hosts through its [MultiplayerTree], which sources the
+## transport scheme from its exported authoring. A root-installed session has no
+## tree, so the caller supplies [param config] and the session brings itself up
+## as a listen host directly through [method NetwSessionInterface.open_host].
+func host(join_payload: JoinPayload, config: NetwHostConfig = null) -> Error:
+	var mt := root as MultiplayerTree
+	if mt:
+		return await mt.host(join_payload)
+	if config == null:
+		return ERR_UNCONFIGURED
+	var prepare_err := await session.prepare_join(join_payload)
+	if prepare_err != OK:
+		return prepare_err
+	var host_err := await session.open_host(config)
+	if host_err != OK:
+		return host_err
+	session.submit_join(join_payload)
+	return OK
 
 
 ## Opens the transport against the [param target] address and submits
@@ -1054,23 +1152,54 @@ func join(
 		timeout: float = 5.0,
 		quiet: bool = false,
 ) -> Error:
-	var mt := tree
-	if not mt:
-		return ERR_UNCONFIGURED
-	return await mt.join(target, join_payload, timeout, quiet)
+	var mt := root as MultiplayerTree
+	if mt:
+		return await mt.join(target, join_payload, timeout, quiet)
+	# Root-installed session: join through the connect kit. The client peer the
+	# connector assigns drives the machine to ONLINE through on_peer_assigned and
+	# the connected-to-server edge, which submits the prepared join.
+	var prepare_err := await session.prepare_join(join_payload)
+	if prepare_err != OK:
+		return prepare_err
+	var attempt := connect.connector().join(target, join_payload)
+	if not attempt.is_done():
+		await attempt.finished
+	var res: NetwConnectResult = attempt.result
+	if res == null or not res.is_ok():
+		if not quiet:
+			Netw.dbg.error(
+				"Failed to join: %s",
+				[res.message if res else "no transport"],
+			)
+		return ERR_CANT_CONNECT
+	return OK
 
 
 ## Probes the target address. Joins if reachable, hosts otherwise.
+##
+## A tree-scoped session sources its host [param config] from the tree's exported
+## authoring. A root-installed session has no tree, so the caller supplies
+## [param config] and the session probes and falls back through the connect kit,
+## which drives the winning host or join edge online and admits the local player.
 ##
 ## See [method MultiplayerTree.join_or_host].
 func join_or_host(
 		target: NetwConnectTarget,
 		join_payload: JoinPayload,
+		config: NetwHostConfig = null,
 ) -> Error:
-	var mt := tree
-	if not mt:
+	var mt := root as MultiplayerTree
+	if mt:
+		return await mt.join_or_host(target, join_payload)
+	if config == null:
 		return ERR_UNCONFIGURED
-	return await mt.join_or_host(target, join_payload)
+	var attempt := connect.connector().join_or_host(target, config, join_payload)
+	if not attempt.is_done():
+		await attempt.finished
+	var res: NetwConnectResult = attempt.result
+	if res == null or not res.is_ok():
+		return ERR_CANT_CONNECT
+	return OK
 
 ## The current connection state.
 var state: NetwSessionInterface.State:
@@ -1082,11 +1211,39 @@ var role: NetwSessionInterface.Role:
 	get:
 		return session.role
 
-## The local player identity for this tree, or [code]null[/code].
-var local_player: NetwEntity:
+## Whether the local peer hosts the session, as either a listen or a dedicated
+## server. Mirrors [member MultiplayerTree.is_host] but resolves through the
+## session, so a root-installed session with no owning [MultiplayerTree] still
+## answers.
+var is_host: bool:
 	get:
-		var mt := tree
-		return mt.local_player if mt else null
+		return role == NetwSessionInterface.Role.DEDICATED_SERVER \
+				or role == NetwSessionInterface.Role.LISTEN_SERVER
+
+## Whether the local peer plays a client, including a listen-server host that is
+## also its own client. Mirrors [member MultiplayerTree.is_local_client] but
+## resolves through the session, so a root-installed session with no owning
+## [MultiplayerTree] still answers.
+var is_local_client: bool:
+	get:
+		return role == NetwSessionInterface.Role.CLIENT \
+				or role == NetwSessionInterface.Role.LISTEN_SERVER
+
+## The local player identity for this session, or [code]null[/code].
+##
+## Tracked off the liveness bus: the represented entity is the one whose route
+## goes live carrying the local peer id, cleared when that route dies. Riding
+## the bus rather than a per-registration write drops the clear-and-reset
+## flicker a reparent used to cause, since a reparent keeps the route live and
+## never emits [signal NetwLivenessInterface.entity_dead].
+##
+## [signal local_player_changed] fires whenever this member changes.
+var local_player: NetwEntity:
+	set(value):
+		if local_player == value:
+			return
+		local_player = value
+		local_player_changed.emit(value)
 
 ## Accepted [NetwParticipant] for this tree, or [code]null[/code].
 var local_participant: NetwParticipant:
@@ -1094,9 +1251,25 @@ var local_participant: NetwParticipant:
 		return get_participant(get_unique_id())
 
 
+# Adopts a newly live entity as local_player when it represents the local peer.
+# A session-less peer (no multiplayer_peer) has no local player, matching the
+# represented-peer test that treats a null peer as not-local.
+func _on_liveness_entity_live(_route: int, entity: NetwEntity) -> void:
+	if not has_multiplayer_peer():
+		return
+	if entity.peer_id == 0 or entity.peer_id != get_unique_id():
+		return
+	local_player = entity
+
+
+func _on_liveness_entity_dead(route: int) -> void:
+	if local_player and local_player.route == route:
+		local_player = null
+
+
 ## Resolves the correct spawn location and causal token for a new player.
 func get_spawn_slot(spawner_path: SceneNodePath) -> SpawnSlot:
-	var mt := tree
+	var mt := root as MultiplayerTree
 	if not mt:
 		return SpawnSlot.new()
 	return mt.get_spawn_slot(spawner_path)
@@ -1131,9 +1304,7 @@ func kick(peer_id: int, reason: String = "") -> void:
 ## The server emits [signal kick_requested] and decides whether to honor it.
 ## [br][br][b]Player request.[/b]
 func request_kick(peer_id: int, reason: String = "") -> void:
-	var mt := tree
-	if mt:
-		mt.request_kick(peer_id, reason)
+	session.request_kick(peer_id, reason)
 
 
 ## Saves game state, closes the multiplayer peer, and waits for the server
@@ -1144,22 +1315,21 @@ func leave() -> void:
 
 ## Asks the server for permission to leave.
 ##
-## The server decides whether to honor it.
+## The server emits [signal disconnect_requested] and decides whether to honor it.
 ## [br][br][b]Player request.[/b]
 func request_leave(reason: String = "") -> void:
-	var mt := tree
-	if mt:
-		mt.request_leave(reason)
+	session.request_leave(reason)
 
 
 ## Notifies all clients that the server is shutting down.
 ##
-## Clients receive [signal server_disconnecting].
+## Clients receive [signal server_disconnecting]. The notice rides
+## [constant NetwFrameEnvelope.Channel.SESSION_SHUTDOWN] on
+## [method NetwSessionInterface.notify_shutdown], so a root-installed session
+## with no [MultiplayerTree] warns its clients through its own verb.
 ## [br][br][b]Server Only.[/b]
 func notify_shutdown(reason: String = "") -> void:
-	var mt := tree
-	if mt:
-		mt.notify_shutdown(reason)
+	session.notify_shutdown(reason)
 
 #endregion
 
@@ -1169,6 +1339,13 @@ func _poll() -> Error:
 	liveness.poll()
 	_frame_counter += 1
 	replication.on_poll()
+	# The poll runs once per idle frame, so the wall-clock gap since the last
+	# poll is that frame's delta, which drives display smoothing.
+	var now_usec := Time.get_ticks_usec()
+	var frame_delta := float(now_usec - _last_poll_usec) / 1_000_000.0 \
+	if _last_poll_usec > 0 else 0.0
+	_last_poll_usec = now_usec
+	interpolation.pump(frame_delta)
 	rpc_interface.sweep_deferred_calls()
 	rpc_interface.sweep_transactions(_receive_tick())
 	return err
@@ -1207,10 +1384,15 @@ func _object_configuration_add(object: Object, configuration: Variant) -> Error:
 		session.configure(configuration as NetwSessionConfig)
 		return OK
 	if configuration is NetwSceneConfig:
-		scenes.configure(
-			object as MultiplayerSceneManager,
-			configuration as NetwSceneConfig,
-		)
+		# A scene declaration that lands after the session settled is a scene
+		# change, not initial authoring. It is honored so the drop-in path still
+		# works, but logged so a late declaration fails loud instead of racing.
+		if _phase == Phase.LIVE:
+			Netw.dbg.warn(
+				"NetwMultiplayer: scene declaration registered after settle is off-contract; authoring is only in-contract while %s.",
+				[Phase.keys()[Phase.DECLARING]],
+			)
+		scenes.configure(configuration as NetwSceneConfig)
 		return OK
 	# A spawner registration is consumed, not forwarded, so the native
 	# replicator never tracks the node and a double spawn is unrepresentable.
@@ -1242,7 +1424,7 @@ func _object_configuration_remove(object: Object, configuration: Variant) -> Err
 		session.deconfigure()
 		return OK
 	if configuration is NetwSceneConfig:
-		scenes.deconfigure(object as MultiplayerSceneManager)
+		scenes.deconfigure()
 		return OK
 	if configuration is MultiplayerSpawner:
 		return replication._spawner_compat.consume_remove(

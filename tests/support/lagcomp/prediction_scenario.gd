@@ -212,6 +212,11 @@ func reset_metrics(p: PredictedEntity) -> void:
 	p.client_prediction.max_replay_depth = 0
 	p.server_prediction.consumed_count = 0
 	p.server_prediction.missing_count = 0
+	p.server_prediction.starved_count = 0
+	p.server_prediction.held_count = 0
+	p.server_prediction.drained_count = 0
+	p.server_prediction.resync_count = 0
+	p.server_prediction.skipped_count = 0
 	p.observer.divergence_log.clear()
 	p.observer.correction_count = 0
 
@@ -246,6 +251,25 @@ func feed_server_input(
 ## Runs one server consume step for [param p] at [param tick].
 func consume_step(p: PredictedEntity, tick: int) -> void:
 	p.server_prediction.simulate_tick(dt(), tick)
+
+
+## Runs the server history recorder for [param p] at [param tick], the pass that
+## normally follows a consume step, so a test can assert which timeline slot a
+## consume actually wrote.
+func record_server_history(p: PredictedEntity, tick: int) -> void:
+	var record_tick := p.server_prediction.history_record_tick(tick)
+	if record_tick < 0:
+		return
+	p.server_entity.timeline.record_state(
+		record_tick, p.server_state.snapshot_payload(),
+	)
+
+
+## Returns the server's recorded authoritative state at [param tick].
+func server_state_at(p: PredictedEntity, tick: int) -> Dictionary:
+	if not p.server_entity or not p.server_entity.timeline:
+		return { }
+	return p.server_entity.timeline.latest_state_at_or_before(tick)
 
 
 ## Installs a per-direction inbound latency on both links.

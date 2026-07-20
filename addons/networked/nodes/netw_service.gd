@@ -8,6 +8,9 @@
 ## Subclasses never override [code]_enter_tree[/code] or [code]_exit_tree[/code].
 ## They override [method _service_entered] and [method _service_exiting] instead,
 ## so forgetting a [code]super[/code] call can never silently drop registration.
+## The lifecycle resolves the session through the branch [NetwMultiplayer], not a
+## [MultiplayerTree], so a service configures under a root install (no owning
+## tree) exactly as it does under a scoped tree.
 ## [codeblock]
 ## class_name MatchClock
 ## extends NetwService
@@ -15,11 +18,11 @@
 ## func _service_type() -> Script:
 ##     return MatchClock           # register under a family base, optional
 ##
-## func _service_entered(mt: MultiplayerTree) -> void:
-##     mt.session_entered.connect(_on_session_entered)
+## func _service_entered(api: NetwMultiplayer) -> void:
+##     api.session_entered.connect(_on_session_entered)
 ##
-## func _service_exiting(mt: MultiplayerTree) -> void:
-##     mt.session_entered.disconnect(_on_session_entered)
+## func _service_exiting(api: NetwMultiplayer) -> void:
+##     api.session_entered.disconnect(_on_session_entered)
 ## [/codeblock]
 ##
 ## Nodes that already extend a non-[Node] base (such as
@@ -108,23 +111,35 @@ func _should_register() -> bool:
 	return true
 
 
-## Called after the service registers, with the owning [param mt].
+## Called after the service registers, with its branch [param api].
 ##
 ## Override for per-service setup such as signal wiring or clock binding. It does
 ## not run in the editor, when [method _should_register] returns
-## [code]false[/code], or when the node is not under a [MultiplayerTree].
+## [code]false[/code], or when the node resolves no session at all.
 @warning_ignore("unused_parameter")
-func _service_entered(mt: MultiplayerTree) -> void:
+func _service_entered(api: NetwMultiplayer) -> void:
 	pass
 
 
-## Called before the service unregisters, with the owning [param mt].
+## Called before the service unregisters, with its branch [param api].
 ##
 ## Override to tear down whatever [method _service_entered] set up. Mirrors the
 ## conditions of [method _service_entered].
 @warning_ignore("unused_parameter")
-func _service_exiting(mt: MultiplayerTree) -> void:
+func _service_exiting(api: NetwMultiplayer) -> void:
 	pass
+
+
+# Resolves the branch api, falling back to the enclosing tree during the
+# not-yet-bound window (a node's own multiplayer is not always the api at call
+# time). Non-null wherever either the api or an owning tree resolves, so the
+# lifecycle runs under a root install (api-first) and a scoped tree (fallback).
+static func _resolve_api(service: Node) -> NetwMultiplayer:
+	var api := NetwMultiplayer.of(service)
+	if api == null:
+		var mt := MultiplayerTree.resolve(service)
+		api = mt.api if mt else null
+	return api
 
 # ---------------------------------------------------------------------------
 # Sealed lifecycle
@@ -134,15 +149,18 @@ func _service_exiting(mt: MultiplayerTree) -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint() or not _should_register():
 		return
-	var mt := NetwService.register(self, _service_type())
-	if is_instance_valid(mt):
-		_service_entered(mt)
+	var api := NetwService._resolve_api(self)
+	if api == null:
+		return
+	api.register_service(self, _service_type())
+	_service_entered(api)
 
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint() or not _should_register():
 		return
-	var mt := MultiplayerTree.resolve(self)
-	if is_instance_valid(mt):
-		_service_exiting(mt)
-	NetwService.unregister(self, _service_type())
+	var api := NetwService._resolve_api(self)
+	if api == null:
+		return
+	_service_exiting(api)
+	api.unregister_service(self, _service_type())

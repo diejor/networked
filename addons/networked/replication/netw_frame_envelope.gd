@@ -104,13 +104,10 @@ enum Channel {
 	SIGNAL = 5,
 	## On-demand property replication from [method Netw.sync_property].
 	PROPERTY_SYNC = 6,
-	## Server-relayed visibility transitions for unbound interest layers,
-	## applied by [NetwInterestInterface]. Route [code]0[/code], peer-scoped.
-	INTEREST_VISIBILITY = 7,
-	## Server-relayed observer transitions for entities whose
-	## [member InterestComponent.report_observers] is enabled. Route
-	## [code]0[/code], peer-scoped.
-	INTEREST_OBSERVER = 8,
+	## Id [code]7[/code] is a retired interest carrier and must not be reclaimed.
+	## Server-relayed route-addressed interest layer attribution and observer
+	## awareness. Reliable, route [code]0[/code], peer-scoped.
+	INTEREST_AWARENESS = 8,
 	## Clock calibration handshake request, client to server. Reliable, route
 	## [code]0[/code].
 	CLOCK_HANDSHAKE = 9,
@@ -190,6 +187,26 @@ enum Channel {
 	## requesting peer. Reliable, route [code]0[/code]. Carries the request id
 	## and the [enum NetwScenePromise.Result].
 	SESSION_SCENE_RESULT = 30,
+	## Server graceful-shutdown notice, server to every peer. Reliable, route
+	## [code]0[/code]. The notice rides the carrier rather than a node
+	## [code]@rpc[/code], so a root-installed session with no [MultiplayerTree]
+	## still warns its clients before it tears down. Fires
+	## [signal NetwMultiplayer.server_disconnecting].
+	SESSION_SHUTDOWN = 31,
+	## Server notice that a participant's scene membership was released, server to
+	## the released peer. Reliable, route [code]0[/code]. Carries the released
+	## [method MultiplayerScene.scene_layer_id]. The recipient clears its local
+	## participant's [member NetwParticipant.current_scene] when it still matches.
+	SESSION_SCENE_RELEASED = 32,
+	## A player's request to kick a peer, client to server. Reliable, route
+	## [code]0[/code]. The request rides the carrier rather than a node
+	## [code]@rpc[/code], so a session with no [MultiplayerTree] still asks. The
+	## server fires [signal NetwMultiplayer.kick_requested] and decides.
+	SESSION_KICK_REQUEST = 33,
+	## A player's request for permission to leave, client to server. Reliable,
+	## route [code]0[/code]. The server fires
+	## [signal NetwMultiplayer.disconnect_requested] and decides.
+	SESSION_LEAVE_REQUEST = 34,
 }
 
 

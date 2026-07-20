@@ -82,14 +82,13 @@ func _service_type() -> Script:
 	return LagCompensation
 
 
-func _service_entered(mt: MultiplayerTree) -> void:
-	if mt.api:
-		_interface = mt.api.lag_compensation
-		_config = _build_config()
-		mt.api.object_configuration_add(self, _config)
-	if not mt.session_entered.is_connected(_on_session_entered):
-		mt.session_entered.connect(_on_session_entered)
-	if mt.is_online():
+func _service_entered(api: NetwMultiplayer) -> void:
+	_interface = api.lag_compensation
+	_config = _build_config()
+	api.object_configuration_add(self, _config)
+	if not api.session_entered.is_connected(_on_session_entered):
+		api.session_entered.connect(_on_session_entered)
+	if api.is_online():
 		_on_session_entered.call_deferred()
 	var tree := get_tree()
 	if _interface and tree \
@@ -115,9 +114,9 @@ func _build_config() -> NetwLagCompensationConfig:
 func _on_session_entered() -> void:
 	_bind_attempts = 0
 	_try_bind_clock()
-	var mt := MultiplayerTree.resolve(self)
-	if mt and mt.api and _interface:
-		mt.api.replication.register_channel(
+	var api := NetwService._resolve_api(self)
+	if api and _interface:
+		api.replication.register_channel(
 			NetwFrameEnvelope.Channel.ACTION,
 			_interface._handle_action_carrier,
 		)
@@ -129,10 +128,10 @@ func _on_session_entered() -> void:
 func _try_bind_clock() -> void:
 	if is_instance_valid(_clock):
 		return
-	var mt := MultiplayerTree.resolve(self)
-	if not mt:
+	var api := NetwService._resolve_api(self)
+	if not api:
 		return
-	var clock := mt.api.clock if mt.api and mt.api.clock.is_configured() else null
+	var clock := api.clock if api.clock.is_configured() else null
 	if clock:
 		_clock = clock
 		# Bind the interface, not this node, so the tick loop survives a scene

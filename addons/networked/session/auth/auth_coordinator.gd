@@ -59,10 +59,10 @@ func set_application_auth_callback(callback: Callable) -> void:
 	prepare()
 
 
-## Stores the owning tree so probe replies can build a [NetwServerInfo] from
+## Stores the owning session so probe replies can build a [NetwServerInfo] from
 ## live session state. Delegates to [NetwProbeResponder].
-func set_tree(tree: MultiplayerTree) -> void:
-	_probe_responder.set_tree(tree)
+func set_owner(api: NetwMultiplayer) -> void:
+	_probe_responder.set_owner(api)
 
 
 ## Sets the per-session provider used to build probe replies. Delegates to

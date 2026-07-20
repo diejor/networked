@@ -35,8 +35,8 @@ func test_direct_level_becomes_a_single_scene_declaration() -> void:
 
 func test_direct_level_spawns_through_a_plain_wrapper() -> void:
 	await harness.add_client()
-	var manager := harness.server_scene_manager()
-	var scene: Variant = manager.active_scenes.get(level_builder.scene_name) \
+	var scenes := harness.server().api.scenes
+	var scene: Variant = scenes.scene(level_builder.scene_name) \
 			as MultiplayerScene
 
 	assert_object(scene).is_not_null()

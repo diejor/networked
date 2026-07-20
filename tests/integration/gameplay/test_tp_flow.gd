@@ -105,10 +105,10 @@ func _tp_target(scene_path: String, node_path: String) -> SceneNodePath:
 func test_tp_spawn_places_player_in_start_scene() -> void:
 	var player := await _spawn_tp_player(level_builder.resource_path)
 
-	var server_mgr := harness.server_scene_manager()
-	assert_that(server_mgr.active_scenes.size()).is_equal(2)
+	var scenes := harness.server().api.scenes
+	assert_that(scenes.scenes.size()).is_equal(2)
 
-	var scene: MultiplayerScene = server_mgr.active_scenes.get(level_builder.scene_name)
+	var scene: MultiplayerScene = scenes.scene(level_builder.scene_name)
 	assert_that(player.get_parent()).is_equal(scene.level)
 
 
@@ -121,8 +121,8 @@ func test_teleport_reparents_on_server_and_snaps_client_to_marker() -> void:
 
 	_set_player_database(client_player)
 
-	var server_mgr := harness.server_scene_manager()
-	var scene2: MultiplayerScene = server_mgr.active_scenes.get(level_2_builder.scene_name)
+	var scenes := harness.server().api.scenes
+	var scene2: MultiplayerScene = scenes.scene(level_2_builder.scene_name)
 
 	var client_tp: TPComponent = client_player.get_node("%TPComponent")
 	var promise := client_tp.teleport(

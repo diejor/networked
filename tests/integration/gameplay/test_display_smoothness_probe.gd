@@ -30,8 +30,10 @@ class FrameProbe:
 	var pump_modes := PackedInt32Array()
 	var newest_ticks := PackedInt32Array()
 
+
 	func _ready() -> void:
 		process_priority = 1000
+
 
 	func _process(_delta: float) -> void:
 		if not is_instance_valid(visual) or not is_instance_valid(body):
@@ -48,6 +50,7 @@ class FrameProbe:
 				if state.name == &"position":
 					newest = state.history.newest_tick()
 		newest_ticks.append(newest)
+
 
 	func report(warmup_frames: int) -> Dictionary:
 		var regressions := 0
@@ -108,7 +111,7 @@ func test_bracketed_local_visuals_move_monotonically() -> void:
 	var valeria := await game.add_host("valeria", false)
 	var jose := await game.add_client("jose", false)
 	var ana := await game.add_client("ana", false)
-	_begin_game(valeria)
+	await _begin_game(valeria)
 
 	var runners: Array = [valeria, jose, ana]
 	var probes: Array = []
@@ -128,25 +131,31 @@ func test_bracketed_local_visuals_move_monotonically() -> void:
 		var entity := NetwEntity.of(probe.body)
 		var syncs := []
 		for sync in entity.synchronizers():
-			syncs.append("%s(auth=%d local=%s pub=%s)" % [
-				sync.name,
-				sync.get_multiplayer_authority(),
-				sync.is_multiplayer_authority(),
-				sync.public_visibility,
-			])
-		print("SYNCS %s owner_auth=%d %s" % [
-			probe.label,
-			probe.body.get_multiplayer_authority(),
-			", ".join(syncs),
-		])
-		print("DIAG %s liveness_connected=%s runtimes=%s route=%s wants=%s predicted_mode=%s" % [
-			probe.label,
-			probe.iface._liveness_connected,
-			probe.iface._runtimes.keys(),
-			probe.iface._route_of(entity),
-			probe.iface._entity_wants_runtime(entity),
-			probe.handle.predicted_mode,
-		])
+			syncs.append(
+				"%s(auth=%d local=%s pub=%s)" % [
+					sync.name,
+					sync.get_multiplayer_authority(),
+					sync.is_multiplayer_authority(),
+					sync.public_visibility,
+				],
+			)
+		print(
+			"SYNCS %s owner_auth=%d %s" % [
+				probe.label,
+				probe.body.get_multiplayer_authority(),
+				", ".join(syncs),
+			],
+		)
+		print(
+			"DIAG %s liveness_connected=%s runtimes=%s route=%s wants=%s predicted_mode=%s" % [
+				probe.label,
+				probe.iface._liveness_connected,
+				probe.iface._runtimes.keys(),
+				probe.iface._route_of(entity),
+				probe.iface._entity_wants_runtime(entity),
+				probe.handle.predicted_mode,
+			],
+		)
 	for runner: NetwSceneRunner in runners:
 		runner.simulate_action_press("move_right")
 	await game.sync_ticks(40)
@@ -196,6 +205,7 @@ func _make_probe(label: String, player: Node2D) -> FrameProbe:
 
 
 func _begin_game(host: NetwSceneRunner) -> void:
+	await host.await_scene(&"Lobby", 2.0)
 	var gamestate := host.tree.get_service(BomberGamestate) as BomberGamestate
 	assert_that(gamestate).is_not_null()
 	gamestate.begin_game()

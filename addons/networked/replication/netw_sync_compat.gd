@@ -114,6 +114,7 @@ class _Consumed:
 	# registration and the native contract reads it live.
 	var sync_paths: Array[NodePath] = []
 	var watch_paths: Array[NodePath] = []
+	var intent_by_peer: Dictionary[int, bool] = { }
 	var schema_hash: int = 0
 	var poisoned: bool = false
 	var schema_checked: bool = false
@@ -122,6 +123,12 @@ class _Consumed:
 	var adopt_attempted: bool = false
 	var last_sync_usec: int = -1
 	var last_watch_usec: int = -1
+	# Cached display feed paths [[node, property], ...] resolved from the live
+	# config, the expensive half of the feed mapping. The per-property
+	# interpolator is looked up live at record time so a spec registered after
+	# the first frame still takes effect.
+	var display_feed_paths: Array = []
+	var display_feed_built: bool = false
 
 
 	func sync() -> MultiplayerSynchronizer:
@@ -146,8 +153,9 @@ func consume(root: Node, sync: MultiplayerSynchronizer) -> Error:
 		return ERR_INVALID_PARAMETER
 	# Visibility changes drive per-peer spawn and stream fate through the
 	# sweep, the consumed counterpart of native _update_sync_visibility.
-	if not sync.visibility_changed.is_connected(_on_sync_visibility_changed):
-		sync.visibility_changed.connect(_on_sync_visibility_changed)
+	var visibility_handler := _on_sync_visibility_changed.bind(root)
+	if not sync.visibility_changed.is_connected(visibility_handler):
+		sync.visibility_changed.connect(visibility_handler)
 	if _binding_of(sync):
 		return OK
 
@@ -160,6 +168,8 @@ func consume(root: Node, sync: MultiplayerSynchronizer) -> Error:
 	binding.root_ref = weakref(root)
 	_refresh_binding(binding)
 	_consumed.append(binding)
+	_refresh_binding_intent(binding)
+	_refresh_interest_intent(root)
 	return OK
 
 
@@ -167,21 +177,75 @@ func consume(root: Node, sync: MultiplayerSynchronizer) -> Error:
 ## baselines. The counterpart of [method consume], reached through
 ## [method NetwMultiplayer._object_configuration_remove] when the synchronizer
 ## exits the tree.
-func consume_remove(_root: Node, sync: MultiplayerSynchronizer) -> Error:
+func consume_remove(root: Node, sync: MultiplayerSynchronizer) -> Error:
+	var visibility_handler := _on_sync_visibility_changed.bind(root)
 	if is_instance_valid(sync) \
-			and sync.visibility_changed.is_connected(_on_sync_visibility_changed):
-		sync.visibility_changed.disconnect(_on_sync_visibility_changed)
+			and sync.visibility_changed.is_connected(visibility_handler):
+		sync.visibility_changed.disconnect(visibility_handler)
 	for i in range(_consumed.size() - 1, -1, -1):
 		if _consumed[i].sync() == sync:
 			_watch_book.reset(_consumed[i])
 			_consumed.remove_at(i)
+	_refresh_interest_intent(root)
 	return OK
 
 
-func _on_sync_visibility_changed(_for_peer: int) -> void:
+func _on_sync_visibility_changed(_for_peer: int, root: Node) -> void:
 	var api := _api()
 	if api:
+		_refresh_binding_intents_for_root(root)
+		_refresh_interest_intent(root)
 		api.replication._spawn_pipeline.schedule_visibility_sweep()
+
+
+## Refreshes every event-fed [InterestEngine] synchronizer intent row.
+func refresh_interest_intents() -> void:
+	var roots: Dictionary[Node, bool] = { }
+	for binding in _consumed:
+		var root := binding.root()
+		if is_instance_valid(root):
+			roots[root] = true
+			_refresh_binding_intent(binding)
+	for root in roots:
+		_refresh_interest_intent(root)
+
+
+func _refresh_interest_intent(root: Node) -> void:
+	var api := _api()
+	if not api or not api.is_server() or not is_instance_valid(root):
+		return
+	var entity := NetwEntity.of(root)
+	if not entity:
+		return
+	var entity_root := entity.owner
+	if not is_instance_valid(entity_root):
+		return
+	var admitted: Array[int] = []
+	for peer_id in api.interest._known_peer_ids():
+		if synchronizer_verdict(peer_id, entity_root):
+			admitted.append(peer_id)
+	api.interest._set_entity_intent(entity, admitted)
+
+
+func _refresh_binding_intents_for_root(root: Node) -> void:
+	for binding in _consumed:
+		if binding.root() == root:
+			_refresh_binding_intent(binding)
+
+
+func _refresh_binding_intent(binding: _Consumed) -> void:
+	var api := _api()
+	var root := binding.root()
+	if not api or not is_instance_valid(root):
+		return
+	var peer_ids: Array[int] = []
+	if api.is_server():
+		peer_ids = api.interest._known_peer_ids()
+	elif api.has_multiplayer_peer():
+		peer_ids.assign(api.get_peers())
+	binding.intent_by_peer.clear()
+	for peer_id in peer_ids:
+		binding.intent_by_peer[peer_id] = synchronizer_verdict(peer_id, root)
 
 
 func _binding_of(sync: MultiplayerSynchronizer) -> _Consumed:
@@ -211,7 +275,8 @@ func _refresh_binding(binding: _Consumed) -> void:
 	if watch.size() > WATCH_LIMIT:
 		if not binding.poisoned:
 			_poison(
-				binding, 0,
+				binding,
+				0,
 				"watches %d properties, above the 64-bit delta mask limit"
 				% watch.size(),
 			)
@@ -233,7 +298,6 @@ static func _schema_hash(binding: _Consumed) -> int:
 		parts.append("w" + String(path))
 	return "|".join(parts).hash() & 0xFFFF
 
-
 #region Pump
 
 ## Pumps every consumed binding once: the throttled
@@ -253,13 +317,12 @@ func pump() -> void:
 
 	_prune()
 
-	var mt := api.tree
 	# A clock can tick before the session assigns a role, and with no role there
 	# are no live routes to gather for, so the pump has nothing to do and must
 	# not read the role-dependent host flag yet.
-	if mt and mt.role == NetwSessionInterface.Role.NONE:
+	if api.role == NetwSessionInterface.Role.NONE:
 		return
-	var host := not mt or mt.is_host
+	var host := api.is_host
 
 	for binding: _Consumed in _consumed.duplicate():
 		var sync := binding.sync()
@@ -291,7 +354,7 @@ func pump() -> void:
 		var route := liveness.route_of(entity)
 		if route <= 0:
 			continue
-		var recipients := _recipients_for(entity, route, root)
+		var recipients := _recipients_for(binding, entity, route, root)
 		if recipients.is_empty():
 			continue
 
@@ -302,8 +365,14 @@ func pump() -> void:
 				binding.last_sync_usec = now
 				for peer_id in recipients:
 					repl.send_to(
-						peer_id, route, NetwFrameEnvelope.Channel.SYNC,
-						payload, false, 0, "", true,
+						peer_id,
+						route,
+						NetwFrameEnvelope.Channel.SYNC,
+						payload,
+						false,
+						0,
+						"",
+						true,
 					)
 					_sync_frames_out += 1
 
@@ -338,14 +407,18 @@ static func _throttle_elapsed(last_usec: int, interval: float, now: int) -> bool
 # synchronizer visibility verdict, so no peer is sent state for a node it was
 # never sent. A client authority mirrors the native rule: every peer it knows,
 # gated by its own local visibility verdict.
-func _recipients_for(entity: NetwEntity, route: int, root: Node) -> Array[int]:
+func _recipients_for(
+		binding: _Consumed,
+		entity: NetwEntity,
+		route: int,
+		root: Node,
+) -> Array[int]:
 	var api := _api()
 	var out: Array[int] = []
 	if not api:
 		return out
-	var mt := api.tree
 	var local_id := api.get_unique_id()
-	if not mt or mt.is_host:
+	if api.is_host:
 		var pipeline := api.replication._spawn_pipeline
 		if pipeline._spawn_book.armed.has(route):
 			# The SPAWN has not flushed yet, so no peer can have the node.
@@ -362,9 +435,9 @@ func _recipients_for(entity: NetwEntity, route: int, root: Node) -> Array[int]:
 			if peer_id == local_id:
 				continue
 			if api.interest.has_filter(entity) \
-					and not api.interest.can_peer_see_entity(peer_id, entity):
+					and not api.interest.wire_admits(peer_id, entity):
 				continue
-			if not synchronizer_verdict(peer_id, root):
+			if not binding.intent_by_peer.get(peer_id, false):
 				continue
 			out.append(peer_id)
 	else:
@@ -421,12 +494,14 @@ func _encode_sync_frame(
 			return PackedByteArray()
 		values.append(read[1])
 		types.append(typeof(read[1]))
-	return NetwFrameEnvelope.encode_sync_frame({
-		"flags": 0,
-		"ordinal": _ordinal_of(binding, route, liveness),
-		"values": values,
-		"types": types,
-	})
+	return NetwFrameEnvelope.encode_sync_frame(
+		{
+			"flags": 0,
+			"ordinal": _ordinal_of(binding, route, liveness),
+			"values": values,
+			"types": types,
+		},
+	)
 
 
 # Reads every watch field off the node and hands the row to the shared watch
@@ -471,13 +546,18 @@ func _send_deltas(
 		NetwCodec.put_varint(w, mask)
 		NetwScriptModel.write_values(w, values, [], types)
 		repl.send_to(
-			peer_id, route, NetwFrameEnvelope.Channel.SYNC_DELTA,
-			w.to_bytes(), true, 0, "", true,
+			peer_id,
+			route,
+			NetwFrameEnvelope.Channel.SYNC_DELTA,
+			w.to_bytes(),
+			true,
+			0,
+			"",
+			true,
 		)
 		_delta_frames_out += 1
 
 #endregion
-
 
 #region Receive
 
@@ -528,7 +608,7 @@ func handle_sync(entity: NetwEntity, payload: PackedByteArray, sender: int) -> v
 		_write_path(root, binding.sync_paths[i], values[i])
 	_sync_frames_in += 1
 	sync.synchronized.emit()
-	_feed_interpolation(route, sync)
+	_feed_interpolation(binding)
 
 
 ## Applies one [constant NetwFrameEnvelope.Channel.SYNC_DELTA] payload: the
@@ -570,17 +650,59 @@ func handle_sync_delta(entity: NetwEntity, payload: PackedByteArray, sender: int
 		_write_path(root, binding.watch_paths[indexes[i]], values[i])
 	_delta_frames_in += 1
 	sync.delta_synchronized.emit()
-	_feed_interpolation(route, sync)
+	_feed_interpolation(binding)
 
 
-func _feed_interpolation(route: int, sync: MultiplayerSynchronizer) -> void:
+# Feeds the interpolation engine a consumed native sync's just-applied values.
+# The feeder owns the mapping from replicated paths to display channels: it
+# resolves [key -> [node, property, spec]] once per binding, then reads each
+# value back off the node at the receive tick and hands the engine plain data
+# through its record door. Only a public synchronizer feeds display, so a private
+# stream never writes a display buffer.
+func _feed_interpolation(binding: _Consumed) -> void:
 	var api := _api()
 	var iface := api.interpolation if api else null
-	if iface:
-		iface.feed_consumed_apply(route, sync)
+	if not iface:
+		return
+	var sync := binding.sync()
+	if not is_instance_valid(sync) \
+			or not sync.replication_config \
+			or not sync.public_visibility:
+		return
+	var paths := _display_paths_for(binding, sync)
+	if paths.is_empty():
+		return
+	var tick := api.clock.tick if api.clock.is_configured() else 0
+	for entry: Array in paths:
+		var node := entry[0] as Node
+		if not is_instance_valid(node):
+			binding.display_feed_built = false
+			continue
+		var prop := entry[1] as StringName
+		var spec := NetwScriptModel.get_node_property_interpolator(node, prop)
+		if spec:
+			iface._record(node, prop, node.get(prop), tick, spec, false)
+
+
+# Resolves and caches the consumed sync's replicated [node, property] paths on the
+# binding, the expensive structural half of the feed mapping. The interpolator
+# spec is looked up live per record so late spec registration still takes effect.
+func _display_paths_for(
+		binding: _Consumed,
+		sync: MultiplayerSynchronizer,
+) -> Array:
+	if binding.display_feed_built:
+		return binding.display_feed_paths
+	var out: Array = []
+	var root := binding.root()
+	if is_instance_valid(root):
+		for db: Array in SynchronizersCache.display_bindings(sync, root):
+			out.append([db[1] as Node, db[2] as StringName])
+	binding.display_feed_paths = out
+	binding.display_feed_built = true
+	return out
 
 #endregion
-
 
 #region Schema descriptors
 
@@ -624,7 +746,8 @@ func _validate_schema(
 		return
 	if int(pending[ordinal]) != binding.schema_hash:
 		_poison(
-			binding, route,
+			binding,
+			route,
 			"schema hash %04x disagrees with the spawn descriptor %04x"
 			% [binding.schema_hash, int(pending[ordinal])],
 		)
@@ -640,7 +763,6 @@ func _poison(binding: _Consumed, route: int, reason: String) -> void:
 	)
 
 #endregion
-
 
 #region Ordinals
 
@@ -694,7 +816,6 @@ func _binding_by_ordinal(route: int, ordinal: int) -> _Consumed:
 
 #endregion
 
-
 #region Field access
 
 # Resolves a config property path against [param root] the way native
@@ -719,9 +840,7 @@ static func _write_path(root: Node, path: NodePath, value: Variant) -> void:
 		return
 	target.set_indexed(NodePath(":" + path.get_concatenated_subnames()), value)
 
-
 #endregion
-
 
 ## Drops all per-session consumption state. Bindings survive because they are
 ## declarations of nodes still in the tree, which re-derive their routes and

@@ -13,10 +13,10 @@ var _activity: DiscordActivityService
 
 
 func _ready() -> void:
-	# The browser is a descendant of the tree now, so it self-resolves its own
-	# NetwConnect facade by ancestry (deferred, so it dodges the tree's
-	# child-setup window). No bind() needed, and eager .connect access here would
-	# trip the "parent busy" service assertion.
+	# The browser self-resolves its own NetwConnect facade from the mounted
+	# session by ancestry (deferred, so it dodges the mount's child-setup
+	# window). No bind() needed, and eager .connect access here would trip the
+	# "parent busy" service assertion.
 	_ctx.local_scene_changed.connect(_on_local_scene_changed)
 	_ctx.session_ended.connect(_show_browser)
 	_ctx.server_disconnecting.connect(_on_server_disconnecting)
@@ -39,7 +39,7 @@ func _ready() -> void:
 
 # The shell shows the browser only when the local participant is in no scene.
 # Every scene ships its own UI, so the browser steps aside on admission.
-func _on_local_scene_changed(_from: NetwScene, to: NetwScene) -> void:
+func _on_local_scene_changed(_from: MultiplayerScene, to: MultiplayerScene) -> void:
 	_browser.visible = to == null
 	if to != null:
 		_set_status("")

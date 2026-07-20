@@ -20,7 +20,7 @@ the kind of question:
 - **Positional questions** (what encloses this node?) are static walkers on the
   answering class. :ref:`NetwEntity.of() <class_NetwEntity_method_of>` resolves
   the entity for a node, and
-  :ref:`NetwScene.for_node() <class_NetwScene_method_for_node>` resolves its
+  :ref:`MultiplayerScene.of() <class_MultiplayerScene_method_of>` resolves its
   scene. Both walk the parent chain and work on orphan nodes, which is why they
   are the only ones you can rely on inside the very early parts of a spawn
   lifecycle (during

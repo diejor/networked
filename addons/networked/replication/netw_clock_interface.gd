@@ -88,6 +88,22 @@ var stretch_nudge_factor: float = 0.05
 ## How often the client pings the server to refresh RTT and recalibrate.
 var ping_interval: float = 0.1
 
+## Ticks the client's clock deliberately leads the half-RTT estimate by, the
+## margin that gets an input authored for server tick [code]T[/code] to the
+## server before it consumes [code]T[/code].
+##
+## The calibration target is continuous ([method handle_pong] carries the
+## server's intra-tick phase), so this lead is the whole margin and nothing is
+## left to a rounding artifact. Too small and the server's consume cursor runs
+## dry ([member NetwLagCompensationInterface.PredictionHandle.starved_count]);
+## too large and every input waits that much longer to be simulated. Pair it
+## with [member NetwLagCompensationInterface.PredictionHandle.consume_buffer_ticks],
+## which absorbs the residual arrival-phase drift this lead does not cover.
+##
+## Ignored on the server, which has no flight time to its own authority and so
+## never leads itself.
+var lead_ticks: float = 1.0
+
 ## The number of ticks the visual display lags behind the simulation.
 var display_offset: int = 2
 
@@ -368,10 +384,23 @@ func consume_drift_log_due(delta: float) -> bool:
 	return _drift_timer >= _DRIFT_LOG_INTERVAL
 
 
-## Ingests one RTT sample and the server tick it was measured against,
+## Ingests one RTT sample and the server clock position it was measured against,
 ## recalibrating the local clock. Returns the fresh metrics payload the
 ## [MultiplayerClock] emits as [signal MultiplayerClock.pong_received].
-func handle_pong(sample: float, server_tick_at_pong: int) -> Dictionary:
+##
+## [param server_tick_phase] is the server's position within
+## [param server_tick_at_pong], in [code][0, 1)[/code], so the target is a
+## continuous clock position rather than a whole tick. Rounding it away would
+## make the target jump by a full tick as the ping's arrival phase slid across a
+## server tick boundary, and [constant SyncMode.STRETCH] would then chase that
+## sawtooth for about a second at a time, dragging the client's tick boundary
+## back and forth through the server's consume boundary. The margin that used to
+## ride on that rounding is now [member lead_ticks], which is explicit.
+func handle_pong(
+		sample: float,
+		server_tick_at_pong: int,
+		server_tick_phase: float = 0.0,
+) -> Dictionary:
 	var old_stable := _stats.is_stable
 
 	_stats.record_sample(sample, jitter_stability_threshold, jitter_window)
@@ -379,9 +408,15 @@ func handle_pong(sample: float, server_tick_at_pong: int) -> Dictionary:
 	if _stats.is_stable != old_stable:
 		stability_changed.emit(_stats.is_stable)
 
-	var half_rtt_ticks := int(ceil(_stats.avg * 0.5 / ticktime))
-	var target_tick := server_tick_at_pong + half_rtt_ticks
-	var pre_calibrate_diff := target_tick - tick
+	# A server echoing its own probe is the identity case: no flight time to
+	# cover and nothing to lead, so it anchors on the position it just reported
+	# instead of nudging itself forward on every pong.
+	var api := _api()
+	var lead := 0.0
+	if not (api and api.is_server()):
+		lead = _stats.avg * 0.5 / ticktime + lead_ticks
+	var target_tick := float(server_tick_at_pong) + server_tick_phase + lead
+	var pre_calibrate_diff := int(round(target_tick)) - tick
 
 	_calibrate(target_tick)
 	_notify_display_offset()
@@ -428,11 +463,16 @@ func send_ping() -> void:
 	var api := _api()
 	if not api:
 		return
+	# The send time is opaque to the server (it only echoes it back), so the low
+	# 32 bits are enough: the client recovers the RTT as a wraparound-safe delta.
+	var payload := PackedByteArray()
+	payload.resize(4)
+	payload.encode_u32(0, Time.get_ticks_usec() & 0xFFFFFFFF)
 	api.replication.send_to(
 		1,
 		0,
 		NetwFrameEnvelope.Channel.CLOCK_PING,
-		var_to_bytes(Time.get_ticks_usec()),
+		payload,
 		false,
 		0,
 		"",
@@ -478,17 +518,26 @@ func _handle_handshake_reply(payload: PackedByteArray, sender: int) -> void:
 
 
 # Server receive for a latency probe. Echoes the client timestamp with the
-# current server tick.
+# current server clock position: the whole tick plus the phase within it,
+# quantized to a byte, so the client can calibrate against a continuous target.
 func _handle_ping(payload: PackedByteArray, sender: int) -> void:
 	var api := _api()
 	if not api or not api.is_server():
 		return
-	var client_usec := int(bytes_to_var(payload))
+	if payload.size() < 4:
+		return
+	var client_usec := payload.decode_u32(0)
+	var phase := clampf(_tick_accumulator / ticktime, 0.0, 1.0)
+	var reply := PackedByteArray()
+	reply.resize(9)
+	reply.encode_u32(0, client_usec)
+	reply.encode_u32(4, tick & 0xFFFFFFFF)
+	reply.encode_u8(8, int(phase * 255.0))
 	api.replication.send_to(
 		sender,
 		0,
 		NetwFrameEnvelope.Channel.CLOCK_PONG,
-		var_to_bytes([client_usec, tick]),
+		reply,
 		false,
 		0,
 		"",
@@ -501,11 +550,17 @@ func _handle_ping(payload: PackedByteArray, sender: int) -> void:
 func _handle_pong(payload: PackedByteArray, sender: int) -> void:
 	if sender != 1:
 		return
-	var body = bytes_to_var(payload)
-	if typeof(body) != TYPE_ARRAY or body.size() < 2:
+	if payload.size() < 9:
 		return
-	var sample := (Time.get_ticks_usec() - int(body[0])) / 1_000_000.0
-	var metrics := handle_pong(sample, int(body[1]))
+	var client_usec := payload.decode_u32(0)
+	var server_tick := payload.decode_u32(4)
+	var server_phase := payload.decode_u8(8) / 255.0
+	# Both stamps live in the low 32 bits of the usec clock, so a masked
+	# subtraction recovers the elapsed time even across a u32 wrap.
+	var elapsed := (Time.get_ticks_usec() & 0xFFFFFFFF) - client_usec
+	elapsed &= 0xFFFFFFFF
+	var sample := elapsed / 1_000_000.0
+	var metrics := handle_pong(sample, server_tick, server_phase)
 	if _node:
 		_node.pong_received.emit(metrics)
 
@@ -513,27 +568,33 @@ func _handle_pong(payload: PackedByteArray, sender: int) -> void:
 
 #region ── Internal Logic ───────────────────────────────────────────────────────
 
-func _calibrate(target_tick: int) -> void:
-	var diff := target_tick - tick
+# Re-anchors on a fresh measurement. The target is a continuous clock position,
+# so the whole-tick part drives the tick counter and the remainder seeds the
+# accumulator, keeping the local phase aligned with the server's rather than
+# only its tick index.
+func _calibrate(target_tick: float) -> void:
+	var whole := int(floor(target_tick))
+	var diff := whole - tick
 
 	if enable_drift_logging:
 		_drift_samples.append(diff)
 
 	if not is_synchronized:
 		# First calibration hard-aligns so STRETCH begins already converged.
-		tick = target_tick
-		_tick_accumulator = 0.0
-		_target_tick_estimate = float(target_tick)
+		tick = whole
+		_tick_accumulator = (target_tick - float(whole)) * ticktime
+		_target_tick_estimate = target_tick
 		is_synchronized = true
 		clock_synchronized.emit()
 		return
 
 	if sync_mode == SyncMode.SNAP:
-		tick = target_tick
+		tick = whole
+		_tick_accumulator = (target_tick - float(whole)) * ticktime
 	else:
 		# Re-anchor the estimate to the fresh measurement. _physics_process
 		# nudges the live clock toward it every frame.
-		_target_tick_estimate = float(target_tick)
+		_target_tick_estimate = target_tick
 
 
 func _nudge_toward_estimate() -> void:

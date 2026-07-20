@@ -284,15 +284,15 @@ func _request_teleport(
 	)
 	_dbg.info("Server received teleport request from %s to %s" % [username, to_scene_path])
 
-	var scene_manager := get_scene_manager()
-	if not scene_manager:
-		_fail(&"no_scene_manager", "Cannot teleport, scene manager not found.")
+	var scenes := get_scenes()
+	if not scenes:
+		_fail(&"no_scene_manager", "Cannot teleport, scene interface not found.")
 		return
 
 	var player := owner
 	var from_scene := MultiplayerScene.of(player)
 	if not from_scene:
-		from_scene = scene_manager.active_scenes.get(from_scene_name)
+		from_scene = scenes.scene(from_scene_name)
 	if not from_scene:
 		_fail(
 			&"source_scene_not_found",
@@ -340,10 +340,10 @@ func _request_teleport(
 
 
 func _activate_destination(to_scene_path: String) -> MultiplayerScene:
-	var scene_manager := get_scene_manager()
+	var scenes := get_scenes()
 	var to_scene_name := _resolve_scene_name(to_scene_path)
-	await scene_manager.activate_scene(StringName(to_scene_name))
-	var to_scene: MultiplayerScene = scene_manager.active_scenes.get(StringName(to_scene_name))
+	await scenes.activate_scene(StringName(to_scene_name))
+	var to_scene: MultiplayerScene = scenes.scene(StringName(to_scene_name))
 	if not to_scene:
 		_fail(
 			&"dest_scene_activation_failed",
@@ -482,8 +482,9 @@ func is_settling() -> bool:
 	return Time.get_ticks_msec() < _settle_until_msec
 
 
-## Adds [member owner] to the active scene in [param scene_mgr].
-func spawn(scene_mgr: MultiplayerSceneManager) -> void:
+## Adds [member owner] to the active scene named by this component in
+## [param scenes].
+func spawn(scenes: NetwSceneInterface) -> void:
 	_dbg.trace("spawn called.")
 	ensure_current_scene_path()
 
@@ -491,7 +492,7 @@ func spawn(scene_mgr: MultiplayerSceneManager) -> void:
 		_dbg.error("Does not have a scene to tp into.", func(m): push_error(m))
 		return
 
-	var scene: MultiplayerScene = scene_mgr.active_scenes.get(current_scene_name)
+	var scene: MultiplayerScene = scenes.scene(current_scene_name)
 	if scene:
 		_dbg.info("Spawning player into scene %s", [current_scene_name])
 		scene.add_player(NetwEntity.of(owner))
