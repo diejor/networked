@@ -4,7 +4,8 @@
 ## [member boost] joins the state set but the closed-form step never touches it,
 ## so whatever a correction restores or preserves stays visible to a test
 ## instead of being recomputed away next tick. It stands in for the contractive
-## fields a game marks [member PredictionComponent.teleport_only_restore_fields].
+## fields a game marks [method NetwScriptModel.PropertyConfig.teleport_only],
+## while carrying no mark itself. [LagCompWithheldBody] is the marked twin.
 class_name LagCompMomentumBody
 extends LagCompForecastBody
 

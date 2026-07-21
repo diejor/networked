@@ -253,6 +253,92 @@ func test_p5_chase_bounded_jerk() -> void:
 			).is_less_equal(bound)
 
 
+# A chase harness settled at zero with near-exact tracking, the rig every
+# recovery-absorption law starts from.
+func _settled_chase() -> NetwInterpHarness:
+	var h := NetwInterpHarness.new()
+	h.tickrate = 60.0
+	h.fps = 60.0
+	h.configure_chase(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"value"),
+		0.005,
+		0.0,
+	)
+	h.set_body(0.0)
+	for f in 30:
+		h.step_chase(float(f) / h.fps)
+	return h
+
+
+# P7 Recovery absorption. A recovery moves the body in one write; the chase
+# absorbs the jump as a decaying render offset, so the display stays put at
+# the correction and glides onto the corrected body with no residue.
+func test_p7_chase_absorbs_a_recovery_without_a_jump() -> void:
+	var h := _settled_chase()
+
+	h.set_body(1.0)
+	h.absorb_recovery({ &"value": 1.0 })
+	h.step_chase(0.6)
+	assert_float(absf(float(h.displayed.back()))) \
+			.override_failure_message(
+				"the display must stay near the pre-correction pose, not jump "
+				+ "with the body",
+			).is_less(0.3)
+
+	for f in 90:
+		h.step_chase(0.7 + float(f) / h.fps)
+	assert_float(float(h.displayed.back())).override_failure_message(
+		"the offset must decay to nothing, leaving the display on the "
+		+ "corrected body",
+	).is_equal_approx(1.0, 0.02)
+
+
+# Each recovery resets its channel's offset rather than accumulating into it,
+# so a correction train cannot wind the display away from the body.
+func test_p7_chase_offsets_reset_rather_than_accumulate() -> void:
+	var h := _settled_chase()
+
+	h.set_body(1.0)
+	h.absorb_recovery({ &"value": 1.0 })
+	h.set_body(2.0)
+	h.absorb_recovery({ &"value": 1.0 })
+	h.step_chase(0.6)
+
+	# An accumulated offset of -2 would hold the display near zero. The reset
+	# offset of -1 leaves it near the first corrected pose.
+	assert_float(float(h.displayed.back())).override_failure_message(
+		"a second recovery must reset the offset, not stack onto the first",
+	).is_greater(0.6)
+
+
+# A teleported recovery clears every offset: a genuine desync should be seen
+# to snap, never smoothed through.
+func test_p7_a_teleport_snaps_the_chase() -> void:
+	var h := _settled_chase()
+
+	h.set_body(5.0)
+	h.absorb_recovery({ &"value": 5.0 }, true)
+	h.step_chase(0.6)
+
+	assert_float(float(h.displayed.back())).override_failure_message(
+		"a teleported recovery must snap the display with the body",
+	).is_greater(4.5)
+
+
+# The absorbed offset is clamped by magnitude with its direction preserved, so
+# a huge correction can never wind the visual further from the body than a
+# teleport would have moved it.
+func test_p7_the_chase_offset_clamps_by_magnitude() -> void:
+	var clamped: Vector3 = NetwInterpolationInterface._clamp_delta(
+		Vector3(10.0, 0.0, 0.0),
+		2.0,
+	)
+	assert_float(clamped.length()).is_equal_approx(2.0, 0.0001)
+	assert_float(clamped.x).is_greater(0.0)
+	assert_float(float(NetwInterpolationInterface._clamp_delta(-9.0, 2.0))) \
+			.is_equal_approx(-2.0, 0.0001)
+
+
 # P6 Loss robustness. Under heavy loss and jitter the display still holds P1, P2,
 # and P4: monotonic, continuous, no regressions, no stalls. Starvation grows lag,
 # it never tears the output. The bounded-lag check rides P3's degraded floor.

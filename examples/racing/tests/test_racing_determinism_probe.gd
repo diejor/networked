@@ -22,6 +22,12 @@ extends NetwTestSuite
 ## loose ceiling, so it records the number rather than freezing it.
 
 const MAIN := preload("res://examples/racing/main.tscn")
+const VEHICLE_CONTROLS := preload(
+	"res://examples/racing/scripts/vehicle_controls.gd"
+)
+const SCHEDULE_FAULT_STEPPER := preload(
+	"res://addons/networked_test/clock/schedule_fault_stepper.gd"
+)
 
 var game: NetwGameHarness
 
@@ -29,6 +35,15 @@ var game: NetwGameHarness
 func before_test() -> void:
 	game = make_game_harness(MAIN)
 	await game.setup()
+
+
+func after_test() -> void:
+	VEHICLE_CONTROLS.probe_quantize_inputs = true
+	var controls: Node = VEHICLE_CONTROLS.new()
+	controls.free()
+	if is_instance_valid(game):
+		await game.teardown()
+	await super.after_test()
 
 
 func test_reports_same_process_divergence_at_matched_ticks() -> void:
@@ -79,23 +94,25 @@ func test_reports_same_process_divergence_at_matched_ticks() -> void:
 	var matched := staleness.filter(func(s: float) -> bool: return s == 0.0).size()
 	print(
 		"[probe] matched-tick samples=%d/%d  corrections=%d" % [
-			matched, staleness.size(), handle.corrections,
+			matched,
+			staleness.size(),
+			handle.corrections,
 		],
 	)
 
 	assert_int(staleness.size()) \
-		.override_failure_message("no state was evaluated, the probe measured nothing") \
-		.is_greater(0)
+			.override_failure_message("the probe measured no state") \
+			.is_greater(0)
 
 	# Loose ceiling only. A one-process run that diverged as hard as the live
 	# captures would mean the physics cannot reproduce itself at all, which is a
 	# different and much larger problem than any timing fix addresses.
 	var angular: Array[float] = by_field.get(&"sphere_angular_velocity", [] as Array[float])
 	assert_float(_median(angular)) \
-		.override_failure_message(
-			"same-process matched-tick angular divergence median %.4f rad/s"
-			% _median(angular),
-		).is_less(5.0)
+			.override_failure_message(
+				"same-process matched-tick angular divergence median %.4f rad/s"
+				% _median(angular),
+			).is_less(5.0)
 
 
 # Watches the predicted and authoritative bodies from the first tick they both
@@ -141,12 +158,10 @@ func test_reports_spawn_gap_from_first_tick() -> void:
 	assert_bool(is_instance_valid(own)).is_true()
 
 
-# Diffs the two peers' drive terms every tick. The sphere is propelled by
-# [code]angular_velocity += vehicle_model.basis.x * linear_speed * 100 * delta[/code],
-# so the impulse depends on the model's whole orientation while only its yaw
-# travels in the state set. This records both peers' speed, full model rotation,
-# ground normal and resulting impulse side by side, so the term that differs is
-# read off rather than reasoned about. No input is applied.
+# Diffs the two peers' drive terms every tick. Propulsion derives its rolling
+# axis from replicated heading projected onto each peer's local ground plane.
+# Full model rotation remains in the output to prove pitch and roll no longer
+# feed the impulse. A sustained turn exercises the drive.
 func test_reports_drive_term_divergence_per_tick() -> void:
 	var host := await game.add_host("mario", false)
 	var client := await game.add_client("luigi", false)
@@ -157,7 +172,9 @@ func test_reports_drive_term_divergence_per_tick() -> void:
 	var mirror := await host.await_player(&"luigi", 2.0)
 
 	const TICK_DELTA := 1.0 / 60.0
-	print("[drive] no input applied. o=own (predicted)  a=authoritative")
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	print("[drive] sustained turn. o=own (predicted)  a=authoritative")
 	print(
 		"[drive]   n   spd_o  |dimp|   dnorm    dyaw  dpitch   droll   dangv  |"
 		+ "   |v_o|   |v_a|    |dv|      gap",
@@ -165,8 +182,8 @@ func test_reports_drive_term_divergence_per_tick() -> void:
 	for i in range(30):
 		var rot_o: Vector3 = own.vehicle_model.rotation
 		var rot_a: Vector3 = mirror.vehicle_model.rotation
-		var basis_o: Vector3 = own.vehicle_model.global_transform.basis.x
-		var basis_a: Vector3 = mirror.vehicle_model.global_transform.basis.x
+		var basis_o := _propulsion_axis(own)
+		var basis_a := _propulsion_axis(mirror)
 		var imp_o: Vector3 = basis_o * (own.linear_speed * 100.0) * TICK_DELTA
 		var imp_a: Vector3 = basis_a * (mirror.linear_speed * 100.0) * TICK_DELTA
 		var norm_o: Vector3 = own.normal
@@ -190,6 +207,8 @@ func test_reports_drive_term_divergence_per_tick() -> void:
 			],
 		)
 		await game.sync_ticks(1)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
 
 	assert_bool(is_instance_valid(own)).is_true()
 
@@ -223,16 +242,17 @@ func test_reports_whether_peers_share_a_physics_space() -> void:
 	)
 	print(
 		"[space] own tree=%s  auth tree=%s" % [
-			own.get_tree(), mirror.get_tree(),
+			own.get_tree(),
+			mirror.get_tree(),
 		],
 	)
 
 	assert_bool(own_world.space == mirror_world.space) \
-		.override_failure_message(
-			"the two peers' bodies share a physics space, so each peer's copy of a"
-			+ " car collides with the other peer's copy and the rig manufactures"
-			+ " divergence that no real two-process session can produce",
-		).is_false()
+			.override_failure_message(
+				"the two peers' bodies share a physics space, so each peer's copy of a"
+				+ " car collides with the other peer's copy and the rig manufactures"
+				+ " divergence that no real two-process session can produce",
+			).is_false()
 
 
 # Attributes every correction to the field that triggered it. The same-process
@@ -256,16 +276,17 @@ func test_reports_correction_trigger_attribution() -> void:
 	var corrected_flags: Array[bool] = []
 	var exceeded: Dictionary[StringName, int] = { }
 	var sole_trigger: Dictionary[StringName, int] = { }
+	var binding: NetwSyncSetBinding = own.entity.state_binding
 	handle.state_evaluated.connect(
 		func(_recv_tick: int, _ack: int, _divergence: float, corrected: bool) -> void:
 			corrected_flags.append(corrected)
 			var over: Array[StringName] = []
 			for field: StringName in handle.last_field_divergence:
-				if handle.correction_trigger_excludes.has(field):
+				if binding.reconcile_only_of(field):
 					continue
-				var limit: float = handle.divergence_epsilon_overrides.get(
-					field, handle.divergence_epsilon,
-				)
+				var limit: float = binding.epsilon_override_of(field)
+				if limit < 0.0:
+					limit = handle.divergence_epsilon
 				if handle.last_field_divergence[field] > limit:
 					over.append(field)
 					exceeded[field] = exceeded.get(field, 0) + 1
@@ -282,32 +303,31 @@ func test_reports_correction_trigger_attribution() -> void:
 
 	var evaluations := corrected_flags.size()
 	var corrected_count := corrected_flags.filter(func(c: bool) -> bool: return c).size()
-	print(
-		"[trigger] base epsilon=%.4f  overrides=%s  excludes=%s" % [
-			handle.divergence_epsilon,
-			handle.divergence_epsilon_overrides,
-			handle.correction_trigger_excludes,
-		],
-	)
+	print("[trigger] base epsilon=%.4f" % handle.divergence_epsilon)
 	print(
 		"[trigger] evaluations=%d  corrected=%d  corrections_total=%d" % [
-			evaluations, corrected_count, handle.corrections,
+			evaluations,
+			corrected_count,
+			handle.corrections,
 		],
 	)
 	for field: StringName in handle.last_field_divergence:
-		var limit: float = handle.divergence_epsilon_overrides.get(
-			field, handle.divergence_epsilon,
-		)
+		var limit: float = binding.epsilon_override_of(field)
+		if limit < 0.0:
+			limit = handle.divergence_epsilon
 		print(
 			"[trigger]   %-26s over threshold %3d/%d  (limit %.4f)  sole trigger %d" % [
-				field, exceeded.get(field, 0), evaluations, limit,
+				field,
+				exceeded.get(field, 0),
+				evaluations,
+				limit,
 				sole_trigger.get(field, 0),
 			],
 		)
 
 	assert_int(evaluations) \
-		.override_failure_message("no state was evaluated, the probe measured nothing") \
-		.is_greater(0)
+			.override_failure_message("the probe measured no state") \
+			.is_greater(0)
 
 
 # Follows position divergence across each correction to see whether a correction
@@ -325,9 +345,11 @@ func test_reports_position_recovery_across_corrections() -> void:
 	await game.sync_ticks(8)
 
 	var handle = own.entity.prediction
-	var limit: float = handle.divergence_epsilon_overrides.get(
-		&"sphere_position", handle.divergence_epsilon,
+	var limit: float = own.entity.state_binding.epsilon_override_of(
+		&"sphere_position",
 	)
+	if limit < 0.0:
+		limit = handle.divergence_epsilon
 	# Reference types only: a lambda captures locals by value.
 	var divergence: Array[float] = []
 	var corrected_flags: Array[bool] = []
@@ -358,7 +380,10 @@ func test_reports_position_recovery_across_corrections() -> void:
 			var over := samples.filter(func(d: float) -> bool: return d > limit).size()
 			print(
 				"[recovery]   +%d evals after a correction: mean=%7.4f  over threshold %d/%d" % [
-					offset, _mean(samples), over, samples.size(),
+					offset,
+					_mean(samples),
+					over,
+					samples.size(),
 				],
 			)
 
@@ -376,13 +401,16 @@ func test_reports_position_recovery_across_corrections() -> void:
 		recross.sort()
 		print(
 			"[recovery] evals until back over threshold: median=%.1f  min=%.1f  max=%.1f  n=%d" % [
-				recross[recross.size() / 2], recross[0], recross[-1], recross.size(),
+				recross[recross.size() / 2],
+				recross[0],
+				recross[-1],
+				recross.size(),
 			],
 		)
 
 	assert_int(divergence.size()) \
-		.override_failure_message("no state was evaluated, the probe measured nothing") \
-		.is_greater(0)
+			.override_failure_message("the probe measured no state") \
+			.is_greater(0)
 
 
 # The measurement that isolates the solver. Corrections are switched off by
@@ -400,12 +428,11 @@ func test_reports_uncorrected_simulation_drift() -> void:
 	var mirror := await host.await_player(&"luigi", 2.0)
 
 	var handle = own.entity.prediction
-	var no_overrides: Dictionary[StringName, float] = { }
-	handle.divergence_epsilon = 1.0e9
-	handle.divergence_epsilon_overrides = no_overrides
-	handle.teleport_threshold = 1.0e9
-	handle.soft_restore_stiffness = no_overrides.duplicate()
+	_silence_triggers(handle)
 	await game.sync_ticks(8)
+	# The wire map rebuilds on any rewire during warmup, so the silence is
+	# re-applied once the link settles.
+	_silence_triggers(handle)
 
 	# The spawn-state audit. Two bodies that have received no input yet should be
 	# standing in the same place, so any gap here is a start-state difference that
@@ -417,7 +444,10 @@ func test_reports_uncorrected_simulation_drift() -> void:
 		var mirror_value: Variant = mirror.get(field)
 		print(
 			"[drift]   %-26s own=%s  authority=%s  gap=%s" % [
-				field, own_value, mirror_value, _gap(own_value, mirror_value),
+				field,
+				own_value,
+				mirror_value,
+				_gap(own_value, mirror_value),
 			],
 		)
 
@@ -438,8 +468,197 @@ func test_reports_uncorrected_simulation_drift() -> void:
 	client.simulate_action_release("right")
 
 	assert_int(handle.corrections) \
-		.override_failure_message("the probe must not correct, or it measures nothing") \
-		.is_equal(0)
+			.override_failure_message("the probe must not correct") \
+			.is_equal(0)
+
+
+# Injects paired zero and double client tick frames while corrections are off,
+# then prints matched-tick divergence and consume counters around each fault.
+func test_reports_divergence_step_response_at_schedule_faults() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+	var handle = own.entity.prediction
+	var server_handle = mirror.entity.prediction
+	_silence_triggers(handle)
+	await game.sync_ticks(8)
+	# The wire map rebuilds on any rewire during warmup, so the silence is
+	# re-applied once the link settles.
+	_silence_triggers(handle)
+
+	var clocks: Array[NetwClockInterface] = [
+		host.tree.api.clock,
+		client.tree.api.clock,
+	]
+	var initial_tick_delta := clocks[1].tick - clocks[0].tick
+	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
+	stepper.override_step_count(24, 1, 0)
+	stepper.override_step_count(25, 1, 2)
+	stepper.override_step_count(48, 1, 2)
+	stepper.override_step_count(49, 1, 0)
+
+	var evaluations: Array[int] = []
+	handle.state_evaluated.connect(
+		func(
+				_recv_tick: int,
+				_ack: int,
+				_divergence: float,
+				_corrected: bool,
+		) -> void:
+			evaluations.append(stepper.frame_index)
+	)
+
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	print(
+		"[fault] frame mark  ctick stick stale  angular position held consumed",
+	)
+	for frame_index in 72:
+		await stepper.sync_frames(1)
+		var frame := stepper.frame_index
+		if not (frame in range(18, 32) or frame in range(42, 56)):
+			continue
+		var mark := "zero" if frame in [24, 49] else (
+				"double" if frame in [25, 48] else ""
+		)
+		print(
+			"[fault] %5d %-6s %5d %5d %5d %8.4f %8.4f %4d %8d" % [
+				frame,
+				mark,
+				clocks[1].tick,
+				clocks[0].tick,
+				handle.last_compare_staleness,
+				handle.last_field_divergence.get(
+					&"sphere_angular_velocity",
+					0.0,
+				),
+				handle.last_field_divergence.get(&"sphere_position", 0.0),
+				server_handle.held_count,
+				server_handle.consumed_count,
+			],
+		)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	assert_int(evaluations.size()) \
+			.override_failure_message("the probe measured no state") \
+			.is_greater(0)
+	assert_int(clocks[1].tick - clocks[0].tick).is_equal(initial_tick_delta)
+
+
+func test_reports_input_quantization_delta() -> void:
+	var quantized_runs: Array[float] = []
+	var raw_runs: Array[float] = []
+	var quantized_position_runs: Array[float] = []
+	var raw_position_runs: Array[float] = []
+	for repeat in 3:
+		if repeat > 0:
+			game = make_unmanaged_game_harness(MAIN)
+			await game.setup()
+		var quantized := await _measure_input_codec_mode(true)
+		quantized_runs.append(quantized.angular)
+		quantized_position_runs.append(quantized.position)
+		await game.teardown()
+
+		VEHICLE_CONTROLS.probe_quantize_inputs = false
+		game = make_unmanaged_game_harness(MAIN)
+		await game.setup()
+		var raw := await _measure_input_codec_mode(false)
+		raw_runs.append(raw.angular)
+		raw_position_runs.append(raw.position)
+		await game.teardown()
+		VEHICLE_CONTROLS.probe_quantize_inputs = true
+
+	var quantized_angular := _median(quantized_runs)
+	var raw_angular := _median(raw_runs)
+	var quantized_position := _median(quantized_position_runs)
+	var raw_position := _median(raw_position_runs)
+
+	print(
+		"[quantization] angular runs quantized=%s raw=%s" % [
+			quantized_runs,
+			raw_runs,
+		],
+	)
+	print(
+		"[quantization] angular median quantized=%.6f raw=%.6f delta=%+.6f" % [
+			quantized_angular,
+			raw_angular,
+			raw_angular - quantized_angular,
+		],
+	)
+	print(
+		"[quantization] position median quantized=%.6f raw=%.6f delta=%+.6f" % [
+			quantized_position,
+			raw_position,
+			raw_position - quantized_position,
+		],
+	)
+	assert_int(quantized_runs.size()).is_equal(3)
+	assert_int(raw_runs.size()).is_equal(3)
+
+
+func _measure_input_codec_mode(quantized: bool) -> Dictionary:
+	VEHICLE_CONTROLS.probe_quantize_inputs = quantized
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+	var own := await client.await_player(&"luigi", 2.0)
+	await host.await_player(&"luigi", 2.0)
+
+	var handle = own.entity.prediction
+	_silence_triggers(handle)
+	await game.sync_ticks(8)
+	# The wire map rebuilds on any rewire during warmup, so the silence is
+	# re-applied once the link settles.
+	_silence_triggers(handle)
+	var angular: Array[float] = []
+	var position: Array[float] = []
+	handle.state_evaluated.connect(
+		func(
+				_recv_tick: int,
+				_ack: int,
+				_divergence: float,
+				_corrected: bool,
+		) -> void:
+			if handle.last_compare_staleness != 0:
+				return
+			angular.append(
+				handle.last_field_divergence.get(
+					&"sphere_angular_velocity",
+					0.0,
+				),
+			)
+			position.append(
+				handle.last_field_divergence.get(&"sphere_position", 0.0),
+			)
+	)
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	await game.sync_ticks(120)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+	return {
+		"angular": _median(angular),
+		"position": _median(position),
+		"samples": angular.size(),
+	}
+
+
+# Switches every correction trigger out of reach, including the per-field
+# epsilon marks the engine gathered at wire time, so the probe measures the
+# bare solver with no correction machinery mixed in.
+func _silence_triggers(handle) -> void:
+	handle.divergence_epsilon = 1.0e9
+	handle.teleport_threshold = 1.0e9
+	var engine = handle._engine()
+	if engine:
+		engine._epsilon_overrides.clear()
 
 
 func _gap(own_value: Variant, mirror_value: Variant) -> String:
@@ -448,6 +667,17 @@ func _gap(own_value: Variant, mirror_value: Variant) -> String:
 	if own_value is float and mirror_value is float:
 		return "%.6f" % absf((own_value as float) - (mirror_value as float))
 	return "same" if own_value == mirror_value else "differs"
+
+
+func _propulsion_axis(body: Node) -> Vector3:
+	var ground_normal := Vector3.UP
+	if body.raycast.is_colliding():
+		ground_normal = body.raycast.get_collision_normal().normalized()
+	var heading_forward := Vector3.FORWARD.rotated(Vector3.UP, body.heading)
+	var ground_forward := heading_forward.slide(ground_normal)
+	if ground_forward.is_zero_approx():
+		return Vector3.RIGHT.rotated(Vector3.UP, body.heading)
+	return ground_forward.normalized().cross(ground_normal).normalized()
 
 
 func _report(label: String, samples: Array[float]) -> void:

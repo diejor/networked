@@ -95,7 +95,6 @@ func _service_entered(api: NetwMultiplayer) -> void:
 			and not tree.node_added.is_connected(_interface._on_node_added):
 		tree.node_added.connect(_interface._on_node_added)
 
-
 # No _service_exiting override. The channel, clock binding, node-added observer,
 # and config all target the interface, so they outlive this node and a scene
 # change that frees it leaves rewind running.
@@ -120,6 +119,14 @@ func _on_session_entered() -> void:
 			NetwFrameEnvelope.Channel.ACTION,
 			_interface._handle_action_carrier,
 		)
+		api.replication.register_channel(
+			NetwFrameEnvelope.Channel.PREDICT_COMMAND,
+			_interface._handle_predict_command_carrier,
+		)
+		api.replication.register_channel(
+			NetwFrameEnvelope.Channel.PREDICT_ACK,
+			_interface._handle_predict_ack_carrier,
+		)
 
 
 # Binds to the tick loop once the clock engine is configured. The clock can mount
@@ -138,8 +145,14 @@ func _try_bind_clock() -> void:
 		# change that frees the node.
 		if _interface:
 			_interface._clock = clock
+			if not clock.before_tick_loop.is_connected(
+				_interface.before_frame_step,
+			):
+				clock.before_tick_loop.connect(_interface.before_frame_step)
 			if not clock.on_tick.is_connected(_interface.tick_step):
 				clock.on_tick.connect(_interface.tick_step)
+			if not clock.after_tick_loop.is_connected(_interface.frame_step):
+				clock.after_tick_loop.connect(_interface.frame_step)
 		return
 	_bind_attempts += 1
 	if _bind_attempts <= _MAX_BIND_ATTEMPTS and is_inside_tree() \

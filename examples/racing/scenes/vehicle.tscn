@@ -137,20 +137,6 @@ tick_mode = true
 [node name="PredictionComponent" type="Node" parent="." unique_id=1682018892]
 unique_name_in_owner = true
 script = ExtResource("8_pred")
-divergence_epsilon_overrides = Dictionary[StringName, float]({
-&"sphere_position": 0.35
-})
-correction_mode = 3
-snap_restore = 1
-max_consume_per_tick = 2
-consume_buffer_ticks = 1
-reconcile_only_fields = Array[StringName]([&"sphere_linear_velocity", &"sphere_angular_velocity", &"heading", &"linear_speed", &"angular_speed", &"acceleration", &"colliding"])
-teleport_only_restore_fields = Array[StringName]([&"sphere_linear_velocity", &"linear_speed", &"angular_speed", &"acceleration"])
-soft_restore_stiffness = Dictionary[StringName, float]({
-&"sphere_angular_velocity": 0.05
-})
-blend_stiffness = 1.0
-teleport_threshold = 3.0
 
 [node name="MultiplayerInterpolator" type="Node" parent="." unique_id=2035980158]
 script = ExtResource("9_interp")

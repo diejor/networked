@@ -135,6 +135,20 @@ func project_by(channel: StringName) -> NetwInterpolate:
 	return self
 
 
+## True when [param other] declares the same smoothing behavior. Compared by
+## value, so a freshly built spec equal to a stored one is recognized as the
+## same declaration and re-applying it is idempotent.
+func is_same_spec(other: NetwInterpolate) -> bool:
+	if other == null:
+		return false
+	return (mode == other.mode
+			and is_equal_approx(smoothing, other.smoothing)
+			and is_equal_approx(snap_distance, other.snap_distance)
+			and target == other.target
+			and forecast_tail == other.forecast_tail
+			and project_channel == other.project_channel)
+
+
 ## Selects [constant Tail.HOLD] so the channel never projects past its newest
 ## sample, for discrete or flag values that must not extrapolate.
 func hold() -> NetwInterpolate:

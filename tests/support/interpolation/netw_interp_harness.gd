@@ -180,6 +180,31 @@ func run_chase(oracle: NetwInterpOracle, duration_sec: float) -> void:
 		playhead_time.append(wall)
 
 
+## Writes the live chase body's value directly, the manual counterpart of the
+## oracle staircase [method run_chase] drives.
+func set_body(value: Variant) -> void:
+	_body.value = value
+
+
+## Feeds one recovery into the chase exactly the way the live absorber does,
+## so a calculus law can assert what a correction looks like on the display.
+func absorb_recovery(deltas: Dictionary, teleported: bool = false) -> void:
+	_iface._on_chase_recovered(0, deltas, teleported, 0, _rt)
+
+
+## Pumps one chase frame at [param wall] seconds, recording it the way
+## [method run_chase] does, so a law can interleave body writes, recoveries,
+## and frames by hand.
+func step_chase(wall: float) -> void:
+	var timing := _timing(wall)
+	_writer.mark_frame(wall)
+	_stats.reset()
+	_iface._pump_chase(_rt, timing, _stats)
+	frames.append(wall)
+	displayed.append(_state.last_written)
+	playhead_time.append(wall)
+
+
 ## A warmup window long enough for the buffer to prime and the lag to settle,
 ## given the display offset the run's preset implied.
 func warmup_hint() -> float:

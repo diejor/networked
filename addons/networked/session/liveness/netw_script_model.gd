@@ -827,7 +827,7 @@ class SyncConfig:
 				+ "NetwInterpolate",
 			)
 			return self
-		if new_list == interpolators:
+		if _same_interpolator_specs(new_list, interpolators):
 			return self
 		if not interpolators.is_empty():
 			Netw.dbg.warn(
@@ -840,6 +840,20 @@ class SyncConfig:
 			"SyncConfig: Incompatible interpolator configured.",
 		)
 		return self
+
+
+	# True when two interpolator lists declare the same specs in the same order,
+	# compared by value so re-declaring freshly built but identical specs is
+	# idempotent rather than a reference mismatch that warns and re-assigns.
+	func _same_interpolator_specs(a: Array, b: Array) -> bool:
+		if a.size() != b.size():
+			return false
+		for i in a.size():
+			var ia := a[i] as NetwInterpolate
+			var ib := b[i] as NetwInterpolate
+			if ia == null or not ia.is_same_spec(ib):
+				return false
+		return true
 
 
 	## True when this config only smooths a value and never claims a write.
@@ -968,7 +982,7 @@ class SyncConfig:
 ## [method Netw.sync_property] pushes it explicitly.
 ##
 ## [br][br]
-## [method volatile], [method retained], [method deadzone], and
+## [method volatile], [method retained], [method epsilon], and
 ## [method persisted] refine one property. [method every_tick],
 ## [method on_change], [method heartbeat], [method windowed], [method audience],
 ## and [method masked] write through to the script's whole [NetwSyncSet] from
@@ -1003,9 +1017,10 @@ class PropertyConfig:
 	## set, the trusted display stream outside the rewind boundary.
 	var in_broadcast_set: bool = false
 
-	## Per-field reconciliation threshold, or a negative value when unset. Set by
-	## [method deadzone].
-	var deadzone_threshold: float = -1.0
+	## The field's own divergence threshold, or a negative value to inherit the
+	## entity's [member PredictionComponent.divergence_epsilon]. Set by
+	## [method epsilon].
+	var epsilon_override: float = -1.0
 
 	## The script set's [member NetwSyncSet.trigger], or [constant UNSET]. Written
 	## by [method every_tick] and [method on_change].
@@ -1039,6 +1054,24 @@ class PropertyConfig:
 	## archetype's [NetwScriptModel.PersistenceConfig] interval. Set by [method persisted].
 	var persist_interval: float = 0.0
 
+	## What the value does in the simulation, which decides whether a
+	## reconciliation compares and restores it. Set by [method causal],
+	## [method derived], and [method cosmetic].
+	var property_class: NetwSyncSet.PropertyClass = NetwSyncSet.PropertyClass.CAUSAL
+
+	## How firmly a recovery pulls this value toward the authoritative one rather
+	## than writing it outright, or [code]0.0[/code] to write it. Set by
+	## [method converge].
+	var converge_stiffness: float = 0.0
+
+	## True once [method teleport_only] restricts the field to teleport-tier
+	## recoveries.
+	var explicit_teleport_only: bool = false
+
+	## True once [method reconcile_only] excludes the field from triggering a
+	## correction on its own.
+	var explicit_reconcile_only: bool = false
+
 
 	## The server owns this value, every observer sees it, and hit detection can
 	## rewind it. The authoritative kind, the body pose the whole game agrees on.
@@ -1054,7 +1087,7 @@ class PropertyConfig:
 	## [/codeblock]
 	## A state field is also the reconciliation anchor: a client predicting this
 	## entity is corrected against the server's stream, within the tolerance
-	## [method deadzone] grants.
+	## [method epsilon] grants.
 	func state() -> PropertyConfig:
 		in_state_set = true
 		lane = NetwSyncSet.Lane.VOLATILE
@@ -1128,15 +1161,90 @@ class PropertyConfig:
 		return self
 
 
-	## Sets the per-field reconciliation deadzone [param threshold], the distance
-	## a predicted value may drift from the authoritative one before a correction
-	## snaps it back. A small tolerance absorbs quantization noise instead of
-	## fighting it with visible corrections.
+	## Marks the value an antecedent of the simulation, one the next step reads
+	## from, so a reconciliation compares it and restores it. The default class.
 	## [codeblock]
-	## Netw.configure_property(self, &"velocity").state().deadzone(0.05)
+	## # the body integrates from velocity, so a restore that skipped it would
+	## # rebase the position and then immediately drift away from it again
+	## Netw.configure_property(self, &"velocity").state().causal()
 	## [/codeblock]
-	func deadzone(threshold: float) -> PropertyConfig:
-		deadzone_threshold = threshold
+	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	func causal() -> PropertyConfig:
+		property_class = NetwSyncSet.PropertyClass.CAUSAL
+		return self
+
+
+	## Marks the value one the body recomputes from causal fields each step, so a
+	## reconciliation replicates it for observers but never restores it. Writing
+	## it back would set a value the next step overwrites anyway.
+	## [codeblock]
+	## # recomputed from velocity every tick, so restoring it decides nothing
+	## Netw.configure_property(self, &"speed").state().derived()
+	## [/codeblock]
+	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	func derived() -> PropertyConfig:
+		property_class = NetwSyncSet.PropertyClass.DERIVED
+		return self
+
+
+	## Marks the value display-only, so no reconciliation compares it and none
+	## restores it. A cosmetic field that disagreed would otherwise correct a
+	## simulation over a value no simulation reads.
+	## [codeblock]
+	## Netw.configure_property(self, &"skid_intensity").state().cosmetic()
+	## [/codeblock]
+	## See [enum NetwSyncSet.PropertyClass] to compare classes.
+	func cosmetic() -> PropertyConfig:
+		property_class = NetwSyncSet.PropertyClass.COSMETIC
+		return self
+
+
+	## Pulls the field toward the authoritative value at [param stiffness] during
+	## a recovery instead of writing it outright, bounded to that one recovery.
+	## [codeblock]
+	## Netw.configure_property(self, &"heading").state().causal().converge(0.4)
+	## [/codeblock]
+	## A stiffness of [code]0.0[/code] restores the value outright, the default.
+	func converge(stiffness: float) -> PropertyConfig:
+		converge_stiffness = stiffness
+		return self
+
+
+	## Restricts the field to teleport-tier recoveries, so an ordinary one leaves
+	## it alone. Right for a value whose mid-flight rewrite is more disruptive
+	## than the drift it would correct.
+	## [codeblock]
+	## Netw.configure_property(self, &"angular_velocity").state().teleport_only()
+	## [/codeblock]
+	func teleport_only() -> PropertyConfig:
+		explicit_teleport_only = true
+		return self
+
+
+	## Sets this field's own divergence [param threshold], the distance its
+	## predicted value may drift from the authoritative one before a correction
+	## triggers. A field without one inherits the entity's
+	## [member PredictionComponent.divergence_epsilon]. A single scalar mixes
+	## units badly for a body whose state spans meters, radians, and meters per
+	## second, so the field that needs its own tolerance declares it in its own
+	## units.
+	## [codeblock]
+	## Netw.configure_property(self, &"velocity").state().epsilon(0.05)
+	## [/codeblock]
+	func epsilon(threshold: float) -> PropertyConfig:
+		epsilon_override = threshold
+		return self
+
+
+	## Excludes the field from triggering a correction, while a correction
+	## another field triggers still restores it. Right for a value whose own
+	## drift is tolerable but that must land with the rest of the closure when
+	## one lands.
+	## [codeblock]
+	## Netw.configure_property(self, &"heading").state().reconcile_only()
+	## [/codeblock]
+	func reconcile_only() -> PropertyConfig:
+		explicit_reconcile_only = true
 		return self
 
 

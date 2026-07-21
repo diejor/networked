@@ -192,12 +192,12 @@ func _guard_wall_clock() -> void:
 	assert(
 		now < _wall_deadline_ms,
 		(
-			"NetwGameHarness: test exceeded %d ms of stepping. Likely a " \
-			% _wall_clock_budget_ms()
+				"NetwGameHarness: test exceeded %d ms of stepping. Likely a " \
+						% _wall_clock_budget_ms()
 		) + (
-			"non-settling early-exit predicate or an oversized tick budget. " +
-			"Bound the run with seconds_to_ticks() and an early-exit " +
-			"predicate, or raise NETW_TEST_WALL_CLOCK_MS."
+				"non-settling early-exit predicate or an oversized tick budget. " +
+				"Bound the run with seconds_to_ticks() and an early-exit " +
+				"predicate, or raise NETW_TEST_WALL_CLOCK_MS."
 		),
 	)
 
@@ -349,6 +349,9 @@ func _create_runner(
 ) -> NetwSceneRunner:
 	var slot := PARTICIPANT_WINDOW_SCENE.instantiate() as ParticipantWindow
 	slot.name = "Window_%s" % username
+	slot.own_world_3d = true
+	slot.world_3d = World3D.new()
+	slot.world_2d = World2D.new()
 	add_child(slot)
 
 	var scene := _main_scene.instantiate()

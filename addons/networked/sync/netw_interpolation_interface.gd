@@ -823,6 +823,21 @@ func _resolve_role(runtime: _Runtime) -> void:
 		_warn_self_feedback(runtime)
 	if pump == _PUMP_REMOTE:
 		_compute_sync_intervals(runtime)
+	# The chase absorbs recoveries, so entering it subscribes to the entity's
+	# reconciliation writes and leaving it forgets them with their offsets.
+	if pump == _PUMP_CHASE:
+		var entity := runtime.entity()
+		if entity and entity.prediction:
+			_bind_hook(
+				runtime.chase_hooks,
+				entity.prediction,
+				entity.prediction.recovered,
+				_on_chase_recovered.bind(runtime),
+			)
+	else:
+		_disconnect_hooks(runtime.chase_hooks)
+		for state in runtime.states:
+			state.chase_offset = null
 
 
 # Warns once per runtime when a predicted or authority pump owns a channel that
@@ -871,7 +886,7 @@ func _resolve_display_role(runtime: _Runtime) -> DisplayRole:
 		return handle.display_role
 	var owner := runtime.owner()
 	var entity := runtime.entity()
-	if _has_prediction_component(runtime) and entity.is_controlled_locally:
+	if _simulates_locally(runtime) and entity.is_controlled_locally:
 		return DisplayRole.PREDICTED
 	if owner and owner.is_multiplayer_authority() \
 			and entity.is_controlled_locally:
@@ -957,11 +972,20 @@ func _set_replicates_tracked_property(
 	return false
 
 
-func _has_prediction_component(runtime: _Runtime) -> bool:
+# True when this peer runs the entity's own simulation forward, which is the
+# body a [constant DisplayRole.PREDICTED] display chases.
+#
+# Registration alone does not answer this. An entity whose recovery policy
+# closes the delay is registered for prediction and simulates nothing here, so
+# there is no live body to chase and its display has an authoritative stream to
+# play back instead. A component that has not registered yet has no axis to read
+# and is taken at its declaration.
+func _simulates_locally(runtime: _Runtime) -> bool:
 	var entity := runtime.entity()
 	var owner := runtime.owner()
 	if entity and entity.prediction.is_registered():
-		return true
+		return entity.prediction.sim_mode \
+				!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY
 	if owner:
 		return owner.get_node_or_null("%PredictionComponent") != null
 	return false
@@ -1143,7 +1167,96 @@ func _pump_history(
 		state.last_written = result
 
 
-# Eases each visual toward its live predicted body every frame.
+# Absorbs one reconciliation write into the chase: the offsets are seeded with
+# the negated pose change, so the visual stays where it was and glides onto the
+# corrected body. Each recovery resets its channel's offset rather than
+# accumulating into it, so a correction train cannot wind the visual up, and a
+# teleported recovery clears every offset because a genuine desync should be
+# seen to snap.
+func _on_chase_recovered(
+		_entry: int,
+		deltas: Dictionary,
+		teleported: bool,
+		_attribution: int,
+		runtime: _Runtime,
+) -> void:
+	if runtime.pump_mode != _PUMP_CHASE:
+		return
+	if teleported:
+		for state in runtime.states:
+			state.chase_offset = null
+		return
+	var limit := _chase_clamp(runtime)
+	for state in runtime.states:
+		if state.self_feedback:
+			continue
+		if not deltas.has(state.source_prop):
+			continue
+		state.chase_offset = _clamp_delta(
+			_scale_delta(deltas[state.source_prop], -1.0),
+			limit,
+		)
+
+
+# The largest render offset a chase absorption may hold, the entity's own
+# teleport tier: an offset past it would show a pose a teleport was entitled
+# to snap through.
+func _chase_clamp(runtime: _Runtime) -> float:
+	var entity := runtime.entity()
+	if entity and entity.prediction:
+		return maxf(entity.prediction.teleport_threshold, 0.0)
+	return INF
+
+
+# Multiplies a spatial delta, the negate and decay both chases need. A type
+# with no scalable form answers null, so it is never absorbed.
+static func _scale_delta(delta: Variant, factor: float) -> Variant:
+	match typeof(delta):
+		TYPE_FLOAT:
+			return (delta as float) * factor
+		TYPE_VECTOR2:
+			return (delta as Vector2) * factor
+		TYPE_VECTOR3:
+			return (delta as Vector3) * factor
+	return null
+
+
+# Clamps a delta's magnitude to [param limit], preserving its direction.
+static func _clamp_delta(delta: Variant, limit: float) -> Variant:
+	match typeof(delta):
+		TYPE_FLOAT:
+			return clampf(delta as float, -limit, limit)
+		TYPE_VECTOR2:
+			return (delta as Vector2).limit_length(limit)
+		TYPE_VECTOR3:
+			return (delta as Vector3).limit_length(limit)
+	return null
+
+
+static func _add_delta(value: Variant, delta: Variant) -> Variant:
+	match typeof(delta):
+		TYPE_FLOAT:
+			return (value as float) + (delta as float)
+		TYPE_VECTOR2:
+			return (value as Vector2) + (delta as Vector2)
+		TYPE_VECTOR3:
+			return (value as Vector3) + (delta as Vector3)
+	return value
+
+
+static func _delta_spent(delta: Variant) -> bool:
+	match typeof(delta):
+		TYPE_FLOAT:
+			return absf(delta as float) < 0.0001
+		TYPE_VECTOR2:
+			return (delta as Vector2).length() < 0.0001
+		TYPE_VECTOR3:
+			return (delta as Vector3).length() < 0.0001
+	return true
+
+
+# Eases each visual toward its live predicted body every frame, carrying any
+# chase-absorbed recovery offset as it decays.
 func _pump_chase(
 		runtime: _Runtime,
 		timing: NetwDisplayTiming,
@@ -1152,6 +1265,11 @@ func _pump_chase(
 	var weight := 1.0 - exp(
 			-timing.frame_delta / _predicted_effective_smooth_time(runtime, timing),
 	)
+	var glide := 1.0
+	if runtime.handle:
+		glide = exp(
+				-timing.frame_delta / maxf(runtime.handle.chase_glide_time, 0.001),
+		)
 	var trace := _should_trace(runtime)
 	for state in runtime.states:
 		# A self-feeding channel would smooth the live body against its own last
@@ -1161,6 +1279,12 @@ func _pump_chase(
 		if not is_instance_valid(state.source_obj):
 			continue
 		var value: Variant = state.source_obj.get(state.source_prop)
+		if state.chase_offset != null:
+			state.chase_offset = _scale_delta(state.chase_offset, glide)
+			if state.chase_offset == null or _delta_spent(state.chase_offset):
+				state.chase_offset = null
+			else:
+				value = _add_delta(value, state.chase_offset)
 		var result: Variant = state.history.smooth_toward(
 			state.last_written,
 			value,
@@ -1435,6 +1559,20 @@ class Handle:
 			predicted_smooth_time = value
 			_mark_dirty()
 
+	## Seconds a chase-absorbed recovery offset takes to decay by
+	## [code]1/e[/code].
+	##
+	## Under [constant PredictedMode.CHASE] each sub-teleport recovery's pose
+	## change is absorbed as a decaying render offset, so the visual stays
+	## where it was and glides onto the corrected body instead of jumping with
+	## it. Each recovery resets its channel's offset rather than accumulating
+	## into it, the offset is clamped to the entity's
+	## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold],
+	## and a teleported recovery clears every offset, because a genuine desync
+	## should be seen to snap. Those three rules are what keep a correction
+	## train from winding the visual away from the body.
+	var chase_glide_time: float = 0.15
+
 	## Enables display lag adaptation for remote interpolation.
 	var enable_smart_dilation: bool = true
 
@@ -1582,6 +1720,8 @@ class _Runtime:
 	var trace_frame := 0
 	var saved_freeze: Dictionary = { }
 	var entity_hooks: Array = []
+	# Recovery-absorption subscription, held only while the chase pump runs.
+	var chase_hooks: Array = []
 	var disabled := false
 	# Display tick past which a disable_for window re-enables the runtime, or -1
 	# when the runtime is not on a timed disable.
@@ -1617,6 +1757,9 @@ class _PropertyState:
 	# feeds the display filter into the control loop, so those pumps skip it.
 	var self_feedback := false
 	var last_written: Variant
+	# Decaying render offset a chase-absorbed recovery seeded, or null while no
+	# recovery is being absorbed on this channel.
+	var chase_offset: Variant = null
 
 
 	func copy_shape_from(other: _PropertyState) -> void:

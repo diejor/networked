@@ -40,11 +40,13 @@ func _init() -> void:
 	position_quantizer.resolution_step = 5.0
 	position_quantizer.min_limit = -500.0
 	position_quantizer.max_limit = 1500.0
-	Netw.configure_property(self, &"position").state().masked().on_spawn().quantize(position_quantizer)
+	Netw.configure_property(self, &"position").state().masked().on_spawn() \
+			.quantize(position_quantizer).epsilon(4.0)
 	var velocity_quantizer := NetwQuantizeBits.new()
 	velocity_quantizer.min_limit = -90.0
 	velocity_quantizer.max_limit = 90.0
-	Netw.configure_property(self, &"velocity").state().masked().quantize(velocity_quantizer)
+	Netw.configure_property(self, &"velocity").state().masked() \
+			.quantize(velocity_quantizer).epsilon(1.5)
 
 
 func _ready() -> void:

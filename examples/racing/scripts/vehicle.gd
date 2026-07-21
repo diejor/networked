@@ -1,4 +1,5 @@
-class_name Vehicle extends Node3D
+class_name Vehicle
+extends Node3D
 ## A server-authoritative racing car with client-side prediction.
 ##
 ## The car is the stock ball controller: an invisible [RigidBody3D] sphere is
@@ -7,26 +8,38 @@ class_name Vehicle extends Node3D
 ## own yaw and rides the sphere. The whole car is one networked entity whose
 ## state set lives on this root through accessor properties routing to the child
 ## sphere, so a single atomic snapshot carries the dynamic-body pose. Because the
-## sphere's solver cannot be stepped per input, prediction reconciles by
-## SNAP_BLEND at full stiffness: a correction lands the authoritative pose on the
-## solver in one write, projected to the present tick through each pose field's
-## [method NetwInterpolate.project_by] derivative, and pauses around wall
-## contacts. The contractive fields (velocities, speed scalars) are
-## teleport-only restores, so a sub-threshold correction never rewinds momentum.
+## sphere's solver cannot be stepped per input, a recovery lands the
+## authoritative pose on the solver in one write, projected to the present tick
+## through each pose field's [method NetwInterpolate.project_by] derivative, and
+## pauses around wall contacts. The contractive fields (velocities, speed
+## scalars) are teleport-only restores, so a sub-teleport recovery never rewinds
+## momentum.
 ##
 ## Display is separated from simulation. On a remote peer the interpolated
 ## channels write dedicated display_position and display_heading targets, never
 ## the simulated sphere or heading, so the smoothed display value never re-enters
 ## the control loop. On a simulating peer the visual rides the live body plus a
 ## decaying correction offset seeded from
-## [signal NetwLagCompensationInterface.PredictionHandle.pose_corrected], so the
-## body lands on truth while the rendered car glides onto it.
+## [signal NetwLagCompensationInterface.PredictionHandle.recovered], so the body
+## lands on truth while the rendered car glides onto it.
+
+const PredictionHandle := NetwLagCompensationInterface.PredictionHandle
 
 # Remote-display interpolation blend (seconds).
 const DISPLAY_SMOOTH := 0.05
 
-# Time constant of the correction render offsets' exponential decay (seconds).
-const CORRECTION_GLIDE := 0.15
+# Chase smoothing for the simulating car's own visual: near-exact tracking, so
+# the display never trails the body it predicts. Recovery absorption rides the
+# interpolator's chase glide, not this.
+const OWN_CHASE_SMOOTH := 0.005
+
+# Capture-only switch that reproduces the pre-L1 schedule and drive feed.
+const LEGACY_CAPTURE_VAR := "NETW_RACING_LEGACY_MODEL"
+
+# Read-only solver contact sampler attached only for an armed netlog.
+const CONTACT_PROBE := preload(
+	"res://examples/racing/scripts/vehicle_contact_probe.gd"
+)
 
 # Nodes
 
@@ -75,17 +88,15 @@ var colliding: bool
 # steering sign on an infinitesimal linear_speed difference near zero.
 var steer_direction: float = 1.0
 
-# Display targets the interpolator writes, kept out of the simulation. A remote car
-# renders from these; a simulating car ignores them and renders the live body.
+# Display targets the interpolator writes, kept out of the simulation. A remote
+# car renders them from the buffered stream; a simulating car renders them from
+# the predicted chase, which tracks the live body and absorbs each recovery as
+# a decaying render offset, so the visual glides onto a corrected body instead
+# of jumping with it. Position rides the Container origin (the tick never reads
+# it); the chase's yaw offset rides the Model child, never the Container
+# rotation the tick integrates and propels along.
 var display_position: Vector3
 var display_heading: float
-
-# Render offsets a correction seeds and _process decays, so the simulating car's
-# visual glides onto the corrected body instead of jumping with it. Position
-# rides the Container origin (the tick never reads it); yaw rides the Model
-# child, never the Container rotation the tick integrates and propels along.
-var correction_offset: Vector3
-var correction_yaw: float
 
 # Cadence recorder, present only when the environment arms it.
 var _net_log: RacingNetLog = null
@@ -95,29 +106,36 @@ var prev_position: Vector3
 
 var calculated_lean: float
 
-
 # Solver-owned half of the state set, routed to the child sphere. The position
 # setter teleports through the PhysicsServer on a live body so a SNAP restore
 # takes on a dynamic Jolt body, and moves the frozen kinematic body directly on
 # a remote where the interpolator drives the pose.
 var sphere_position: Vector3:
-	get: return sphere.position if is_instance_valid(sphere) else Vector3.ZERO
-	set(value): _apply_sphere_position(value)
+	get:
+		return sphere.position if is_instance_valid(sphere) else Vector3.ZERO
+	set(value):
+		_apply_sphere_position(value)
 
 var sphere_linear_velocity: Vector3:
-	get: return sphere.linear_velocity if is_instance_valid(sphere) else Vector3.ZERO
+	get:
+		return sphere.linear_velocity if is_instance_valid(sphere) else Vector3.ZERO
 	set(value):
-		if is_instance_valid(sphere): sphere.linear_velocity = value
+		if is_instance_valid(sphere):
+			sphere.linear_velocity = value
 
 var sphere_angular_velocity: Vector3:
-	get: return sphere.angular_velocity if is_instance_valid(sphere) else Vector3.ZERO
+	get:
+		return sphere.angular_velocity if is_instance_valid(sphere) else Vector3.ZERO
 	set(value):
-		if is_instance_valid(sphere): sphere.angular_velocity = value
+		if is_instance_valid(sphere):
+			sphere.angular_velocity = value
 
 var heading: float:
-	get: return vehicle_model.rotation.y if is_instance_valid(vehicle_model) else 0.0
+	get:
+		return vehicle_model.rotation.y if is_instance_valid(vehicle_model) else 0.0
 	set(value):
-		if is_instance_valid(vehicle_model): vehicle_model.rotation.y = value
+		if is_instance_valid(vehicle_model):
+			vehicle_model.rotation.y = value
 
 
 func _init() -> void:
@@ -129,11 +147,19 @@ func _init() -> void:
 	# The interpolated pose is redirected to display_position so the smoothed value
 	# never writes back onto the simulated body, and it projects along the
 	# replicated linear velocity so a remote car covers a gap without stalling.
-	Netw.configure_property(self, &"sphere_position").state().masked().on_spawn() \
-			.interpolate(NetwInterpolate.new().lerp().smooth(DISPLAY_SMOOTH) \
-			.project_by(&"sphere_linear_velocity").to(&"display_position"))
-	Netw.configure_property(self, &"sphere_linear_velocity").state().masked()
-	Netw.configure_property(self, &"sphere_angular_velocity").state().masked()
+	Netw.configure_property(self, &"sphere_position").state().masked().causal() \
+			.quantize(NetwQuantizeBits.new().bits(24).limits(-2048.0, 2048.0)) \
+			.on_spawn().epsilon(0.35) \
+			.interpolate(
+				NetwInterpolate.new().lerp().smooth(DISPLAY_SMOOTH) \
+						.project_by(&"sphere_linear_velocity").to(&"display_position"),
+			)
+	Netw.configure_property(self, &"sphere_linear_velocity").state().masked() \
+			.causal().teleport_only().reconcile_only() \
+			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
+	Netw.configure_property(self, &"sphere_angular_velocity").state().masked() \
+			.causal().teleport_only().reconcile_only() \
+			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
 
 	# Heading interpolates as an angle channel onto its own display target, and
 	# projects by its replicated angular_speed, its exact derivative, so a
@@ -141,13 +167,34 @@ func _init() -> void:
 	# shortest arc instead of rewinding the turn in progress. The scalar
 	# cosmetics replicate raw: a remote reads them straight for effects, so
 	# they never need a smoothed display copy.
-	Netw.configure_property(self, &"heading").state().masked().on_spawn() \
-			.interpolate(NetwInterpolate.new().angle().smooth(DISPLAY_SMOOTH) \
-			.project_by(&"angular_speed").to(&"display_heading"))
-	Netw.configure_property(self, &"linear_speed").state().masked()
-	Netw.configure_property(self, &"angular_speed").state().masked()
-	Netw.configure_property(self, &"acceleration").state().masked()
-	Netw.configure_property(self, &"colliding").state().masked()
+	Netw.configure_property(self, &"heading").state().masked().causal() \
+			.reconcile_only() \
+			.quantize(NetwQuantizeAngle.new().bits(16)) \
+			.on_spawn() \
+			.interpolate(
+				NetwInterpolate.new().angle().smooth(DISPLAY_SMOOTH) \
+						.project_by(&"angular_speed").to(&"display_heading"),
+			)
+	# linear_speed and angular_speed carry their own previous value into the next
+	# step and propulsion reads them, so a recovery that skipped them would rebase
+	# the pose and then drive away from it again. acceleration and colliding are
+	# recomputed each step, from linear_speed and from the raycast, so restoring
+	# them writes values the next step overwrites. None of the scalars triggers a
+	# correction on its own, so their quantized drift never teleports the pose.
+	Netw.configure_property(self, &"linear_speed").state().masked().causal() \
+			.reconcile_only() \
+			.quantize(NetwQuantizeBits.new().bits(16).limits(-4.0, 4.0))
+	Netw.configure_property(self, &"angular_speed").state().masked().causal() \
+			.reconcile_only() \
+			.quantize(NetwQuantizeBits.new().bits(16).limits(-16.0, 16.0))
+	# The steering-sign latch is state the next step reads, so a recovery must
+	# restore it and a replay must not re-derive it from a diverging speed.
+	Netw.configure_property(self, &"steer_direction").state().masked().causal() \
+			.quantize(NetwQuantizeBits.new().bits(4).limits(-1.0, 1.0))
+	Netw.configure_property(self, &"acceleration").state().masked().derived() \
+			.reconcile_only()
+	Netw.configure_property(self, &"colliding").state().masked().derived() \
+			.reconcile_only()
 
 	Netw.configure_interest(self).layer(&"race")
 
@@ -160,10 +207,30 @@ func _ready() -> void:
 	var handle := entity.interpolation if entity else null
 	if handle:
 		handle.timeline_mode = NetwInterpolationInterface.TimelineMode.BUFFERED
-	# Corrections land on the solver in one write; the visual absorbs each one as
-	# a decaying offset so the car glides onto truth instead of jumping.
+		# Corrections land on the solver in one write; the declared chase
+		# absorbs each one as a decaying render offset, so the visual glides
+		# onto truth instead of jumping, and tracks the live body near-exactly
+		# between corrections.
+		handle.predicted_mode = NetwInterpolationInterface.PredictedMode.CHASE
+		handle.predicted_smooth_time = OWN_CHASE_SMOOTH
 	if entity:
-		entity.prediction.pose_corrected.connect(_on_pose_corrected)
+		# The car is a solver body: its sphere integrates in the physics
+		# solver, so the archetype bundles the frame cadence, the repeat-last
+		# hold, the rebase-recover policy, and the projected restore.
+		entity.prediction.configure_prediction(
+			PredictionHandle.Archetype.SOLVER_BODY,
+		)
+		# The ground ray is the one world fact the drive reads, so it is
+		# declared: sampled once before each drive, folded into the
+		# environment digest, and read back inside the drive, so a divergence
+		# born of a different ground contact is charged to the environment
+		# instead of staying unattributed.
+		entity.prediction.configure_sensors({
+			ground = _sample_ground,
+		})
+		# The legacy capture reproduces the pre-L1 per-tick schedule.
+		if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
+			entity.prediction.schedule = PredictionHandle.Schedule.TICK
 		_start_net_log()
 	display_position = sphere.position
 	display_heading = vehicle_model.rotation.y
@@ -172,19 +239,45 @@ func _ready() -> void:
 
 # Public Functions
 
-func get_vehicle_position() -> Vector3: return vehicle_model.global_position
+
+func get_vehicle_position() -> Vector3:
+	return vehicle_model.global_position
+
 
 ## The displayed world position of the car, read by the local chase camera.
-func displayed_position() -> Vector3: return get_vehicle_position()
+func displayed_position() -> Vector3:
+	return get_vehicle_position()
 
 # Functions
+
+
+# Samples the ground contact at the pre-drive sphere position, forced so the
+# result reflects this tick's position rather than trailing the last physics
+# step. Both peers then read the same contact at drive 0, where one had settled
+# a step and the other had not. Declared through configure_sensors, so the
+# engine samples it before each drive and the drive reads it back.
+func _sample_ground() -> Dictionary:
+	raycast.position = sphere.position
+	raycast.force_raycast_update()
+	return {
+		colliding = raycast.is_colliding(),
+		normal = raycast.get_collision_normal() if raycast.is_colliding() \
+				else Vector3.UP,
+	}
+
 
 # The authoritative simulation step, run on the server and predicted on the
 # owning client. A remote peer never runs it; the sphere is frozen and the
 # interpolator drives the displayed pose.
 func _network_tick(delta, _tick, _is_fresh):
-
-	handle_input(delta)
+	# The drive reads the declared ground sample rather than re-querying the
+	# ray, so the transition runs against exactly the facts its environment
+	# digest describes.
+	var ground: Dictionary = entity.prediction.sensor(&"ground", {
+		colliding = false,
+		normal = Vector3.UP,
+	})
+	_handle_input(delta)
 
 	# Latch the steering direction with hysteresis. sign(linear_speed) flips on an
 	# infinitesimal state difference near zero, so client and server would steer
@@ -206,20 +299,23 @@ func _network_tick(delta, _tick, _is_fresh):
 
 	# Ground alignment
 
-	if raycast.is_colliding():
+	if bool(ground[&"colliding"]):
 		if !colliding:
-			if vehicle_body != null: vehicle_body.position = Vector3(0, 0.1, 0) # Bounce
-			input.z = 0
+			if vehicle_body != null:
+				vehicle_body.position = Vector3(0, 0.1, 0) # Bounce
 
-		normal = raycast.get_collision_normal()
+		normal = ground[&"normal"]
 
 		# Orient model to colliding normal
 
 		if normal.dot(vehicle_model.global_basis.y) > 0.5:
+			var saved_heading := heading
 			var xform = align_with_y(vehicle_model.global_transform, normal)
-			vehicle_model.global_transform = vehicle_model.global_transform.interpolate_with(xform, 0.2).orthonormalized()
+			vehicle_model.global_transform = vehicle_model.global_transform \
+					.interpolate_with(xform, 0.2).orthonormalized()
+			heading = saved_heading
 
-	colliding = raycast.is_colliding()
+	colliding = bool(ground[&"colliding"])
 
 	var target_speed = input.z
 
@@ -233,44 +329,62 @@ func _network_tick(delta, _tick, _is_fresh):
 
 	acceleration = lerpf(acceleration, linear_speed + (abs(sphere.angular_velocity.length() * linear_speed) / 100), delta * 1)
 
-	raycast.position = sphere.position
+# Reads the tape input independently of the local RayCast update phase.
 
-# Handle input when vehicle is colliding with ground
 
-func handle_input(delta):
+func _handle_input(delta):
+	input.x = inputs.steer
+	input.z = inputs.throttle
 
-	if raycast.is_colliding():
-		input.x = inputs.steer
-		input.z = inputs.throttle
+	sphere.angular_velocity += _propulsion_axis() * (linear_speed * 100) * delta
 
-	sphere.angular_velocity += vehicle_model.get_global_transform().basis.x * (linear_speed * 100) * delta
+
+# Builds the rolling axis from replicated yaw and the declared ground sample.
+# Model pitch and roll are presentation state and must never feed prediction.
+func _propulsion_axis() -> Vector3:
+	if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
+		return vehicle_model.global_basis.x
+	var ground: Dictionary = entity.prediction.sensor(&"ground", {
+		colliding = false,
+		normal = Vector3.UP,
+	})
+	var ground_normal := Vector3.UP
+	if bool(ground[&"colliding"]):
+		ground_normal = (ground[&"normal"] as Vector3).normalized()
+	var heading_forward := Vector3.FORWARD.rotated(Vector3.UP, heading)
+	var ground_forward := heading_forward.slide(ground_normal)
+	if ground_forward.is_zero_approx():
+		return Vector3.RIGHT.rotated(Vector3.UP, heading)
+	return ground_forward.normalized().cross(ground_normal).normalized()
 
 
 # Presentation runs on every peer. A simulating car (owner or server) renders the
 # live body plus the decaying correction offsets, so a reconciliation lands on
 # the solver in one write while the visual glides onto it; a remote car renders
 # the interpolated display targets and never touches its frozen physics body.
-# These writes are display-only: the tick reads the Container basis for
-# propulsion, never its origin, and the yaw glide rides the Model child.
+# These writes are display-only. Propulsion reads replicated heading and the
+# local ground normal, while the yaw glide rides the Model child.
 func _process(delta):
-	if not is_instance_valid(sphere): return
+	if not is_instance_valid(sphere):
+		return
 
 	_update_simulation_freeze()
-
-	var decay := exp(-delta / CORRECTION_GLIDE)
-	correction_offset *= decay
-	correction_yaw *= decay
 
 	if _should_simulate():
 		if is_instance_valid(entity):
 			# Feed the predictor the body's sleep state so a settled car is not sprung.
 			entity.prediction.sleeping = sphere.sleeping
-		vehicle_model.position = sphere.position + correction_offset - Vector3(0, 0.65, 0)
+		# The chase writes the display targets: the live body plus each
+		# recovery's decaying render offset. Yaw stays sim-owned on the
+		# Container, so only the chase's heading offset rides the Model child.
+		vehicle_model.position = display_position - Vector3(0, 0.65, 0)
+		if model_visual != null:
+			model_visual.rotation.y = angle_difference(heading, display_heading)
 	else:
 		vehicle_model.position = display_position - Vector3(0, 0.65, 0)
 		vehicle_model.rotation.y = display_heading
-	if model_visual != null:
-		model_visual.rotation.y = correction_yaw
+		if model_visual != null:
+			model_visual.rotation.y = 0.0
 	raycast.position = sphere.position
 
 	# Calculate vehicle model linear velocity
@@ -290,15 +404,18 @@ func _process(delta):
 # interpolated pose. The framework's role-driven freeze only reaches an entity
 # whose root is itself the body, so a child-body car manages freeze here.
 func _update_simulation_freeze() -> void:
-	if not is_instance_valid(sphere): return
+	if not is_instance_valid(sphere):
+		return
 	var want_frozen := not _should_simulate()
 	if sphere.freeze != want_frozen:
 		sphere.freeze = want_frozen
 
 
 func _should_simulate() -> bool:
-	if not multiplayer: return true
-	if multiplayer.is_server(): return true
+	if not multiplayer:
+		return true
+	if multiplayer.is_server():
+		return true
 	return is_instance_valid(entity) and entity.is_controlled_locally
 
 
@@ -311,30 +428,22 @@ func _start_net_log() -> void:
 	var clock: NetwClockInterface = multiplayer.clock if multiplayer else null
 	if not clock:
 		return
+	if sphere.get_script() == null:
+		sphere.set_script(CONTACT_PROBE)
+		sphere.max_contacts_reported = maxi(sphere.max_contacts_reported, 16)
 	_net_log = RacingNetLog.new()
 	_net_log.name = "NetLog"
 	add_child(_net_log)
 	_net_log.start(entity, clock)
 
 
-# Seeds the render offsets with the pose change a correction just applied, so the
-# visual stays where it was and glides onto the corrected body. A teleport-tier
-# correction clears them: a genuine desync should be seen to snap.
-func _on_pose_corrected(deltas: Dictionary, teleported: bool) -> void:
-	if teleported:
-		correction_offset = Vector3.ZERO
-		correction_yaw = 0.0
-		return
-	correction_offset -= deltas.get(&"sphere_position", Vector3.ZERO)
-	correction_yaw -= deltas.get(&"heading", 0.0)
-
-
 # The sphere_position setter. Only a reconciliation correction reaches it now: the
 # interpolator writes display_position, not the body, so there is no every-frame
-# display write to fight Jolt and no display band to guard. A full-stiffness
-# SNAP_BLEND correction lands its one restore write straight on the solver body.
+# display write to fight Jolt and no display band to guard. A recovery lands its
+# one staged write straight on the solver body.
 func _apply_sphere_position(local_pos: Vector3) -> void:
-	if not is_instance_valid(sphere): return
+	if not is_instance_valid(sphere):
+		return
 	var target := global_transform * local_pos
 	if sphere.freeze:
 		sphere.global_position = target
@@ -345,20 +454,18 @@ func _apply_sphere_position(local_pos: Vector3) -> void:
 
 
 func effect_body(delta):
-
 	calculated_lean = lerp_angle(calculated_lean, -input.x / 5 * linear_speed, delta * 5)
 
 	# Slightly tilt (and move) body based on acceleration and steering
 
 	if vehicle_body != null:
-
 		vehicle_body.rotation.x = lerp_angle(vehicle_body.rotation.x, -(linear_speed - acceleration) / 6, delta * 10)
 		vehicle_body.rotation.z = calculated_lean
 
 		vehicle_body.position = vehicle_body.position.lerp(Vector3(0, 0.2, 0), delta * 5)
 
-func effect_wheels(delta):
 
+func effect_wheels(delta):
 	# Rotate wheels based on acceleration
 
 	for wheel in [wheel_fl, wheel_fr, wheel_bl, wheel_br]:
@@ -367,13 +474,23 @@ func effect_wheels(delta):
 
 	# Rotate front wheels based on steering direction
 
-	if wheel_fl != null: wheel_fl.rotation.y = lerp_angle(wheel_fl.rotation.y, -input.x / 1.5, delta * 10)
-	if wheel_fr != null: wheel_fr.rotation.y = lerp_angle(wheel_fr.rotation.y, -input.x / 1.5, delta * 10)
+	if wheel_fl != null:
+		wheel_fl.rotation.y = lerp_angle(
+			wheel_fl.rotation.y,
+			-input.x / 1.5,
+			delta * 10,
+		)
+	if wheel_fr != null:
+		wheel_fr.rotation.y = lerp_angle(
+			wheel_fr.rotation.y,
+			-input.x / 1.5,
+			delta * 10,
+		)
 
 # Engine sounds
 
-func effect_engine(delta):
 
+func effect_engine(delta):
 	var speed_factor = clamp(abs(linear_speed), 0.0, 1.0)
 	var throttle_factor = clamp(abs(input.z), 0.0, 1.0)
 
@@ -381,30 +498,40 @@ func effect_engine(delta):
 	engine_sound.volume_db = lerp(engine_sound.volume_db, target_volume, delta * 5.0)
 
 	var target_pitch = remap(speed_factor, 0.0, 1.0, 0.5, 3)
-	if throttle_factor > 0.1: target_pitch += 0.2
+	if throttle_factor > 0.1:
+		target_pitch += 0.2
 
 	engine_sound.pitch_scale = lerp(engine_sound.pitch_scale, target_pitch, delta * 2.0)
 
 # Show trails (and play skid sound)
 
-func effect_trails():
 
+func effect_trails():
 	var drift_intensity = abs(linear_speed - acceleration) + (abs(calculated_lean) * 2.0)
 	var should_emit = drift_intensity > 0.25
 
-	if trail_left != null: trail_left.emitting = should_emit
-	if trail_right != null: trail_right.emitting = should_emit
+	if trail_left != null:
+		trail_left.emitting = should_emit
+	if trail_right != null:
+		trail_right.emitting = should_emit
 
 	var target_volume = -80.0
-	if should_emit: target_volume = remap(clamp(drift_intensity, 0.25, 2.0), 0.25, 2.0, -10.0, 0.0)
+	if should_emit:
+		target_volume = remap(
+			clamp(drift_intensity, 0.25, 2.0),
+			0.25,
+			2.0,
+			-10.0,
+			0.0,
+		)
 
 	screech_sound.pitch_scale = lerp(screech_sound.pitch_scale, clamp(abs(linear_speed), 1.0, 3.0), 0.1)
 	screech_sound.volume_db = lerp(screech_sound.volume_db, target_volume, 10.0 * get_physics_process_delta_time())
 
 # Align vehicle with normal
 
-func align_with_y(xform, new_y):
 
+func align_with_y(xform, new_y):
 	xform.basis.y = new_y
 	xform.basis.x = -xform.basis.z.cross(new_y)
 	xform.basis = xform.basis.orthonormalized()
@@ -412,17 +539,20 @@ func align_with_y(xform, new_y):
 
 # Detect collisions and play impact sound
 
-func _on_sphere_body_entered(_body: Node) -> void:
 
+func _on_sphere_body_entered(body: Node) -> void:
 	# Pause reconciliation through the contact: the predicted and authoritative
 	# bodies settle a wall bounce differently for a few ticks, and correcting there
 	# fights the solver. A hard desync past the teleport threshold still snaps.
 	if _should_simulate() and is_instance_valid(entity):
 		entity.prediction.notify_contact()
 		if _net_log:
-			_net_log.mark_contact()
+			_net_log.mark_contact(
+				StringName("%s_entered" % body.get_class().to_snake_case()),
+			)
 
-	if vehicle_body == null: return
+	if vehicle_body == null:
+		return
 
 	if not impact_sound.playing:
 		var impact_velocity := absf(linear_velocity.dot(vehicle_body.global_basis.z))

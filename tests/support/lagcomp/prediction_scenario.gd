@@ -214,7 +214,6 @@ func reset_metrics(p: PredictedEntity) -> void:
 	p.server_prediction.missing_count = 0
 	p.server_prediction.starved_count = 0
 	p.server_prediction.held_count = 0
-	p.server_prediction.drained_count = 0
 	p.server_prediction.resync_count = 0
 	p.server_prediction.skipped_count = 0
 	p.observer.divergence_log.clear()

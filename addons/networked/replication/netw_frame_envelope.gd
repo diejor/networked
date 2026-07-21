@@ -65,13 +65,14 @@ const CARRIER_MAGIC_UNRELIABLE_ACKED := 0x8E
 ## bit0 SYNC_FLAG_STAMPED   a tick varint follows
 ## bit1 SYNC_FLAG_ACKED     a reconciliation ack varint follows (requires bit0)
 ## bit2 SYNC_FLAG_WINDOWED  a count varint and windowed rows follow (requires bit0)
-## bit3 reserved            unassigned
+## bit3 SYNC_FLAG_TAPED     a trailing prediction tape block follows
 ## bit4 SYNC_FLAG_MASKED    a mask varint follows (per-peer volatile diff)
 ## bit5-7 reserved
 ## [/codeblock]
 const SYNC_FLAG_STAMPED := 1 << 0
 const SYNC_FLAG_ACKED := 1 << 1
 const SYNC_FLAG_WINDOWED := 1 << 2
+const SYNC_FLAG_TAPED := 1 << 3
 const SYNC_FLAG_MASKED := 1 << 4
 
 ## Payload families multiplexed over the one carrier pair. The channel byte in
@@ -90,8 +91,11 @@ const SYNC_FLAG_MASKED := 1 << 4
 ## [constant Channel.SPAWN] and [constant Channel.DESPAWN] carry the
 ## replicator's entity spawn edges. [constant Channel.CONTROL_REQUEST] and
 ## [constant Channel.CONTROL_APPLY] carry control transfer, dispatched the
-## same route-addressed way with no RPC layer. Ids [code]100[/code] to
-## [code]254[/code] are user channels over [NetwChannel].
+## same route-addressed way with no RPC layer.
+## [constant Channel.PREDICT_COMMAND] and [constant Channel.PREDICT_ACK] carry
+## prediction's owner and authority lanes, keyed by transition rather than by
+## clock label. Ids [code]100[/code] to [code]254[/code] are user channels over
+## [NetwChannel].
 enum Channel {
 	## Routed [NetwAction] traffic. Ids [code]0[/code] and [code]1[/code] are
 	## retired carriers and must not be reclaimed.
@@ -207,6 +211,25 @@ enum Channel {
 	## route [code]0[/code]. The server fires
 	## [signal NetwMultiplayer.disconnect_requested] and decides.
 	SESSION_LEAVE_REQUEST = 34,
+	## One owner's prediction commands with the transitions they drove, owner to
+	## server. Unreliable, entity-routed, window-redundant.
+	##
+	## A transition and the command that drove it ride the same frame because a
+	## transition whose command arrived separately can be applied without it,
+	## which authority can only paper over by substituting a command the owner
+	## never authored. The decoder drops a frame carrying a fresh transition
+	## without its payload, so that pairing is a parsing fact rather than a
+	## check.
+	PREDICT_COMMAND = 35,
+	## Authority's per-transition acknowledgements, server to the owning peer.
+	## Unreliable, entity-routed, re-sent until the owner confirms.
+	##
+	## Acknowledgement is separated from state because a held authority frame
+	## still owes a remote observer its state while owing the owner no
+	## acknowledgement at all. Each record carries what authority actually ran,
+	## so an owner learns that its command was substituted instead of inferring
+	## it from a state it cannot explain.
+	PREDICT_ACK = 36,
 }
 
 
@@ -293,6 +316,9 @@ static func unpack_all(framed_bytes: PackedByteArray) -> Array[Dictionary]:
 ## mask        int     field bitmask, written when SYNC_FLAG_MASKED
 ## samples     Array   [[age, row_values], ...] newest first, written when
 ##                     SYNC_FLAG_WINDOWED, each row sharing quantizers and types
+## tape        Dictionary {epoch, entries}, written after the value payload when
+##                     SYNC_FLAG_TAPED. Entry indices must be contiguous. Each
+##                     label delta is zigzag encoded with fresh in its low bit.
 ## [/codeblock]
 ## A [constant SYNC_FLAG_WINDOWED] frame carries its sample rows in place of the
 ## top-level [code]values[/code], and the two never combine with each other or
@@ -321,6 +347,8 @@ static func encode_sync_frame(frame: Dictionary) -> PackedByteArray:
 	else:
 		var values: Array = frame.get("values", [])
 		NetwScriptModel.write_values(w, values, quantizers, _value_types(values, types))
+	if flags & SYNC_FLAG_TAPED:
+		_encode_tape(w, frame.get("tape", { }))
 	return w.to_bytes()
 
 
@@ -338,6 +366,8 @@ static func encode_sync_frame(frame: Dictionary) -> PackedByteArray:
 ## indices  Array[int]     the masked field positions, empty when not masked
 ## values   Array          decoded values (the masked subset when masked)
 ## samples  Array          [[age, row_values], ...] when windowed, else empty
+## tape_epoch int          prediction tape epoch, or -1 when not taped
+## entries  Array          [{index, label, fresh}, ...] when taped, else empty
 ## [/codeblock]
 static func decode_sync_frame(
 		payload: PackedByteArray,
@@ -354,6 +384,8 @@ static func decode_sync_frame(
 		"indices": [] as Array[int],
 		"values": [] as Array,
 		"samples": [] as Array,
+		"tape_epoch": -1,
+		"entries": [] as Array,
 	}
 	var flags: int = out["flags"]
 	if flags & SYNC_FLAG_STAMPED:
@@ -383,7 +415,71 @@ static func decode_sync_frame(
 		out["values"] = NetwScriptModel.read_values(r, sel_q, sel_t)
 	else:
 		out["values"] = NetwScriptModel.read_values(r, quantizers, types)
+	if flags & SYNC_FLAG_TAPED:
+		_decode_tape(r, out)
 	return out
+
+
+# Writes a contiguous entry window after the ordinary SYNC payload.
+static func _encode_tape(
+		w: NetwBitBuffer.Writer,
+		tape: Dictionary,
+) -> void:
+	var entries: Array = tape.get("entries", [])
+	var count := mini(entries.size(), 255)
+	var first := maxi(0, entries.size() - count)
+	w.put_aligned_u8(int(tape.get("epoch", 0)))
+	var base_index := 0
+	if count > 0:
+		base_index = int((entries[first] as Dictionary).get("index", 0))
+	NetwCodec.put_varint(w, base_index)
+	w.put_aligned_u8(count)
+	var previous_label := 0
+	for i in range(first, entries.size()):
+		var entry := entries[i] as Dictionary
+		var label := int(entry.get("label", -1))
+		var encoded_delta := _encode_zigzag(label - previous_label)
+		var tagged_delta := encoded_delta << 1
+		if bool(entry.get("fresh", false)):
+			tagged_delta |= 1
+		NetwCodec.put_varint(w, tagged_delta)
+		previous_label = label
+
+
+# Reads the contiguous entry window written by [_encode_tape].
+static func _decode_tape(
+		r: NetwBitBuffer.Reader,
+		out: Dictionary,
+) -> void:
+	var epoch := r.get_aligned_u8()
+	var base_index := NetwCodec.get_safe_varint(r)
+	var count := r.get_aligned_u8()
+	var entries: Array = []
+	var previous_label := 0
+	for offset in count:
+		var tagged_delta := NetwCodec.get_safe_varint(r)
+		if tagged_delta < 0:
+			break
+		var encoded_delta := tagged_delta >> 1
+		var label := previous_label + _decode_zigzag(encoded_delta)
+		entries.append(
+			{
+				"index": base_index + offset,
+				"label": label,
+				"fresh": bool(tagged_delta & 1),
+			},
+		)
+		previous_label = label
+	out["tape_epoch"] = epoch
+	out["entries"] = entries
+
+
+static func _encode_zigzag(value: int) -> int:
+	return (value << 1) if value >= 0 else ((-value << 1) - 1)
+
+
+static func _decode_zigzag(value: int) -> int:
+	return (value >> 1) if value & 1 == 0 else -((value >> 1) + 1)
 
 
 # Fills a per-value type array when the caller passed none, so raw values still

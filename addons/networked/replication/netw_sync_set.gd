@@ -146,6 +146,22 @@ enum Lane {
 	RETAINED,
 }
 
+## The [member Field.property_class] axis, what a field's value does in the
+## simulation.
+##
+## A reconciliation has to restore the values the next step reads from and may
+## not touch the ones it recomputes, so the class is what tells the two apart.
+## [constant CAUSAL] fields are antecedents of the recurrence, so they are
+## compared and restored. [constant DERIVED] fields are recomputed by the body
+## from causal ones, so restoring them writes a value the next step overwrites.
+## [constant COSMETIC] fields reach display only, so comparing them would
+## correct a simulation over a value no simulation reads.
+enum PropertyClass {
+	CAUSAL,
+	DERIVED,
+	COSMETIC,
+}
+
 ## The [member audience] axis, which peers a set reaches.
 ##
 ## [constant AUDIENCE_PUBLIC] reaches every admitted recipient.
@@ -174,6 +190,30 @@ class Field extends RefCounted:
 	## [constant Lane.VOLATILE] when the field is freshest-wins,
 	## [constant Lane.RETAINED] when it replicates reliably on change.
 	var lane: Lane = Lane.VOLATILE
+
+	## What the field's value does in the simulation, which decides whether a
+	## reconciliation compares it, restores it, or leaves it to display. Set by
+	## [method NetwScriptModel.PropertyConfig.causal] and its siblings.
+	var property_class: PropertyClass = PropertyClass.CAUSAL
+
+	## How firmly a restored value is pulled toward the authoritative one instead
+	## of being written to it, or [code]0.0[/code] to write it outright. Set by
+	## [method NetwScriptModel.PropertyConfig.converge].
+	var converge_stiffness: float = 0.0
+
+	## When true the field is restored only by a teleport-tier recovery, never by
+	## an ordinary one. Set by
+	## [method NetwScriptModel.PropertyConfig.teleport_only].
+	var explicit_teleport_only: bool = false
+
+	## When true the field never triggers a correction on its own, while a
+	## correction another field triggers still restores it. Set by
+	## [method NetwScriptModel.PropertyConfig.reconcile_only].
+	var explicit_reconcile_only: bool = false
+
+	## The field's own divergence threshold, or a negative value to inherit the
+	## entity's default. Set by [method NetwScriptModel.PropertyConfig.epsilon].
+	var epsilon_override: float = -1.0
 
 
 	func _init(
@@ -355,7 +395,13 @@ static func from_property_configs(
 		var quantizer: NetwQuantize = (
 				config.quantizers[0] if not config.quantizers.is_empty() else null
 		)
-		set.fields.append(Field.new(property, quantizer, config.lane == Lane.RETAINED))
+		var field := Field.new(property, quantizer, config.lane == Lane.RETAINED)
+		field.property_class = config.property_class
+		field.converge_stiffness = config.converge_stiffness
+		field.explicit_teleport_only = config.explicit_teleport_only
+		field.explicit_reconcile_only = config.explicit_reconcile_only
+		field.epsilon_override = config.epsilon_override
+		set.fields.append(field)
 
 		if config._policy_configured:
 			if not policy_owner.is_empty() and config.write_policy != policy:

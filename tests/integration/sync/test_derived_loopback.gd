@@ -11,6 +11,10 @@
 class_name TestDerivedLoopback
 extends NetwTestSuite
 
+const CONTROLLER_STATE_PLAYER := preload(
+	"res://tests/support/sync/controller_state_player.gd"
+)
+
 var rig: DerivedLoopbackRig
 
 
@@ -24,10 +28,12 @@ func test_state_flows_to_client_and_input_flows_to_server() -> void:
 
 	rig.server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
-			rig.server_node.position = Vector2(t, -t))
+			rig.server_node.position = Vector2(t, -t)
+	)
 	rig.client_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
-			rig.client_node.rotation = float(t) * 0.01)
+			rig.client_node.rotation = float(t) * 0.01
+	)
 
 	rig.sync_ticks(60)
 
@@ -67,10 +73,12 @@ func test_server_only_input_never_reaches_another_client() -> void:
 
 	rig.server_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
-			rig.server_node.position = Vector2(t, -t))
+			rig.server_node.position = Vector2(t, -t)
+	)
 	rig.client_clock.on_tick.connect(
 		func(_d: float, t: int) -> void:
-			rig.client_node.rotation = float(t) * 0.01)
+			rig.client_node.rotation = float(t) * 0.01
+	)
 
 	rig.sync_ticks(60)
 
@@ -80,3 +88,25 @@ func test_server_only_input_never_reaches_another_client() -> void:
 	# still the default while the server's tracks the controller.
 	assert_float(rig.observer_node.rotation).is_equal(0.0)
 	assert_float(rig.server_node.rotation).is_greater(0.0)
+
+
+func test_reports_controller_authored_public_state_relay() -> void:
+	rig = DerivedLoopbackRig.new()
+	rig.player_type = CONTROLLER_STATE_PLAYER
+	await rig.setup(self, 60, true)
+
+	rig.client_clock.on_tick.connect(
+		func(_d: float, t: int) -> void:
+			rig.client_node.position = Vector2(t, -t)
+	)
+	rig.sync_ticks(60)
+
+	print(
+		"[relay] controller=%s server=%s observer=%s observed=%s" % [
+			rig.client_node.position,
+			rig.server_node.position,
+			rig.observer_node.position,
+			rig.observer_node.position != Vector2.ZERO,
+		],
+	)
+	assert_bool(is_instance_valid(rig.observer_node)).is_true()

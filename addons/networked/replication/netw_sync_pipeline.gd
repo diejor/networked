@@ -272,7 +272,7 @@ func _pump_derived(
 			# A masked set's mask differs by recipient (each peer's own confirmed
 			# baseline), so the frame cannot be shared like the plain volatile row
 			# below; it is computed and sent per recipient.
-			if not binding.suppress_volatile:
+			if not binding.volatile_external:
 				for peer_id in recipients:
 					var masked := binding.masked_delta(
 						ordinal, peer_id, frame_tick, binding.reconcile_ack,
@@ -294,7 +294,7 @@ func _pump_derived(
 			# a recipient must not survive to its next admission, so absence heals
 			# the full masked row on gain, matching the retained lane's rule below.
 			binding.retain_masked_baselines(recipients)
-		elif not binding.suppress_volatile:
+		elif not binding.volatile_external:
 			var bytes := binding.encode_volatile(ordinal, frame_tick, binding.reconcile_ack)
 			if not bytes.is_empty():
 				for peer_id in recipients:
@@ -773,6 +773,17 @@ static func volatile_flags(set: NetwSyncSet) -> int:
 ## ([param write] false) may hold a diverging prediction on the node. A key
 ## [param last_row] has never seen (only possible on a malformed stream, since
 ## the gain edge always sends a full mask first) falls back to the live node.
+## [br][br]
+## This merge is what carries the masked lane's reconstruction invariant. After
+## an accepted frame the merged row equals the sender's full row for that frame's
+## tick, under arbitrary loss, duplication, and reorder, save for the rows before
+## the gain edge. Loss and duplication are absorbed because the sender diffs
+## against a confirmed baseline and so re-carries every field that changed since
+## it. Reorder is absorbed because a stale frame is dropped at
+## [method accept_unreliable] and never reaches this merge. The one hole a naive
+## diff leaves, a value that changes away from the baseline and back before its
+## send is acked, is closed on the sender by [method NetwSyncSetBinding.masked_delta]
+## keeping the field sticky until the ack.
 static func apply_volatile_frame(
 		node: Node,
 		set: NetwSyncSet,
@@ -794,10 +805,15 @@ static func apply_volatile_frame(
 		return { }
 	var values: Array = frame.get("values", [])
 	var row: Dictionary = { }
+	# A masked row is a mosaic: this frame's fields at its own tick, merged over
+	# whatever the earlier frames left. Only a whole row describes one moment, so
+	# the header says which it is rather than leaving the receiver to guess.
+	var whole := true
 	if int(frame.get("flags", 0)) & NetwFrameEnvelope.SYNC_FLAG_MASKED:
 		var indices: Array = frame.get("indices", [])
 		if values.size() != indices.size():
 			return { }
+		whole = indices.size() == keys.size()
 		row = last_row.duplicate()
 		for i in keys.size():
 			if not row.has(keys[i]):
@@ -817,6 +833,7 @@ static func apply_volatile_frame(
 		"tick": frame.get("tick", -1),
 		"ack": frame.get("ack", -1),
 		"payload": row,
+		"whole": whole,
 	}
 
 

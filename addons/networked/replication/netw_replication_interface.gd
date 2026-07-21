@@ -479,7 +479,9 @@ func _dispatch_frame(
 				_sync_pipeline.handle_derived_delta(entity, d_ordinal, payload, sender)
 			else:
 				_sync_compat.handle_sync_delta(entity, payload, sender)
-		NetwFrameEnvelope.Channel.ACTION:
+		NetwFrameEnvelope.Channel.ACTION, \
+		NetwFrameEnvelope.Channel.PREDICT_COMMAND, \
+		NetwFrameEnvelope.Channel.PREDICT_ACK:
 			var handler: Callable = _handlers.get(channel, Callable())
 			if handler.is_valid():
 				handler.call(entity, payload, sender)

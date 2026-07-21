@@ -76,9 +76,11 @@ func sync_ticks(ticks: int) -> void:
 	for frame in range(1, ticks * max_ratio + 1):
 		await tree.physics_frame
 		for i in clocks.size():
+			clocks[i].before_tick_loop.emit()
 			if stepped[i] < ticks and frame % ratios[i] == 0:
 				clocks[i].force_step(1)
 				stepped[i] += 1
+			clocks[i].after_tick_loop.emit()
 
 	for clock in clocks:
 		clock.manual_tick = false

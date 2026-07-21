@@ -201,10 +201,7 @@ tick_mode = true
 [node name="PredictionComponent" type="Node" parent="." unique_id=1650089842]
 unique_name_in_owner = true
 script = ExtResource("8_pred")
-divergence_epsilon_overrides = Dictionary[StringName, float]({
-&"position": 4.0,
-&"velocity": 1.5
-})
+archetype = 1
 
 [node name="MultiplayerInterpolator" type="Node" parent="." unique_id=1650089841]
 script = ExtResource("9_3dwf2")

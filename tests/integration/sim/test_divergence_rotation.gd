@@ -46,43 +46,32 @@ func test_missing_key_forces_correction() -> void:
 
 	assert_bool(PredictionComponent.diverged(pred, auth, 0.01, { })).is_true()
 
-# --- per-property deadzone inspector rows ---
+# --- the per-field threshold is a property mark ---
 
 
-func test_deadzone_row_roundtrips_into_override() -> void:
-	var pc := _component()
-	pc.divergence_epsilon = 0.01
+# A probe declaring its own tolerance in its own units, the way a real body
+# does. The mark is the one source of the per-field threshold.
+class EpsilonProbe extends Node2D:
+	var spin := Quaternion.IDENTITY
 
-	pc.call("_set", &"deadzone/rotation", 0.5)
-
-	assert_float(pc.divergence_epsilon_overrides[&"rotation"]).is_equal_approx(0.5, 0.0001)
-	assert_float(pc.call("_get", &"deadzone/rotation")).is_equal_approx(0.5, 0.0001)
-
-
-func test_deadzone_row_defaults_to_global_epsilon() -> void:
-	var pc := _component()
-	pc.divergence_epsilon = 0.02
-
-	# No override stored: the row reads the global default.
-	assert_float(pc.call("_get", &"deadzone/position")).is_equal_approx(0.02, 0.0001)
+	func _init() -> void:
+		Netw.configure_property(self, &"spin").state().epsilon(0.5)
 
 
-func test_setting_global_default_clears_the_override() -> void:
-	var pc := _component()
-	pc.divergence_epsilon = 0.01
-	pc.call("_set", &"deadzone/position", 0.5)
-	assert_bool(pc.divergence_epsilon_overrides.has(&"position")).is_true()
+# The epsilon() mark flows from the declaration into the derived state set,
+# where the engine and the editor lint both read it. A field without the mark
+# reports the inherit sentinel rather than a number it never declared.
+func test_epsilon_mark_reaches_the_derived_set() -> void:
+	var probe: EpsilonProbe = auto_free(EpsilonProbe.new())
+	var set := NetwSyncSet.from_script(
+		probe.get_script() as Script,
+		NetwSyncSet.Record.RECORD_STATE,
+	)
 
-	# Landing back on the global default (what the revert arrow does) drops it.
-	pc.call("_set", &"deadzone/position", 0.01)
-	assert_bool(pc.divergence_epsilon_overrides.has(&"position")).is_false()
-
-
-func test_deadzone_revert_targets_global_epsilon() -> void:
-	var pc := _component()
-	pc.divergence_epsilon = 0.03
-	assert_bool(pc.call("_property_can_revert", &"deadzone/x")).is_false()
-
-	pc.call("_set", &"deadzone/x", 1.0)
-	assert_bool(pc.call("_property_can_revert", &"deadzone/x")).is_true()
-	assert_float(pc.call("_property_get_revert", &"deadzone/x")).is_equal_approx(0.03, 0.0001)
+	assert_that(set).is_not_null()
+	var spin_field: NetwSyncSet.Field = null
+	for field: NetwSyncSet.Field in set.fields:
+		if field.key == &"spin":
+			spin_field = field
+	assert_that(spin_field).is_not_null()
+	assert_float(spin_field.epsilon_override).is_equal_approx(0.5, 0.0001)

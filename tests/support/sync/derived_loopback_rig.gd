@@ -13,6 +13,9 @@ extends RefCounted
 
 const PLAYER := preload("res://tests/support/sync/derived_state_player.gd")
 
+## Script type instantiated for each peer's matched node.
+var player_type: Variant = PLAYER
+
 var inner: NetwTestHarness
 var client: MultiplayerTree
 var server_clock: NetwClockInterface
@@ -89,7 +92,7 @@ func setup(
 
 
 func _build_node() -> Node2D:
-	var node := PLAYER.new()
+	var node: Node2D = player_type.new()
 	node.name = "DerivedPlayer"
 	return node
 

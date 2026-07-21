@@ -42,6 +42,15 @@ var _masked_confirmed: Dictionary = { }
 # to _masked_confirmed and drops everything at or before it.
 var _masked_inflight: Dictionary = { }
 
+# peer -> the fields masked in since that peer's baseline last advanced, used as
+# a set. A field stays sticky-sent until the ack that promotes a baseline the
+# receiver provably holds, which is what closes the revert race: a field that
+# changes away from the confirmed baseline and back before its send is acked
+# would otherwise diff clean against the stale baseline and strand the interim
+# value on the receiver. Cleared whole on promotion, since the new baseline is a
+# row the receiver reconstructed and diff-against-it is sufficient afterward.
+var _masked_dirty: Dictionary = { }
+
 # Receiver side of the masked volatile lane: the last row this binding decoded,
 # merged target for a masked frame's partial subset. Kept independent of
 # write_gate so a reconciling client (write_gate false) merges against its own
@@ -76,30 +85,15 @@ var authored_tick: int = -1
 ## the last input tick the server has processed here.
 var reconcile_ack: int = -1
 
-## When true, the pump holds this pass's volatile row and sends nothing on the
-## volatile lane. The retained lane still pumps, so a reliable field lands on
-## schedule either way.
+## When true, another carrier owns this set's volatile bytes and the pump sends
+## nothing on the volatile lane. The retained lane still pumps, so a reliable
+## field lands on schedule either way.
 ##
-## A volatile frame is a truthful [code](tick, ack, payload)[/code] triple: the
-## payload is gathered live at send time, so it may only ship on a tick whose
-## [member reconcile_ack] advanced to match it. A prediction engine sets this on a
-## tick that consumed no input, where the body has coasted past the ack it would
-## otherwise re-stamp and the owning client would read the difference as its own
-## divergence.
-var suppress_volatile: bool = false
-
-## The predicted [NetwTimeline] a windowed input set sources its redundancy window
-## from. When set, the window is the unacked tail of this timeline rather than the
-## binding's own gathered ring, so a predicting client resends the same samples it
-## recorded and the server heals a lost input tick from them. Null for a plain
-## windowed set, which rings its own gathered values.
-var window_timeline: NetwTimeline = null
-
-## The last input tick the receiver has acknowledged, flooring the windowed input
-## set so an acknowledged sample is never re-sent. Only consulted when
-## [member window_timeline] drives the window.
-var window_floor: int = -1
-
+## The set survives as declaration and codec while its wire path lives
+## elsewhere. A prediction engine sets this on its input binding, whose samples
+## ride [constant NetwFrameEnvelope.Channel.PREDICT_COMMAND] with the
+## transition each one drove.
+var volatile_external: bool = false
 
 func _init(binding_set: NetwSyncSet, node: Node) -> void:
 	set = binding_set
@@ -143,8 +137,6 @@ func encode_volatile(ordinal: int, tick: int, ack: int) -> PackedByteArray:
 
 
 func _encode_windowed(ordinal: int, tick: int) -> PackedByteArray:
-	if window_timeline != null:
-		return _encode_windowed_from_timeline(ordinal, tick)
 	var n := node()
 	if not is_instance_valid(n):
 		return PackedByteArray()
@@ -158,61 +150,18 @@ func _encode_windowed(ordinal: int, tick: int) -> PackedByteArray:
 	for i in range(_window_rows.size() - 1, -1, -1):
 		var row: Array = _window_rows[i]
 		samples.append([tick - int(row[0]), row[1]])
-	return NetwFrameEnvelope.encode_sync_frame(
-		{
-			"ordinal": ordinal,
-			"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
-			"samples": samples,
-			"quantizers": gathered[2],
-			"types": gathered[3],
-			"tick": tick,
-		},
-	)
-
-
-# The prediction input window: the redundant samples are the unacked tail of the
-# owning client's predicted timeline, floored by the acknowledged tick so a sample
-# the server already consumed is never re-sent, the input carrier's rule. Falls
-# back to one live sample so the window is always a sole carrier before any input
-# has been recorded.
-func _encode_windowed_from_timeline(ordinal: int, tick: int) -> PackedByteArray:
-	var n := node()
-	if not is_instance_valid(n):
-		return PackedByteArray()
-	var vfields := _volatile_fields()
-	var samples: Array = []
-	var from := maxi(window_floor + 1, tick - set.window + 1)
-	var rows := window_timeline.inputs_in_range(from, tick)
-	for i in range(rows.size() - 1, -1, -1):
-		var row: Dictionary = rows[i]
-		var input: Dictionary = row["input"]
-		var values: Array = []
-		for f in vfields:
-			values.append(input.get(f.key, n.get(f.key)))
-		samples.append([tick - int(row["tick"]), values])
-	if samples.is_empty():
-		var live: Array = []
-		for f in vfields:
-			if not (f.key in n):
-				return PackedByteArray()
-			live.append(n.get(f.key))
-		samples.append([0, live])
-	var quantizers: Array = []
-	for f in vfields:
-		quantizers.append(f.quantizer)
-	var types: Array = []
-	for v in samples[0][1]:
-		types.append(typeof(v))
-	return NetwFrameEnvelope.encode_sync_frame(
-		{
-			"ordinal": ordinal,
-			"flags": NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
-			"samples": samples,
-			"quantizers": quantizers,
-			"types": types,
-			"tick": tick,
-		},
-	)
+	var frame := {
+		"ordinal": ordinal,
+		"flags": (
+				NetwFrameEnvelope.SYNC_FLAG_STAMPED
+				| NetwFrameEnvelope.SYNC_FLAG_WINDOWED
+		),
+		"samples": samples,
+		"quantizers": gathered[2],
+		"types": gathered[3],
+		"tick": tick,
+	}
+	return NetwFrameEnvelope.encode_sync_frame(frame)
 
 
 # The VOLATILE fields in set order, the wire order the windowed lane encodes.
@@ -227,10 +176,11 @@ func _volatile_fields() -> Array:
 ## Decodes one [constant NetwFrameEnvelope.Channel.SYNC] [param payload] and
 ## writes its [constant NetwSyncSet.Lane.VOLATILE] values onto the node, returning
 ## the decoded header [code]{ordinal, tick, ack}[/code] for the timeline and
-## prediction feed, or an empty dictionary when the frame is malformed. A windowed
-## input frame carries a ring of redundant samples newest first, so the freshest
-## sample (age [code]0[/code]) is the one applied and the older rows heal only a
-## receiver that missed a tick.
+## prediction feed, or an empty dictionary when the frame is malformed. A
+## windowed input frame carries a ring of redundant samples newest first, so the
+## freshest sample (age [code]0[/code]) is the one applied and the older rows heal
+## only a receiver that missed a tick. A taped frame also returns
+## [code]tape_epoch[/code] and its decoded [code]entries[/code].
 func apply_volatile(payload: PackedByteArray) -> Dictionary:
 	var n := node()
 	if not is_instance_valid(n):
@@ -297,6 +247,8 @@ func _apply_windowed(n: Node, payload: PackedByteArray) -> Dictionary:
 		"ack": frame.get("ack", -1),
 		"payload": rows[0]["payload"],
 		"samples": rows,
+		"tape_epoch": frame.get("tape_epoch", -1),
+		"entries": frame.get("entries", []),
 	}
 
 
@@ -315,6 +267,142 @@ func snapshot_payload() -> Dictionary:
 ## set's fields onto the body.
 func apply_payload(payload: Dictionary) -> void:
 	NetwSyncPipeline.apply_payload(node(), set, payload)
+
+
+## Returns [param payload] with every value the [member set] declares
+## round-tripped through that field's [NetwQuantize], the one form both peers
+## can agree on.
+##
+## A predicting client and its authority never see the same float twice: one
+## reads a live property, the other reads what survived the wire. Recording the
+## round trip instead of the live value makes the two comparable exactly rather
+## than approximately. A field with no quantizer passes through untouched, since
+## its raw bits already are its canonical form.
+## [codeblock]
+## var recorded := binding.canonicalize_payload(binding.snapshot_payload())
+## timeline.record_state(tick + 1, recorded)
+## [/codeblock]
+func canonicalize_payload(payload: Dictionary) -> Dictionary:
+	var plan := _canonical_plan(payload)
+	if plan.is_empty():
+		return payload.duplicate()
+	var writer := NetwBitBuffer.Writer.new()
+	NetwScriptModel.write_values(
+		writer,
+		plan["values"],
+		plan["quantizers"],
+		plan["types"],
+	)
+	var reader := NetwBitBuffer.Reader.new(writer.to_bytes())
+	var canonical := NetwScriptModel.read_values(
+		reader,
+		plan["quantizers"],
+		plan["types"],
+	)
+	var keys: Array = plan["keys"]
+	var out := payload.duplicate()
+	for i in mini(keys.size(), canonical.size()):
+		out[keys[i]] = canonical[i]
+	return out
+
+
+## Returns the wire bytes of [param payload], encoded in [member set] field
+## order through the same codecs the frame uses.
+##
+## The bytes that ship are the bytes that hash, so a fingerprint taken here and
+## a fingerprint taken by a peer decoding the frame describe the same values.
+## Only the fields [param payload] carries are encoded, so two payloads are
+## comparable exactly when they name the same fields.
+func canonical_bytes(payload: Dictionary) -> PackedByteArray:
+	var plan := _canonical_plan(payload)
+	if plan.is_empty():
+		return PackedByteArray()
+	var writer := NetwBitBuffer.Writer.new()
+	NetwScriptModel.write_values(
+		writer,
+		plan["values"],
+		plan["quantizers"],
+		plan["types"],
+	)
+	return writer.to_bytes()
+
+
+## Returns what [param property] does in the simulation, or
+## [constant NetwSyncSet.PropertyClass.CAUSAL] when the set does not declare it.
+##
+## A reconciliation reads this to decide which values it may compare and
+## restore. Undeclared properties answer causal because that is the class whose
+## mistake is a correction rather than a silent divergence.
+func property_class_of(property: StringName) -> NetwSyncSet.PropertyClass:
+	var field := field_of(property)
+	return field.property_class if field else NetwSyncSet.PropertyClass.CAUSAL
+
+
+## Returns how firmly a recovery pulls [param property] toward the authoritative
+## value, or [code]0.0[/code] when it is restored outright.
+func converge_stiffness_of(property: StringName) -> float:
+	var field := field_of(property)
+	return field.converge_stiffness if field else 0.0
+
+
+## Returns whether [param property] is restored only by a teleport-tier
+## recovery.
+func teleport_only_of(property: StringName) -> bool:
+	var field := field_of(property)
+	return field.explicit_teleport_only if field else false
+
+
+## Returns whether [param property] is excluded from triggering a correction
+## on its own.
+func reconcile_only_of(property: StringName) -> bool:
+	var field := field_of(property)
+	return field.explicit_reconcile_only if field else false
+
+
+## Returns [param property]'s own divergence threshold, or a negative value
+## when it inherits the entity's default.
+func epsilon_override_of(property: StringName) -> float:
+	var field := field_of(property)
+	return field.epsilon_override if field else -1.0
+
+
+## Returns the declared [NetwSyncSet.Field] for [param property], or
+## [code]null[/code] when this set does not carry it.
+func field_of(property: StringName) -> NetwSyncSet.Field:
+	if not set:
+		return null
+	for field: NetwSyncSet.Field in set.fields:
+		if field.key == property:
+			return field
+	return null
+
+
+# Selects the payload's fields in set order with the codec inputs each needs.
+# Empty when the node has freed or the payload names no declared field, which
+# leaves both canonical verbs pass-through rather than lossy.
+func _canonical_plan(payload: Dictionary) -> Dictionary:
+	var n := node()
+	if payload.is_empty() or not is_instance_valid(n) or not set:
+		return { }
+	var keys: Array[StringName] = []
+	var values: Array = []
+	var quantizers: Array = []
+	var types: Array = []
+	for field in set.fields:
+		if not payload.has(field.key):
+			continue
+		keys.append(field.key)
+		values.append(payload[field.key])
+		quantizers.append(field.quantizer)
+		types.append(NetwScriptModel.get_node_property_type(n, field.key))
+	if keys.is_empty():
+		return { }
+	return {
+		"keys": keys,
+		"values": values,
+		"quantizers": quantizers,
+		"types": types,
+	}
 
 
 ## Polls the set's [constant NetwSyncSet.Lane.RETAINED] fields off the node into
@@ -428,6 +516,9 @@ func retain_masked_baselines(recipients: Array) -> void:
 	for peer: int in _masked_inflight.keys().duplicate():
 		if peer not in recipients:
 			_masked_inflight.erase(peer)
+	for peer: int in _masked_dirty.keys().duplicate():
+		if peer not in recipients:
+			_masked_dirty.erase(peer)
 
 
 ## Clears the retained peer baselines while keeping the polled row, so every
@@ -441,6 +532,7 @@ func clear_peer(peer: int) -> void:
 	_watch_book.clear_peer(peer)
 	_masked_confirmed.erase(peer)
 	_masked_inflight.erase(peer)
+	_masked_dirty.erase(peer)
 
 
 ## Returns [code]{bytes, row, full}[/code] for a masked-lane volatile send to
@@ -457,6 +549,14 @@ func clear_peer(peer: int) -> void:
 ## pass, for a caller counting how often the lane falls back to a full row.
 ## Returns an empty dictionary when the node has freed or a field is
 ## unreadable, so a half row never crosses the wire.
+## [br][br]
+## A field stays masked in until the ack that promotes a baseline carrying it,
+## even once it no longer differs from the confirmed baseline. So a value that
+## changes away from the baseline and back inside the in-flight window is still
+## sent rather than silently going quiet, which is the sender's half of the
+## reconstruction invariant [method NetwSyncPipeline.apply_volatile_frame] states.
+## Without it the receiver would strand the interim value it was handed and no
+## later frame would correct it.
 func masked_delta(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
 	var n := node()
 	if not is_instance_valid(n):
@@ -468,6 +568,7 @@ func masked_delta(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
 			return { }
 		row[f.key] = n.get(f.key)
 	var base: Variant = _masked_confirmed.get(peer)
+	var dirty: Dictionary = _masked_dirty.get_or_add(peer, { })
 	var mask := 0
 	var values: Array = []
 	var quantizers: Array = []
@@ -475,11 +576,14 @@ func masked_delta(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
 	for i in fields.size():
 		var f: NetwSyncSet.Field = fields[i]
 		var cur = row[f.key]
-		if base == null or not (base as Dictionary).has(f.key) or (base as Dictionary)[f.key] != cur:
+		var changed: bool = (base == null or not (base as Dictionary).has(f.key)
+				or (base as Dictionary)[f.key] != cur)
+		if changed or dirty.has(f.key):
 			mask |= 1 << i
 			values.append(cur)
 			quantizers.append(f.quantizer)
 			types.append(typeof(cur))
+			dirty[f.key] = true
 	if mask == 0:
 		return { "bytes": PackedByteArray(), "row": row, "full": false }
 	var full := fields.is_empty() or mask == (1 << fields.size()) - 1
@@ -525,6 +629,7 @@ func advance_masked_ack(peer: int, acked_seq: int) -> void:
 	if best == -1:
 		return
 	_masked_confirmed[peer] = inflight[best]
+	_masked_dirty.erase(peer)
 	for seq: int in inflight.keys().duplicate():
 		if seq == best or _seq_at_or_before(seq, best):
 			inflight.erase(seq)

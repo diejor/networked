@@ -666,34 +666,6 @@ func test_binding_windowed_apply_returns_every_sample() -> void:
 	assert_float(dst.rotation).is_equal_approx(0.3, 0.0001)
 
 
-func test_binding_windowed_input_sources_the_predicted_timeline() -> void:
-	# A prediction engine drives the window from the predicted timeline, so the
-	# client resends the same samples it recorded rather than its gathered ring.
-	var set := _make_set([[&"rotation", NetwSyncSet.Lane.VOLATILE]])
-	set.stamp = NetwSyncSet.Stamp.STAMP_TICK
-	set.window = 3
-	var node := Node2D.new()
-	add_child(node)
-	auto_free(node)
-	var timeline := NetwTimeline.new()
-	timeline.record_input(8, { &"rotation": 0.8 })
-	timeline.record_input(9, { &"rotation": 0.9 })
-	timeline.record_input(10, { &"rotation": 1.0 })
-	var binding := NetwSyncSetBinding.new(set, node)
-	binding.window_timeline = timeline
-	var bytes := binding.encode_volatile(0, 10, -1)
-
-	var dst := Node2D.new()
-	add_child(dst)
-	auto_free(dst)
-	var header := NetwSyncSetBinding.new(set, dst).apply_volatile(bytes)
-	var samples: Array = header["samples"]
-	assert_int(samples.size()).is_equal(3)
-	assert_int(samples[0]["tick"]).is_equal(10)
-	assert_float((samples[0]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(1.0, 0.0001)
-	assert_float((samples[2]["payload"] as Dictionary)[&"rotation"]).is_equal_approx(0.8, 0.0001)
-
-
 func test_masked_sugar_writes_through_and_conflicts_with_windowed() -> void:
 	var configs: Dictionary = {
 		&"position": _prop().state().masked(),
@@ -917,29 +889,3 @@ func test_retain_masked_baselines_drops_a_peer_no_longer_a_recipient() -> void:
 	assert_int((second["bytes"] as PackedByteArray).size()).is_greater(0)
 	var frame := NetwFrameEnvelope.decode_sync_frame(second["bytes"], [null], [TYPE_VECTOR2])
 	assert_int(frame["mask"]).is_equal(1)
-
-
-func test_binding_window_floor_trims_acknowledged_samples() -> void:
-	var set := _make_set([[&"rotation", NetwSyncSet.Lane.VOLATILE]])
-	set.stamp = NetwSyncSet.Stamp.STAMP_TICK
-	set.window = 5
-	var node := Node2D.new()
-	add_child(node)
-	auto_free(node)
-	var timeline := NetwTimeline.new()
-	for t: int in [7, 8, 9, 10]:
-		timeline.record_input(t, { &"rotation": float(t) })
-	var binding := NetwSyncSetBinding.new(set, node)
-	binding.window_timeline = timeline
-	binding.window_floor = 8 # the server already consumed through tick 8
-	var bytes := binding.encode_volatile(0, 10, -1)
-
-	var dst := Node2D.new()
-	add_child(dst)
-	auto_free(dst)
-	var header := NetwSyncSetBinding.new(set, dst).apply_volatile(bytes)
-	var samples: Array = header["samples"]
-	# Only ticks 9 and 10 survive the floor.
-	assert_int(samples.size()).is_equal(2)
-	assert_int(samples[0]["tick"]).is_equal(10)
-	assert_int(samples[1]["tick"]).is_equal(9)

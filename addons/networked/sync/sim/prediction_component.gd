@@ -12,12 +12,21 @@
 ## [member NetwEntity.prediction] has a single publisher.
 ## [codeblock]
 ## PlayerRoot (declares .state()/.input() marks, defines _network_tick)
-## └── PredictionComponent      # exports + deadzone rows; registers the engine
+## `-- PredictionComponent      # entity-level policy; registers the engine
 ##
 ## # on tree entry:
 ## entity.prediction.correction_mode = correction_mode   # push exports
 ## Netw.of(self).lag_compensation.register_prediction(entity)
 ## [/codeblock]
+## The component carries entity-level policy only. A per-field fact (a
+## tolerance, a restore restriction, a trigger exclusion) is a property fact
+## and lives on the property mark
+## ([method NetwScriptModel.PropertyConfig.epsilon],
+## [method NetwScriptModel.PropertyConfig.teleport_only],
+## [method NetwScriptModel.PropertyConfig.reconcile_only],
+## [method NetwScriptModel.PropertyConfig.converge]), never here. A key
+## declared here with a non-default value and also configured from code is a
+## configuration error the handle reports, so every fact keeps one source.
 ##
 ## [br][b]The model the engine runs[/b]
 ## [br]The owning client predicts each tick and reconciles against the
@@ -25,31 +34,26 @@
 ## never against tick equality, so there is no clock lead and no determinism
 ## contract. Each entity has at most one input-owning peer
 ## ([member NetwEntity.controller]), so the [NetwTimeline] has exactly one writer
-## per side and a correction replays only this entity. The input set ships the
-## controlling peer's input toward the server stamped with
-## [member NetwSyncSetBinding.authored_tick]; the state set ships authoritative
-## state back stamped the same way and carrying the ack, the last input tick the
-## server consumed. That ack lets the client compare the server against its own
-## past prediction tick for tick, not against the body it shows now.
+## per side and a correction replays only this entity. The controlling peer's
+## input rides [constant NetwFrameEnvelope.Channel.PREDICT_COMMAND], each
+## sample beside the transition it drove; the state set ships authoritative
+## state back stamped with [member NetwSyncSetBinding.authored_tick] and
+## carrying the ack, the last input tick the server consumed. That ack lets the
+## client compare the server against its own past prediction tick for tick, not
+## against the body it shows now.
 ## [codeblock]
-## # input set, client -> server   (authored_tick = the tick it was gathered)
-## { tick: authored_tick, &"motion": ... }
+## # command lane, client -> server  (one transition per authored tick)
+## { index, label, fresh, &"motion": ... }
 ## # state set, server -> client   (reconcile_ack = last consumed input tick)
 ## { tick: authored_tick, ack: reconcile_ack, &"position": ... }
 ## [/codeblock]
 ## The predicted body snaps to the authoritative payload only when it diverges past
-## [member NetwLagCompensationInterface.PredictionHandle.divergence_epsilon] (or a per-property override), then
+## [member NetwLagCompensationInterface.PredictionHandle.divergence_epsilon] (or the field's own
+## [method NetwScriptModel.PropertyConfig.epsilon] mark), then
 ## every unacked input replays on top with [code]is_fresh = false[/code] so
 ## one-shot effects fire once. [member NetwLagCompensationInterface.PredictionHandle.is_reconciling] is true
-## across the snap and replay, and [signal NetwLagCompensationInterface.PredictionHandle.reconciled] carries the
-## divergence.
-##
-## [br][b]Reconciliation deadzones[/b]
-## [br]The per-property thresholds are edited in the inspector under
-## [code]Reconciliation Deadzones[/code], one row per state field, typed by the
-## property so a rotation row reads in radians. Each row backs
-## [member NetwLagCompensationInterface.PredictionHandle.divergence_epsilon_overrides]. A row left at
-## [member divergence_epsilon] inherits it.
+## across the snap and replay, and [signal NetwLagCompensationInterface.PredictionHandle.divergence_detected]
+## reports the divergence, naming the transition and what it is charged to.
 class_name PredictionComponent
 extends NetwComponent
 
@@ -64,6 +68,15 @@ enum Role {
 	HOST_LOCAL,
 	## A remote display. Never simulates here, the interpolator shows it.
 	REMOTE,
+}
+
+## Cadence that applies the entity's simulation drive.
+enum Schedule {
+	## Apply once for every network tick. Use this for kinematic prediction.
+	TICK,
+	## Apply once after every physics frame's network tick loop. Use this for
+	## solver-driven bodies whose physics integrates once per frame.
+	FRAME,
 }
 
 ## What the server does for a missing input tick.
@@ -88,12 +101,6 @@ enum CorrectionMode {
 	## predicted body resumes forward from truth and the display chase absorbs the
 	## snap.
 	SNAP,
-	## Ease a dynamic body onto the authoritative pose over several ticks with an
-	## error-smoothing spring, hard-snapping only past [member teleport_threshold].
-	## Pauses around contacts ([method notify_contact]) and while [member sleeping],
-	## so a wall bounce or a settled body is not sprung. The industry-standard answer
-	## to dynamic-body rubber banding.
-	SNAP_BLEND,
 }
 
 ## How a [constant CorrectionMode.SNAP] restore places the authoritative state on
@@ -108,40 +115,29 @@ enum RestoreMode {
 	EXTRAPOLATED,
 }
 
-## Divergence above which a state receive triggers a correction.
-##
-## A single scalar mixes units badly for a 3D body, whose state spans meters,
-## a unit quaternion, and m·s⁻¹, so [member divergence_epsilon_overrides] sets a
-## per-property threshold where one is needed.
-@export var divergence_epsilon: float = 0.01
+## What kind of body the entity predicts. Mirrors
+## [enum NetwLagCompensationInterface.PredictionHandle.Archetype] by value.
+enum Archetype {
+	## No preset. Every knob keeps its own default until declared.
+	NONE,
+	## A body whose step is a plain callable, re-runnable within one frame.
+	KINEMATIC,
+	## A solver-integrated body whose step cannot be re-run per input.
+	SOLVER_BODY,
+}
 
-## Per-property divergence thresholds overriding [member divergence_epsilon].
-##
-## Edited per property in the inspector under [code]Reconciliation Deadzones[/code],
-## one row per state-set field, typed by the property so a
-## rotation row reads in radians and a position row in units. A row left at
-## [member divergence_epsilon] inherits it (the inspector revert arrow clears the
-## override). This dictionary is the backing store, also settable from code for
-## programmatically registered state. Keyed by the virtual property name.
-@export var divergence_epsilon_overrides: Dictionary[StringName, float] = { }
+## The one decision the schedule and recovery presets derive from, applied
+## through
+## [method NetwLagCompensationInterface.PredictionHandle.configure_prediction]
+## on tree entry. The preset is a floor: any export below declared away from
+## its default overrides its part of the bundle.
+@export var archetype: Archetype = Archetype.NONE
 
-## How a correction is applied. See [enum CorrectionMode]. [constant CorrectionMode.AUTO]
-## resolves [constant CorrectionMode.REPLAY] for a kinematic body and
-## [constant CorrectionMode.SNAP] for a dynamic one.
-@export var correction_mode: CorrectionMode = CorrectionMode.AUTO
+@export_group("Schedule")
 
-## How a [constant CorrectionMode.SNAP] restore lands on the body. See
-## [enum RestoreMode]. [constant RestoreMode.EXTRAPOLATED] carries a dynamic body
-## forward to the present tick through its replicated velocity, so it holds for a
-## body whose state set replicates velocity alongside the transform. Ignored under
-## [constant CorrectionMode.REPLAY].
-@export var snap_restore: RestoreMode = RestoreMode.EXACT
-
-## Ceiling in ticks on the age a [constant RestoreMode.EXTRAPOLATED] restore
-## projects across, so a server input cursor that falls behind never launches the
-## body along a huge extrapolation. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.max_restore_ticks].
-@export var max_restore_ticks: int = 6
+## Cadence that invokes [member simulate]. FRAME scheduling keeps a dynamic
+## body at one drive application per physics frame while ticks label input.
+@export var schedule: Schedule = Schedule.TICK
 
 ## Server policy for a missing input tick. See [enum MissingInput].
 @export var missing_policy: MissingInput = MissingInput.STALL
@@ -174,53 +170,45 @@ enum RestoreMode {
 ## Mirrors [member NetwLagCompensationInterface.PredictionHandle.consume_buffer_ticks].
 @export_range(0, 8) var consume_buffer_ticks: int = 0
 
-## State fields that a correction restores but that never trigger one on their own.
+## [constant Schedule.FRAME] tape transitions the server keeps standing before it
+## replays one per physics frame. The one-transition default absorbs a single
+## missed arrival at the cost of one frame of input latency. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.replay_buffer_depth].
+@export_range(0, 8) var replay_buffer_depth: int = 1
+
+@export_group("Recovery")
+
+## Divergence above which a state receive triggers a correction.
 ##
-## A cosmetic scalar or a display-owned heading still reconciles to the
-## authoritative value when another field corrects, yet its own drift never
-## teleports the whole state set. Backs
-## [member NetwLagCompensationInterface.PredictionHandle.correction_trigger_excludes].
-@export var reconcile_only_fields: Array[StringName] = []
+## A single scalar mixes units badly for a 3D body, whose state spans meters,
+## a unit quaternion, and meters per second. A field that needs its own
+## threshold declares it in its own units with
+## [method NetwScriptModel.PropertyConfig.epsilon], which overrides this
+## default for that field alone.
+@export var divergence_epsilon: float = 0.01
 
-## State fields that only a teleport-tier correction restores.
-##
-## A sub-threshold [constant CorrectionMode.SNAP_BLEND] correction leaves them on
-## the predicted body, so a contractive field that re-converges on its own (a
-## damped velocity, a lerp-toward scalar) is never rewound to the stale ack tick,
-## which under acceleration reads as losing speed on every correction. A
-## correction past [member teleport_threshold] still restores them. Pair with
-## [member reconcile_only_fields] so the field neither triggers nor rewinds below
-## the teleport tier. Backs
-## [member NetwLagCompensationInterface.PredictionHandle.teleport_only_restore].
-@export var teleport_only_restore_fields: Array[StringName] = []
+## How a correction is applied. See [enum CorrectionMode]. [constant CorrectionMode.AUTO]
+## resolves [constant CorrectionMode.REPLAY] for a kinematic body and
+## [constant CorrectionMode.SNAP] for a dynamic one.
+@export var correction_mode: CorrectionMode = CorrectionMode.AUTO
 
-## Per-tick fraction of its remaining error that a field is eased toward
-## authority by, keyed by state field. Such a field is never written by a
-## sub-teleport correction, only pulled a little every tick.
-##
-## Use it for a field that drives the simulation but has no
-## [member NetwInterpolate.project_channel] derivative to project with, a
-## velocity above all. Restoring one writes the value it held at the ack tick,
-## which mid-manoeuvre forks the body again, while leaving it alone lets a fork
-## outlive every correction and keep regenerating the error. Around
-## [code]0.05[/code] converges over roughly twenty ticks without a visible step.
-## Backs [member NetwLagCompensationInterface.PredictionHandle.soft_restore_stiffness].
-@export var soft_restore_stiffness: Dictionary[StringName, float] = { }
+## How a [constant CorrectionMode.SNAP] restore lands on the body. See
+## [enum RestoreMode]. [constant RestoreMode.EXTRAPOLATED] carries a dynamic body
+## forward to the present tick through its replicated velocity, so it holds for a
+## body whose state set replicates velocity alongside the transform. Ignored under
+## [constant CorrectionMode.REPLAY].
+@export var snap_restore: RestoreMode = RestoreMode.EXACT
 
-@export_group("Blend Correction")
+## Ceiling in ticks on the age a [constant RestoreMode.EXTRAPOLATED] restore
+## projects across, so a server input cursor that falls behind never launches the
+## body along a huge extrapolation. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.max_restore_ticks].
+@export var max_restore_ticks: int = 6
 
-## Ticks a [constant CorrectionMode.SNAP_BLEND] correction eases the body onto the
-## authoritative pose over. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.blend_ticks].
-@export_range(1, 30) var blend_ticks: int = 8
-
-## Per-tick fraction of the remaining [constant CorrectionMode.SNAP_BLEND] error
-## applied each tick, the spring stiffness. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.blend_stiffness].
-@export_range(0.01, 1.0, 0.01) var blend_stiffness: float = 0.25
-
-## Pose error above which a [constant CorrectionMode.SNAP_BLEND] correction abandons
-## the spring and hard-teleports, in the pose field's own units. Mirrors
+## Pose error above which a recovery restores the whole closure instead of
+## withholding the fields declared
+## [method NetwScriptModel.PropertyConfig.teleport_only], in the pose field's
+## own units. Mirrors
 ## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold].
 @export var teleport_threshold: float = 2.0
 
@@ -284,33 +272,50 @@ func _exit_tree() -> void:
 
 
 # Pushes the node's exports into the entity's prediction handle so the engine
-# reads its config from one place. The overrides dictionary is shared by
-# reference, so a code-side edit and the inspector rows stay in sync.
+# reads its config from one place, and records which verb keys the scene
+# declared away from their defaults so a code verb restating one is caught as
+# the two-source error it is.
 func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void:
+	handle.schedule = schedule
 	handle.correction_mode = correction_mode
 	handle.snap_restore = snap_restore
 	handle.max_restore_ticks = max_restore_ticks
 	handle.missing_policy = missing_policy
 	handle.max_consume_per_tick = max_consume_per_tick
 	handle.consume_buffer_ticks = consume_buffer_ticks
+	handle.replay_buffer_depth = replay_buffer_depth
 	handle.max_consume_lag_ticks = max_consume_lag_ticks
-	handle.blend_ticks = blend_ticks
-	handle.blend_stiffness = blend_stiffness
 	handle.teleport_threshold = teleport_threshold
 	handle.collision_cooldown_ticks = collision_cooldown_ticks
 	handle.divergence_epsilon = divergence_epsilon
-	handle.divergence_epsilon_overrides = divergence_epsilon_overrides
-	var excludes: Dictionary[StringName, bool] = { }
-	for field: StringName in reconcile_only_fields:
-		excludes[field] = true
-	handle.correction_trigger_excludes = excludes
-	var teleport_only: Dictionary[StringName, bool] = { }
-	for field: StringName in teleport_only_restore_fields:
-		teleport_only[field] = true
-	handle.teleport_only_restore = teleport_only
-	handle.soft_restore_stiffness = soft_restore_stiffness
 	if simulate.is_valid():
 		handle.simulate = simulate
+	# A default export is a valid choice, not a declaration, so only a value
+	# the scene moved off its default claims the key.
+	var declared: Dictionary[StringName, bool] = { }
+	if schedule != Schedule.TICK:
+		declared[&"tier"] = true
+	if missing_policy != MissingInput.STALL:
+		declared[&"hold"] = true
+	if replay_buffer_depth != 1:
+		declared[&"buffer_depth"] = true
+	if max_consume_lag_ticks != 60:
+		declared[&"resync_ceiling"] = true
+	if not is_equal_approx(divergence_epsilon, 0.01):
+		declared[&"epsilon"] = true
+	if not is_equal_approx(teleport_threshold, 2.0):
+		declared[&"teleport_threshold"] = true
+	if collision_cooldown_ticks != 6:
+		declared[&"cooldown_ticks"] = true
+	if snap_restore != RestoreMode.EXACT:
+		declared[&"projection"] = true
+	handle.scene_declared = declared
+	# The bundle lands after the declared keys are known, so an export moved
+	# off its default keeps outranking the preset it refines.
+	if archetype != Archetype.NONE:
+		handle.configure_prediction(
+			archetype as NetwLagCompensationInterface.PredictionHandle.Archetype,
+		)
 
 
 # The one reconciliation invariant that is always wrong: a deadzone below a
@@ -329,13 +334,14 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 		if not codec:
 			continue
 		var floor_error := codec._max_error(typeof(owner.get(field.key)) as Variant.Type)
-		var epsilon := _epsilon_for(field.key)
+		var epsilon := field.epsilon_override \
+				if field.epsilon_override >= 0.0 else divergence_epsilon
 		if epsilon < floor_error:
 			out.append(
 				(
-						"Reconciliation deadzone for \"%s\" (%.4f) is below its codec's "
+						"Divergence epsilon for \"%s\" (%.4f) is below its codec's "
 						+ "quantization error (%.4f). The predicted body corrects every "
-						+ "packet from quantization noise alone. Raise the deadzone to at "
+						+ "packet from quantization noise alone. Raise the epsilon to at "
 						+ "least %.4f."
 				) % [field.key, epsilon, floor_error, floor_error],
 			)
@@ -343,8 +349,8 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 
 
 # The owner's derived state set, resolved statically from its script, so the
-# editor lint and the deadzone rows read the same fields and quantizers the
-# runtime gathers. Null when the owner is scriptless or marks no state set.
+# editor lint reads the same fields, quantizers, and epsilon marks the runtime
+# gathers. Null when the owner is scriptless or marks no state set.
 func _owner_state_set() -> NetwSyncSet:
 	if not owner:
 		return null
@@ -354,13 +360,9 @@ func _owner_state_set() -> NetwSyncSet:
 	return NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_STATE)
 
 
-func _epsilon_for(key: StringName) -> float:
-	return divergence_epsilon_overrides.get(key, divergence_epsilon)
-
-
-## Opens a [member collision_cooldown_ticks] window pausing non-teleport
-## [constant CorrectionMode.SNAP_BLEND] corrections, so a contact transient is not
-## corrected through. Call it when the predicted body registers a collision.
+## Opens a [member collision_cooldown_ticks] window pausing sub-teleport
+## recoveries, so a contact transient is not corrected through. Call it when the
+## predicted body registers a collision.
 func notify_contact() -> void:
 	if _entity:
 		_entity.prediction.notify_contact()
@@ -384,7 +386,8 @@ func set_sleeping(value: bool) -> void:
 ## resolver so the rule lives in one place.
 static func resolve_correction_mode_for(body: Node, mode: int) -> CorrectionMode:
 	return NetwLagCompensationInterface.PredictionHandle.resolve_correction_mode_for(
-		body, mode,
+		body,
+		mode,
 	) as CorrectionMode
 
 
@@ -398,7 +401,10 @@ static func diverged(
 		overrides: Dictionary,
 ) -> bool:
 	return NetwLagCompensationInterface.PredictionHandle.diverged(
-		predicted, authoritative, epsilon, overrides,
+		predicted,
+		authoritative,
+		epsilon,
+		overrides,
 	)
 
 
@@ -407,111 +413,3 @@ static func diverged(
 static func value_error(a: Variant, b: Variant) -> float:
 	return NetwLagCompensationInterface.PredictionHandle.value_error(a, b)
 
-# ---------------------------------------------------------------------------
-# Inspector: per-property deadzone rows
-# ---------------------------------------------------------------------------
-
-# One editor row per state-set field, backed by
-# divergence_epsilon_overrides. Mirrors MultiplayerInterpolator's per-property
-# inspector so a deadzone is set by name, typed by the property (radians for a
-# rotation, units for a position), instead of hand-editing an opaque dictionary.
-const _DEADZONE_PREFIX := "deadzone/"
-
-
-func _validate_property(property: Dictionary) -> void:
-	# The dictionary is the backing store. The per-property rows are the surface.
-	if property.name == "divergence_epsilon_overrides":
-		property.usage = PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_STORAGE
-
-
-func _get_property_list() -> Array[Dictionary]:
-	var props: Array[Dictionary] = []
-	if not Engine.is_editor_hint() or not owner:
-		return props
-
-	var rows := _deadzone_rows()
-	if rows.is_empty():
-		return props
-
-	props.append(
-		{
-			"name": "Reconciliation Deadzones",
-			"type": TYPE_NIL,
-			"usage": PROPERTY_USAGE_GROUP,
-			"hint_string": _DEADZONE_PREFIX,
-		},
-	)
-	for clean_name: StringName in rows:
-		props.append(
-			{
-				"name": _DEADZONE_PREFIX + clean_name,
-				"type": TYPE_FLOAT,
-				"usage": PROPERTY_USAGE_EDITOR,
-				"hint": PROPERTY_HINT_RANGE,
-				"hint_string": _deadzone_hint(rows[clean_name]),
-			},
-		)
-	return props
-
-
-func _get(property: StringName) -> Variant:
-	if property.begins_with(_DEADZONE_PREFIX):
-		var key := StringName(property.trim_prefix(_DEADZONE_PREFIX))
-		return divergence_epsilon_overrides.get(key, divergence_epsilon)
-	return null
-
-
-func _set(property: StringName, value: Variant) -> bool:
-	if not property.begins_with(_DEADZONE_PREFIX):
-		return false
-	var key := StringName(property.trim_prefix(_DEADZONE_PREFIX))
-	# Storing the global default means "inherit it", so drop the override. This is
-	# also what the inspector revert arrow lands on.
-	if is_equal_approx(float(value), divergence_epsilon):
-		divergence_epsilon_overrides.erase(key)
-	else:
-		divergence_epsilon_overrides[key] = float(value)
-	return true
-
-
-func _property_can_revert(property: StringName) -> bool:
-	if property.begins_with(_DEADZONE_PREFIX):
-		return divergence_epsilon_overrides.has(
-			StringName(property.trim_prefix(_DEADZONE_PREFIX)),
-		)
-	return false
-
-
-func _property_get_revert(property: StringName) -> Variant:
-	if property.begins_with(_DEADZONE_PREFIX):
-		return divergence_epsilon
-	return null
-
-
-# Maps each state property name to its Variant type for the editor rows. State
-# props only, since reconciliation compares the state-set payload. The type is
-# read off the entity root (owner.get), which resolves at edit time. Existing
-# overrides are unioned in so a code-registered threshold stays visible and
-# revertable.
-func _deadzone_rows() -> Dictionary:
-	var rows: Dictionary = { }
-	var set := _owner_state_set()
-	if set:
-		for field in set.fields:
-			if field.lane != NetwSyncSet.Lane.VOLATILE:
-				continue
-			rows[field.key] = typeof(owner.get(field.key))
-	for key: StringName in divergence_epsilon_overrides:
-		if not rows.has(key):
-			rows[key] = TYPE_NIL
-	return rows
-
-
-func _deadzone_hint(value_type: int) -> String:
-	var suffix := ""
-	match value_type:
-		TYPE_QUATERNION, TYPE_BASIS, TYPE_TRANSFORM2D, TYPE_TRANSFORM3D:
-			suffix = ",suffix:rad"
-		TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I:
-			suffix = ",suffix:u"
-	return "0.0,100.0,0.0001,or_greater" + suffix

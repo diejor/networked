@@ -1,10 +1,9 @@
 ## Records the divergence series a client prediction handle reports.
 ##
-## Connects to [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated]
-## (every receive) and
-## [signal NetwLagCompensationInterface.PredictionHandle.reconciled] (corrections
-## only), so the scenario reads peak and tail divergence and the correction count
-## off real signals instead of the retired spike's metric fields.
+## Connects to [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated],
+## which fires on every receive and carries whether that receive triggered a
+## correction, so the scenario reads peak and tail divergence and the correction
+## count off one real signal instead of the retired spike's metric fields.
 ##
 ## [codeblock]
 ## divergence_log entry:
@@ -19,7 +18,8 @@ extends RefCounted
 ## One entry per state receive, in arrival order.
 var divergence_log: Array[Dictionary] = []
 
-## Corrections seen through [signal NetwLagCompensationInterface.PredictionHandle.reconciled].
+## Corrections seen, counted from the [param corrected] flag of
+## [signal NetwLagCompensationInterface.PredictionHandle.state_evaluated].
 var correction_count: int = 0
 
 var _prediction: NetwLagCompensationInterface.PredictionHandle
@@ -29,7 +29,6 @@ var _prediction: NetwLagCompensationInterface.PredictionHandle
 func observe(prediction: NetwLagCompensationInterface.PredictionHandle) -> void:
 	_prediction = prediction
 	prediction.state_evaluated.connect(_on_state_evaluated)
-	prediction.reconciled.connect(_on_reconciled)
 
 
 ## Returns the worst finite divergence seen, ignoring the INF first-contact gap.
@@ -67,7 +66,5 @@ func _on_state_evaluated(
 			&"corrected": corrected,
 		},
 	)
-
-
-func _on_reconciled(_error: float) -> void:
-	correction_count += 1
+	if corrected:
+		correction_count += 1

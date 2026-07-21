@@ -46,7 +46,8 @@ func before_test() -> void:
 	var sync_prop := NodePath(".:synced")
 	cfg.add_property(sync_prop)
 	cfg.property_set_replication_mode(
-		sync_prop, SceneReplicationConfig.REPLICATION_MODE_ALWAYS
+		sync_prop,
+		SceneReplicationConfig.REPLICATION_MODE_ALWAYS,
 	)
 	sync.replication_config = cfg
 	root.add_child(sync)
@@ -89,11 +90,12 @@ func test_unknown_flag_bit_drops_loudly() -> void:
 	var bytes := w.to_bytes()
 
 	@warning_ignore("redundant_await")
-	await assert_error(func() -> void:
-		compat.handle_sync(entity, bytes, 1)
+	await assert_error(
+		func() -> void:
+			compat.handle_sync(entity, bytes, 1)
 	).is_push_warning(
 		"NetwSyncCompat: consumed synchronizer 'Sync' SYNC flags 1 unimplemented, "
-		+ "frame dropped. Peers must run the same Networked version."
+		+ "frame dropped. Peers must run the same Networked version.",
 	)
 
 	assert_int(root.synced).is_equal(0)
@@ -126,7 +128,7 @@ func test_acked_frame_encodes_ack_as_value_plus_one() -> void:
 		var w := NetwBitBuffer.Writer.new()
 		NetwCodec.put_varint(w, 0)
 		w.put_aligned_u8(
-			NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_ACKED
+			NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_ACKED,
 		)
 		NetwCodec.put_varint(w, 7) # tick
 		NetwCodec.put_varint(w, ack_value + 1)
@@ -147,7 +149,7 @@ func test_windowed_frame_carries_count_then_age_rows() -> void:
 	var w := NetwBitBuffer.Writer.new()
 	NetwCodec.put_varint(w, 0)
 	w.put_aligned_u8(
-		NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED
+		NetwFrameEnvelope.SYNC_FLAG_STAMPED | NetwFrameEnvelope.SYNC_FLAG_WINDOWED,
 	)
 	NetwCodec.put_varint(w, 9) # tick
 	NetwCodec.put_varint(w, samples.size())
@@ -166,16 +168,17 @@ func test_windowed_frame_carries_count_then_age_rows() -> void:
 
 
 func test_flag_bits_occupy_distinct_positions() -> void:
-	# The grammar reserves bit3 between WINDOWED and MASKED, so the four live bits
-	# never collide when a frame combines them.
+	# The five live grammar bits never collide when a frame combines them.
 	assert_int(NetwFrameEnvelope.SYNC_FLAG_STAMPED).is_equal(1)
 	assert_int(NetwFrameEnvelope.SYNC_FLAG_ACKED).is_equal(2)
 	assert_int(NetwFrameEnvelope.SYNC_FLAG_WINDOWED).is_equal(4)
+	assert_int(NetwFrameEnvelope.SYNC_FLAG_TAPED).is_equal(8)
 	assert_int(NetwFrameEnvelope.SYNC_FLAG_MASKED).is_equal(16)
 	var combined := (
-		NetwFrameEnvelope.SYNC_FLAG_STAMPED
-		| NetwFrameEnvelope.SYNC_FLAG_ACKED
-		| NetwFrameEnvelope.SYNC_FLAG_WINDOWED
-		| NetwFrameEnvelope.SYNC_FLAG_MASKED
+			NetwFrameEnvelope.SYNC_FLAG_STAMPED
+			| NetwFrameEnvelope.SYNC_FLAG_ACKED
+			| NetwFrameEnvelope.SYNC_FLAG_WINDOWED
+			| NetwFrameEnvelope.SYNC_FLAG_TAPED
+			| NetwFrameEnvelope.SYNC_FLAG_MASKED
 	)
-	assert_int(combined).is_equal(23)
+	assert_int(combined).is_equal(31)
