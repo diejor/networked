@@ -99,6 +99,8 @@ func _spawn_markers() -> Array[Marker3D]:
 
 func _grid_slot(spawn_index: int) -> Vector3:
 	var column := spawn_index % GRID_COLUMNS
+	# The row index is the whole-columns count, so the truncation is the point.
+	@warning_ignore("integer_division")
 	var row := spawn_index / GRID_COLUMNS
 	var offset := (GRID_COLUMNS - 1) * GRID_SPACING * 0.5
 	return START_ANCHOR + Vector3(column * GRID_SPACING - offset, 0.0, row * GRID_SPACING)

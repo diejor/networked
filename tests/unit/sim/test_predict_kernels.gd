@@ -18,7 +18,7 @@ const RestoreMode := PredictionHandle.RestoreMode
 const ConsumeAction := Engine_.ConsumeAction
 const ExactVerdict := Engine_.ExactVerdict
 const Domain := NetwPredictJournal.Domain
-
+const Attribution := NetwPredictJournal.Attribution
 
 # --- predict_fold ---
 
@@ -30,9 +30,9 @@ func test_a_frame_with_newer_input_drives_it_fresh() -> void:
 	assert_int(plan[&"kind"]).is_equal(DriveKind.FRESH)
 
 
-# The FRAME tier drives once per frame whether or not a tick authored fresh
-# input, so a frame with nothing newer repeats the command it already has under
-# the label it already had. It never invents a label.
+# The fold decision itself repeats the command it already has under the label it
+# already had. The frame governor normally clamps this surplus callback before
+# it reaches the fold.
 func test_a_frame_with_no_newer_input_repeats_the_same_label() -> void:
 	var plan := Engine_.predict_fold(7, 7, 99)
 	assert_int(plan[&"label"]).is_equal(7)
@@ -47,7 +47,6 @@ func test_a_frame_before_any_input_labels_from_the_pass_timing() -> void:
 	var plan := Engine_.predict_fold(-1, -1, 42)
 	assert_int(plan[&"label"]).is_equal(42)
 	assert_bool(plan[&"fresh"]).is_false()
-
 
 # --- consume_plan ---
 
@@ -89,7 +88,6 @@ func test_the_latch_warms_once_the_buffer_is_exceeded() -> void:
 	assert_bool(Engine_.consume_plan(2, 1, false)[&"warmed"]).is_true()
 	assert_bool(Engine_.consume_plan(1, 1, false)[&"warmed"]).is_false()
 	assert_bool(Engine_.consume_plan(1, 1, true)[&"warmed"]).is_true()
-
 
 # --- evaluate ---
 
@@ -134,15 +132,14 @@ func test_a_transition_past_epsilon_corrects() -> void:
 
 # An empty prediction means nothing was recorded at or before the ack, so there
 # was no transition to judge. That must correct rather than pass as agreement,
-# and it must leave the reported per-property errors alone, because reporting
+# and it must clear the reported per-property errors, because reporting
 # stale errors as this transition's would be worse than reporting none.
 func test_an_unjudged_transition_corrects_and_reports_nothing_new() -> void:
 	var sink: Dictionary = { &"stale": 9.0 }
 	var verdict := _by_tolerance({ }, { &"x": 1.0 }, 0.1, sink)
 	assert_bool(verdict[&"corrected"]).is_true()
 	assert_float(verdict[&"divergence"]).is_equal(INF)
-	assert_float(sink[&"stale"]).is_equal_approx(9.0, 0.0001)
-
+	assert_dict(sink).is_empty()
 
 # --- recover ---
 
@@ -181,6 +178,9 @@ func _stage(
 		ack_age_ticks,
 		max_restore_ticks,
 		0.1,
+		Domain.IN_DOMAIN,
+		Attribution.UNKNOWN,
+		false,
 	)
 
 
@@ -189,7 +189,12 @@ func _stage(
 func test_replay_restores_but_reports_no_write() -> void:
 	var payload := { &"x": 1.0 }
 	var plan := _stage(
-		payload, CorrectionMode.REPLAY, RestoreMode.EXACT, { }, 0, 8,
+		payload,
+		CorrectionMode.REPLAY,
+		RestoreMode.EXACT,
+		{ },
+		0,
+		8,
 	)
 	assert_dict(plan[&"restore"]).is_equal(payload)
 	assert_dict(plan[&"write"]).is_empty()
@@ -199,7 +204,12 @@ func test_replay_restores_but_reports_no_write() -> void:
 func test_snap_reports_what_it_wrote() -> void:
 	var payload := { &"x": 1.0 }
 	var plan := _stage(
-		payload, CorrectionMode.SNAP, RestoreMode.EXACT, { }, 0, 8,
+		payload,
+		CorrectionMode.SNAP,
+		RestoreMode.EXACT,
+		{ },
+		0,
+		8,
 	)
 	assert_dict(plan[&"write"]).is_equal(payload)
 
@@ -236,7 +246,6 @@ func test_the_projection_span_is_capped() -> void:
 	var restore: Dictionary = plan[&"restore"]
 	assert_vector(restore[&"pos"]).is_equal_approx(Vector3(3.0, 0.0, 0.0), Vector3.ONE * 0.001)
 
-
 # --- the recovery tiers ---
 
 
@@ -261,6 +270,9 @@ func _tiered(
 		0,
 		8,
 		0.1,
+		Domain.IN_DOMAIN,
+		Attribution.UNKNOWN,
+		false,
 	)
 
 
@@ -298,7 +310,6 @@ func test_suppression_never_outranks_the_teleport_tier() -> void:
 	assert_bool(plan[&"skip"]).is_false()
 	assert_bool(plan[&"teleport"]).is_true()
 
-
 # --- the observing policy ---
 
 
@@ -319,6 +330,9 @@ func _observed(pose_error: float, suppressed: bool) -> Dictionary:
 		0,
 		8,
 		0.1,
+		Domain.IN_DOMAIN,
+		Attribution.UNKNOWN,
+		false,
 	)
 
 
@@ -390,7 +404,10 @@ func test_converge_touches_only_the_fields_that_declared_it() -> void:
 func test_the_degenerate_rates_restore_outright() -> void:
 	for rate in [0.0, 1.0]:
 		var staged := Engine_.converge_toward(
-			{ &"vel": 10.0 }, { &"vel": 0.0 }, { &"vel": rate }, { },
+			{ &"vel": 10.0 },
+			{ &"vel": 0.0 },
+			{ &"vel": rate },
+			{ },
 		)
 		assert_float(staged[&"vel"]).override_failure_message(
 			"rate %.1f must restore outright" % rate,
@@ -402,7 +419,10 @@ func test_the_degenerate_rates_restore_outright() -> void:
 # restores outright instead.
 func test_an_unsteppable_type_restores_outright() -> void:
 	var staged := Engine_.converge_toward(
-		{ &"flag": true }, { &"flag": false }, { &"flag": 0.5 }, { },
+		{ &"flag": true },
+		{ &"flag": false },
+		{ &"flag": 0.5 },
+		{ },
 	)
 	assert_bool(staged[&"flag"]).is_true()
 
@@ -429,6 +449,9 @@ func test_the_step_leaves_nothing_outstanding() -> void:
 	var current := { &"vel": 0.0 }
 	for _i in range(30):
 		current = Engine_.converge_toward(
-			{ &"vel": 10.0 }, current, { &"vel": 0.25 }, { },
+			{ &"vel": 10.0 },
+			current,
+			{ &"vel": 0.25 },
+			{ },
 		)
 	assert_float(current[&"vel"]).is_equal_approx(10.0, 0.01)

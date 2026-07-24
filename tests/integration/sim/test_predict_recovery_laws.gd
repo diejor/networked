@@ -29,7 +29,7 @@ func _stage(
 		converge_rules: Dictionary,
 		pose_error: float,
 		domain: Domain = Domain.IN_DOMAIN,
-		attribution: Attribution = Attribution.UNATTRIBUTED,
+		attribution: Attribution = Attribution.UNKNOWN,
 		contact_window: bool = false,
 ) -> Dictionary:
 	return Engine_.recover(
@@ -52,7 +52,6 @@ func _stage(
 		attribution,
 		contact_window,
 	)
-
 
 # --- recovery conservation ---
 
@@ -126,7 +125,6 @@ func test_a_teleport_honors_neither_field_rule() -> void:
 		"a teleport must restore the whole closure verbatim",
 	).is_equal(payload)
 
-
 # --- the domain-keyed closure, at the kernel ---
 
 
@@ -149,6 +147,35 @@ func test_an_out_of_domain_recovery_writes_the_full_closure() -> void:
 	assert_dict(plan[&"restore"]).override_failure_message(
 		"an out-of-domain recovery must restore the whole closure",
 	).is_equal(payload)
+
+
+# Suppression can pause a reproducible settling transient, but it cannot make an
+# unknown transition safe to ignore. The out-of-domain full-closure guarantee
+# therefore outranks the cooldown.
+func test_suppression_never_outranks_out_of_domain_closure() -> void:
+	var payload := { &"pos": 3.0, &"vel": 7.0 }
+	var plan := Engine_.recover(
+		payload,
+		RecoveryPolicy.REBASE_RECOVER,
+		CorrectionMode.SNAP,
+		RestoreMode.EXACT,
+		{ },
+		{ &"vel": true },
+		{ },
+		{ &"pos": 0.0, &"vel": 0.0 },
+		{ },
+		1.0,
+		10.0,
+		true,
+		0,
+		8,
+		0.1,
+		Domain.OUT_OF_DOMAIN,
+		Attribution.UNKNOWN,
+		false,
+	)
+	assert_bool(plan[&"skip"]).is_false()
+	assert_dict(plan[&"restore"]).is_equal(payload)
 
 
 # The mirror. The same declarations under the same values stay partial when the
@@ -181,7 +208,7 @@ func test_an_unattributed_recovery_under_an_open_window_restores_all() -> void:
 		{ },
 		1.0,
 		Domain.IN_DOMAIN,
-		Attribution.UNATTRIBUTED,
+		Attribution.UNKNOWN,
 		true,
 	)
 	assert_dict(blind[&"restore"]).override_failure_message(
@@ -195,13 +222,12 @@ func test_an_unattributed_recovery_under_an_open_window_restores_all() -> void:
 		{ },
 		1.0,
 		Domain.IN_DOMAIN,
-		Attribution.SIMULATION,
+		Attribution.CLOSURE,
 		true,
 	)
 	assert_bool(charged[&"restore"].has(&"vel")).override_failure_message(
 		"a charged divergence keeps its declared partiality under the window",
 	).is_false()
-
 
 # --- escalation, at the kernel ---
 
@@ -215,7 +241,11 @@ func _escalations(divergences: Array, signs: Array) -> Array:
 	var out: Array = []
 	for i in divergences.size():
 		var v := Engine_.escalation_after(
-			streak, sign, last, divergences[i], signs[i],
+			streak,
+			sign,
+			last,
+			divergences[i],
+			signs[i],
 		)
 		streak = v[&"streak"]
 		sign = v[&"sign"]
@@ -239,6 +269,22 @@ func test_alternating_sign_deltas_escalate_by_three() -> void:
 	assert_array(_escalations([1.0, 1.0], [1, -1])).is_equal([false, true])
 
 
+# Dominant-axis changes are turns, not overshoots. The engine compares signs
+# only when the field and axis key agree across recoveries.
+func test_a_direction_change_does_not_supply_a_sign_flip() -> void:
+	var x := Engine_.delta_direction(&"position", Vector3(2.0, 0.0, 1.0))
+	var z := Engine_.delta_direction(&"position", Vector3(1.0, 0.0, -2.0))
+	assert_that(x[&"key"]).is_not_equal(z[&"key"])
+	var verdict := Engine_.escalation_after(
+		1,
+		0 if x[&"key"] != z[&"key"] else x[&"sign"],
+		1.0,
+		1.0,
+		z[&"sign"],
+	)
+	assert_bool(verdict[&"escalate"]).is_false()
+
+
 # A shrinking sequence is converging, which is what recoveries are for, so it
 # must never escalate however long it runs and whatever its deltas' signs.
 func test_a_shrinking_sequence_never_escalates() -> void:
@@ -251,7 +297,6 @@ func test_a_shrinking_sequence_never_escalates() -> void:
 		assert_bool(flag).override_failure_message(
 			"a shrinking sequence must never escalate",
 		).is_false()
-
 
 # --- the projection guard, at the kernel ---
 
@@ -267,6 +312,9 @@ func test_a_diverged_channel_costs_only_its_own_field_the_projection() -> void:
 		{ &"vel": 5.0, &"alt_vel": 0.001 },
 		0.01,
 		{ },
+		10,
+		10,
+		0.1,
 	)
 	assert_bool(guarded.has(&"pos")).override_failure_message(
 		"a field whose channel is diverged must restore exact, not project",
@@ -276,17 +324,35 @@ func test_a_diverged_channel_costs_only_its_own_field_the_projection() -> void:
 	).is_true()
 
 
-# The channel is judged by its own declared threshold, so a per-property
-# epsilon override moves the guard with it.
-func test_the_projection_guard_reads_the_channels_own_epsilon() -> void:
+# The projected destination is judged by its declared error budget, so a
+# per-property epsilon override moves the guard with that destination.
+func test_the_projection_guard_reads_the_destinations_epsilon() -> void:
 	var guarded := Engine_.guard_projection(
 		{ &"pos": &"vel" },
 		{ &"vel": 5.0 },
 		0.01,
-		{ &"vel": 10.0 },
+		{ &"pos": 10.0 },
+		10,
+		10,
+		0.1,
 	)
 	assert_bool(guarded.has(&"pos")).is_true()
 
+
+# The channel error matters only through the error it adds to the projected
+# destination over the restore span. A short span can safely use a derivative
+# whose own correction threshold is much smaller.
+func test_projection_uses_destination_error_over_the_restore_span() -> void:
+	var guarded := Engine_.guard_projection(
+		{ &"pos": &"vel" },
+		{ &"vel": 4.0 },
+		0.01,
+		{ &"pos": 0.35 },
+		2,
+		8,
+		0.016,
+	)
+	assert_bool(guarded.has(&"pos")).is_true()
 
 # --- the domain window, at the engine ---
 
@@ -307,10 +373,11 @@ func test_declaring_sensors_alone_leaves_every_transition_out_of_domain() -> voi
 	var s := PredictionScenario.new()
 	await s.setup(self)
 	var subject := await s.add_predicted_entity()
-	subject.client_prediction.configure_sensors({
-		ground = func() -> float: return 1.0,
-	})
-	subject.client_prediction.configure_epoch(3)
+	subject.client_prediction.sensors().sample(
+		&"ground",
+		func() -> float: return 1.0,
+	)
+	subject.client_prediction.epoch(3)
 
 	s.hold_input(subject, RIGHT)
 	s.run(12)
@@ -325,7 +392,7 @@ func test_declaring_sensors_alone_leaves_every_transition_out_of_domain() -> voi
 			in_rows += 1
 	assert_int(in_rows).override_failure_message(
 		"sensors declare the environment, not the island, so no transition may be "
-		+ "in domain until configure_island names participants",
+		+ "in domain until island() names participants",
 	).is_equal(0)
 	await s.teardown()
 
@@ -339,9 +406,10 @@ func test_a_declared_sensor_is_sampled_pre_drive_and_read_back() -> void:
 	await s.setup(self)
 	var subject := await s.add_predicted_entity()
 	var world: Array[int] = [0]
-	subject.client_prediction.configure_sensors({
-		counter = func() -> int: return world[0],
-	})
+	subject.client_prediction.sensors().sample(
+		&"counter",
+		func() -> int: return world[0],
+	)
 
 	s.hold_input(subject, RIGHT)
 	s.run(6, func(_tick: int) -> void: world[0] += 1)
@@ -370,9 +438,7 @@ func test_a_contact_against_a_frozen_participant_labels_out_of_domain() -> void:
 	# The axes are what equivalence is read off, so the proxy is declared by
 	# setting the axis rather than by contorting the topology into one.
 	participant.client_prediction.sim_mode = SimMode.DISPLAY
-	subject.client_prediction.configure_island({
-		participants = [participant.client_entity],
-	})
+	subject.client_prediction.island().add(participant.client_entity)
 	subject.client_prediction.collision_cooldown_ticks = 4
 
 	s.hold_input(subject, RIGHT)
@@ -409,9 +475,7 @@ func test_a_contact_against_an_equivalent_participant_keeps_exactness() -> void:
 	var subject: PredictedEntity = parts[1]
 	var participant: PredictedEntity = parts[2]
 	participant.client_prediction.sim_mode = SimMode.SPECULATIVE
-	subject.client_prediction.configure_island({
-		participants = [participant.client_entity],
-	})
+	subject.client_prediction.island().add(participant.client_entity)
 
 	s.hold_input(subject, RIGHT)
 	s.run(6)
@@ -433,7 +497,6 @@ func test_a_contact_against_an_equivalent_participant_keeps_exactness() -> void:
 	).is_equal(0)
 	await s.teardown()
 
-
 # --- what a policy decides, at the engine ---
 
 
@@ -448,9 +511,7 @@ func test_a_closed_delay_speculates_nothing() -> void:
 	var subject := await s.add_predicted_entity()
 	var control := await s.add_predicted_entity()
 
-	subject.client_prediction.configure_recovery({
-		policy = RecoveryPolicy.DELAY_CLOSED,
-	})
+	subject.client_prediction.recovery().policy(RecoveryPolicy.DELAY_CLOSED)
 	s.hold_input(subject, RIGHT)
 	s.hold_input(control, RIGHT)
 	s.run(12)
@@ -485,9 +546,7 @@ func test_an_observing_policy_reports_without_repairing() -> void:
 	await s.setup(self)
 	var subject := await s.add_predicted_entity()
 	var control := await s.add_predicted_entity()
-	subject.client_prediction.configure_recovery({
-		policy = RecoveryPolicy.OBSERVE,
-	})
+	subject.client_prediction.recovery().policy(RecoveryPolicy.OBSERVE)
 	var found: Array[int] = []
 	var repaired: Array[int] = []
 	var control_repaired: Array[int] = []
@@ -527,7 +586,6 @@ func test_an_observing_policy_reports_without_repairing() -> void:
 	).is_empty()
 	await s.teardown()
 
-
 # --- bounded convergence, at the engine ---
 
 
@@ -552,9 +610,7 @@ func test_escalation_restores_withheld_fields() -> void:
 	# Partiality is an in-domain refinement, so the rig declares the island
 	# that puts the entity in domain: an undeclared entity would restore the
 	# full closure on its first recovery and never reach the escalation.
-	subject.client_prediction.configure_island({
-		participants = [anchor.client_entity],
-	})
+	subject.client_prediction.island().add(anchor.client_entity)
 
 	s.hold_input(subject, RIGHT)
 	s.hold_input(anchor, RIGHT)
@@ -575,6 +631,26 @@ func test_escalation_restores_withheld_fields() -> void:
 		"the closure must arrive as the promoted full restore, reported as a "
 		+ "teleport so the display snaps rather than chases",
 	).is_true()
+	var provenance_rows := 0
+	var journal := subject.client_prediction.journal()
+	for transition: int in journal.transitions():
+		var row := journal.row_at(transition)
+		if int(row.get(&"write_id", 0)) == 0:
+			continue
+		provenance_rows += 1
+		assert_int(row[&"basis"]).is_greater_equal(0)
+		assert_int(row[&"operator"]).is_not_equal(
+			NetwPredictJournal.Operator.NONE,
+		)
+		assert_bool(
+			int(row[&"flags"]) & NetwPredictJournal.ROW_CHAIN_BROKEN > 0,
+		).override_failure_message(
+			"a recovery discontinuity with provenance is a sanctioned chain edge",
+		).is_false()
+	assert_int(provenance_rows).override_failure_message(
+		"the first new drive after recovery must carry its operator identity",
+	).is_greater(0)
+	assert_int(subject.client_prediction.chain_break_count).is_equal(0)
 	# The train is bounded: the escalation plus the in-flight backlog of
 	# already-predicted transitions, never one correction per receive for the
 	# whole window.

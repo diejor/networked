@@ -45,8 +45,53 @@ func test_frame_tape_replays_the_same_simulation_entry_for_entry() -> void:
 		predicted.client_prediction.tape_transitions(),
 	)
 	assert_int(predicted.server_prediction.folded_count).is_equal(0)
-	assert_int(predicted.server_prediction.held_count).is_equal(1)
+	assert_int(predicted.server_prediction.held_count).is_equal(3)
 	assert_int(predicted.server_prediction.starved_count).is_equal(0)
+	assert_int(predicted.client_prediction.authoring_clamped_count).is_equal(2)
+
+
+func test_frame_authors_at_most_one_transition_per_network_tick() -> void:
+	var scenario := PredictionScenario.new()
+	scenario.body_type = IdleSensitiveBody
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	_configure_frame(predicted)
+	predicted.client_root.motion = Vector2.RIGHT
+
+	_emit_client_frame(scenario.client_clock, 1)
+	var transitions: int = predicted.client_prediction.tape_transitions().size()
+	var steps: int = predicted.client_root.simulation_steps
+	_emit_client_frame(scenario.client_clock, 0)
+	_emit_client_frame(scenario.client_clock, 0)
+
+	assert_int(predicted.client_prediction.tape_transitions().size()) \
+			.is_equal(transitions)
+	assert_int(predicted.client_root.simulation_steps).is_equal(steps)
+	assert_int(predicted.client_prediction.authoring_clamped_count).is_equal(2)
+
+
+func test_prediction_holds_at_the_structural_ack_age_ceiling() -> void:
+	var scenario := PredictionScenario.new()
+	scenario.body_type = IdleSensitiveBody
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	_configure_frame(predicted)
+	predicted.client_root.motion = Vector2.RIGHT
+	var ceiling := \
+			NetwLagCompensationInterface._PredictionEngine.ACK_AGE_MAX
+	for index in ceiling:
+		_emit_client_frame(scenario.client_clock, 1)
+	var transitions: int = predicted.client_prediction.tape_transitions().size()
+	var steps: int = predicted.client_root.simulation_steps
+
+	_emit_client_frame(scenario.client_clock, 1)
+
+	assert_int(predicted.client_prediction.tape_transitions().size()) \
+			.is_equal(transitions)
+	assert_int(predicted.client_root.simulation_steps).is_equal(steps)
+	assert_int(predicted.client_prediction.speculation_held_count).is_equal(1)
+	assert_int(predicted.client_prediction.stats()[&"ack_age_max"]) \
+			.is_equal(ceiling)
 
 
 func test_frame_journal_fingerprints_match_at_every_acked_entry() -> void:
@@ -234,8 +279,8 @@ func test_frame_resync_jumps_to_live_edge_and_client_corrects() -> void:
 
 
 func _configure_frame(predicted: PredictedEntity) -> void:
-	predicted.client_prediction.schedule = FRAME
-	predicted.server_prediction.schedule = FRAME
+	predicted.client_prediction.schedule().frame()
+	predicted.server_prediction.schedule().frame()
 	predicted.server_prediction.replay_buffer_depth = 1
 	predicted.server_prediction.missing_policy = \
 	NetwLagCompensationInterface.PredictionHandle.MissingInput.REPEAT_LAST

@@ -148,6 +148,48 @@ func test_predicted_chase_moves_visual_toward_live_source() -> void:
 	assert_vector(_player.position).is_equal(P1)
 
 
+func test_display_role_switches_glide_between_remote_and_predicted() -> void:
+	_spawn_predicted()
+	_entity.prediction.teleport_threshold = 250.0
+	_entity.interpolation.chase_glide_time = 0.15
+	_player.position = P0
+	for frame in 30:
+		_render()
+
+	_player.position = P1
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.REMOTE
+	)
+	_iface.record(_player, &"position", P1, 1)
+	_display_at(1, 0, 0.0)
+	assert_float(_visual.global_position.distance_to(P0)) \
+			.override_failure_message(
+				"the first remote target must retain the prior predicted display",
+			).is_less(0.1)
+	for frame in 90:
+		_render()
+	assert_vector(_visual.global_position).is_equal_approx(
+		P1,
+		Vector2(0.1, 0.1),
+	)
+
+	_player.position = P0
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.PREDICTED
+	)
+	_render()
+	assert_float(_visual.global_position.distance_to(P1)) \
+			.override_failure_message(
+				"the predicted chase must adopt the prior remote display",
+			).is_less(20.0)
+	for frame in 90:
+		_render()
+	assert_vector(_visual.global_position).is_equal_approx(
+		P0,
+		Vector2(0.1, 0.1),
+	)
+
+
 func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:
 	var body := RigidBody2D.new()
 	body.name = "RemoteBody"

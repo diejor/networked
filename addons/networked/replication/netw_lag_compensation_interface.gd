@@ -105,21 +105,25 @@
 ## [br]Prediction is one recurrence: the next state is the transition function
 ## applied to state, commands, and environment.
 ## [codeblock]
-## S' = F(S, C, E)
+## S' = F_H(S, C, E) -> (S', O)
 ##   S  state        the declared state fields, compared against authority
 ##   C  commands     the declared input fields, one set per tick
 ##   E  environment  the declared sensor, epoch, and island facts
-##   F  transition   the game's simulate callable, run on its schedule cadence
+##   H  topology     the schedule, participants, epoch, and reported body mode
+##   F  transition   the game's simulate callable, run under H
+##   O  witness      the realized contact classes and discrete solve facts
 ## [/codeblock]
 ## [code]S[/code] is what [method NetwScriptModel.PropertyConfig.state]
 ## declares, [code]C[/code] what [method NetwScriptModel.PropertyConfig.input]
 ## declares, [code]E[/code] what
-## [method NetwLagCompensationInterface.PredictionHandle.configure_sensors] and
-## [method NetwLagCompensationInterface.PredictionHandle.configure_island]
+## [method NetwLagCompensationInterface.PredictionHandle.sensors] and
+## [method NetwLagCompensationInterface.PredictionHandle.island]
 ## declare, and [code]F[/code] is
 ## [member NetwLagCompensationInterface.PredictionHandle.simulate] run on the
-## [enum NetwLagCompensationInterface.PredictionHandle.Schedule] cadence. When a
-## transition disagrees with authority,
+## [enum NetwLagCompensationInterface.PredictionHandle.Schedule] cadence.
+## [code]H[/code] is captured by the engine, and [code]O[/code] is declared by
+## [method NetwLagCompensationInterface.PredictionHandle.witness].
+## When a transition disagrees with authority,
 ## [signal NetwLagCompensationInterface.PredictionHandle.divergence_detected]
 ## charges the disagreement to one antecedent as a
 ## [enum NetwPredictJournal.Attribution], and a
@@ -127,23 +131,34 @@
 ## [code]S[/code].
 ##
 ## [br][br][b]The recovery guarantee[/b]
-## [br]Recoveries are bounded and convergent at every configuration. A recovery
-## sequence shrinks the divergence or escalates to one full-closure restore, a
-## restore never projects a field along a channel that is itself diverged, and a
-## divergence outside the declared domain restores the whole closure. No
-## reachable configuration produces a persistent oscillation.
+## [br]One disturbance episode is the unit of recovery. Inside it, an operator
+## must shrink the aligned error or spend finite evidence toward one
+## full-closure restore. A restore projects only while the channel error stays
+## inside the destination's projected error budget, and a divergence outside
+## the declared domain restores the whole closure. Exhausting the episode's
+## finite evidence enters bounded
+## [constant PredictionHandle.RecoveryPolicy.DELAY_CLOSED]
+## quarantine and a journaled reseed. No repairing policy can produce a
+## persistent oscillation. The telemetry-only
+## [constant PredictionHandle.RecoveryPolicy.OBSERVE] policy writes nothing,
+## so a persistent divergence may keep its report open without oscillating.
 ##
 ## [br][br][b]The transparency bargain[/b]
 ## [br]The engine explains only what was declared. An undeclared environment
 ## read leaves its transitions
 ## [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN] and its divergences
-## [constant NetwPredictJournal.Attribution.UNATTRIBUTED]. Declaring the
+## [constant NetwPredictJournal.Attribution.UNKNOWN]. Declaring the
 ## environment through
-## [method NetwLagCompensationInterface.PredictionHandle.configure_sensors],
-## [method NetwLagCompensationInterface.PredictionHandle.configure_epoch], and
-## [method NetwLagCompensationInterface.PredictionHandle.configure_island] is
+## [method NetwLagCompensationInterface.PredictionHandle.sensors],
+## [method NetwLagCompensationInterface.PredictionHandle.epoch], and
+## [method NetwLagCompensationInterface.PredictionHandle.island] is
 ## how attribution sharpens from "something differed" to the antecedent that
-## differed.
+## differed. An undeclared
+## [method NetwLagCompensationInterface.PredictionHandle.witness]
+## leaves realized solve evidence unknown, so the ladder never guesses contact
+## agreement from a missing observation. A declared witness reports only
+## post-solve [code]O[/code]. It never becomes an antecedent. A malformed
+## declaration is reported, while an absent declaration is valid and silent.
 ##
 ## [br][br][b]The ceiling[/b]
 ## [br]A divergence charged to environment the owner never had, above all
@@ -158,9 +173,10 @@
 ## plus a [PredictionComponent]. A field its owner simply owns is
 ## [method NetwScriptModel.PropertyConfig.broadcast], which needs no
 ## prediction, no reconciliation, and no quantized canonical form, and trusts
-## the owner. The two do not mix on one field: a broadcast field under a
-## [PredictionComponent], or a predicted entity whose controller carries no
-## [PredictionComponent], is a configuration error the validator reports.
+## the owner. The two do not mix on one field. A broadcast field under a
+## [PredictionComponent], or a script declaring both state and input without a
+## [PredictionComponent] or code-first registration, is a configuration error
+## the validator reports.
 class_name NetwLagCompensationInterface
 extends RefCounted
 
@@ -205,7 +221,7 @@ signal action_gate_fallback(key: StringName, view_tick: int)
 ## [codeblock]
 ## api.lag_compensation.peer_divergence.connect(
 ##     func(peer: int, entry: int, attribution: NetwPredictJournal.Attribution):
-##         if attribution == NetwPredictJournal.Attribution.SIMULATION:
+##         if attribution == NetwPredictJournal.Attribution.CLOSURE:
 ##             suspicion[peer] = suspicion.get(peer, 0) + 1
 ## )
 ## [/codeblock]
@@ -231,6 +247,11 @@ var _runner := _SimulationRunner.new()
 # NetwEntity. The handle on NetwEntity.prediction reaches its record back through
 # a weakref, so erasing an entry here is the whole release.
 var _engines: Dictionary = { }
+
+const _PredictionBoundaryOverlay := preload(
+	"res://addons/networked/debug/prediction_boundary_overlay.gd"
+)
+var _prediction_overlays: Dictionary[NetwEntity, Node] = { }
 
 # Env-gated JSONL drain of the public prediction surface, built lazily the
 # first frame it is armed and never re-checked once found off.
@@ -322,6 +343,7 @@ func register_prediction(entity: NetwEntity) -> void:
 	_engines[entity] = engine
 	entity.prediction._engine_ref = weakref(engine)
 	engine._attach(self, entity)
+	_attach_prediction_overlay(entity)
 
 
 ## Releases [param entity]'s prediction engine record, restoring the set-handle
@@ -332,8 +354,35 @@ func unregister_prediction(entity: NetwEntity) -> void:
 	if not engine:
 		return
 	_engines.erase(entity)
+	_detach_prediction_overlay(entity)
 	engine._release()
 	entity.prediction._engine_ref = null
+
+
+# Adds the read-only in-world overlay when the shared debug gate is active.
+func _attach_prediction_overlay(entity: NetwEntity) -> void:
+	if not DebugFeature.is_world_debug_enabled():
+		return
+	if not bool(ProjectSettings.get_setting(
+			"debug/networked/prediction_boundary_overlay",
+			true,
+	)):
+		return
+	if not is_instance_valid(entity.owner):
+		return
+	var overlay := _PredictionBoundaryOverlay.new()
+	overlay.name = "PredictionBoundaryOverlay"
+	overlay.bind(entity)
+	_prediction_overlays[entity] = overlay
+	entity.owner.add_child.call_deferred(overlay)
+
+
+# Releases the entity overlay without changing any prediction state.
+func _detach_prediction_overlay(entity: NetwEntity) -> void:
+	var overlay := _prediction_overlays.get(entity) as Node
+	_prediction_overlays.erase(entity)
+	if is_instance_valid(overlay):
+		overlay.queue_free()
 
 
 ## Registers [param entity] for server-side authoritative recording, returning its
@@ -463,7 +512,7 @@ func frame_step() -> void:
 	_runner.frame_step(frame_timing())
 
 
-# Drains every registered entity's public journal and stats to JSONL when the
+# Drains every registered entity's public evidence to JSONL when the
 # NETW_PREDICT_TAP directory is set. The tap reads only the public handle, so
 # this never perturbs the run it records.
 func _drain_tap() -> void:
@@ -1025,10 +1074,18 @@ class _SimulationRunner extends RefCounted:
 		if _sort_dirty:
 			_rebuild_sorted()
 		for engine in _sorted:
+			engine.prepare_island(PredictionHandle.Schedule.TICK)
+		if _sort_dirty:
+			_rebuild_sorted()
+		for engine in _sorted:
 			engine.network_tick(timing)
 
 
 	func frame_step(timing: PredictTiming) -> void:
+		if _sort_dirty:
+			_rebuild_sorted()
+		for engine in _sorted:
+			engine.prepare_island(PredictionHandle.Schedule.FRAME)
 		if _sort_dirty:
 			_rebuild_sorted()
 		for engine in _sorted:
@@ -1222,21 +1279,28 @@ class _RewindQueries extends RefCounted:
 			node.force_update_transform()
 
 
-## Per-entity prediction and reconciliation config, owned by
-## [member NetwEntity.prediction].
+## Runtime prediction-boundary policy and evidence for one [NetwEntity].
 ##
-## The handle holds the settings a [PredictionComponent] declares in a scene or a
-## caller sets in code, plus the live counters [method metrics] reads. The kernel
-## that steps this config is the per-entity [NetwLagCompensationInterface._PredictionEngine]
-## record, wired by [method register_prediction] and released by
-## [method unregister_prediction]. The handle outlives the engine, so its config
-## and counters survive a control transfer that re-homes the engine.
+## Every entity owns one stable handle through [member NetwEntity.prediction]. A
+## [PredictionComponent] may supply scene policy, while code uses
+## [method archetype], [method schedule], [method recovery], [method sensors],
+## [method witness], [method transport], [method island], and [method epoch].
+## Each fact must have one source.
+##
+## [br][br]The client compares its claim with the authority row named by the
+## server acknowledgement. [member input_source] and [member sim_mode] state
+## whether this peer authors, receives, predicts, or displays the entity.
+## [method stats], [method journal], [method episode], and [method metrics]
+## expose the resulting evidence without changing simulation.
 ## [codeblock]
 ## var pred := NetwEntity.of(self).prediction
-## pred.correction_mode = PredictionComponent.CorrectionMode.SNAP
-## pred.divergence_epsilon = 0.05
-## if pred.is_registered() and pred.is_reconciling:
-##     ...   # a correction is snapping and replaying this frame
+## pred.archetype(
+##     NetwLagCompensationInterface.PredictionHandle.Archetype.SOLVER_BODY,
+## )
+## pred.witness().contacts(sample_contacts)
+## pred.recovery().on_breach(
+##     NetwLagCompensationInterface.PredictionHandle.BreachResponse.DEMOTE,
+## )
 ## [/codeblock]
 class PredictionHandle:
 	extends RefCounted
@@ -1257,13 +1321,15 @@ class PredictionHandle:
 		HOST_LOCAL,
 		## A remote display. Never simulates here, the interpolator shows it.
 		REMOTE,
+		## A replicated remote stepped locally with a predicted command.
+		SIMULATE,
 	}
 
 	## Where this peer's copy of the entity gets the command it simulates with.
 	##
 	## [constant LOCAL] authors the command here. [constant RECEIVED] reads a
 	## command another peer authored and sent. [constant PREDICTED] guesses a
-	## command nobody sent, which no peer does today.
+	## command nobody sent for a simulated island participant.
 	## [constant NONE] simulates nothing, so it needs no command.
 	enum InputSource {
 		LOCAL,
@@ -1289,6 +1355,34 @@ class PredictionHandle:
 		TICK,
 		## Apply once after every physics frame's network tick loop.
 		FRAME,
+	}
+
+	## Local collider realizations retained for diagnostics, never compared.
+	enum ContactClass {
+		## The solve reported no collider.
+		NONE,
+		## The collider is the support reported by the declared ground sensor.
+		DECLARED_SUPPORT,
+		## Static geometry other than the declared support.
+		OTHER_STATIC,
+		## A dynamic entity this peer predicts or simulates authoritatively.
+		PREDICTED_DYNAMIC,
+		## A dynamic entity outside this peer's prediction island.
+		UNPREDICTED_DYNAMIC,
+		## A kinematic or animated collision proxy.
+		KINEMATIC_PROXY,
+	}
+
+	## Peer-invariant realized-witness classes carried by fingerprints and acks.
+	enum WitnessClass {
+		## No contact was realized.
+		NONE = 0,
+		## The declared support was contacted.
+		SUPPORT = 1 << 0,
+		## Static geometry other than the declared support was contacted.
+		STATIC = 1 << 1,
+		## A replicated dynamic entity was contacted.
+		DYNAMIC_ENTITY = 1 << 2,
 	}
 
 	## How the most recent scheduled drive selected its input.
@@ -1344,7 +1438,7 @@ class PredictionHandle:
 	## recovery presets are derived from. Mirrors
 	## [enum PredictionComponent.Archetype] by value.
 	##
-	## An archetype is a floor, not a cage: [method configure_prediction] applies
+	## An archetype is a floor, not a cage: [method archetype] applies
 	## its bundle, and any value declared in the scene or configured afterward
 	## overrides the bundled one.
 	enum Archetype {
@@ -1352,15 +1446,21 @@ class PredictionHandle:
 		NONE,
 		## A body whose step is a plain callable, re-runnable within one frame.
 		## Bundles the [constant Schedule.TICK] cadence, the
-		## [constant MissingInput.STALL] hold, and
-		## [constant RecoveryPolicy.REBASE_REPLAY].
+		## [constant MissingInput.STALL] hold,
+		## [constant RecoveryPolicy.REBASE_REPLAY], and
+		## [constant BreachResponse.PREDICT_THROUGH], because a command-pinned
+		## velocity re-synchronizes on the next tick and a breach cannot
+		## compound.
 		KINEMATIC,
 		## A solver-integrated body whose step cannot be re-run per input.
 		## Bundles the [constant Schedule.FRAME] cadence, the
 		## [constant MissingInput.REPEAT_LAST] hold,
 		## [constant RecoveryPolicy.REBASE_RECOVER], the
-		## [constant RestoreMode.EXTRAPOLATED] projection, and a teleport
-		## threshold sized for a body that settles through contacts.
+		## [constant RestoreMode.EXTRAPOLATED] projection, a teleport
+		## threshold sized for a body that settles through contacts, and
+		## [constant BreachResponse.DEMOTE], armed only once
+		## [method witness] declares the contact observation, because a
+		## breach impulse into integrating momentum compounds every tick.
 		SOLVER_BODY,
 	}
 
@@ -1372,17 +1472,568 @@ class PredictionHandle:
 	## declares what it wants and the engine picks how. [constant REBASE_REPLAY]
 	## restores the acknowledged state and re-runs the unacknowledged commands
 	## over it. [constant REBASE_RECOVER] restores without replaying, for a body
-	## whose step cannot be re-run cheaply. [constant ROLLBACK_SCOPE] restores
-	## every declared island member and re-runs them together.
+	## whose step cannot be re-run cheaply.
 	## [constant DELAY_CLOSED] never speculates, so no divergence can arise.
-	## [constant OBSERVE] reports a divergence and repairs nothing.
+	## [constant OBSERVE] reports a divergence and repairs nothing. It is outside
+	## the finite recovery guarantee: persistent divergence can retain one open
+	## episode, but it cannot create a recovery oscillation because it writes no
+	## operator.
 	enum RecoveryPolicy {
 		REBASE_REPLAY,
 		REBASE_RECOVER,
-		ROLLBACK_SCOPE,
 		DELAY_CLOSED,
 		OBSERVE,
 	}
+
+	## How a prediction-island member is represented on this peer.
+	enum Fidelity {
+		## Display received state and classify contact against a proxy.
+		PROXY,
+		## Step the member locally with substituted commands.
+		SIMULATED,
+	}
+
+	## How divergence is reconciled across an island.
+	enum Reconcile {
+		## Reconcile each predicted entity independently.
+		INDEPENDENT,
+		## Restore and replay the island together. Reserved until useful.
+		JOINT,
+	}
+
+	## What prediction does when its realized witness touches a body outside the
+	## prediction boundary.
+	##
+	## Static world geometry is part of the shared world every peer solves
+	## against, so touching it never breaches. A breach is contact with a
+	## dynamic body this peer does not step, whose displayed pose is a stale
+	## stand-in the solve cannot reproduce.
+	enum BreachResponse {
+		## Continue speculation and let ordinary recovery absorb any divergence.
+		PREDICT_THROUGH,
+		## Follow authority immediately while commands continue to flow.
+		DEMOTE,
+	}
+
+	## Fluent declaration of prediction cadence and missing-input behavior.
+	class ScheduleConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Selects one drive per network tick and returns this configurator.
+		func tick() -> ScheduleConfig:
+			if _handle._allows_code_value(&"tier", "schedule().tick"):
+				_handle._schedule = Schedule.TICK
+			return self
+
+
+		## Selects one drive per physics frame and returns this configurator.
+		func frame() -> ScheduleConfig:
+			if _handle._allows_code_value(&"tier", "schedule().frame"):
+				_handle._schedule = Schedule.FRAME
+			return self
+
+
+		## Keeps [param depth] FRAME transitions buffered.
+		func buffer_depth(depth: int) -> ScheduleConfig:
+			if _handle._allows_code_value(
+					&"buffer_depth",
+					"schedule().buffer_depth",
+			):
+				_handle.replay_buffer_depth = maxi(0, depth)
+			return self
+
+
+		## Stalls when the next expected input is absent.
+		func hold_stall() -> ScheduleConfig:
+			if _handle._allows_code_value(&"hold", "schedule().hold_stall"):
+				_handle.missing_policy = MissingInput.STALL
+			return self
+
+
+		## Repeats the last input when the next expected one is absent.
+		func hold_repeat_last() -> ScheduleConfig:
+			if _handle._allows_code_value(
+					&"hold",
+					"schedule().hold_repeat_last",
+			):
+				_handle.missing_policy = MissingInput.REPEAT_LAST
+			return self
+
+
+		## Reopens a lagging consume cursor at [param ticks].
+		func resync_ceiling(ticks: int) -> ScheduleConfig:
+			if _handle._allows_code_value(
+					&"resync_ceiling",
+					"schedule().resync_ceiling",
+			):
+				_handle.max_consume_lag_ticks = maxi(0, ticks)
+			return self
+
+
+		# Applies the scene's raw export before code declarations are admitted.
+		func _scene_tier(value: Schedule) -> void:
+			_handle._schedule = value
+
+	## Fluent declaration of the state shared with the prediction environment.
+	class SensorsConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Samples [param sensor] once before each drive under [param name].
+		func sample(name: StringName, sensor: Callable) -> SensorsConfig:
+			if not sensor.is_valid():
+				push_error(
+					"PredictionHandle.sensors().sample: sensor must be a valid "
+					+ "Callable.",
+				)
+				return self
+			var sensors: Dictionary = _handle.island_config.get(&"sensors", { })
+			sensors[name] = sensor
+			_handle.island_config[&"sensors"] = sensors
+			return self
+
+
+		## Removes the sample named [param name].
+		func remove(name: StringName) -> SensorsConfig:
+			var sensors: Dictionary = _handle.island_config.get(&"sensors", { })
+			sensors.erase(name)
+			_handle.island_config[&"sensors"] = sensors
+			return self
+
+	## Fluent declaration of the solve facts observed after each transition.
+	class WitnessConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Samples realized contacts with [param sampler].
+		func contacts(sampler: Callable) -> WitnessConfig:
+			if not sampler.is_valid():
+				push_error(
+					"PredictionHandle.witness().contacts: sampler must be a "
+					+ "valid Callable.",
+				)
+				return self
+			_handle.witness_config = { &"contacts": sampler }
+			return self
+
+	## Fluent declaration of present-time pose transport.
+	class TransportConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Accepts pose transport only when [param sweep] reports a clear path.
+		func corridor(sweep: Callable) -> TransportConfig:
+			if not sweep.is_valid():
+				push_error(
+					"PredictionHandle.transport().corridor: sweep must be a "
+					+ "valid Callable.",
+				)
+				return self
+			_handle.transport_config = { &"corridor": sweep }
+			return self
+
+	## Fluent declaration of prediction-island membership and promotion.
+	class IslandConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Uses tolerance comparison for this island.
+		func approximate() -> IslandConfig:
+			_declare()
+			_handle.island_config[&"approximate"] = true
+			_handle.island_config.erase(&"exact_claim")
+			return self
+
+
+		## Claims exact comparison for an explicit-only island.
+		func exact() -> IslandConfig:
+			_declare()
+			if not _handle.island_config.get(&"producers", []).is_empty():
+				push_error(
+					"PredictionHandle.island().exact: produced islands are "
+					+ "always approximate.",
+				)
+				return self
+			_handle.island_config[&"approximate"] = false
+			_handle.island_config[&"exact_claim"] = true
+			return self
+
+
+		## Produces members from the resolved interest scope or [param layer].
+		func from_interest(layer: StringName = &"") -> IslandConfig:
+			_declare()
+			if bool(_handle.island_config.get(&"exact_claim", false)):
+				push_error(
+					"PredictionHandle.island().from_interest: produced islands "
+					+ "cannot claim exact comparison.",
+				)
+				return self
+			var producers: Array = _handle.island_config.get(&"producers", [])
+			var producer := { &"kind": &"interest", &"layer": layer }
+			if not producers.has(producer):
+				producers.append(producer)
+			_handle.island_config[&"producers"] = producers
+			_handle.island_config[&"approximate"] = true
+			return self
+
+
+		## Adds an explicit runtime [param entity] to the island.
+		func add(entity: NetwEntity) -> IslandConfig:
+			_declare()
+			if not _handle._is_same_scene(entity):
+				push_error(
+					"PredictionHandle.island().add: islands cannot cross "
+					+ "MultiplayerScene boundaries.",
+				)
+				return self
+			var participants: Array = _handle.island_config.get(
+				&"participants",
+				[],
+			)
+			if not participants.has(entity):
+				participants.append(entity)
+			_handle.island_config[&"participants"] = participants
+			return self
+
+
+		## Removes an explicit runtime [param entity] from the island.
+		func remove(entity: NetwEntity) -> IslandConfig:
+			_declare()
+			var participants: Array = _handle.island_config.get(
+				&"participants",
+				[],
+			)
+			participants.erase(entity)
+			_handle.island_config[&"participants"] = participants
+			var fidelity: Dictionary = _handle.island_config.get(&"fidelity", { })
+			fidelity.erase(entity)
+			_handle.island_config[&"fidelity"] = fidelity
+			var predictors: Dictionary = _handle.island_config.get(
+				&"command_predictors",
+				{ },
+			)
+			predictors.erase(entity)
+			_handle.island_config[&"command_predictors"] = predictors
+			return self
+
+
+		## Promotes the nearest [param count] produced members for simulation.
+		func simulate_nearest(count: int) -> IslandConfig:
+			_declare()
+			_handle.island_config[&"promotion"] = {
+				&"kind": &"nearest",
+				&"count": maxi(0, count),
+			}
+			return self
+
+
+		## Promotes produced members within [param meters] for simulation.
+		func simulate_within(meters: float) -> IslandConfig:
+			_declare()
+			_handle.island_config[&"promotion"] = {
+				&"kind": &"within",
+				&"meters": maxf(0.0, meters),
+			}
+			return self
+
+
+		## Explicitly promotes [param entity] for local simulation. When
+		## [param predict_commands] is valid, it is called as
+		## [code](participant, tick)[/code] and must return an input [Dictionary].
+		func simulate(
+				entity: NetwEntity,
+				predict_commands: Callable = Callable(),
+		) -> IslandConfig:
+			add(entity)
+			_set_fidelity(entity, Fidelity.SIMULATED)
+			if predict_commands.is_valid():
+				self.predict_commands(entity, predict_commands)
+			return self
+
+
+		## Sets the substituted command producer for [param entity]. The callable
+		## receives [code](participant, tick)[/code] and returns an input
+		## [Dictionary]. Leaving it undeclared uses the zero-input COAST policy.
+		func predict_commands(
+				entity: NetwEntity,
+				predictor: Callable,
+		) -> IslandConfig:
+			add(entity)
+			if not predictor.is_valid():
+				push_error(
+					"PredictionHandle.island().predict_commands: predictor must "
+					+ "be a valid Callable.",
+				)
+				return self
+			var predictors: Dictionary = _handle.island_config.get(
+				&"command_predictors",
+				{ },
+			)
+			predictors[entity] = predictor
+			_handle.island_config[&"command_predictors"] = predictors
+			return self
+
+
+		## Explicitly keeps [param entity] as a displayed proxy.
+		func observe(entity: NetwEntity) -> IslandConfig:
+			add(entity)
+			_set_fidelity(entity, Fidelity.PROXY)
+			return self
+
+
+		## Selects island reconciliation. JOINT remains reserved.
+		func reconcile(mode: Reconcile) -> IslandConfig:
+			_declare()
+			if mode == Reconcile.JOINT:
+				push_error(
+					"PredictionHandle.island().reconcile: JOINT stays reserved "
+					+ "until contact is decisive, error-sensitive, and "
+					+ "small-scope.",
+				)
+				return self
+			_handle.island_config[&"reconcile"] = mode
+			return self
+
+
+		# Marks the declaration that admits fingerprint comparison.
+		func _declare() -> void:
+			if bool(_handle.island_config.get(&"inherited", false)):
+				var environment := { }
+				for key in [&"sensors", &"epoch"]:
+					if _handle.island_config.has(key):
+						environment[key] = _handle.island_config[key]
+				_handle.island_config = environment
+			_handle.island_config[&"declared"] = true
+			if not _handle.island_config.has(&"participants"):
+				_handle.island_config[&"participants"] = []
+			if not _handle.island_config.has(&"reconcile"):
+				_handle.island_config[&"reconcile"] = Reconcile.INDEPENDENT
+
+
+		# Stores one explicit fidelity override.
+		func _set_fidelity(entity: NetwEntity, value: Fidelity) -> void:
+			var fidelity: Dictionary = _handle.island_config.get(&"fidelity", { })
+			if _handle.island_config.get(&"participants", []).has(entity):
+				fidelity[entity] = value
+			_handle.island_config[&"fidelity"] = fidelity
+
+	## Fluent scene-level prediction-island defaults.
+	##
+	## [MultiplayerScene.prediction_island] applies this rule to predicted
+	## descendants that do not make their own [method PredictionHandle.island]
+	## declaration.
+	class IslandDefaults:
+		extends RefCounted
+
+		var _config: Dictionary
+
+
+		func _init(config: Dictionary) -> void:
+			_config = config
+			_declare()
+
+
+		## Uses tolerance comparison for produced scene membership.
+		func approximate() -> IslandDefaults:
+			_config[&"approximate"] = true
+			_config.erase(&"exact_claim")
+			return self
+
+
+		## Claims exact comparison when the scene rule has no producer.
+		func exact() -> IslandDefaults:
+			if not _config.get(&"producers", []).is_empty():
+				push_error(
+					"MultiplayerScene.prediction_island().exact: produced "
+					+ "islands are always approximate.",
+				)
+				return self
+			_config[&"approximate"] = false
+			_config[&"exact_claim"] = true
+			return self
+
+
+		## Produces members from each entity's resolved interest scope or
+		## [param layer].
+		func from_interest(layer: StringName = &"") -> IslandDefaults:
+			if bool(_config.get(&"exact_claim", false)):
+				push_error(
+					"MultiplayerScene.prediction_island().from_interest: "
+					+ "produced islands cannot claim exact comparison.",
+				)
+				return self
+			var producers: Array = _config.get(&"producers", [])
+			var producer := { &"kind": &"interest", &"layer": layer }
+			if not producers.has(producer):
+				producers.append(producer)
+			_config[&"producers"] = producers
+			_config[&"approximate"] = true
+			return self
+
+
+		## Promotes the nearest [param count] produced members for simulation.
+		func simulate_nearest(count: int) -> IslandDefaults:
+			_config[&"promotion"] = {
+				&"kind": &"nearest",
+				&"count": maxi(0, count),
+			}
+			return self
+
+
+		## Promotes produced members within [param meters] for simulation.
+		func simulate_within(meters: float) -> IslandDefaults:
+			_config[&"promotion"] = {
+				&"kind": &"within",
+				&"meters": maxf(0.0, meters),
+			}
+			return self
+
+
+		## Selects scene-default island reconciliation. JOINT remains reserved.
+		func reconcile(mode: Reconcile) -> IslandDefaults:
+			if mode == Reconcile.JOINT:
+				push_error(
+					"MultiplayerScene.prediction_island().reconcile: JOINT "
+					+ "stays reserved until contact is decisive, "
+					+ "error-sensitive, and small-scope.",
+				)
+				return self
+			_config[&"reconcile"] = mode
+			return self
+
+
+		# Seeds the detached inherited rule with structural defaults.
+		func _declare() -> void:
+			_config[&"declared"] = true
+			_config[&"inherited"] = true
+			if not _config.has(&"participants"):
+				_config[&"participants"] = []
+			if not _config.has(&"reconcile"):
+				_config[&"reconcile"] = Reconcile.INDEPENDENT
+
+	## Fluent declaration of per-entity recovery behavior.
+	class RecoveryConfig:
+		extends RefCounted
+
+		var _handle: PredictionHandle
+
+
+		func _init(handle: PredictionHandle) -> void:
+			_handle = handle
+
+
+		## Selects the per-entity recovery [param value].
+		func policy(value: RecoveryPolicy) -> RecoveryConfig:
+			if not _handle._allows_code_value(&"policy", "recovery().policy"):
+				return self
+			_handle._apply_recovery_policy(value)
+			return self
+
+
+		## Sets the default actionable error [param value].
+		func epsilon(value: float) -> RecoveryConfig:
+			if _handle._allows_code_value(&"epsilon", "recovery().epsilon"):
+				_handle.divergence_epsilon = maxf(0.0, value)
+			return self
+
+
+		## Sets the whole-closure threshold [param value].
+		func teleport_threshold(value: float) -> RecoveryConfig:
+			if _handle._allows_code_value(
+					&"teleport_threshold",
+					"recovery().teleport_threshold",
+			):
+				_handle.teleport_threshold = maxf(0.0, value)
+			return self
+
+
+		## Sets the contact cooldown to [param ticks].
+		func cooldown_ticks(ticks: int) -> RecoveryConfig:
+			if _handle._allows_code_value(
+					&"cooldown_ticks",
+					"recovery().cooldown_ticks",
+			):
+				_handle.collision_cooldown_ticks = maxi(0, ticks)
+			return self
+
+
+		## Selects how SNAP places received state.
+		func projection(value: RestoreMode) -> RecoveryConfig:
+			if _handle._allows_code_value(
+					&"projection",
+					"recovery().projection",
+			):
+				_handle.snap_restore = value
+			return self
+
+
+		## Sets what the entity does when its witness reports contact outside the
+		## prediction boundary, then returns this configurator.
+		##
+		## [constant BreachResponse.DEMOTE] stops speculation at the witnessed
+		## transition, follows authority while commands keep flowing, and resumes
+		## through a reseed after authority reports a clean witness run.
+		## [constant BreachResponse.PREDICT_THROUGH] keeps ordinary reconciliation.
+		func on_breach(response: BreachResponse) -> RecoveryConfig:
+			_handle.breach_response = response
+			return self
+
+	## Lifecycle state of one actionable divergence episode.
+	enum EpisodeState {
+		## The episode is accepting comparisons and operator evidence.
+		OPEN,
+		## A verified agreement run retired the episode.
+		CLOSED,
+		## Bounded recovery evidence was exhausted.
+		FALLBACK,
+	}
+
+	## Measured outcome of one recovery operator application.
+	enum OperatorOutcome {
+		## No later aligned comparison has judged the write yet.
+		PENDING,
+		## A later comparison strictly reduced or closed the aligned error.
+		CONTRACTED,
+		## The verification window held or grew the aligned error.
+		FAILED_TO_CONTRACT,
+		## The write introduced a realized boundary absent on authority.
+		INTRODUCED_BOUNDARY,
+	}
+
+	## Generator status when the causal fork predates retained journal rows.
+	const GENERATOR_UNKNOWN_BEYOND_RETENTION := \
+			&"UNKNOWN_BEYOND_RETENTION"
 
 	## The simulation step, defaulting to the entity root's
 	## [code]_network_tick(delta, tick, is_fresh)[/code]. Set it to route the step
@@ -1390,10 +2041,8 @@ class PredictionHandle:
 	## exactly one authoritative step runs per entity per tick.
 	var simulate: Callable = Callable()
 
-	## Cadence that invokes [member simulate], a [enum Schedule] value. FRAME
-	## scheduling lets elastic tick events choose input labels while a
-	## solver-driven body receives exactly one drive application per physics frame.
-	var schedule: int = Schedule.TICK
+	# Cadence selected through schedule(). Read with resolved_schedule().
+	var _schedule: Schedule = Schedule.TICK
 
 	## How a correction is applied, a [enum CorrectionMode] value. See
 	## [enum PredictionComponent.CorrectionMode] for the scene-facing enum.
@@ -1419,30 +2068,45 @@ class PredictionHandle:
 	## wires. Read-only: authority and local control decide it.
 	var sim_mode: SimMode = SimMode.DISPLAY
 
-	## The [enum RecoveryPolicy] declared through [method configure_recovery], or
+	## The [enum RecoveryPolicy] declared through [method recovery], or
 	## [code]-1[/code] while none has been, in which case
 	## [method resolved_recovery_policy] derives one from
 	## [member correction_mode].
 	var recovery_policy: int = -1
 
+	## Immediate response to an out-of-boundary realized contact.
+	##
+	## The response is armed only when [member witness_config] declares the
+	## observation. [constant BreachResponse.DEMOTE] follows authority through
+	## the existing delayed fallback path while the command lane stays live.
+	var breach_response: BreachResponse = BreachResponse.PREDICT_THROUGH
+
 	## The island and environment configuration declared through
-	## [method configure_island], [method configure_sensors], and
-	## [method configure_epoch], keyed by those verbs' own keys plus an internal
-	## [code]declared[/code] marker only [method configure_island] sets.
+	## [method island], [method sensors], and
+	## [method epoch], keyed by those verbs' own keys plus an internal
+	## [code]declared[/code] marker only [method island] sets.
 	##
 	## Sensors and an epoch are environment attribution, not a claim of exactness,
 	## so declaring them alone leaves every transition
 	## [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN]. Only naming the island
-	## participants through [method configure_island] opts an entity into the
+	## participants through [method island] opts an entity into the
 	## fingerprint compare. An entity that declares nothing is out of domain on
 	## every transition, the absence of a claim rather than a claim of divergence.
 	var island_config: Dictionary = { }
 
+	## Realized-transition observation declared through [method witness].
+	## An empty value is valid and makes the witness boundary unknown.
+	var witness_config: Dictionary = { }
+
+	## Present-time transport declared through [method transport].
+	## An empty value keeps the conditional operator disabled.
+	var transport_config: Dictionary = { }
+
 	## Ceiling in ticks on the age a [constant RestoreMode.EXTRAPOLATED] restore
 	## projects across. The projection advances by the unacked span
-	## [member ack_age_ticks], which grows without bound when the server input
-	## cursor falls behind, and a linear projection over a large age lands the body
-	## far off a curved path. This caps that span the way
+	## [member ack_age_ticks]. The prediction governor holds before that span can
+	## exceed its structural ceiling, but a linear projection near the ceiling can
+	## still land a body far off a curved path. This caps that span the way
 	## [member Handle.max_forecast_ticks] caps the display forecast, so a stale ack
 	## never launches the body. Defaults to the same [code]6[/code].
 	var max_restore_ticks: int = 6
@@ -1541,6 +2205,15 @@ class PredictionHandle:
 	## consume cursor is falling behind.
 	var ack_age_ticks: int = 0
 
+	## Physics-frame callbacks folded into their tick's existing command record.
+	## A growing value means this peer produces frame callbacks faster than the
+	## shared network clock advances, but it cannot grow the command queue.
+	var authoring_clamped_count: int = 0
+
+	## Prediction passes held because their unacknowledged horizon reached the
+	## structural ceiling. Input capture continues while the simulated body holds.
+	var speculation_held_count: int = 0
+
 	## Divergence above which a state receive triggers a correction. A field that
 	## needs its own tolerance declares it with
 	## [method NetwScriptModel.PropertyConfig.epsilon], which overrides this
@@ -1566,7 +2239,7 @@ class PredictionHandle:
 	## One fact, one source: a code verb that writes a key the scene already
 	## declared is a configuration error, because whichever writer ran last
 	## would silently win. The component fills this when it pushes its exports,
-	## and every configure verb refuses a key found here.
+	## and every fluent setter refuses a key found here.
 	var scene_declared: Dictionary[StringName, bool] = { }
 
 	## Ticks by which the prediction compared against the most recent
@@ -1688,7 +2361,7 @@ class PredictionHandle:
 	## The verdict is the correction trigger for a transition labeled
 	## [constant NetwPredictJournal.Domain.IN_DOMAIN], and a report for one that
 	## is not. Which label a transition earns is decided by
-	## [method configure_island], so an entity that declares no island keeps the
+	## [method island], so an entity that declares no island keeps the
 	## tolerance compare it always had.
 	var fp_mismatch_count: int = 0
 
@@ -1696,6 +2369,10 @@ class PredictionHandle:
 	## while none has. This is the transition to inspect, since every later
 	## mismatch may be the propagation of this one.
 	var first_divergent_transition: int = -1
+
+	## Rows whose pre-state did not chain from the preceding post-state and carried
+	## no operator provenance. Any nonzero value names an out-of-transition write.
+	var chain_break_count: int = 0
 
 	## Transitions authority reached a verdict on for the owner's claimed
 	## post-state, the denominator [member client_mismatch_count] is unreadable
@@ -1720,12 +2397,11 @@ class PredictionHandle:
 	## to, a [enum NetwPredictJournal.Attribution] value. Meaningful only once
 	## [member last_attributed_transition] is not [code]-1[/code].
 	##
-	## A divergence is always charged to something, so
-	## [constant NetwPredictJournal.Attribution.SIMULATION] is a claim and not a
-	## default: it says the command hashes matched and the environment digests
-	## matched, which leaves the step function itself.
+	## [constant NetwPredictJournal.Attribution.UNKNOWN] means required evidence
+	## was absent. Every other value names the first observed boundary that
+	## differed.
 	var last_attribution: NetwPredictJournal.Attribution = \
-			NetwPredictJournal.Attribution.UNATTRIBUTED
+			NetwPredictJournal.Attribution.UNKNOWN
 
 	## The transition [member last_attribution] describes, or [code]-1[/code]
 	## while no divergence has been charged.
@@ -1739,7 +2415,7 @@ class PredictionHandle:
 	## only observes hears about one exactly as loudly as a game that corrects.
 	## [codeblock]
 	## entity.prediction.divergence_detected.connect(func(entry, attribution):
-	##     if attribution == NetwPredictJournal.Attribution.SIMULATION:
+	##     if attribution == NetwPredictJournal.Attribution.CLOSURE:
 	##         push_warning("transition %d diverged under equal antecedents" % entry)
 	## )
 	## [/codeblock]
@@ -1747,6 +2423,24 @@ class PredictionHandle:
 		entry: int,
 		attribution: NetwPredictJournal.Attribution,
 	)
+
+	## Emitted when an actionable settled comparison opens an episode.
+	##
+	## [param report] has the same schema as [method episode].
+	signal episode_opened(report: Dictionary)
+
+	## Emitted after the verified agreement run closes an episode.
+	##
+	## [param report] has the same schema as [method episode]. It is the final
+	## detached record and remains valid after later journal rows evict its
+	## generator.
+	signal episode_closed(report: Dictionary)
+
+	## Emitted when bounded recovery evidence enters delayed fallback.
+	##
+	## [param report] has the same schema as [method episode] at quarantine entry.
+	## Command capture continues while local speculation is closed.
+	signal episode_fallback(report: Dictionary)
 
 	## Emitted after a recovery wrote the body, naming the transition it rebased
 	## at, the per-field pose change it applied ([code]after - before[/code],
@@ -1787,143 +2481,119 @@ class PredictionHandle:
 
 	var _entity_ref: WeakRef
 	var _engine_ref: WeakRef
+	var _episode_snapshot: Dictionary = { }
+	var _next_episode_id: int = 1
+	var _last_closed_episode_id: int = 0
+	var _last_closed_transition: int = -1
+	var _last_closure_was_fallback: bool = false
+	var _fallback_flap_level: int = 0
+	var _last_episode_reopen_chain: Array[int] = []
+	# Subject instance ids whose local islands currently step this entity.
+	var _simulation_subjects: Dictionary[int, Callable] = { }
 
 
-	## The declared [enum Archetype], or [constant Archetype.NONE] while nothing
-	## picked one. Written by [method configure_prediction].
-	var archetype: Archetype = Archetype.NONE
+	# The archetype bundle selected through archetype().
+	var _archetype: Archetype = Archetype.NONE
 
 
-	## Declares what kind of body this entity predicts, applying that
-	## archetype's schedule and recovery bundle in one call.
+	## Applies the named [param declared] prediction bundle.
 	##
-	## The archetype is the first decision a predicted entity makes, and the
-	## preset is a floor rather than a cage: a key the scene's
-	## [PredictionComponent] declared keeps the scene's value, and a
-	## [method configure_schedule] or [method configure_recovery] call after
-	## this one overrides its part of the bundle.
-	## [codeblock]
-	## entity.prediction.configure_prediction(
-	##     PredictionHandle.Archetype.SOLVER_BODY,
-	## )
-	## # refine one bundled value afterward:
-	## entity.prediction.configure_recovery({ teleport_threshold = 5.0 })
-	## [/codeblock]
-	func configure_prediction(declared: Archetype) -> void:
-		archetype = declared
-		var schedule_cfg: Dictionary = { }
-		var recovery_cfg: Dictionary = { }
+	## Scene-declared schedule and recovery facts keep their values. A later
+	## fluent declaration may refine any fact the scene did not claim.
+	func archetype(declared: Archetype) -> PredictionHandle:
+		# The archetype is one fact like any other: a scene that declared it
+		# owns it, and a code restatement is refused loudly rather than
+		# silently re-deriving the bundle.
+		if scene_declared.has(&"archetype"):
+			push_error(
+				"PredictionHandle.archetype: the archetype is "
+				+ "declared on the scene's PredictionComponent and configured "
+				+ "from code. One source per fact: keep the scene value or "
+				+ "the code call, not both. The code value is ignored.",
+			)
+			return self
+		_archetype = declared
 		match declared:
 			Archetype.KINEMATIC:
-				schedule_cfg = {
-					tier = Schedule.TICK,
-					hold = MissingInput.STALL,
-				}
-				recovery_cfg = { policy = RecoveryPolicy.REBASE_REPLAY }
+				breach_response = BreachResponse.PREDICT_THROUGH
+				if not scene_declared.has(&"tier"):
+					_schedule = Schedule.TICK
+				if not scene_declared.has(&"hold"):
+					missing_policy = MissingInput.STALL
+				if not scene_declared.has(&"policy"):
+					_apply_recovery_policy(RecoveryPolicy.REBASE_REPLAY)
 			Archetype.SOLVER_BODY:
-				schedule_cfg = {
-					tier = Schedule.FRAME,
-					hold = MissingInput.REPEAT_LAST,
-				}
-				recovery_cfg = {
-					policy = RecoveryPolicy.REBASE_RECOVER,
-					projection = RestoreMode.EXTRAPOLATED,
-					teleport_threshold = 3.0,
-				}
+				breach_response = BreachResponse.DEMOTE
+				if not scene_declared.has(&"tier"):
+					_schedule = Schedule.FRAME
+				if not scene_declared.has(&"hold"):
+					missing_policy = MissingInput.REPEAT_LAST
+				if not scene_declared.has(&"policy"):
+					_apply_recovery_policy(RecoveryPolicy.REBASE_RECOVER)
+				if not scene_declared.has(&"projection"):
+					snap_restore = RestoreMode.EXTRAPOLATED
+				if not scene_declared.has(&"teleport_threshold"):
+					teleport_threshold = 3.0
 			_:
-				return
-		# A scene declaration outranks the preset, so its keys are dropped here
-		# rather than tripping the two-source error a caller's restatement earns.
-		for key: StringName in scene_declared:
-			schedule_cfg.erase(key)
-			recovery_cfg.erase(key)
-		if not schedule_cfg.is_empty():
-			configure_schedule(schedule_cfg)
-		if not recovery_cfg.is_empty():
-			configure_recovery(recovery_cfg)
+				return self
+		return self
 
 
-	## Declares when this entity simulates and how far behind authority may run.
+	## Returns the fluent schedule declaration for this entity.
+	func schedule() -> ScheduleConfig:
+		return ScheduleConfig.new(self)
+
+
+	## Returns the resolved drive cadence.
+	func resolved_schedule() -> Schedule:
+		return _schedule
+
+
+	## Returns the declared archetype bundle.
+	func resolved_archetype() -> Archetype:
+		return _archetype
+
+
+	## Declares the prediction island: which entities share interactions with this
+	## body and how many this peer steps inside its prediction boundary.
 	##
-	## The schedule is one decision with four parts, so it is written once rather
-	## than assembled from knobs a caller has to know belong together.
+	## Membership producers and explicit entities feed one runtime set. The
+	## interest producer admits only entities replicated on this peer. Promotion
+	## policies select which members become [constant Fidelity.SIMULATED]; every
+	## other member remains a witnessed [constant Fidelity.PROXY]. Changes commit
+	## at transition boundaries, with distance hysteresis and contact-safe fidelity
+	## handoffs.
 	## [codeblock]
-	## entity.prediction.configure_schedule({
-	##     tier = PredictionHandle.Schedule.FRAME,
-	##     buffer_depth = 1,
-	##     hold = PredictionHandle.MissingInput.REPEAT_LAST,
-	##     resync_ceiling = 60,
-	## })
+	## entity.prediction.island() \
+	##     .approximate() \
+	##     .from_interest() \
+	##     .simulate_nearest(1)
 	## [/codeblock]
-	## Keys are optional and an omitted one keeps its current value. An
-	## unrecognized key is an error rather than a silent no-op, because a typo in
-	## a [Dictionary] is otherwise indistinguishable from a default.
-	func configure_schedule(config: Dictionary) -> void:
-		var cfg := _validated_config(
-			config,
-			[&"tier", &"buffer_depth", &"hold", &"resync_ceiling"],
-			"configure_schedule",
-		)
-		if cfg.has(&"tier"):
-			schedule = int(cfg[&"tier"])
-		if cfg.has(&"buffer_depth"):
-			replay_buffer_depth = int(cfg[&"buffer_depth"])
-		if cfg.has(&"hold"):
-			missing_policy = int(cfg[&"hold"])
-		if cfg.has(&"resync_ceiling"):
-			max_consume_lag_ticks = int(cfg[&"resync_ceiling"])
+	## A simulated member uses the zero-input COAST command unless
+	## [method PredictionHandle.IslandConfig.predict_commands] supplies a command.
+	## Each received
+	## authority state independently rebases it through the configured projection,
+	## so its error is bounded by receive cadence times command error. Its display
+	## chases the collidable simulated body. Produced islands are always
+	## approximate; [method PredictionHandle.IslandConfig.exact] accepts explicit
+	## membership only.
+	func island() -> IslandConfig:
+		return IslandConfig.new(self)
 
 
-	## Declares which entities this one shares a simulation with, so a divergence
-	## can be charged to the environment rather than to the simulation.
-	##
-	## An entity that contacts another is only entitled to reproduce a transition
-	## exactly when both peers agree about that other entity too. Declaring the
-	## island is how the engine learns which transitions those are, and it is the
-	## only verb that opts the entity into the fingerprint compare.
-	## [codeblock]
-	## entity.prediction.configure_island({
-	##     participants = [other_entity],
-	##     approximate = false,
-	## })
-	## [/codeblock]
-	## A participant this peer only displays is inequivalent, so contact against
-	## it opens a window in which transitions are compared by tolerance instead of
-	## by fingerprint. [param approximate] declares every transition that way. The
-	## environment half of the island, the world facts a transition runs against,
-	## is declared separately through [method configure_sensors] and
-	## [method configure_epoch], which never opt the entity into exact compare.
-	func configure_island(config: Dictionary) -> void:
-		var cfg := _validated_config(
-			config,
-			[&"participants", &"approximate"],
-			"configure_island",
-		)
-		for key: StringName in cfg:
-			island_config[key] = cfg[key]
-		# The internal marker the domain label keys exact compare on. Set here and
-		# nowhere else, so declaring sensors or an epoch cannot ratchet a lone
-		# entity into the fingerprint compare it never asked for.
-		island_config[&"declared"] = true
+	## Returns the fluent environment-sensor declaration.
+	func sensors() -> SensorsConfig:
+		return SensorsConfig.new(self)
 
 
-	## Declares the world facts a transition is sampled against, folded into the
-	## environment digest that separates an environment divergence from a
-	## simulation one. Each entry maps a name to a [Callable] the engine samples
-	## before a drive.
-	##
-	## Declaring sensors does NOT declare an island. A transition stays
-	## [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN] until
-	## [method configure_island] names the bodies this entity contacts, so an
-	## entity can attribute its divergences without ratcheting itself into an
-	## exact compare it cannot pass.
-	## [codeblock]
-	## entity.prediction.configure_sensors({
-	##     ground = Callable(self, "_sample_ground"),
-	## })
-	## [/codeblock]
-	func configure_sensors(sensors: Dictionary) -> void:
-		island_config[&"sensors"] = sensors.duplicate(true)
+	## Returns the fluent realized-witness declaration.
+	func witness() -> WitnessConfig:
+		return WitnessConfig.new(self)
+
+
+	## Returns the fluent present-time transport declaration.
+	func transport() -> TransportConfig:
+		return TransportConfig.new(self)
 
 
 	## Reads back the value the engine sampled for the declared sensor
@@ -1938,7 +2608,7 @@ class PredictionHandle:
 	## unattributed.
 	## [codeblock]
 	## func _init() -> void:
-	##     entity.prediction.configure_sensors({ ground = _sample_ground })
+	##     entity.prediction.sensors().sample(&"ground", _sample_ground)
 	##
 	## func _network_tick(delta: float, tick: int, fresh: bool) -> void:
 	##     var ground: Dictionary = entity.prediction.sensor(&"ground", { })
@@ -1951,73 +2621,18 @@ class PredictionHandle:
 
 
 	## Declares the version of the static world this entity simulates against.
-	## Bumping [param epoch] reopens the tolerance window, since two peers cannot
+	## Bumping [param value] reopens the tolerance window, since two peers cannot
 	## have adopted a world change on the same transition. Like
-	## [method configure_sensors] this declares the environment, not an island, so
+	## [method sensors] this declares the environment, not an island, so
 	## it never opts the entity into the fingerprint compare.
-	## [codeblock]
-	## entity.prediction.configure_epoch(world_version)
-	## [/codeblock]
-	func configure_epoch(epoch: int) -> void:
-		island_config[&"epoch"] = epoch
+	func epoch(value: int) -> PredictionHandle:
+		island_config[&"epoch"] = value
+		return self
 
 
-	## Declares how a divergence is repaired once one is found.
-	## [codeblock]
-	## entity.prediction.configure_recovery({
-	##     policy = PredictionHandle.RecoveryPolicy.REBASE_REPLAY,
-	##     epsilon = 0.35,
-	##     teleport_threshold = 3.0,
-	##     cooldown_ticks = 6,
-	##     projection = PredictionHandle.RestoreMode.EXTRAPOLATED,
-	## })
-	## [/codeblock]
-	## A single field's own threshold is a property fact, declared on the
-	## property with [method NetwScriptModel.PropertyConfig.epsilon] rather
-	## than here.
-	## [code]policy[/code] takes a [enum RecoveryPolicy] value.
-	## [constant RecoveryPolicy.REBASE_REPLAY],
-	## [constant RecoveryPolicy.REBASE_RECOVER],
-	## [constant RecoveryPolicy.DELAY_CLOSED] and
-	## [constant RecoveryPolicy.OBSERVE] each run their own mechanism.
-	## [constant RecoveryPolicy.ROLLBACK_SCOPE] is accepted and reported through
-	## [method resolved_recovery_policy], and rebases the diverged entity alone
-	## until it restores the rest of its island.
-	##
-	## Declaring [constant RecoveryPolicy.DELAY_CLOSED] is a decision about where
-	## the entity is simulated at all, not only about how it is repaired. The peer
-	## that does not own the timeline resolves [member sim_mode] to
-	## [constant SimMode.DISPLAY] and never speculates, so the question of
-	## repairing a speculation cannot arise there.
-	func configure_recovery(config: Dictionary) -> void:
-		var cfg := _validated_config(
-			config,
-			[
-				&"policy", &"epsilon",
-				&"teleport_threshold", &"cooldown_ticks", &"projection",
-			],
-			"configure_recovery",
-		)
-		if cfg.has(&"policy"):
-			recovery_policy = int(cfg[&"policy"])
-			correction_mode = _correction_mode_for_policy(
-				recovery_policy as RecoveryPolicy,
-			)
-			# A policy decides where the entity is simulated and not only how it is
-			# repaired, so the axes are resolved again here. Waiting for the next
-			# control transfer to notice would leave an entity speculating under a
-			# policy that says it never speculates.
-			var engine := _engine()
-			if engine:
-				engine._rewire()
-		if cfg.has(&"epsilon"):
-			divergence_epsilon = float(cfg[&"epsilon"])
-		if cfg.has(&"teleport_threshold"):
-			teleport_threshold = float(cfg[&"teleport_threshold"])
-		if cfg.has(&"cooldown_ticks"):
-			collision_cooldown_ticks = int(cfg[&"cooldown_ticks"])
-		if cfg.has(&"projection"):
-			snap_restore = int(cfg[&"projection"])
+	## Returns the fluent recovery declaration for this entity.
+	func recovery() -> RecoveryConfig:
+		return RecoveryConfig.new(self)
 
 
 	## Returns the [enum RecoveryPolicy] this entity recovers under, resolving
@@ -2033,43 +2648,38 @@ class PredictionHandle:
 		)
 
 
-	# Copies the caller's config so a later mutation of their dictionary cannot
-	# reach into the handle, and rejects a key this verb does not define. A
-	# Dictionary config trades compile-time shape checking for reach, so the
-	# check it loses at compile time is owed at apply time. A key the scene
-	# already declared is rejected too: the same fact stated in two places has
-	# no single source of truth, and the error names the fix instead of letting
-	# the later writer silently win.
-	func _validated_config(
-			config: Dictionary,
-			allowed: Array[StringName],
-			verb: String,
-	) -> Dictionary:
-		var out: Dictionary = { }
-		for key: StringName in config:
-			if not allowed.has(key):
-				push_error(
-					(
-							"PredictionHandle.%s: unknown key '%s'. Known keys "
-							+ "are [%s]."
-					) % [verb, key, ", ".join(allowed)],
-				)
-				continue
-			if scene_declared.has(key):
-				push_error(
-					(
-							"PredictionHandle.%s: '%s' is declared on the "
-							+ "scene's PredictionComponent and configured from "
-							+ "code. One source per fact: keep the scene value "
-							+ "or the code call, not both. The code value is "
-							+ "ignored."
-					) % [verb, key],
-				)
-				continue
-			var value: Variant = config[key]
-			out[key] = value.duplicate(true) if value is Dictionary \
-					or value is Array else value
-		return out
+	# Enforces one source for each scene-facing fact.
+	func _allows_code_value(key: StringName, verb: String) -> bool:
+		if not scene_declared.has(key):
+			return true
+		push_error(
+			(
+					"PredictionHandle.%s: '%s' is declared on the scene's "
+					+ "PredictionComponent and configured from code. One "
+					+ "source per fact: keep the scene value or the code call, "
+					+ "not both. The code value is ignored."
+			) % [verb, key],
+		)
+		return false
+
+
+	# Applies the strategy and refreshes axes that depend on it.
+	func _apply_recovery_policy(value: RecoveryPolicy) -> void:
+		recovery_policy = value
+		correction_mode = _correction_mode_for_policy(value)
+		var engine := _engine()
+		if engine:
+			engine._rewire()
+
+
+	# True when an explicit member shares the bound entity's scene.
+	func _is_same_scene(participant: NetwEntity) -> bool:
+		if not participant or not is_instance_valid(participant):
+			return false
+		var engine := _engine()
+		if not engine or not engine._entity:
+			return true
+		return engine._entity.scene == participant.scene
 
 
 	# The correction mechanism a policy runs through. A policy names a strategy
@@ -2077,10 +2687,7 @@ class PredictionHandle:
 	# one mechanism without sharing a meaning.
 	func _correction_mode_for_policy(policy: RecoveryPolicy) -> CorrectionMode:
 		match policy:
-			RecoveryPolicy.REBASE_REPLAY, RecoveryPolicy.ROLLBACK_SCOPE:
-				# A scope rollback re-runs its members, so the mechanism is the
-				# same replay a lone rebase runs. What the scope adds is who else
-				# it re-runs, which the shell decides once the members are known.
+			RecoveryPolicy.REBASE_REPLAY:
 				return CorrectionMode.REPLAY
 			RecoveryPolicy.REBASE_RECOVER, RecoveryPolicy.DELAY_CLOSED:
 				return CorrectionMode.SNAP
@@ -2096,14 +2703,11 @@ class PredictionHandle:
 	##
 	## The axes are the decision and the role is its name, so every role is
 	## reachable from some pair and no pair reaches a role that contradicts it.
-	## One pair names no role today: a peer speculating on a command it did not
-	## author is the shape a future input relay would take, and until one exists
-	## it resolves to [constant Role.REMOTE] rather than inventing a fifth name.
 	## [codeblock]
 	##             AUTHORITATIVE   SPECULATIVE   DISPLAY
 	##   LOCAL     HOST_LOCAL      PREDICT       REMOTE
 	##   RECEIVED  CONSUME         (unreachable) REMOTE
-	##   PREDICTED (unreachable)   (unreachable) REMOTE
+	##   PREDICTED (unreachable)   SIMULATE      REMOTE
 	##   NONE      REMOTE          REMOTE        REMOTE
 	## [/codeblock]
 	static func role_for_axes(source: InputSource, mode: SimMode) -> Role:
@@ -2116,6 +2720,8 @@ class PredictionHandle:
 			else Role.PREDICT
 		if source == InputSource.RECEIVED and mode == SimMode.AUTHORITATIVE:
 			return Role.CONSUME
+		if source == InputSource.PREDICTED and mode == SimMode.SPECULATIVE:
+			return Role.SIMULATE
 		return Role.REMOTE
 
 
@@ -2186,6 +2792,213 @@ class PredictionHandle:
 		return engine.journal() if engine else null
 
 
+	## Returns the active or most recently retired disturbance episode report.
+	##
+	## The returned [Dictionary] is detached from engine storage. An empty value
+	## means no actionable divergence has opened. The stable report sections are:
+	## [codeblock]
+	## {
+	##     id: int,
+	##     generator: {
+	##         transition: int,
+	##         boundary: NetwPredictJournal.Attribution,
+	##         row: Dictionary,
+	##     },
+	##     operators: Array[{
+	##         operator: NetwPredictJournal.Operator,
+	##         basis: int,
+	##         eligible: bool,
+	##         applied: bool,
+	##         eligibility: Dictionary,
+	##         outcome: OperatorOutcome,
+	##         write: Dictionary,
+	##     }],
+	##     contraction: Array[{transition, meter, agrees, write_id}],
+	##     disposition: {
+	##         state: EpisodeState,
+	##         non_contraction_used: int,
+	##         closure_used: int,
+	##         closed_transition: int,
+	##         fallback_transition: int,
+	##         demoted: bool,
+	##         breach_transition: int,
+	##         breach_witness: Dictionary,
+	##         resume_ack_age: int,
+	##         quarantine_target: int,
+	##         quarantine_clean_run: int,
+	##         reseed_transition: int,
+	##         aligned_transition: int,
+	##     },
+	##     reopen_chain: Array[int],
+	## }
+	## [/codeblock]
+	## [code]generator.row[/code] includes the retained journal row and its
+	## forensic sidecar. If the causal run predates retention, its status is
+	## [constant GENERATOR_UNKNOWN_BEYOND_RETENTION]. Later divergent rows appear
+	## in [code]taint[/code], while independent agreeing-pre failures appear in
+	## [code]secondary_generators[/code]. The original evidence keys remain in the
+	## detached report for capture compatibility. A refused operator has
+	## [code]outcome = -1[/code] and an empty [code]write[/code].
+	func episode() -> Dictionary:
+		var engine := _engine()
+		if engine:
+			return engine.episode()
+		return _episode_report(_episode_snapshot)
+
+
+	# Projects raw resumable episode state into the stable public report.
+	func _episode_report(raw: Dictionary) -> Dictionary:
+		if raw.is_empty():
+			return { }
+		var report := raw.duplicate(true)
+		var row: Dictionary = report.get(&"generator_row_copy", { })
+		report[&"generator"] = {
+			&"transition": int(row.get(
+				&"transition",
+				report.get(&"opened_transition", -1),
+			)),
+			&"boundary": int(report.get(
+				&"attribution",
+				NetwPredictJournal.Attribution.UNKNOWN,
+			)),
+			&"row": row,
+		}
+		report[&"operators"] = _episode_operator_attempts(report)
+		report[&"contraction"] = (
+			report.get(&"comparisons", []) as Array
+		).duplicate(true)
+		report[&"disposition"] = {
+			&"state": int(report.get(&"state", EpisodeState.OPEN)),
+			&"non_contraction_used": int(
+				report.get(&"non_contraction_used", 0),
+			),
+			&"closure_used": int(report.get(&"closure_used", 0)),
+			&"closed_transition": int(
+				report.get(&"closed_transition", -1),
+			),
+			&"fallback_transition": int(
+				report.get(&"fallback_transition", -1),
+			),
+			&"demoted": bool(report.get(&"demoted", false)),
+			&"breach_transition": int(
+				report.get(&"breach_transition", -1),
+			),
+			&"breach_witness": (
+				report.get(&"breach_witness", { }) as Dictionary
+			).duplicate(true),
+			&"resume_ack_age": int(
+				report.get(&"resume_ack_age", 0),
+			),
+			&"quarantine_target": int(
+				report.get(&"quarantine_target", 0),
+			),
+			&"quarantine_clean_run": int(
+				report.get(&"quarantine_clean_run", 0),
+			),
+			&"reseed_transition": int(
+				report.get(&"reseed_transition", -1),
+			),
+			&"aligned_transition": int(
+				report.get(&"aligned_transition", -1),
+			),
+		}
+		var chain: Array = report.get(&"reopen_chain", [])
+		if chain.is_empty():
+			var reopened_from := int(report.get(&"reopened_from", 0))
+			if reopened_from > 0:
+				chain.append(reopened_from)
+			chain.append(int(report.get(&"id", 0)))
+		report[&"reopen_chain"] = chain.duplicate()
+		return report
+
+
+	# Joins eligibility decisions to applied writes without losing refusals.
+	func _episode_operator_attempts(report: Dictionary) -> Array[Dictionary]:
+		var attempts: Array[Dictionary] = []
+		var writes: Array = report.get(&"writes", [])
+		var used_writes := { }
+		for value: Variant in report.get(&"decisions", []):
+			var decision := (value as Dictionary).duplicate(true)
+			var matched_write := { }
+			for index in writes.size():
+				if used_writes.has(index):
+					continue
+				var candidate := writes[index] as Dictionary
+				if int(candidate.get(&"operator", -1)) \
+						== int(decision.get(&"operator", -2)) \
+						and int(candidate.get(&"basis", -1)) \
+						== int(decision.get(&"basis", -2)):
+					matched_write = candidate.duplicate(true)
+					used_writes[index] = true
+					break
+			decision[&"outcome"] = int(matched_write.get(&"outcome", -1))
+			decision[&"write"] = matched_write
+			attempts.append(decision)
+		for index in writes.size():
+			if used_writes.has(index):
+				continue
+			var write := (writes[index] as Dictionary).duplicate(true)
+			attempts.append({
+				&"operator": int(write.get(&"operator", -1)),
+				&"basis": int(write.get(&"basis", -1)),
+				&"eligible": true,
+				&"applied": true,
+				&"eligibility": { },
+				&"outcome": int(write.get(&"outcome", -1)),
+				&"write": write,
+			})
+		return attempts
+
+
+	# Allocates an episode identity and its reopen link across engine lifetimes.
+	func _open_episode_identity(transition: int, flap_window: int) -> Dictionary:
+		var reopened_from := 0
+		var reopen_chain: Array[int] = []
+		if _last_closed_episode_id > 0 \
+				and transition >= _last_closed_transition \
+				and transition - _last_closed_transition <= flap_window:
+			reopened_from = _last_closed_episode_id
+			reopen_chain = _last_episode_reopen_chain.duplicate()
+			if reopen_chain.is_empty() \
+					or reopen_chain.back() != reopened_from:
+				reopen_chain = [reopened_from]
+			if _last_closure_was_fallback:
+				_fallback_flap_level += 1
+		else:
+			_fallback_flap_level = 0
+		reopen_chain.append(_next_episode_id)
+		_last_episode_reopen_chain = reopen_chain.duplicate()
+		var identity := {
+			&"id": _next_episode_id,
+			&"reopened_from": reopened_from,
+			&"reopen_chain": reopen_chain,
+		}
+		_next_episode_id += 1
+		return identity
+
+
+	# Keeps episode evidence available when the engine rewires or unregisters.
+	func _store_episode(report: Dictionary) -> void:
+		_episode_snapshot = report.duplicate(true)
+
+
+	# Remembers the closure frontier used by the handle-side flap guard.
+	func _store_episode_closure(report: Dictionary, transition: int) -> void:
+		_store_episode(report)
+		_last_closed_episode_id = int(report.get(&"id", 0))
+		_last_closed_transition = transition
+		_last_closure_was_fallback = int(report.get(&"state", -1)) \
+				== EpisodeState.FALLBACK
+		if not _last_closure_was_fallback:
+			_fallback_flap_level = 0
+
+
+	# Returns the flap-priced clean run without exceeding its structural cap.
+	func _quarantine_target(base: int, cap: int) -> int:
+		var multiplier := 1 << mini(_fallback_flap_level, 30)
+		return mini(base * multiplier, cap)
+
+
 	## Returns this entity's prediction counters as one record, the schedule,
 	## recovery, and verification numbers a capture or an overlay reads together.
 	## [codeblock]
@@ -2200,6 +3013,7 @@ class PredictionHandle:
 	##  ┠╴skipped (int)           transitions a resync passed over
 	##  ┠╴max_replay_depth (int)  deepest replay window any recovery walked
 	##  ┠╴command_queue_depth (int)  transitions authority holds with commands
+	##  ┠╴ack_age_ticks (int)      unconfirmed speculative horizon
 	##  ┠╴ack_confirmed (int)     highest transition the owner saw acked, or -1
 	##  ┠╴frames_dropped_invalid (int)  owner-lane frames dropped whole
 	##  ┠╴substituted (int)       transitions authority declared substituted
@@ -2207,11 +3021,28 @@ class PredictionHandle:
 	##  ┠╴fp_mismatches (int)     of those, the ones that fingerprinted unequal
 	##  ┠╴first_divergent_transition (int)   the first of them, or -1
 	##  ┠╴client_fp_verified (int)  transitions authority judged the owner's claim on
-	##  ┖╴client_mismatches (int)   of those, the ones the owner claimed differently
+	##  ┠╴client_mismatches (int)   owner claims that differed from authority
+	##  ┠╴island_members (PackedStringArray)  locally replicated produced members
+	##  ┖╴simulated_members (PackedStringArray)  members stepped on this peer
 	## }
 	## [/codeblock]
+	## [code]authoring_clamped[/code] counts frame callbacks folded into the
+	## current network tick. [code]speculation_held[/code] counts passes held at
+	## the structural [code]ack_age_max[/code] ceiling.
+	## [code]chain_breaks[/code] counts pre-state rows that no preceding post-state
+	## or operator provenance can explain.
 	func stats() -> Dictionary:
-		return {
+		var engine := _engine()
+		var island_stats := engine._island_stats() if engine else {
+			&"island_members": PackedStringArray(),
+			&"simulated_members": PackedStringArray(),
+		}
+		var out := {
+			&"schedule": _schedule,
+			&"archetype": _archetype,
+			&"recovery_policy": resolved_recovery_policy(),
+			&"input_source": input_source,
+			&"sim_mode": sim_mode,
 			&"consumed": consumed_count,
 			&"missing": missing_count,
 			&"starved": starved_count,
@@ -2222,15 +3053,22 @@ class PredictionHandle:
 			&"skipped": skipped_count,
 			&"max_replay_depth": max_replay_depth,
 			&"command_queue_depth": command_queue_depth,
+			&"authoring_clamped": authoring_clamped_count,
+			&"speculation_held": speculation_held_count,
+			&"ack_age_max": _PredictionEngine.ACK_AGE_MAX,
+			&"ack_age_ticks": ack_age_ticks,
 			&"ack_confirmed": ack_confirmed_transition,
 			&"frames_dropped_invalid": frames_dropped_invalid,
 			&"substituted": substituted_count,
 			&"fp_verified": fp_verified_count,
 			&"fp_mismatches": fp_mismatch_count,
 			&"first_divergent_transition": first_divergent_transition,
+			&"chain_breaks": chain_break_count,
 			&"client_fp_verified": client_fp_verified_count,
 			&"client_mismatches": client_mismatch_count,
 		}
+		out.merge(island_stats)
+		return out
 
 
 	## Returns the prediction tape in ascending transition order. The owning
@@ -2429,6 +3267,39 @@ class PredictionHandle:
 		_entity_ref = weakref(bound_entity)
 
 
+	# Adds or removes one island's local simulation claim and refreshes the axes.
+	func _set_simulated_by(
+			subject: NetwEntity,
+			enabled: bool,
+			predictor: Callable = Callable(),
+	) -> void:
+		if subject == null:
+			return
+		var subject_id := subject.get_instance_id()
+		var changed := false
+		if enabled:
+			changed = not _simulation_subjects.has(subject_id) \
+					or _simulation_subjects[subject_id] != predictor
+			_simulation_subjects[subject_id] = predictor
+		else:
+			changed = _simulation_subjects.erase(subject_id)
+		if changed:
+			var current := _engine()
+			if current:
+				current._rewire()
+
+
+	# Returns the stable first predictor declared by a promoting subject.
+	func _predicted_command_callable() -> Callable:
+		var ids: Array = _simulation_subjects.keys()
+		ids.sort()
+		for subject_id: int in ids:
+			var predictor := _simulation_subjects[subject_id] as Callable
+			if predictor.is_valid():
+				return predictor
+		return Callable()
+
+
 	func _engine() -> _PredictionEngine:
 		return _engine_ref.get_ref() as _PredictionEngine if _engine_ref else null
 
@@ -2455,22 +3326,33 @@ class PredictionHandle:
 # heals on the next send instead of on a retransmit.
 #
 #   COMMAND (owner -> authority, unreliable)
-#     [ack_of_acks varint]     highest ack record the owner has seen
+#     [version u8][ack_of_acks varint]  codec version and highest seen ack
 #     [epoch u8][base varint][count u8]
 #     [transition bits]        zigzag label delta << 1 | fresh, per transition
 #     [payload section]        one windowed payload per FRESH transition
-#     [fp section]             count u8, then [post_fp u32][e_digest u32] per
-#                              transition the owner has closed
+#     [fp section]             count u8, then one record per closed transition
+#       [mask u8][pre][post][environment][topology][witness] as u32
+#       [three pre-family u32][three post-family u32][raw u32 when masked]
 #
 #   ACK (authority -> owner, unreliable)
-#     [base varint][count u8]
-#     per transition: [c_hash u32][post_fp u32][flags u8]
+#     [version u8][epoch u8][base varint][count u8]
+#     per transition: mask, pre, command, environment, post, topology, witness,
+#                     three pre families, three post families, optional raw,
+#                     authority witness-class bits, and flags
+#     one MTU-safe oldest prefix per send; ack-of-acks advances later chunks
 class _PredictFrames extends RefCounted:
+	const WIRE_VERSION := 5
 	# Set on an ack record when authority ran a command the owner never authored.
 	const ACK_SUBSTITUTED := 1 << 0
 
 	# Set on an ack record when a later truth replaced an earlier verdict.
 	const ACK_SUPERSEDED := 1 << 1
+	const ACK_WITNESS_SHIFT := 2
+	const ACK_WITNESS_MASK := 0x1C
+	# Twenty-one worst-case raw records keep the framed unreliable payload below
+	# the carrier's conservative 1200-byte aggregation threshold.
+	const ACK_RECORD_MAX := 21
+	const ACK_FRAME_BYTES_MAX := 1150
 
 	const _MAX_RUN := 255
 	const _U32 := 0xFFFFFFFF
@@ -2482,7 +3364,7 @@ class _PredictFrames extends RefCounted:
 	# The fingerprint section carries the owner's post-state digest beside the
 	# environment it ran against, the same pair the ACK frame carries in the other
 	# direction and for the same reason: a disagreement neither peer can charge to
-	# the command or to the world is the one charged to the simulation, and
+	# the command or to the world is the one charged to the closure, and
 	# authority cannot make that separation from a post-state alone.
 	static func encode_command(
 			epoch: int,
@@ -2493,8 +3375,16 @@ class _PredictFrames extends RefCounted:
 			types: Array,
 			post_fps: PackedInt32Array = PackedInt32Array(),
 			e_digests: PackedInt32Array = PackedInt32Array(),
+			pre_fps: PackedInt32Array = PackedInt32Array(),
+			pre_family_fps: PackedInt32Array = PackedInt32Array(),
+			post_family_fps: PackedInt32Array = PackedInt32Array(),
+			topo_fps: PackedInt32Array = PackedInt32Array(),
+			witness_fps: PackedInt32Array = PackedInt32Array(),
+			raw_fps: PackedInt32Array = PackedInt32Array(),
+			evidence_masks: PackedByteArray = PackedByteArray(),
 	) -> PackedByteArray:
 		var w := NetwBitBuffer.Writer.new()
+		w.put_aligned_u8(WIRE_VERSION)
 		# Zigzag, because the frontier is -1 until the first acknowledgement
 		# lands and a plain varint would carry that across as a huge positive.
 		NetwCodec.put_varint(w, _encode_zigzag(ack_of_acks))
@@ -2517,11 +3407,34 @@ class _PredictFrames extends RefCounted:
 			previous_label = label
 		for values: Array in payloads:
 			NetwScriptModel.write_values(w, values, quantizers, types)
-		var fp_count := mini(mini(post_fps.size(), e_digests.size()), _MAX_RUN)
+		var fp_count := mini(
+			count,
+			_claim_count(
+				pre_fps,
+				post_fps,
+				e_digests,
+				pre_family_fps,
+				post_family_fps,
+				topo_fps,
+				witness_fps,
+				raw_fps,
+				evidence_masks,
+			),
+		)
 		w.put_aligned_u8(fp_count)
 		for i in fp_count:
+			w.put_aligned_u8(evidence_masks[i])
+			w.put_aligned_u32(pre_fps[i] & _U32)
 			w.put_aligned_u32(post_fps[i] & _U32)
 			w.put_aligned_u32(e_digests[i] & _U32)
+			w.put_aligned_u32(topo_fps[i] & _U32)
+			w.put_aligned_u32(witness_fps[i] & _U32)
+			for family in 3:
+				w.put_aligned_u32(pre_family_fps[i * 3 + family] & _U32)
+			for family in 3:
+				w.put_aligned_u32(post_family_fps[i * 3 + family] & _U32)
+			if evidence_masks[i] & NetwPredictJournal.EVIDENCE_RAW:
+				w.put_aligned_u32(raw_fps[i] & _U32)
 		return w.to_bytes()
 
 
@@ -2537,6 +3450,8 @@ class _PredictFrames extends RefCounted:
 		if payload.is_empty():
 			return { }
 		var r := NetwBitBuffer.Reader.new(payload)
+		if r.get_aligned_u8() != WIRE_VERSION:
+			return { }
 		var ack_of_acks := _decode_zigzag(NetwCodec.get_safe_varint(r))
 		var epoch := r.get_aligned_u8()
 		var base := NetwCodec.get_safe_varint(r)
@@ -2565,44 +3480,110 @@ class _PredictFrames extends RefCounted:
 				return { }
 			payloads.append(values)
 		var fp_count := r.get_aligned_u8()
+		if fp_count > count:
+			return { }
+		var pre_fps := PackedInt32Array()
 		var post_fps := PackedInt32Array()
 		var e_digests := PackedInt32Array()
+		var pre_family_fps := PackedInt32Array()
+		var post_family_fps := PackedInt32Array()
+		var topo_fps := PackedInt32Array()
+		var witness_fps := PackedInt32Array()
+		var raw_fps := PackedInt32Array()
+		var evidence_masks := PackedByteArray()
 		for i in fp_count:
+			if r.remaining_bytes() < 45:
+				return { }
+			var evidence_mask := r.get_aligned_u8()
+			evidence_masks.append(evidence_mask)
+			pre_fps.append(_to_signed(r.get_aligned_u32()))
 			post_fps.append(_to_signed(r.get_aligned_u32()))
 			e_digests.append(_to_signed(r.get_aligned_u32()))
+			topo_fps.append(_to_signed(r.get_aligned_u32()))
+			witness_fps.append(_to_signed(r.get_aligned_u32()))
+			for family in 3:
+				pre_family_fps.append(_to_signed(r.get_aligned_u32()))
+			for family in 3:
+				post_family_fps.append(_to_signed(r.get_aligned_u32()))
+			if evidence_mask & NetwPredictJournal.EVIDENCE_RAW:
+				if r.remaining_bytes() < 4:
+					return { }
+				raw_fps.append(_to_signed(r.get_aligned_u32()))
+			else:
+				raw_fps.append(0)
 		return {
 			"epoch": epoch,
 			"ack_of_acks": ack_of_acks,
 			"transitions": transitions,
 			"payloads": payloads,
+			"pre_fps": pre_fps,
 			"post_fps": post_fps,
 			"e_digests": e_digests,
+			"pre_family_fps": pre_family_fps,
+			"post_family_fps": post_family_fps,
+			"topo_fps": topo_fps,
+			"witness_fps": witness_fps,
+			"raw_fps": raw_fps,
+			"evidence_masks": evidence_masks,
 		}
 
 
 	# Writes one ACK frame from parallel columns beginning at [param base]. The
 	# environment digest rides beside the two fingerprints because a divergence
 	# the owner cannot charge to the command or to the environment is charged to
-	# the simulation, and that last step is only honest once the first two have
+	# the closure, and that last step is only honest once the first two have
 	# been tested against authority's own values rather than assumed.
 	static func encode_ack(
+			epoch: int,
 			base: int,
+			pre_fps: PackedInt32Array,
 			c_hashes: PackedInt32Array,
 			e_digests: PackedInt32Array,
 			post_fps: PackedInt32Array,
+			pre_family_fps: PackedInt32Array,
+			post_family_fps: PackedInt32Array,
+			topo_fps: PackedInt32Array,
+			witness_fps: PackedInt32Array,
+			raw_fps: PackedInt32Array,
+			evidence_masks: PackedByteArray,
 			flags: PackedByteArray,
 	) -> PackedByteArray:
 		var w := NetwBitBuffer.Writer.new()
 		var count := mini(
-			mini(c_hashes.size(), e_digests.size()),
-			mini(post_fps.size(), mini(flags.size(), _MAX_RUN)),
+			mini(
+				_claim_count(
+					pre_fps,
+					post_fps,
+					e_digests,
+					pre_family_fps,
+					post_family_fps,
+					topo_fps,
+					witness_fps,
+					raw_fps,
+					evidence_masks,
+				),
+				ACK_RECORD_MAX,
+			),
+			mini(c_hashes.size(), flags.size()),
 		)
+		w.put_aligned_u8(WIRE_VERSION)
+		w.put_aligned_u8(epoch & 0xFF)
 		NetwCodec.put_varint(w, base)
 		w.put_aligned_u8(count)
 		for i in count:
+			w.put_aligned_u8(evidence_masks[i])
+			w.put_aligned_u32(pre_fps[i] & _U32)
 			w.put_aligned_u32(c_hashes[i] & _U32)
 			w.put_aligned_u32(e_digests[i] & _U32)
 			w.put_aligned_u32(post_fps[i] & _U32)
+			w.put_aligned_u32(topo_fps[i] & _U32)
+			w.put_aligned_u32(witness_fps[i] & _U32)
+			for family in 3:
+				w.put_aligned_u32(pre_family_fps[i * 3 + family] & _U32)
+			for family in 3:
+				w.put_aligned_u32(post_family_fps[i * 3 + family] & _U32)
+			if evidence_masks[i] & NetwPredictJournal.EVIDENCE_RAW:
+				w.put_aligned_u32(raw_fps[i] & _U32)
 			w.put_aligned_u8(flags[i])
 		return w.to_bytes()
 
@@ -2611,27 +3592,68 @@ class _PredictFrames extends RefCounted:
 	# parallel packed columns, the one hot-path crossing this family never turns
 	# into dictionaries.
 	static func decode_ack(payload: PackedByteArray) -> Dictionary:
-		if payload.is_empty():
+		if payload.size() < 4:
 			return { }
 		var r := NetwBitBuffer.Reader.new(payload)
+		if r.get_aligned_u8() != WIRE_VERSION:
+			return { }
+		var epoch := r.get_aligned_u8()
 		var base := NetwCodec.get_safe_varint(r)
 		if base < 0:
 			return { }
 		var count := r.get_aligned_u8()
+		var pre_fps := PackedInt32Array()
 		var c_hashes := PackedInt32Array()
 		var e_digests := PackedInt32Array()
 		var post_fps := PackedInt32Array()
+		var pre_family_fps := PackedInt32Array()
+		var post_family_fps := PackedInt32Array()
+		var topo_fps := PackedInt32Array()
+		var witness_fps := PackedInt32Array()
+		var raw_fps := PackedInt32Array()
+		var evidence_masks := PackedByteArray()
+		var witness_class_bits := PackedByteArray()
 		var flags := PackedByteArray()
 		for i in count:
+			if r.remaining_bytes() < 50:
+				return { }
+			var evidence_mask := r.get_aligned_u8()
+			evidence_masks.append(evidence_mask)
+			pre_fps.append(_to_signed(r.get_aligned_u32()))
 			c_hashes.append(_to_signed(r.get_aligned_u32()))
 			e_digests.append(_to_signed(r.get_aligned_u32()))
 			post_fps.append(_to_signed(r.get_aligned_u32()))
-			flags.append(r.get_aligned_u8())
+			topo_fps.append(_to_signed(r.get_aligned_u32()))
+			witness_fps.append(_to_signed(r.get_aligned_u32()))
+			for family in 3:
+				pre_family_fps.append(_to_signed(r.get_aligned_u32()))
+			for family in 3:
+				post_family_fps.append(_to_signed(r.get_aligned_u32()))
+			if evidence_mask & NetwPredictJournal.EVIDENCE_RAW:
+				if r.remaining_bytes() < 5:
+					return { }
+				raw_fps.append(_to_signed(r.get_aligned_u32()))
+			else:
+				raw_fps.append(0)
+			var ack_flags := r.get_aligned_u8()
+			witness_class_bits.append(
+				(ack_flags & ACK_WITNESS_MASK) >> ACK_WITNESS_SHIFT,
+			)
+			flags.append(ack_flags & (0xFF ^ ACK_WITNESS_MASK))
 		return {
+			"epoch": epoch,
 			"base": base,
+			"pre_fps": pre_fps,
 			"c_hashes": c_hashes,
 			"e_digests": e_digests,
 			"post_fps": post_fps,
+			"pre_family_fps": pre_family_fps,
+			"post_family_fps": post_family_fps,
+			"topo_fps": topo_fps,
+			"witness_fps": witness_fps,
+			"raw_fps": raw_fps,
+			"evidence_masks": evidence_masks,
+			"witness_class_bits": witness_class_bits,
 			"flags": flags,
 		}
 
@@ -2640,6 +3662,35 @@ class _PredictFrames extends RefCounted:
 	# column carries, so a value never changes representation between the two.
 	static func _to_signed(value: int) -> int:
 		return value - 0x100000000 if value >= 0x80000000 else value
+
+
+	static func _claim_count(
+			pre_fps: PackedInt32Array,
+			post_fps: PackedInt32Array,
+			e_digests: PackedInt32Array,
+			pre_family_fps: PackedInt32Array,
+			post_family_fps: PackedInt32Array,
+			topo_fps: PackedInt32Array,
+			witness_fps: PackedInt32Array,
+			raw_fps: PackedInt32Array,
+			evidence_masks: PackedByteArray,
+	) -> int:
+		return mini(
+			mini(
+				mini(pre_fps.size(), mini(post_fps.size(), e_digests.size())),
+				mini(
+					topo_fps.size(),
+					mini(witness_fps.size(), raw_fps.size()),
+				),
+			),
+			mini(
+				floori(pre_family_fps.size() / 3.0),
+				mini(
+					floori(post_family_fps.size() / 3.0),
+					mini(evidence_masks.size(), _MAX_RUN),
+				),
+			),
+		)
 
 
 	static func _encode_zigzag(value: int) -> int:
@@ -2652,16 +3703,34 @@ class _PredictFrames extends RefCounted:
 
 class _PredictionEngine extends RefCounted:
 	const TAPE_HISTORY_LIMIT := 256
+	# The owner may speculate through at most one quarter of the history ring.
+	# At the standard 60 Hz network rate this is about one second, leaving three
+	# quarters of the ring for acknowledgement and recovery evidence.
+	const ACK_AGE_MAX := TAPE_HISTORY_LIMIT >> 2
 	# Acknowledgement records repeated per send. The lane is unreliable, so it
 	# re-sends what the owner has not confirmed, but an owner whose confirmation
 	# never arrives must not grow the frame without bound. Its own
 	# acknowledgement floor advances the moment any frame lands.
 	const ACK_WINDOW_MAX := 64
+	const RAW_FP_ENV := "NETW_PREDICT_RAW_FP"
+	const STATE_FAMILY_POSE := 0
+	const STATE_FAMILY_MOMENTUM := 1
+	const STATE_FAMILY_CONTROLLER := 2
 	# Consecutive non-shrinking recoveries that promote the next one to a full
 	# closure. Fixed rather than configurable: convergence is a guarantee the
 	# kernel owes at every configuration, not a knob whose wrong value can
 	# forfeit it.
 	const ESCALATE_NONSHRINK := 3
+	# A closure and operator outcome must survive a full acknowledgement horizon.
+	const EPISODE_CLOSE_RUN := ACK_WINDOW_MAX
+	const EPISODE_FLAP_WINDOW := ACK_WINDOW_MAX
+	const EPISODE_NON_CONTRACTION_BUDGET := 4
+	const EPISODE_FULL_CLOSURE_BUDGET := 2
+	# A clean proof spans two measured acknowledgement ages, floored at three
+	# distinct authority rows and capped below the evidence ring.
+	const RESUME_ACK_MULTIPLIER := 2
+	const RESUME_RUN_MIN := 3
+	const QUARANTINE_RUN_CAP := ACK_WINDOW_MAX * 4
 
 	var _iface_ref: WeakRef
 	var _entity: NetwEntity
@@ -2693,6 +3762,11 @@ class _PredictionEngine extends RefCounted:
 	# Per-field divergence thresholds overriding the entity default, read off
 	# each property's epsilon() mark at wire time.
 	var _epsilon_overrides: Dictionary[StringName, float] = { }
+	# State field -> family index: pose, momentum, or controller and latches.
+	var _state_family_of: Dictionary[StringName, int] = { }
+	# State fields the next transition may read. Derived and cosmetic values do
+	# not participate in transport eligibility.
+	var _causal_fields: Dictionary[StringName, bool] = { }
 
 	# Fields whose NetwInterpolate spec is ANGLE mode, built alongside the
 	# projection map. Their compare, blend delta, and pose delta use the shortest
@@ -2719,6 +3793,7 @@ class _PredictionEngine extends RefCounted:
 	# Predict cursor.
 	var _latest_input_tick: int = -1
 	var _last_driven_input_tick: int = -1
+	var _last_frame_transition_tick: int = -1
 	var _last_recorded_input_tick: int = -1
 	var _frame_input: Dictionary = { }
 	var _stall_input: Dictionary = { }
@@ -2740,6 +3815,8 @@ class _PredictionEngine extends RefCounted:
 	# Authority lane, owner side: the highest transition authority has
 	# acknowledged, which floors both lanes' redundancy windows.
 	var _ack_of_acks: int = -1
+	# Freshest transition authority proved through either the ack or state lane.
+	var _latest_authority_ack: int = -1
 	# Authority lane, authority side: the highest transition the owner has
 	# confirmed receiving an acknowledgement for, which trims the re-send run.
 	var _owner_ack_floor: int = -1
@@ -2768,9 +3845,40 @@ class _PredictionEngine extends RefCounted:
 	# magnitude of the last one (magnitude negative while there is none), and
 	# the promotion the next staged recovery consumes.
 	var _nonshrink_streak: int = 0
+	var _last_recovery_direction := StringName()
 	var _last_recovery_sign: int = 0
 	var _last_recovery_divergence: float = -1.0
 	var _escalate_next: bool = false
+	# The actionable disturbance record. Its detached copy lives on the handle.
+	var _episode: Dictionary = { }
+	# Transition sidecars are bounded with the journal and copied on generator pin.
+	var _forensic_sidecars: Dictionary = { }
+	# Fallback closes speculation while retaining local input authoring.
+	var _fallback_latched: bool = false
+	var _quarantine_stream_reconstructed: bool = false
+	var _quarantine_clean_run: int = 0
+	var _quarantine_target: int = RESUME_RUN_MIN
+	var _quarantine_last_tick: int = -1
+	var _quarantine_last_basis: int = -1
+	var _quarantine_pending_states: Dictionary[int, Dictionary] = { }
+	var _reseed_align_pending: bool = false
+	var _reseed_epoch_confirmed: bool = false
+	var _reseed_ignore_through: int = -1
+	# The last out-of-transition body write, stamped onto the next new row.
+	var _pending_provenance: Dictionary = { }
+	var _next_operator_write_id: int = 1
+	# Witness state spans consecutive solves but never changes the simulation.
+	var _previous_witness_sleeping: bool = false
+	var _has_previous_witness: bool = false
+	var _invalid_witness_reported: bool = false
+	var _invalid_command_predictor_reported: bool = false
+	var _raw_fp_enabled: bool = false
+	# Conditional operators wait for the ack lane to align the basis witness.
+	# The state survives only until that verdict or a newer state supersedes it.
+	var _witness_verdicts: Dictionary[int, int] = { }
+	var _authority_witness_classes: Dictionary[int, int] = { }
+	var _deferred_operator_states: Dictionary[int, Dictionary] = { }
+	var _operator_deferred_basis: int = -1
 
 	# Declared-island state. _out_of_domain_until is the label an open window
 	# stops covering, or -1 when none is open; a window opens on a fact that makes
@@ -2788,12 +3896,16 @@ class _PredictionEngine extends RefCounted:
 	# TODO: carry samples per tape entry once a replaying tier declares
 	# sensors, so a re-run transition reads the world its original drive read.
 	var _sensor_samples: Dictionary = { }
+	# Produced membership and fidelity are committed only at transition boundaries.
+	var _island_members: Array[NetwEntity] = []
+	var _simulated_members: Dictionary[NetwEntity, bool] = { }
+	var _realized_contact_entities: Dictionary[NetwEntity, bool] = { }
 
 	# What the owner claims it reached, keyed by transition, held on authority
 	# until authority has run that transition itself. The owner ships a claim
 	# ahead of the consume cursor, so a verdict taken on arrival would judge a row
 	# authority has not written yet.
-	#   { transition: int -> { post_fp: int, e_digest: int } }
+	#   { transition: int -> { pre_fp, post_fp, e_digest, family columns } }
 	var _owner_claims: Dictionary = { }
 
 
@@ -2803,6 +3915,8 @@ class _PredictionEngine extends RefCounted:
 		_iface_ref = weakref(iface)
 		_entity = entity
 		_handle = entity.prediction
+		_apply_scene_island_defaults()
+		_episode = _handle._episode_snapshot.duplicate(true)
 		if not entity.control_changed.is_connected(_on_control_changed):
 			entity.control_changed.connect(_on_control_changed)
 		if not entity.reparented.is_connected(_on_reparented):
@@ -2813,6 +3927,8 @@ class _PredictionEngine extends RefCounted:
 	# Leaves the loop and restores the set-handle hooks, keeping the handle's config
 	# and counters so a re-registration resumes.
 	func _release() -> void:
+		_clear_island_promotions()
+		_handle._simulation_subjects.clear()
 		_unregister_from_loop()
 		if _state_binding:
 			_state_binding.on_applied = Callable()
@@ -2832,9 +3948,24 @@ class _PredictionEngine extends RefCounted:
 		return _handle
 
 
+	func _island_stats() -> Dictionary:
+		var members := PackedStringArray()
+		for member: NetwEntity in _island_members:
+			members.append(String(member.entity_id))
+		members.sort()
+		var simulated := PackedStringArray()
+		for member: NetwEntity in _simulated_members:
+			simulated.append(String(member.entity_id))
+		simulated.sort()
+		return {
+			&"island_members": members,
+			&"simulated_members": simulated,
+		}
+
+
 	func network_tick(timing: PredictTiming) -> void:
 		_adopt_timing(timing)
-		if _handle.schedule == PredictionHandle.Schedule.TICK:
+		if _handle._schedule == PredictionHandle.Schedule.TICK:
 			simulate_tick(timing)
 			return
 		match _role:
@@ -2842,6 +3973,11 @@ class _PredictionEngine extends RefCounted:
 				_predict_author_tick(timing.tick)
 			PredictionHandle.Role.HOST_LOCAL:
 				_host_local_author_tick(timing.tick)
+			PredictionHandle.Role.REMOTE:
+				if _fallback_latched:
+					_fallback_author_tick(timing.tick)
+			PredictionHandle.Role.SIMULATE:
+				pass
 
 
 	func simulate_tick(timing: PredictTiming) -> void:
@@ -2853,19 +3989,48 @@ class _PredictionEngine extends RefCounted:
 				_consume_step(timing.delta, timing.tick)
 			PredictionHandle.Role.HOST_LOCAL:
 				_host_local_step(timing.delta, timing.tick)
+			PredictionHandle.Role.REMOTE:
+				if _fallback_latched:
+					_fallback_author_step(timing.tick)
+			PredictionHandle.Role.SIMULATE:
+				_simulated_step(timing.delta, timing.tick)
 
 
 	func simulate_frame(timing: PredictTiming) -> void:
 		_adopt_timing(timing)
-		if _handle.schedule != PredictionHandle.Schedule.FRAME:
+		if _handle._schedule != PredictionHandle.Schedule.FRAME:
 			return
 		match _role:
 			PredictionHandle.Role.PREDICT:
+				if timing.tick <= _last_frame_transition_tick:
+					_handle.authoring_clamped_count += 1
+					_send_command_frame()
+					return
 				_predict_frame_step(timing)
 			PredictionHandle.Role.CONSUME:
 				_consume_frame_step(timing)
 			PredictionHandle.Role.HOST_LOCAL:
 				_host_local_frame_step(timing)
+			PredictionHandle.Role.REMOTE:
+				if _fallback_latched:
+					if timing.tick <= _last_frame_transition_tick:
+						_handle.authoring_clamped_count += 1
+						_send_command_frame()
+						return
+					_fallback_author_frame_step(timing)
+			PredictionHandle.Role.SIMULATE:
+				_simulated_frame_step(timing)
+
+
+	# Commits produced membership and promotion before a schedule-tier transition.
+	func prepare_island(schedule: PredictionHandle.Schedule) -> void:
+		if _handle._schedule != schedule or _role not in [
+			PredictionHandle.Role.PREDICT,
+			PredictionHandle.Role.CONSUME,
+			PredictionHandle.Role.HOST_LOCAL,
+		]:
+			return
+		_refresh_island_membership(_role == PredictionHandle.Role.PREDICT)
 
 
 	# Keeps the step a receive-driven path replays at. A correction arrives on no
@@ -2901,9 +4066,10 @@ class _PredictionEngine extends RefCounted:
 	## Chooses the one drive a FRAME pass applies, returning
 	## [code]{ label: int, fresh: bool, kind: DriveKind }[/code].
 	##
-	## A frame with no newer input than the last one driven repeats that input
-	## under the label it already had rather than inventing one, so a peer's
-	## transition count follows its frames and never its ticks.
+	## Once the frame governor admits a pass, a frame with no newer input than the
+	## last one driven repeats that input under the label it already had rather
+	## than inventing one. The governor normally folds such surplus callbacks
+	## before this decision.
 	## [codeblock]
 	## latest > driven  ──> FRESH,  labeled by the input
 	## latest <= driven ──> REPEAT, labeled by the input it repeats
@@ -2984,9 +4150,9 @@ class _PredictionEngine extends RefCounted:
 	## [member NetwLagCompensationInterface.PredictionHandle.last_field_divergence]
 	## keeps its identity for anyone already holding it. It is filled on every
 	## branch, because the magnitude of a divergence is worth reporting even where
-	## it no longer decides one. An unjudged transition leaves it untouched, since
-	## reporting a previous transition's errors as this one's would be worse than
-	## reporting none.
+	## it no longer decides one. An unjudged transition clears it, since reporting
+	## a previous transition's errors as this one's would be worse than reporting
+	## none.
 	static func evaluate(
 			domain: NetwPredictJournal.Domain,
 			verdict: ExactVerdict,
@@ -2999,6 +4165,7 @@ class _PredictionEngine extends RefCounted:
 			field_sink: Dictionary,
 	) -> Dictionary:
 		var in_domain := domain == NetwPredictJournal.Domain.IN_DOMAIN
+		field_sink.clear()
 		if predicted.is_empty():
 			return {
 				&"divergence": INF,
@@ -3027,24 +4194,110 @@ class _PredictionEngine extends RefCounted:
 		}
 
 
+	## Returns the integral aligned error meter for one settled comparison.
+	##
+	## [param field_sink] maps causal field names to canonical error magnitudes.
+	## [param tolerances] maps the same names to their fixed zero-region bound.
+	## A non-positive bound is an exact field: zero agrees and any error measures
+	## one. Infinite or missing-field errors saturate rather than overflowing.
+	static func measure(field_sink: Dictionary, tolerances: Dictionary) -> int:
+		var meter := 0
+		for field: StringName in tolerances:
+			var error := float(field_sink.get(field, INF))
+			if not is_finite(error):
+				return 0x7FFFFFFF
+			var tolerance := maxf(0.0, float(tolerances.get(field, 0.0)))
+			if tolerance <= 0.0:
+				meter = maxi(meter, 1 if error > 0.0 else 0)
+				continue
+			meter = maxi(
+				meter,
+				ceili(maxf(error - tolerance, 0.0) / tolerance),
+			)
+		return meter
+
+
 	## Charges one divergence to the antecedent that differed, returning the
 	## [enum NetwPredictJournal.Attribution] it earns.
 	##
-	## The recurrence has three antecedents and they are tested in the order
-	## their evidence is strongest. The command is compared hash to hash, the
-	## environment digest to digest, and only a divergence that survives both
-	## reaches the simulation, which is why
-	## [constant NetwPredictJournal.Attribution.SIMULATION] means a bug with an
-	## address rather than a leftover.
+	## The boundaries are tested in causal order. Missing required peer evidence
+	## returns [constant NetwPredictJournal.Attribution.UNKNOWN], never agreement.
 	static func attribute(
+			pre_equal: bool,
 			command_equal: bool,
 			environment_equal: bool,
+			topology_equal: bool = true,
+			raw_equal: bool = true,
+			witness_equal: bool = true,
+			local_evidence: int = NetwPredictJournal.EVIDENCE_WITNESS,
+			peer_evidence: int = NetwPredictJournal.EVIDENCE_WITNESS,
+			evidence_complete: bool = true,
 	) -> NetwPredictJournal.Attribution:
+		if not evidence_complete:
+			return NetwPredictJournal.Attribution.UNKNOWN
+		if not pre_equal:
+			return NetwPredictJournal.Attribution.PRE_STATE
 		if not command_equal:
 			return NetwPredictJournal.Attribution.COMMAND
 		if not environment_equal:
 			return NetwPredictJournal.Attribution.ENVIRONMENT
-		return NetwPredictJournal.Attribution.SIMULATION
+		if not topology_equal:
+			return NetwPredictJournal.Attribution.TOPOLOGY
+		var both_raw := bool(
+			local_evidence & NetwPredictJournal.EVIDENCE_RAW,
+		) and bool(peer_evidence & NetwPredictJournal.EVIDENCE_RAW)
+		if both_raw and not raw_equal:
+			return NetwPredictJournal.Attribution.EXECUTION
+		var both_witness := bool(
+			local_evidence & NetwPredictJournal.EVIDENCE_WITNESS,
+		) and bool(peer_evidence & NetwPredictJournal.EVIDENCE_WITNESS)
+		if not both_witness:
+			return NetwPredictJournal.Attribution.UNKNOWN
+		if not witness_equal:
+			return NetwPredictJournal.Attribution.CONTACT
+		return NetwPredictJournal.Attribution.CLOSURE
+
+
+	## Fingerprints an uncanonicalized state payload in sorted field order.
+	static func raw_state_fingerprint(payload: Dictionary) -> int:
+		var keys := payload.keys()
+		keys.sort()
+		var bytes := PackedByteArray()
+		for key: StringName in keys:
+			bytes.append_array(var_to_bytes(key))
+			bytes.append_array(var_to_bytes(payload[key]))
+		return NetwPredictJournal.fnv1a(bytes)
+
+
+	## Fingerprints a sorted set of execution facts.
+	static func fact_fingerprint(facts: Dictionary) -> int:
+		var keys := facts.keys()
+		keys.sort()
+		var bytes := PackedByteArray()
+		for key: StringName in keys:
+			bytes.append_array(var_to_bytes(key))
+			bytes.append_array(var_to_bytes(facts[key]))
+		return NetwPredictJournal.fnv1a(bytes)
+
+
+	## Buckets a realized contact count as zero, one, two, three, or four-plus.
+	static func contact_count_bucket(count: int) -> int:
+		return clampi(count, 0, 4)
+
+
+	## Returns the first state family whose fingerprint differs, or
+	## [constant NetwPredictJournal.StateFamily.NONE] when evidence is incomplete
+	## or every family agrees.
+	static func differing_family(
+			local: PackedInt32Array,
+			peer: PackedInt32Array,
+	) -> NetwPredictJournal.StateFamily:
+		if local.size() < 3 or peer.size() < 3:
+			return NetwPredictJournal.StateFamily.NONE
+		for i in 3:
+			if local[i] != peer[i]:
+				return (i + 1) as NetwPredictJournal.StateFamily
+		return NetwPredictJournal.StateFamily.NONE
 
 
 	## Stages the one write a correction applies, returning
@@ -3063,9 +4316,9 @@ class _PredictionEngine extends RefCounted:
 	## REPLAY                  ──> restore all, write nothing (replay
 	##                             reaches the present under its own power)
 	## SNAP, pose >= threshold ──> restore all, teleport
-	## SNAP, suppressed        ──> skip
 	## SNAP, out of domain     ──> restore all (partiality is an in-domain
 	##                             refinement)
+	## SNAP, suppressed        ──> skip
 	## SNAP, below threshold   ──> restore all but the withheld fields
 	## [/codeblock]
 	## [param policy] is what the entity asked for and [param correction] is the
@@ -3081,7 +4334,8 @@ class _PredictionEngine extends RefCounted:
 	## [param withheld] names the fields a sub-teleport recovery leaves on the
 	## predicted body. A contractive field that re-converges on its own is worse
 	## off rewound to the acknowledged tick than left alone, which is what
-	## [method NetwScriptModel.PropertyConfig.teleport_only] declares. [param converge_rules] is the middle answer between withholding a
+	## [method NetwScriptModel.PropertyConfig.teleport_only] declares.
+	## [param converge_rules] is the middle answer between withholding a
 	## field and writing it outright, applied through [method converge_toward].
 	## A teleport ignores both declarations, because past the threshold the
 	## predicted body has nothing worth keeping.
@@ -3099,7 +4353,7 @@ class _PredictionEngine extends RefCounted:
 	## partway toward authority is sound only where the antecedents were declared
 	## reproducible, so a divergence labeled
 	## [constant NetwPredictJournal.Domain.OUT_OF_DOMAIN], or one still
-	## [constant NetwPredictJournal.Attribution.UNATTRIBUTED] while an open
+	## [constant NetwPredictJournal.Attribution.UNKNOWN] while an open
 	## contact window is disturbing the bodies, restores the whole closure
 	## instead: the recovery cannot know which fields are safe to leave behind,
 	## so it leaves none.
@@ -3119,10 +4373,9 @@ class _PredictionEngine extends RefCounted:
 			ack_age_ticks: int,
 			max_restore_ticks: int,
 			tick_delta: float,
-			domain: NetwPredictJournal.Domain = NetwPredictJournal.Domain.IN_DOMAIN,
-			attribution: NetwPredictJournal.Attribution = \
-					NetwPredictJournal.Attribution.UNATTRIBUTED,
-			contact_window: bool = false,
+			domain: NetwPredictJournal.Domain,
+			attribution: NetwPredictJournal.Attribution,
+			contact_window: bool,
 	) -> Dictionary:
 		# The divergence has already been reported by the time a recovery is
 		# staged, so a policy that only reports has nothing left to do. Declining
@@ -3154,29 +4407,29 @@ class _PredictionEngine extends RefCounted:
 				&"teleport": true,
 				&"skip": false,
 			}
-		# A settling body and a diverging one look alike for a few ticks after a
-		# contact, and correcting through that transient fights the solver rather
-		# than the divergence. The recovery declines instead of writing a value it
-		# would have to take back.
-		if suppressed:
-			return {
-				&"restore": { },
-				&"write": { },
-				&"teleport": false,
-				&"skip": true,
-			}
 		# Partiality is an in-domain refinement. A divergence outside the
 		# declared domain, or one nobody could charge while a contact was still
 		# disturbing the bodies, gives no ground to decide which fields are safe
 		# to leave predicted, so the recovery re-bases the whole closure.
 		if domain == NetwPredictJournal.Domain.OUT_OF_DOMAIN \
-				or (attribution == NetwPredictJournal.Attribution.UNATTRIBUTED
+				or (attribution == NetwPredictJournal.Attribution.UNKNOWN
 						and contact_window):
 			return {
 				&"restore": restore,
 				&"write": restore,
 				&"teleport": false,
 				&"skip": false,
+			}
+		# A settling body and a diverging one look alike for a few ticks after a
+		# contact. This pause applies only after the domain contract has earned
+		# partial recovery. An out-of-domain divergence must still close the whole
+		# state it cannot reason about.
+		if suppressed:
+			return {
+				&"restore": { },
+				&"write": { },
+				&"teleport": false,
+				&"skip": true,
 			}
 		if not withheld.is_empty():
 			restore = restore.duplicate()
@@ -3230,29 +4483,36 @@ class _PredictionEngine extends RefCounted:
 		}
 
 
-	## The sign of a delta's dominant axis: [code]-1[/code], [code]0[/code], or
-	## [code]1[/code].
+	## Identifies a delta's dominant axis and its sign.
 	##
-	## Two recoveries agree or disagree in direction along the axis where their
-	## delta is largest, so the sign is read there rather than folded across
-	## axes where a small orthogonal drift could mask a flip. A type with no
-	## signed axis reports [code]0[/code], which never counts as a flip.
-	static func delta_sign(delta: Variant) -> int:
+	## A sign flip is evidence of overshoot only when two recoveries answer the
+	## same field on the same axis. The returned [code]key[/code] carries both.
+	## A type with no signed axis returns an empty key and a zero sign.
+	static func delta_direction(field: StringName, delta: Variant) -> Dictionary:
+		var axis := -1
+		var component := 0.0
 		match typeof(delta):
 			TYPE_FLOAT:
-				return int(signf(delta as float))
+				axis = 0
+				component = delta as float
 			TYPE_VECTOR2:
 				var v2 := delta as Vector2
-				return int(signf(v2.x if absf(v2.x) >= absf(v2.y) else v2.y))
+				axis = 0 if absf(v2.x) >= absf(v2.y) else 1
+				component = v2[axis]
 			TYPE_VECTOR3:
 				var v3 := delta as Vector3
-				var dominant := v3.x
-				if absf(v3.y) > absf(dominant):
-					dominant = v3.y
-				if absf(v3.z) > absf(dominant):
-					dominant = v3.z
-				return int(signf(dominant))
-		return 0
+				axis = 0
+				if absf(v3.y) > absf(v3[axis]):
+					axis = 1
+				if absf(v3.z) > absf(v3[axis]):
+					axis = 2
+				component = v3[axis]
+		if axis < 0:
+			return { &"key": StringName(), &"sign": 0 }
+		return {
+			&"key": StringName("%s:%d" % [field, axis]),
+			&"sign": int(signf(component)),
+		}
 
 
 	## Drops from [param projection] every field whose derivative channel is
@@ -3263,21 +4523,30 @@ class _PredictionEngine extends RefCounted:
 	## the recovery answers. The guard is per field: one diverged channel costs
 	## its own field the projection and no other, so a converged channel keeps
 	## the landing accuracy projection buys. A channel is diverged when its
-	## entry in [param field_divergence] reaches its own threshold, read from
-	## [param overrides] with [param epsilon] as the fallback.
+	## entry in [param field_divergence] would introduce more projected error than
+	## the destination field tolerates over the restore span. This is independent
+	## from the derivative channel's correction-trigger epsilon.
 	static func guard_projection(
 			projection: Dictionary,
 			field_divergence: Dictionary,
 			epsilon: float,
 			overrides: Dictionary,
+			ack_age_ticks: int,
+			max_restore_ticks: int,
+			tick_delta: float,
 	) -> Dictionary:
 		if projection.is_empty() or field_divergence.is_empty():
 			return projection
+		var span := float(clampi(ack_age_ticks, 0, max_restore_ticks)) \
+				* tick_delta
 		var out := { }
 		for field: StringName in projection:
 			var channel: StringName = projection[field]
-			var limit := float(overrides.get(channel, epsilon))
-			if float(field_divergence.get(channel, 0.0)) < limit:
+			var limit := float(overrides.get(field, epsilon))
+			var projected_error := float(
+				field_divergence.get(channel, 0.0),
+			) * span
+			if projected_error < limit:
 				out[field] = channel
 		return out
 
@@ -3287,7 +4556,7 @@ class _PredictionEngine extends RefCounted:
 	##
 	## Exactness is claimed, never assumed. An entity that never declared an
 	## island through
-	## [method NetwLagCompensationInterface.PredictionHandle.configure_island]
+	## [method NetwLagCompensationInterface.PredictionHandle.island]
 	## has said nothing about whether its antecedents match its authority's, so
 	## [param declared] false labels every one of its transitions out of domain
 	## and it is compared by tolerance exactly as it always was. An island
@@ -3381,6 +4650,51 @@ class _PredictionEngine extends RefCounted:
 		return a
 
 
+	## Composes an aligned historical pose error onto the live pose.
+	##
+	## [param predicted] and [param authority] describe the settled basis.
+	## [param current] is the newer live state. Keys in [param pose_fields] use
+	## translation, except keys in [param angles], which use the shortest arc.
+	## The result carries [code]restore[/code], the partial payload to stage,
+	## [code]delta[/code], the transported error, and [code]valid[/code]. No
+	## causal non-pose field is written.
+	static func transport(
+			predicted: Dictionary,
+			authority: Dictionary,
+			current: Dictionary,
+			pose_fields: Dictionary,
+			angles: Dictionary = { },
+	) -> Dictionary:
+		var restore: Dictionary = { }
+		var deltas: Dictionary = { }
+		for field: StringName in pose_fields:
+			if not predicted.has(field) or not authority.has(field) \
+					or not current.has(field):
+				return {
+					&"restore": { },
+					&"delta": { },
+					&"valid": false,
+				}
+			var delta: Variant = _pose_delta(
+				authority[field],
+				predicted[field],
+				angles.has(field),
+			)
+			if delta == null:
+				return {
+					&"restore": { },
+					&"delta": { },
+					&"valid": false,
+				}
+			deltas[field] = delta
+			restore[field] = _pose_sum(current[field], delta)
+		return {
+			&"restore": restore,
+			&"delta": deltas,
+			&"valid": not restore.is_empty(),
+		}
+
+
 	## Replaces each converging property in [param restore] with a bounded step
 	## from [param current] toward it, returning the staged payload.
 	##
@@ -3460,17 +4774,14 @@ class _PredictionEngine extends RefCounted:
 
 
 	func finalize_frame_state() -> void:
-		if _handle.schedule != PredictionHandle.Schedule.FRAME:
+		if _handle._schedule != PredictionHandle.Schedule.FRAME:
 			return
 		if _role != PredictionHandle.Role.PREDICT:
 			return
 		var state := _capture()
 		if _last_driven_entry_index > _last_recorded_entry_index:
 			_entry_history.record_state(_last_driven_entry_index + 1, state)
-			_journal.close(
-				_last_driven_entry_index,
-				_state_fingerprint(state),
-			)
+			_close_journal_row(_last_driven_entry_index, state)
 			_last_recorded_entry_index = _last_driven_entry_index
 		if _last_driven_input_tick > _last_recorded_input_tick:
 			_timeline.record_state(_last_driven_input_tick + 1, state)
@@ -3478,7 +4789,7 @@ class _PredictionEngine extends RefCounted:
 
 
 	func uses_schedule(schedule: PredictionHandle.Schedule) -> bool:
-		return _handle.schedule == schedule
+		return _handle._schedule == schedule
 
 
 	func tape_transitions() -> Array[Dictionary]:
@@ -3500,13 +4811,884 @@ class _PredictionEngine extends RefCounted:
 	func transition_state_at(entry_index: int) -> Dictionary:
 		# A TICK transition is its tick, so its post-state lives in the predicted
 		# timeline rather than in the FRAME tier's entry history.
-		if _handle.schedule == PredictionHandle.Schedule.TICK:
+		if _handle._schedule == PredictionHandle.Schedule.TICK:
 			return _timeline.state_at(entry_index + 1) if _timeline else { }
 		return _entry_history.state_at(entry_index + 1)
 
 
 	func journal() -> NetwPredictJournal:
 		return _journal
+
+
+	## Returns a detached copy of the engine's episode evidence.
+	func episode() -> Dictionary:
+		return _handle._episode_report(_episode)
+
+
+	# Copies the episode onto the handle after every evidence mutation.
+	func _sync_episode() -> void:
+		if _handle and not _episode.is_empty():
+			_handle._store_episode(_episode)
+
+
+	# Opens one behavioral episode at the first actionable settled comparison.
+	func _open_episode(
+			transition: int,
+			attribution: NetwPredictJournal.Attribution,
+	) -> void:
+		var identity := _handle._open_episode_identity(
+			transition,
+			EPISODE_FLAP_WINDOW,
+		)
+		_episode = {
+			&"id": int(identity[&"id"]),
+			&"opened_transition": transition,
+			&"generator_row_copy": _pin_generator(transition),
+			&"attribution": attribution,
+			&"writes": [],
+			&"non_contraction_used": 0,
+			&"closure_used": 0,
+			&"state": PredictionHandle.EpisodeState.OPEN,
+			&"reopened_from": int(identity[&"reopened_from"]),
+			&"reopen_chain": (
+				identity[&"reopen_chain"] as Array
+			).duplicate(),
+			&"taint": [],
+			&"secondary_generators": [],
+			&"comparisons": [],
+			&"decisions": [],
+			&"transport_decided": false,
+			&"dissipate_decided": false,
+			&"agreement_run": 0,
+			&"last_comparison_transition": -1,
+			&"agreement_write_id": 0,
+			&"last_write_id": 0,
+		}
+		_next_operator_write_id = 1
+		_sync_episode()
+		_handle.episode_opened.emit(_handle._episode_report(_episode))
+
+
+	# Pins the earliest retained row in the actionable out-of-domain run.
+	func _pin_generator(crossing: int) -> Dictionary:
+		var transitions := _journal.transitions()
+		var index := transitions.find(crossing)
+		if index < 0:
+			return {
+				&"status": PredictionHandle.GENERATOR_UNKNOWN_BEYOND_RETENTION,
+			}
+		var row := _journal.row_at(crossing)
+		if _is_actionable_generator_row(row):
+			while index > 0:
+				var previous := _journal.row_at(int(transitions[index - 1]))
+				if not _is_actionable_generator_row(previous):
+					break
+				index -= 1
+				row = previous
+		if index == 0 and transitions.size() >= TAPE_HISTORY_LIMIT \
+				and _is_actionable_generator_row(row):
+			return {
+				&"status": PredictionHandle.GENERATOR_UNKNOWN_BEYOND_RETENTION,
+				&"retained_anchor": _pin_row(int(transitions[0])),
+			}
+		return _pin_row(int(row.get(&"transition", crossing)))
+
+
+	# True when a mismatch was actionable under the tolerance comparison.
+	func _is_actionable_generator_row(row: Dictionary) -> bool:
+		return bool(
+			int(row.get(&"flags", 0)) & NetwPredictJournal.ROW_DIVERGENT,
+		) \
+				and int(row.get(&"domain", NetwPredictJournal.Domain.IN_DOMAIN)) \
+				== NetwPredictJournal.Domain.OUT_OF_DOMAIN
+
+
+	# Copies one row and its debug-only forensic sidecar out of bounded storage.
+	func _pin_row(transition: int) -> Dictionary:
+		var row := _journal.row_at(transition).duplicate(true)
+		if row.is_empty():
+			return {
+				&"status": PredictionHandle.GENERATOR_UNKNOWN_BEYOND_RETENTION,
+			}
+		row[&"sidecar"] = _forensic_sidecars.get(
+			transition,
+			{ },
+		).duplicate(true)
+		return row
+
+
+	# Holds one state until the ack lane supplies its aligned witness verdict.
+	func _defer_operator_for_witness(
+			recv_tick: int,
+			basis: int,
+			payload: Dictionary,
+	) -> bool:
+		if _episode.is_empty() or _witness_verdicts.has(basis):
+			return false
+		var transport_waits := not _handle.transport_config.is_empty() \
+				and not bool(_episode.get(&"transport_decided", false))
+		var dissipate_waits := _has_dissipate_fields() \
+				and not bool(_episode.get(&"dissipate_decided", false)) \
+				and _handle.resolved_recovery_policy() \
+				!= PredictionHandle.RecoveryPolicy.OBSERVE
+		if not transport_waits and not dissipate_waits:
+			return false
+		if _operator_deferred_basis >= 0 \
+				and _operator_deferred_basis != basis:
+			_record_unavailable_operator(
+				_operator_deferred_basis,
+				transport_waits,
+				dissipate_waits,
+			)
+			_deferred_operator_states.erase(_operator_deferred_basis)
+			_operator_deferred_basis = -1
+			return false
+		_deferred_operator_states[basis] = {
+			&"recv_tick": recv_tick,
+			&"payload": payload.duplicate(true),
+		}
+		_operator_deferred_basis = basis
+		return true
+
+
+	# Records that witness evidence never arrived before a newer basis replaced it.
+	func _record_unavailable_operator(
+			basis: int,
+			transport_waited: bool,
+			dissipate_waited: bool,
+	) -> void:
+		var decisions: Array = _episode[&"decisions"]
+		if transport_waited \
+				and not bool(_episode.get(&"transport_decided", false)):
+			_episode[&"transport_decided"] = true
+			decisions.append({
+				&"operator": NetwPredictJournal.Operator.TRANSPORT_DELTA,
+				&"basis": basis,
+				&"eligible": false,
+				&"applied": false,
+				&"eligibility": {
+					&"witness_aligned": false,
+				},
+			})
+		if dissipate_waited \
+				and not bool(_episode.get(&"dissipate_decided", false)):
+			_episode[&"dissipate_decided"] = true
+			decisions.append({
+				&"operator": NetwPredictJournal.Operator.DISSIPATE,
+				&"basis": basis,
+				&"eligible": false,
+				&"applied": false,
+				&"eligibility": {
+					&"witness_aligned": false,
+				},
+			})
+		_sync_episode()
+
+
+	# Re-evaluates the retained state once its ack witness has been compared.
+	func _retry_deferred_operator(basis: int) -> void:
+		if _operator_deferred_basis != basis \
+				or not _deferred_operator_states.has(basis):
+			return
+		var state: Dictionary = _deferred_operator_states[basis]
+		_deferred_operator_states.erase(basis)
+		_operator_deferred_basis = -1
+		_on_state(
+			int(state[&"recv_tick"]),
+			basis,
+			state[&"payload"],
+		)
+
+
+	# Attempts the conditional operator once and records every eligibility fact.
+	func _try_transport(
+			predicted: Dictionary,
+			authority: Dictionary,
+			current: Dictionary,
+			basis: int,
+			escalated: bool,
+	) -> Dictionary:
+		if _handle.transport_config.is_empty() or _episode.is_empty() \
+				or bool(_episode.get(&"transport_decided", false)):
+			return { }
+		var candidate := transport(
+			predicted,
+			authority,
+			current,
+			_restore_projection,
+			_angle_fields,
+		)
+		var basis_clean := _witness_row_clean(
+			_journal.row_at(basis),
+			true,
+		)
+		var recent_clean := _recent_witness_clean(basis)
+		var non_pose := _non_pose_eligibility(predicted, authority)
+		var delta_size := _transport_delta_size(
+			current,
+			candidate.get(&"restore", { }),
+		)
+		var below_teleport := delta_size > 0.0 \
+				and delta_size < _handle.teleport_threshold
+		var policy_ok := not escalated \
+				and _correction == PredictionHandle.CorrectionMode.SNAP \
+				and _handle.resolved_recovery_policy() \
+				!= PredictionHandle.RecoveryPolicy.OBSERVE
+		var corridor_clear := false
+		var prior_ok := bool(candidate.get(&"valid", false)) \
+				and basis_clean and recent_clean \
+				and bool(non_pose[&"agrees"]) \
+				and below_teleport and policy_ok
+		if prior_ok:
+			var corridor: Callable = _handle.transport_config[&"corridor"]
+			var proposed := current.duplicate()
+			proposed.merge(candidate[&"restore"], true)
+			corridor_clear = bool(corridor.call(current, proposed))
+		var eligible := prior_ok and corridor_clear
+		var decision := {
+			&"operator": NetwPredictJournal.Operator.TRANSPORT_DELTA,
+			&"basis": basis,
+			&"eligible": eligible,
+			&"applied": eligible,
+			&"eligibility": {
+				&"candidate": bool(candidate.get(&"valid", false)),
+				&"basis_witness_clean": basis_clean,
+				&"recent_witness_clean": recent_clean,
+				&"non_pose": non_pose,
+				&"delta": delta_size,
+				&"below_teleport": below_teleport,
+				&"policy": policy_ok,
+				&"corridor_clear": corridor_clear,
+			},
+		}
+		_episode[&"transport_decided"] = true
+		var decisions: Array = _episode[&"decisions"]
+		decisions.append(decision)
+		_sync_episode()
+		return candidate if eligible else { }
+
+
+	# A clean witness is awake and reports only contact the closure reproduces:
+	# none, the declared support, or static world geometry.
+	func _witness_row_clean(row: Dictionary, require_peer: bool) -> bool:
+		if row.is_empty() or not int(row.get(&"evidence_mask", 0)) \
+				& NetwPredictJournal.EVIDENCE_WITNESS:
+			return false
+		if require_peer and not int(row.get(&"flags", 0)) \
+				& NetwPredictJournal.ROW_WITNESS_MATCHED:
+			return false
+		var detail: Dictionary = row.get(&"witness_detail", { })
+		if detail.is_empty() or bool(detail.get(&"sleeping", true)) \
+				or bool(detail.get(&"woke", true)):
+			return false
+		var classes: Array = detail.get(&"contact_classes", [])
+		if classes.is_empty():
+			return false
+		for contact_class: int in classes:
+			if contact_class not in [
+				PredictionHandle.ContactClass.NONE,
+				PredictionHandle.ContactClass.DECLARED_SUPPORT,
+				PredictionHandle.ContactClass.OTHER_STATIC,
+			]:
+				return false
+		return true
+
+
+	# Requires a contiguous clean local witness run from the basis through now.
+	func _recent_witness_clean(basis: int) -> bool:
+		var expected := basis
+		for transition: int in _journal.transitions():
+			if transition < basis:
+				continue
+			if transition != expected:
+				return false
+			var row := _journal.row_at(transition)
+			if not int(row.get(&"flags", 0)) \
+					& NetwPredictJournal.ROW_CLOSED:
+				return expected > basis
+			if not _witness_row_clean(row, false):
+				return false
+			expected += 1
+		return expected > basis
+
+
+	# Compares every declared causal field outside the pose family at the basis.
+	func _non_pose_eligibility(
+			predicted: Dictionary,
+			authority: Dictionary,
+	) -> Dictionary:
+		var agrees := true
+		var fields: Dictionary = { }
+		for field: StringName in _causal_fields:
+			if int(_state_family_of.get(
+				field,
+				STATE_FAMILY_CONTROLLER,
+			)) == STATE_FAMILY_POSE:
+				continue
+			var error := INF
+			if predicted.has(field) and authority.has(field):
+				error = PredictionHandle._error(
+					predicted[field],
+					authority[field],
+					_angle_fields.has(field),
+				)
+			var epsilon := float(
+				_epsilon_overrides.get(field, _handle.divergence_epsilon),
+			)
+			var field_agrees := error <= epsilon
+			fields[field] = {
+				&"error": error,
+				&"epsilon": epsilon,
+				&"agrees": field_agrees,
+			}
+			agrees = agrees and field_agrees
+		return { &"agrees": agrees, &"fields": fields }
+
+
+	# Measures the largest pose change the partial transport would write.
+	func _transport_delta_size(
+			current: Dictionary,
+			restore: Dictionary,
+	) -> float:
+		if restore.is_empty():
+			return INF
+		var error := 0.0
+		for field: StringName in restore:
+			if not current.has(field):
+				return INF
+			error = maxf(
+				error,
+				PredictionHandle._error(
+					current[field],
+					restore[field],
+					_angle_fields.has(field),
+				),
+			)
+		return error
+
+
+	# Whether transport is still gathering its bounded verification verdicts.
+	func _transport_pending() -> bool:
+		if _episode.is_empty():
+			return false
+		var writes: Array = _episode.get(&"writes", [])
+		for index in range(writes.size() - 1, -1, -1):
+			var write: Dictionary = writes[index]
+			if int(write.get(&"operator", -1)) \
+					!= NetwPredictJournal.Operator.TRANSPORT_DELTA:
+				continue
+			return int(write.get(&"outcome", -1)) \
+					== PredictionHandle.OperatorOutcome.PENDING
+		return false
+
+
+	# Whether the clean momentum-only no-write attempt is still gathering proof.
+	func _dissipate_pending() -> bool:
+		if _episode.is_empty():
+			return false
+		var writes: Array = _episode.get(&"writes", [])
+		for index in range(writes.size() - 1, -1, -1):
+			var write: Dictionary = writes[index]
+			if int(write.get(&"operator", -1)) \
+					!= NetwPredictJournal.Operator.DISSIPATE:
+				continue
+			return int(write.get(&"outcome", -1)) \
+					== PredictionHandle.OperatorOutcome.PENDING
+		return false
+
+
+	# Whether this recipe exposes at least one withheld momentum field.
+	func _has_dissipate_fields() -> bool:
+		return not _withheld_fields.is_empty()
+
+
+	# Attempts one bounded no-write window for a clean momentum-only error.
+	func _try_dissipate(
+			basis: int,
+			meter: int,
+			domain: NetwPredictJournal.Domain,
+			escalated: bool,
+	) -> bool:
+		if _episode.is_empty() \
+				or bool(_episode.get(&"dissipate_decided", false)) \
+				or _withheld_fields.is_empty():
+			return false
+		var eligibility := _dissipate_eligibility(basis, domain)
+		var eligible := not escalated and meter > 0 \
+				and bool(eligibility[&"eligible"])
+		_episode[&"dissipate_decided"] = true
+		var decisions: Array = _episode[&"decisions"]
+		decisions.append({
+			&"operator": NetwPredictJournal.Operator.DISSIPATE,
+			&"basis": basis,
+			&"eligible": eligible,
+			&"applied": eligible,
+			&"eligibility": eligibility,
+		})
+		if eligible:
+			var write_id := _next_operator_write_id
+			_next_operator_write_id += 1
+			_record_episode_write(
+				write_id,
+				NetwPredictJournal.Operator.DISSIPATE,
+				basis,
+				0,
+				_entity.entity_id if _entity else &"body",
+				false,
+				true,
+			)
+		else:
+			_sync_episode()
+		return eligible
+
+
+	# Proves that only withheld momentum fields cross their declared zero region.
+	func _dissipate_eligibility(
+			basis: int,
+			domain: NetwPredictJournal.Domain,
+	) -> Dictionary:
+		var tolerances := _meter_tolerances(domain)
+		var fields: Dictionary = { }
+		var momentum_active := false
+		var other_active := false
+		for field: StringName in _handle.last_field_divergence:
+			if _trigger_excludes.has(field) \
+					and not _withheld_fields.has(field):
+				continue
+			var error := float(_handle.last_field_divergence.get(field, INF))
+			var tolerance := float(tolerances.get(
+				field,
+				_epsilon_overrides.get(
+					field,
+					_handle.divergence_epsilon,
+				),
+			))
+			var active := error > tolerance
+			var momentum := _withheld_fields.has(field)
+			fields[field] = {
+				&"error": error,
+				&"epsilon": tolerance,
+				&"active": active,
+				&"momentum": momentum,
+			}
+			if not active:
+				continue
+			if momentum:
+				momentum_active = true
+			elif not _trigger_excludes.has(field):
+				other_active = true
+		var basis_clean := _witness_row_clean(
+			_journal.row_at(basis),
+			true,
+		)
+		var recent_clean := _recent_witness_clean(basis)
+		var mechanism_ok := _correction \
+				== PredictionHandle.CorrectionMode.SNAP \
+				and _handle.resolved_recovery_policy() \
+				!= PredictionHandle.RecoveryPolicy.OBSERVE
+		return {
+			&"eligible": momentum_active and not other_active \
+					and basis_clean and recent_clean and mechanism_ok,
+			&"momentum_active": momentum_active,
+			&"other_active": other_active,
+			&"basis_witness_clean": basis_clean,
+			&"recent_witness_clean": recent_clean,
+			&"mechanism": mechanism_ok,
+			&"fields": fields,
+		}
+
+
+	# Attaches later mismatches as taint or an agreeing-pre secondary generator.
+	func _record_episode_divergence(transition: int) -> void:
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+				!= PredictionHandle.EpisodeState.OPEN:
+			return
+		if transition == int(_episode.get(&"opened_transition", -1)):
+			return
+		var row := _journal.row_at(transition)
+		var attribution := int(row.get(
+			&"attribution",
+			NetwPredictJournal.Attribution.UNKNOWN,
+		))
+		var independent := not row.is_empty() \
+				and attribution != NetwPredictJournal.Attribution.UNKNOWN \
+				and attribution != NetwPredictJournal.Attribution.PRE_STATE
+		if independent:
+			var generators: Array = _episode[&"secondary_generators"]
+			for generator: Dictionary in generators:
+				if int(generator.get(&"transition", -1)) == transition:
+					return
+			generators.append(_pin_row(transition))
+		else:
+			var taint: Array = _episode[&"taint"]
+			if not taint.has(transition):
+				taint.append(transition)
+		_sync_episode()
+
+
+	# Records one distinct aligned verdict and closes after the verified run.
+	func _record_episode_comparison(
+			transition: int,
+			meter: int,
+			agrees: bool,
+	) -> void:
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+				!= PredictionHandle.EpisodeState.OPEN:
+			return
+		var last := int(_episode.get(&"last_comparison_transition", -1))
+		if transition <= last:
+			return
+		_judge_operator_outcomes(transition, meter)
+		var comparisons: Array = _episode[&"comparisons"]
+		comparisons.append({
+			&"transition": transition,
+			&"meter": meter,
+			&"agrees": agrees,
+			&"write_id": int(_episode.get(&"last_write_id", 0)),
+		})
+		_episode[&"last_comparison_transition"] = transition
+		if agrees:
+			var same_write := int(_episode.get(&"agreement_write_id", 0)) \
+					== int(_episode.get(&"last_write_id", 0))
+			_episode[&"agreement_run"] = (
+				int(_episode.get(&"agreement_run", 0)) + 1
+				if same_write else 1
+			)
+			_episode[&"agreement_write_id"] = int(
+				_episode.get(&"last_write_id", 0),
+			)
+		else:
+			_episode[&"agreement_run"] = 0
+		if int(_episode[&"agreement_run"]) >= EPISODE_CLOSE_RUN:
+			_close_episode(transition)
+		else:
+			_sync_episode()
+
+
+	# Judges pending operator writes from later aligned meter samples.
+	func _judge_operator_outcomes(transition: int, meter: int) -> void:
+		var writes: Array = _episode.get(&"writes", [])
+		for i in writes.size():
+			var write: Dictionary = writes[i]
+			if int(write.get(&"outcome", -1)) \
+					!= PredictionHandle.OperatorOutcome.PENDING:
+				continue
+			if transition <= int(write.get(&"basis", -1)):
+				continue
+			if int(write.get(&"operator", -1)) \
+					== NetwPredictJournal.Operator.DISSIPATE:
+				var best := int(write.get(
+					&"best_meter",
+					write.get(&"meter_before", meter),
+				))
+				if meter == 0:
+					write[&"outcome"] = \
+							PredictionHandle.OperatorOutcome.CONTRACTED
+					write[&"judged_transition"] = transition
+					write[&"meter_after"] = meter
+				elif meter < best:
+					write[&"best_meter"] = meter
+					write[&"verdicts"] = 0
+				else:
+					write[&"verdicts"] = int(
+						write.get(&"verdicts", 0),
+					) + 1
+					if int(write[&"verdicts"]) >= int(
+						write.get(&"verify_run", 3),
+					):
+						write[&"outcome"] = (
+							PredictionHandle.OperatorOutcome.FAILED_TO_CONTRACT
+						)
+						write[&"judged_transition"] = transition
+						write[&"meter_after"] = meter
+						_episode[&"non_contraction_used"] = int(
+							_episode.get(&"non_contraction_used", 0),
+						) + 1
+				writes[i] = write
+				continue
+			if meter == 0 or meter < int(write.get(&"meter_before", meter)):
+				write[&"outcome"] = PredictionHandle.OperatorOutcome.CONTRACTED
+				write[&"judged_transition"] = transition
+				write[&"meter_after"] = meter
+				writes[i] = write
+				continue
+			write[&"verdicts"] = int(write.get(&"verdicts", 0)) + 1
+			if int(write[&"verdicts"]) >= int(write.get(&"verify_run", 3)):
+				write[&"outcome"] = \
+						PredictionHandle.OperatorOutcome.FAILED_TO_CONTRACT
+				write[&"judged_transition"] = transition
+				write[&"meter_after"] = meter
+				if not bool(write.get(&"evidence_free", false)):
+					_episode[&"non_contraction_used"] = int(
+						_episode.get(&"non_contraction_used", 0),
+					) + 1
+			writes[i] = write
+
+
+	# Records one operator attempt as episode evidence and resets the clean run.
+	func _record_episode_write(
+			write_id: int,
+			operator: NetwPredictJournal.Operator,
+			basis: int,
+			delta_fp: int,
+			target: StringName,
+			evidence_free: bool = false,
+			null_operator: bool = false,
+	) -> void:
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) not in [
+			PredictionHandle.EpisodeState.OPEN,
+			PredictionHandle.EpisodeState.FALLBACK,
+		]:
+			return
+		var comparisons: Array = _episode.get(&"comparisons", [])
+		var meter_before := 0x7FFFFFFF
+		if not comparisons.is_empty():
+			meter_before = int(comparisons.back().get(&"meter", meter_before))
+		var writes: Array = _episode[&"writes"]
+		writes.append({
+			&"episode": int(_episode[&"id"]),
+			&"write_id": write_id,
+			&"operator": operator,
+			&"basis": basis,
+			&"delta_fp": delta_fp,
+			&"target": target,
+			&"outcome": PredictionHandle.OperatorOutcome.PENDING,
+			&"meter_before": meter_before,
+			&"verdicts": 0,
+			&"verify_run": EPISODE_CLOSE_RUN if null_operator \
+					else maxi(3, _handle.ack_age_ticks),
+			&"evidence_free": evidence_free,
+			&"null_operator": null_operator,
+		})
+		_episode[&"last_write_id"] = write_id
+		_episode[&"agreement_run"] = 0
+		if operator == NetwPredictJournal.Operator.FULL_CLOSURE:
+			_episode[&"closure_used"] = int(
+				_episode.get(&"closure_used", 0),
+			) + 1
+		_sync_episode()
+
+
+	# Spends escalation evidence without resetting any episode counter.
+	func _record_non_contraction() -> void:
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+				!= PredictionHandle.EpisodeState.OPEN:
+			return
+		var writes: Array = _episode.get(&"writes", [])
+		for i in range(writes.size() - 1, -1, -1):
+			var write: Dictionary = writes[i]
+			if int(write.get(&"outcome", -1)) \
+					!= PredictionHandle.OperatorOutcome.PENDING:
+				continue
+			write[&"outcome"] = \
+					PredictionHandle.OperatorOutcome.FAILED_TO_CONTRACT
+			writes[i] = write
+			break
+		_episode[&"non_contraction_used"] = int(
+			_episode.get(&"non_contraction_used", 0),
+		) + 1
+		_sync_episode()
+
+
+	# Retires the episode after the domain-aware verified agreement run.
+	func _close_episode(transition: int) -> void:
+		_episode[&"state"] = PredictionHandle.EpisodeState.CLOSED
+		_episode[&"closed_transition"] = transition
+		_handle._store_episode_closure(_episode, transition)
+		_handle.episode_closed.emit(_handle._episode_report(_episode))
+
+
+	# Whether either structural recovery evidence budget is exhausted.
+	func _episode_budget_exhausted() -> bool:
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+				!= PredictionHandle.EpisodeState.OPEN:
+			return false
+		return int(_episode.get(&"non_contraction_used", 0)) \
+				>= EPISODE_NON_CONTRACTION_BUDGET \
+				or int(_episode.get(&"closure_used", 0)) \
+				>= EPISODE_FULL_CLOSURE_BUDGET
+
+
+	# Closes speculation and starts the coherent-authority quarantine proof.
+	func _enter_fallback(transition: int, demoted: bool = false) -> void:
+		var stream_was_reconstructed := _stream_reconstructed
+		_episode[&"state"] = PredictionHandle.EpisodeState.FALLBACK
+		_episode[&"fallback_transition"] = transition
+		_episode[&"demoted"] = demoted
+		_fallback_latched = true
+		var resume_ack_age := maxi(_handle.ack_age_ticks, 0)
+		var resume_run := _resume_run_for_ack_age(resume_ack_age)
+		_quarantine_target = _handle._quarantine_target(
+			resume_run,
+			QUARANTINE_RUN_CAP,
+		)
+		_episode[&"resume_ack_age"] = resume_ack_age
+		_episode[&"quarantine_target"] = _quarantine_target
+		_sync_episode()
+		_handle.episode_fallback.emit(_handle._episode_report(_episode))
+		_rewire()
+		_quarantine_stream_reconstructed = stream_was_reconstructed
+		_quarantine_clean_run = 0
+		_quarantine_last_tick = -1
+		_quarantine_last_basis = -1
+		_quarantine_pending_states = { }
+
+
+	# Scales the clean proof by measured acknowledgement age, never wire width.
+	func _resume_run_for_ack_age(ack_age: int) -> int:
+		return clampi(
+			maxi(ack_age, 0) * RESUME_ACK_MULTIPLIER,
+			RESUME_RUN_MIN,
+			QUARANTINE_RUN_CAP,
+		)
+
+
+	# Counts distinct coherent authority frames while speculation is closed.
+	func _on_quarantine_state_frame(header: Dictionary) -> void:
+		if not _fallback_latched:
+			return
+		_quarantine_stream_reconstructed = \
+				_quarantine_stream_reconstructed \
+				or bool(header.get(&"whole", true))
+		if not _quarantine_stream_reconstructed:
+			return
+		var tick := int(header.get(&"tick", -1))
+		var basis := int(header.get(&"ack", -1))
+		var payload: Dictionary = header.get(&"payload", { })
+		if tick <= _quarantine_last_tick or basis < 0 or payload.is_empty():
+			return
+		_quarantine_last_tick = tick
+		_quarantine_pending_states[basis] = header.duplicate(true)
+		while _quarantine_pending_states.size() > TAPE_HISTORY_LIMIT:
+			var retained := _quarantine_pending_states.keys()
+			retained.sort()
+			_quarantine_pending_states.erase(retained.front())
+		if _authority_witness_classes.has(basis):
+			_apply_quarantine_witness(basis)
+		_try_begin_quarantine_reseed()
+
+
+	# Counts one transition only when its authority witness summary arrives.
+	func _apply_quarantine_witness(basis: int) -> void:
+		if not _fallback_latched or basis <= _quarantine_last_basis:
+			return
+		var witness_bits := int(_authority_witness_classes.get(basis, -1))
+		var clean := _authority_witness_is_clean(witness_bits)
+		if not clean:
+			_quarantine_clean_run = 0
+		elif _quarantine_last_basis >= 0 \
+				and basis != _quarantine_last_basis + 1:
+			_quarantine_clean_run = 1
+		else:
+			_quarantine_clean_run += 1
+		_quarantine_last_basis = basis
+		_episode[&"quarantine_clean_run"] = _quarantine_clean_run
+		_sync_episode()
+		_try_begin_quarantine_reseed()
+
+
+	# Reseeds from the newest coherent state inside the proven clean run.
+	func _try_begin_quarantine_reseed() -> void:
+		if not _fallback_latched \
+				or _quarantine_clean_run < _quarantine_target:
+			return
+		var clean_start := _quarantine_last_basis \
+				- _quarantine_clean_run + 1
+		var bases := _quarantine_pending_states.keys()
+		bases.sort()
+		bases.reverse()
+		for value: Variant in bases:
+			var basis := int(value)
+			if basis < clean_start or basis > _quarantine_last_basis:
+				continue
+			if not _authority_witness_is_clean(int(
+					_authority_witness_classes.get(basis, -1),
+			)):
+				continue
+			_begin_reseed(_quarantine_pending_states[basis])
+			return
+
+
+	# An authority summary is clean when it reports only contact the closure
+	# reproduces: none, the declared support, or static world geometry.
+	func _authority_witness_is_clean(bits: int) -> bool:
+		return bits >= 0 and not bool(
+			bits & ~(
+				PredictionHandle.WitnessClass.SUPPORT
+				| PredictionHandle.WitnessClass.STATIC
+			),
+		)
+
+
+	# Seeds the newest authority closure and reopens a fresh command epoch.
+	func _begin_reseed(header: Dictionary) -> void:
+		var payload: Dictionary = header.get(&"payload", { })
+		var basis := int(header.get(&"ack", -1))
+		_restore(
+			payload,
+			NetwPredictJournal.Operator.RESEED,
+			basis,
+			null,
+			true,
+		)
+		var reseed_provenance := _pending_provenance.duplicate(true)
+		_episode[&"reseed_transition"] = basis
+		_fallback_latched = false
+		_reseed_align_pending = true
+		_reseed_epoch_confirmed = false
+		_reseed_ignore_through = -1
+		_rewire()
+		_pending_provenance = reseed_provenance
+		_sync_episode()
+
+
+	# Applies the one evidence-free post-epoch horizon alignment.
+	func _finish_reseed_alignment(
+			recv_tick: int,
+			ack: int,
+			payload: Dictionary,
+	) -> void:
+		_restore(
+			payload,
+			NetwPredictJournal.Operator.RESEED_ALIGN,
+			ack,
+			null,
+			true,
+		)
+		if _timeline:
+			_timeline.record_state(ack + 1, payload)
+		if _correction == PredictionHandle.CorrectionMode.REPLAY:
+			_replay_reseed_horizon(ack)
+		_reseed_ignore_through = (
+			_last_driven_entry_index
+			if _handle._schedule == PredictionHandle.Schedule.FRAME
+			else _latest_input_tick
+		)
+		_reseed_align_pending = false
+		_reseed_epoch_confirmed = false
+		_episode[&"aligned_transition"] = ack
+		_episode[&"closed_transition"] = ack
+		_handle._store_episode_closure(_episode, ack)
+		_handle.state_evaluated.emit(recv_tick, ack, 0.0, false)
+
+
+	# Re-runs the current epoch's unacknowledged commands from the aligned seed.
+	func _replay_reseed_horizon(ack: int) -> void:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
+			_replay_authored_entries(ack)
+			return
+		if not _timeline or not _input_binding:
+			return
+		var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
+		var live_input := _input_binding.snapshot_payload()
+		for entry: Dictionary in window:
+			_run(entry[&"input"], _tick_delta, int(entry[&"tick"]), false)
+			_timeline.record_state(int(entry[&"tick"]) + 1, _capture())
+		_input_binding.apply_payload(live_input)
+		_handle.max_replay_depth = maxi(
+			_handle.max_replay_depth,
+			window.size(),
+		)
 
 
 	# --- Owner and authority lanes ---
@@ -3532,7 +5714,9 @@ class _PredictionEngine extends RefCounted:
 	# nothing outstanding. Split from the send so the bytes are testable and so
 	# the kernel half stays a pure function of the tape and the ack floor.
 	func build_command_frame() -> PackedByteArray:
-		if _role != PredictionHandle.Role.PREDICT or _authored_tape.is_empty():
+		var authors_commands := _role == PredictionHandle.Role.PREDICT \
+				or _role == PredictionHandle.Role.REMOTE and _fallback_latched
+		if not authors_commands or _authored_tape.is_empty():
 			return PackedByteArray()
 		var window := maxi(1, _input_binding.set.window + 2)
 		var rows: Array = []
@@ -3562,8 +5746,15 @@ class _PredictionEngine extends RefCounted:
 		# open holds a zero authority would read as a claim of zero, so the section
 		# covers the closed prefix of the window and stops at the first row the
 		# owner cannot yet speak for.
+		var pre_fps := PackedInt32Array()
 		var post_fps := PackedInt32Array()
 		var e_digests := PackedInt32Array()
+		var pre_family_fps := PackedInt32Array()
+		var post_family_fps := PackedInt32Array()
+		var topo_fps := PackedInt32Array()
+		var witness_fps := PackedInt32Array()
+		var raw_fps := PackedInt32Array()
+		var evidence_masks := PackedByteArray()
 		var closed := _journal.last_closed()
 		for entry: Dictionary in rows:
 			var index := int(entry.get("index", -1))
@@ -3572,8 +5763,17 @@ class _PredictionEngine extends RefCounted:
 			var row := _journal.row_at(index)
 			if row.is_empty():
 				break
+			pre_fps.append(int(row.get(&"pre_fp", 0)))
 			post_fps.append(int(row.get(&"post_fp", 0)))
 			e_digests.append(int(row.get(&"e_digest", 0)))
+			topo_fps.append(int(row.get(&"topo_fp", 0)))
+			witness_fps.append(int(row.get(&"witness_fp", 0)))
+			raw_fps.append(int(row.get(&"raw_fp", 0)))
+			evidence_masks.append(int(row.get(&"evidence_mask", 0)))
+			for key in [&"pre_pose_fp", &"pre_momentum_fp", &"pre_controller_fp"]:
+				pre_family_fps.append(int(row.get(key, 0)))
+			for key in [&"post_pose_fp", &"post_momentum_fp", &"post_controller_fp"]:
+				post_family_fps.append(int(row.get(key, 0)))
 		return _PredictFrames.encode_command(
 			_tape_epoch,
 			_ack_of_acks,
@@ -3583,6 +5783,13 @@ class _PredictionEngine extends RefCounted:
 			types,
 			post_fps,
 			e_digests,
+			pre_fps,
+			pre_family_fps,
+			post_family_fps,
+			topo_fps,
+			witness_fps,
+			raw_fps,
+			evidence_masks,
 		)
 
 
@@ -3620,13 +5827,28 @@ class _PredictionEngine extends RefCounted:
 		# transition would scan the ring per lookup and allocate a row
 		# dictionary per record, on every authority frame.
 		var transitions := _journal.transitions()
+		var all_pre := _journal.pre_fps()
 		var all_c := _journal.c_hashes()
 		var all_e := _journal.e_digests()
 		var all_fp := _journal.post_fps()
+		var all_pre_families := _journal.pre_family_fps()
+		var all_post_families := _journal.post_family_fps()
+		var all_topo := _journal.topo_fps()
+		var all_witness := _journal.witness_fps()
+		var all_witness_classes := _journal.witness_class_bits()
+		var all_raw := _journal.raw_fps()
+		var all_evidence := _journal.evidence_masks()
 		var all_flags := _journal.flags()
+		var pre_fps := PackedInt32Array()
 		var c_hashes := PackedInt32Array()
 		var e_digests := PackedInt32Array()
 		var post_fps := PackedInt32Array()
+		var pre_family_fps := PackedInt32Array()
+		var post_family_fps := PackedInt32Array()
+		var topo_fps := PackedInt32Array()
+		var witness_fps := PackedInt32Array()
+		var raw_fps := PackedInt32Array()
+		var evidence_masks := PackedByteArray()
 		var flags := PackedByteArray()
 		for i in transitions.size():
 			var transition := transitions[i]
@@ -3634,20 +5856,38 @@ class _PredictionEngine extends RefCounted:
 				continue
 			if transition > frontier:
 				break
+			pre_fps.append(all_pre[i])
 			c_hashes.append(all_c[i])
 			e_digests.append(all_e[i])
 			post_fps.append(all_fp[i])
-			flags.append(
-				_PredictFrames.ACK_SUBSTITUTED \
-				if all_flags[i] & NetwPredictJournal.ROW_SUBSTITUTED else 0,
-			)
+			topo_fps.append(all_topo[i])
+			witness_fps.append(all_witness[i])
+			raw_fps.append(all_raw[i])
+			evidence_masks.append(all_evidence[i])
+			for family in 3:
+				pre_family_fps.append(all_pre_families[i * 3 + family])
+				post_family_fps.append(all_post_families[i * 3 + family])
+			var ack_flags := _PredictFrames.ACK_SUBSTITUTED \
+					if all_flags[i] & NetwPredictJournal.ROW_SUBSTITUTED else 0
+			ack_flags |= (
+				all_witness_classes[i] << _PredictFrames.ACK_WITNESS_SHIFT
+			) & _PredictFrames.ACK_WITNESS_MASK
+			flags.append(ack_flags)
 		if flags.is_empty():
 			return PackedByteArray()
 		return _PredictFrames.encode_ack(
+			_command_epoch,
 			base,
+			pre_fps,
 			c_hashes,
 			e_digests,
 			post_fps,
+			pre_family_fps,
+			post_family_fps,
+			topo_fps,
+			witness_fps,
+			raw_fps,
+			evidence_masks,
 			flags,
 		)
 
@@ -3696,19 +5936,55 @@ class _PredictionEngine extends RefCounted:
 		# The fingerprint section covers the closed prefix of the same transition
 		# run, so entry i of the columns describes transition i of the run.
 		var post_fps: PackedInt32Array = frame.get("post_fps", PackedInt32Array())
+		var pre_fps: PackedInt32Array = frame.get("pre_fps", PackedInt32Array())
 		var e_digests: PackedInt32Array = frame.get(
 			"e_digests",
 			PackedInt32Array(),
 		)
-		for i in mini(post_fps.size(), e_digests.size()):
+		var pre_family_fps: PackedInt32Array = frame.get(
+			"pre_family_fps",
+			PackedInt32Array(),
+		)
+		var post_family_fps: PackedInt32Array = frame.get(
+			"post_family_fps",
+			PackedInt32Array(),
+		)
+		var topo_fps: PackedInt32Array = frame.get(
+			"topo_fps",
+			PackedInt32Array(),
+		)
+		var witness_fps: PackedInt32Array = frame.get(
+			"witness_fps",
+			PackedInt32Array(),
+		)
+		var raw_fps: PackedInt32Array = frame.get(
+			"raw_fps",
+			PackedInt32Array(),
+		)
+		var evidence_masks: PackedByteArray = frame.get(
+			"evidence_masks",
+			PackedByteArray(),
+		)
+		for i in post_fps.size():
 			if i >= transitions.size():
 				break
 			var claimed := int((transitions[i] as Dictionary).get("index", -1))
 			if claimed < 0:
 				continue
 			_owner_claims[claimed] = {
+				&"pre_fp": pre_fps[i],
 				&"post_fp": post_fps[i],
 				&"e_digest": e_digests[i],
+				&"topo_fp": topo_fps[i],
+				&"witness_fp": witness_fps[i],
+				&"raw_fp": raw_fps[i],
+				&"evidence_mask": evidence_masks[i],
+				&"pre_pose_fp": pre_family_fps[i * 3],
+				&"pre_momentum_fp": pre_family_fps[i * 3 + 1],
+				&"pre_controller_fp": pre_family_fps[i * 3 + 2],
+				&"post_pose_fp": post_family_fps[i * 3],
+				&"post_momentum_fp": post_family_fps[i * 3 + 1],
+				&"post_controller_fp": post_family_fps[i * 3 + 2],
 			}
 		while _owner_claims.size() > TAPE_HISTORY_LIMIT:
 			var claims: Array = _owner_claims.keys()
@@ -3738,7 +6014,7 @@ class _PredictionEngine extends RefCounted:
 			# transition is the tick, so its command records at its label and the
 			# consume cursor walks it with depth measured in ticks.
 			var label := int(row.get("label", -1))
-			if _handle.schedule == PredictionHandle.Schedule.TICK \
+			if _handle._schedule == PredictionHandle.Schedule.TICK \
 					and bool(row.get("fresh", false)) and label >= 0:
 				_timeline.record_input(label, command)
 				if _next_input_tick < 0:
@@ -3756,18 +6032,30 @@ class _PredictionEngine extends RefCounted:
 
 
 	func receive_ack_frame(payload: PackedByteArray) -> void:
-		if _role != PredictionHandle.Role.PREDICT:
+		if _role != PredictionHandle.Role.PREDICT and not _fallback_latched:
 			return
 		var frame := _PredictFrames.decode_ack(payload)
 		if frame.is_empty():
 			_handle.frames_dropped_invalid += 1
 			return
+		if int(frame.get(&"epoch", -1)) != _tape_epoch:
+			return
+		if _reseed_align_pending:
+			_reseed_epoch_confirmed = true
 		_on_ack_run(
 			int(frame.get("base", 0)),
+			frame.get("pre_fps", PackedInt32Array()),
 			frame.get("c_hashes", PackedInt32Array()),
 			frame.get("e_digests", PackedInt32Array()),
 			frame.get("post_fps", PackedInt32Array()),
+			frame.get("pre_family_fps", PackedInt32Array()),
+			frame.get("post_family_fps", PackedInt32Array()),
+			frame.get("topo_fps", PackedInt32Array()),
+			frame.get("witness_fps", PackedInt32Array()),
+			frame.get("raw_fps", PackedInt32Array()),
+			frame.get("evidence_masks", PackedByteArray()),
 			frame.get("flags", PackedByteArray()),
+			frame.get("witness_class_bits", PackedByteArray()),
 		)
 
 
@@ -3781,14 +6069,27 @@ class _PredictionEngine extends RefCounted:
 	# disagreement but never its cause.
 	func _on_ack_run(
 			base: int,
+			pre_fps: PackedInt32Array,
 			c_hashes: PackedInt32Array,
 			e_digests: PackedInt32Array,
 			post_fps: PackedInt32Array,
+			pre_family_fps: PackedInt32Array,
+			post_family_fps: PackedInt32Array,
+			topo_fps: PackedInt32Array,
+			witness_fps: PackedInt32Array,
+			raw_fps: PackedInt32Array,
+			evidence_masks: PackedByteArray,
 			flags: PackedByteArray,
+			witness_class_bits: PackedByteArray = PackedByteArray(),
 	) -> void:
 		for i in flags.size():
 			var transition := base + i
 			_ack_of_acks = maxi(_ack_of_acks, transition)
+			_latest_authority_ack = maxi(_latest_authority_ack, transition)
+			if i < witness_class_bits.size():
+				_authority_witness_classes[transition] = witness_class_bits[i]
+				if _fallback_latched:
+					_apply_quarantine_witness(transition)
 			var row := _journal.row_at(transition)
 			if flags[i] & _PredictFrames.ACK_SUBSTITUTED:
 				_journal.mark_substituted(transition)
@@ -3800,8 +6101,26 @@ class _PredictionEngine extends RefCounted:
 					var matched := int(row.get(&"post_fp", 0)) == post_fps[i]
 					_record_ack_verdict(transition, matched)
 					if not matched:
-						_charge_divergence(transition, row, c_hashes, e_digests, i)
+						_charge_divergence(
+							transition,
+							row,
+							pre_fps,
+							c_hashes,
+							e_digests,
+							pre_family_fps,
+							post_family_fps,
+							topo_fps,
+							witness_fps,
+							raw_fps,
+							evidence_masks,
+							i,
+						)
 		_handle.ack_confirmed_transition = _ack_of_acks
+		while _authority_witness_classes.size() > TAPE_HISTORY_LIMIT:
+			var retained := _authority_witness_classes.keys()
+			retained.sort()
+			_authority_witness_classes.erase(retained[0])
+		_refresh_owner_ack_age()
 
 
 	# Names the antecedent one disagreeing transition is charged to. The columns
@@ -3811,18 +6130,53 @@ class _PredictionEngine extends RefCounted:
 	func _charge_divergence(
 			transition: int,
 			row: Dictionary,
+			pre_fps: PackedInt32Array,
 			c_hashes: PackedInt32Array,
 			e_digests: PackedInt32Array,
+			pre_family_fps: PackedInt32Array,
+			post_family_fps: PackedInt32Array,
+			topo_fps: PackedInt32Array,
+			witness_fps: PackedInt32Array,
+			raw_fps: PackedInt32Array,
+			evidence_masks: PackedByteArray,
 			index: int,
 	) -> void:
-		# A column authority did not send cannot convict its antecedent, so a
-		# short run reads as agreement there and the charge falls through to the
-		# antecedent whose evidence did arrive.
+		var family_end := (index + 1) * 3
+		var complete := index < pre_fps.size() \
+				and index < c_hashes.size() \
+				and index < e_digests.size() \
+				and index < topo_fps.size() \
+				and index < witness_fps.size() \
+				and index < raw_fps.size() \
+				and index < evidence_masks.size() \
+				and family_end <= pre_family_fps.size() \
+				and family_end <= post_family_fps.size()
+		var local_evidence := int(row.get(&"evidence_mask", 0))
+		var peer_evidence := evidence_masks[index] if complete else 0
+		var both_witness := complete \
+				and bool(local_evidence & NetwPredictJournal.EVIDENCE_WITNESS) \
+				and bool(peer_evidence & NetwPredictJournal.EVIDENCE_WITNESS)
+		var witness_equal := both_witness \
+				and int(row.get(&"witness_fp", 0)) == witness_fps[index]
+		_witness_verdicts[transition] = 1 if witness_equal else 2
+		while _witness_verdicts.size() > TAPE_HISTORY_LIMIT:
+			var verdict_transitions := _witness_verdicts.keys()
+			verdict_transitions.sort()
+			_witness_verdicts.erase(verdict_transitions[0])
+		_journal.mark_witness_match(
+			transition,
+			witness_equal,
+		)
 		var attribution := attribute(
-			index >= c_hashes.size() \
-					or int(row.get(&"c_hash", 0)) == c_hashes[index],
-			index >= e_digests.size() \
-					or int(row.get(&"e_digest", 0)) == e_digests[index],
+			complete and int(row.get(&"pre_fp", 0)) == pre_fps[index],
+			complete and int(row.get(&"c_hash", 0)) == c_hashes[index],
+			complete and int(row.get(&"e_digest", 0)) == e_digests[index],
+			complete and int(row.get(&"topo_fp", 0)) == topo_fps[index],
+			complete and int(row.get(&"raw_fp", 0)) == raw_fps[index],
+			complete and int(row.get(&"witness_fp", 0)) == witness_fps[index],
+			local_evidence,
+			peer_evidence,
+			complete,
 		)
 		_handle.last_attribution = attribution
 		_handle.last_attributed_transition = transition
@@ -3830,6 +6184,30 @@ class _PredictionEngine extends RefCounted:
 		# for an older transition later still reads the charge that transition
 		# earned rather than whatever this lane judged last.
 		_journal.mark_attribution(transition, attribution)
+		if not complete:
+			_retry_deferred_operator(transition)
+			return
+		var local_family := PackedInt32Array()
+		var peer_family := PackedInt32Array()
+		if attribution == NetwPredictJournal.Attribution.PRE_STATE:
+			local_family = PackedInt32Array([
+				int(row.get(&"pre_pose_fp", 0)),
+				int(row.get(&"pre_momentum_fp", 0)),
+				int(row.get(&"pre_controller_fp", 0)),
+			])
+			peer_family = pre_family_fps.slice(index * 3, family_end)
+		elif attribution == NetwPredictJournal.Attribution.CLOSURE:
+			local_family = PackedInt32Array([
+				int(row.get(&"post_pose_fp", 0)),
+				int(row.get(&"post_momentum_fp", 0)),
+				int(row.get(&"post_controller_fp", 0)),
+			])
+			peer_family = post_family_fps.slice(index * 3, family_end)
+		_journal.mark_differing_family(
+			transition,
+			differing_family(local_family, peer_family),
+		)
+		_retry_deferred_operator(transition)
 
 
 	# One place counts a fingerprint verdict, so the state-frame path and the ack
@@ -3896,7 +6274,7 @@ class _PredictionEngine extends RefCounted:
 			return
 		var transition := _recorded_transition()
 		var fingerprint := _state_fingerprint(payload)
-		_journal.close(transition, fingerprint)
+		_close_journal_row(transition, payload)
 		_judge_owner_claim(transition, fingerprint)
 
 
@@ -3923,11 +6301,59 @@ class _PredictionEngine extends RefCounted:
 		var substituted := bool(
 			_journal.flags_at(transition) & NetwPredictJournal.ROW_SUBSTITUTED,
 		)
+		var row := _journal.row_at(transition)
+		var both_witness := bool(
+			int(row.get(&"evidence_mask", 0))
+			& NetwPredictJournal.EVIDENCE_WITNESS,
+		) and bool(
+			int(claim[&"evidence_mask"])
+			& NetwPredictJournal.EVIDENCE_WITNESS,
+		)
+		_journal.mark_witness_match(
+			transition,
+			both_witness and int(claim[&"witness_fp"]) \
+					== int(row.get(&"witness_fp", 0)),
+		)
 		var attribution := attribute(
+			int(claim[&"pre_fp"]) == int(row.get(&"pre_fp", 0)),
 			not substituted,
 			int(claim[&"e_digest"]) == int(
-				_journal.row_at(transition).get(&"e_digest", 0),
+				row.get(&"e_digest", 0),
 			),
+			int(claim[&"topo_fp"]) == int(row.get(&"topo_fp", 0)),
+			int(claim[&"raw_fp"]) == int(row.get(&"raw_fp", 0)),
+			int(claim[&"witness_fp"]) == int(row.get(&"witness_fp", 0)),
+			int(row.get(&"evidence_mask", 0)),
+			int(claim[&"evidence_mask"]),
+		)
+		_journal.mark_attribution(transition, attribution)
+		var local_family := PackedInt32Array()
+		var peer_family := PackedInt32Array()
+		if attribution == NetwPredictJournal.Attribution.PRE_STATE:
+			local_family = PackedInt32Array([
+				int(row.get(&"pre_pose_fp", 0)),
+				int(row.get(&"pre_momentum_fp", 0)),
+				int(row.get(&"pre_controller_fp", 0)),
+			])
+			peer_family = PackedInt32Array([
+				int(claim[&"pre_pose_fp"]),
+				int(claim[&"pre_momentum_fp"]),
+				int(claim[&"pre_controller_fp"]),
+			])
+		elif attribution == NetwPredictJournal.Attribution.CLOSURE:
+			local_family = PackedInt32Array([
+				int(row.get(&"post_pose_fp", 0)),
+				int(row.get(&"post_momentum_fp", 0)),
+				int(row.get(&"post_controller_fp", 0)),
+			])
+			peer_family = PackedInt32Array([
+				int(claim[&"post_pose_fp"]),
+				int(claim[&"post_momentum_fp"]),
+				int(claim[&"post_controller_fp"]),
+			])
+		_journal.mark_differing_family(
+			transition,
+			differing_family(local_family, peer_family),
 		)
 		var iface := _iface()
 		if iface and _entity:
@@ -3937,7 +6363,7 @@ class _PredictionEngine extends RefCounted:
 	# The transition the recorder's slot belongs to. FRAME replays acknowledge the
 	# entry index they replayed, every other tier drives its own label.
 	func _recorded_transition() -> int:
-		if _handle.schedule == PredictionHandle.Schedule.FRAME \
+		if _handle._schedule == PredictionHandle.Schedule.FRAME \
 				and _role == PredictionHandle.Role.CONSUME:
 			return _ack
 		return _handle.last_drive_label
@@ -3949,7 +6375,7 @@ class _PredictionEngine extends RefCounted:
 
 	func history_record_tick(fallback_tick: int) -> int:
 		if _role == PredictionHandle.Role.CONSUME \
-				and _handle.schedule == PredictionHandle.Schedule.FRAME:
+				and _handle._schedule == PredictionHandle.Schedule.FRAME:
 			return _last_replayed_label + 1 \
 			if _ack_advanced and _last_replayed_fresh else -1
 		if _role == PredictionHandle.Role.CONSUME and _ack >= 0:
@@ -3957,7 +6383,7 @@ class _PredictionEngine extends RefCounted:
 			# the slot keeps the snapshot the last real consume left there instead
 			# of being overwritten with a body that has coasted past the ack.
 			return _ack + 1 if _ack_advanced else -1
-		if _handle.schedule == PredictionHandle.Schedule.FRAME:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
 			return _last_driven_input_tick + 1 if _ack_advanced else -1
 		return fallback_tick
 
@@ -3968,14 +6394,14 @@ class _PredictionEngine extends RefCounted:
 	# close, or the acknowledgement frontier stalls behind it forever.
 	func consumed_unslotted_transition() -> bool:
 		return _role == PredictionHandle.Role.CONSUME \
-				and _handle.schedule == PredictionHandle.Schedule.FRAME \
+				and _handle._schedule == PredictionHandle.Schedule.FRAME \
 				and _ack_advanced and not _last_replayed_fresh
 
 
 	func has_consumed_state_tick(state_tick: int) -> bool:
 		if _role != PredictionHandle.Role.CONSUME:
 			return true
-		if _handle.schedule == PredictionHandle.Schedule.FRAME:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
 			return _last_replayed_label + 1 >= state_tick
 		return _ack >= 0 and _ack + 1 >= state_tick
 
@@ -4001,7 +6427,24 @@ class _PredictionEngine extends RefCounted:
 
 
 	func _on_reparented(_reparent: NetwEntity.ReparentOpts) -> void:
+		_apply_scene_island_defaults()
 		_rewire()
+
+
+	# Inherits the containing scene's rule unless this entity declared its own.
+	func _apply_scene_island_defaults() -> void:
+		if bool(_handle.island_config.get(&"declared", false)) \
+				and not bool(_handle.island_config.get(&"inherited", false)):
+			return
+		var scene := _entity.scene
+		var inherited := scene._prediction_island_defaults() if scene else { }
+		if inherited.is_empty() \
+				and not bool(_handle.island_config.get(&"inherited", false)):
+			return
+		for key in [&"sensors", &"epoch"]:
+			if _handle.island_config.has(key):
+				inherited[key] = _handle.island_config[key]
+		_handle.island_config = inherited
 
 
 	# Resolves the role from current authority and binds the set handles. Idempotent
@@ -4024,14 +6467,36 @@ class _PredictionEngine extends RefCounted:
 		input_binding.volatile_external = false
 		_timeline = null
 		_restore_projection = { }
+		_state_family_of = { }
+		_causal_fields = { }
 		_angle_fields = { }
 		_converge_rules = { }
 		_cooldown_until_tick = -1
 		# A rewire re-keys the transitions the evidence was gathered over, so a
 		# streak cannot mean anything across it.
 		_reset_recovery_trackers()
+		if not _episode.is_empty() and int(_episode.get(&"state", -1)) \
+				== PredictionHandle.EpisodeState.OPEN:
+			_episode[&"agreement_run"] = 0
+			_episode[&"last_comparison_transition"] = -1
+			_sync_episode()
+		_pending_provenance = { }
+		_next_operator_write_id = int(_episode.get(&"last_write_id", 0)) + 1
+		_forensic_sidecars = { }
+		_previous_witness_sleeping = false
+		_has_previous_witness = false
+		_invalid_witness_reported = false
+		_invalid_command_predictor_reported = false
+		_witness_verdicts = { }
+		_authority_witness_classes = { }
+		_quarantine_pending_states = { }
+		_quarantine_last_basis = -1
+		_deferred_operator_states = { }
+		_operator_deferred_basis = -1
+		_raw_fp_enabled = not OS.get_environment(RAW_FP_ENV).is_empty()
 		_latest_input_tick = -1
 		_last_driven_input_tick = -1
+		_last_frame_transition_tick = -1
 		_last_recorded_input_tick = -1
 		_frame_input = { }
 		_stall_input = input_binding.snapshot_payload()
@@ -4045,6 +6510,7 @@ class _PredictionEngine extends RefCounted:
 		_stream_reconstructed = false
 		_handle.fp_verified_count = 0
 		_handle.fp_mismatch_count = 0
+		_handle.chain_break_count = 0
 		# A rewire re-keys the transitions a window was expressed in, so an open
 		# window cannot mean anything across it and is dropped rather than carried.
 		_out_of_domain_until = -1
@@ -4054,6 +6520,7 @@ class _PredictionEngine extends RefCounted:
 		_command_queue.clear()
 		_command_epoch = -1
 		_ack_of_acks = -1
+		_latest_authority_ack = -1
 		_owner_ack_floor = -1
 		_handle.command_queue_depth = 0
 		_handle.ack_confirmed_transition = -1
@@ -4077,11 +6544,14 @@ class _PredictionEngine extends RefCounted:
 				_handle.simulate = Callable(root, &"_network_tick")
 
 		_role = _resolve_axes()
+		if _role != PredictionHandle.Role.PREDICT:
+			_clear_island_promotions()
 		_correction = PredictionHandle.resolve_correction_mode_for(
 			_entity.owner,
 			_handle.correction_mode,
 		)
 		_error_on_retained_predicted_props(state_binding.set)
+		_build_restore_projection(state_binding)
 		_validate_property_classes(state_binding.set)
 		match _role:
 			PredictionHandle.Role.PREDICT:
@@ -4097,7 +6567,6 @@ class _PredictionEngine extends RefCounted:
 				# than snapping the predicted body, so the network never overwrites it.
 				state_binding.write_gate = false
 				state_binding.on_applied = _on_state_frame
-				_build_restore_projection(state_binding)
 				_latest_input_tick = -1
 				_register_with_loop()
 			PredictionHandle.Role.CONSUME:
@@ -4112,8 +6581,25 @@ class _PredictionEngine extends RefCounted:
 			PredictionHandle.Role.HOST_LOCAL:
 				_timeline = _registry_timeline()
 				_register_with_loop()
+			PredictionHandle.Role.SIMULATE:
+				# Authority rows are decoded without snapping, then projected to the
+				# current transition before each independent rebase.
+				_timeline = NetwTimeline.new()
+				_entity.timeline = _timeline
+				input_binding.volatile_external = true
+				state_binding.write_gate = false
+				state_binding.on_applied = _on_simulated_state_frame
+				_register_with_loop()
 			PredictionHandle.Role.REMOTE:
-				pass
+				if _fallback_latched:
+					# Fallback still owns the command lane. It receives authority
+					# state for display but runs no speculative simulation.
+					_timeline = NetwTimeline.new()
+					_entity.timeline = _timeline
+					input_binding.volatile_external = true
+					state_binding.on_applied = _on_quarantine_state_frame
+					_register_with_loop()
+		_entity.interpolation._mark_role_dirty()
 
 
 	# Server roles read the registry-owned timeline, get-or-creating it so the order
@@ -4131,6 +6617,7 @@ class _PredictionEngine extends RefCounted:
 	# reads the maps.
 	func _build_restore_projection(binding: NetwSyncSetBinding) -> void:
 		_restore_projection = { }
+		_state_family_of = { }
 		_angle_fields = { }
 		_converge_rules = { }
 		_withheld_fields = { }
@@ -4142,6 +6629,9 @@ class _PredictionEngine extends RefCounted:
 		var field_keys: Dictionary[StringName, bool] = { }
 		for field in binding.set.fields:
 			field_keys[field.key] = true
+			_state_family_of[field.key] = STATE_FAMILY_CONTROLLER
+			if field.property_class == NetwSyncSet.PropertyClass.CAUSAL:
+				_causal_fields[field.key] = true
 		for field in binding.set.fields:
 			var spec := NetwScriptModel.get_node_property_interpolator(node, field.key)
 			if not spec:
@@ -4150,10 +6640,13 @@ class _PredictionEngine extends RefCounted:
 				_angle_fields[field.key] = true
 			if spec.project_channel == &"":
 				continue
+			if not field_keys.has(spec.project_channel):
+				continue
+			_state_family_of[field.key] = STATE_FAMILY_POSE
+			_state_family_of[spec.project_channel] = STATE_FAMILY_MOMENTUM
 			if spec.forecast_tail == NetwInterpolate.Tail.HOLD:
 				continue
-			if field_keys.has(spec.project_channel):
-				_restore_projection[field.key] = spec.project_channel
+			_restore_projection[field.key] = spec.project_channel
 		# The per-field recovery facts live on the property marks, so this is
 		# where they enter the engine: one read per rewire, one source per fact.
 		for field in binding.set.fields:
@@ -4247,6 +6740,7 @@ class _PredictionEngine extends RefCounted:
 		_validated_class_hash = config_hash
 		var unquantized: Array[String] = []
 		var uncompared: Array[String] = []
+		var transport_without_epsilon: Array[String] = []
 		for field: NetwSyncSet.Field in set.fields:
 			match field.property_class:
 				NetwSyncSet.PropertyClass.CAUSAL:
@@ -4255,6 +6749,14 @@ class _PredictionEngine extends RefCounted:
 				NetwSyncSet.PropertyClass.COSMETIC:
 					if field.epsilon_override >= 0.0:
 						uncompared.append(String(field.key))
+			if not _handle.transport_config.is_empty() \
+					and field.property_class == NetwSyncSet.PropertyClass.CAUSAL \
+					and int(_state_family_of.get(
+						field.key,
+						STATE_FAMILY_CONTROLLER,
+					)) != STATE_FAMILY_POSE \
+					and field.epsilon_override < 0.0:
+				transport_without_epsilon.append(String(field.key))
 		if not unquantized.is_empty():
 			Netw.dbg.warn(
 				(
@@ -4274,6 +6776,17 @@ class _PredictionEngine extends RefCounted:
 						+ "compared, so the threshold decides nothing. Mark them "
 						+ "derived() or drop the epsilon() mark."
 				) % [", ".join(uncompared)],
+			)
+		if not transport_without_epsilon.is_empty():
+			Netw.dbg.warn(
+				(
+						"NetwLagCompensation: transport reads causal non-pose "
+						+ "properties [%s] without declared epsilons. Their units "
+						+ "fall back to the entity default, so the transport gate "
+						+ "has no world-scale tolerance."
+				),
+				[", ".join(transport_without_epsilon)],
+				func(m): push_warning(m),
 			)
 		_report_authority_model_mismatches()
 
@@ -4331,6 +6844,17 @@ class _PredictionEngine extends RefCounted:
 				field.epsilon_override,
 			])
 		parts.append("masked:%d" % (1 if set.masked else 0))
+		var node := _entity.owner if _entity else null
+		var script := node.get_script() as Script if is_instance_valid(node) \
+				else null
+		if script:
+			var broadcast_set := NetwSyncSet.from_script(
+				script,
+				NetwSyncSet.Record.RECORD_BROADCAST,
+			)
+			if broadcast_set:
+				for field: NetwSyncSet.Field in broadcast_set.fields:
+					parts.append("broadcast:%s" % field.key)
 		parts.append("controller:%d" % (1 if _entity.controller > 0 else 0))
 		return hash("
 ".join(parts))
@@ -4357,6 +6881,9 @@ class _PredictionEngine extends RefCounted:
 		elif is_server:
 			_handle.input_source = PredictionHandle.InputSource.RECEIVED
 			_handle.sim_mode = PredictionHandle.SimMode.AUTHORITATIVE
+		elif not _handle._simulation_subjects.is_empty():
+			_handle.input_source = PredictionHandle.InputSource.PREDICTED
+			_handle.sim_mode = PredictionHandle.SimMode.SPECULATIVE
 		else:
 			_handle.input_source = PredictionHandle.InputSource.NONE
 			_handle.sim_mode = PredictionHandle.SimMode.DISPLAY
@@ -4372,7 +6899,7 @@ class _PredictionEngine extends RefCounted:
 	# closing the delay is a claim only the game can make about its own entity,
 	# never one a body type can imply.
 	func _delay_closed() -> bool:
-		return _handle.recovery_policy \
+		return _fallback_latched or _handle.recovery_policy \
 				== PredictionHandle.RecoveryPolicy.DELAY_CLOSED
 
 
@@ -4393,6 +6920,235 @@ class _PredictionEngine extends RefCounted:
 			)
 
 
+	# Produces the interest-bounded roster and commits hysteretic promotion.
+	func _refresh_island_membership(apply_promotion: bool = true) -> void:
+		if not bool(_handle.island_config.get(&"declared", false)):
+			_clear_island_promotions()
+			_island_members.clear()
+			return
+		var found: Dictionary[NetwEntity, bool] = { }
+		for entry: Variant in _handle.island_config.get(&"participants", []):
+			var explicit := entry as NetwEntity
+			if _valid_island_member(explicit):
+				found[explicit] = true
+		var api := _entity.multiplayer
+		if api:
+			for producer: Dictionary in _handle.island_config.get(
+					&"producers",
+					[],
+			):
+				if producer.get(&"kind", &"") != &"interest":
+					continue
+				var layer: StringName = producer.get(&"layer", &"")
+				for candidate: NetwEntity in api.interest.shared_entities(
+						_entity,
+						layer,
+				):
+					if _valid_island_member(candidate):
+						found[candidate] = true
+		var members: Array[NetwEntity] = []
+		members.assign(found.keys())
+		members.sort_custom(_entity_id_less)
+		if not apply_promotion:
+			_clear_island_promotions()
+			_island_members = members
+			return
+		var desired := _desired_simulated_members(members)
+		var committed: Dictionary[NetwEntity, bool] = { }
+		for member: NetwEntity in members:
+			var was_simulated := _simulated_members.has(member)
+			var wants_simulated := desired.has(member)
+			if was_simulated != wants_simulated \
+					and _realized_contact_entities.has(member):
+				wants_simulated = was_simulated
+			if wants_simulated:
+				committed[member] = true
+		_enforce_nearest_budget(committed)
+		_apply_island_promotions(committed)
+		_island_members = members
+
+
+	# Returns whether a locally present participant may enter this island.
+	# A scene wrapper is a container, never an interaction participant, so no
+	# producer or explicit add may seat one in the island.
+	func _valid_island_member(member: NetwEntity) -> bool:
+		return member != null and member != _entity \
+				and is_instance_valid(member) \
+				and is_instance_valid(member.owner) \
+				and not member.owner is MultiplayerScene \
+				and member.multiplayer == _entity.multiplayer \
+				and member.scene == _entity.scene
+
+
+	# Selects explicit and policy-driven participants, retaining near-boundary
+	# winners so local distance noise cannot flip body topology every transition.
+	func _desired_simulated_members(
+			members: Array[NetwEntity],
+	) -> Dictionary[NetwEntity, bool]:
+		var desired: Dictionary[NetwEntity, bool] = { }
+		var fidelity: Dictionary = _handle.island_config.get(&"fidelity", { })
+		var automatic: Array[NetwEntity] = []
+		for member: NetwEntity in members:
+			var explicit := int(fidelity.get(member, -1))
+			if explicit == PredictionHandle.Fidelity.SIMULATED:
+				desired[member] = true
+			elif explicit != PredictionHandle.Fidelity.PROXY \
+					and _can_automatically_simulate(member):
+				automatic.append(member)
+		var promotion: Dictionary = _handle.island_config.get(&"promotion", { })
+		match promotion.get(&"kind", &""):
+			&"nearest":
+				_promote_nearest(
+					automatic,
+					int(promotion.get(&"count", 0)),
+					desired,
+				)
+			&"within":
+				_promote_within(
+					automatic,
+					float(promotion.get(&"meters", 0.0)),
+					desired,
+				)
+		return desired
+
+
+	# Automatic policies select only prediction-aware display participants.
+	func _can_automatically_simulate(member: NetwEntity) -> bool:
+		if not member.prediction.is_registered():
+			return false
+		return member.prediction.sim_mode == PredictionHandle.SimMode.DISPLAY \
+				or not member.prediction._simulation_subjects.is_empty()
+
+
+	# Keeps a deferred handoff inside the nearest policy's structural budget.
+	func _enforce_nearest_budget(
+			committed: Dictionary[NetwEntity, bool],
+	) -> void:
+		var promotion: Dictionary = _handle.island_config.get(&"promotion", { })
+		if promotion.get(&"kind", &"") != &"nearest":
+			return
+		var fidelity: Dictionary = _handle.island_config.get(&"fidelity", { })
+		var automatic: Array[NetwEntity] = []
+		for member: NetwEntity in committed:
+			if int(fidelity.get(member, -1)) \
+					!= PredictionHandle.Fidelity.SIMULATED:
+				automatic.append(member)
+		automatic.sort_custom(
+			func(a: NetwEntity, b: NetwEntity) -> bool:
+				var a_retained := _simulated_members.has(a)
+				var b_retained := _simulated_members.has(b)
+				if a_retained != b_retained:
+					return a_retained
+				var da := _distance_squared(a)
+				var db := _distance_squared(b)
+				return da < db or is_equal_approx(da, db) \
+						and _entity_id_less(a, b),
+		)
+		var count := int(promotion.get(&"count", 0))
+		for index in range(count, automatic.size()):
+			committed.erase(automatic[index])
+
+
+	# Keeps up to count nearest members with a ten-percent exit margin.
+	func _promote_nearest(
+			members: Array[NetwEntity],
+			count: int,
+			out: Dictionary[NetwEntity, bool],
+	) -> void:
+		if count <= 0 or members.is_empty():
+			return
+		members.sort_custom(
+			func(a: NetwEntity, b: NetwEntity) -> bool:
+				var da := _distance_squared(a)
+				var db := _distance_squared(b)
+				return da < db or is_equal_approx(da, db) \
+						and _entity_id_less(a, b),
+		)
+		var limit := mini(count, members.size())
+		var cutoff := _distance_squared(members[limit - 1]) * 1.21
+		var retained: Array[NetwEntity] = []
+		for member: NetwEntity in members:
+			if _simulated_members.has(member) \
+					and _distance_squared(member) <= cutoff:
+				retained.append(member)
+		retained.sort_custom(_entity_id_less)
+		for member: NetwEntity in retained:
+			if out.size() >= count:
+				break
+			out[member] = true
+		for member: NetwEntity in members:
+			if out.size() >= count:
+				break
+			out[member] = true
+
+
+	# Applies a ten-percent exit margin to radius promotion.
+	func _promote_within(
+			members: Array[NetwEntity],
+			meters: float,
+			out: Dictionary[NetwEntity, bool],
+	) -> void:
+		var enter_squared := meters * meters
+		var exit_squared := enter_squared * 1.21
+		for member: NetwEntity in members:
+			var limit := exit_squared if _simulated_members.has(member) \
+					else enter_squared
+			if _distance_squared(member) <= limit:
+				out[member] = true
+
+
+	# Commits promotion claims on participant handles.
+	func _apply_island_promotions(
+			desired: Dictionary[NetwEntity, bool],
+	) -> void:
+		for member: NetwEntity in _simulated_members:
+			if not desired.has(member) and is_instance_valid(member):
+				member.prediction._set_simulated_by(_entity, false)
+		var predictors: Dictionary = _handle.island_config.get(
+			&"command_predictors",
+			{ },
+		)
+		for member: NetwEntity in desired:
+			member.prediction._set_simulated_by(
+				_entity,
+				true,
+				predictors.get(member, Callable()),
+			)
+		_simulated_members = desired
+
+
+	# Drops every promotion owned by this subject.
+	func _clear_island_promotions() -> void:
+		for member: NetwEntity in _simulated_members:
+			if is_instance_valid(member):
+				member.prediction._set_simulated_by(_entity, false)
+		_simulated_members.clear()
+
+
+	func _distance_squared(member: NetwEntity) -> float:
+		return _entity_position(_entity).distance_squared_to(
+			_entity_position(member),
+		)
+
+
+	func _entity_position(member: NetwEntity) -> Vector3:
+		var root := member.owner if member else null
+		if root is Node3D:
+			return (root as Node3D).global_position
+		if root is Node2D:
+			var point := (root as Node2D).global_position
+			return Vector3(point.x, point.y, 0.0)
+		return Vector3.ZERO
+
+
+	func _entity_id_less(a: NetwEntity, b: NetwEntity) -> bool:
+		var a_id := String(a.entity_id)
+		var b_id := String(b.entity_id)
+		if a_id == b_id:
+			return a.get_instance_id() < b.get_instance_id()
+		return a_id < b_id
+
+
 	# True only when every body this entity could have touched is one this peer
 	# simulates the way authority does.
 	#
@@ -4411,7 +7167,13 @@ class _PredictionEngine extends RefCounted:
 		var participants := _island_participants()
 		if participants.is_empty():
 			return false
-		for participant in participants:
+		var contacts: Array[NetwEntity] = participants
+		if not _realized_contact_entities.is_empty():
+			contacts = []
+			contacts.assign(_realized_contact_entities.keys())
+		for participant in contacts:
+			if participant not in participants:
+				return false
 			var handle := participant.prediction as PredictionHandle
 			if handle == null \
 					or handle.sim_mode == PredictionHandle.SimMode.DISPLAY:
@@ -4421,9 +7183,10 @@ class _PredictionEngine extends RefCounted:
 
 	# The declared participants that are still live entities.
 	func _island_participants() -> Array[NetwEntity]:
+		if not _island_members.is_empty():
+			return _island_members.duplicate()
 		var out: Array[NetwEntity] = []
-		var declared: Array = _handle.island_config.get(&"participants", [])
-		for entry in declared:
+		for entry in _handle.island_config.get(&"participants", []):
 			var participant := entry as NetwEntity
 			if participant and is_instance_valid(participant):
 				out.append(participant)
@@ -4434,15 +7197,13 @@ class _PredictionEngine extends RefCounted:
 	# all. Silence there would let an entity look in-domain forever while
 	# colliding with bodies nobody ever claimed the peers agree about.
 	func _report_island_gap() -> void:
-		if _island_gap_reported or not _handle.island_config.get(
-				&"participants", [],
-		).is_empty():
+		if _island_gap_reported or not _island_participants().is_empty():
 			return
 		_island_gap_reported = true
 		push_warning(
 			"Prediction: %s reported contact with no declared island. Declare the "
 			% _entity.entity_id
-			+ "bodies it touches through configure_island(), or its contact "
+			+ "bodies it touches through island(), or its contact "
 			+ "transitions will keep claiming an exactness they cannot hold.",
 		)
 
@@ -4469,9 +7230,13 @@ class _PredictionEngine extends RefCounted:
 		_input_binding.authored_tick = tick
 
 
-	# Applies the newest authored input once. A zero-tick frame repeats the last
-	# input but authors no new state label.
+	# Applies the newest authored input after the tick-rate governor admits it.
 	func _predict_frame_step(timing: PredictTiming) -> void:
+		_last_frame_transition_tick = timing.tick
+		if _speculation_horizon_full():
+			_handle.speculation_held_count += 1
+			_send_command_frame()
+			return
 		var plan := predict_fold(
 			_latest_input_tick,
 			_last_driven_input_tick,
@@ -4487,31 +7252,212 @@ class _PredictionEngine extends RefCounted:
 		_send_command_frame()
 
 
+	# Captures the command lane while fallback displays authority state.
+	func _fallback_author_tick(tick: int) -> void:
+		_predict_author_tick(tick)
+
+
+	# Authors one FRAME command without opening a speculative transition.
+	func _fallback_author_frame_step(timing: PredictTiming) -> void:
+		_last_frame_transition_tick = timing.tick
+		var plan := predict_fold(
+			_latest_input_tick,
+			_last_driven_input_tick,
+			timing.tick,
+		)
+		var label: int = plan[&"label"]
+		var fresh: bool = plan[&"fresh"]
+		_author_tape_entry(label, fresh)
+		if fresh:
+			_last_driven_input_tick = label
+		_send_command_frame()
+
+
+	# Authors one TICK command without running or journaling speculation.
+	func _fallback_author_step(tick: int) -> void:
+		var input := _canonical_input(_input_binding.snapshot_payload())
+		_timeline.record_input(tick, input)
+		_latest_input_tick = tick
+		_input_binding.authored_tick = tick
+		_prepare_tick_tape(tick)
+		_author_tape_entry(tick, true)
+		_last_driven_input_tick = tick
+		_send_command_frame()
+
+
 	func _predict_step(delta: float, tick: int) -> void:
 		var input := _canonical_input(_input_binding.snapshot_payload())
 		_timeline.record_input(tick, input)
 		_latest_input_tick = tick
 		_input_binding.authored_tick = tick
+		if _speculation_horizon_full():
+			_handle.speculation_held_count += 1
+			_send_command_frame()
+			return
 		# A TICK drive is its own transition, so the tape entry is degenerate:
 		# index, label, and tick are the same number and every entry is fresh.
 		# The lane codec implies contiguous indices, so a clock re-anchor that
 		# gaps the tick sequence starts a new tape epoch instead of straddling it.
+		_prepare_tick_tape(tick)
+		_author_tape_entry(tick, true)
+		_last_driven_input_tick = tick
+		_record_drive(tick, tick, PredictionHandle.DriveKind.FRESH, input)
+		_run(input, delta, tick, true)
+		var state := _capture()
+		_timeline.record_state(tick + 1, state)
+		_close_journal_row(tick, state)
+		# The row is closed before the send, so the frame's fingerprint section
+		# can claim the transition it just drove rather than trailing by a tick.
+		_send_command_frame()
+
+
+	# Steps a remote participant through F with a substituted predicted command.
+	func _simulated_step(delta: float, tick: int) -> void:
+		_run(_predicted_command(tick), delta, tick, false)
+		_handle.drive_seq += 1
+		_handle.substituted_count += 1
+		_mark_idle_drive(tick, PredictionHandle.DriveKind.MISSING)
+
+
+	# Applies the same one-drive FRAME cadence used by the subject island.
+	func _simulated_frame_step(timing: PredictTiming) -> void:
+		if timing.tick <= _last_frame_transition_tick:
+			return
+		_last_frame_transition_tick = timing.tick
+		_simulated_step(timing.delta, timing.tick)
+
+
+	# Merges a per-participant predictor over the COAST zero-input baseline.
+	func _predicted_command(tick: int) -> Dictionary:
+		var command := _coast_command()
+		var predictor := _handle._predicted_command_callable()
+		if not predictor.is_valid():
+			return _canonical_input(command)
+		var predicted: Variant = predictor.call(_entity, tick)
+		if predicted is Dictionary:
+			for key: Variant in predicted:
+				command[key] = predicted[key]
+			return _canonical_input(command)
+		if not _invalid_command_predictor_reported:
+			_invalid_command_predictor_reported = true
+			push_error(
+				"Prediction island command predictor for %s must return a "
+				% _entity.entity_id
+				+ "Dictionary. COAST was used instead.",
+			)
+		return _canonical_input(command)
+
+
+	# Builds the type-preserving zero command that defines COAST.
+	func _coast_command() -> Dictionary:
+		var out: Dictionary = { }
+		for key: StringName in _input_binding.snapshot_payload():
+			out[key] = _zero_value(_input_binding.node().get(key))
+		return out
+
+
+	func _zero_value(value: Variant) -> Variant:
+		match typeof(value):
+			TYPE_BOOL:
+				return false
+			TYPE_INT:
+				return 0
+			TYPE_FLOAT:
+				return 0.0
+			TYPE_STRING:
+				return ""
+			TYPE_STRING_NAME:
+				return &""
+			TYPE_VECTOR2:
+				return Vector2.ZERO
+			TYPE_VECTOR2I:
+				return Vector2i.ZERO
+			TYPE_VECTOR3:
+				return Vector3.ZERO
+			TYPE_VECTOR3I:
+				return Vector3i.ZERO
+			TYPE_VECTOR4:
+				return Vector4.ZERO
+			TYPE_VECTOR4I:
+				return Vector4i.ZERO
+			TYPE_COLOR:
+				return Color(0.0, 0.0, 0.0, 0.0)
+			TYPE_ARRAY:
+				return []
+			TYPE_DICTIONARY:
+				return { }
+		return value
+
+
+	# Independently rebases a simulated remote on every reconstructed state row.
+	func _on_simulated_state_frame(header: Dictionary) -> void:
+		_stream_reconstructed = _stream_reconstructed \
+				or bool(header.get("whole", true))
+		if not _stream_reconstructed:
+			return
+		var payload: Dictionary = header.get("payload", { })
+		if payload.is_empty():
+			return
+		var recv_tick := int(header.get("tick", -1))
+		var iface := _iface()
+		var current_tick := iface._current_tick() if iface else recv_tick
+		var age_ticks := clampi(
+			maxi(0, current_tick - recv_tick),
+			0,
+			_handle.max_restore_ticks,
+		)
+		var target := payload
+		if _handle.snap_restore == PredictionHandle.RestoreMode.EXTRAPOLATED:
+			target = _extrapolated_payload(
+				payload,
+				float(age_ticks) * _tick_delta,
+			)
+		var divergence := PredictionHandle.divergence_by_field(
+			_capture(),
+			target,
+			_angle_fields,
+			_handle.last_field_divergence,
+		)
+		_handle.is_reconciling = true
+		_handle.corrections += 1
+		_restore(target)
+		_handle.is_reconciling = false
+		_handle.state_evaluated.emit(recv_tick, -1, divergence, true)
+
+
+	# Re-keys a TICK tape when its clock jumps past the contiguous lane.
+	func _prepare_tick_tape(tick: int) -> void:
 		if not _authored_tape.is_empty() \
 				and int(_authored_tape.back().get("index", -1)) != tick - 1:
 			_tape_epoch = (_tape_epoch + 1) & 0xFF
 			_authored_tape.clear()
 			_journal.clear(_tape_epoch)
+			_forensic_sidecars.clear()
+			_witness_verdicts.clear()
+			_deferred_operator_states.clear()
+			_operator_deferred_basis = -1
 			_ack_of_acks = -1
 		_next_tape_entry_index = tick
-		_author_tape_entry(tick, true)
-		_record_drive(tick, tick, PredictionHandle.DriveKind.FRESH, input)
-		_run(input, delta, tick, true)
-		var state := _capture()
-		_timeline.record_state(tick + 1, state)
-		_journal.close(tick, _state_fingerprint(state))
-		# The row is closed before the send, so the frame's fingerprint section
-		# can claim the transition it just drove rather than trailing by a tick.
-		_send_command_frame()
+
+
+	# True once another speculative transition would exceed the bounded horizon.
+	func _speculation_horizon_full() -> bool:
+		_refresh_owner_ack_age()
+		return _handle.ack_age_ticks >= ACK_AGE_MAX
+
+
+	# Publishes the speculative span from the freshest proof on either lane.
+	func _refresh_owner_ack_age() -> void:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
+			_handle.ack_age_ticks = maxi(
+				0,
+				_next_tape_entry_index - _latest_authority_ack - 1,
+			)
+		else:
+			_handle.ack_age_ticks = maxi(
+				0,
+				_last_driven_input_tick - _latest_authority_ack,
+			)
 
 
 	# Drives reconciliation from a received state frame. The set handle fires this
@@ -4530,10 +7476,22 @@ class _PredictionEngine extends RefCounted:
 	func _on_state(recv_tick: int, ack: int, payload: Dictionary) -> void:
 		if ack < 0:
 			return
+		_latest_authority_ack = maxi(_latest_authority_ack, ack)
+		_refresh_owner_ack_age()
+		if _reseed_align_pending:
+			if _reseed_epoch_confirmed:
+				_finish_reseed_alignment(recv_tick, ack, payload)
+			else:
+				_handle.state_evaluated.emit(recv_tick, ack, 0.0, false)
+			return
+		if ack <= _reseed_ignore_through:
+			_handle.state_evaluated.emit(recv_tick, ack, 0.0, false)
+			return
+		_reseed_ignore_through = -1
 		var frame_entry: Dictionary = { }
 		var ack_label := ack
 		var predicted: Dictionary
-		if _handle.schedule == PredictionHandle.Schedule.FRAME:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
 			frame_entry = _authored_entry_at(ack)
 			if frame_entry.is_empty():
 				return
@@ -4541,13 +7499,8 @@ class _PredictionEngine extends RefCounted:
 			predicted = _entry_history.state_at(ack + 1)
 			if predicted.is_empty():
 				return
-			_handle.ack_age_ticks = maxi(
-				0,
-				_next_tape_entry_index - ack - 1,
-			)
 			_handle.last_compare_staleness = 0
 		else:
-			_handle.ack_age_ticks = maxi(0, _latest_input_tick - ack)
 			predicted = _timeline.latest_state_at_or_before(ack + 1)
 			var compared_tick := \
 					_timeline.latest_state_tick_at_or_before(ack + 1)
@@ -4562,6 +7515,8 @@ class _PredictionEngine extends RefCounted:
 		# first frame, so the gate is transparent to every non-masked recipe.
 		var divergence := 0.0
 		var corrected := false
+		var settled := false
+		var meter := 0
 		var domain := _journal.domain_at(ack)
 		if _stream_reconstructed:
 			# The row is read after the fingerprint pass, so a transition this
@@ -4570,9 +7525,10 @@ class _PredictionEngine extends RefCounted:
 			# reads are scalar: this runs on every authoritative frame of every
 			# predicted entity, where materializing a row would allocate to deliver
 			# two bytes.
+			var exact_verdict := _exact_verdict_of(_journal.flags_at(ack))
 			var verdict := evaluate(
 				domain,
-				_exact_verdict_of(_journal.flags_at(ack)),
+				exact_verdict,
 				predicted,
 				payload,
 				_handle.divergence_epsilon,
@@ -4583,16 +7539,66 @@ class _PredictionEngine extends RefCounted:
 			)
 			divergence = verdict[&"divergence"]
 			corrected = verdict[&"corrected"]
+			settled = domain == NetwPredictJournal.Domain.OUT_OF_DOMAIN \
+					or exact_verdict != ExactVerdict.UNJUDGED
+			if settled:
+				meter = measure(
+					_handle.last_field_divergence,
+					_meter_tolerances(domain),
+				)
+				# The exact predicate is authoritative in domain. Preserve its
+				# binary verdict if a conservative quantizer bound overlaps one
+				# adjacent canonical value.
+				if corrected and meter == 0:
+					meter = 1
+				elif not corrected:
+					meter = 0
 		var attribution := _attribution_for(ack)
+		if settled:
+			_journal.mark_aligned_error(ack, divergence)
+			if corrected:
+				if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+						!= PredictionHandle.EpisodeState.OPEN:
+					_open_episode(ack, attribution)
+				else:
+					_record_episode_divergence(ack)
+				_handle.divergence_detected.emit(ack, attribution)
+			_record_episode_comparison(ack, meter, not corrected)
+			if corrected and _episode_budget_exhausted():
+				_enter_fallback(ack)
+				_handle.state_evaluated.emit(
+					recv_tick,
+					ack,
+					divergence,
+					false,
+				)
+				return
+		if corrected and (_transport_pending() or _dissipate_pending()):
+			_handle.state_evaluated.emit(
+				recv_tick,
+				ack,
+				divergence,
+				false,
+			)
+			return
+		if corrected and _defer_operator_for_witness(
+			recv_tick,
+			ack,
+			payload,
+		):
+			_handle.state_evaluated.emit(
+				recv_tick,
+				ack,
+				divergence,
+				false,
+			)
+			return
 		if corrected:
-			_handle.divergence_detected.emit(ack, attribution)
 			# Re-resolve from the handle so a runtime correction_mode change is live.
 			_correction = PredictionHandle.resolve_correction_mode_for(
 				_entity.owner,
 				_handle.correction_mode,
 			)
-			_handle.is_reconciling = true
-			_handle.corrections += 1
 			var before := _capture()
 			var correction_write: Dictionary = { }
 			# A promoted recovery reports an unmeasurable pose error rather than
@@ -4600,47 +7606,97 @@ class _PredictionEngine extends RefCounted:
 			# entitled to claim it sits below the teleport tier, whatever the
 			# measurement says.
 			var escalated := _escalate_next
-			_escalate_next = false
-			# The recorded and compared payload stays the raw authoritative state.
-			# Only the body write is what the recovery staged.
-			var plan := recover(
+			var transported := _try_transport(
+				predicted,
 				payload,
-				_handle.resolved_recovery_policy(),
-				_correction,
-				_handle.snap_restore,
-				guard_projection(
+				before,
+				ack,
+				escalated,
+			)
+			if transported.is_empty() and _try_dissipate(
+					ack,
+					meter,
+					domain,
+					escalated,
+			):
+				_handle.state_evaluated.emit(
+					recv_tick,
+					ack,
+					divergence,
+					false,
+				)
+				return
+			_escalate_next = false
+			_handle.is_reconciling = true
+			_handle.corrections += 1
+			var plan: Dictionary
+			if not transported.is_empty():
+				plan = {
+					&"restore": transported[&"restore"],
+					&"write": transported[&"restore"],
+					&"teleport": false,
+					&"skip": false,
+				}
+				_last_correction_teleported = false
+				_restore(
+					plan[&"restore"],
+					NetwPredictJournal.Operator.TRANSPORT_DELTA,
+					ack,
+				)
+				correction_write = plan[&"write"]
+			else:
+				var recovery_projection := guard_projection(
 					_restore_projection,
 					_handle.last_field_divergence,
 					_handle.divergence_epsilon,
 					_epsilon_overrides,
-				),
-				_withheld_below_teleport(),
-				_converge_rules_now(),
-				before,
-				_angle_fields,
-				INF if escalated else _pose_error_against(payload),
-				_handle.teleport_threshold,
-				_corrections_suppressed(),
-				_handle.ack_age_ticks,
-				_handle.max_restore_ticks,
-				_tick_delta,
-				domain,
-				attribution,
-				_out_of_domain_until >= 0 and ack_label < _out_of_domain_until,
-			)
-			_last_correction_teleported = plan[&"teleport"]
-			_track_recovery_convergence(
-				escalated, plan, divergence, predicted, payload,
-			)
-			if not plan[&"skip"]:
-				_restore(plan[&"restore"])
-				correction_write = plan[&"write"]
+					_handle.ack_age_ticks,
+					_handle.max_restore_ticks,
+					_tick_delta,
+				)
+				# The recorded payload remains raw. Only the body write is staged.
+				plan = recover(
+					payload,
+					_handle.resolved_recovery_policy(),
+					_correction,
+					_handle.snap_restore,
+					recovery_projection,
+					_withheld_below_teleport(),
+					_converge_rules_now(),
+					before,
+					_angle_fields,
+					INF if escalated else _pose_error_against(payload),
+					_handle.teleport_threshold,
+					_corrections_suppressed(),
+					_handle.ack_age_ticks,
+					_handle.max_restore_ticks,
+					_tick_delta,
+					domain,
+					attribution,
+					_out_of_domain_until >= 0 \
+							and ack_label < _out_of_domain_until,
+				)
+				_last_correction_teleported = plan[&"teleport"]
+				_track_recovery_convergence(
+					escalated, plan, divergence, predicted, payload,
+				)
+				if not plan[&"skip"]:
+					var operator := NetwPredictJournal.Operator.REBASE_EXACT
+					if bool(plan[&"teleport"]):
+						operator = NetwPredictJournal.Operator.FULL_CLOSURE
+					elif _correction == PredictionHandle.CorrectionMode.SNAP \
+							and _handle.snap_restore \
+							== PredictionHandle.RestoreMode.EXTRAPOLATED \
+							and not recovery_projection.is_empty():
+						operator = NetwPredictJournal.Operator.REBASE_PROJECTED
+					_restore(plan[&"restore"], operator, ack)
+					correction_write = plan[&"write"]
 			# Anchor the authoritative state at its keyed tick so a later packet
 			# carrying the same ack compares against the corrected value, not the
 			# stale prediction it just replaced. Without this a duplicate ack (the
 			# server is input starved and re-sends the same ack) re-triggers this
 			# correction every tick until the ack advances past the stale entry.
-			if _handle.schedule == PredictionHandle.Schedule.TICK:
+			if _handle._schedule == PredictionHandle.Schedule.TICK:
 				_timeline.record_state(ack + 1, payload)
 			# REPLAY re-runs unacked inputs over the restored state (kinematic). SNAP
 			# stops at the restore (dynamic): the predicted body resumes forward from
@@ -4653,15 +7709,8 @@ class _PredictionEngine extends RefCounted:
 			# not to make.
 			var replays: bool = not plan[&"skip"] \
 					and _correction == PredictionHandle.CorrectionMode.REPLAY
-			if replays and _handle.schedule == PredictionHandle.Schedule.FRAME:
-				# A scope rollback re-runs the whole declared island over the same
-				# entries. Every other policy re-runs this entity alone, which is
-				# the same thing whenever the island is this entity.
-				if _handle.resolved_recovery_policy() \
-						== PredictionHandle.RecoveryPolicy.ROLLBACK_SCOPE:
-					_replay_scope(ack)
-				else:
-					_replay_authored_entries(ack)
+			if replays and _handle._schedule == PredictionHandle.Schedule.FRAME:
+				_replay_authored_entries(ack)
 			elif replays:
 				var window := _timeline.inputs_in_range(ack + 1, _latest_input_tick)
 				_handle.max_replay_depth = maxi(_handle.max_replay_depth, window.size())
@@ -4679,12 +7728,44 @@ class _PredictionEngine extends RefCounted:
 			# streak from one long past.
 			_reset_recovery_trackers()
 
-		if _handle.schedule == PredictionHandle.Schedule.FRAME:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
 			_timeline.trim_before(ack_label)
 			_entry_history.trim_before(ack)
 		else:
 			_timeline.trim_before(ack)
 		_handle.state_evaluated.emit(recv_tick, ack, divergence, corrected)
+
+
+	# Builds the fixed per-field zero region for the comparison's own domain.
+	func _meter_tolerances(
+			domain: NetwPredictJournal.Domain,
+	) -> Dictionary:
+		var tolerances: Dictionary[StringName, float] = { }
+		var node := _state_binding.node() if _state_binding else null
+		if not is_instance_valid(node) or not _state_binding.set:
+			return tolerances
+		for field: NetwSyncSet.Field in _state_binding.set.fields:
+			if _trigger_excludes.has(field.key):
+				if _causal_fields.has(field.key) \
+						and _epsilon_overrides.has(field.key):
+						tolerances[field.key] = _epsilon_overrides[field.key]
+				continue
+			if _withheld_fields.has(field.key) \
+					and _epsilon_overrides.has(field.key):
+				tolerances[field.key] = _epsilon_overrides[field.key]
+				continue
+			if domain == NetwPredictJournal.Domain.OUT_OF_DOMAIN:
+				tolerances[field.key] = float(_epsilon_overrides.get(
+					field.key,
+					_handle.divergence_epsilon,
+				))
+				continue
+			if not field.quantizer:
+				tolerances[field.key] = 0.0
+				continue
+			var type := NetwScriptModel.get_node_property_type(node, field.key)
+			tolerances[field.key] = field.quantizer._max_error(type)
+		return tolerances
 
 
 	# What a divergence at [param transition] is charged to.
@@ -4695,19 +7776,19 @@ class _PredictionEngine extends RefCounted:
 	# row is still decisive on its own: authority declared it ran a command the
 	# owner never authored, and no further evidence could change that.
 	#
-	# Anything else is UNATTRIBUTED rather than charged to the suspect that
+	# Anything else is UNKNOWN rather than charged to the suspect that
 	# happens to be tested last. A tolerance failure on an out-of-domain
 	# transition is not a bug with an address, and naming one would turn the
 	# attribution into a decoration.
 	func _attribution_for(transition: int) -> NetwPredictJournal.Attribution:
 		var charged := _journal.attribution_at(transition)
-		if charged != NetwPredictJournal.Attribution.UNATTRIBUTED:
+		if charged != NetwPredictJournal.Attribution.UNKNOWN:
 			return charged
 		if _handle.last_attributed_transition == transition:
 			return _handle.last_attribution
 		if _journal.flags_at(transition) & NetwPredictJournal.ROW_SUBSTITUTED:
 			return NetwPredictJournal.Attribution.COMMAND
-		return NetwPredictJournal.Attribution.UNATTRIBUTED
+		return NetwPredictJournal.Attribution.UNKNOWN
 
 
 	# Whether either fingerprint path has reached a verdict for a row yet.
@@ -4752,7 +7833,7 @@ class _PredictionEngine extends RefCounted:
 	func _close_replayed_entry(index: int) -> void:
 		var state := _capture()
 		_entry_history.record_state(index + 1, state)
-		_journal.close(index, _state_fingerprint(state))
+		_close_journal_row(index, state)
 
 
 	# The entries this member authored past [param ack], each carried with the
@@ -4787,7 +7868,7 @@ class _PredictionEngine extends RefCounted:
 	func _is_steppable() -> bool:
 		return _handle.sim_mode != PredictionHandle.SimMode.DISPLAY \
 				and _handle.simulate.is_valid() \
-				and _handle.schedule == PredictionHandle.Schedule.FRAME
+				and _handle._schedule == PredictionHandle.Schedule.FRAME
 
 
 	# The members a scope rollback re-runs, in entity-id order.
@@ -4844,7 +7925,12 @@ class _PredictionEngine extends RefCounted:
 			# restoring it again would overwrite authority's payload with the
 			# prediction the recovery just replaced.
 			if member != self:
-				member._restore(member.transition_state_at(ack))
+				member._restore(
+					member.transition_state_at(ack),
+					NetwPredictJournal.Operator.REBASE_EXACT,
+					ack,
+					self,
+				)
 		for index in range(ack + 1, last_entry + 1):
 			for plan: Dictionary in plans:
 				var member: _PredictionEngine = plan[&"member"]
@@ -4925,6 +8011,7 @@ class _PredictionEngine extends RefCounted:
 			payload: Dictionary,
 	) -> void:
 		if escalated:
+			_record_non_contraction()
 			_reset_recovery_trackers()
 			# The promoted closure lands mid-disturbance, so the same settling
 			# window a fresh contact earns covers the snap it just applied.
@@ -4935,16 +8022,20 @@ class _PredictionEngine extends RefCounted:
 				or _correction == PredictionHandle.CorrectionMode.REPLAY:
 			return
 		if plan[&"teleport"]:
-			_reset_recovery_trackers()
 			return
+		var direction := _divergence_direction(predicted, payload)
+		var direction_key: StringName = direction[&"key"]
+		var comparable_sign := _last_recovery_sign \
+				if direction_key == _last_recovery_direction else 0
 		var verdict := escalation_after(
 			_nonshrink_streak,
-			_last_recovery_sign,
+			comparable_sign,
 			_last_recovery_divergence,
 			divergence,
-			_divergence_sign(predicted, payload),
+			direction[&"sign"],
 		)
 		_nonshrink_streak = verdict[&"streak"]
+		_last_recovery_direction = direction_key
 		_last_recovery_sign = verdict[&"sign"]
 		_last_recovery_divergence = divergence
 		_escalate_next = verdict[&"escalate"]
@@ -4955,14 +8046,17 @@ class _PredictionEngine extends RefCounted:
 	# bump, and the escalation the evidence just spent itself on.
 	func _reset_recovery_trackers() -> void:
 		_nonshrink_streak = 0
+		_last_recovery_direction = StringName()
 		_last_recovery_sign = 0
 		_last_recovery_divergence = -1.0
 		_escalate_next = false
 
 
-	# The dominant-axis sign of the divergence this recovery answers, read off
-	# the field the last comparison charged the most error to.
-	func _divergence_sign(predicted: Dictionary, payload: Dictionary) -> int:
+	# The field and dominant axis of the divergence this recovery answers.
+	func _divergence_direction(
+			predicted: Dictionary,
+			payload: Dictionary,
+	) -> Dictionary:
 		var dominant := StringName()
 		var top := 0.0
 		for field: StringName in _handle.last_field_divergence:
@@ -4971,8 +8065,8 @@ class _PredictionEngine extends RefCounted:
 				top = error
 				dominant = field
 		if dominant == StringName():
-			return 0
-		return delta_sign(_pose_delta(
+			return { &"key": StringName(), &"sign": 0 }
+		return delta_direction(dominant, _pose_delta(
 			payload[dominant],
 			predicted[dominant],
 			_angle_fields.has(dominant),
@@ -5172,13 +8266,10 @@ class _PredictionEngine extends RefCounted:
 	func _declare_skipped(from: int, until: int) -> void:
 		for transition in range(from, until):
 			var queued: Dictionary = _replay_entry(transition)
-			_journal.open(
+			_mark_skipped(
 				transition,
 				int(queued.get("label", -1)),
-				PredictionHandle.DriveKind.MISSING,
-				0,
 			)
-			_journal.mark_substituted(transition)
 
 
 	# Counts contiguous queued transitions beginning exactly at the replay cursor.
@@ -5288,13 +8379,7 @@ class _PredictionEngine extends RefCounted:
 				maxi(_next_input_tick, target - ACK_WINDOW_MAX),
 				target,
 		):
-			_journal.open(
-				transition,
-				transition,
-				PredictionHandle.DriveKind.MISSING,
-				0,
-			)
-			_journal.mark_substituted(transition)
+			_mark_skipped(transition, transition)
 		_handle.skipped_count += maxi(0, target - _next_input_tick)
 		_handle.resync_count += 1
 		_next_input_tick = target
@@ -5344,6 +8429,20 @@ class _PredictionEngine extends RefCounted:
 	# --- Shared ---
 
 
+	# Seals a new skipped row or overlays supersession on retained evidence.
+	func _mark_skipped(transition: int, label: int) -> void:
+		if _journal.row_at(transition).is_empty():
+			_journal.open(
+				transition,
+				label,
+				PredictionHandle.DriveKind.MISSING,
+				0,
+			)
+			_journal.mark_substituted(transition)
+		else:
+			_journal.mark_superseded(transition)
+
+
 	# The one choke point every real drive passes through, so the journal records
 	# exactly the transitions that ran. An idle frame goes through
 	# _mark_idle_drive instead and appends no row.
@@ -5356,17 +8455,54 @@ class _PredictionEngine extends RefCounted:
 		_handle.drive_seq += 1
 		_handle.last_drive_label = label
 		_handle.last_drive_kind = kind
+		var is_new := _journal.row_at(transition).is_empty()
+		var raw_state := _capture_raw()
+		var pre_state := _state_binding.canonicalize_payload(raw_state)
+		var pre_fp := _state_fingerprint(pre_state)
+		var raw_fp := raw_state_fingerprint(raw_state) if _raw_fp_enabled else 0
+		var evidence_mask := NetwPredictJournal.EVIDENCE_RAW \
+				if _raw_fp_enabled else 0
+		var provenance := _pending_provenance.duplicate()
+		var previous := _journal.row_at(transition - 1)
+		_forensic_sidecars[transition] = {
+			&"pre_bytes": _state_binding.canonical_bytes(pre_state),
+			&"command_bytes": _input_binding.canonical_bytes(input),
+			&"command_payload": input.duplicate(true),
+		}
+		while _forensic_sidecars.size() > TAPE_HISTORY_LIMIT:
+			var sidecar_transitions := _forensic_sidecars.keys()
+			sidecar_transitions.sort()
+			_forensic_sidecars.erase(sidecar_transitions[0])
 		_journal.open(
 			transition,
 			label,
 			kind,
 			NetwPredictJournal.fnv1a(_input_binding.canonical_bytes(input)),
+			pre_fp,
+			_state_family_fingerprints(pre_state),
+			provenance,
+			_base_topology_fingerprint(),
+			raw_fp,
+			evidence_mask,
 		)
+		if is_new:
+			_pending_provenance = { }
+			var previous_flags := int(previous.get(&"flags", 0))
+			var comparable := not previous.is_empty() \
+					and bool(previous_flags & NetwPredictJournal.ROW_CLOSED) \
+					and not bool(previous_flags & NetwPredictJournal.ROW_SUBSTITUTED)
+			if comparable \
+					and int(previous.get(&"post_fp", 0)) != pre_fp \
+					and int(provenance.get(&"write_id", 0)) == 0:
+				_journal.mark_chain_broken(transition)
+				_handle.chain_break_count += 1
 		# The environment is fingerprinted before the drive runs, because what
 		# attribution needs to know is the world the transition ran AGAINST. A
 		# digest taken afterward would describe the world the transition helped
 		# make, which cannot exonerate or convict it.
 		_e_digest = _sample_environment()
+		var sidecar: Dictionary = _forensic_sidecars.get(transition, { })
+		sidecar[&"environment_samples"] = _sensor_samples.duplicate(true)
 		_journal.mark_e_digest(transition, _e_digest)
 		_journal.mark_domain(transition, domain_of(
 			bool(_handle.island_config.get(&"declared", false)),
@@ -5470,14 +8606,365 @@ class _PredictionEngine extends RefCounted:
 		)
 
 
+	func _capture_raw() -> Dictionary:
+		return _state_binding.snapshot_payload()
+
+
 	func _state_fingerprint(payload: Dictionary) -> int:
 		return NetwPredictJournal.fnv1a(
 			_state_binding.canonical_bytes(payload),
 		)
 
 
-	func _restore(payload: Dictionary) -> void:
+	# Fingerprints pose, momentum, then controller and latch state separately.
+	func _state_family_fingerprints(payload: Dictionary) -> PackedInt32Array:
+		var family_payloads: Array[Dictionary] = [{ }, { }, { }]
+		for key: StringName in payload:
+			if not _state_family_of.has(key):
+				continue
+			family_payloads[_state_family_of[key]][key] = payload[key]
+		var out := PackedInt32Array()
+		for family: Dictionary in family_payloads:
+			out.append(
+				0 if family.is_empty() else NetwPredictJournal.fnv1a(
+					_state_binding.canonical_bytes(family),
+				),
+			)
+		return out
+
+
+	# Seals the after-solve observation before sealing the produced state.
+	func _close_journal_row(transition: int, state: Dictionary) -> void:
+		var row := _journal.row_at(transition)
+		if row.is_empty() \
+				or int(row.get(&"flags", 0)) & NetwPredictJournal.ROW_CLOSED:
+			return
+		var solve := _sample_solve_evidence(
+			int(row.get(&"topo_fp", 0)),
+			transition,
+		)
+		_journal.mark_solve(
+			transition,
+			int(solve[&"topo_fp"]),
+			int(solve[&"witness_fp"]),
+			int(row.get(&"evidence_mask", 0)) | int(solve[&"evidence_mask"]),
+			solve[&"detail"],
+			int(solve[&"witness_class_bits"]),
+		)
+		_journal.close(
+			transition,
+			_state_fingerprint(state),
+			_state_family_fingerprints(state),
+		)
+		var sidecar: Dictionary = _forensic_sidecars.get(transition, { })
+		sidecar[&"post_bytes"] = _state_binding.canonical_bytes(state)
+		_maybe_demote_for_breach(transition, solve)
+
+
+	# Closes speculation on the same transition that realized the breach.
+	func _maybe_demote_for_breach(transition: int, solve: Dictionary) -> void:
+		if _role != PredictionHandle.Role.PREDICT or _fallback_latched \
+				or _handle.breach_response \
+						!= PredictionHandle.BreachResponse.DEMOTE \
+				or _handle.witness_config.is_empty() \
+				or not bool(solve.get(&"breach", false)):
+			return
+		_journal.mark_domain(transition, NetwPredictJournal.Domain.OUT_OF_DOMAIN)
+		if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+				!= PredictionHandle.EpisodeState.OPEN:
+			_open_episode(transition, NetwPredictJournal.Attribution.CONTACT)
+		else:
+			_episode[&"generator_row_copy"] = _pin_row(transition)
+			_episode[&"attribution"] = NetwPredictJournal.Attribution.CONTACT
+		var write_id := _next_operator_write_id
+		_next_operator_write_id += 1
+		_record_episode_write(
+			write_id,
+			NetwPredictJournal.Operator.DEMOTE,
+			transition,
+			int(solve.get(&"witness_fp", 0)),
+			_entity.entity_id,
+			true,
+		)
+		_episode[&"breach_transition"] = transition
+		_episode[&"breach_witness"] = solve.get(&"detail", { }).duplicate(true)
+		_sync_episode()
+		# TICK closes before its ordinary lane send. Preserve the command that
+		# produced the breach before rewire opens the author-only epoch.
+		_send_command_frame()
+		_enter_fallback(transition, true)
+
+
+	# Fingerprints execution facts known before the solve begins.
+	func _base_topology_fingerprint() -> int:
+		var participants := PackedStringArray()
+		for participant in _island_participants():
+			participants.append(String(participant.entity_id))
+		participants.sort()
+		return fact_fingerprint({
+			&"schedule": _handle._schedule,
+			&"epoch": int(_handle.island_config.get(&"epoch", -1)),
+			&"participants": participants,
+		})
+
+
+	# Samples and classifies the realized solve. An absent declaration is unknown.
+	func _sample_solve_evidence(
+			base_topology: int,
+			transition: int,
+	) -> Dictionary:
+		var empty := {
+			&"topo_fp": base_topology,
+			&"witness_fp": 0,
+			&"witness_class_bits": 0,
+			&"evidence_mask": 0,
+			&"detail": { },
+		}
+		var sampler := _handle.witness_config.get(&"contacts", Callable()) \
+				as Callable
+		_realized_contact_entities.clear()
+		if not sampler.is_valid():
+			return empty
+		var sample := _normalize_witness_sample(sampler.call())
+		if sample.is_empty():
+			return empty
+		var support := _declared_support_collider()
+		var contact_classes: Array[int] = []
+		var collider_classes := PackedStringArray()
+		var collider_ids := PackedStringArray()
+		var compared_contacts := PackedStringArray()
+		var outside_boundary_ids := PackedStringArray()
+		var island_participants := _island_participants()
+		var witness_class_bits := 0
+		for value: Variant in sample[&"colliders"]:
+			var collider := value as Object
+			var collider_entity := _contact_entity(collider)
+			if collider_entity and collider_entity != _entity:
+				_realized_contact_entities[collider_entity] = true
+			var contact_class := _classify_collider(collider, support)
+			if contact_class not in contact_classes:
+				contact_classes.append(contact_class)
+			var collider_type := collider.get_class()
+			if collider_type not in collider_classes:
+				collider_classes.append(collider_type)
+			var collider_id := _collider_identity(collider)
+			if collider_id not in collider_ids:
+				collider_ids.append(collider_id)
+			if _contact_breaches_boundary(
+					collider,
+					support,
+					island_participants,
+			) \
+					and collider_id not in outside_boundary_ids:
+				outside_boundary_ids.append(collider_id)
+			var witness_class := _witness_class(collider, support)
+			witness_class_bits |= witness_class
+			var compared := "%s:%d" % [collider_id, witness_class]
+			if compared not in compared_contacts:
+				compared_contacts.append(compared)
+		if contact_classes.is_empty():
+			contact_classes.append(PredictionHandle.ContactClass.NONE)
+		contact_classes.sort()
+		collider_classes.sort()
+		collider_ids.sort()
+		compared_contacts.sort()
+		outside_boundary_ids.sort()
+		var sleeping := bool(sample[&"sleeping"])
+		var woke := _has_previous_witness and _previous_witness_sleeping \
+				and not sleeping
+		_previous_witness_sleeping = sleeping
+		_has_previous_witness = true
+		var detail := {
+			&"contact_classes": contact_classes,
+			&"collider_classes": collider_classes,
+			&"collider_ids": collider_ids,
+			&"contact_bucket": contact_count_bucket(
+				(sample[&"colliders"] as Array).size(),
+			),
+			&"sleeping": sleeping,
+			&"woke": woke,
+			&"solve_ordinal": transition,
+			&"witness_class_bits": witness_class_bits,
+			&"outside_boundary_ids": outside_boundary_ids,
+			&"breach": not outside_boundary_ids.is_empty(),
+			&"continuous": sample.get(&"continuous", { }).duplicate(true),
+		}
+		var body_facts := { }
+		for key in [&"body_mode", &"collision_layer", &"collision_mask"]:
+			if sample.has(key):
+				body_facts[key] = sample[key]
+		var topology := base_topology
+		if not body_facts.is_empty():
+			body_facts[&"base"] = base_topology
+			topology = fact_fingerprint(body_facts)
+		return {
+			&"topo_fp": topology,
+			&"witness_fp": fact_fingerprint({
+				&"contacts": compared_contacts,
+			}),
+			&"witness_class_bits": witness_class_bits,
+			&"breach": not outside_boundary_ids.is_empty(),
+			&"evidence_mask": NetwPredictJournal.EVIDENCE_WITNESS,
+			&"detail": detail,
+		}
+
+
+	# Accepts only the documented witness shape and reports a bad declaration once.
+	func _normalize_witness_sample(value: Variant) -> Dictionary:
+		if value is Dictionary:
+			var sample := value as Dictionary
+			var colliders: Variant = sample.get(&"colliders", null)
+			var sleeping: Variant = sample.get(&"sleeping", null)
+			if colliders is Array and typeof(sleeping) == TYPE_BOOL:
+				for collider: Variant in colliders:
+					if not collider is Object or not is_instance_valid(collider):
+						return _report_invalid_witness()
+				var continuous: Variant = sample.get(&"continuous", { })
+				if continuous is Dictionary:
+					return sample
+		return _report_invalid_witness()
+
+
+	func _report_invalid_witness() -> Dictionary:
+		if not _invalid_witness_reported:
+			_invalid_witness_reported = true
+			push_error(
+				"Prediction witness must return {colliders: Array, sleeping: bool}; "
+				+ "continuous, when present, must be a Dictionary.",
+			)
+		return { }
+
+
+	func _declared_support_collider() -> String:
+		var ground: Variant = _sensor_samples.get(&"ground", { })
+		if ground is Dictionary:
+			var collider: Variant = (ground as Dictionary).get(&"collider", null)
+			if collider is String or collider is StringName:
+				return String(collider)
+		return ""
+
+
+	func _classify_collider(
+			collider: Object,
+			support: String,
+	) -> PredictionHandle.ContactClass:
+		if not support.is_empty() and _collider_identity(collider) == support:
+			return PredictionHandle.ContactClass.DECLARED_SUPPORT
+		if collider is AnimatableBody2D or collider is AnimatableBody3D \
+				or collider is CharacterBody2D or collider is CharacterBody3D:
+			return PredictionHandle.ContactClass.KINEMATIC_PROXY
+		if _is_static_geometry(collider):
+			return PredictionHandle.ContactClass.OTHER_STATIC
+		if collider is RigidBody2D and (collider as RigidBody2D).freeze \
+				or collider is RigidBody3D and (collider as RigidBody3D).freeze:
+			return PredictionHandle.ContactClass.KINEMATIC_PROXY
+		var entity := _contact_entity(collider)
+		var iface := _iface()
+		if entity and iface and iface._engines.has(entity):
+			return PredictionHandle.ContactClass.PREDICTED_DYNAMIC
+		return PredictionHandle.ContactClass.UNPREDICTED_DYNAMIC
+
+
+	# Returns the peer-invariant class compared across the acknowledgement lane.
+	func _witness_class(collider: Object, support: String) -> int:
+		if not support.is_empty() and _collider_identity(collider) == support:
+			return PredictionHandle.WitnessClass.SUPPORT
+		if _is_static_geometry(collider):
+			return PredictionHandle.WitnessClass.STATIC
+		return PredictionHandle.WitnessClass.DYNAMIC_ENTITY
+
+
+	# True when the solve consumed a stand-in the closure cannot reproduce.
+	# Static world geometry is identical on every peer, so touching it is
+	# in-boundary; only an un-stepped dynamic body is a stale stand-in.
+	func _contact_breaches_boundary(
+			collider: Object,
+			support: String,
+			island_participants: Array[NetwEntity],
+	) -> bool:
+		if not support.is_empty() and _collider_identity(collider) == support:
+			return false
+		if _is_static_geometry(collider):
+			return false
+		var entity := _contact_entity(collider)
+		if not entity:
+			return true
+		if entity == _entity:
+			return false
+		if entity not in island_participants:
+			return true
+		return entity.prediction.sim_mode == PredictionHandle.SimMode.DISPLAY
+
+
+	func _collider_identity(collider: Object) -> String:
+		var node := collider as Node
+		if _is_static_geometry(collider):
+			return "path:%s" % node.get_path()
+		var entity := _contact_entity(collider)
+		if entity:
+			return "entity:%s" % entity.entity_id
+		return "path:%s" % node.get_path() if node else "object:%s" % \
+				collider.get_class()
+
+
+	# True for fixed world geometry, excluding movable static-body subclasses.
+	# Tile and grid worlds collide through their own node classes, never a
+	# StaticBody, so the class list must name them explicitly.
+	func _is_static_geometry(collider: Object) -> bool:
+		if collider is AnimatableBody2D or collider is AnimatableBody3D:
+			return false
+		if collider is StaticBody2D or collider is StaticBody3D:
+			return true
+		return collider is GridMap or collider is CSGShape3D \
+				or collider is TileMap or collider is TileMapLayer
+
+
+	# Resolves the entity a contact belongs to. A scene wrapper is a container,
+	# not a body: its level geometry must never read as contact with the scene
+	# entity itself.
+	func _contact_entity(collider: Object) -> NetwEntity:
+		var node := collider as Node
+		var entity := NetwEntity.of(node) if node else null
+		if entity and entity.owner is MultiplayerScene:
+			return null
+		return entity
+
+
+	func _restore(
+			payload: Dictionary,
+			operator: NetwPredictJournal.Operator = NetwPredictJournal.Operator.NONE,
+			basis: int = -1,
+			provenance_owner: _PredictionEngine = null,
+			evidence_free: bool = false,
+	) -> void:
 		_state_binding.apply_payload(payload)
+		if operator == NetwPredictJournal.Operator.NONE:
+			return
+		var episode_owner := provenance_owner if provenance_owner else self
+		var episode_id := 0
+		if not episode_owner._episode.is_empty() \
+				and int(episode_owner._episode.get(&"state", -1)) \
+				== PredictionHandle.EpisodeState.OPEN:
+			episode_id = int(episode_owner._episode.get(&"id", 0))
+		var write_id := episode_owner._next_operator_write_id
+		_pending_provenance = {
+			&"episode": episode_id,
+			&"write_id": write_id,
+			&"operator": operator,
+			&"basis": basis,
+		}
+		episode_owner._next_operator_write_id += 1
+		var target := _entity.entity_id if _entity else StringName()
+		episode_owner._record_episode_write(
+			write_id,
+			operator,
+			basis,
+			NetwPredictJournal.fnv1a(
+				_state_binding.canonical_bytes(payload),
+			),
+			target,
+			evidence_free,
+		)
 
 
 	func _register_with_loop() -> void:

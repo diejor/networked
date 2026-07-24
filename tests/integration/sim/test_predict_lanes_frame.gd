@@ -21,8 +21,8 @@ class StepCountingBody extends LagCompSimBody:
 
 
 func _configure_frame(predicted: PredictedEntity) -> void:
-	predicted.client_prediction.schedule = FRAME
-	predicted.server_prediction.schedule = FRAME
+	predicted.client_prediction.schedule().frame()
+	predicted.server_prediction.schedule().frame()
 	predicted.server_prediction.replay_buffer_depth = 1
 	predicted.server_prediction.missing_policy = \
 	NetwLagCompensationInterface.PredictionHandle.MissingInput.REPEAT_LAST
@@ -201,9 +201,8 @@ func test_the_ack_lane_stays_dense_over_a_long_run() -> void:
 	predicted.client_root.motion = Vector2.RIGHT
 
 	# Far past the acknowledgement window and the journal ring, with zero-tick
-	# frames mixed in, so a frontier that silently stalls behind one REPEAT
-	# entry's row cannot hide in a short all-fresh run.
-	for i in 40:
+	# frames mixed in, so clamped callbacks cannot hide a stalled frontier.
+	for i in 80:
 		for ticks in [1, 0, 2, 1, 1]:
 			_emit_client_frame(scenario.client_clock, ticks)
 			_deliver_command(predicted)
@@ -214,7 +213,7 @@ func test_the_ack_lane_stays_dense_over_a_long_run() -> void:
 			.override_failure_message(
 				"the acknowledgement frontier must track the replay, not stall "
 				+ "behind it",
-			).is_greater_equal(190)
+			).is_greater_equal(300)
 	assert_int(predicted.client_prediction.fp_mismatch_count).is_equal(0)
 
 

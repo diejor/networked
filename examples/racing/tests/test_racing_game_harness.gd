@@ -4,13 +4,19 @@ extends NetwTestSuite
 ## authoritative pose.
 
 const MAIN := preload("res://examples/racing/main.tscn")
+const SIMULATE_NEAREST_VAR := "NETW_RACING_SIMULATE_NEAREST"
 
 var game: NetwGameHarness
 
 
 func before_test() -> void:
+	OS.unset_environment(SIMULATE_NEAREST_VAR)
 	game = make_game_harness(MAIN)
 	await game.setup()
+
+
+func after_test() -> void:
+	OS.unset_environment(SIMULATE_NEAREST_VAR)
 
 
 func test_host_car_spawns_and_drives_forward() -> void:
@@ -30,15 +36,25 @@ func test_host_car_spawns_and_drives_forward() -> void:
 	assert_float(absf(car.linear_speed)).is_greater(0.1)
 
 
-func test_remote_car_converges_on_authority() -> void:
+func test_every_view_of_a_remote_car_converges_on_authority() -> void:
 	var host := await game.add_host("mario", false)
 	var client := await game.add_client("luigi", false)
+	var watcher := await game.add_client("peach", false)
 	await host.await_scene(&"Track", 2.0)
 	await client.await_scene(&"Track", 2.0)
+	await watcher.await_scene(&"Track", 2.0)
 
 	var own := await client.await_player(&"luigi", 2.0)
-	var mirror := await host.await_player(&"luigi", 2.0)
+	var host_view := await host.await_player(&"luigi", 2.0)
+	var watcher_view := await watcher.await_player(&"luigi", 2.0)
 	assert_that(client.local_player).is_equal(own)
+	assert_int(own.entity.prediction.resolved_archetype()).is_equal(
+		NetwLagCompensationInterface.PredictionHandle.Archetype.SOLVER_BODY,
+	)
+	assert_int(own.entity.prediction.breach_response).is_equal(
+		NetwLagCompensationInterface \
+				.PredictionHandle.BreachResponse.DEMOTE,
+	)
 
 	var start: Vector3 = own.sphere_position
 	await game.sync_ticks(4)
@@ -48,10 +64,80 @@ func test_remote_car_converges_on_authority() -> void:
 	# The owning client predicts its own car; the host holds authority. While the
 	# car is driving their poses track within the SNAP correction band, and the
 	# client's prediction has actually carried it down the track.
-	var gap: float = own.sphere_position.distance_to(mirror.sphere_position)
+	var gap: float = own.sphere_position.distance_to(host_view.sphere_position)
 	assert_float(gap).is_less(3.5)
 	assert_float(own.sphere_position.distance_to(start)).is_greater(2.0)
+	assert_float(
+		host_view.sphere_position.distance_to(host_view.display_position),
+	).override_failure_message(
+		"the host display must follow the client car it simulates",
+	).is_less(3.0)
+	assert_float(
+		watcher_view.sphere_position.distance_to(watcher_view.display_position),
+	).override_failure_message(
+		"a remote watcher display must follow the received car stream",
+	).is_less(3.0)
 	client.simulate_action_release("forward")
+
+
+func test_remote_visual_stays_attached_through_a_wall_contact() -> void:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var authority := await host.await_player(&"luigi", 2.0)
+	await game.sync_ticks(4)
+
+	var max_authority_visual_gap := 0.0
+	var entered_display_mode := false
+	client.simulate_action_press("forward")
+	for _tick in 720:
+		await game.sync_ticks(1)
+		max_authority_visual_gap = maxf(
+			max_authority_visual_gap,
+			authority.sphere_position.distance_to(
+				authority.vehicle_model.position + Vector3(0, 0.65, 0),
+			),
+		)
+		entered_display_mode = entered_display_mode or (
+			own.entity.prediction.sim_mode
+			== NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY
+		)
+	client.simulate_action_release("forward")
+
+	assert_bool(entered_display_mode).override_failure_message(
+		"wall recovery must not freeze the owning car into delayed display",
+	).is_false()
+	assert_float(max_authority_visual_gap).override_failure_message(
+		"the authority visual detached %.3fm from the remote car collider"
+		% max_authority_visual_gap,
+	).is_less(0.5)
+
+
+func test_scene_toggle_simulates_the_nearest_remote_car() -> void:
+	OS.set_environment(SIMULATE_NEAREST_VAR, "1")
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+	var own := await client.await_player(&"luigi", 2.0)
+	var remote := await client.await_player(&"mario", 2.0)
+	await game.sync_ticks(4)
+
+	assert_int(own.entity.prediction.sim_mode).is_equal(
+		NetwLagCompensationInterface.PredictionHandle.SimMode.SPECULATIVE,
+	)
+	assert_int(remote.entity.prediction.input_source).is_equal(
+		NetwLagCompensationInterface.PredictionHandle.InputSource.PREDICTED,
+	)
+	assert_int(remote.entity.prediction.sim_mode).is_equal(
+		NetwLagCompensationInterface.PredictionHandle.SimMode.SPECULATIVE,
+	)
+	assert_bool(remote.sphere.freeze).override_failure_message(
+		"the published simulated cell must unfreeze racing's child body",
+	).is_false()
 
 
 # The prediction must remain a free reproduction of the authoritative solve.

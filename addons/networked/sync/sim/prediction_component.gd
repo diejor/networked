@@ -1,59 +1,44 @@
 @tool
-## Scene-first configuration for one entity's client prediction and reconciliation.
-##
-## The node declares the prediction config and registers a per-entity engine
-## record. The kernel that actually predicts, consumes, and reconciles lives in
-## [NetwLagCompensationInterface], keyed by [NetwEntity], reached and configured
-## through [member NetwEntity.prediction]. This node is to that engine what
-## [MultiplayerSynchronizer] is to [NetwSyncCompat]: a config carrier that pushes
-## its exports into the handle on tree entry, calls
-## [method NetwLagCompensationInterface.register_prediction], and releases the
-## engine on exit. At most one wires per entity, so
-## [member NetwEntity.prediction] has a single publisher.
+## Scene-first policy for one entity's prediction boundary and reconciliation.
 ## [codeblock]
-## PlayerRoot (declares .state()/.input() marks, defines _network_tick)
-## `-- PredictionComponent      # entity-level policy; registers the engine
-##
-## # on tree entry:
-## entity.prediction.correction_mode = correction_mode   # push exports
-## Netw.of(self).lag_compensation.register_prediction(entity)
+## PlayerRoot
+## `-- PredictionComponent
 ## [/codeblock]
-## The component carries entity-level policy only. A per-field fact (a
-## tolerance, a restore restriction, a trigger exclusion) is a property fact
-## and lives on the property mark
+## The node publishes its entity-level policy through
+## [member NetwEntity.prediction] and registers one engine record with
+## [method NetwLagCompensationInterface.register_prediction]. The predicted
+## state is compared with the authority row named by
+## [member NetwSyncSetBinding.reconcile_ack], never with the newest received
+## tick. This keeps the comparison aligned without requiring equal peer clocks
+## or deterministic physics.
+##
+## [br][br]A per-field tolerance, restore restriction, trigger exclusion, or
+## convergence rate belongs to its property mark through
 ## ([method NetwScriptModel.PropertyConfig.epsilon],
 ## [method NetwScriptModel.PropertyConfig.teleport_only],
 ## [method NetwScriptModel.PropertyConfig.reconcile_only],
-## [method NetwScriptModel.PropertyConfig.converge]), never here. A key
-## declared here with a non-default value and also configured from code is a
-## configuration error the handle reports, so every fact keeps one source.
-##
-## [br][b]The model the engine runs[/b]
-## [br]The owning client predicts each tick and reconciles against the
-## [member NetwSyncSetBinding.reconcile_ack] the server frames on its state stream,
-## never against tick equality, so there is no clock lead and no determinism
-## contract. Each entity has at most one input-owning peer
-## ([member NetwEntity.controller]), so the [NetwTimeline] has exactly one writer
-## per side and a correction replays only this entity. The controlling peer's
-## input rides [constant NetwFrameEnvelope.Channel.PREDICT_COMMAND], each
-## sample beside the transition it drove; the state set ships authoritative
-## state back stamped with [member NetwSyncSetBinding.authored_tick] and
-## carrying the ack, the last input tick the server consumed. That ack lets the
-## client compare the server against its own past prediction tick for tick, not
-## against the body it shows now.
+## [method NetwScriptModel.PropertyConfig.converge]). Entity-level code uses the
+## fluent declarations on [member NetwEntity.prediction]. Keep one source for
+## each fact. A non-default scene export and a code declaration for the same
+## fact is a configuration error.
 ## [codeblock]
-## # command lane, client -> server  (one transition per authored tick)
-## { index, label, fresh, &"motion": ... }
-## # state set, server -> client   (reconcile_ack = last consumed input tick)
-## { tick: authored_tick, ack: reconcile_ack, &"position": ... }
+## var prediction := NetwEntity.of(self).prediction
+## prediction.sensors().sample(&"ground", sample_ground)
+## prediction.witness().contacts(sample_contacts)
+## prediction.recovery().on_breach(
+##     NetwLagCompensationInterface.PredictionHandle.BreachResponse.DEMOTE,
+## )
+## prediction.island() \
+##     .approximate() \
+##     .from_interest() \
+##     .simulate_nearest(1)
 ## [/codeblock]
-## The predicted body snaps to the authoritative payload only when it diverges past
-## [member NetwLagCompensationInterface.PredictionHandle.divergence_epsilon] (or the field's own
-## [method NetwScriptModel.PropertyConfig.epsilon] mark), then
-## every unacked input replays on top with [code]is_fresh = false[/code] so
-## one-shot effects fire once. [member NetwLagCompensationInterface.PredictionHandle.is_reconciling] is true
-## across the snap and replay, and [signal NetwLagCompensationInterface.PredictionHandle.divergence_detected]
-## reports the divergence, naming the transition and what it is charged to.
+## [br][br][method NetwLagCompensationInterface.PredictionHandle.island]
+## names the local prediction boundary. A promoted remote publishes predicted
+## input with speculative simulation, runs through the same schedule, and
+## independently rebases on each authority row. A witnessed contact outside
+## the boundary follows the configured
+## [enum NetwLagCompensationInterface.PredictionHandle.BreachResponse].
 class_name PredictionComponent
 extends NetwComponent
 
@@ -68,6 +53,8 @@ enum Role {
 	HOST_LOCAL,
 	## A remote display. Never simulates here, the interpolator shows it.
 	REMOTE,
+	## A replicated remote stepped locally with a predicted command.
+	SIMULATE,
 }
 
 ## Cadence that applies the entity's simulation drive.
@@ -128,7 +115,7 @@ enum Archetype {
 
 ## The one decision the schedule and recovery presets derive from, applied
 ## through
-## [method NetwLagCompensationInterface.PredictionHandle.configure_prediction]
+## [method NetwLagCompensationInterface.PredictionHandle.archetype]
 ## on tree entry. The preset is a floor: any export below declared away from
 ## its default overrides its part of the bundle.
 @export var archetype: Archetype = Archetype.NONE
@@ -276,7 +263,9 @@ func _exit_tree() -> void:
 # declared away from their defaults so a code verb restating one is caught as
 # the two-source error it is.
 func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void:
-	handle.schedule = schedule
+	handle.schedule()._scene_tier(
+		schedule as NetwLagCompensationInterface.PredictionHandle.Schedule,
+	)
 	handle.correction_mode = correction_mode
 	handle.snap_restore = snap_restore
 	handle.max_restore_ticks = max_restore_ticks
@@ -307,15 +296,20 @@ func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void
 		declared[&"teleport_threshold"] = true
 	if collision_cooldown_ticks != 6:
 		declared[&"cooldown_ticks"] = true
+	if correction_mode != CorrectionMode.AUTO:
+		declared[&"policy"] = true
 	if snap_restore != RestoreMode.EXACT:
 		declared[&"projection"] = true
 	handle.scene_declared = declared
 	# The bundle lands after the declared keys are known, so an export moved
-	# off its default keeps outranking the preset it refines.
+	# off its default keeps outranking the preset it refines. The archetype
+	# itself is claimed only afterward, so this push applies the bundle while
+	# a later code restatement is refused as the two-source error it is.
 	if archetype != Archetype.NONE:
-		handle.configure_prediction(
+		handle.archetype(
 			archetype as NetwLagCompensationInterface.PredictionHandle.Archetype,
 		)
+		declared[&"archetype"] = true
 
 
 # The one reconciliation invariant that is always wrong: a deadzone below a
@@ -335,7 +329,7 @@ func _quantization_deadzone_warnings() -> PackedStringArray:
 			continue
 		var floor_error := codec._max_error(typeof(owner.get(field.key)) as Variant.Type)
 		var epsilon := field.epsilon_override \
-				if field.epsilon_override >= 0.0 else divergence_epsilon
+		if field.epsilon_override >= 0.0 else divergence_epsilon
 		if epsilon < floor_error:
 			out.append(
 				(
@@ -412,4 +406,3 @@ static func diverged(
 ## Delegates to the engine's reconciliation math.
 static func value_error(a: Variant, b: Variant) -> float:
 	return NetwLagCompensationInterface.PredictionHandle.value_error(a, b)
-

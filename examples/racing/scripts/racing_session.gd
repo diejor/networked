@@ -13,6 +13,10 @@ const CAPTURE_ROLE_VAR := "NETW_RACING_CAPTURE_ROLE"
 const CAPTURE_PORT_VAR := "NETW_RACING_CAPTURE_PORT"
 const CAPTURE_SECONDS_VAR := "NETW_RACING_CAPTURE_SECONDS"
 const CAPTURE_MODE_VAR := "NETW_RACING_CAPTURE_MODE"
+const SIMULATE_NEAREST_VAR := "NETW_RACING_SIMULATE_NEAREST"
+
+## Simulates the nearest replicated opponent inside each local car's island.
+@export var simulate_nearest_opponent := false
 
 @onready var _browser: ConnectBrowser = %ConnectBrowser
 
@@ -53,6 +57,15 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 # admission finds no scene. Admission re-runs when the scene arrives, keeping
 # join order and scene order decoupled.
 func _on_scene_spawned(scene: MultiplayerScene) -> void:
+	# Every car on the track shares one approximate island, so contact against
+	# another car classifies as a boundary breach instead of an undeclared
+	# contact. Promotion to simulated fidelity stays opt-in.
+	var island := scene.prediction_island() \
+			.approximate() \
+			.from_interest()
+	if simulate_nearest_opponent \
+			or not OS.get_environment(SIMULATE_NEAREST_VAR).is_empty():
+		island.simulate_nearest(1)
 	if not api.is_server():
 		return
 	for participant: NetwParticipant in api.participants:
@@ -267,4 +280,3 @@ func _other_vehicle(car: Node) -> Node:
 		if node is Vehicle and node != car:
 			return node
 	return null
-

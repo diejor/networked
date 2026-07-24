@@ -87,6 +87,8 @@ var _tracked_nodes: Dictionary[Node, bool] = { }
 var _admission_layer: NetwInterestLayer
 # Peers admitted before their participant existed, retried on join.
 var _pending_admitted_peers: Dictionary[int, bool] = { }
+# Inherited prediction-island rule for descendant entities.
+var _prediction_island_config: Dictionary = { }
 
 
 ## Returns the [MultiplayerScene] containing [param node], or [code]null[/code].
@@ -102,6 +104,23 @@ static func of(node: Node) -> MultiplayerScene:
 			return current as MultiplayerScene
 		current = current.get_parent()
 	return null
+
+
+## Returns the fluent prediction-island rule inherited by predicted entities in
+## this scene.
+##
+## An entity's own [method NetwLagCompensationInterface.PredictionHandle.island]
+## declaration overrides this rule whole.
+func prediction_island() \
+		-> NetwLagCompensationInterface.PredictionHandle.IslandDefaults:
+	return NetwLagCompensationInterface.PredictionHandle.IslandDefaults.new(
+		_prediction_island_config,
+	)
+
+
+# Returns a detached inherited rule for one entity handle.
+func _prediction_island_defaults() -> Dictionary:
+	return _prediction_island_config.duplicate(true)
 
 
 ## Stable [NetwInterestLayer] id for [member level].

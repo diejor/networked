@@ -3,7 +3,7 @@
 ## Whether a peer authors its own command and whether its simulation is the truth
 ## are independent facts. Naming their pairs is convenient, but the name is the
 ## derived thing, so these laws hold every role to being reachable from some pair
-## and hold the pairs no peer produces today to staying unreachable.
+## and hold the remaining unreachable pairs to inert behavior.
 class_name TestPredictRoleAxes
 extends NetwTestSuite
 
@@ -11,6 +11,12 @@ const PredictionHandle := NetwLagCompensationInterface.PredictionHandle
 const InputSource := PredictionHandle.InputSource
 const SimMode := PredictionHandle.SimMode
 const Role := PredictionHandle.Role
+
+
+func test_scene_component_role_enum_matches_the_runtime_handle() -> void:
+	assert_array(PredictionComponent.Role.values()).contains_exactly(
+		Role.values(),
+	)
 
 
 func test_each_role_is_named_by_the_pair_that_produces_it() -> void:
@@ -44,10 +50,9 @@ func test_a_peer_that_simulates_nothing_is_remote_whatever_it_would_read() -> vo
 				).is_equal(Role.REMOTE)
 
 
-func test_speculating_on_a_command_nobody_authored_here_stays_unreachable() -> void:
-	# This is the shape a future input relay would take: a peer speculating on
-	# another peer's command. Nothing produces it today, and until something
-	# does it must not quietly acquire the behavior of a role it is not.
+func test_only_predicted_speculation_names_a_simulated_participant() -> void:
+	# Received speculative input still has no producer. Predicted speculative
+	# input is the island cell that intentionally guesses a remote command.
 	assert_int(PredictionHandle.role_for_axes(
 		InputSource.RECEIVED, SimMode.SPECULATIVE,
 	)).override_failure_message(
@@ -56,7 +61,7 @@ func test_speculating_on_a_command_nobody_authored_here_stays_unreachable() -> v
 	).is_equal(Role.REMOTE)
 	assert_int(PredictionHandle.role_for_axes(
 		InputSource.PREDICTED, SimMode.SPECULATIVE,
-	)).is_equal(Role.REMOTE)
+	)).is_equal(Role.SIMULATE)
 	assert_int(PredictionHandle.role_for_axes(
 		InputSource.PREDICTED, SimMode.AUTHORITATIVE,
 	)).is_equal(Role.REMOTE)

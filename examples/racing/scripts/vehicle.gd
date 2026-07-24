@@ -11,9 +11,10 @@ extends Node3D
 ## sphere's solver cannot be stepped per input, a recovery lands the
 ## authoritative pose on the solver in one write, projected to the present tick
 ## through each pose field's [method NetwInterpolate.project_by] derivative, and
-## pauses around wall contacts. The contractive fields (velocities, speed
-## scalars) are teleport-only restores, so a sub-teleport recovery never rewinds
-## momentum.
+## pauses around wall contacts. The velocity fields are teleport-only restores,
+## so an in-domain sub-teleport recovery keeps momentum. An out-of-domain
+## recovery restores the whole closure because its contact antecedents were not
+## reproducible.
 ##
 ## Display is separated from simulation. On a remote peer the interpolated
 ## channels write dedicated display_position and display_heading targets, never
@@ -155,10 +156,10 @@ func _init() -> void:
 						.project_by(&"sphere_linear_velocity").to(&"display_position"),
 			)
 	Netw.configure_property(self, &"sphere_linear_velocity").state().masked() \
-			.causal().teleport_only().reconcile_only() \
+			.causal().teleport_only().epsilon(0.5) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
 	Netw.configure_property(self, &"sphere_angular_velocity").state().masked() \
-			.causal().teleport_only().reconcile_only() \
+			.causal().teleport_only().epsilon(0.35) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-256.0, 256.0))
 
 	# Heading interpolates as an angle channel onto its own display target, and
@@ -182,14 +183,15 @@ func _init() -> void:
 	# them writes values the next step overwrites. None of the scalars triggers a
 	# correction on its own, so their quantized drift never teleports the pose.
 	Netw.configure_property(self, &"linear_speed").state().masked().causal() \
-			.reconcile_only() \
+			.reconcile_only().epsilon(0.1) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-4.0, 4.0))
 	Netw.configure_property(self, &"angular_speed").state().masked().causal() \
-			.reconcile_only() \
+			.reconcile_only().epsilon(0.2) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-16.0, 16.0))
 	# The steering-sign latch is state the next step reads, so a recovery must
 	# restore it and a replay must not re-derive it from a diverging speed.
 	Netw.configure_property(self, &"steer_direction").state().masked().causal() \
+			.epsilon(0.0) \
 			.quantize(NetwQuantizeBits.new().bits(4).limits(-1.0, 1.0))
 	Netw.configure_property(self, &"acceleration").state().masked().derived() \
 			.reconcile_only()
@@ -214,23 +216,21 @@ func _ready() -> void:
 		handle.predicted_mode = NetwInterpolationInterface.PredictedMode.CHASE
 		handle.predicted_smooth_time = OWN_CHASE_SMOOTH
 	if entity:
-		# The car is a solver body: its sphere integrates in the physics
-		# solver, so the archetype bundles the frame cadence, the repeat-last
-		# hold, the rebase-recover policy, and the projected restore.
-		entity.prediction.configure_prediction(
-			PredictionHandle.Archetype.SOLVER_BODY,
-		)
-		# The ground ray is the one world fact the drive reads, so it is
-		# declared: sampled once before each drive, folded into the
-		# environment digest, and read back inside the drive, so a divergence
-		# born of a different ground contact is charged to the environment
-		# instead of staying unattributed.
-		entity.prediction.configure_sensors({
-			ground = _sample_ground,
-		})
+		# The car's SOLVER_BODY archetype is declared on the scene's
+		# PredictionComponent, which bundles the frame cadence, the
+		# repeat-last hold, the rebase-recover policy, and the projected
+		# restore. Only the sensors stay in code: a sampler is a Callable a
+		# scene cannot carry. The ground ray is the one world fact the drive
+		# reads, so it is declared, sampled once before each drive, folded
+		# into the environment digest, and read back inside the drive, so a
+		# divergence born of a different ground contact is charged to the
+		# environment instead of staying unattributed.
+		entity.prediction.sensors().sample(&"ground", _sample_ground)
+		entity.prediction.witness().contacts(_sample_contacts)
+		entity.prediction.transport().corridor(_transport_corridor_clear)
 		# The legacy capture reproduces the pre-L1 per-tick schedule.
 		if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
-			entity.prediction.schedule = PredictionHandle.Schedule.TICK
+			entity.prediction.schedule().tick()
 		_start_net_log()
 	display_position = sphere.position
 	display_heading = vehicle_model.rotation.y
@@ -254,21 +254,64 @@ func displayed_position() -> Vector3:
 # Samples the ground contact at the pre-drive sphere position, forced so the
 # result reflects this tick's position rather than trailing the last physics
 # step. Both peers then read the same contact at drive 0, where one had settled
-# a step and the other had not. Declared through configure_sensors, so the
+# a step and the other had not. Declared through sensors(), so the
 # engine samples it before each drive and the drive reads it back.
 func _sample_ground() -> Dictionary:
 	raycast.position = sphere.position
 	raycast.force_raycast_update()
 	return {
 		colliding = raycast.is_colliding(),
+		collider = _ground_collider_identity(),
 		normal = raycast.get_collision_normal() if raycast.is_colliding() \
 				else Vector3.UP,
 	}
 
 
-# The authoritative simulation step, run on the server and predicted on the
-# owning client. A remote peer never runs it; the sphere is frozen and the
-# interpolator drives the displayed pose.
+func _ground_collider_identity() -> String:
+	if not raycast.is_colliding():
+		return ""
+	var collider := raycast.get_collider() as Node
+	return "path:%s" % collider.get_path() if collider else ""
+
+
+# Samples the class-level facts Jolt realized after the drive. Continuous
+# manifold values remain outside the equality witness.
+func _sample_contacts() -> Dictionary:
+	return {
+		colliders = sphere.get_colliding_bodies(),
+		sleeping = sphere.sleeping,
+		body_mode = sphere.freeze_mode if sphere.freeze else -1,
+		collision_layer = sphere.collision_layer,
+		collision_mask = sphere.collision_mask,
+	}
+
+
+# Sweeps the live sphere through the proposed present-time translation.
+func _transport_corridor_clear(
+		current: Dictionary,
+		proposed: Dictionary,
+) -> bool:
+	if not current.has(&"sphere_position") \
+			or not proposed.has(&"sphere_position"):
+		return false
+	var parent := sphere.get_parent_node_3d()
+	if not parent:
+		return false
+	var parameters := PhysicsTestMotionParameters3D.new()
+	parameters.from = sphere.global_transform
+	parameters.motion = parent.global_basis * (
+		proposed[&"sphere_position"] - current[&"sphere_position"]
+	)
+	parameters.margin = 0.001
+	return not PhysicsServer3D.body_test_motion(
+		sphere.get_rid(),
+		parameters,
+		PhysicsTestMotionResult3D.new(),
+	)
+
+
+# The authoritative simulation step, run on the server, the owning client, and
+# a remote peer while an island promotes this car to simulated fidelity.
 func _network_tick(delta, _tick, _is_fresh):
 	# The drive reads the declared ground sample rather than re-querying the
 	# ray, so the transition runs against exactly the facts its environment
@@ -360,8 +403,8 @@ func _propulsion_axis() -> Vector3:
 
 # Presentation runs on every peer. A simulating car (owner or server) renders the
 # live body plus the decaying correction offsets, so a reconciliation lands on
-# the solver in one write while the visual glides onto it; a remote car renders
-# the interpolated display targets and never touches its frozen physics body.
+# the solver in one write while the visual glides onto it. A proxy remote
+# renders interpolated targets while its physics body stays frozen.
 # These writes are display-only. Propulsion reads replicated heading and the
 # local ground normal, while the yaw glide rides the Model child.
 func _process(delta):
@@ -370,7 +413,13 @@ func _process(delta):
 
 	_update_simulation_freeze()
 
-	if _should_simulate():
+	if multiplayer.is_server():
+		# Authority renders its live body without an interpolation playhead.
+		vehicle_model.position = sphere.position - Vector3(0, 0.65, 0)
+		vehicle_model.rotation.y = heading
+		if model_visual != null:
+			model_visual.rotation.y = 0.0
+	elif _should_simulate():
 		if is_instance_valid(entity):
 			# Feed the predictor the body's sleep state so a settled car is not sprung.
 			entity.prediction.sleeping = sphere.sleeping
@@ -416,7 +465,16 @@ func _should_simulate() -> bool:
 		return true
 	if multiplayer.is_server():
 		return true
-	return is_instance_valid(entity) and entity.is_controlled_locally
+	if not is_instance_valid(entity):
+		return false
+	if not entity.prediction.is_registered():
+		return entity.is_controlled_locally
+	if entity.prediction.sim_mode \
+			!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY:
+		return true
+	return entity.prediction.input_source \
+			== NetwLagCompensationInterface.PredictionHandle.InputSource.NONE \
+			and entity.is_controlled_locally
 
 
 # Arms the cadence recorder when the environment asks for it, so a live two-

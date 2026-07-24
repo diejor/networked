@@ -124,6 +124,19 @@ func _register_settings() -> void:
 		},
 	)
 
+	var predict_overlay_setting := "debug/networked/prediction_boundary_overlay"
+	if not ProjectSettings.has_setting(predict_overlay_setting):
+		ProjectSettings.set_setting(predict_overlay_setting, true)
+
+	ProjectSettings.set_initial_value(predict_overlay_setting, true)
+	ProjectSettings.add_property_info(
+		{
+			"name": predict_overlay_setting,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+		},
+	)
+
 	var turn_credentials_setting := "networked/webrtc/turn_credentials_url"
 	if not ProjectSettings.has_setting(turn_credentials_setting):
 		ProjectSettings.set_setting(turn_credentials_setting, "")

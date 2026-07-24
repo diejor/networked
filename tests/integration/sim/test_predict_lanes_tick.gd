@@ -75,6 +75,21 @@ func test_a_tick_drive_authors_its_own_degenerate_transition() -> void:
 			.is_equal(int((authored.back() as Dictionary)["index"]))
 
 
+func test_a_tick_drive_holds_at_the_structural_ack_age_ceiling() -> void:
+	var scenario := PredictionScenario.new()
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	predicted.client_root.motion = Vector2.RIGHT
+	var ceiling := \
+			NetwLagCompensationInterface._PredictionEngine.ACK_AGE_MAX
+	for index in ceiling + 3:
+		_emit_client_tick(scenario)
+
+	assert_int(predicted.client_prediction.ack_age_ticks).is_equal(ceiling)
+	assert_int(predicted.client_prediction.speculation_held_count) \
+			.is_greater(0)
+
+
 func test_authority_replays_the_owner_lane_tick_for_tick() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)

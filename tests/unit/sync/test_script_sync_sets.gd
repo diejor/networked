@@ -330,10 +330,21 @@ func test_binding_encodes_a_windowed_input_ring() -> void:
 func test_register_derived_binds_declared_state_and_input_sets() -> void:
 	var pipeline := NetwSyncPipeline.new(null)
 	var node: Node = preload("res://tests/support/sync/derived_state_player.gd").new()
+	node.name = "PredictedWithoutComponent"
 	add_child(node)
 	auto_free(node)
 
 	pipeline.register_derived(node)
+	assert_str(
+		NetwSyncPipeline._missing_prediction_component_message(
+			"PredictedWithoutComponent",
+		),
+	).is_equal(
+		"Prediction: PredictedWithoutComponent declares state() and input() "
+		+ "fields but carries no PredictionComponent. Its controller will author "
+		+ "commands without simulating the predicted state. Add the component or "
+		+ "register prediction from code.",
+	)
 	# The script marks one state set (position) and one input set (rotation).
 	assert_int(pipeline.counters()[&"derived_sets_active"]).is_equal(2)
 

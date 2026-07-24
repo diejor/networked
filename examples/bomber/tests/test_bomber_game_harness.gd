@@ -58,6 +58,7 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 	var jose_world := await jose.await_scene(&"World")
 	var jose_player := await jose.await_player(&"jose") as Node2D
 	var valeria_player := valeria.find_player(&"valeria") as Node2D
+	var jose_on_host := valeria.find_player(&"jose") as Node2D
 
 	await game.sync_ticks(8)
 	var jose_start := jose_player.position.x
@@ -72,6 +73,10 @@ func test_client_input_drives_only_its_player_and_spawns_rate_limited_bomb() -> 
 
 	# The client drives its own player.
 	assert_that(jose_player.position.x).is_greater(jose_start)
+	var host_runtime = NetwEntity.of(jose_on_host).interpolation._runtime()
+	assert_int(host_runtime.pump_mode).override_failure_message(
+		"the host must sample the client player it simulates authoritatively",
+	).is_equal(NetwInterpolationInterface._PUMP_BRACKETED)
 	# And only its own: the host's player never saw the input.
 	assert_float(valeria_player.position.x).is_equal_approx(valeria_held, 1.0)
 

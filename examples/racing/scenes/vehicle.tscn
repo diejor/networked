@@ -137,6 +137,7 @@ tick_mode = true
 [node name="PredictionComponent" type="Node" parent="." unique_id=1682018892]
 unique_name_in_owner = true
 script = ExtResource("8_pred")
+archetype = 2
 
 [node name="MultiplayerInterpolator" type="Node" parent="." unique_id=2035980158]
 script = ExtResource("9_interp")

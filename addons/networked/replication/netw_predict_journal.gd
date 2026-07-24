@@ -2,9 +2,10 @@
 ## instrument a deterministic kernel proves itself against.
 ##
 ## A row opens when a transition is authored and closes when its post-solve
-## state is captured, so a closed row names one drive completely: the command
-## that ran, the clock label it carried, and the fingerprint of the state it
-## left. That makes the fingerprint the acceptance test rather than a tolerance.
+## state is captured, so a closed row names one drive completely. Its evidence
+## is immutable after close while verdict flags, attribution, and domain may
+## settle later. That makes the fingerprint the acceptance test rather than a
+## tolerance.
 ## Two peers that ran the same transition closure agree on [method post_fps] at
 ## every acked transition, and the first transition where they disagree is the
 ## one that broke, not the one where the error grew visible.
@@ -43,25 +44,78 @@ const ROW_DIVERGENT := 16
 ## by [method mark_substituted], whose row is final without ever having run.
 const ROW_CLOSED := 32
 
+## The row's [method pre_fps] did not chain from the preceding produced state
+## and no operator provenance accounts for the intervening write.
+const ROW_CHAIN_BROKEN := 64
+
+## Both peers declared a realized witness for the row and its fingerprint
+## matched. The local [code]witness_detail[/code] may therefore describe the
+## peer's stable witness facts too.
+const ROW_WITNESS_MATCHED := 128
+
+## The row carries a declared realized-transition witness.
+const EVIDENCE_WITNESS := 1
+
+## The row carries the optional raw pre-state fingerprint.
+const EVIDENCE_RAW := 2
+
 ## Which antecedent of the recurrence a divergence is charged to.
 ##
-## A divergence whose antecedents the owner could test is always charged, because
-## an unattributed one is a tuning problem and an attributed one is a bug with an
-## address. Testing them takes authority's own command hash and environment
-## digest, which arrive on the acknowledgement lane, so a divergence found before
-## that lane has spoken is [constant UNATTRIBUTED] rather than blamed on the
-## suspect that happens to be tested last.
+## A divergence is charged to the first unequal boundary in causal order:
+## pre-state, command, environment, topology, optional raw execution bits,
+## realized contact, then the produced closure. Missing required peer evidence
+## yields [constant UNKNOWN] rather than a guess.
 enum Attribution {
-	## No antecedent could be tested, so nothing is charged. The absence is
-	## itself the finding: it says the acknowledgement lane had not covered this
-	## transition when the divergence was found.
-	UNATTRIBUTED,
+	## Required peer evidence was absent, so no boundary is blamed.
+	UNKNOWN,
+	## The peers entered the transition with different declared state.
+	PRE_STATE,
 	## The command differed. Authority ran input the owner did not author.
 	COMMAND,
 	## The environment differed. The transition ran against unequal world facts.
 	ENVIRONMENT,
-	## The simulation differed under equal command and equal environment.
-	SIMULATION,
+	## The execution topology or body mode differed.
+	TOPOLOGY,
+	## Canonical state agreed but optional raw execution bits differed.
+	EXECUTION,
+	## Equal observed antecedents produced a different contact witness.
+	CONTACT,
+	## Every observed antecedent agreed but the produced state differed.
+	CLOSURE,
+}
+
+## Recovery operators that may account for a state-chain discontinuity.
+enum Operator {
+	## No operator wrote the body since the preceding row.
+	NONE,
+	## A projected authoritative basis was restored.
+	REBASE_PROJECTED,
+	## An exact authoritative basis was restored.
+	REBASE_EXACT,
+	## The teleport tier restored the full declared closure.
+	FULL_CLOSURE,
+	## Present-time moving transport composed an aligned delta.
+	TRANSPORT_DELTA,
+	## Fallback seeded the body from authority.
+	RESEED,
+	## The first post-reseed comparison aligned the acknowledgement horizon.
+	RESEED_ALIGN,
+	## A witnessed boundary breach closed speculation without closing input.
+	DEMOTE,
+	## A clean momentum-only divergence was left to contract without a write.
+	DISSIPATE,
+}
+
+## State family that first differed inside a pre-state or closure boundary.
+enum StateFamily {
+	## No family differed or the peer evidence was unavailable.
+	NONE,
+	## Position and orientation fields.
+	POSE,
+	## Declared derivative and velocity fields.
+	MOMENTUM,
+	## Remaining controller state and latches.
+	CONTROLLER_LATCH,
 }
 
 ## Whether a transition is one the peers are entitled to reproduce exactly.
@@ -89,11 +143,30 @@ var _transitions := PackedInt64Array()
 var _labels := PackedInt64Array()
 var _c_hashes := PackedInt32Array()
 var _e_digests := PackedInt32Array()
+var _pre_fps := PackedInt32Array()
+var _topo_fps := PackedInt32Array()
+var _raw_fps := PackedInt32Array()
+var _witness_fps := PackedInt32Array()
+var _witness_class_bits := PackedByteArray()
+var _aligned_errors := PackedFloat32Array()
 var _post_fps := PackedInt32Array()
+var _pre_pose_fps := PackedInt32Array()
+var _pre_momentum_fps := PackedInt32Array()
+var _pre_controller_fps := PackedInt32Array()
+var _post_pose_fps := PackedInt32Array()
+var _post_momentum_fps := PackedInt32Array()
+var _post_controller_fps := PackedInt32Array()
+var _episode_ids := PackedInt32Array()
+var _write_ids := PackedInt32Array()
+var _operators := PackedByteArray()
+var _bases := PackedInt64Array()
+var _differing_families := PackedByteArray()
+var _evidence_masks := PackedByteArray()
 var _kinds := PackedByteArray()
 var _domains := PackedByteArray()
 var _attributions := PackedByteArray()
 var _flags := PackedByteArray()
+var _witness_details: Dictionary[int, Dictionary] = { }
 
 
 func _init(capacity: int = CAPACITY_DEFAULT) -> void:
@@ -102,7 +175,25 @@ func _init(capacity: int = CAPACITY_DEFAULT) -> void:
 	_labels.resize(_capacity)
 	_c_hashes.resize(_capacity)
 	_e_digests.resize(_capacity)
+	_pre_fps.resize(_capacity)
+	_topo_fps.resize(_capacity)
+	_raw_fps.resize(_capacity)
+	_witness_fps.resize(_capacity)
+	_witness_class_bits.resize(_capacity)
+	_aligned_errors.resize(_capacity)
 	_post_fps.resize(_capacity)
+	_pre_pose_fps.resize(_capacity)
+	_pre_momentum_fps.resize(_capacity)
+	_pre_controller_fps.resize(_capacity)
+	_post_pose_fps.resize(_capacity)
+	_post_momentum_fps.resize(_capacity)
+	_post_controller_fps.resize(_capacity)
+	_episode_ids.resize(_capacity)
+	_write_ids.resize(_capacity)
+	_operators.resize(_capacity)
+	_bases.resize(_capacity)
+	_differing_families.resize(_capacity)
+	_evidence_masks.resize(_capacity)
 	_kinds.resize(_capacity)
 	_domains.resize(_capacity)
 	_attributions.resize(_capacity)
@@ -129,30 +220,104 @@ static func fnv1a(bytes: PackedByteArray) -> int:
 ## for flooring the input window. [param kind] is a
 ## [enum NetwLagCompensationInterface.PredictionHandle.DriveKind] value naming
 ## how the command was selected. [param c_hash] fingerprints the canonical
-## command bytes. The row stays open until [method close] records the state the
-## drive produced.
-func open(transition: int, label: int, kind: int, c_hash: int) -> void:
+## command bytes. [param pre_fp] fingerprints the declared state consumed by the
+## drive. [param pre_families] carries pose, momentum, then controller and latch
+## fingerprints. [param provenance] names an operator write since the preceding
+## row. The row stays open until [method close] records the produced state. A
+## retained row with the same transition is left unchanged.
+func open(
+		transition: int,
+		label: int,
+		kind: int,
+		c_hash: int,
+		pre_fp: int = 0,
+		pre_families: PackedInt32Array = PackedInt32Array(),
+		provenance: Dictionary = { },
+		topo_fp: int = 0,
+		raw_fp: int = 0,
+		evidence_mask: int = 0,
+) -> void:
+	if _slot_of(transition) >= 0:
+		return
 	var slot := _next_slot()
 	_transitions[slot] = transition
 	_labels[slot] = label
 	_c_hashes[slot] = c_hash
 	_e_digests[slot] = 0
+	_pre_fps[slot] = pre_fp
+	_topo_fps[slot] = topo_fp
+	_raw_fps[slot] = raw_fp
+	_witness_fps[slot] = 0
+	_witness_class_bits[slot] = 0
+	_aligned_errors[slot] = 0.0
 	_post_fps[slot] = 0
+	_pre_pose_fps[slot] = _family_at(pre_families, 0)
+	_pre_momentum_fps[slot] = _family_at(pre_families, 1)
+	_pre_controller_fps[slot] = _family_at(pre_families, 2)
+	_post_pose_fps[slot] = 0
+	_post_momentum_fps[slot] = 0
+	_post_controller_fps[slot] = 0
+	_episode_ids[slot] = int(provenance.get(&"episode", 0))
+	_write_ids[slot] = int(provenance.get(&"write_id", 0))
+	_operators[slot] = int(provenance.get(&"operator", Operator.NONE))
+	_bases[slot] = int(provenance.get(&"basis", -1))
+	_differing_families[slot] = StateFamily.NONE
+	_evidence_masks[slot] = evidence_mask
 	_kinds[slot] = kind
 	_domains[slot] = Domain.IN_DOMAIN
-	_attributions[slot] = Attribution.UNATTRIBUTED
+	_attributions[slot] = Attribution.UNKNOWN
 	_flags[slot] = 0
 
 
-## Closes the row for [param transition] with [param post_fp], the fingerprint
-## of the canonical state the drive produced. Ignored when the row has already
-## fallen out of the ring.
-func close(transition: int, post_fp: int) -> void:
+## Seals the execution topology and realized witness for [param transition]
+## before [method close]. [param evidence_mask] declares which optional columns
+## are present. [param detail] is debug-only witness narration retained with the
+## row and never used for equality. [param witness_class_bits] is the compact,
+## peer-invariant authority summary carried by acknowledgement records.
+func mark_solve(
+		transition: int,
+		topo_fp: int,
+		witness_fp: int,
+		evidence_mask: int,
+		detail: Dictionary = { },
+		witness_class_bits: int = 0,
+) -> void:
 	var slot := _slot_of(transition)
-	if slot < 0:
+	if slot < 0 or _flags[slot] & ROW_CLOSED:
+		return
+	_topo_fps[slot] = topo_fp
+	_witness_fps[slot] = witness_fp
+	_witness_class_bits[slot] = witness_class_bits
+	_evidence_masks[slot] = evidence_mask
+	if not detail.is_empty():
+		_witness_details[transition] = detail.duplicate(true)
+
+
+## Closes the row for [param transition] with [param post_fp], the fingerprint
+## of the canonical state the drive produced. [param post_families] carries its
+## pose, momentum, then controller and latch fingerprints. Ignored when the row
+## has already closed or fallen out of the ring.
+func close(
+		transition: int,
+		post_fp: int,
+		post_families: PackedInt32Array = PackedInt32Array(),
+) -> void:
+	var slot := _slot_of(transition)
+	if slot < 0 or _flags[slot] & ROW_CLOSED:
 		return
 	_post_fps[slot] = post_fp
+	_post_pose_fps[slot] = _family_at(post_families, 0)
+	_post_momentum_fps[slot] = _family_at(post_families, 1)
+	_post_controller_fps[slot] = _family_at(post_families, 2)
 	_flags[slot] |= ROW_CLOSED
+
+
+## Marks [param transition] as a state-chain break with no operator provenance.
+## Ignored when the row has already fallen out of the ring.
+func mark_chain_broken(transition: int) -> void:
+	var slot := _slot_of(transition)
+	if slot >= 0:
+		_flags[slot] |= ROW_CHAIN_BROKEN
 
 
 ## Records authority's verdict for [param transition]: [constant ROW_ACKED]
@@ -165,6 +330,17 @@ func mark_ack(transition: int, matched: bool) -> void:
 	var flags := _flags[slot] | ROW_ACKED
 	flags &= ~(ROW_MATCHED | ROW_DIVERGENT)
 	_flags[slot] = flags | (ROW_MATCHED if matched else ROW_DIVERGENT)
+
+
+## Records whether both peers supplied equal realized-transition witnesses.
+## Ignored when the row has already fallen out of the ring.
+func mark_witness_match(transition: int, matched: bool) -> void:
+	var slot := _slot_of(transition)
+	if slot < 0:
+		return
+	_flags[slot] &= ~ROW_WITNESS_MATCHED
+	if matched:
+		_flags[slot] |= ROW_WITNESS_MATCHED
 
 
 ## Marks [param transition] as one authority ran with a command the owner never
@@ -180,6 +356,18 @@ func mark_substituted(transition: int) -> void:
 	_flags[slot] |= ROW_SUBSTITUTED | ROW_CLOSED
 	# A transition authority ran with a command its owner never authored has an
 	# unequal antecedent by definition, so it is never entitled to exactness.
+	_domains[slot] = Domain.OUT_OF_DOMAIN
+
+
+## Marks a retained [param transition] as superseded by a later substitution.
+## Its sealed evidence remains unchanged while the verdict overlay records
+## [constant ROW_SUBSTITUTED] and [constant ROW_SUPERSEDED]. Ignored when the
+## row has already fallen out of the ring.
+func mark_superseded(transition: int) -> void:
+	var slot := _slot_of(transition)
+	if slot < 0:
+		return
+	_flags[slot] |= ROW_SUBSTITUTED | ROW_SUPERSEDED
 	_domains[slot] = Domain.OUT_OF_DOMAIN
 
 
@@ -199,16 +387,13 @@ func mark_domain(transition: int, domain: Domain) -> void:
 
 
 ## Records the environment digest [param e_digest] for [param transition], the
-## fingerprint of the declared world facts the drive ran against. Ignored when
-## the row has already fallen out of the ring.
+## fingerprint of the declared world facts the drive ran against. Ignored after
+## the row closes or when it has already fallen out of the ring.
 ##
-## It is what separates a divergence charged to
-## [constant Attribution.ENVIRONMENT] from one charged to
-## [constant Attribution.SIMULATION]. Equal commands and equal digests leave the
-## simulation itself as the only remaining suspect.
+## It separates [constant Attribution.ENVIRONMENT] from later causal boundaries.
 func mark_e_digest(transition: int, e_digest: int) -> void:
 	var slot := _slot_of(transition)
-	if slot < 0:
+	if slot < 0 or _flags[slot] & ROW_CLOSED:
 		return
 	_e_digests[slot] = e_digest
 
@@ -226,13 +411,32 @@ func mark_attribution(transition: int, attribution: Attribution) -> void:
 	_attributions[slot] = attribution
 
 
+## Records the aligned state error measured when [param transition] settles.
+## Ignored after ring eviction.
+func mark_aligned_error(transition: int, error: float) -> void:
+	var slot := _slot_of(transition)
+	if slot >= 0:
+		_aligned_errors[slot] = error
+
+
+## Records which state family first differed inside [param transition]'s
+## pre-state or closure boundary. Ignored after ring eviction.
+func mark_differing_family(
+		transition: int,
+		family: StateFamily,
+) -> void:
+	var slot := _slot_of(transition)
+	if slot >= 0:
+		_differing_families[slot] = family
+
+
 ## Returns the [enum Attribution] charged to [param transition], or
-## [constant Attribution.UNATTRIBUTED] when nothing charged it or the row has
+## [constant Attribution.UNKNOWN] when nothing charged it or the row has
 ## fallen out of the ring.
 func attribution_at(transition: int) -> Attribution:
 	var slot := _slot_of(transition)
 	if slot < 0:
-		return Attribution.UNATTRIBUTED
+		return Attribution.UNKNOWN
 	return _attributions[slot] as Attribution
 
 
@@ -278,9 +482,16 @@ func first_unmatched() -> int:
 ##  ┠╴e_digest (int)       fingerprint of the declared environment facts
 ##  ┠╴post_fp (int)        fingerprint of the state the drive produced
 ##  ┠╴domain (int)         a Domain value
+##  ┠╴attribution (int)    an Attribution value
 ##  ┖╴flags (int)          the ROW_ bitfield
 ## }
 ## [/codeblock]
+## The row also exposes [code]pre_fp[/code], the pre and post
+## [code]pose_fp[/code], [code]momentum_fp[/code], and
+## [code]controller_fp[/code] families, plus the preceding operator's
+## [code]episode_id[/code], [code]write_id[/code], [code]operator[/code], and
+## [code]basis[/code]. Settled rows expose [code]aligned_error[/code], and
+## witnessed rows expose [code]witness_class_bits[/code].
 func row_at(transition: int) -> Dictionary:
 	var slot := _slot_of(transition)
 	if slot < 0:
@@ -291,7 +502,26 @@ func row_at(transition: int) -> Dictionary:
 		&"kind": _kinds[slot],
 		&"c_hash": _c_hashes[slot],
 		&"e_digest": _e_digests[slot],
+		&"pre_fp": _pre_fps[slot],
+		&"topo_fp": _topo_fps[slot],
+		&"raw_fp": _raw_fps[slot],
+		&"witness_fp": _witness_fps[slot],
+		&"witness_class_bits": _witness_class_bits[slot],
+		&"aligned_error": _aligned_errors[slot],
+		&"evidence_mask": _evidence_masks[slot],
+		&"witness_detail": _witness_details.get(transition, { }).duplicate(true),
+		&"pre_pose_fp": _pre_pose_fps[slot],
+		&"pre_momentum_fp": _pre_momentum_fps[slot],
+		&"pre_controller_fp": _pre_controller_fps[slot],
 		&"post_fp": _post_fps[slot],
+		&"post_pose_fp": _post_pose_fps[slot],
+		&"post_momentum_fp": _post_momentum_fps[slot],
+		&"post_controller_fp": _post_controller_fps[slot],
+		&"episode_id": _episode_ids[slot],
+		&"write_id": _write_ids[slot],
+		&"operator": _operators[slot],
+		&"basis": _bases[slot],
+		&"differing_family": _differing_families[slot],
 		&"domain": _domains[slot],
 		&"attribution": _attributions[slot],
 		&"flags": _flags[slot],
@@ -359,6 +589,44 @@ func e_digests() -> PackedInt32Array:
 	return out
 
 
+## Returns the retained pre-state fingerprints, ordered by [method transitions].
+func pre_fps() -> PackedInt32Array:
+	return _ordered_i32(_pre_fps)
+
+
+## Returns the retained execution-topology fingerprints, ordered by
+## [method transitions].
+func topo_fps() -> PackedInt32Array:
+	return _ordered_i32(_topo_fps)
+
+
+## Returns the retained raw pre-state fingerprints, ordered by
+## [method transitions]. A row without [constant EVIDENCE_RAW] carries zero.
+func raw_fps() -> PackedInt32Array:
+	return _ordered_i32(_raw_fps)
+
+
+## Returns the retained realized-witness fingerprints, ordered by
+## [method transitions]. A row without [constant EVIDENCE_WITNESS] carries zero.
+func witness_fps() -> PackedInt32Array:
+	return _ordered_i32(_witness_fps)
+
+
+## Returns authority witness-class summaries ordered by [method transitions].
+func witness_class_bits() -> PackedByteArray:
+	return _ordered_u8(_witness_class_bits)
+
+
+## Returns pose, momentum, then controller and latch fingerprints per retained
+## pre-state, ordered by [method transitions].
+func pre_family_fps() -> PackedInt32Array:
+	return _ordered_families(
+		_pre_pose_fps,
+		_pre_momentum_fps,
+		_pre_controller_fps,
+	)
+
+
 ## Returns the retained post-solve state fingerprints, ordered by
 ## [method transitions]. An open row carries [code]0[/code] until
 ## [method close].
@@ -390,6 +658,45 @@ func domains() -> PackedByteArray:
 	return out
 
 
+## Returns pose, momentum, then controller and latch fingerprints per retained
+## post-state, ordered by [method transitions].
+func post_family_fps() -> PackedInt32Array:
+	return _ordered_families(
+		_post_pose_fps,
+		_post_momentum_fps,
+		_post_controller_fps,
+	)
+
+
+## Returns the first retained transition marked [constant ROW_CHAIN_BROKEN], or
+## [code]-1[/code] when the retained chain is intact.
+func first_chain_break() -> int:
+	for i in _count:
+		var slot := (_start + i) % _capacity
+		if _flags[slot] & ROW_CHAIN_BROKEN:
+			return _transitions[slot]
+	return -1
+
+
+## Returns the retained divergence charges, ordered by [method transitions].
+func attributions() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(_count)
+	for i in _count:
+		out[i] = _attributions[(_start + i) % _capacity]
+	return out
+
+
+## Returns the retained evidence-completeness masks, ordered by
+## [method transitions].
+func evidence_masks() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(_count)
+	for i in _count:
+		out[i] = _evidence_masks[(_start + i) % _capacity]
+	return out
+
+
 ## Returns the retained [code]ROW_[/code] bitfields, ordered by
 ## [method transitions].
 func flags() -> PackedByteArray:
@@ -409,6 +716,7 @@ func clear(epoch: int) -> void:
 	_epoch = epoch
 	_count = 0
 	_start = 0
+	_witness_details.clear()
 
 
 ## Returns how many rows the journal currently retains, at most
@@ -434,6 +742,7 @@ func _next_slot() -> int:
 		_count += 1
 		return slot
 	var evicted := _start
+	_witness_details.erase(_transitions[evicted])
 	_start = (_start + 1) % _capacity
 	return evicted
 
@@ -445,3 +754,38 @@ func _slot_of(transition: int) -> int:
 		if _transitions[slot] == transition:
 			return slot
 	return -1
+
+
+static func _family_at(families: PackedInt32Array, index: int) -> int:
+	return families[index] if index < families.size() else 0
+
+
+func _ordered_i32(column: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(_count)
+	for i in _count:
+		out[i] = column[(_start + i) % _capacity]
+	return out
+
+
+func _ordered_u8(column: PackedByteArray) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(_count)
+	for i in _count:
+		out[i] = column[(_start + i) % _capacity]
+	return out
+
+
+func _ordered_families(
+		pose: PackedInt32Array,
+		momentum: PackedInt32Array,
+		controller: PackedInt32Array,
+) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(_count * 3)
+	for i in _count:
+		var slot := (_start + i) % _capacity
+		out[i * 3] = pose[slot]
+		out[i * 3 + 1] = momentum[slot]
+		out[i * 3 + 2] = controller[slot]
+	return out

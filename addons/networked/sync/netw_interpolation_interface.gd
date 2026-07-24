@@ -327,7 +327,6 @@ func _ensure_liveness_connection() -> void:
 	_liveness = lv
 	_liveness_connected = true
 
-
 #region Record seam
 
 ## Records [param value] for [param target_property] on [param node].
@@ -558,6 +557,15 @@ func _mark_runtime_dirty(handle: Handle) -> void:
 	_rebuild_runtime.call_deferred(runtime)
 
 
+# Re-resolves only the display source while preserving its channel outputs.
+func _mark_role_dirty(handle: Handle) -> void:
+	var runtime := _runtime_for_handle(handle)
+	if not runtime:
+		_mark_runtime_dirty(handle)
+		return
+	_resolve_role(runtime)
+
+
 # Connects [param cb] to [param sig] and stores the triple so one helper can
 # disconnect it later even after [param source] is freed.
 func _bind_hook(
@@ -591,9 +599,7 @@ func _on_entity_control_changed(
 	var runtime := _runtimes.get(route) as _Runtime
 	if not runtime:
 		return
-	runtime.pump_mode = _PUMP_UNRESOLVED
 	_resolve_role(runtime)
-	_reset_runtime(runtime)
 
 
 func _on_entity_reparented(
@@ -757,8 +763,12 @@ func _ensure_state(
 			and not output.global_space \
 			and not visual.get(&"top_level") \
 			and target_prop in [
-				&"rotation", &"scale", &"transform",
-				&"quaternion", &"basis", &"skew",
+				&"rotation",
+				&"scale",
+				&"transform",
+				&"quaternion",
+				&"basis",
+				&"skew",
 			]:
 		_dbg.warn(
 			"interpolation: channel '%s' on parented visual '%s' is written "
@@ -809,13 +819,23 @@ func _resolve_role(runtime: _Runtime) -> void:
 	var pump := _pump_for(runtime, role)
 	if pump == runtime.pump_mode:
 		return
+	var previous_pump := runtime.pump_mode
+	runtime.display_offset_limit = _chase_clamp(runtime)
 
 	# Crossing the predicted boundary switches feeders between local sampling
 	# and network receive, which record in different tick domains. Stale
 	# records from the previous feeder cannot mix with the new one.
-	if _pump_is_predicted(pump) or _pump_is_predicted(runtime.pump_mode):
+	if _pump_is_predicted(pump) or _pump_is_predicted(previous_pump):
 		for state in runtime.states:
 			state.history.clear()
+	# A resolved source change retains the displayed value while the new source
+	# establishes its first target. That target seeds a reset-not-accumulate
+	# offset in the pump, where the value is finally available.
+	if previous_pump != _PUMP_UNRESOLVED \
+			and previous_pump != _PUMP_DISABLED \
+			and pump != _PUMP_DISABLED:
+		for state in runtime.states:
+			state.role_offset_pending = not state.self_feedback
 
 	runtime.pump_mode = pump
 	_apply_body_freeze(runtime, role)
@@ -824,7 +844,7 @@ func _resolve_role(runtime: _Runtime) -> void:
 	if pump == _PUMP_REMOTE:
 		_compute_sync_intervals(runtime)
 	# The chase absorbs recoveries, so entering it subscribes to the entity's
-	# reconciliation writes and leaving it forgets them with their offsets.
+	# reconciliation writes. A source transition owns any offset after leaving.
 	if pump == _PUMP_CHASE:
 		var entity := runtime.entity()
 		if entity and entity.prediction:
@@ -836,8 +856,10 @@ func _resolve_role(runtime: _Runtime) -> void:
 			)
 	else:
 		_disconnect_hooks(runtime.chase_hooks)
-		for state in runtime.states:
-			state.chase_offset = null
+		if pump == _PUMP_DISABLED:
+			for state in runtime.states:
+				state.display_offset = null
+				state.role_offset_pending = false
 
 
 # Warns once per runtime when a predicted or authority pump owns a channel that
@@ -886,8 +908,16 @@ func _resolve_display_role(runtime: _Runtime) -> DisplayRole:
 		return handle.display_role
 	var owner := runtime.owner()
 	var entity := runtime.entity()
-	if _simulates_locally(runtime) and entity.is_controlled_locally:
+	if _simulates_locally(runtime) and (
+			entity.is_controlled_locally
+			or entity.prediction.input_source \
+					== NetwLagCompensationInterface.PredictionHandle.InputSource.PREDICTED
+	):
 		return DisplayRole.PREDICTED
+	if entity.prediction.is_registered() \
+			and entity.prediction.sim_mode \
+					!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY:
+		return DisplayRole.AUTHORITY
 	if owner and owner.is_multiplayer_authority() \
 			and entity.is_controlled_locally:
 		return DisplayRole.DISABLED
@@ -1105,6 +1135,7 @@ func _pump_history(
 	stats.max_display_lag = maxf(stats.max_display_lag, playhead.display_lag)
 
 	var eit := playhead.expected_interval_ticks
+	var glide := _display_glide(runtime, timing.frame_delta)
 	for state in runtime.states:
 		# The bracketed pump runs on the peer that authors this stream (the server's
 		# authority, or a predicted body in bracketed mode). A self-feeding channel
@@ -1122,8 +1153,8 @@ func _pump_history(
 		# project by their project_by sibling read at this channel's newest tick,
 		# an atomic pair, and fall back to their own finite difference.
 		var project := forecast and (
-			state.spec == null
-			or state.spec.forecast_tail != NetwInterpolate.Tail.HOLD
+				state.spec == null
+				or state.spec.forecast_tail != NetwInterpolate.Tail.HOLD
 		)
 		var velocity: Variant = null
 		var has_velocity := false
@@ -1143,6 +1174,12 @@ func _pump_history(
 			timing.ticktime,
 			velocity,
 			has_velocity,
+		)
+		result = _apply_display_offset(
+			state,
+			result,
+			glide,
+			runtime.display_offset_limit,
 		)
 		if state.history.last_projected:
 			stats.projecting += 1
@@ -1184,18 +1221,21 @@ func _on_chase_recovered(
 		return
 	if teleported:
 		for state in runtime.states:
-			state.chase_offset = null
+			state.display_offset = null
+			state.role_offset_pending = false
 		return
 	var limit := _chase_clamp(runtime)
+	runtime.display_offset_limit = limit
 	for state in runtime.states:
 		if state.self_feedback:
 			continue
 		if not deltas.has(state.source_prop):
 			continue
-		state.chase_offset = _clamp_delta(
+		state.display_offset = _clamp_delta(
 			_scale_delta(deltas[state.source_prop], -1.0),
 			limit,
 		)
+		state.role_offset_pending = false
 
 
 # The largest render offset a chase absorption may hold, the entity's own
@@ -1218,6 +1258,8 @@ static func _scale_delta(delta: Variant, factor: float) -> Variant:
 			return (delta as Vector2) * factor
 		TYPE_VECTOR3:
 			return (delta as Vector3) * factor
+		TYPE_QUATERNION:
+			return Quaternion.IDENTITY.slerp(delta as Quaternion, factor)
 	return null
 
 
@@ -1230,6 +1272,11 @@ static func _clamp_delta(delta: Variant, limit: float) -> Variant:
 			return (delta as Vector2).limit_length(limit)
 		TYPE_VECTOR3:
 			return (delta as Vector3).limit_length(limit)
+		TYPE_QUATERNION:
+			var rotation := delta as Quaternion
+			var angle := Quaternion.IDENTITY.angle_to(rotation)
+			return rotation if angle <= limit or angle <= 0.0 \
+					else Quaternion.IDENTITY.slerp(rotation, limit / angle)
 	return null
 
 
@@ -1241,6 +1288,8 @@ static func _add_delta(value: Variant, delta: Variant) -> Variant:
 			return (value as Vector2) + (delta as Vector2)
 		TYPE_VECTOR3:
 			return (value as Vector3) + (delta as Vector3)
+		TYPE_QUATERNION:
+			return ((delta as Quaternion) * (value as Quaternion)).normalized()
 	return value
 
 
@@ -1252,7 +1301,62 @@ static func _delta_spent(delta: Variant) -> bool:
 			return (delta as Vector2).length() < 0.0001
 		TYPE_VECTOR3:
 			return (delta as Vector3).length() < 0.0001
+		TYPE_QUATERNION:
+			return Quaternion.IDENTITY.angle_to(delta as Quaternion) < 0.0001
 	return true
+
+
+# Returns the residual that composes [param target] back onto [param displayed].
+static func _role_offset(
+		displayed: Variant,
+		target: Variant,
+		mode: NetwInterpolate.Mode,
+) -> Variant:
+	if typeof(displayed) != typeof(target):
+		return null
+	match typeof(target):
+		TYPE_FLOAT:
+			return angle_difference(target, displayed) \
+					if mode == NetwInterpolate.Mode.ANGLE \
+					else float(displayed) - float(target)
+		TYPE_VECTOR2:
+			return (displayed as Vector2) - (target as Vector2)
+		TYPE_VECTOR3:
+			return (displayed as Vector3) - (target as Vector3)
+		TYPE_QUATERNION:
+			return (displayed as Quaternion) * (target as Quaternion).inverse()
+	return null
+
+
+# Seeds and decays one role or recovery offset against the current target.
+static func _apply_display_offset(
+		state: _PropertyState,
+		target: Variant,
+		glide: float,
+		limit: float,
+) -> Variant:
+	if state.role_offset_pending:
+		state.role_offset_pending = false
+		state.display_offset = _clamp_delta(
+			_role_offset(state.last_written, target, state.spec.mode),
+			limit,
+		)
+	if state.display_offset == null:
+		return target
+	state.display_offset = _scale_delta(state.display_offset, glide)
+	if state.display_offset == null or _delta_spent(state.display_offset):
+		state.display_offset = null
+		return target
+	return _add_delta(target, state.display_offset)
+
+
+# Returns the shared exponential decay for recovery and role offsets.
+static func _display_glide(runtime: _Runtime, frame_delta: float) -> float:
+	if not runtime.handle:
+		return 1.0
+	return exp(
+		-frame_delta / maxf(runtime.handle.chase_glide_time, 0.001),
+	)
 
 
 # Eases each visual toward its live predicted body every frame, carrying any
@@ -1263,13 +1367,9 @@ func _pump_chase(
 		stats: NetwPumpStats,
 ) -> void:
 	var weight := 1.0 - exp(
-			-timing.frame_delta / _predicted_effective_smooth_time(runtime, timing),
+		-timing.frame_delta / _predicted_effective_smooth_time(runtime, timing),
 	)
-	var glide := 1.0
-	if runtime.handle:
-		glide = exp(
-				-timing.frame_delta / maxf(runtime.handle.chase_glide_time, 0.001),
-		)
+	var glide := _display_glide(runtime, timing.frame_delta)
 	var trace := _should_trace(runtime)
 	for state in runtime.states:
 		# A self-feeding channel would smooth the live body against its own last
@@ -1279,12 +1379,12 @@ func _pump_chase(
 		if not is_instance_valid(state.source_obj):
 			continue
 		var value: Variant = state.source_obj.get(state.source_prop)
-		if state.chase_offset != null:
-			state.chase_offset = _scale_delta(state.chase_offset, glide)
-			if state.chase_offset == null or _delta_spent(state.chase_offset):
-				state.chase_offset = null
-			else:
-				value = _add_delta(value, state.chase_offset)
+		value = _apply_display_offset(
+			state,
+			value,
+			glide,
+			runtime.display_offset_limit,
+		)
 		var result: Variant = state.history.smooth_toward(
 			state.last_written,
 			value,
@@ -1381,6 +1481,8 @@ func _reset_runtime(runtime: _Runtime) -> void:
 	playhead.starvation_ticks = 0
 	for state in runtime.states:
 		state.history.clear()
+		state.display_offset = null
+		state.role_offset_pending = false
 		state.last_written = _current_source_value(state)
 		state.output.write(state.last_written)
 
@@ -1403,6 +1505,8 @@ func _snap_state(
 		return
 	state.output.write(value)
 	state.history.clear()
+	state.display_offset = null
+	state.role_offset_pending = false
 	state.last_written = value
 
 
@@ -1545,13 +1649,13 @@ class Handle:
 	var display_role: DisplayRole = DisplayRole.AUTO:
 		set(value):
 			display_role = value
-			_mark_dirty()
+			_mark_role_dirty()
 
 	## Predicted display filter used for local prediction.
 	var predicted_mode: PredictedMode = PredictedMode.CHASE:
 		set(value):
 			predicted_mode = value
-			_mark_dirty()
+			_mark_role_dirty()
 
 	## Exponential smoothing time for [constant PredictedMode.CHASE].
 	var predicted_smooth_time: float = 0.0:
@@ -1559,8 +1663,9 @@ class Handle:
 			predicted_smooth_time = value
 			_mark_dirty()
 
-	## Seconds a chase-absorbed recovery offset takes to decay by
-	## [code]1/e[/code].
+	## Seconds a recovery or display role offset takes to decay by
+	## [code]1/e[/code]. Role changes retain the last displayed value and glide
+	## onto the first target supplied by the new source.
 	##
 	## Under [constant PredictedMode.CHASE] each sub-teleport recovery's pose
 	## change is absorbed as a decaying render offset, so the visual stays
@@ -1700,6 +1805,11 @@ class Handle:
 			iface._mark_runtime_dirty(self)
 
 
+	func _mark_role_dirty() -> void:
+		var iface := _interface()
+		if iface:
+			iface._mark_role_dirty(self)
+
 #region Runtime data
 
 class _Runtime:
@@ -1729,6 +1839,8 @@ class _Runtime:
 	# Set once the self-feedback warning has fired, so it warns per runtime not per
 	# role resolution.
 	var warned_self_feedback := false
+	# Cached in role resolution so the pure pumps never inspect the entity.
+	var display_offset_limit := INF
 
 
 	func entity() -> NetwEntity:
@@ -1757,9 +1869,10 @@ class _PropertyState:
 	# feeds the display filter into the control loop, so those pumps skip it.
 	var self_feedback := false
 	var last_written: Variant
-	# Decaying render offset a chase-absorbed recovery seeded, or null while no
-	# recovery is being absorbed on this channel.
-	var chase_offset: Variant = null
+	# Decaying render offset seeded by a recovery or display-source transition.
+	var display_offset: Variant = null
+	# The new source seeds its offset when it produces the first target.
+	var role_offset_pending := false
 
 
 	func copy_shape_from(other: _PropertyState) -> void:
@@ -1898,7 +2011,7 @@ class _History:
 			# is the only path that sleeps: a moving projection must keep writing.
 			if forecast and NetwProject.supports(typeof(result)):
 				var velocity: Variant = explicit_velocity if has_explicit_velocity \
-						else _finite_velocity(prev_tick, ticktime)
+				else _finite_velocity(prev_tick, ticktime)
 				if velocity != null and not _velocity_negligible(velocity):
 					var age := clampf(
 						(float(dt) + factor) - float(prev_tick),
@@ -1959,8 +2072,8 @@ class _History:
 		match typeof(new_val):
 			TYPE_FLOAT:
 				var d: float = angle_difference(old_val, new_val) \
-						if mode == NetwInterpolate.Mode.ANGLE \
-						else float(new_val) - float(old_val)
+				if mode == NetwInterpolate.Mode.ANGLE \
+				else float(new_val) - float(old_val)
 				return d / span
 			TYPE_VECTOR2:
 				return ((new_val as Vector2) - (old_val as Vector2)) / span

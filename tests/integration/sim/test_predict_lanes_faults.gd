@@ -11,8 +11,8 @@ const FRAME := NetwLagCompensationInterface.PredictionHandle.Schedule.FRAME
 
 
 func _configure_frame(predicted: PredictedEntity) -> void:
-	predicted.client_prediction.schedule = FRAME
-	predicted.server_prediction.schedule = FRAME
+	predicted.client_prediction.schedule().frame()
+	predicted.server_prediction.schedule().frame()
 	predicted.server_prediction.replay_buffer_depth = 1
 	predicted.server_prediction.missing_policy = \
 	NetwLagCompensationInterface.PredictionHandle.MissingInput.REPEAT_LAST

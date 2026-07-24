@@ -68,9 +68,31 @@ func test_field_recovery_facts_ride_the_marks() -> void:
 
 	var pred: PredictionComponent = auto_free(PredictionComponent.new())
 	pred.consume_buffer_ticks = 2
+	pred.archetype = PredictionComponent.Archetype.SOLVER_BODY
 	var handle := NetwLagCompensationInterface.PredictionHandle.new()
 	pred._push_config(handle)
 	assert_int(handle.consume_buffer_ticks).is_equal(2)
+	# The scene archetype applies its bundle on the push and then owns the
+	# fact, so a later code restatement has a conflict to trip over.
+	assert_int(handle.resolved_schedule()) \
+			.is_equal(NetwLagCompensationInterface.PredictionHandle.Schedule.FRAME)
+	assert_bool(handle.scene_declared.has(&"archetype")).is_true()
+
+
+func test_a_scene_correction_mode_outranks_the_archetype_policy() -> void:
+	var pred: PredictionComponent = auto_free(PredictionComponent.new())
+	pred.correction_mode = PredictionComponent.CorrectionMode.REPLAY
+	pred.archetype = PredictionComponent.Archetype.SOLVER_BODY
+	var handle := NetwLagCompensationInterface.PredictionHandle.new()
+
+	pred._push_config(handle)
+
+	assert_bool(handle.scene_declared.has(&"policy")).is_true()
+	assert_int(handle.correction_mode).override_failure_message(
+		"the scene correction mode must outrank the archetype bundle",
+	).is_equal(
+		NetwLagCompensationInterface.PredictionHandle.CorrectionMode.REPLAY,
+	)
 
 
 # An angle-flagged field compares by its shortest arc, so a heading crossing the
@@ -116,12 +138,8 @@ func test_teleport_only_restore_preserved_below_teleport_tier() -> void:
 		p.client_prediction.correction_mode = SNAP
 		p.client_prediction.snap_restore = EXTRAPOLATED
 		p.client_prediction.teleport_threshold = 2.0
-	kept.client_prediction.configure_island({
-		participants = [rewound.client_entity],
-	})
-	rewound.client_prediction.configure_island({
-		participants = [kept.client_entity],
-	})
+	kept.client_prediction.island().add(rewound.client_entity)
+	rewound.client_prediction.island().add(kept.client_entity)
 
 	s.latency_both(4)
 	s.hold_input(kept, RIGHT)
@@ -153,7 +171,7 @@ func test_teleport_only_restore_preserved_below_teleport_tier() -> void:
 		).is_equal_approx(7.0, 0.01)
 
 
-# --- pose_corrected: the display-absorption delta ---
+# --- recovered: the display-absorption delta ---
 
 # A sub-teleport recovery lands in one write and reports the pose change it
 # applied, so display code can absorb it into a decaying render offset. A
@@ -288,9 +306,11 @@ func test_collision_cooldown_pauses_the_recovery() -> void:
 	s.body_type = LagCompForecastBody
 	await s.setup(self)
 	var blend := await s.add_predicted_entity([&"position", &"velocity"])
+	var participant := await s.add_predicted_entity([&"position", &"velocity"])
 	blend.client_prediction.correction_mode = SNAP
 	blend.client_prediction.snap_restore = EXTRAPOLATED
 	blend.client_prediction.collision_cooldown_ticks = 30
+	blend.client_prediction.island().add(participant.client_entity)
 
 	s.latency_both(4)
 	s.hold_input(blend, RIGHT)
@@ -318,6 +338,7 @@ func test_sleeping_body_pauses_the_recovery() -> void:
 	var blend := await s.add_predicted_entity([&"position", &"velocity"])
 	blend.client_prediction.correction_mode = SNAP
 	blend.client_prediction.snap_restore = EXTRAPOLATED
+	blend.client_prediction.island().exact()
 
 	s.latency_both(4)
 	s.hold_input(blend, RIGHT)

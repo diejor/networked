@@ -339,6 +339,30 @@ func test_p7_the_chase_offset_clamps_by_magnitude() -> void:
 			.is_equal_approx(-2.0, 0.0001)
 
 
+func test_p8_role_offsets_preserve_shortest_rotation_channels() -> void:
+	var displayed_angle := deg_to_rad(179.0)
+	var target_angle := deg_to_rad(-179.0)
+	var angle_offset: float = NetwInterpolationInterface._role_offset(
+		displayed_angle,
+		target_angle,
+		NetwInterpolate.Mode.ANGLE,
+	)
+	assert_float(absf(angle_offset)).is_equal_approx(deg_to_rad(2.0), 0.0001)
+
+	var displayed := Quaternion(Vector3.UP, deg_to_rad(170.0))
+	var target := Quaternion(Vector3.UP, deg_to_rad(-170.0))
+	var offset: Quaternion = NetwInterpolationInterface._role_offset(
+		displayed,
+		target,
+		NetwInterpolate.Mode.SLERP,
+	)
+	var recomposed: Quaternion = NetwInterpolationInterface._add_delta(
+		target,
+		offset,
+	)
+	assert_float(recomposed.angle_to(displayed)).is_less(0.0001)
+
+
 # P6 Loss robustness. Under heavy loss and jitter the display still holds P1, P2,
 # and P4: monotonic, continuous, no regressions, no stalls. Starvation grows lag,
 # it never tears the output. The bounded-lag check rides P3's degraded floor.

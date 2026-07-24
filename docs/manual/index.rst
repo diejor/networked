@@ -23,6 +23,7 @@ your scene.
    pre_game_connection
    scenes_and_players
    interest_management
+   prediction_boundaries
    transport_backends
    context_and_services
    testing

@@ -13,7 +13,32 @@ const KIND_REPEAT := 2
 
 func test_open_and_close_compose_one_row() -> void:
 	var journal := NetwPredictJournal.new(8)
-	journal.open(3, 41, KIND_FRESH, 111)
+	journal.open(
+		3,
+		41,
+		KIND_FRESH,
+		111,
+		211,
+		PackedInt32Array([1, 2, 3]),
+		{
+			episode = 7,
+			write_id = 8,
+			operator = NetwPredictJournal.Operator.REBASE_EXACT,
+			basis = 2,
+		},
+		301,
+		302,
+		NetwPredictJournal.EVIDENCE_RAW,
+	)
+	journal.mark_solve(
+		3,
+		401,
+		402,
+		NetwPredictJournal.EVIDENCE_WITNESS | NetwPredictJournal.EVIDENCE_RAW,
+		{ contact_bucket = 1, continuous = { impulse = 2.5 } },
+		5,
+	)
+	journal.mark_aligned_error(3, 1.25)
 	assert_int(journal.row_at(3)[&"post_fp"]).is_equal(0)
 	assert_int(journal.row_at(3)[&"flags"]).is_equal(0)
 	assert_int(journal.last_closed()).override_failure_message(
@@ -21,14 +46,44 @@ func test_open_and_close_compose_one_row() -> void:
 		+ "may acknowledge",
 	).is_equal(-1)
 
-	journal.close(3, 222)
+	journal.close(3, 222, PackedInt32Array([4, 5, 6]))
 
 	var row := journal.row_at(3)
 	assert_int(row[&"transition"]).is_equal(3)
 	assert_int(row[&"label"]).is_equal(41)
 	assert_int(row[&"kind"]).is_equal(KIND_FRESH)
 	assert_int(row[&"c_hash"]).is_equal(111)
+	assert_int(row[&"pre_fp"]).is_equal(211)
+	assert_int(row[&"topo_fp"]).is_equal(401)
+	assert_int(row[&"raw_fp"]).is_equal(302)
+	assert_int(row[&"witness_fp"]).is_equal(402)
+	assert_int(row[&"witness_class_bits"]).is_equal(5)
+	assert_float(row[&"aligned_error"]).is_equal_approx(1.25, 0.0001)
+	assert_int(row[&"evidence_mask"]).is_equal(
+		NetwPredictJournal.EVIDENCE_WITNESS | NetwPredictJournal.EVIDENCE_RAW,
+	)
+	assert_float(row[&"witness_detail"][&"continuous"][&"impulse"]) \
+			.is_equal(2.5)
+	assert_int(row[&"pre_pose_fp"]).is_equal(1)
+	assert_int(row[&"pre_momentum_fp"]).is_equal(2)
+	assert_int(row[&"pre_controller_fp"]).is_equal(3)
 	assert_int(row[&"post_fp"]).is_equal(222)
+	assert_int(row[&"post_pose_fp"]).is_equal(4)
+	assert_int(row[&"post_momentum_fp"]).is_equal(5)
+	assert_int(row[&"post_controller_fp"]).is_equal(6)
+	assert_int(row[&"episode_id"]).is_equal(7)
+	assert_int(row[&"write_id"]).is_equal(8)
+	assert_int(row[&"operator"]).is_equal(
+		NetwPredictJournal.Operator.REBASE_EXACT,
+	)
+	assert_int(row[&"basis"]).is_equal(2)
+	assert_array(journal.topo_fps()).is_equal(PackedInt32Array([401]))
+	assert_array(journal.raw_fps()).is_equal(PackedInt32Array([302]))
+	assert_array(journal.witness_fps()).is_equal(PackedInt32Array([402]))
+	assert_array(journal.witness_class_bits()).is_equal(PackedByteArray([5]))
+	assert_array(journal.evidence_masks()).is_equal(PackedByteArray([
+		NetwPredictJournal.EVIDENCE_WITNESS | NetwPredictJournal.EVIDENCE_RAW,
+	]))
 	assert_int(row[&"e_digest"]).is_equal(0)
 	assert_int(row[&"domain"]).is_equal(NetwPredictJournal.Domain.IN_DOMAIN)
 	assert_int(row[&"flags"]).is_equal(NetwPredictJournal.ROW_CLOSED)
@@ -39,6 +94,11 @@ func test_ring_evicts_oldest_and_keeps_columns_aligned() -> void:
 	var journal := NetwPredictJournal.new(4)
 	for k in 6:
 		journal.open(k, 100 + k, KIND_FRESH, 200 + k)
+		journal.mark_attribution(
+			k,
+			NetwPredictJournal.Attribution.ENVIRONMENT \
+			if k % 2 else NetwPredictJournal.Attribution.CLOSURE,
+		)
 		journal.close(k, 300 + k)
 
 	assert_int(journal.size()).is_equal(4)
@@ -46,6 +106,14 @@ func test_ring_evicts_oldest_and_keeps_columns_aligned() -> void:
 	assert_array(journal.labels()).is_equal([102, 103, 104, 105])
 	assert_array(journal.c_hashes()).is_equal([202, 203, 204, 205])
 	assert_array(journal.post_fps()).is_equal([302, 303, 304, 305])
+	assert_array(journal.attributions()).is_equal(
+		[
+			NetwPredictJournal.Attribution.CLOSURE,
+			NetwPredictJournal.Attribution.ENVIRONMENT,
+			NetwPredictJournal.Attribution.CLOSURE,
+			NetwPredictJournal.Attribution.ENVIRONMENT,
+		],
+	)
 	assert_dict(journal.row_at(1)).override_failure_message(
 		"an evicted transition must not resolve to a live row",
 	).is_empty()
@@ -137,6 +205,158 @@ func test_a_substituted_row_is_closed_without_having_run() -> void:
 		"authority ran nothing for a substituted transition, so its row is "
 		+ "final and acknowledgeable without a state to fingerprint",
 	).is_equal(0)
+
+
+func test_sealed_evidence_is_immutable_while_verdicts_settle() -> void:
+	var journal := NetwPredictJournal.new(8)
+	journal.open(
+		3,
+		41,
+		KIND_FRESH,
+		111,
+		211,
+		PackedInt32Array([1, 2, 3]),
+		{ write_id = 4, operator = NetwPredictJournal.Operator.REBASE_EXACT },
+		311,
+		312,
+		NetwPredictJournal.EVIDENCE_RAW,
+	)
+	journal.mark_e_digest(3, 222)
+	journal.mark_solve(
+		3,
+		313,
+		314,
+		NetwPredictJournal.EVIDENCE_WITNESS | NetwPredictJournal.EVIDENCE_RAW,
+		{ contact_bucket = 2 },
+	)
+	journal.close(3, 333, PackedInt32Array([5, 6, 7]))
+
+	journal.open(
+		3,
+		90,
+		KIND_REPEAT,
+		900,
+		901,
+		PackedInt32Array([8, 9, 10]),
+		{ write_id = 11 },
+		911,
+		912,
+		0,
+	)
+	journal.mark_e_digest(3, 901)
+	journal.mark_solve(3, 913, 914, 0, { contact_bucket = 4 })
+	journal.close(3, 902, PackedInt32Array([12, 13, 14]))
+	journal.mark_attribution(3, NetwPredictJournal.Attribution.ENVIRONMENT)
+	journal.mark_domain(3, NetwPredictJournal.Domain.OUT_OF_DOMAIN)
+	journal.mark_ack(3, false)
+
+	var row := journal.row_at(3)
+	assert_int(row[&"label"]).is_equal(41)
+	assert_int(row[&"kind"]).is_equal(KIND_FRESH)
+	assert_int(row[&"c_hash"]).is_equal(111)
+	assert_int(row[&"e_digest"]).is_equal(222)
+	assert_int(row[&"pre_fp"]).is_equal(211)
+	assert_int(row[&"pre_pose_fp"]).is_equal(1)
+	assert_int(row[&"topo_fp"]).is_equal(313)
+	assert_int(row[&"raw_fp"]).is_equal(312)
+	assert_int(row[&"witness_fp"]).is_equal(314)
+	assert_int(row[&"witness_detail"][&"contact_bucket"]).is_equal(2)
+	assert_int(row[&"post_fp"]).is_equal(333)
+	assert_int(row[&"post_controller_fp"]).is_equal(7)
+	assert_int(row[&"write_id"]).is_equal(4)
+	assert_int(row[&"domain"]).is_equal(
+		NetwPredictJournal.Domain.OUT_OF_DOMAIN,
+	)
+	assert_int(row[&"attribution"]).is_equal(
+		NetwPredictJournal.Attribution.ENVIRONMENT,
+	)
+	assert_bool(int(row[&"flags"]) & NetwPredictJournal.ROW_DIVERGENT > 0) \
+			.is_true()
+
+
+func test_supersession_preserves_the_sealed_row() -> void:
+	var journal := NetwPredictJournal.new(8)
+	journal.open(3, 41, KIND_FRESH, 111)
+	journal.mark_e_digest(3, 222)
+	journal.close(3, 333)
+
+	journal.mark_superseded(3)
+
+	var row := journal.row_at(3)
+	assert_int(row[&"c_hash"]).is_equal(111)
+	assert_int(row[&"e_digest"]).is_equal(222)
+	assert_int(row[&"post_fp"]).is_equal(333)
+	assert_int(row[&"domain"]).is_equal(
+		NetwPredictJournal.Domain.OUT_OF_DOMAIN,
+	)
+	assert_bool(int(row[&"flags"]) & NetwPredictJournal.ROW_CLOSED > 0) \
+			.is_true()
+	assert_bool(int(row[&"flags"]) & NetwPredictJournal.ROW_SUBSTITUTED > 0) \
+			.is_true()
+	assert_bool(int(row[&"flags"]) & NetwPredictJournal.ROW_SUPERSEDED > 0) \
+			.is_true()
+
+
+func test_chain_break_search_returns_the_first_flagged_boundary() -> void:
+	var journal := NetwPredictJournal.new(8)
+	for transition in 6:
+		journal.open(transition, transition, KIND_FRESH, transition)
+		journal.close(transition, transition + 100)
+	journal.mark_chain_broken(4)
+	journal.mark_chain_broken(2)
+
+	assert_int(journal.first_chain_break()).override_failure_message(
+		"generator search must name the earliest retained broken boundary",
+	).is_equal(2)
+	assert_bool(
+		int(journal.row_at(2)[&"flags"]) \
+		& NetwPredictJournal.ROW_CHAIN_BROKEN > 0,
+	).is_true()
+
+
+func test_witness_sidecar_is_evicted_with_its_row() -> void:
+	var journal := NetwPredictJournal.new(1)
+	journal.open(1, 1, KIND_FRESH, 1)
+	journal.mark_solve(
+		1, 2, 3, NetwPredictJournal.EVIDENCE_WITNESS, { collider_ids = ["a"] },
+	)
+	journal.close(1, 4)
+	journal.open(2, 2, KIND_FRESH, 2)
+	journal.mark_solve(
+		2, 5, 6, NetwPredictJournal.EVIDENCE_WITNESS, { collider_ids = ["b"] },
+	)
+	journal.close(2, 7)
+
+	assert_dict(journal.row_at(1)).is_empty()
+	assert_array(journal.row_at(2)[&"witness_detail"][&"collider_ids"]) \
+			.is_equal(["b"])
+
+
+func test_witness_match_is_a_revisable_verdict_overlay() -> void:
+	var journal := NetwPredictJournal.new(2)
+	journal.open(1, 1, KIND_FRESH, 1)
+	journal.mark_solve(
+		1,
+		2,
+		3,
+		NetwPredictJournal.EVIDENCE_WITNESS,
+		{ contact_classes = [0] },
+	)
+	journal.close(1, 4)
+
+	journal.mark_witness_match(1, true)
+	assert_bool(
+		int(journal.row_at(1)[&"flags"]) \
+		& NetwPredictJournal.ROW_WITNESS_MATCHED > 0,
+	).is_true()
+	journal.mark_witness_match(1, false)
+	var row := journal.row_at(1)
+	assert_bool(
+		int(row[&"flags"]) \
+		& NetwPredictJournal.ROW_WITNESS_MATCHED > 0,
+	).is_false()
+	assert_int(int(row[&"witness_fp"])).is_equal(3)
+	assert_int(int(row[&"post_fp"])).is_equal(4)
 
 
 func test_clear_adopts_the_epoch_and_drops_every_row() -> void:

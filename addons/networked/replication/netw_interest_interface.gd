@@ -655,6 +655,62 @@ func all_layers() -> Array[NetwInterestLayer]:
 	return out
 
 
+## Returns the resolved interest memberships for [param entity] on this peer.
+##
+## The result includes ancestry-derived scene membership as well as labels
+## declared through [member NetwEntity.interest].
+func resolved_layer_ids(entity: NetwEntity) -> Array[StringName]:
+	var out: Array[StringName] = []
+	if entity == null:
+		return out
+	out.assign(_entity_layers.get(entity, { }).keys())
+	if out.is_empty() and not _is_server():
+		out = entity.interest.layer_ids()
+	out.sort_custom(
+		func(a: StringName, b: StringName) -> bool:
+			return String(a) < String(b),
+	)
+	return out
+
+
+## Returns locally replicated entities sharing [param entity]'s resolved
+## interest scope, or only [param layer_id] when it is non-empty.
+##
+## The result excludes [param entity] and is stable by entity id. It contains
+## only live entities present in this peer's interest layers.
+func shared_entities(
+		entity: NetwEntity,
+		layer_id: StringName = &"",
+) -> Array[NetwEntity]:
+	if not layer_id.is_empty() and layer_id not in resolved_layer_ids(entity):
+		return []
+	var layer_ids: Array[StringName] = []
+	if layer_id.is_empty():
+		layer_ids = resolved_layer_ids(entity)
+	else:
+		layer_ids.append(layer_id)
+	var found: Dictionary[NetwEntity, bool] = { }
+	for current_id: StringName in layer_ids:
+		var current := get_layer(current_id)
+		if current == null:
+			continue
+		for candidate: NetwEntity in current.entities:
+			if candidate != entity and is_instance_valid(candidate) \
+					and is_instance_valid(candidate.owner):
+				found[candidate] = true
+	var out: Array[NetwEntity] = []
+	out.assign(found.keys())
+	out.sort_custom(
+		func(a: NetwEntity, b: NetwEntity) -> bool:
+			var a_id := String(a.entity_id)
+			var b_id := String(b.entity_id)
+			if a_id == b_id:
+				return a.get_instance_id() < b.get_instance_id()
+			return a_id < b_id,
+	)
+	return out
+
+
 ## Returns tree-wide interest occupancy counters for [InterestMonitor].
 ##
 ## [code]visible_edges[/code] is the count of admitted (entity, peer) pairs across

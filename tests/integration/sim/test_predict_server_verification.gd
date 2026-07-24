@@ -27,11 +27,16 @@ class DriftingBody extends LagCompSimBody:
 
 
 func _configure_frame(predicted: PredictedEntity) -> void:
-	predicted.client_prediction.schedule = FRAME
-	predicted.server_prediction.schedule = FRAME
+	predicted.client_prediction.schedule().frame()
+	predicted.server_prediction.schedule().frame()
 	predicted.server_prediction.replay_buffer_depth = 1
 	predicted.server_prediction.missing_policy = \
 	NetwLagCompensationInterface.PredictionHandle.MissingInput.REPEAT_LAST
+	for handle in [predicted.client_prediction, predicted.server_prediction]:
+		handle.witness().contacts(
+			func() -> Dictionary:
+				return { colliders = [], sleeping = false },
+		)
 
 
 func _emit_client_frame(clock: NetwClockInterface, ticks: int) -> void:
@@ -65,6 +70,53 @@ func _round(scenario: PredictionScenario, predicted: PredictedEntity) -> void:
 	_step_authority(scenario, predicted)
 
 
+func _run_first_boundary(
+		client_sample: Dictionary,
+		server_sample: Dictionary,
+) -> int:
+	var scenario := PredictionScenario.new()
+	scenario.body_type = DriftingBody
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	_configure_frame(predicted)
+	if bool(client_sample.get(&"static_contact", false)):
+		var client_contact := StaticBody2D.new()
+		scenario.client.add_child(client_contact)
+		client_sample[&"colliders"] = [client_contact]
+		client_sample.erase(&"static_contact")
+	if bool(server_sample.get(&"static_contact", false)):
+		var server_contact := StaticBody2D.new()
+		scenario.server.add_child(server_contact)
+		server_sample[&"colliders"] = [server_contact]
+		server_sample.erase(&"static_contact")
+	predicted.client_prediction.witness().contacts(
+		func() -> Dictionary:
+			return client_sample.duplicate(true),
+	)
+	predicted.server_prediction.witness().contacts(
+		func() -> Dictionary:
+			return server_sample.duplicate(true),
+	)
+	var reported: Array[int] = []
+	scenario.server_sim.peer_divergence.connect(
+		func(_peer: int, _entry: int, attribution: Attribution) -> void:
+			reported.append(attribution),
+	)
+	predicted.client_root.motion = Vector2.RIGHT
+	for _i in 4:
+		_round(scenario, predicted)
+	assert_int(predicted.server_prediction.client_mismatch_count).is_equal(0)
+	(predicted.client_root as DriftingBody).drift = Vector2(7.0, 0.0)
+	for _i in 6:
+		_round(scenario, predicted)
+	assert_array(reported).override_failure_message(
+		"the injected output drift must reach an attributed verdict",
+	).is_not_empty()
+	var first: int = reported.front()
+	await scenario.teardown()
+	return first
+
+
 # The owner claims a fingerprint for every transition it has finished, so a run
 # where the two peers agree still reaches verdicts. A rig that verified nothing
 # would satisfy "no mismatch" without authority having checked anything, which is
@@ -89,6 +141,29 @@ func test_authority_judges_a_clean_run_and_finds_nothing() -> void:
 				"two peers running the same command over the same state must not "
 				+ "be reported as disagreeing",
 			).is_equal(0)
+	var compared_witnesses := 0
+	var client_journal := predicted.client_prediction.journal()
+	var server_journal := predicted.server_prediction.journal()
+	for transition: int in server_journal.transitions():
+		var client_row := client_journal.row_at(transition)
+		var server_row := server_journal.row_at(transition)
+		if client_row.is_empty() or server_row.is_empty():
+			continue
+		if (int(client_row[&"flags"]) & NetwPredictJournal.ROW_CLOSED) == 0:
+			continue
+		if (int(server_row[&"flags"]) & NetwPredictJournal.ROW_CLOSED) == 0:
+			continue
+		compared_witnesses += 1
+		assert_int(client_row[&"topo_fp"]).is_equal(server_row[&"topo_fp"])
+		assert_int(client_row[&"witness_fp"]) \
+				.is_equal(server_row[&"witness_fp"])
+		assert_bool(
+			int(client_row[&"evidence_mask"]) \
+			& NetwPredictJournal.EVIDENCE_WITNESS > 0,
+		).is_true()
+	assert_int(compared_witnesses).override_failure_message(
+		"a clean run must compare at least one sealed witness boundary",
+	).is_greater(0)
 	await scenario.teardown()
 
 
@@ -143,10 +218,25 @@ func test_authority_catches_an_owner_whose_step_disagrees() -> void:
 	assert_int(first[&"peer"]).override_failure_message(
 		"the report must name the peer whose claim was judged",
 	).is_equal(predicted.client_entity.controller)
-	# Equal commands and an undeclared world leave one antecedent standing, so
-	# SIMULATION here is a claim about where the fault is and not a default.
+	# Equal observed boundaries leave the produced closure, so this verdict is a
+	# claim about where the fault is and not a default.
 	assert_int(first[&"attribution"]).override_failure_message(
-		"a divergence under an equal command and an equal world is charged to "
-		+ "the step function",
-	).is_equal(Attribution.SIMULATION)
+		"a divergence under equal observed boundaries is charged to closure",
+	).is_equal(Attribution.CLOSURE)
 	await scenario.teardown()
+
+
+func test_topology_is_the_first_unequal_boundary() -> void:
+	var attribution := await _run_first_boundary(
+		{colliders = [], sleeping = false, body_mode = 1},
+		{colliders = [], sleeping = false, body_mode = 2},
+	)
+	assert_int(attribution).is_equal(Attribution.TOPOLOGY)
+
+
+func test_contact_is_the_first_unequal_boundary() -> void:
+	var attribution := await _run_first_boundary(
+		{colliders = [], sleeping = false, static_contact = true},
+		{colliders = [], sleeping = false},
+	)
+	assert_int(attribution).is_equal(Attribution.CONTACT)

@@ -15,6 +15,8 @@ const Engine_ := NetwLagCompensationInterface._PredictionEngine
 const ExactVerdict := Engine_.ExactVerdict
 const Domain := NetwPredictJournal.Domain
 const Attribution := NetwPredictJournal.Attribution
+const WITNESS := NetwPredictJournal.EVIDENCE_WITNESS
+const RAW := NetwPredictJournal.EVIDENCE_RAW
 
 # Far apart enough that no tolerance below it would ever call them equal, so a
 # law that expects agreement is proving the epsilon was not consulted.
@@ -133,25 +135,91 @@ func test_the_field_report_is_filled_on_both_branches() -> void:
 # --- attribute ---
 
 
-# The command is tested first because its evidence is the strongest: a hash
-# disagreement means authority ran input the owner never authored, which
-# explains the whole divergence without needing the environment or the step
-# function to be at fault too.
+# Pre-state is the first causal boundary. A mismatch there means every later
+# difference can be propagation, so command and environment cannot outrank it.
+func test_an_unequal_pre_state_is_charged_first() -> void:
+	assert_int(Engine_.attribute(
+		false, false, false, false, false, false, WITNESS, WITNESS,
+	)) \
+			.is_equal(Attribution.PRE_STATE)
+
+
+# Equal pre-state leaves the command as the next boundary.
 func test_an_unequal_command_is_charged_to_the_command() -> void:
-	assert_int(Engine_.attribute(false, true)).is_equal(Attribution.COMMAND)
-	assert_int(Engine_.attribute(false, false)).is_equal(Attribution.COMMAND)
+	assert_int(Engine_.attribute(
+		true, false, true, true, true, true, WITNESS, WITNESS,
+	)).is_equal(Attribution.COMMAND)
 
 
 # An equal command leaves the environment as the next suspect, and a digest
 # disagreement convicts it: the two peers ran the same input against world facts
 # they had themselves declared and fingerprinted, and those did not match.
 func test_an_unequal_environment_is_charged_to_the_environment() -> void:
-	assert_int(Engine_.attribute(true, false)) \
+	assert_int(Engine_.attribute(
+		true, true, false, true, true, true, WITNESS, WITNESS,
+	)) \
 			.is_equal(Attribution.ENVIRONMENT)
 
 
-# The claim worth making. Equal commands and equal environments leave the step
-# function itself, so this is a bug with an address rather than an unattributed
-# divergence somebody would otherwise widen a tolerance around.
-func test_equal_antecedents_leave_the_simulation() -> void:
-	assert_int(Engine_.attribute(true, true)).is_equal(Attribution.SIMULATION)
+# Execution topology is the first B2 boundary.
+func test_unequal_topology_is_charged_before_solve_evidence() -> void:
+	assert_int(Engine_.attribute(
+		true, true, true, false, false, false, WITNESS | RAW, WITNESS | RAW,
+	)).is_equal(Attribution.TOPOLOGY)
+
+
+func test_raw_bits_are_tested_only_when_both_peers_enable_them() -> void:
+	assert_int(Engine_.attribute(
+		true, true, true, true, false, true, WITNESS | RAW, WITNESS | RAW,
+	)).is_equal(Attribution.EXECUTION)
+	assert_int(Engine_.attribute(
+		true, true, true, true, false, true, WITNESS | RAW, WITNESS,
+	)).is_equal(Attribution.CLOSURE)
+
+
+func test_unequal_realized_witness_is_charged_to_contact() -> void:
+	assert_int(Engine_.attribute(
+		true, true, true, true, true, false, WITNESS, WITNESS,
+	)).is_equal(Attribution.CONTACT)
+
+
+func test_equal_observed_boundaries_leave_the_closure() -> void:
+	assert_int(Engine_.attribute(
+		true, true, true, true, true, true, WITNESS, WITNESS,
+	)) \
+			.is_equal(Attribution.CLOSURE)
+
+
+func test_missing_required_evidence_is_unknown() -> void:
+	assert_int(Engine_.attribute(
+		true, true, true, true, true, true, 0, 0,
+	)) \
+			.is_equal(Attribution.UNKNOWN)
+	assert_int(Engine_.attribute(
+		true, true, true, true, true, true, WITNESS, WITNESS, false,
+	)) \
+			.is_equal(Attribution.UNKNOWN)
+
+
+func test_raw_and_fact_fingerprints_are_order_independent() -> void:
+	assert_int(Engine_.fact_fingerprint({ &"a": 1, &"b": 2 })).is_equal(
+		Engine_.fact_fingerprint({ &"b": 2, &"a": 1 }),
+	)
+	assert_int(Engine_.raw_state_fingerprint({ &"x": 1.0 })) \
+			.is_not_equal(Engine_.raw_state_fingerprint({ &"x": 1.0000001 }))
+	assert_int(Engine_.contact_count_bucket(99)).is_equal(4)
+
+
+func test_state_family_search_returns_the_first_difference() -> void:
+	assert_int(
+		Engine_.differing_family(
+			PackedInt32Array([1, 2, 3]),
+			PackedInt32Array([1, 9, 8]),
+		),
+	).is_equal(NetwPredictJournal.StateFamily.MOMENTUM)
+	assert_int(
+		Engine_.differing_family(
+			PackedInt32Array([1, 2]),
+			PackedInt32Array([1, 9, 8]),
+		),
+	).is_equal(NetwPredictJournal.StateFamily.NONE)

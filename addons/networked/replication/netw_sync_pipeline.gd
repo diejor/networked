@@ -59,6 +59,10 @@ var _api_ref: WeakRef
 # binding's weakref, never by route, so a reparent is followed for free.
 var _derived_bindings: Array[NetwSyncSetBinding] = []
 
+# Node instance id -> state/input config hash already checked for the prediction
+# component contract. Kept across rewires so one unchanged mistake warns once.
+var _prediction_contract_hashes: Dictionary[int, int] = { }
+
 # Inbound datagram freshness books, route -> sender -> channel -> last accepted
 # u16. Nesting by route first keeps clear_route a single erase, so a stream's
 # freshness state dies with its entity.
@@ -147,11 +151,72 @@ func register_derived(node: Node) -> void:
 	var input_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_INPUT)
 	if input_set:
 		_derived_bindings.append(NetwSyncSetBinding.new(input_set, node))
+	_queue_prediction_contract_check(node, state_set, input_set)
 	# A broadcast set records into no timeline (the rewind boundary in code), so it
 	# calls no timeline hook, unlike the state set above.
 	var broadcast_set := NetwSyncSet.from_script(script, NetwSyncSet.Record.RECORD_BROADCAST)
 	if broadcast_set:
 		_derived_bindings.append(NetwSyncSetBinding.new(broadcast_set, node))
+
+
+# Defers until child components have entered the tree. A state plus command
+# declaration is a prediction contract, but the pipeline exists before a
+# PredictionComponent has necessarily registered its engine.
+func _queue_prediction_contract_check(
+		node: Node,
+		state_set: NetwSyncSet,
+		input_set: NetwSyncSet,
+) -> void:
+	if not state_set or not input_set \
+			or state_set.fields.is_empty() or input_set.fields.is_empty():
+		return
+	var parts := PackedStringArray()
+	for field: NetwSyncSet.Field in state_set.fields:
+		parts.append("s:%s" % field.key)
+	for field: NetwSyncSet.Field in input_set.fields:
+		parts.append("i:%s" % field.key)
+	var config_hash := hash("\n".join(parts))
+	var instance_id := node.get_instance_id()
+	if _prediction_contract_hashes.get(instance_id, 0) == config_hash:
+		return
+	_prediction_contract_hashes[instance_id] = config_hash
+	_report_missing_prediction_component.call_deferred(
+		weakref(node),
+		config_hash,
+	)
+
+
+# Reports the contradiction only after code-first registration and scene child
+# setup had a chance to satisfy it.
+func _report_missing_prediction_component(
+		node_ref: WeakRef,
+		config_hash: int,
+) -> void:
+	var node := node_ref.get_ref() as Node if node_ref else null
+	if not is_instance_valid(node):
+		return
+	if _prediction_contract_hashes.get(node.get_instance_id(), 0) != config_hash:
+		return
+	var entity := NetwEntity.of(node)
+	if entity and entity.prediction.is_registered():
+		return
+	if not node.find_children("*", "PredictionComponent", true, false).is_empty():
+		return
+	var entity_name := String(entity.entity_id) if entity else node.name
+	push_warning(_missing_prediction_component_message(entity_name))
+
+
+# Builds the stable fire-once warning asserted by the validator law.
+static func _missing_prediction_component_message(
+		entity_name: String,
+) -> String:
+	return (
+			"Prediction: %s declares state() and input() fields but carries no "
+			% entity_name
+			+ "PredictionComponent. Its controller will author commands without "
+			+ "simulating the predicted state. Add the component or register "
+			+ "prediction from code."
+	)
 
 
 # State-set presence is the rewind trigger: on the server, register the entity so
@@ -275,7 +340,10 @@ func _pump_derived(
 			if not binding.volatile_external:
 				for peer_id in recipients:
 					var masked := binding.masked_delta(
-						ordinal, peer_id, frame_tick, binding.reconcile_ack,
+						ordinal,
+						peer_id,
+						frame_tick,
+						binding.reconcile_ack,
 					)
 					if masked.is_empty():
 						break
@@ -283,8 +351,14 @@ func _pump_derived(
 					if masked_bytes.is_empty():
 						continue
 					repl.send_to(
-						peer_id, route, NetwFrameEnvelope.Channel.SYNC,
-						masked_bytes, false, 0, "", true,
+						peer_id,
+						route,
+						NetwFrameEnvelope.Channel.SYNC,
+						masked_bytes,
+						false,
+						0,
+						"",
+						true,
 					)
 					_stage_pending_masked(peer_id, binding, masked["row"])
 					_masked_frames_out += 1
@@ -299,8 +373,14 @@ func _pump_derived(
 			if not bytes.is_empty():
 				for peer_id in recipients:
 					repl.send_to(
-						peer_id, route, NetwFrameEnvelope.Channel.SYNC,
-						bytes, false, 0, "", true,
+						peer_id,
+						route,
+						NetwFrameEnvelope.Channel.SYNC,
+						bytes,
+						false,
+						0,
+						"",
+						true,
 					)
 
 		binding.poll_retained()
@@ -308,8 +388,14 @@ func _pump_derived(
 			var delta := binding.retained_delta(ordinal, peer_id)
 			if not delta.is_empty():
 				repl.send_to(
-					peer_id, route, NetwFrameEnvelope.Channel.SYNC_DELTA,
-					delta, true, 0, "", true,
+					peer_id,
+					route,
+					NetwFrameEnvelope.Channel.SYNC_DELTA,
+					delta,
+					true,
+					0,
+					"",
+					true,
 				)
 		# A baseline held against a peer no longer a recipient must not survive to
 		# its next admission, so absence heals the full retained row.
@@ -385,15 +471,19 @@ func derived_group(
 			continue
 		if not is_instance_valid(entity.owner):
 			continue
-		keyed.append([
-			String(entity.owner.get_path_to(node)),
-			binding.set.record,
-			binding,
-		])
-	keyed.sort_custom(func(a: Array, b: Array) -> bool:
-		if a[0] != b[0]:
-			return a[0] < b[0]
-		return a[1] < b[1])
+		keyed.append(
+			[
+				String(entity.owner.get_path_to(node)),
+				binding.set.record,
+				binding,
+			],
+		)
+	keyed.sort_custom(
+		func(a: Array, b: Array) -> bool:
+			if a[0] != b[0]:
+				return a[0] < b[0]
+			return a[1] < b[1]
+	)
 	var out: Array[NetwSyncSetBinding] = []
 	for entry: Array in keyed:
 		out.append(entry[2])
@@ -404,7 +494,7 @@ func derived_group(
 # pass, pending the seq the tick's flush assigns.
 func _stage_pending_masked(peer_id: int, binding: NetwSyncSetBinding, row: Dictionary) -> void:
 	var list: Array = _pending_masked.get_or_add(peer_id, [])
-	list.append({"binding": binding, "row": row})
+	list.append({ "binding": binding, "row": row })
 
 
 ## Commits every masked row staged for [param peer_id] this pass into its
@@ -419,7 +509,9 @@ func commit_pending_masked(peer_id: int, seq: int) -> void:
 		return
 	for entry: Dictionary in list:
 		(entry["binding"] as NetwSyncSetBinding).commit_masked_pending(
-			peer_id, seq, entry["row"],
+			peer_id,
+			seq,
+			entry["row"],
 		)
 	_pending_masked.erase(peer_id)
 
@@ -691,7 +783,6 @@ func accept_unreliable(
 	verdicts[key] = accepted
 	return accepted
 
-
 #region Derived-set frames
 
 ## Gathers [param node]'s [constant NetwSyncSet.Lane.VOLATILE] field values for
@@ -711,15 +802,17 @@ static func encode_volatile_frame(
 	var gathered := gather_volatile(node, set)
 	if not gathered[0]:
 		return PackedByteArray()
-	return NetwFrameEnvelope.encode_sync_frame({
-		"ordinal": ordinal,
-		"flags": volatile_flags(set),
-		"values": gathered[1],
-		"quantizers": gathered[2],
-		"types": gathered[3],
-		"tick": tick,
-		"ack": ack,
-	})
+	return NetwFrameEnvelope.encode_sync_frame(
+		{
+			"ordinal": ordinal,
+			"flags": volatile_flags(set),
+			"values": gathered[1],
+			"quantizers": gathered[2],
+			"types": gathered[3],
+			"tick": tick,
+			"ack": ack,
+		},
+	)
 
 
 ## Reads [param node]'s [constant NetwSyncSet.Lane.VOLATILE] field values for
@@ -867,7 +960,6 @@ static func apply_payload(node: Node, set: NetwSyncSet, payload: Dictionary) -> 
 			node.set(field.key, payload[field.key])
 
 #endregion
-
 
 #region Derived-set receive
 
@@ -1067,7 +1159,6 @@ func note_derived_schema(route: int, descriptors: Dictionary) -> void:
 		_derived_pending_schema[route] = descriptors
 
 #endregion
-
 
 ## Drops all per-session sync state so no registered binding or property
 ## sequence record outlives its session.
