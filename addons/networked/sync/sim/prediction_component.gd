@@ -157,11 +157,12 @@ enum Archetype {
 ## Mirrors [member NetwLagCompensationInterface.PredictionHandle.consume_buffer_ticks].
 @export_range(0, 8) var consume_buffer_ticks: int = 0
 
-## [constant Schedule.FRAME] tape transitions the server keeps standing before it
-## replays one per physics frame. The one-transition default absorbs a single
-## missed arrival at the cost of one frame of input latency. Mirrors
-## [member NetwLagCompensationInterface.PredictionHandle.replay_buffer_depth].
-@export_range(0, 8) var replay_buffer_depth: int = 1
+## [constant Schedule.FRAME] tape transitions authority leaves standing instead
+## of replaying, a fixed latency on every command that buys no jitter absorption
+## back. Mirrors
+## [member NetwLagCompensationInterface.PredictionHandle.replay_buffer_depth],
+## whose documentation states why the default is zero.
+@export_range(0, 8) var replay_buffer_depth: int = 0
 
 @export_group("Recovery")
 
@@ -286,7 +287,7 @@ func _push_config(handle: NetwLagCompensationInterface.PredictionHandle) -> void
 		declared[&"tier"] = true
 	if missing_policy != MissingInput.STALL:
 		declared[&"hold"] = true
-	if replay_buffer_depth != 1:
+	if replay_buffer_depth != 0:
 		declared[&"buffer_depth"] = true
 	if max_consume_lag_ticks != 60:
 		declared[&"resync_ceiling"] = true

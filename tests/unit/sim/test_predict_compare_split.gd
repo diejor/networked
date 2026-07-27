@@ -209,6 +209,39 @@ func test_raw_and_fact_fingerprints_are_order_independent() -> void:
 			.is_not_equal(Engine_.raw_state_fingerprint({ &"x": 1.0000001 }))
 	assert_int(Engine_.contact_count_bucket(99)).is_equal(4)
 
+	# Insertion order above is the weaker half. These fold in one fixed order
+	# and are compared across two processes, so the order has to come from the
+	# names' text: sorting the StringName keys themselves compares interning
+	# pointers, which is a per-process accident that no same-process assertion
+	# can see. Enough keys that a pointer order coinciding with text order is
+	# not a plausible pass.
+	var facts := {
+		&"zulu": 1, &"alpha": 2, &"mike": 3, &"echo": 4,
+		&"papa": 5, &"bravo": 6, &"tango": 7, &"kilo": 8,
+	}
+	assert_int(Engine_.fact_fingerprint(facts)).override_failure_message(
+		"fact fingerprints must fold their keys in text order",
+	).is_equal(_fold_in_text_order(facts))
+	var raw := { &"zed": 1.0, &"abe": 2.0, &"mid": 3.0, &"eve": 4.0 }
+	assert_int(Engine_.raw_state_fingerprint(raw)).override_failure_message(
+		"raw state fingerprints must fold their keys in text order",
+	).is_equal(_fold_in_text_order(raw))
+
+
+# The fold the two fingerprints above owe a peer, written out longhand so the
+# law does not lean on the implementation it is checking.
+func _fold_in_text_order(source: Dictionary) -> int:
+	var names := PackedStringArray()
+	for key in source:
+		names.append(String(key))
+	names.sort()
+	var bytes := PackedByteArray()
+	for name in names:
+		var key := StringName(name)
+		bytes.append_array(var_to_bytes(key))
+		bytes.append_array(var_to_bytes(source[key]))
+	return NetwPredictJournal.fnv1a(bytes)
+
 
 func test_state_family_search_returns_the_first_difference() -> void:
 	assert_int(

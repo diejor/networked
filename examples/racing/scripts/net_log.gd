@@ -28,7 +28,10 @@ extends Node
 ## depth. A [code]ticks_this_frame[/code] of [code]0[/code] or
 ## [code]2[/code] is the local clock stretching to meet its calibration target.
 
-## Environment variable that arms the recorder. Any non-empty value enables it.
+## Environment variable that arms the recorder. Any non-empty value enables
+## it. A value containing a path separator is used as the output directory,
+## so a scripted capture can land each peer's logs beside its other
+## artifacts instead of in the shared [code]user://[/code].
 const ENABLE_VAR := "NETW_NETLOG"
 
 # Transitions held back before a journal row is written, so the row leaves with
@@ -40,9 +43,34 @@ const FRAME_HEADER := "kind,wall_ms,tick,ticks_this_frame,ack_age,consumed," \
 		+ "corrections," \
 		+ "contacts,grounded,drive_seq,drive_label,drive_kind,steer,throttle," \
 		+ "wall_contacts,wall_impulse,wall_normal_y,car_contacts," \
-		+ "ground_contacts,contact_seq"
+		+ "ground_contacts,contact_seq," \
+		+ "quantum_steps,quantum_declared,quantum_faults,clamped," \
+		+ "lane_sent,lane_received"
+# Where this peer has the car, once per frame, in the network tick's own
+# domain. Two peers' POSE rows differenced by tick answer the only question the
+# other rows cannot: how far apart the two worlds are right now. Every other
+# measure here is taken at the acknowledged transition, which is seconds of
+# driving in the past. body is the collider, shown is what the player sees.
+const POSE_HEADER := "kind,wall_ms,tick,body_x,body_y,body_z," \
+		+ "shown_x,shown_y,shown_z,sim_mode," \
+		+ "interp_rows,interp_newest,interp_lag,interp_shown_tick,display_role," \
+		+ "interp_sleeping,disp_x,disp_z,pump_x,pump_z,pumped,display_tick," \
+		+ "display_offset,oldest,ring_x,ring_z,channels,ambiguous," \
+		+ "lv_x,lv_y,lv_z,av_x,av_y,av_z"
+# Why the car is in the simulation mode it is in, written only when something in
+# that answer changes. A demote is an episode falling back, and a demote that
+# never ends is a quarantine that never reseeds, so the clean run, its target,
+# and the size of the seed pool are the three numbers that separate "recovering"
+# from "stuck" without re-deriving either from the frame rows.
+const EPISODE_HEADER := "kind,wall_ms,tick,sim_mode,episode_state,clean_run," \
+		+ "target,seed_pool,reconstructed,fallback_at,reseed_at,aligned_at," \
+		+ "resume_ack_age"
 const CORRECTION_HEADER := "kind,wall_ms,tick,field,magnitude,teleported"
-const EVAL_HEADER := "kind,wall_ms,tick,recv_tick,ack,divergence,corrected"
+# staleness says whether the comparison was matched at all, and linear_speed is
+# what the drive impulse scales with, so a divergence that equals one tick of
+# drive is legible as a phase error rather than read as a physical fork.
+const EVAL_HEADER := "kind,wall_ms,tick,recv_tick,ack,divergence,corrected," \
+		+ "staleness,linear_speed,drive_impulse"
 const CONTACT_HEADER := "kind,wall_ms,tick,drive_label,contact_kind,count,impulse,normal_y"
 const FIELD_HEADER := "kind,wall_ms,tick,field,error"
 const JOURNAL_HEADER := "kind,wall_ms,transition,label,drive_kind,c_hash," \
@@ -50,7 +78,8 @@ const JOURNAL_HEADER := "kind,wall_ms,transition,label,drive_kind,c_hash," \
 const STATS_HEADER := "kind,wall_ms,consumed,missing,starved,held," \
 		+ "folded,corrections,resync,skipped,max_replay_depth,fp_verified," \
 		+ "fp_mismatches,first_divergent_transition,command_queue_depth," \
-		+ "frames_dropped_invalid,substituted,ack_confirmed"
+		+ "frames_dropped_invalid,substituted,ack_confirmed," \
+		+ "comparisons_ran,comparisons_skipped"
 
 var _clock: NetwClockInterface
 var _handle: NetwLagCompensationInterface.PredictionHandle
@@ -63,12 +92,23 @@ var _contacts_this_frame: int = 0
 var _last_contact_sequence: int = -1
 var _last_journal_transition: int = -1
 var _previous: Dictionary = { }
+var _last_episode_key: String = ""
 
 
 ## Returns [code]true[/code] when [constant ENABLE_VAR] arms the recorder, so a
 ## caller can skip composing one at all on a normal run.
 static func armed() -> bool:
 	return not OS.get_environment(ENABLE_VAR).is_empty()
+
+
+# The directory logs land in: the armed value itself when it names a path,
+# otherwise the shared user:// both manual instances write into.
+static func _output_dir() -> String:
+	var value := OS.get_environment(ENABLE_VAR)
+	if value.contains("/") or value.contains("\\"):
+		DirAccess.make_dir_recursive_absolute(value)
+		return value
+	return "user://"
 
 
 ## Starts recording [param entity]'s cadence against [param clock], opening
@@ -91,17 +131,19 @@ func start(entity: NetwEntity, clock: NetwClockInterface) -> void:
 	# instance holds a recorder per car, whose entity ids collide whenever two
 	# players share a username (hence the controlling peer, which never does).
 	var role := "server" if multiplayer.is_server() else "client"
-	var path := "user://netlog_%s_%d_car%d_%s.csv" % [
+	var path := _output_dir().path_join("netlog_%s_%d_car%d_%s.csv" % [
 		role,
 		multiplayer.get_unique_id(),
 		entity.controller,
 		String(entity.entity_id).validate_filename(),
-	]
+	])
 	_file = FileAccess.open(path, FileAccess.WRITE)
 	if not _file:
 		push_warning("net_log could not open %s" % path)
 		return
 	_file.store_line(FRAME_HEADER)
+	_file.store_line(POSE_HEADER)
+	_file.store_line(EPISODE_HEADER)
 	_file.store_line(CORRECTION_HEADER)
 	_file.store_line(EVAL_HEADER)
 	_file.store_line(CONTACT_HEADER)
@@ -131,7 +173,7 @@ func _exit_tree() -> void:
 func _write_stats() -> void:
 	var stats := _handle.stats()
 	_file.store_line(
-		"STATS,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		"STATS,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			Time.get_ticks_msec(),
 			stats[&"consumed"],
 			stats[&"missing"],
@@ -149,6 +191,8 @@ func _write_stats() -> void:
 			stats[&"frames_dropped_invalid"],
 			stats[&"substituted"],
 			stats[&"ack_confirmed"],
+			_handle.comparisons_ran,
+			_handle.comparisons_skipped,
 		],
 	)
 
@@ -167,7 +211,8 @@ func _on_after_tick_loop() -> void:
 	_file.store_line(
 		(
 				"FRAME,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
-				+ "%d,%d,%d,%s,%.6f,%.6f,%d,%.6f,%.6f,%d,%d,%d"
+				+ "%d,%d,%d,%s,%.6f,%.6f,%d,%.6f,%.6f,%d,%d,%d,"
+				+ "%d,%d,%d,%d,%d,%d"
 		) % [
 			Time.get_ticks_msec(),
 			_clock.tick,
@@ -195,11 +240,143 @@ func _on_after_tick_loop() -> void:
 			_contact_int(&"car_contacts"),
 			_contact_int(&"ground_contacts"),
 			_contact_int(&"contact_sequence"),
+			_handle.quantum_steps,
+			_handle.quantum_declared,
+			_handle.quantum_fault_count,
+			int(_handle.stats()[&"authoring_clamped"]),
+			deltas["lane_sent"],
+			deltas["lane_received"],
 		],
 	)
+	_record_pose()
+	_record_episode()
 	_drain_journal(JOURNAL_TAP_LAG)
 	_ticks_this_frame = 0
 	_contacts_this_frame = 0
+
+
+# Where this peer has the car this frame, collider and rendered pose both, in
+# world space so two peers' rows are directly comparable.
+func _record_pose() -> void:
+	if not is_instance_valid(_body):
+		return
+	var sphere := _body.get_node_or_null(^"Sphere") as Node3D
+	var shown: Node3D = _body.get_node_or_null(^"Container") as Node3D
+	if sphere == null or shown == null:
+		return
+	var b := sphere.global_position
+	var s := shown.global_position
+	# The pose channel's own playhead, so a visual sitting away from its body
+	# says whether the ring is cold, the playhead is out of its range, or the
+	# stream is simply behind.
+	var rows := -1
+	var newest := -1
+	var lag := 0.0
+	var shown_tick := -1
+	var role := -1
+	var sleeping := -1
+	var pump := Vector3(-999.0, -999.0, -999.0)
+	var pumped := -1
+	var oldest := -1
+	var ring := Vector3(-999.0, -999.0, -999.0)
+	var channels := -1
+	var ambiguous := -1
+	var entity := NetwEntity.of(_body)
+	var interp := entity.interpolation if entity else null
+	if interp:
+		# The channel is named by its target, the display value it writes.
+		var buffer := interp.get_buffer(&"display_position")
+		if buffer:
+			rows = buffer.size()
+			newest = buffer.newest_tick()
+		lag = interp.display_lag
+		shown_tick = interp.displayed_authoring_tick()
+		role = interp.resolved_display_role
+		sleeping = 1 if interp.is_sleeping(&"display_position") else 0
+		pumped = interp.pumped_frames
+		var census := interp.channel_census()
+		channels = int(census[&"channels"])
+		ambiguous = int(census[&"ambiguous"])
+		if buffer:
+			oldest = buffer.oldest_tick()
+			var nv: Variant = buffer.get_at(buffer.newest_tick())
+			if nv is Vector3:
+				ring = nv
+		var written: Variant = interp.displayed_value(&"display_position")
+		if written is Vector3:
+			pump = written
+	# The solver velocities ride the row so two peers can be differenced at a
+	# tick lag: a momentum error that is really a phase offset shows up as a
+	# minimum at some nonzero lag, and one that is a genuine fork does not.
+	var lv := Vector3.ZERO
+	var av := Vector3.ZERO
+	if _contact_probe:
+		lv = _contact_probe.linear_velocity
+		av = _contact_probe.angular_velocity
+	_file.store_line(
+		(
+				"POSE,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%.2f,%d,%d,%d,"
+				+ "%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%d,%.4f,%.4f,%d,%d,"
+				+ "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f"
+		) % [
+			Time.get_ticks_msec(),
+			_clock.tick,
+			b.x, b.y, b.z,
+			s.x, s.y, s.z,
+			_handle.sim_mode,
+			rows, newest, lag, shown_tick, role, sleeping,
+			_body.display_position.x, _body.display_position.z,
+			pump.x, pump.z, pumped,
+			_clock.display_tick, _clock.display_offset, oldest,
+			ring.x, ring.z, channels, ambiguous,
+			lv.x, lv.y, lv.z, av.x, av.y, av.z,
+		],
+	)
+
+
+# One row per change in why the car is simulating the way it is, so a run of
+# identical frames costs nothing and every transition is on its own line.
+func _record_episode() -> void:
+	# The digest, never the report: this runs every physics frame and the report
+	# detaches one entry per comparison the episode has ever settled.
+	var disposition: Dictionary = _handle.episode_digest().get(
+		&"disposition",
+		{ },
+	)
+	var row := "EPISODE,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%d" % [
+		Time.get_ticks_msec(),
+		_clock.tick,
+		_handle.sim_mode,
+		int(disposition.get(&"state", -1)),
+		int(disposition.get(&"quarantine_clean_run", -1)),
+		int(disposition.get(&"quarantine_target", -1)),
+		_seed_pool_size(),
+		str(_stream_reconstructed()),
+		int(disposition.get(&"fallback_transition", -1)),
+		int(disposition.get(&"reseed_transition", -1)),
+		int(disposition.get(&"aligned_transition", -1)),
+		int(disposition.get(&"resume_ack_age", -1)),
+	]
+	# The wall clock and tick move every row, so compare everything after them.
+	var key := row.substr(row.find(",", row.find(",", 8) + 1))
+	if key == _last_episode_key:
+		return
+	_last_episode_key = key
+	_file.store_line(row)
+
+
+# The quarantine's seed pool and stream gate are engine internals with no public
+# reader, and a stuck fallback is unreadable without them.
+func _seed_pool_size() -> int:
+	var engine: Object = _handle._engine()
+	if not engine:
+		return -1
+	return (engine._quarantine_pending_states as Dictionary).size()
+
+
+func _stream_reconstructed() -> bool:
+	var engine: Object = _handle._engine()
+	return engine != null and bool(engine._quarantine_stream_reconstructed)
 
 
 # Drains the journal rows that have settled, holding back the newest
@@ -327,22 +504,36 @@ func _on_state_evaluated(
 	if not _file:
 		return
 	var now := Time.get_ticks_msec()
+	# One tick of drive is what the propulsion adds to angular velocity each
+	# transition, so an angular divergence that lands on it is one transition of
+	# phase rather than a fork the solver produced.
+	var speed := 0.0
+	if is_instance_valid(_body):
+		speed = float(_body.get(&"linear_speed"))
 	_file.store_line(
-		"EVAL,%d,%d,%d,%d,%.4f,%s" % [
+		"EVAL,%d,%d,%d,%d,%.9f,%s,%d,%.4f,%.4f" % [
 			now,
 			_clock.tick,
 			recv_tick,
 			ack,
 			divergence,
 			"true" if corrected else "false",
+			_handle.last_compare_staleness,
+			speed,
+			absf(speed) * 100.0 * _clock.ticktime,
 		],
 	)
 	# The scalar above is only the worst field. A set mixing meters, radians and
 	# m/s hides which one moved, and a field excluded from triggering can diverge
 	# freely without ever showing up as a correction, so each is logged on its own.
+	# Nine decimals, not four: racing's finest declared grid is an angle step of
+	# 9.6e-5 and its position step is 2.4e-4, so a four-decimal column renders a
+	# whole-bucket disagreement on those fields as 0.0000 and reads exactly like
+	# perfect agreement. The column has to out-resolve the grids it is used to
+	# judge, or it cannot answer whether two peers landed in the same bucket.
 	for field: StringName in _handle.last_field_divergence:
 		_file.store_line(
-			"FIELD,%d,%d,%s,%.4f" % [
+			"FIELD,%d,%d,%s,%.9f" % [
 				now,
 				_clock.tick,
 				field,
@@ -406,6 +597,10 @@ func _counters() -> Dictionary:
 		"resync": _handle.resync_count,
 		"skipped": _handle.skipped_count,
 		"corrections": _handle.corrections,
+		# The two ends of the owner lane. Only one is nonzero on a given peer, so
+		# a session reads the owner's sent against authority's received.
+		"lane_sent": _handle.command_frames_sent,
+		"lane_received": _handle.command_frames_received,
 	}
 
 

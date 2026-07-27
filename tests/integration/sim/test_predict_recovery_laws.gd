@@ -699,3 +699,118 @@ func test_an_undeclared_entity_recovers_the_full_closure_at_once() -> void:
 		"the closure must come from the recovery itself, not a teleport",
 	).is_false()
 	await s.teardown()
+
+# --- what a recovery costs a field that did not need one ---
+
+# The trajectory of a first-order filter stepping toward [param target] from
+# [param start], which is the shape every rate-like causal scalar has: racing's
+# angular_speed and linear_speed, a camera ease, a throttle ramp.
+func _filter_run(start: float, target: float, gain: float, ticks: int) -> Array:
+	var out: Array = [start]
+	var value := start
+	for _i in ticks:
+		value = lerpf(value, target, gain)
+		out.append(value)
+	return out
+
+
+# What a recovery costs a field that already agreed.
+#
+# A [method NetwScriptModel.PropertyConfig.reconcile_only] field never triggers a
+# recovery and is restored by every one some other field triggers. What gets
+# staged is authority's value at the acknowledged transition, which is
+# acknowledgement-age ticks old. For a field sitting at steady state that is
+# free, because the old value and the current one are the same value. For a
+# filter still moving it is not: the recovery writes a value staler than the
+# error it replaced, and the field ends further from authority than if the
+# recovery had left it alone.
+#
+# Measured in a rendered session, `.agents/data/2026-07-26-fast`: angular_speed
+# agreed at 0.10 against its own 0.2 epsilon when a sphere_position divergence
+# triggered, was restored anyway, and climbed to 0.22 over the following eight
+# ticks. Across the same recoveries sphere_angular_velocity, which is withheld,
+# fell from 0.73 to 0.52.
+#
+# This is a probe, not a gate. [method NetwLagCompensationInterface.
+# _PredictionEngine.recover] receives neither the field's epsilon nor its
+# measured error, so it cannot decline, and no configuration available today
+# expresses "leave this one alone, it was already right". The numbers say what
+# such a declaration would be worth.
+func test_reports_what_a_recovery_costs_a_field_that_already_agreed() -> void:
+	var gain := 4.0 / 60.0
+	var epsilon := 0.2
+	var agreed := epsilon * 0.5
+	print("[agreeing] gain=%.4f/tick  field error before recovery=%.2f (eps %.2f)"
+			% [gain, agreed, epsilon])
+	print("[agreeing]   ack_age   regime        before    after     verdict")
+	var transient_worsened := 0
+	var steady_worsened := 0
+	for regime: String in ["steady", "moving"]:
+		# Steady means the filter has already arrived, which is the case every
+		# straight-line capture measured. Moving is a hard input change, which is
+		# the case a lap measures and no earlier capture did.
+		var target := 0.0 if regime == "steady" else -4.0
+		var run := _filter_run(0.0, target, gain, 24)
+		for ack_age in [1, 2, 4, 8]:
+			var now: int = run.size() - 1
+			var authority_now: float = run[now]
+			var authority_at_ack: float = run[now - ack_age]
+			# The owner is where authority is, minus the error that agreed.
+			var current := authority_now - agreed
+			var plan := _stage(
+				{ &"rate": authority_at_ack },
+				{ &"rate": current },
+				{ },
+				{ },
+				1.0,
+			)
+			var before := absf(authority_now - current)
+			var after := absf(authority_now - float(plan[&"restore"][&"rate"]))
+			if after > before + 0.0001:
+				if regime == "steady":
+					steady_worsened += 1
+				else:
+					transient_worsened += 1
+			print("[agreeing]   %-9d %-13s %-9.4f %-9.4f %s"
+					% [
+						ack_age,
+						regime,
+						before,
+						after,
+						"WORSE" if after > before + 0.0001 else "ok",
+					])
+
+	# The arm exists to reproduce the regime, so say so rather than assume it.
+	assert_int(steady_worsened).override_failure_message(
+		"restoring a settled field cannot cost anything, because the value it "
+		+ "stages is the value already there. A worsening here means the arm "
+		+ "models something other than staleness.",
+	).is_equal(0)
+	assert_int(transient_worsened).override_failure_message(
+		"the arm never reproduced a stale restore, so it measures nothing. A "
+		+ "moving filter restored from an older transition must land further "
+		+ "from authority than the error it replaced.",
+	).is_greater(0)
+
+
+# The behaviour the probe above prices, pinned so a guard has to change it
+# deliberately.
+#
+# A recovery stages every declared field it is given, whether or not that field
+# was the one that diverged. That is correct for a field that genuinely
+# disagrees and it is what makes a rebase total. It is also unconditional, and
+# the kernel is given nothing it could condition on.
+func test_a_recovery_stages_a_field_that_had_no_divergence() -> void:
+	var plan := _stage(
+		{ &"pos": 3.0, &"rate": 7.0 },
+		{ &"pos": 0.0, &"rate": 7.0 },
+		{ },
+		{ },
+		1.0,
+	)
+	assert_bool(plan[&"restore"].has(&"rate")).override_failure_message(
+		"a recovery stages the whole closure, so a field that already matched "
+		+ "is staged too. If this ever stops being true, the probe above and "
+		+ "every recovery-conservation law here need re-reading.",
+	).is_true()
+	assert_float(plan[&"restore"][&"rate"]).is_equal_approx(7.0, 0.0001)

@@ -164,7 +164,20 @@ func test_frame_journal_command_hashes_agree_across_the_peers() -> void:
 		).is_equal(client_row[&"c_hash"])
 
 
-func test_frame_held_and_starved_frames_append_no_journal_row() -> void:
+# A pass that ran no transition claims none, whether it declined one it held or
+# had none to decline. The journal records what ran, so a frame absent from it
+# is a frame that drove nothing.
+#
+# This is also the cost the FRAME tier's zero-depth default exists to avoid, and
+# the reason it cannot avoid all of it. The space solves on both of these
+# frames, so each is simulated time no transition accounts for and each shows up
+# on the next drive as a [member quantum_fault_count]. Authority cannot hold the
+# space instead: the gate holds a whole world and the quantum is per entity, so
+# one dry car cannot stop the others. The remaining answer is for authority to
+# run a substituted transition and declare it, which it cannot do while the
+# transition index belongs to the owner alone — the owner authors the index this
+# cursor walks, so authority has no identity to file its own transition under.
+func test_frame_a_pass_that_drove_nothing_claims_no_transition() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)
 	var predicted := await scenario.add_predicted_entity()
@@ -172,19 +185,43 @@ func test_frame_held_and_starved_frames_append_no_journal_row() -> void:
 	predicted.client_root.motion = Vector2.RIGHT
 	_warm_replay(scenario, predicted)
 
-	var server := predicted.server_prediction.journal()
-	var before := server.size()
+	var journal := predicted.server_prediction.journal()
+	var rows_before := journal.size()
 	var held_before := predicted.server_prediction.held_count
 
 	predicted.server_prediction.simulate_frame(scenario.dt())
 
 	assert_int(predicted.server_prediction.held_count).is_equal(held_before + 1)
-	assert_int(server.size()).override_failure_message(
+	assert_int(journal.size()).override_failure_message(
 		"a frame that drove nothing must not claim a transition",
-	).is_equal(before)
+	).is_equal(rows_before)
+	assert_int(predicted.server_state.reconcile_ack) \
+			.override_failure_message("a held pass acknowledges nothing") \
+			.is_equal(-1)
+
+	# One transition still stands behind the buffer. Spend it, so the frame after
+	# it is dry rather than merely buffered.
+	predicted.server_prediction.replay_buffer_depth = 0
+	predicted.server_prediction.simulate_frame(scenario.dt())
+	assert_int(predicted.server_prediction.tape_queue_depth).override_failure_message(
+		"the queue must actually be empty, or the next pass is a hold and this "
+		+ "half of the law measures nothing",
+	).is_equal(0)
+
+	var rows_dry := journal.size()
+	predicted.server_prediction.simulate_frame(scenario.dt())
+
+	assert_int(predicted.server_prediction.starved_count).is_equal(1)
+	assert_int(journal.size()).override_failure_message(
+		"a dry frame drove nothing, so it claims nothing either",
+	).is_equal(rows_dry)
 
 
-func test_frame_buffer_absorbs_one_early_then_late_arrival() -> void:
+# Queue depth is what covers a dry frame, not the buffer setting. An arrival
+# that lands early leaves a transition standing, and the frame that receives
+# nothing runs that one instead of holding. The buffer only decides which depth
+# the same pattern plays out around, so this reads identically at any setting.
+func test_frame_depth_from_an_early_arrival_covers_a_late_one() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)
 	var predicted := await scenario.add_predicted_entity()
@@ -236,7 +273,16 @@ func test_frame_one_missed_arrival_causes_exactly_one_hold() -> void:
 	assert_int(predicted.server_state.reconcile_ack).is_equal(ack_before + 1)
 
 
-func test_frame_dry_queue_acks_nothing() -> void:
+# A dry run acknowledges nothing and leaves the cursor exactly where the owner's
+# next transition will land.
+#
+# The second half is the constraint any future substitution has to satisfy and
+# the reason one cannot simply be inserted here. The index this cursor walks is
+# authored by the owner, so a transition authority invents would have to occupy
+# an index the owner is still going to fill. Advancing the cursor past it stops
+# the owner's stream being consumed at all, which is a worse failure than the
+# quantum fault a dry frame costs.
+func test_frame_a_dry_run_acks_nothing_and_strands_no_transition() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)
 	var predicted := await scenario.add_predicted_entity()
@@ -248,12 +294,27 @@ func test_frame_dry_queue_acks_nothing() -> void:
 	_deliver_command(predicted)
 	predicted.server_prediction.simulate_frame(scenario.dt())
 	assert_int(predicted.server_state.reconcile_ack).is_greater_equal(0)
-	predicted.server_prediction.simulate_frame(scenario.dt())
 
-	assert_int(predicted.server_prediction.starved_count).is_equal(1)
+	var dry := 4
+	for index in dry:
+		predicted.server_prediction.simulate_frame(scenario.dt())
+
+	assert_int(predicted.server_prediction.starved_count).is_equal(dry)
 	assert_int(predicted.server_state.reconcile_ack) \
 			.override_failure_message("a dry pass acknowledges nothing") \
 			.is_equal(-1)
+
+	# The owner's next transition is consumed on the frame after it arrives. A
+	# dry run must cost the stream nothing but the frames it had no input for.
+	var consumed_before := predicted.server_prediction.consumed_count
+	_emit_client_frame(scenario.client_clock, 1)
+	_deliver_command(predicted)
+	predicted.server_prediction.simulate_frame(scenario.dt())
+	assert_int(predicted.server_prediction.consumed_count) \
+			.override_failure_message(
+				"a dry run must not strand the cursor ahead of the stream, or "
+				+ "the owner's transitions stop being consumed",
+			).is_equal(consumed_before + 1)
 
 
 func test_frame_resync_jumps_to_live_edge_and_client_corrects() -> void:
@@ -332,3 +393,42 @@ func _emit_client_frame(clock: NetwClockInterface, ticks: int) -> void:
 	if ticks > 0:
 		clock.force_step(ticks)
 	clock.after_tick_loop.emit()
+
+
+# A physics frame that advanced the world but opened no transition is the one
+# divergence cause a peer can name alone: the solver moved by an amount no
+# compared column accounts for, so every antecedent still agrees and the
+# boundary ladder would otherwise walk all the way to CLOSURE.
+#
+# The pump here emits one frame per call, so the clock is set to declare one
+# physics step per transition and the harness matches what it claims.
+func test_a_frame_that_opens_no_transition_is_charged_to_the_next_one() -> void:
+	var scenario := PredictionScenario.new()
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	_configure_frame(predicted)
+	_quantize_motion(predicted)
+	scenario.client_clock.tickrate = Engine.physics_ticks_per_second
+	predicted.client_root.motion = Vector2.RIGHT
+
+	for _index in 3:
+		_emit_client_frame(scenario.client_clock, 1)
+	var handle := predicted.client_prediction
+	assert_int(handle.quantum_declared).override_failure_message(
+		"the harness must declare the cadence it actually pumps",
+	).is_equal(1)
+	assert_int(handle.quantum_steps).override_failure_message(
+		"one drive per physics frame is the declared quantum",
+	).is_equal(1)
+	var clean := handle.quantum_fault_count
+
+	# The clamped frame authors nothing, so the drive after it stands alone for
+	# two frames of physics.
+	_emit_client_frame(scenario.client_clock, 0)
+	_emit_client_frame(scenario.client_clock, 1)
+
+	assert_int(handle.quantum_steps).is_equal(2)
+	assert_int(handle.quantum_fault_count).override_failure_message(
+		"a frame that integrates without a transition must be counted",
+	).is_equal(clean + 1)
+	assert_int(int(handle.stats()[&"quantum_faults"])).is_equal(clean + 1)

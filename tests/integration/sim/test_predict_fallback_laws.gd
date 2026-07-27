@@ -285,6 +285,176 @@ func test_quarantine_requires_a_consecutive_clean_authority_witness_run() -> voi
 	assert_bool(engine._reseed_align_pending).is_true()
 
 
+func test_quarantine_reseed_survives_a_stale_state_pool() -> void:
+	var engine := _engine()
+	_bind_position(engine)
+	_open(engine)
+	engine._episode[&"state"] = EpisodeState.FALLBACK
+	engine._fallback_latched = true
+	engine._quarantine_stream_reconstructed = true
+	engine._quarantine_target = 2
+	# The state lane delivered one snapshot long ago and its witness bits are
+	# already evicted, then the acknowledgement lane proves a clean run far
+	# ahead of it.
+	engine._on_quarantine_state_frame({
+		&"tick": 3,
+		&"ack": 3,
+		&"payload": { &"position": Vector2(3.0, 0.0) },
+	})
+	_authority_witness(engine, 40)
+	engine._apply_quarantine_witness(40)
+	_authority_witness(engine, 41)
+	engine._apply_quarantine_witness(41)
+
+	assert_bool(engine._fallback_latched).override_failure_message(
+		"a proven run with only a stale snapshot must hold the latch "
+		+ "through the bounded wait instead of replaying the past",
+	).is_true()
+	for basis in range(42, 42 + Engine_.QUARANTINE_RUN_CAP):
+		_authority_witness(engine, basis)
+		engine._apply_quarantine_witness(basis)
+
+	assert_bool(engine._fallback_latched).override_failure_message(
+		"a proven clean run must reseed from the newest retained snapshot "
+		+ "instead of holding fallback forever",
+	).is_false()
+	assert_bool(engine._reseed_align_pending).is_true()
+	assert_int(int(engine._episode[&"reseed_transition"])).is_equal(3)
+
+
+func test_quarantine_reseed_skips_a_known_dirty_snapshot() -> void:
+	var engine := _engine()
+	_bind_position(engine)
+	_open(engine)
+	engine._episode[&"state"] = EpisodeState.FALLBACK
+	engine._fallback_latched = true
+	engine._quarantine_stream_reconstructed = true
+	engine._quarantine_target = 2
+	_authority_witness(engine, 2)
+	_authority_witness(engine, 3, Handle.WitnessClass.DYNAMIC_ENTITY)
+	engine._on_quarantine_state_frame({
+		&"tick": 2,
+		&"ack": 2,
+		&"payload": { &"position": Vector2(2.0, 0.0) },
+	})
+	engine._on_quarantine_state_frame({
+		&"tick": 3,
+		&"ack": 3,
+		&"payload": { &"position": Vector2(3.0, 0.0) },
+	})
+	_authority_witness(engine, 40)
+	engine._apply_quarantine_witness(40)
+	_authority_witness(engine, 41)
+	engine._apply_quarantine_witness(41)
+
+	assert_bool(engine._fallback_latched).is_true()
+	for basis in range(42, 42 + Engine_.QUARANTINE_RUN_CAP):
+		_authority_witness(engine, basis)
+		engine._apply_quarantine_witness(basis)
+
+	assert_bool(engine._fallback_latched).is_false()
+	assert_int(int(engine._episode[&"reseed_transition"])) \
+			.override_failure_message(
+		"the newest snapshot carries a dirty witness and must be skipped "
+		+ "for the older clean one",
+	).is_equal(2)
+
+
+func test_stale_pool_wait_prefers_a_fresh_seed() -> void:
+	var engine := _engine()
+	_bind_position(engine)
+	_open(engine)
+	engine._episode[&"state"] = EpisodeState.FALLBACK
+	engine._fallback_latched = true
+	engine._quarantine_stream_reconstructed = true
+	engine._quarantine_target = 2
+	engine._on_quarantine_state_frame({
+		&"tick": 1,
+		&"ack": 3,
+		&"payload": { &"position": Vector2(3.0, 0.0) },
+	})
+	_authority_witness(engine, 40)
+	engine._apply_quarantine_witness(40)
+	_authority_witness(engine, 41)
+	engine._apply_quarantine_witness(41)
+
+	assert_bool(engine._fallback_latched).override_failure_message(
+		"a proven run with only stale snapshots must wait for the lane "
+		+ "instead of seeding a pose that predates the divergence",
+	).is_true()
+	engine._on_quarantine_state_frame({
+		&"tick": 2,
+		&"ack": 41,
+		&"payload": { &"position": Vector2(41.0, 0.0) },
+	})
+
+	assert_bool(engine._fallback_latched).is_false()
+	assert_bool(engine._reseed_align_pending).is_true()
+	assert_int(int(engine._episode[&"reseed_transition"])) \
+			.override_failure_message(
+		"an in-window row arriving during the wait must seed instead of "
+		+ "the stale snapshot",
+	).is_equal(41)
+
+
+func test_epoch_admission_rekeys_the_authority_journal() -> void:
+	var engine := _engine()
+	engine._command_epoch = 3
+	engine._journal.open(0, 100, Handle.DriveKind.FRESH, 111)
+	engine._journal.close(0, 7)
+	engine._journal.open(1, 101, Handle.DriveKind.FRESH, 222)
+	engine._journal.close(1, 8)
+	engine._ack = 1
+
+	engine._admit_command_frame({ "epoch": 4 }, [])
+
+	assert_int(engine._journal.size()).override_failure_message(
+		"an epoch admission must drop retained rows so a reused index "
+		+ "cannot answer with the previous epoch's evidence",
+	).is_equal(0)
+	assert_int(engine.build_ack_frame().size()).override_failure_message(
+		"no acknowledgement may ship until a row of the admitted epoch "
+		+ "closes",
+	).is_equal(0)
+	engine._journal.open(0, 200, Handle.DriveKind.FRESH, 333)
+	engine._journal.close(0, 9)
+	var row := engine._journal.row_at(0)
+	assert_int(int(row[&"c_hash"])).override_failure_message(
+		"a reused index must open a fresh row for the admitted epoch",
+	).is_equal(333)
+	assert_int(int(row[&"label"])).is_equal(200)
+
+
+func test_state_lane_acks_wait_for_the_epoch_confirmed_ack_lane() -> void:
+	var engine := _engine()
+	engine._role = Handle.Role.PREDICT
+	engine._handle._schedule = Handle.Schedule.FRAME
+	engine._tape_epoch = 5
+	# A rewire resets the frontier while dead-epoch rows are still in flight.
+	engine._ack_domain_confirmed = false
+	engine._next_tape_entry_index = 12
+	engine._refresh_owner_ack_age()
+	assert_int(engine._handle.ack_age_ticks).is_equal(12)
+
+	engine._on_state(500, 400, { })
+
+	assert_int(engine._latest_authority_ack).override_failure_message(
+		"an unstamped state-row ack must not feed the frontier before the "
+		+ "ack lane confirms this tape's numbering",
+	).is_equal(-1)
+	assert_int(engine._handle.ack_age_ticks).override_failure_message(
+		"a dead-domain ack must not collapse the speculative span",
+	).is_equal(12)
+
+	engine.receive_ack_frame(_empty_ack(5))
+	engine._on_state(501, 3, { })
+
+	assert_int(engine._latest_authority_ack).override_failure_message(
+		"a confirmed domain admits state-row acks again",
+	).is_equal(3)
+	assert_int(engine._handle.ack_age_ticks).is_equal(8)
+
+
 func test_adversarial_knobs_still_fallback_with_delayed_control() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)
@@ -298,6 +468,19 @@ func test_adversarial_knobs_still_fallback_with_delayed_control() -> void:
 	handle.collision_cooldown_ticks = 0
 	handle.snap_restore = Handle.RestoreMode.EXTRAPOLATED
 	predicted.client_entity.interpolation.chase_glide_time = 10.0
+	# A display channel, so the role the demote resolves is observable. The
+	# client owns and controls this body, which is the case that used to
+	# resolve DISABLED once the simulation closed.
+	var visual := Node2D.new()
+	visual.name = "Visual"
+	predicted.client_root.add_child(visual)
+	predicted.client_entity.interpolation.visual_root = NodePath("Visual")
+	Netw.configure_property(predicted.client_root, &"position").interpolate(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
+	)
+	scenario.client.api.interpolation._mark_runtime_dirty(
+		predicted.client_entity.interpolation,
+	)
 	var fallbacks: Array[Dictionary] = []
 	var opened: Array[Dictionary] = []
 	handle.episode_fallback.connect(
@@ -331,6 +514,16 @@ func test_adversarial_knobs_still_fallback_with_delayed_control() -> void:
 				"quality knobs may shape repair but cannot expand its evidence budget",
 			).is_less_equal(recovery_bound)
 	assert_int(handle.sim_mode).is_equal(Handle.SimMode.DISPLAY)
+
+	# A closed simulation stops writing the body, so the display has to consume
+	# the replicated stream the way any remote peer does. Resolving DISABLED
+	# here freezes the visual on its last value while the collider tracks
+	# authority.
+	var display_role: int = \
+			predicted.client_entity.interpolation.resolved_display_role
+	assert_int(display_role).override_failure_message(
+		"a demoted body must display from the stream, not stop displaying",
+	).is_equal(NetwInterpolationInterface.DisplayRole.REMOTE)
 
 	var consumed_before := predicted.consumed
 	var server_position := predicted.server_root.position
@@ -373,4 +566,17 @@ func test_adversarial_knobs_still_fallback_with_delayed_control() -> void:
 	assert_int(opened.size()).override_failure_message(
 		"post-alignment clean driving must not be priced as fallback flapping",
 	).is_equal(opened_at_fallback)
+	# The pre-alignment speculation horizon acks with honest mismatches (the
+	# client drove from the reseed basis while authority's live body had moved
+	# on), so the truthful-acknowledgement law measures after that horizon has
+	# flushed: once clean driving is verifying, acknowledgements must carry
+	# the admitted epoch's fingerprints, never a previous epoch's retained
+	# rows answering for reused indices.
+	scenario.run(4)
+	var mismatches_settled := handle.fp_mismatch_count
+	scenario.run(10)
+	assert_int(handle.fp_mismatch_count).override_failure_message(
+		"post-alignment acknowledgements must carry the admitted epoch's "
+		+ "fingerprints, never a previous epoch's retained rows",
+	).is_equal(mismatches_settled)
 	await scenario.teardown()

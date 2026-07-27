@@ -95,12 +95,37 @@ func test_a_negative_cooldown_still_covers_the_disturbed_transition() -> void:
 
 
 # Two peers that declared the same island must digest it identically. Dictionary
-# iteration order is not guaranteed to agree between them, so the digest sorts
-# its sensor names rather than trusting the order it received them in.
+# iteration order is not guaranteed to agree between them, so the digest folds
+# its sensor names in text order rather than trusting the order it received them
+# in.
 func test_the_digest_does_not_depend_on_declaration_order() -> void:
 	var one := Engine_.environment_digest(7, { &"b": 2.0, &"a": 1.0 })
 	var other := Engine_.environment_digest(7, { &"a": 1.0, &"b": 2.0 })
 	assert_int(one).is_equal(other)
+
+	# Declaration order is the weaker half: the two peers are separate
+	# processes, and sorting the StringName keys themselves would order them by
+	# interning pointer, which no same-process assertion can distinguish from
+	# text order. Fold longhand in text order and require the digest to match,
+	# with enough sensors that a coincidence is not a plausible pass.
+	var samples := {
+		&"zulu": 1.0, &"alpha": 2.0, &"mike": 3.0, &"echo": 4.0,
+		&"papa": 5.0, &"bravo": 6.0, &"tango": 7.0, &"kilo": 8.0,
+	}
+	var names := PackedStringArray()
+	for key in samples:
+		names.append(String(key))
+	names.sort()
+	var bytes := PackedByteArray()
+	bytes.append_array(var_to_bytes(7))
+	for name in names:
+		var key := StringName(name)
+		bytes.append_array(var_to_bytes(key))
+		bytes.append_array(var_to_bytes(samples[key]))
+	assert_int(Engine_.environment_digest(7, samples)) \
+			.override_failure_message(
+				"the environment digest must fold its sensors in text order",
+			).is_equal(NetwPredictJournal.fnv1a(bytes))
 
 
 func test_a_changed_world_version_changes_the_digest() -> void:

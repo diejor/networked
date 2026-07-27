@@ -138,6 +138,36 @@ var physics_factor: float:
 	get:
 		return float(Engine.physics_ticks_per_second) / float(tickrate)
 
+## Physics steps one tick is worth, [member physics_factor] as a whole number.
+##
+## The physics server runs exactly one step per frame, so a tick can be worth
+## one step or two but never one and a fifth. A fractional
+## [member physics_factor] is a declaration the engine cannot honour, and
+## [NetwLagCompensationInterface] reports it against the entity that drives a
+## solver body under it.
+var physics_steps_per_tick: int:
+	get:
+		return maxi(1, int(round(physics_factor)))
+
+## Whether this frame's simulated world may advance.
+##
+## A tick is a fixed amount of simulated time, so a frame that emits no tick
+## must advance no physics or the two peers stop meaning the same thing by a
+## transition. [NetwLagCompensationInterface] reads this after the tick loop and
+## holds the predicted bodies' spaces on a frame that answers
+## [code]false[/code]. It stays [code]true[/code] for a whole session unless a
+## gate is armed, so a game that predicts nothing never sees a held frame.
+var is_simulating: bool = true
+
+## Frames the tick loop wanted more ticks than it was allowed to emit.
+##
+## Under a gate the loop emits at most one tick per frame, so a peer whose
+## physics cannot sustain [member tickrate] times
+## [member physics_steps_per_tick] steps per wall second cannot catch up and
+## falls behind the authority it tracks. Any sustained growth here means this
+## peer is too slow to predict, which no netcode setting repairs.
+var simulation_behind_count: int = 0
+
 ## The fractional position [0, 1) within the current tick.
 var tick_factor: float:
 	set(v):
@@ -265,6 +295,48 @@ func detach_node(node: MultiplayerClock) -> void:
 		_node = null
 
 
+## Returns the measured wall-clock cadence of the two loops that pump this
+## clock.
+##
+## Every prediction tier states a sustained-rate precondition and nothing used
+## to check it: a peer whose main loop is throttled degrades its physics
+## catch-up, and that degradation was only ever derived offline from log
+## timestamps. [method physics_step] counts the physics pump and
+## [method mark_poll] counts the idle pump, each against the wall clock, so
+## both real rates are session truth.
+## [codeblock]
+## {
+##  ┠╴physics_frames (int)   physics_step calls since the first count
+##  ┠╴polls (int)            mark_poll calls since the first count
+##  ┠╴wall_seconds (float)   span since the first counted call
+##  ┠╴physics_hz (float)     physics_frames over wall_seconds
+##  ┖╴poll_hz (float)        polls over wall_seconds
+## }
+## [/codeblock]
+## [method force_step] counts nothing, because a manually stepped clock has no
+## wall-clock meaning. A gated stepper therefore reports an empty cadence.
+func cadence() -> Dictionary:
+	var wall := 0.0
+	if _cadence_started_usec > 0:
+		wall = float(Time.get_ticks_usec() - _cadence_started_usec) / 1_000_000.0
+	return {
+		&"physics_frames": _physics_frame_count,
+		&"polls": _poll_count,
+		&"wall_seconds": wall,
+		&"physics_hz": _physics_frame_count / wall if wall > 0.0 else 0.0,
+		&"poll_hz": _poll_count / wall if wall > 0.0 else 0.0,
+	}
+
+
+## Counts one idle-frame poll toward [method cadence]. [NetwMultiplayer] calls
+## this once per [method MultiplayerAPI.poll], which is the session's main-loop
+## pump, so the poll rate is the peer's real main-loop rate.
+func mark_poll() -> void:
+	_poll_count += 1
+	if _cadence_started_usec == 0:
+		_cadence_started_usec = Time.get_ticks_usec()
+
+
 ## Test seam. Synchronously emits [param count] full ticks without consulting
 ## real time, mirroring the [method MultiplayerClock._physics_process] tick loop
 ## body so [signal before_tick], [signal on_tick], [signal after_tick] and
@@ -276,6 +348,10 @@ func force_step(count: int = 1) -> void:
 		on_tick.emit(ticktime, tick)
 		after_tick.emit(ticktime, tick)
 		tick += 1
+	# A gated stepper owes the same decision the real loop makes, so a manual
+	# frame that emits no tick holds exactly as a pumped one would. Call it with
+	# zero to spend a frame that ran no tick.
+	_resolve_simulation_gate(count)
 
 #endregion
 
@@ -296,12 +372,21 @@ var _configured := false
 var _tick_accumulator: float = 0.0
 var _target_tick_estimate: float = 0.0
 var _last_physics_time_usec: int = 0
+# Cadence counters behind cadence(). Zero until the first counted call, so a
+# never-pumped clock reports an empty span rather than a stale one.
+var _cadence_started_usec: int = 0
+var _physics_frame_count: int = 0
+var _poll_count: int = 0
 var _tick_factor_override: float = -1.0
 var _ping_timer: float = 0.0
 var _stats := _NetworkStats.new()
 var _display_offset_insufficient: bool = false
 var _drift_samples: Array[int] = []
 var _drift_timer: float = 0.0
+# Gates armed by NetwLagCompensationInterface, and the world's unspent step
+# budget. A tick pays physics_steps_per_tick in, a simulated frame spends one.
+var _simulation_gates: int = 0
+var _simulation_credit: int = 0
 
 #endregion
 
@@ -320,9 +405,13 @@ func _api() -> NetwMultiplayer:
 ## and [member manual_tick] guards pass.
 func physics_step(delta: float) -> void:
 	_last_physics_time_usec = Time.get_ticks_usec()
+	_physics_frame_count += 1
+	if _cadence_started_usec == 0:
+		_cadence_started_usec = _last_physics_time_usec
 
 	if delta > stall_threshold:
 		_tick_accumulator = 0.0
+		_simulation_credit = 0
 
 	before_tick_loop.emit()
 
@@ -334,9 +423,12 @@ func physics_step(delta: float) -> void:
 		_target_tick_estimate += delta * tickrate
 		_nudge_toward_estimate()
 
+	# A gated clock emits at most one tick per frame, because a second tick in
+	# one frame would have to share the single step the physics server runs and
+	# the two would then mean different amounts of simulated time.
+	var tick_ceiling := 1 if _simulation_gates > 0 else max_ticks_per_frame
 	var ticks_this_frame := 0
-	while _tick_accumulator >= ticktime and \
-			ticks_this_frame < max_ticks_per_frame:
+	while _tick_accumulator >= ticktime and ticks_this_frame < tick_ceiling:
 		_tick_accumulator -= ticktime
 		before_tick.emit(ticktime, tick)
 		on_tick.emit(ticktime, tick)
@@ -344,7 +436,56 @@ func physics_step(delta: float) -> void:
 		tick += 1
 		ticks_this_frame += 1
 
+	_resolve_simulation_gate(ticks_this_frame)
+
 	after_tick_loop.emit()
+
+
+# Spends one frame of the world's step budget, which each tick pays
+# physics_steps_per_tick into.
+#
+# The budget is what makes the correspondence exact rather than approximate: a
+# tick buys a whole number of steps, a frame spends one, and the credit carries
+# the remainder rather than rounding it away. A frame with no credit holds, so a
+# clock throttled below its own physics rate stops paying for frames no tick
+# claimed.
+func _resolve_simulation_gate(ticks_this_frame: int) -> void:
+	if _simulation_gates <= 0:
+		is_simulating = true
+		_simulation_credit = 0
+		return
+	if _tick_accumulator >= ticktime:
+		# The loop wanted another tick and the ceiling refused it, so this peer
+		# is not keeping up with the authority it tracks.
+		simulation_behind_count += 1
+	_simulation_credit += ticks_this_frame * physics_steps_per_tick
+	is_simulating = _simulation_credit > 0
+	if is_simulating:
+		_simulation_credit -= 1
+
+
+## Arms one simulation gate on this clock, held until [method release_gate].
+##
+## The clock decides whether a frame advances simulated time. It never touches a
+## physics space itself, because it has no scene: [NetwLagCompensationInterface]
+## arms a gate when it registers a body the physics server integrates, reads
+## [member is_simulating] after the tick loop, and holds that body's space.
+func arm_gate() -> void:
+	_simulation_gates += 1
+
+
+## Releases one gate armed by [method arm_gate]. The last release restores an
+## ungated clock, which simulates every frame.
+func release_gate() -> void:
+	_simulation_gates = maxi(0, _simulation_gates - 1)
+	if _simulation_gates == 0:
+		is_simulating = true
+		_simulation_credit = 0
+
+
+## Returns [code]true[/code] while any gate is armed.
+func is_gated() -> bool:
+	return _simulation_gates > 0
 
 
 ## Advances the tick loop from the API poll while no [MultiplayerClock] drives

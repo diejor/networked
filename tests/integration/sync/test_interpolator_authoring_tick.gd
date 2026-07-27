@@ -54,6 +54,20 @@ func test_keys_history_by_authoring_tick() -> void:
 	# under authoring-tick keying.
 	assert_vector(buf.get_at(newest)).is_equal(_pos(newest))
 
+	# A reparent re-applies the authoring node's exported values so a fresh
+	# handle picks up what the inspector declared. The handle it already
+	# configured keeps what the owner wrote in code, or every runtime display
+	# setting silently reverts to the node's default the first time the entity
+	# moves, including the switch that arms the pump's own trace.
+	entity.interpolation.predicted_smooth_time = 0.25
+	entity.interpolation.trace_interval = 20
+	entity.reparented.emit(NetwEntity.ReparentOpts.new())
+	assert_float(entity.interpolation.predicted_smooth_time) \
+			.override_failure_message(
+				"a reparent must not reset a code-written display setting",
+			).is_equal(0.25)
+	assert_int(entity.interpolation.trace_interval).is_equal(20)
+
 
 func test_displayed_authoring_tick_names_a_past_shown_tick() -> void:
 	rig = DerivedLoopbackRig.new()

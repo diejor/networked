@@ -240,6 +240,29 @@ func node_of(route: int) -> Node:
 	return entity.owner if entity else null
 
 
+## Returns every entity this peer currently holds a [constant State.LIVE] route
+## for, ordered by route so two calls in one frame agree.
+##
+## This is the peer's own visible set and nothing more. A route exists here only
+## because this peer was sent the spawn, so reading it tells a caller what it can
+## already see rather than anything about what other peers can.
+## [codeblock]
+## for entity in api.liveness.live_entities():
+##     ...   # every entity replicated to me, right now
+## [/codeblock]
+func live_entities() -> Array[NetwEntity]:
+	var routes := _routes.keys()
+	routes.sort()
+	var out: Array[NetwEntity] = []
+	for route: int in routes:
+		if _states.get(route, State.UNKNOWN) != State.LIVE:
+			continue
+		var entity := _routes[route] as NetwEntity
+		if is_instance_valid(entity):
+			out.append(entity)
+	return out
+
+
 ## Returns the state of [param entity].
 func state_of(entity: NetwEntity) -> State:
 	if entity == null:

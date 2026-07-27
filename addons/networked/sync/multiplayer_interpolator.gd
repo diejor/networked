@@ -106,6 +106,7 @@ extends NetwComponent
 
 var _entity: NetwEntity
 var _applying := false
+var _applied_handle: WeakRef
 
 
 func _ready() -> void:
@@ -125,10 +126,21 @@ func _bind_entity() -> void:
 		_entity.reparented.connect(_on_reparented)
 
 
+# A reparent can resolve a different [NetwEntity], and a fresh handle has never
+# seen this node's authored values. The handle it already applied to has, plus
+# whatever the owner layered on top in code, so re-applying there would silently
+# reset every runtime write back to the inspector default.
 func _on_reparented(_reparent: NetwEntity.ReparentOpts) -> void:
 	_bind_entity()
-	_apply_handle()
+	if _handle() != _applied_handle_ref():
+		_apply_handle()
 	_apply_property_interpolators()
+
+
+func _applied_handle_ref() -> NetwInterpolationInterface.Handle:
+	if not _applied_handle:
+		return null
+	return _applied_handle.get_ref() as NetwInterpolationInterface.Handle
 
 
 func _handle() -> NetwInterpolationInterface.Handle:
@@ -159,6 +171,7 @@ func _apply_handle() -> void:
 	handle.floor_smoothing = floor_smoothing
 	handle.starvation_grace_frames = starvation_grace_frames
 	handle.trace_interval = trace_interval
+	_applied_handle = weakref(handle)
 	_applying = false
 
 

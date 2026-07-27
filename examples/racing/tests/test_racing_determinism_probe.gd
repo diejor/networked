@@ -550,6 +550,442 @@ func test_reports_divergence_step_response_at_schedule_faults() -> void:
 	assert_int(clocks[1].tick - clocks[0].tick).is_equal(initial_tick_delta)
 
 
+# One fault pair is a step response. A rendered client emits them continuously:
+# a session measured on this machine ran 458 zero-tick and 12 double-tick frames
+# against a server that emitted exactly one tick on every frame, because the
+# client renders faster than the tick rate and its clock redistributes the same
+# ticks across more frames. This runs the same drive twice, once evenly and once
+# at that ratio, so the cost of the redistribution is read against its own
+# control rather than against a live capture with 25% run-to-run variance.
+#
+# Faults are paired so both clocks finish on the same tick count: the difference
+# between the arms is when the ticks land, never how many.
+const SCALED_FAULT_PERIOD := 8
+const SCALED_FAULT_FRAMES := 200
+
+
+# The control. One harness carries one session, so the two arms are two cases
+# and the log is read as a pair.
+func test_reports_divergence_with_evenly_stepped_clocks() -> void:
+	var even := await _run_fault_ratio(0)
+	assert_int(int(even["samples"])).override_failure_message(
+		"the control arm measured no state",
+	).is_greater(0)
+	# The one assertion either arm earns: a control that already diverged would
+	# make the uneven arm's number unreadable.
+	assert_float(even["angular"]).override_failure_message(
+		"evenly stepped clocks must reproduce the drive exactly",
+	).is_less(0.01)
+
+
+func test_reports_divergence_under_a_rendered_clients_fault_ratio() -> void:
+	var uneven := await _run_fault_ratio(SCALED_FAULT_PERIOD)
+	assert_int(int(uneven["samples"])).override_failure_message(
+		"the uneven arm measured no state",
+	).is_greater(0)
+
+
+# The dense arm above is far harsher than a real client. A measured session ran
+# 12 double-tick frames in 3099, so this arm carries the sparse ratio and says
+# whether a handful of skipped transitions is enough on its own.
+func test_reports_divergence_under_a_sparse_fault_ratio() -> void:
+	var sparse := await _run_fault_ratio(SCALED_FAULT_FRAMES / 3)
+	assert_int(int(sparse["samples"])).override_failure_message(
+		"the sparse arm measured no state",
+	).is_greater(0)
+
+
+# Drives one arm and returns its worst matched divergence. A [param period] of
+# zero steps both clocks evenly; otherwise the client drops a tick every
+# [param period] frames and takes it back on the next frame.
+func _run_fault_ratio(period: int) -> Dictionary:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var handle = own.entity.prediction
+	_silence_triggers(handle)
+	await game.sync_ticks(8)
+	# The wire map rebuilds on any rewire during warmup, so the silence is
+	# re-applied once the link settles.
+	_silence_triggers(handle)
+
+	var clocks: Array[NetwClockInterface] = [
+		host.tree.api.clock,
+		client.tree.api.clock,
+	]
+	var initial_tick_delta := clocks[1].tick - clocks[0].tick
+	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
+	var faults := 0
+	if period > 0:
+		var frame := period
+		while frame + 1 <= SCALED_FAULT_FRAMES:
+			stepper.override_step_count(frame, 1, 0)
+			stepper.override_step_count(frame + 1, 1, 2)
+			faults += 1
+			frame += period
+
+	var samples := 0
+	var worst_angular := 0.0
+	var worst_position := 0.0
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	for _i in SCALED_FAULT_FRAMES:
+		await stepper.sync_frames(1)
+		if handle.last_compare_staleness != 0:
+			continue
+		samples += 1
+		worst_angular = maxf(
+			worst_angular,
+			handle.last_field_divergence.get(&"sphere_angular_velocity", 0.0),
+		)
+		worst_position = maxf(
+			worst_position,
+			handle.last_field_divergence.get(&"sphere_position", 0.0),
+		)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	print(
+		"[ratio] %-8s zero-tick frames=%-4d samples=%-4d angular=%8.4f position=%8.4f"
+				% [
+					"even" if period == 0 else "uneven",
+					faults,
+					samples,
+					worst_angular,
+					worst_position,
+				],
+	)
+	assert_int(clocks[1].tick - clocks[0].tick).override_failure_message(
+		"paired faults must leave both clocks on the same tick count",
+	).is_equal(initial_tick_delta)
+	return {
+		"faults": faults,
+		"samples": samples,
+		"angular": worst_angular,
+		"position": worst_position,
+	}
+
+
+# The arms above vary when a tick lands. These vary how much physics a tick buys,
+# which is a different quantity and the one a rendered session actually differs
+# on: a measured client ran 3099 physics frames against 2653 ticks while its
+# frame-starved host ran 2886 against 2886, so the client advanced its solver
+# 1.168 times per tick against the host's 1.000. The car's body is a RigidBody3D,
+# so it integrates on the physics frame while its state is compared on the
+# transition. Identical impulses at identical transitions then close differently.
+#
+# Every arm gives both clocks the same zero-tick frames, so the tick counts
+# finish equal and authority is never starved of input labels. What varies is
+# whether a peer's physics space integrates on a frame that emitted no tick.
+# [param gate] names the invariant under test: a frame that advances no
+# simulated time advances no physics.
+const INTEGRATION_SKIP_PERIOD := 7
+const INTEGRATION_FRAMES := 210
+
+
+# The control. No frame is skipped, so both peers integrate once per tick and
+# the drive must reproduce exactly. An arm that diverged here would make the
+# other two unreadable.
+func test_reports_divergence_with_matched_integration_counts() -> void:
+	var matched := await _run_integration_ratio(0, false)
+	assert_int(int(matched["samples"])).override_failure_message(
+		"the control arm measured no state",
+	).is_greater(0)
+	# A very loose ceiling. This harness is timing-marginal and the control draws
+	# a non-zero number in a minority of runs, so freezing it tight would report
+	# the rig rather than the drive.
+	assert_float(matched["worst_angular"]).override_failure_message(
+		(
+				"matched integration counts must reproduce the drive, but angular"
+				+ " divergence reached %.4f"
+		) % [matched["worst_angular"]],
+	).is_less(1.0)
+
+
+# Both arms in one case, because the absolute numbers this harness draws move
+# between runs while the ratio between two arms measured back to back does not.
+#
+# Ungated is the defect a rendered client produces: one frame in seven emits no
+# tick on either peer, authority declines to integrate it, and the owner
+# integrates it anyway, spending 1.167 integrations per tick against authority's
+# 1.000. Gated holds the invariant on both peers instead, so each spends exactly
+# one. Nothing else differs between them.
+func test_reports_whether_gating_integration_on_the_tick_closes_the_gap() -> void:
+	var ungated := await _run_integration_ratio(INTEGRATION_SKIP_PERIOD, false)
+	await game.teardown()
+	game = make_unmanaged_game_harness(MAIN)
+	await game.setup()
+	var gated := await _run_integration_ratio(INTEGRATION_SKIP_PERIOD, true)
+
+	print(
+		"[integrate] ungated worst=%.4f  gated worst=%.4f  closed %.0f%% of the gap"
+				% [
+					ungated["worst_angular"],
+					gated["worst_angular"],
+					100.0 * (1.0 - gated["worst_angular"] / maxf(
+						ungated["worst_angular"],
+						0.0001,
+					)),
+				],
+	)
+
+	assert_int(int(gated["samples"])).override_failure_message(
+		"the gated arm measured no state",
+	).is_greater(0)
+
+	# The lever, before its result. A space that stayed inactive and integrated
+	# anyway would leave every other number here describing a run that never
+	# happened.
+	assert_float(ungated["authority_travel"]).override_failure_message(
+		(
+				"deactivating the space did not stop the body integrating, so"
+				+ " neither arm measured anything: authority travelled %.4f m"
+				+ " against the owner's %.4f m"
+		) % [ungated["authority_travel"], ungated["owner_travel"]],
+	).is_less(ungated["owner_travel"])
+
+	# The defect. An integration surplus on its own, with both clocks stepped
+	# identically and every input matched, carries the car past the epsilon that
+	# opens a divergence episode.
+	var epsilon: float = ungated["angular_epsilon"]
+	assert_float(ungated["worst_angular"]).override_failure_message(
+		(
+				"an unticked frame that still integrates must diverge past the"
+				+ " %.4f epsilon that triggers a correction, but reached only %.4f"
+		) % [epsilon, ungated["worst_angular"]],
+	).is_greater(epsilon)
+
+	# The repair, stated as a ratio rather than a ceiling. Gating does not
+	# restore the control, so what this holds is that most of the divergence the
+	# surplus bought is bought back.
+	assert_float(gated["worst_angular"]).override_failure_message(
+		(
+				"gating integration on the tick must close most of the gap:"
+				+ " ungated reached %.4f and gated still reached %.4f"
+		) % [ungated["worst_angular"], gated["worst_angular"]],
+	).is_less(0.5 * float(ungated["worst_angular"]))
+
+
+# Whether the residual gating leaves is bounded or accumulating, which is the
+# difference between an exact contract for a solver body and a declared-degraded
+# one. The arm above is 3.5 s of fairly straight driving, short enough that a
+# slow accumulation would read as a flat number. This one is three times longer
+# and is read by fifths: a bounded residual holds its level, an accumulating one
+# climbs, and the epsilon that opens an episode is the line either way.
+const INTEGRATION_LONG_FRAMES := 630
+
+
+func test_reports_whether_the_gated_residual_stays_bounded_over_a_long_drive() -> void:
+	var gated := await _run_integration_ratio(
+		INTEGRATION_SKIP_PERIOD,
+		true,
+		INTEGRATION_LONG_FRAMES,
+	)
+
+	assert_int(int(gated["samples"])).override_failure_message(
+		"the long arm measured no state",
+	).is_greater(0)
+	# The contract claim, stated against the threshold it exists to stay under.
+	# A residual that crossed here would mean gating bounds the divergence
+	# without removing it, and the solver-body contract is degraded rather than
+	# exact.
+	assert_float(gated["last_fifth"]).override_failure_message(
+		(
+				"the gated residual must still be under the %.4f epsilon after "
+				+ "%d frames, but the last fifth averaged %.4f against the "
+				+ "first fifth's %.4f"
+		) % [
+			gated["angular_epsilon"],
+			INTEGRATION_LONG_FRAMES,
+			gated["last_fifth"],
+			gated["first_fifth"],
+		],
+	).is_less(float(gated["angular_epsilon"]))
+
+
+# Drives one arm and returns its divergence trajectory. A [param skip_period] of
+# zero emits a tick on every frame. Otherwise both clocks skip one frame in
+# [param skip_period], authority always declines to integrate a skipped frame,
+# and the owner declines only when [param gate_owner] holds.
+func _run_integration_ratio(
+		skip_period: int,
+		gate_owner: bool,
+		frames: int = INTEGRATION_FRAMES,
+) -> Dictionary:
+	var host := await game.add_host("mario", false)
+	var client := await game.add_client("luigi", false)
+	await host.await_scene(&"Track", 2.0)
+	await client.await_scene(&"Track", 2.0)
+
+	var own := await client.await_player(&"luigi", 2.0)
+	var mirror := await host.await_player(&"luigi", 2.0)
+	var other_on_client := await client.await_player(&"mario", 2.0)
+	var other_on_host := await host.await_player(&"mario", 2.0)
+	var handle = own.entity.prediction
+	# Read before the silence, which clears the per-field marks the engine
+	# gathered at wire time.
+	var angular_epsilon: float = own.entity.state_binding.epsilon_override_of(
+		&"sphere_angular_velocity",
+	)
+	if angular_epsilon < 0.0:
+		angular_epsilon = handle.divergence_epsilon
+	_silence_triggers(handle)
+	await game.sync_ticks(8)
+	# The wire map rebuilds on any rewire during warmup, so the silence is
+	# re-applied once the link settles.
+	_silence_triggers(handle)
+
+	var clocks: Array[NetwClockInterface] = [
+		host.tree.api.clock,
+		client.tree.api.clock,
+	]
+	var initial_tick_delta := clocks[1].tick - clocks[0].tick
+	var stepper := SCHEDULE_FAULT_STEPPER.new(get_tree(), clocks)
+	var authority_space: RID = mirror.sphere.get_world_3d().space
+	var owner_space: RID = own.sphere.get_world_3d().space
+
+	# Both clocks lose the same frames, so the run ends on matched tick counts
+	# and authority never runs short of input labels.
+	var skipped_ticks := 0
+	if skip_period > 0:
+		var skipped_frame := skip_period
+		while skipped_frame <= frames:
+			stepper.override_step_count(skipped_frame, 0, 0)
+			stepper.override_step_count(skipped_frame, 1, 0)
+			skipped_ticks += 1
+			skipped_frame += skip_period
+
+	# Distance each body covers, so the arm can say whether the space it stopped
+	# actually stopped.
+	var owner_travel := 0.0
+	var authority_travel := 0.0
+	var last_own: Vector3 = own.sphere_position
+	var last_mirror: Vector3 = mirror.sphere_position
+
+	# Whether stopping a space also stops the ray the drive reads its ground from,
+	# and how close the cars come. A lever that blinds the raycast, or a pair that
+	# meets in the broadphase, would both put something other than the
+	# integration count in the result.
+	var ray_hits := { "own_tick": 0, "own_skip": 0, "auth_tick": 0, "auth_skip": 0 }
+	var ray_frames := { "own_tick": 0, "own_skip": 0, "auth_tick": 0, "auth_skip": 0 }
+	var nearest_on_client := INF
+	var nearest_on_host := INF
+
+	var trajectory: Array[float] = []
+	var worst_angular := 0.0
+	var worst_position := 0.0
+	client.simulate_action_press("forward")
+	client.simulate_action_press("right")
+	for frame in range(1, frames + 1):
+		var ticks := skip_period == 0 or frame % skip_period != 0
+		PhysicsServer3D.space_set_active(authority_space, ticks)
+		PhysicsServer3D.space_set_active(owner_space, ticks or not gate_owner)
+		await stepper.sync_frames(1)
+
+		var own_slot: String = "own_tick" if ticks else "own_skip"
+		var auth_slot: String = "auth_tick" if ticks else "auth_skip"
+		ray_frames[own_slot] += 1
+		ray_frames[auth_slot] += 1
+		if own.raycast.is_colliding():
+			ray_hits[own_slot] += 1
+		if mirror.raycast.is_colliding():
+			ray_hits[auth_slot] += 1
+		nearest_on_client = minf(
+			nearest_on_client,
+			own.sphere_position.distance_to(other_on_client.sphere_position),
+		)
+		nearest_on_host = minf(
+			nearest_on_host,
+			mirror.sphere_position.distance_to(other_on_host.sphere_position),
+		)
+
+		owner_travel += last_own.distance_to(own.sphere_position)
+		authority_travel += last_mirror.distance_to(mirror.sphere_position)
+		last_own = own.sphere_position
+		last_mirror = mirror.sphere_position
+
+		if handle.last_compare_staleness != 0:
+			continue
+		var angular: float = handle.last_field_divergence.get(
+			&"sphere_angular_velocity",
+			0.0,
+		)
+		trajectory.append(angular)
+		worst_angular = maxf(worst_angular, angular)
+		worst_position = maxf(
+			worst_position,
+			handle.last_field_divergence.get(&"sphere_position", 0.0),
+		)
+	PhysicsServer3D.space_set_active(authority_space, true)
+	PhysicsServer3D.space_set_active(owner_space, true)
+	client.simulate_action_release("forward")
+	client.simulate_action_release("right")
+
+	var label := "control"
+	if skip_period > 0:
+		label = "gated" if gate_owner else "ungated"
+	var fifth := maxi(1, trajectory.size() / 5)
+	var first_fifth := _mean(trajectory.slice(0, fifth))
+	var last_fifth := _mean(trajectory.slice(trajectory.size() - fifth))
+	print(
+		"[integrate] %-8s skipped=%-4d samples=%-4d travel own=%7.3f auth=%7.3f"
+				% [
+					label,
+					skipped_ticks,
+					trajectory.size(),
+					owner_travel,
+					authority_travel,
+				],
+	)
+	print(
+		"[integrate]   angular first fifth=%7.4f last fifth=%7.4f worst=%7.4f"
+				% [first_fifth, last_fifth, worst_angular],
+	)
+	print(
+		(
+				"[integrate]   ray hit own %d/%d ticked %d/%d skipped |"
+				+ " auth %d/%d ticked %d/%d skipped | nearest car c=%.2f h=%.2f"
+		) % [
+			ray_hits["own_tick"], ray_frames["own_tick"],
+			ray_hits["own_skip"], ray_frames["own_skip"],
+			ray_hits["auth_tick"], ray_frames["auth_tick"],
+			ray_hits["auth_skip"], ray_frames["auth_skip"],
+			nearest_on_client, nearest_on_host,
+		],
+	)
+	_report_trajectory(trajectory)
+	assert_int(clocks[1].tick - clocks[0].tick).override_failure_message(
+		"both clocks must finish on the same tick count, so the arm varies the"
+		+ " integration count alone",
+	).is_equal(initial_tick_delta)
+	return {
+		"samples": trajectory.size(),
+		"worst_angular": worst_angular,
+		"worst_position": worst_position,
+		"first_fifth": first_fifth,
+		"last_fifth": last_fifth,
+		"owner_travel": owner_travel,
+		"authority_travel": authority_travel,
+		"angular_epsilon": angular_epsilon,
+	}
+
+
+# Prints the divergence in fifths so a ramp is legible against a spike without
+# reading the raw samples.
+func _report_trajectory(trajectory: Array[float]) -> void:
+	if trajectory.is_empty():
+		print("[integrate]   trajectory: no matched samples")
+		return
+	var fifth := maxi(1, trajectory.size() / 5)
+	var row := ""
+	for bucket in range(0, trajectory.size(), fifth):
+		row += "%7.4f " % _mean(trajectory.slice(bucket, bucket + fifth))
+	print("[integrate]   trajectory by fifths: %s" % row)
+
+
 func test_reports_input_quantization_delta() -> void:
 	var quantized_runs: Array[float] = []
 	var raw_runs: Array[float] = []

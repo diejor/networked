@@ -53,8 +53,27 @@ func spawn_participant(participant: NetwParticipant) -> void:
 	spawn({
 		peer_id = participant.peer_id,
 		spawn_index = spawn_index,
-		username = participant.username,
+		username = _unique_username(str(participant.username)),
 	})
+
+
+# Duplicate display names would collide as entity ids, and the witness, the
+# island roster, and every id-keyed diagnostic would conflate the cars. A
+# later duplicate gains a join-order suffix instead.
+func _unique_username(username: String) -> String:
+	var parent := get_node_or_null(spawn_path)
+	var taken := { }
+	if parent:
+		for child in parent.get_children():
+			var entity := NetwEntity.of(child)
+			if entity:
+				taken[String(entity.entity_id)] = true
+	var claimed := username
+	var ordinal := 2
+	while taken.has(claimed):
+		claimed = "%s-%d" % [username, ordinal]
+		ordinal += 1
+	return claimed
 
 
 func _spawn_vehicle(data: Dictionary) -> Node:

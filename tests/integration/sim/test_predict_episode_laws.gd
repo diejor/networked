@@ -111,15 +111,27 @@ func test_topology_fingerprint_ignores_peer_local_simulation_modes() -> void:
 	}
 	first.prediction.sim_mode = Handle.SimMode.DISPLAY
 	second.prediction.sim_mode = Handle.SimMode.SPECULATIVE
-	var before := engine._base_topology_fingerprint()
+	var before := engine._base_topology_fingerprint(1)
 
 	engine._handle.sim_mode = Handle.SimMode.DISPLAY
 	first.prediction.sim_mode = Handle.SimMode.AUTHORITATIVE
 	second.prediction.sim_mode = Handle.SimMode.DISPLAY
 
-	assert_int(engine._base_topology_fingerprint()).override_failure_message(
+	assert_int(engine._base_topology_fingerprint(1)).override_failure_message(
 		"topology compares membership, not each peer's local realization",
 	).is_equal(before)
+
+
+# The amount of simulated time a transition bought is an execution fact about
+# that transition, so two peers that spent different amounts of physics on the
+# same transition disagree at the topology boundary rather than exhausting the
+# ladder and reporting that every antecedent agreed.
+func test_topology_fingerprint_separates_transitions_by_their_quantum() -> void:
+	var engine := _engine()
+
+	assert_int(engine._base_topology_fingerprint(2)).override_failure_message(
+		"a transition that spent two physics steps must not fingerprint as one",
+	).is_not_equal(engine._base_topology_fingerprint(1))
 
 
 func test_forensic_mismatch_alone_does_not_open_an_episode() -> void:
@@ -229,7 +241,7 @@ func test_episode_signals_carry_the_same_stable_report() -> void:
 		func(report: Dictionary) -> void: closed.append(report),
 	)
 	_open(engine)
-	for transition in range(1, Engine_.EPISODE_CLOSE_RUN + 1):
+	for transition in range(1, engine._episode_close_run() + 1):
 		engine._record_episode_comparison(transition, 0, true)
 
 	assert_int(opened.size()).is_equal(1)
@@ -255,7 +267,7 @@ func test_an_agreeing_pre_failure_pins_a_secondary_generator() -> void:
 func test_agreement_requires_the_full_distinct_transition_run() -> void:
 	var engine := _engine()
 	_open(engine)
-	var close_run: int = Engine_.EPISODE_CLOSE_RUN
+	var close_run: int = engine._episode_close_run()
 	for transition in range(1, close_run):
 		engine._record_episode_comparison(transition, 0, true)
 		engine._record_episode_comparison(transition, 0, true)
@@ -335,7 +347,7 @@ func test_generator_copy_survives_journal_eviction() -> void:
 func test_a_nearby_new_episode_links_to_the_closed_one() -> void:
 	var engine := _engine()
 	_open(engine)
-	var close_run: int = Engine_.EPISODE_CLOSE_RUN
+	var close_run: int = engine._episode_close_run()
 	for transition in range(1, close_run + 1):
 		engine._record_episode_comparison(transition, 0, true)
 	var closed_id := int(engine.episode()[&"id"])
@@ -378,3 +390,231 @@ func test_malformed_witness_callable_reports_once() -> void:
 		"Prediction witness must return {colliders: Array, sleeping: bool}; "
 		+ "continuous, when present, must be a Dictionary.",
 	)
+
+
+# An episode has no bound on how long it may stay open, so its evidence must not
+# grow with session length. The trim keeps the newest entries and reports how
+# many it elided, which is what separates a truncated series from a short one.
+func test_evidence_series_stay_bounded_and_count_what_they_drop() -> void:
+	var engine := _engine()
+	_open(engine)
+	var limit: int = Engine_.EPISODE_EVIDENCE_LIMIT
+	var extra := 50
+	for transition in range(1, limit + extra):
+		engine._record_episode_comparison(transition, 4, false)
+
+	# The opening comparison plus the loop is limit + extra entries seen.
+	var report := engine.episode()
+	assert_int(report[&"comparisons"].size()).is_equal(limit)
+	assert_int(int(report[&"disposition"][&"evidence_dropped"])).is_equal(extra)
+	# The newest survive, so contraction stays judgeable at the frontier.
+	assert_int(int(report[&"comparisons"].back()[&"transition"])) \
+			.is_equal(limit + extra - 1)
+	# The generator predates every trimmed entry and is pinned outside them.
+	assert_int(int(report[&"generator"][&"transition"])).is_equal(0)
+	assert_dict(report[&"generator"][&"row"]).is_not_empty()
+
+
+# Independent failures are pinned row copies and the earliest are the causally
+# interesting ones, so the cap refuses new pins rather than dropping old ones.
+func test_secondary_generators_cap_and_keep_the_earliest() -> void:
+	var engine := _engine()
+	_open(engine)
+	var cap: int = Engine_.EPISODE_GENERATOR_LIMIT
+	for transition in range(1, cap + 5):
+		_append_row(engine, transition, Attribution.CLOSURE)
+		engine._record_episode_divergence(transition)
+
+	var report := engine.episode()
+	assert_int(report[&"secondary_generators"].size()).is_equal(cap)
+	assert_int(int(report[&"secondary_generators"][0][&"transition"])) \
+			.is_equal(1)
+	assert_int(int(report[&"disposition"][&"evidence_dropped"])).is_equal(4)
+
+
+# One projection serves the detached report and the per-frame digest, so a
+# reader that takes the cheap path can never see a different disposition.
+func test_the_digest_reports_the_disposition_without_the_evidence() -> void:
+	var engine := _engine()
+	_open(engine)
+	engine._record_episode_write(1, Operator.REBASE_EXACT, 0, 99, &"body")
+	for transition in range(1, 9):
+		engine._record_episode_comparison(transition, 3, false)
+
+	var report := engine.episode()
+	var digest := engine._handle.episode_digest()
+	assert_dict(digest[&"disposition"]).is_equal(report[&"disposition"])
+	assert_int(int(digest[&"id"])).is_equal(int(report[&"id"]))
+	assert_int(int(digest[&"generator"][&"transition"])) \
+			.is_equal(int(report[&"generator"][&"transition"]))
+	assert_int(int(digest[&"last_meter"])).is_equal(3)
+	assert_int(int(digest[&"evidence"][&"comparisons"])) \
+			.is_equal(report[&"comparisons"].size())
+	assert_int(int(digest[&"last_operator"][&"operator"])) \
+			.is_equal(Operator.REBASE_EXACT)
+	# It carries no series at all, which is the whole point of it.
+	assert_bool(digest.has(&"comparisons")).is_false()
+	assert_bool(digest.has(&"contraction")).is_false()
+
+
+# The revision is what lets a recorder detect a change without detaching or
+# serializing the record.
+func test_the_digest_revision_moves_only_on_evidence_mutation() -> void:
+	var engine := _engine()
+	_open(engine)
+	var first := int(engine._handle.episode_digest()[&"revision"])
+	assert_int(int(engine._handle.episode_digest()[&"revision"])) \
+			.is_equal(first)
+	engine._record_episode_comparison(1, 2, false)
+	assert_int(int(engine._handle.episode_digest()[&"revision"])) \
+			.is_greater(first)
+
+
+# The handle adopts the engine's record instead of copying it on every mutation,
+# so the public read is the one place a copy still has to happen.
+func test_a_detached_report_survives_later_evidence() -> void:
+	var engine := _engine()
+	_open(engine)
+	var report := engine.episode()
+	var before: int = report[&"comparisons"].size()
+	engine._record_episode_comparison(1, 2, false)
+
+	assert_int(report[&"comparisons"].size()).is_equal(before)
+	assert_int(engine.episode()[&"comparisons"].size()).is_equal(before + 1)
+
+
+# A transition is a fixed quantum of simulated time. The physics server runs one
+# step per frame while the drive runs on its own cadence, so the count of steps
+# between two consecutive drives is the local evidence that the two agree, and
+# it is the one divergence cause a peer can detect without a peer.
+func test_the_quantum_counts_physics_steps_between_drives() -> void:
+	var engine := _engine()
+	engine._declared_quantum_value = 1
+
+	# A first drive has nothing to measure against and reports the declaration,
+	# because a peer-local start must never read as a cross-peer mismatch.
+	engine._frame_index = 10
+	assert_int(engine._measure_quantum()).is_equal(1)
+
+	# One drive per physics frame is the declared quantum.
+	engine._frame_index = 11
+	assert_int(engine._measure_quantum()).is_equal(1)
+
+	# A frame that ran no drive is charged to the transition that follows it.
+	engine._frame_index = 13
+	assert_int(engine._measure_quantum()).is_equal(2)
+
+	# Two drives inside one frame share one integration, the same fault seen
+	# from the other side.
+	assert_int(engine._measure_quantum()).is_equal(0)
+
+
+# A rewire is peer-local, so the gap it opens must not be charged to the first
+# transition after it.
+func test_a_rewire_re_anchors_the_quantum_on_the_declaration() -> void:
+	var engine := _engine()
+	engine._declared_quantum_value = 2
+	engine._frame_index = 100
+	engine._measure_quantum()
+	engine._last_drive_frame = -1
+	engine._frame_index = 400
+
+	assert_int(engine._measure_quantum()).is_equal(2)
+
+
+# A stall must not hand the topology fingerprint a fresh value for every frame
+# it lost, since one saturated count already says the transition is unusable.
+func test_the_quantum_saturates_rather_than_counting_a_stall() -> void:
+	var engine := _engine()
+	engine._frame_index = 1
+	engine._measure_quantum()
+	engine._frame_index = 5000
+
+	assert_int(engine._measure_quantum()) \
+			.is_equal(Engine_.QUANTUM_STEPS_MAX)
+
+
+# An engine driven with no interface pump has no frames to count, so it reports
+# the declaration rather than manufacturing a fault out of its own absence.
+func test_an_unpumped_engine_reports_the_declared_quantum() -> void:
+	var engine := _engine()
+	engine._declared_quantum_value = 3
+
+	assert_int(engine._measure_quantum()).is_equal(3)
+	assert_int(engine._measure_quantum()).is_equal(3)
+
+
+# The closure run scales with the horizon this session carries, because that is
+# what a closure has to survive. Pinned to the wire redundancy constant instead,
+# a run of 64 exact agreements needs (1-p)^64, which is a coin flip at a one
+# percent disagreement rate and unreachable at five.
+func test_the_closure_run_scales_with_the_acknowledgement_age() -> void:
+	var engine := _engine()
+
+	engine._handle.ack_age_ticks = 0
+	assert_int(engine._episode_close_run()).override_failure_message(
+		"a run still has to be a run, however short the horizon",
+	).is_equal(Engine_.EPISODE_CLOSE_RUN_MIN)
+
+	engine._handle.ack_age_ticks = 12
+	assert_int(engine._episode_close_run()).is_equal(24)
+
+	engine._handle.ack_age_ticks = 4096
+	assert_int(engine._episode_close_run()).override_failure_message(
+		"the run must stay inside the evidence the wire actually retains",
+	).is_equal(Engine_.EPISODE_CLOSE_RUN)
+
+
+# Doubling a quarantine hold is sound against a transient of unknown duration
+# and pure cost against a standing one, because the wait buys nothing and the
+# window it opens is where an unsupervised prediction drifts far enough that its
+# repair reads as a teleport.
+func test_a_standing_boundary_does_not_lengthen_the_next_hold() -> void:
+	var handle := Handle.new()
+	var base := Engine_.RESUME_RUN_MIN
+	var cap := Engine_.QUARANTINE_RUN_CAP
+
+	# A fallback, then a reopen against a different boundary: transient, priced.
+	handle._open_episode_identity(0, Engine_.EPISODE_FLAP_WINDOW, Attribution.CONTACT)
+	handle._store_episode_closure(
+		{ &"id": 1, &"state": EpisodeState.FALLBACK },
+		0,
+	)
+	handle._open_episode_identity(1, Engine_.EPISODE_FLAP_WINDOW, Attribution.COMMAND)
+	var transient := handle._quarantine_target(base, cap)
+
+	# The same fallback, reopened against the boundary that already failed.
+	handle._store_episode_closure(
+		{ &"id": 2, &"state": EpisodeState.FALLBACK },
+		1,
+	)
+	handle._open_episode_identity(2, Engine_.EPISODE_FLAP_WINDOW, Attribution.COMMAND)
+	var standing := handle._quarantine_target(base, cap)
+
+	assert_int(transient).override_failure_message(
+		"a transient reopen must still be priced, or the guard is inert",
+	).is_greater(base)
+	assert_int(standing).override_failure_message(
+		"a reopen against the boundary that already failed must not buy a "
+		+ "longer wait, because waiting is not what fixes it",
+	).is_equal(transient)
+
+
+# A transition that spent the wrong amount of physics is standing by
+# construction: no length of wait changes how much simulated time a frame buys.
+func test_a_topology_boundary_never_lengthens_a_hold() -> void:
+	var handle := Handle.new()
+	var base := Engine_.RESUME_RUN_MIN
+	var cap := Engine_.QUARANTINE_RUN_CAP
+
+	handle._open_episode_identity(0, Engine_.EPISODE_FLAP_WINDOW, Attribution.CONTACT)
+	handle._store_episode_closure(
+		{ &"id": 1, &"state": EpisodeState.FALLBACK },
+		0,
+	)
+	handle._open_episode_identity(1, Engine_.EPISODE_FLAP_WINDOW, Attribution.TOPOLOGY)
+
+	assert_int(handle._quarantine_target(base, cap)).override_failure_message(
+		"a quantum mismatch is standing, so a longer quarantine only grows the "
+		+ "unsupervised window",
+	).is_equal(base)

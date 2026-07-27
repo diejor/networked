@@ -763,9 +763,17 @@ func _send_standalone_ack(peer_id: int, ack: int) -> void:
 	inner.send_bytes(framed, peer_id, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE)
 
 
-# Clock tick callback that pumps registered senders.
+# Clock tick callback that pumps registered senders, then services the transport
+# so the tick's own frames leave with it and everything queued since the last
+# tick arrives before the drives that read it.
+#
+# The order is load-bearing and is why this rides the tick rather than the frame
+# boundary: the aggregation flush stamps a datagram's sequence and the standalone
+# echo answers the freshest inbound one, so servicing before that pass would
+# promote a masked baseline against a sequence the tick had not yet authored.
 func _on_clock_tick(_delta: float, tick: int) -> void:
 	replication.on_clock_tick(tick)
+	poll_transport()
 
 
 # The tick a received payload is stamped with: the session tick when the clock
@@ -1333,21 +1341,49 @@ func notify_shutdown(reason: String = "") -> void:
 
 #endregion
 
-func _poll() -> Error:
+## Services the transport and the lifecycle sweeps that ride with it.
+##
+## A datagram is only sent or received here, so whatever drives this call decides
+## how often a peer's simulation can see the network. Engine polling alone drives
+## it once per rendered frame, which makes a peer's framerate govern its
+## neighbour's input arrival: commands pile up and land in clumps, and a clumped
+## arrival reaches a solver body as a transition that spent the wrong amount of
+## physics rather than as latency.
+##
+## So the transport is also serviced once per tick of
+## [member NetwMultiplayer.clock], which gives the guarantee this needs:
+## [b]at least once per simulated tick[/b]. Servicing a peer more often than that
+## is harmless and only lowers latency, so the engine poll keeps its call and a
+## session with no clock is unaffected.
+## [codeblock]
+## before_tick_loop   record the frame that closed
+##   on_tick          tick_step
+##   after_tick       flush this tick's frames, then poll_transport()
+## after_tick_loop    drive and consume, against a queue the tick just filled
+## [/codeblock]
+## Safe to call again from game code that wants the newest inbound state before
+## it runs.
+func poll_transport() -> Error:
 	var err := inner.poll()
-	clock.poll_step()
 	liveness.poll()
+	rpc_interface.sweep_deferred_calls()
+	rpc_interface.sweep_transactions(_receive_tick())
+	return err
+
+
+func _poll() -> Error:
+	var err := poll_transport()
+	clock.mark_poll()
+	clock.poll_step()
 	_frame_counter += 1
 	replication.on_poll()
-	# The poll runs once per idle frame, so the wall-clock gap since the last
-	# poll is that frame's delta, which drives display smoothing.
+	# The rest is display only. This runs once per idle frame, so the wall-clock
+	# gap since the last one is that frame's delta.
 	var now_usec := Time.get_ticks_usec()
 	var frame_delta := float(now_usec - _last_poll_usec) / 1_000_000.0 \
 	if _last_poll_usec > 0 else 0.0
 	_last_poll_usec = now_usec
 	interpolation.pump(frame_delta)
-	rpc_interface.sweep_deferred_calls()
-	rpc_interface.sweep_transactions(_receive_tick())
 	return err
 
 
@@ -1419,6 +1455,7 @@ func _object_configuration_remove(object: Object, configuration: Variant) -> Err
 		return OK
 	if configuration is NetwLagCompensationConfig:
 		lag_compensation._configured = false
+		lag_compensation._close_tap()
 		return OK
 	if configuration is NetwSessionConfig:
 		session.deconfigure()

@@ -334,8 +334,11 @@ func _ensure_liveness_connection() -> void:
 ## [param tick] is the key in that value's history. The interpolation spec is
 ## resolved from the configuration registry. An unconfigured target is a no-op.
 ## [param tick] is the local receive tick from a property sync feeder. An
-## entity displaying under [constant DisplayRole.PREDICTED] ignores recorded
-## values and follows its locally simulated state instead.
+## entity displaying under [constant DisplayRole.PREDICTED] keeps following
+## its locally simulated state. Values recorded during prediction stay out
+## of the display but keep the history warm, so a demotion to
+## [constant DisplayRole.REMOTE] resumes from authority rows instead of
+## holding the last predicted pose.
 func record(
 		node: Node,
 		target_property: StringName,
@@ -380,12 +383,13 @@ func _record(
 	var runtime := _runtime_for(route, entity)
 	if not runtime:
 		return
-	# A predicted runtime displays the locally simulated body, so network
-	# feeds must not write into the same histories the local sampler fills.
-	# Prediction corrections rewrite the body itself, and the display picks
-	# them up from the local sampling pass.
+	# A bracketed pump fills these histories from the local sampler, so a
+	# network feed must not mix its tick domain into that ring. The chase
+	# pump displays the live body and never samples history, so network rows
+	# recorded during prediction stay display-invisible while keeping the
+	# ring warm for a demote handoff to the remote role.
 	_resolve_role(runtime)
-	if _pump_is_predicted(runtime.pump_mode):
+	if runtime.pump_mode == _PUMP_BRACKETED:
 		return
 	var state := runtime.states_by_key.get(
 		_state_key_for(node, target_property),
@@ -817,6 +821,7 @@ func _index_target(runtime: _Runtime, state: _PropertyState) -> void:
 func _resolve_role(runtime: _Runtime) -> void:
 	var role := _resolve_display_role(runtime)
 	var pump := _pump_for(runtime, role)
+	runtime.role = role
 	if pump == runtime.pump_mode:
 		return
 	var previous_pump := runtime.pump_mode
@@ -824,8 +829,13 @@ func _resolve_role(runtime: _Runtime) -> void:
 
 	# Crossing the predicted boundary switches feeders between local sampling
 	# and network receive, which record in different tick domains. Stale
-	# records from the previous feeder cannot mix with the new one.
-	if _pump_is_predicted(pump) or _pump_is_predicted(previous_pump):
+	# records from the previous feeder cannot mix with the new one. The one
+	# warm handoff is chase to remote: a chase ring holds only network rows
+	# in the remote pump's own tick domain, so a demote keeps them and the
+	# display resumes from authority instead of holding its last write.
+	var warm_handoff := previous_pump == _PUMP_CHASE and pump == _PUMP_REMOTE
+	if not warm_handoff \
+			and (_pump_is_predicted(pump) or _pump_is_predicted(previous_pump)):
 		for state in runtime.states:
 			state.history.clear()
 	# A resolved source change retains the displayed value while the new source
@@ -914,10 +924,17 @@ func _resolve_display_role(runtime: _Runtime) -> DisplayRole:
 					== NetwLagCompensationInterface.PredictionHandle.InputSource.PREDICTED
 	):
 		return DisplayRole.PREDICTED
-	if entity.prediction.is_registered() \
-			and entity.prediction.sim_mode \
-					!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY:
-		return DisplayRole.AUTHORITY
+	if entity.prediction.is_registered():
+		if entity.prediction.sim_mode \
+				!= NetwLagCompensationInterface.PredictionHandle.SimMode.DISPLAY:
+			return DisplayRole.AUTHORITY
+		# A demoted entity has stopped simulating and now consumes the same
+		# replicated stream a remote peer consumes, so it displays as REMOTE
+		# even on the peer holding its authority and control. The local
+		# authority rule below would disable its pump instead, and nothing
+		# else writes the display once the simulation stops.
+		if not _authors_display_streams(runtime):
+			return DisplayRole.REMOTE
 	if owner and owner.is_multiplayer_authority() \
 			and entity.is_controlled_locally:
 		return DisplayRole.DISABLED
@@ -1090,13 +1107,17 @@ func _pump_runtime(
 	# and never scans control, authority, and streams per frame.
 	if runtime.pump_mode == _PUMP_UNRESOLVED:
 		_resolve_role(runtime)
+	# Counted past the disabled return, so a pump that ran reads differently from
+	# one that was entered and declined.
 	match runtime.pump_mode:
 		_PUMP_DISABLED:
 			return
 		_PUMP_CHASE:
+			runtime.pumped += 1
 			stats.runtimes += 1
 			_pump_chase(runtime, timing, stats)
 		_:
+			runtime.pumped += 1
 			stats.runtimes += 1
 			_pump_history(runtime, timing, stats)
 
@@ -1716,6 +1737,44 @@ class Handle:
 			var runtime := _runtime()
 			return runtime.playhead.display_lag if runtime else 0.0
 
+	## The [enum DisplayRole] this entity is displayed by right now, with
+	## [constant DisplayRole.AUTO] already resolved.
+	##
+	## [member display_role] is the request and this is the answer, so a display
+	## that is not behaving is read here rather than by re-deriving the rule.
+	## Reports [constant DisplayRole.AUTO] before the first resolve.
+	var resolved_display_role: DisplayRole:
+		get:
+			var runtime := _runtime()
+			return runtime.role if runtime else DisplayRole.AUTO
+
+	## Diagnostic shape of this entity's channel table: how many channels the pump
+	## iterates, and how many display names more than one of them claims.
+	##
+	## A name two channels claim is served to a reader by whichever was indexed
+	## first while the pump writes them all, so a display that disagrees with what
+	## this interface reports is read here before anything else.
+	func channel_census() -> Dictionary:
+		var runtime := _runtime()
+		if not runtime:
+			return { &"channels": 0, &"ambiguous": 0 }
+		return {
+			&"channels": runtime.states.size(),
+			&"ambiguous": runtime.ambiguous_targets.size(),
+		}
+
+
+	## Read-only count of pump passes this entity's display has taken.
+	##
+	## A display standing still while this stands still is a pump that never ran,
+	## which is a different fault from a pump running and writing the same value.
+	## A role resolved to [constant DisplayRole.DISABLED] writes nothing and is
+	## not counted, so the two faults stay distinguishable here.
+	var pumped_frames: int:
+		get:
+			var runtime := _runtime()
+			return runtime.pumped if runtime else 0
+
 	## Read-only count of consecutive frames starved for fresh snapshots.
 	var starvation_ticks: int:
 		get:
@@ -1739,6 +1798,37 @@ class Handle:
 		var runtime := _runtime()
 		if iface and runtime:
 			iface._reset_runtime(runtime)
+
+
+	## Returns whether [param property]'s channel has parked itself on its newest
+	## value, so the pump is deliberately writing nothing for it.
+	##
+	## A history sleeps once the playhead reaches the newest recorded tick and the
+	## display already shows it. A channel asleep while its source is visibly
+	## moving is the pump declining to write, which is what a pinned display looks
+	## like from here.
+	func is_sleeping(property: StringName) -> bool:
+		var iface := _interface()
+		var runtime := _runtime()
+		if not iface or not runtime:
+			return false
+		var state := iface._named_state(runtime, property)
+		return state.history.is_sleeping if state else false
+
+
+	## Returns the value the pump last wrote for [param property], or
+	## [code]null[/code] when no channel writes that name.
+	##
+	## This is what the pump decided, before whatever the game does with it. A
+	## value here that advances while the visual stands still puts the fault
+	## after the pump; one that stands still too puts it inside.
+	func displayed_value(property: StringName) -> Variant:
+		var iface := _interface()
+		var runtime := _runtime()
+		if not iface or not runtime:
+			return null
+		var state := iface._named_state(runtime, property)
+		return state.last_written if state else null
 
 
 	## Returns the displayed STATE authoring tick, or [code]-1[/code].
@@ -1825,6 +1915,12 @@ class _Runtime:
 	var states_by_target: Dictionary[StringName, _PropertyState] = { }
 	var ambiguous_targets: Dictionary[StringName, bool] = { }
 	var pump_mode: int = _PUMP_UNRESOLVED
+	# The role the pump mode was chosen for. Two roles share the bracketed pump,
+	# so the pump alone cannot answer which one is running.
+	var role: DisplayRole = DisplayRole.AUTO
+	# Pump passes this runtime has actually taken, so a stalled display is told
+	# apart from one the pump is driving to a constant.
+	var pumped := 0
 	var rebuild_queued := false
 	var authoring_binding: NetwSyncSetBinding
 	var trace_frame := 0

@@ -7,7 +7,8 @@
 ## real nodes: global-space writes on a parented visual, a moving parent, channel
 ## inheritance from the body, rigid-body freeze on the remote role, RPC and signal
 ## argument interpolation, quaternion output, snap and reset against the visual,
-## and the local-sampler bracketed feed. It stays deliberately small.
+## the local-sampler bracketed feed, and the predicted-boundary history
+## handoff. It stays deliberately small.
 class_name TestInterpNodeSemantics
 extends NetwTestSuite
 
@@ -188,6 +189,110 @@ func test_display_role_switches_glide_between_remote_and_predicted() -> void:
 		P0,
 		Vector2(0.1, 0.1),
 	)
+
+	# A disabled role writes nothing, so it must not be counted as a pass. A
+	# counter that advanced anyway would read identically to a healthy pump,
+	# and a frozen display would look like one that ran and chose this value.
+	var pumped_predicted := _entity.interpolation.pumped_frames
+	for frame in 10:
+		_render()
+	assert_int(_entity.interpolation.pumped_frames).override_failure_message(
+		"a running pump must count its passes",
+	).is_greater(pumped_predicted)
+
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.DISABLED
+	)
+	_render()
+	var pumped_disabled := _entity.interpolation.pumped_frames
+	for frame in 10:
+		_render()
+	assert_int(_entity.interpolation.pumped_frames).override_failure_message(
+		"a pump that declined every pass must not report having run",
+	).is_equal(pumped_disabled)
+
+
+func test_demote_flip_resumes_from_rows_recorded_while_predicted() -> void:
+	_spawn_predicted()
+	_entity.prediction.teleport_threshold = 250.0
+	_player.position = P0
+	for frame in 30:
+		_render()
+
+	# Authority rows keep arriving during prediction. The chase display must
+	# ignore them, but they must land in history so a demote hands the remote
+	# pump a warm ring even when no row arrives after the flip.
+	_iface.record(_player, &"position", P1, 1)
+	_iface.record(_player, &"position", P2, 2)
+	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	assert_bool(runtime.states[0].history.is_empty()) \
+			.override_failure_message(
+				"network rows must record into history during prediction",
+			).is_false()
+	_render()
+	assert_float(_visual.global_position.distance_to(P0)) \
+			.override_failure_message(
+				"the chase display must keep ignoring network rows",
+			).is_less(0.1)
+
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.REMOTE
+	)
+	_display_at(2, 0, 0.0)
+	assert_float(_visual.global_position.distance_to(P0)) \
+			.override_failure_message(
+				"the first remote frame must retain the prior predicted display",
+			).is_less(0.1)
+	for frame in 90:
+		_render()
+	assert_vector(_visual.global_position).is_equal_approx(
+		P2,
+		Vector2(0.1, 0.1),
+	)
+
+
+func test_demote_flip_seeds_role_offset_on_first_frame() -> void:
+	_spawn_predicted()
+	_player.position = P1
+	for frame in 30:
+		_render()
+
+	_iface.record(_player, &"position", P2, 1)
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.REMOTE
+	)
+	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	var state = runtime.states[0]
+	assert_bool(state.role_offset_pending).is_true()
+
+	_display_at(1, 0, 0.0)
+	assert_bool(state.role_offset_pending) \
+			.override_failure_message(
+				"the role offset must seed on the first frame after a demote",
+			).is_false()
+	assert_that(state.display_offset).is_not_null()
+
+
+func test_promote_flip_still_clears_history() -> void:
+	_spawn_target(true)
+	Netw.configure_property(_player, &"position").interpolate(
+		NetwInterpolate.new().lerp().smooth(0.0).to(&"position"),
+	)
+	_bind_route()
+
+	_iface.record(_player, &"position", P0, 0)
+	_iface.record(_player, &"position", P1, 1)
+	_display_at(1, 1, 0.5)
+
+	_entity.interpolation.display_role = (
+		NetwInterpolationInterface.DisplayRole.PREDICTED
+	)
+	var runtime := _iface._runtime_for_handle(_entity.interpolation)
+	for state in runtime.states:
+		assert_bool(state.history.is_empty()) \
+				.override_failure_message(
+					"a promote to predicted must clear the remote tick domain",
+				).is_true()
 
 
 func test_remote_rigidbody_freezes_and_restores_from_handle_role() -> void:

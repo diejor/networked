@@ -19,6 +19,7 @@ class TapHandle:
 
 	var tap_journal: NetwPredictJournal
 	var tap_episode: Dictionary = { }
+	var tap_revision: int = 0
 
 
 	func _init(value: NetwPredictJournal) -> void:
@@ -35,6 +36,17 @@ class TapHandle:
 
 	func episode() -> Dictionary:
 		return tap_episode.duplicate(true)
+
+
+	# The tap reads the digest to decide whether anything changed and detaches
+	# the report only when it says yes, so the stub owes both.
+	func episode_digest() -> Dictionary:
+		if tap_episode.is_empty():
+			return { }
+		return {
+			&"id": int(tap_episode.get(&"id", 0)),
+			&"revision": tap_revision,
+		}
 
 
 func _configure_frame(predicted: PredictedEntity) -> void:

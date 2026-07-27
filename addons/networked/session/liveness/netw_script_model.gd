@@ -1755,14 +1755,32 @@ class _ScriptCache:
 		return types
 
 
+	# Orders names by their text, and the reason it cannot just sort the names
+	# it is given: sorting an array of StringName compares interning pointers,
+	# not characters, so the order depends on which names a process happened to
+	# intern first. An id minted from that order names one member on the peer
+	# that sent it and a different member on the peer that reads it, silently,
+	# because both peers hold the same set of names and only disagree on their
+	# order. The [NetwEntity] component divergence hash sorts the same names as
+	# String, so text order is also the order that hash already agrees on.
+	static func _ordered_by_text(names: PackedStringArray) -> Array:
+		names.sort()
+		var out: Array = []
+		for n in names:
+			out.append(StringName(n))
+		return out
+
+
 	# Sorted @rpc method names, the source of 1-byte method ids.
 	func sorted_methods() -> Array:
 		if _sorted_methods_done:
 			return _sorted_methods
 		_sorted_methods_done = true
+		var names := PackedStringArray()
 		for m in rpc_config:
-			_sorted_methods.append(StringName(m))
-		_sorted_methods.sort()
+			if not names.has(String(m)):
+				names.append(String(m))
+		_sorted_methods = _ordered_by_text(names)
 		return _sorted_methods
 
 
@@ -1772,15 +1790,16 @@ class _ScriptCache:
 		if _sorted_props_done:
 			return _sorted_props
 		_sorted_props_done = true
+		var names := PackedStringArray()
 		var s := _script
 		while s != null:
 			for p in s.get_script_property_list():
 				if int(p.get("usage", 0)) & PROPERTY_USAGE_SCRIPT_VARIABLE:
-					var n: StringName = p["name"]
-					if not _sorted_props.has(n):
-						_sorted_props.append(n)
+					var n := String(p["name"])
+					if not names.has(n):
+						names.append(n)
 			s = s.get_base_script()
-		_sorted_props.sort()
+		_sorted_props = _ordered_by_text(names)
 		return _sorted_props
 
 
@@ -1789,12 +1808,13 @@ class _ScriptCache:
 		if _sorted_signals_done:
 			return _sorted_signals
 		_sorted_signals_done = true
+		var names := PackedStringArray()
 		var s := _script
 		while s != null:
 			for sig in s.get_script_signal_list():
-				var n: StringName = sig["name"]
-				if not _sorted_signals.has(n):
-					_sorted_signals.append(n)
+				var n := String(sig["name"])
+				if not names.has(n):
+					names.append(n)
 			s = s.get_base_script()
-		_sorted_signals.sort()
+		_sorted_signals = _ordered_by_text(names)
 		return _sorted_signals

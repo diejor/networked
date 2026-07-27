@@ -17,7 +17,7 @@ func before_test() -> void:
 	await game.setup()
 
 
-func _setup_drive(turning: bool = false) -> Array:
+func _setup_drive(turning: bool = false, observe: bool = true) -> Array:
 	var host := await game.add_host("mario", false)
 	var client := await game.add_client("luigi", false)
 	await host.await_scene(&"Track", 2.0)
@@ -28,7 +28,8 @@ func _setup_drive(turning: bool = false) -> Array:
 	var host_authority := await host.await_player(&"mario", 2.0)
 	for car in [own, authority, host_car, host_authority]:
 		car.sphere.collision_mask = 1
-	own.entity.prediction.recovery_policy = Handle.RecoveryPolicy.OBSERVE
+	if observe:
+		own.entity.prediction.recovery_policy = Handle.RecoveryPolicy.OBSERVE
 	await game.sync_ticks(16)
 	client.simulate_action_press("forward")
 	if turning:
@@ -286,3 +287,113 @@ func test_body_motion_query_distinguishes_clear_and_blocked_corridors() -> void:
 	print("[b5:corridor] clear=%s blocked=%s" % [clear_hit, blocked_hit])
 	assert_bool(clear_hit).is_false()
 	assert_bool(blocked_hit).is_true()
+
+
+# --- the solver's own reproducibility floor ---
+
+# Drives with corrections declined and reports where the aligned divergence
+# settles, which is the floor every epsilon on this body has to clear.
+#
+# [member NetwLagCompensationInterface.PredictionHandle.last_field_divergence] is
+# the engine's own comparison at the acknowledged transition, so it is aligned
+# rather than a difference between two peers standing at different ticks. The
+# recovery policy is [constant Handle.RecoveryPolicy.OBSERVE], so the ladder
+# writes nothing and what is left is what the two simulations produce on their
+# own.
+func _floor_run(turning: bool, ticks: int, observe: bool = true) -> Dictionary:
+	var parts := await _setup_drive(turning, observe)
+	var own: Node = parts[1]
+	var handle = own.entity.prediction
+	var angular: Array[float] = []
+	var linear: Array[float] = []
+	var pose: Array[float] = []
+	var seen := -1
+	for _i in ticks:
+		await game.sync_ticks(1)
+		var ran: int = handle.comparisons_ran
+		if ran == seen:
+			continue
+		seen = ran
+		var d: Dictionary = handle.last_field_divergence
+		if d.is_empty():
+			continue
+		angular.append(float(d.get(&"sphere_angular_velocity", 0.0)))
+		linear.append(float(d.get(&"sphere_linear_velocity", 0.0)))
+		pose.append(float(d.get(&"sphere_position", 0.0)))
+	return {
+		&"angular": angular,
+		&"linear": linear,
+		&"pose": pose,
+		&"corrections": int(handle.corrections),
+	}
+
+
+func _percentiles(values: Array[float]) -> Dictionary:
+	if values.is_empty():
+		return { &"n": 0 }
+	var sorted := values.duplicate()
+	sorted.sort()
+	var total := 0.0
+	for v: float in sorted:
+		total += v
+	return {
+		&"n": sorted.size(),
+		&"mean": total / float(sorted.size()),
+		&"p50": sorted[int(sorted.size() * 0.50)],
+		&"p90": sorted[mini(sorted.size() - 1, int(sorted.size() * 0.90))],
+		&"max": sorted[sorted.size() - 1],
+	}
+
+
+func _report_floor(label: String, run: Dictionary) -> void:
+	print("[floor] %s  corrections=%d" % [label, int(run[&"corrections"])])
+	for key: StringName in [&"angular", &"linear", &"pose"]:
+		var p := _percentiles(run[key] as Array[float])
+		if int(p[&"n"]) == 0:
+			print("[floor]   %-8s no samples" % key)
+			continue
+		print("[floor]   %-8s n=%-4d mean=%.4f p50=%.4f p90=%.4f max=%.4f" % [
+			key,
+			int(p[&"n"]),
+			float(p[&"mean"]),
+			float(p[&"p50"]),
+			float(p[&"p90"]),
+			float(p[&"max"]),
+		])
+
+
+# Straight-line driving. Every script-integrated field held exactly zero here in
+# a rendered capture, so whatever the solver fields show is the solver's own.
+func test_reports_the_solver_floor_driving_straight() -> void:
+	var run := await _floor_run(false, 90)
+	_report_floor("straight", run)
+	assert_int(int((run[&"angular"] as Array).size())).override_failure_message(
+		"the arm compared nothing, so it measures no floor",
+	).is_greater(0)
+	assert_int(int(run[&"corrections"])).override_failure_message(
+		"an observing entity must write nothing, or the ladder is still in the "
+		+ "loop and this is not a floor",
+	).is_equal(0)
+
+
+# The same body under steering, which is the regime a lap spends its time in and
+# the one every earlier straight-line capture never entered.
+func test_reports_the_solver_floor_under_steering() -> void:
+	var run := await _floor_run(true, 90)
+	_report_floor("steering", run)
+	assert_int(int((run[&"angular"] as Array).size())).override_failure_message(
+		"the arm compared nothing, so it measures no floor",
+	).is_greater(0)
+	assert_int(int(run[&"corrections"])).is_equal(0)
+
+
+# The same drive with the recovery ladder back in the loop, and nothing else
+# changed. Delivery in this rig is lockstep, so there is no arrival jitter and no
+# quantum fault to charge: whatever separates this arm from the observing one is
+# what the recoveries themselves put there.
+func test_reports_the_floor_with_the_ladder_in_the_loop() -> void:
+	var run := await _floor_run(true, 90, false)
+	_report_floor("steering+ladder", run)
+	assert_int(int((run[&"angular"] as Array).size())).override_failure_message(
+		"the arm compared nothing, so it measures nothing",
+	).is_greater(0)

@@ -570,6 +570,31 @@ func on_clock_tick(tick: int) -> void:
 		api.flush_standalone_acks()
 
 
+## Flushes the per-peer aggregation buffers again once the physics frame's own
+## producers have run, so a frame's frames leave in the frame that wrote them.
+##
+## [method on_clock_tick] flushes what a tick produced, from inside the tick
+## loop. A [constant NetwLagCompensationInterface.PredictionHandle.Schedule.FRAME]
+## entity drives after that loop closes, so its owner-lane frames are buffered
+## behind a flush that has already run. Without this the wait is not even
+## constant: a frame that emits no tick runs no flush at all, so its commands
+## leave paired with the next tick's and authority receives two transitions where
+## it can only spend one physics step on them.
+## [codeblock]
+## before_tick_loop   frame opens
+##   on_tick          property pump buffers this tick's frames
+##   after_tick       on_clock_tick   ──> flush
+## after_tick_loop    FRAME entities drive, buffering owner-lane frames
+##                    on_frame_end    ──> flush, or they wait for the next tick
+## [/codeblock]
+## Batching is unaffected. The buffer a peer fills at tick cadence and the one it
+## fills at frame cadence belong to different roles — only a predicting owner
+## writes owner-lane frames — so on any one peer the second flush finds an empty
+## buffer and sends nothing.
+func on_frame_end() -> void:
+	flush_all_buffers()
+
+
 ## Pumps the consumed synchronizers once per [method MultiplayerAPI.poll] when
 ## no [MultiplayerClock] is configured, the native per-network-process cadence
 ## a stock project with zero Networked nodes runs at. With a clock configured

@@ -37,10 +37,8 @@ const OWN_CHASE_SMOOTH := 0.005
 # Capture-only switch that reproduces the pre-L1 schedule and drive feed.
 const LEGACY_CAPTURE_VAR := "NETW_RACING_LEGACY_MODEL"
 
-# Read-only solver contact sampler attached only for an armed netlog.
-const CONTACT_PROBE := preload(
-	"res://examples/racing/scripts/vehicle_contact_probe.gd"
-)
+# Capture-only switch that arms the interpolation pump's per-frame trace.
+const INTERP_TRACE_VAR := "NETW_RACING_INTERP_TRACE"
 
 # Nodes
 
@@ -168,31 +166,48 @@ func _init() -> void:
 	# shortest arc instead of rewinding the turn in progress. The scalar
 	# cosmetics replicate raw: a remote reads them straight for effects, so
 	# they never need a smoothed display copy.
+	# The epsilon is in radians, the only scale this field has: the entity
+	# default is metres and decides nothing about an angle. Heading is also the
+	# one causal field here that integrates with no rate answering for it, so
+	# leaving it unscaled kept the direction the drive pushes along out of the
+	# convergence measure entirely, free to accumulate until the propulsion
+	# turned it into a momentum fork that some other field crossed for.
 	Netw.configure_property(self, &"heading").state().masked().causal() \
-			.reconcile_only() \
-			.quantize(NetwQuantizeAngle.new().bits(16)) \
+			.reconcile_only().epsilon(0.05) \
+			.quantize(NetwQuantizeAngle.new().bits(16).centered()) \
 			.on_spawn() \
 			.interpolate(
 				NetwInterpolate.new().angle().smooth(DISPLAY_SMOOTH) \
 						.project_by(&"angular_speed").to(&"display_heading"),
 			)
-	# linear_speed and angular_speed carry their own previous value into the next
-	# step and propulsion reads them, so a recovery that skipped them would rebase
-	# the pose and then drive away from it again. acceleration and colliding are
-	# recomputed each step, from linear_speed and from the raycast, so restoring
-	# them writes values the next step overwrites. None of the scalars triggers a
-	# correction on its own, so their quantized drift never teleports the pose.
+	# linear_speed and angular_speed are first-order filters closing on a target
+	# both peers compute from the same command, so a divergence between them
+	# shrinks on its own inside the filter's own time constant. They are withheld
+	# from a sub-teleport restore for the same reason the solver velocities are:
+	# a recovery stages authority's value at the acknowledged transition, which is
+	# older than the one they already hold, and while the filter is still moving
+	# that older value sits further from the truth than the error it would have
+	# replaced. Restoring them below the teleport tier therefore writes a worse
+	# number than leaving them alone, and above it the whole closure is restored
+	# because a body that far out holds nothing worth keeping. acceleration and
+	# colliding are recomputed each step, from linear_speed and from the raycast,
+	# so restoring them writes values the next step overwrites. None of the
+	# scalars triggers a correction on its own, so their drift never teleports
+	# the pose.
 	Netw.configure_property(self, &"linear_speed").state().masked().causal() \
-			.reconcile_only().epsilon(0.1) \
+			.reconcile_only().teleport_only().epsilon(0.1) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-4.0, 4.0))
 	Netw.configure_property(self, &"angular_speed").state().masked().causal() \
-			.reconcile_only().epsilon(0.2) \
+			.reconcile_only().teleport_only().epsilon(0.2) \
 			.quantize(NetwQuantizeBits.new().bits(16).limits(-16.0, 16.0))
 	# The steering-sign latch is state the next step reads, so a recovery must
-	# restore it and a replay must not re-derive it from a diverging speed.
+	# restore it and a replay must not re-derive it from a diverging speed. It
+	# only ever holds -1, 0 or +1, which is exactly the three levels two bits
+	# spans, so quantizing it is lossless and gives the field a canonical form
+	# the fingerprint can compare instead of raw float bits.
 	Netw.configure_property(self, &"steer_direction").state().masked().causal() \
 			.epsilon(0.0) \
-			.quantize(NetwQuantizeBits.new().bits(4).limits(-1.0, 1.0))
+			.quantize(NetwQuantizeBits.new().bits(2).limits(-1.0, 1.0))
 	Netw.configure_property(self, &"acceleration").state().masked().derived() \
 			.reconcile_only()
 	Netw.configure_property(self, &"colliding").state().masked().derived() \
@@ -215,6 +230,10 @@ func _ready() -> void:
 		# between corrections.
 		handle.predicted_mode = NetwInterpolationInterface.PredictedMode.CHASE
 		handle.predicted_smooth_time = OWN_CHASE_SMOOTH
+		# Arms the display pump's own per-frame trace, for diagnosing a visual
+		# that sits away from the body it is supposed to follow.
+		if not OS.get_environment(INTERP_TRACE_VAR).is_empty():
+			handle.trace_interval = 20
 	if entity:
 		# The car's SOLVER_BODY archetype is declared on the scene's
 		# PredictionComponent, which bundles the frame cadence, the
@@ -228,6 +247,9 @@ func _ready() -> void:
 		entity.prediction.sensors().sample(&"ground", _sample_ground)
 		entity.prediction.witness().contacts(_sample_contacts)
 		entity.prediction.transport().corridor(_transport_corridor_clear)
+		# The island is declared once, on the track scene, and every car inherits
+		# it. Declaring one here instead would opt this car out of the scene rule
+		# rather than refine it, and the rule carries the opt-in promotion.
 		# The legacy capture reproduces the pre-L1 per-tick schedule.
 		if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
 			entity.prediction.schedule().tick()
@@ -487,7 +509,7 @@ func _start_net_log() -> void:
 	if not clock:
 		return
 	if sphere.get_script() == null:
-		sphere.set_script(CONTACT_PROBE)
+		sphere.set_script(VehicleContactProbe)
 		sphere.max_contacts_reported = maxi(sphere.max_contacts_reported, 16)
 	_net_log = RacingNetLog.new()
 	_net_log.name = "NetLog"

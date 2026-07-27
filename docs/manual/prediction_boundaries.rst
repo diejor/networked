@@ -84,6 +84,49 @@ limit while it continues sampling input and resending the outstanding command
 window. Read ``ack_age_max``, ``ack_age_ticks``, ``authoring_clamped``, and
 ``speculation_held`` from ``prediction.stats()`` when diagnosing this state.
 
+How much time a transition is worth
+-----------------------------------
+
+A transition is also a fixed amount of simulated time, and that is the one
+antecedent no column above can record, because it is the width of the
+transition rather than anything inside it. Two peers only mean the same thing
+by a transition when they advance the world by the same amount inside it.
+
+For a body the game integrates this is exact by construction: one drive, one
+transition, nothing to arm. For a body the physics server integrates it is not.
+The server steps once per frame on its own cadence, and a client whose clock is
+throttled to track a slower host keeps rendering and stepping at its own rate,
+so every frame that emits no tick advances the world by an amount no transition
+claims. The error is continuous, it compounds, and every compared column stays
+equal while it happens.
+
+Declaring ``Archetype.SOLVER_BODY`` arms a simulation gate for that body's
+world. A frame that emits no tick then runs no solve and opens no transition.
+Commands keep flowing on a held frame, because holding simulated time must
+never hold input.
+
+The cost is worth stating. A peer can only hold frames it has to spare, so a
+peer whose physics cannot sustain ``tickrate`` times ``physics_steps_per_tick``
+steps per wall second cannot hold anything and falls behind the authority it
+tracks; ``simulation_behind_count`` on the clock reports it. Running behind a
+host that is itself below its frame budget means a session in slow motion,
+which is what a single machine already does under load. The gate makes that
+consistent between peers rather than letting the client race ahead and fork.
+
+``physics_ticks_per_second`` must be a whole multiple of ``tickrate`` for a
+solver body. One step cannot be split, so a fractional ratio alternates on a
+phase each peer keeps privately and no other declaration repairs it. Networked
+reports that configuration against the entity that drives under it.
+
+Read ``quantum_steps``, ``quantum_declared``, and ``quantum_faults`` from
+``prediction.stats()``. A nonzero fault count is the one divergence cause a
+peer detects alone, before any comparison disagrees, and a cross-peer mismatch
+is charged to ``TOPOLOGY`` rather than exhausting the attribution ladder.
+
+This couples the meaning of a tick and nothing else. Deterministic lockstep
+couples the players' commands and costs a round trip of input latency before
+anything moves. Commands here stay speculative and stay substitutable.
+
 Choose the smallest sufficient rung
 -----------------------------------
 

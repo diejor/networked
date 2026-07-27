@@ -1,14 +1,23 @@
 ## Laws of the canonical domain: what
-## [method NetwSyncSetBinding.canonicalize_payload] records and what
-## [method NetwSyncSetBinding.canonical_bytes] hashes.
+## [method NetwSyncSetBinding.canonicalize_payload] records, what
+## [method NetwSyncSetBinding.canonical_bytes] hashes, and which fields a state
+## fingerprint is taken over.
 ##
 ## A prediction and the authority state that acknowledges it are only comparable
 ## exactly when both were recorded in the form the wire can carry. These cases
 ## pin that the recorded value is the quantizer round trip, that the bytes are
 ## stable and order-faithful, and that a one-quantum difference is visible to
 ## [method NetwPredictJournal.fnv1a] rather than absorbed.
+##
+## The last group pins the scope. A comparison is entitled to judge the fields
+## the recurrence reads and no others, so a
+## [constant NetwSyncSet.PropertyClass.DERIVED] or
+## [constant NetwSyncSet.PropertyClass.COSMETIC] field must not be able to
+## decide whether two peers reproduced a transition.
 class_name TestCanonicalRecording
 extends NetwTestSuite
+
+const Engine_ := NetwLagCompensationInterface._PredictionEngine
 
 class CanonicalProbe:
 	extends Node2D
@@ -179,3 +188,157 @@ func test_field_order_is_the_set_order_not_the_payload_order() -> void:
 	assert_array(binding.canonical_bytes(reordered)).override_failure_message(
 		"the same values must hash the same however the payload was built",
 	).is_equal(binding.canonical_bytes(payload))
+
+
+# --- the scope of a state fingerprint ---
+
+
+# A set whose pose is causal, whose heading is derived, and whose tag is
+# cosmetic. The two non-causal fields carry no quantizer, which is exactly the
+# shape that makes their raw bits reach a fingerprint.
+func _mixed_class_set() -> NetwSyncSet:
+	var set := NetwSyncSet.new()
+	var pose := NetwSyncSet.Field.new(&"pose")
+	pose.quantizer = NetwQuantizeFixed.new().step(STEP).limits(-64.0, 64.0)
+	pose.property_class = NetwSyncSet.PropertyClass.CAUSAL
+	var heading := NetwSyncSet.Field.new(&"heading")
+	heading.property_class = NetwSyncSet.PropertyClass.DERIVED
+	var tag := NetwSyncSet.Field.new(&"tag")
+	tag.property_class = NetwSyncSet.PropertyClass.COSMETIC
+	set.fields.append(pose)
+	set.fields.append(heading)
+	set.fields.append(tag)
+	return set
+
+
+# An engine wired to nothing but a binding and the two field maps a fingerprint
+# reads. Nothing else in the kernel participates in the scope decision, so a
+# whole loopback would only make the law harder to read.
+func _fingerprinting_engine(binding: NetwSyncSetBinding) -> Engine_:
+	var engine := Engine_.new()
+	engine._state_binding = binding
+	engine._causal_fields = { &"pose": true }
+	engine._state_family_of = {
+		&"pose": Engine_.STATE_FAMILY_POSE,
+		&"heading": Engine_.STATE_FAMILY_CONTROLLER,
+		&"tag": Engine_.STATE_FAMILY_CONTROLLER,
+	}
+	return engine
+
+
+# The decisive law. A derived float is recomputed by the body from causal ones,
+# so two peers reach it from raw values that differ below the causal grid and it
+# can never agree by luck. If it reaches the fingerprint, bit-equality is
+# unreachable however well the causal fields are sized.
+func test_a_derived_field_cannot_decide_the_state_fingerprint() -> void:
+	var node := _probe()
+	var binding := NetwSyncSetBinding.new(_mixed_class_set(), node)
+	var engine := _fingerprinting_engine(binding)
+	node.pose = Vector2(2.0, 2.0)
+	node.heading = 1.0
+	var base := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	node.heading = -2.75
+	var moved := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	assert_int(moved).override_failure_message(
+		"a field the recurrence does not read must not decide whether two "
+		+ "peers reproduced the transition",
+	).is_equal(base)
+
+
+# The same law for the class that reaches display only. Comparing one would
+# correct a simulation over a value no simulation reads.
+func test_a_cosmetic_field_cannot_decide_the_state_fingerprint() -> void:
+	var node := _probe()
+	var binding := NetwSyncSetBinding.new(_mixed_class_set(), node)
+	var engine := _fingerprinting_engine(binding)
+	node.pose = Vector2(1.0, -1.0)
+	node.tag = 3
+	var base := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	node.tag = -99999
+	var moved := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	assert_int(moved).is_equal(base)
+
+
+# The scope narrows what is compared, never what is detected. A causal field is
+# the thing a fingerprint exists to judge.
+func test_a_causal_field_still_decides_the_state_fingerprint() -> void:
+	var node := _probe()
+	var binding := NetwSyncSetBinding.new(_mixed_class_set(), node)
+	var engine := _fingerprinting_engine(binding)
+	node.pose = Vector2(2.0, 2.0)
+	var base := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	node.pose = Vector2(2.0 + STEP, 2.0)
+	var moved := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	assert_int(moved).override_failure_message(
+		"a whole quantum of causal movement must still be visible",
+	).is_not_equal(base)
+
+
+# The family columns answer WHICH part of the state forked, and they are read
+# after the whole-state verdict says one did. A family that could be moved by a
+# field the recurrence does not read would name the wrong part.
+func test_family_fingerprints_ignore_the_non_causal_fields() -> void:
+	var node := _probe()
+	var binding := NetwSyncSetBinding.new(_mixed_class_set(), node)
+	var engine := _fingerprinting_engine(binding)
+	node.pose = Vector2(4.0, 4.0)
+	node.heading = 0.25
+	node.tag = 1
+	var base := engine._state_family_fingerprints(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	node.heading = 3.0
+	node.tag = 77
+	var moved := engine._state_family_fingerprints(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	assert_array(moved).override_failure_message(
+		"a differing family must name a part of the state the next "
+		+ "transition reads",
+	).is_equal(base)
+
+
+# A set that declares no causal field at all has nothing the recurrence reads,
+# and an empty scope would make every transition agree vacuously. That is the
+# instrument-reads-healthy failure, so the scope falls back to the whole payload
+# and keeps the answer it always gave.
+func test_a_set_with_no_causal_field_compares_the_whole_payload() -> void:
+	var node := _probe()
+	var set := _mixed_class_set()
+	set.fields[0].property_class = NetwSyncSet.PropertyClass.DERIVED
+	var binding := NetwSyncSetBinding.new(set, node)
+	var engine := _fingerprinting_engine(binding)
+	engine._causal_fields = { }
+	node.pose = Vector2(2.0, 2.0)
+	var base := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	node.pose = Vector2(2.0 + STEP, 2.0)
+	var moved := engine._state_fingerprint(
+		binding.canonicalize_payload(binding.snapshot_payload()),
+	)
+
+	assert_int(moved).override_failure_message(
+		"an empty scope must not silently agree about everything",
+	).is_not_equal(base)

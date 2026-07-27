@@ -441,6 +441,30 @@ func test_property_sync_payload_is_token_then_value_only() -> void:
 	assert_that(values[0]).is_equal(70)
 	assert_that(r.remaining_bytes()).is_equal(0)
 
+	# The token above is a 1-byte id into a per-script name table, and the two
+	# peers never exchange that table. It agrees only if both derive the same
+	# order from the same names, so the order has to come from the text.
+	# Sorting an array of StringName compares interning pointers instead, which
+	# is a per-process accident, and the component divergence hash cannot catch
+	# the skew because both peers hold the same name set and differ only in
+	# order. The result is a value silently applied to the wrong property.
+	var script := node.get_script() as Script
+	var table: Array = NetwScriptModel._cache_for(script).sorted_properties()
+	var by_text := PackedStringArray()
+	for name_ in table:
+		by_text.append(String(name_))
+	var shuffled := PackedStringArray(by_text)
+	shuffled.sort()
+	assert_array(Array(by_text)).override_failure_message(
+		"property ids must be ordered by name text, not by interning order",
+	).is_equal(Array(shuffled))
+	for i in table.size():
+		assert_int(NetwScriptModel.get_property_id(script, table[i])) \
+				.is_equal(i + 1)
+		assert_str(String(
+			NetwScriptModel.get_property_name_by_id(script, i + 1),
+		)).is_equal(String(table[i]))
+
 
 func _prop_datagram(seq: int, route: int, property: StringName, value: Variant) -> PackedByteArray:
 	var frame := NetwFrameEnvelope.pack(

@@ -80,7 +80,9 @@ func _snapshot(entity: NetwEntity) -> Dictionary:
 	var handle := entity.prediction
 	var live := entity.state_binding.snapshot_payload() \
 			if entity.state_binding else { }
-	var episode: Dictionary = handle.episode()
+	# The digest, never the report: the overlay draws every frame and the report
+	# detaches one entry per comparison the episode has ever settled.
+	var episode: Dictionary = handle.episode_digest()
 	var basis_transition := _basis_transition(episode)
 	var authority := _authority_sample(entity, live)
 	return {
@@ -381,10 +383,9 @@ func _episode_annotation(episode: Dictionary) -> String:
 
 
 func _last_operator_annotation(episode: Dictionary) -> String:
-	var operators: Array = episode.get(&"operators", [])
-	if operators.is_empty():
+	var attempt: Dictionary = episode.get(&"last_operator", { })
+	if attempt.is_empty():
 		return ""
-	var attempt: Dictionary = operators.back()
 	var operation := _enum_name(
 		NetwPredictJournal.Operator,
 		int(attempt.get(&"operator", NetwPredictJournal.Operator.NONE)),
@@ -394,14 +395,11 @@ func _last_operator_annotation(episode: Dictionary) -> String:
 		NetwLagCompensationInterface.PredictionHandle.OperatorOutcome,
 		outcome_value,
 	)
-	var comparisons: Array = episode.get(&"contraction", [])
-	var meter := int(comparisons.back().get(&"meter", 0)) \
-			if not comparisons.is_empty() else 0
 	return "%s %s  basis %d  meter %d" % [
 		operation,
 		outcome,
 		int(attempt.get(&"basis", -1)),
-		meter,
+		int(episode.get(&"last_meter", 0)),
 	]
 
 

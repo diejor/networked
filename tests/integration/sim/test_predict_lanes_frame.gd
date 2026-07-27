@@ -217,6 +217,75 @@ func test_the_ack_lane_stays_dense_over_a_long_run() -> void:
 	assert_int(predicted.client_prediction.fp_mismatch_count).is_equal(0)
 
 
+# The owner authors on its own physics cadence, so a burst where it wins the
+# race leaves authority behind by however many transitions it lost. Authority
+# keeps that lead standing rather than working it off, because the only way to
+# work it off is to run two transitions against one solve, and a transition is
+# an amount of simulated time. Paying a rate difference in drives spends the
+# thing being compared.
+#
+# What authority owes instead is that the lead stays bounded and stays honest:
+# it never reaches the resync ceiling under recovered cadence, it declares no
+# command unrun, and every frame of it still advances the acknowledgement
+# frontier one transition at a time.
+func test_a_cadence_surplus_stands_without_ever_doubling_a_solve() -> void:
+	var scenario := PredictionScenario.new()
+	await scenario.setup(self)
+	var predicted := await scenario.add_predicted_entity()
+	_configure_frame(predicted)
+	predicted.client_root.motion = Vector2.RIGHT
+
+	# The owner gets three frames in for every one authority runs, so a surplus
+	# opens. The tier folds several physics ticks into one authored transition,
+	# so the race is won in frames rather than in ticks per frame.
+	for i in 12:
+		for _f in 3:
+			_emit_client_frame(scenario.client_clock, 1)
+			_deliver_command(predicted)
+		_step_authority(scenario, predicted)
+		_deliver_ack(predicted)
+	var peak := predicted.server_prediction.ack_age_ticks
+	assert_int(peak).override_failure_message(
+		"the burst must actually open a surplus, or the law proves nothing",
+	).is_greater(4)
+
+	# Cadence returns to parity. Nothing else intervenes.
+	var consumed_before := predicted.server_prediction.consumed_count
+	var frames := 40
+	for i in frames:
+		_emit_client_frame(scenario.client_clock, 1)
+		_deliver_command(predicted)
+		_step_authority(scenario, predicted)
+		_deliver_ack(predicted)
+	var consumed := predicted.server_prediction.consumed_count - consumed_before
+
+	# One solve, at most one transition. This is the property the catch-up drain
+	# used to break, once per frame it fired.
+	assert_int(consumed).override_failure_message(
+		"authority ran %d transitions across %d solves; a frame may run one"
+		% [consumed, frames],
+	).is_less_equal(frames)
+
+	# The lead stands rather than draining, and stays far from the ceiling that
+	# would start declaring the owner's commands unrun.
+	assert_int(predicted.server_prediction.ack_age_ticks) \
+			.override_failure_message(
+				"a standing lead must stay bounded under recovered cadence, "
+				+ "got %d after peaking at %d"
+				% [predicted.server_prediction.ack_age_ticks, peak],
+			).is_less(predicted.server_prediction.max_consume_lag_ticks)
+	assert_int(predicted.server_prediction.skipped_count).is_equal(0)
+	assert_int(predicted.server_prediction.resync_count).is_equal(0)
+
+	# The frontier follows the replay the whole way. A lead authority declines to
+	# drain must never become a lane that stops acknowledging.
+	assert_int(predicted.client_prediction.ack_confirmed_transition) \
+			.override_failure_message(
+				"the frontier must follow the standing lead, not stall behind it",
+			).is_greater_equal(25)
+	assert_int(predicted.client_prediction.fp_mismatch_count).is_equal(0)
+
+
 func test_the_ack_lane_floors_the_command_window() -> void:
 	var scenario := PredictionScenario.new()
 	await scenario.setup(self)

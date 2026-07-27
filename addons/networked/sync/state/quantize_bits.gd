@@ -7,15 +7,30 @@
 ## same range. Best for normalized directions and bounded scalars (e.g.
 ## [code]motion[/code] with [code]bits = 8, [-1, 1][/code]).
 ##
-## The grid uses [code]2^bits[/code] codes anchored at [member min_value], so
-## the center of a symmetric range round-trips exactly. A value at rest
-## ([code]0[/code] for a symmetric range) decodes back to [code]0[/code],
-## which matters when game logic compares an axis to exactly zero. The top
-## endpoint resolves within one step instead of exactly.
+## The grid spans the declared range inclusively and holds an odd number of
+## levels, so three values a game depends on all survive the wire: both
+## declared limits, and the rest point of a symmetric range.
 ##
+## Those three cannot coexist on a [code]2^bits[/code] grid. Spanning
+## [member min_limit] to [member max_limit] inclusively over [code]N[/code]
+## levels puts the midpoint on a level only when [code]N[/code] is odd, and
+## [code]2^bits[/code] is even. The grid therefore uses
+## [code]2^bits - 1[/code] levels and leaves one bit pattern unused, which
+## costs under one percent of resolution at eight bits and nothing measurable
+## above sixteen.
 ## [codeblock]
 ## var q := NetwQuantizeBits.new().bits(8).limits(-1.0, 1.0)
+##
+## bits(4).limits(-1, 1)   15 levels, step 2/14
+##   -1.0  ──> -1.0    the declared floor
+##    0.0  ──>  0.0    a stick at neutral, a body at rest
+##   +1.0  ──> +1.0    the declared ceiling
 ## [/codeblock]
+## A quantizer whose endpoints do not round-trip is invisible to every
+## comparison, because both peers encode the same code, while the two games
+## read values a whole step apart. Nothing downstream can attribute that,
+## which is why exactness here is a wire property rather than a tuning
+## preference.
 class_name NetwQuantizeBits
 extends NetwQuantize
 
@@ -40,21 +55,26 @@ func limits(p_min: float, p_max: float) -> NetwQuantizeBits:
 	return self
 
 
-# Number of distinct codes. A 2^bits divisor keeps the range center on the grid.
-# A 2^bits minus 1 divisor straddles it.
-func _codes() -> int:
-	return 1 << bit_count
+# Levels on the grid, held odd so a symmetric range's midpoint is one of them.
+# One bit pattern goes unused to buy that. A single-bit field cannot hold three
+# distinct values at all, so it degenerates to the two endpoints.
+func _levels() -> int:
+	return maxi(2, (1 << bit_count) - 1)
 
 
 func _enc(w: NetwBitBuffer.Writer, v: float) -> void:
 	var span := max_limit - min_limit
-	var codes := _codes()
+	var top := _levels() - 1
 	var f := 0.0 if span == 0.0 else clampf((v - min_limit) / span, 0.0, 1.0)
-	w.put_bits(clampi(int(round(f * codes)), 0, codes - 1), bit_count)
+	w.put_bits(clampi(int(round(f * top)), 0, top), bit_count)
 
 
 func _dec(r: NetwBitBuffer.Reader) -> float:
-	var f := float(r.get_bits(bit_count)) / float(_codes())
+	# The unused pattern decodes to the ceiling rather than past it. A frame
+	# this peer did not write must never produce a value outside the range the
+	# declaration promised its readers.
+	var top := _levels() - 1
+	var f := float(mini(r.get_bits(bit_count), top)) / float(top)
 	return min_limit + f * (max_limit - min_limit)
 
 
@@ -118,14 +138,14 @@ func _bit_width(type: Variant.Type) -> int:
 
 
 ## Implements [method NetwQuantize._max_error]: half the grid spacing
-## ([code]span / 2^bits[/code]) per axis, combined as a magnitude for a
+## ([code]span / (2^bits - 2)[/code]) per axis, combined as a magnitude for a
 ## [Vector3] or [Vector2].
 func _max_error(type: Variant.Type) -> float:
 	assert(
 		_supports_type(type),
 		"NetwQuantizeBits: Unsupported type %s." % type_string(type),
 	)
-	var axis := (max_limit - min_limit) / float(1 << bit_count) * 0.5
+	var axis := (max_limit - min_limit) / float(_levels() - 1) * 0.5
 	match type:
 		TYPE_VECTOR3:
 			return axis * sqrt(3.0)

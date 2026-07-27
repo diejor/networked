@@ -156,6 +156,18 @@ enum Lane {
 ## from causal ones, so restoring them writes a value the next step overwrites.
 ## [constant COSMETIC] fields reach display only, so comparing them would
 ## correct a simulation over a value no simulation reads.
+## [br][br]The class therefore decides the scope of a state fingerprint as well
+## as the scope of a restore. A non-causal field is computed from the raw values
+## behind the canonical ones, so two peers reach it from inputs that differ below
+## the causal grid, and one of them left in the compare would make bit-equality
+## unreachable however well the causal fields are sized. Only a causal field
+## decides whether two peers reproduced a transition.
+## [codeblock]
+##             simulation reads   compared   restored
+## CAUSAL      yes                yes        yes
+## DERIVED     no, recomputed     no         yes, overwritten next step
+## COSMETIC    no, display only   no         yes
+## [/codeblock]
 enum PropertyClass {
 	CAUSAL,
 	DERIVED,

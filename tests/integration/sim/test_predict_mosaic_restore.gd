@@ -154,3 +154,66 @@ func test_a_state_frame_reaches_no_fingerprint_verdict() -> void:
 		+ "not reach a fingerprint verdict",
 	).is_equal(verified_before)
 	await s.teardown()
+
+
+# The gate is armed once, by the gain edge, and describes the field stream. A
+# rewire re-keys transition numbering and keeps the same binding, whose merged
+# row stays coherent across it, so the arming survives. Clearing it would demand
+# a second gain edge the sender has no reason to produce: past the edge it ships
+# only changed fields, and a row carrying every field again is a coincidence a
+# rarely-moving field can withhold for a whole session. The entity would then
+# predict with no reconciliation and report agreement while it drifted.
+func test_a_rewire_keeps_the_stream_armed() -> void:
+	var s := PredictionScenario.new()
+	await s.setup(self)
+	var p := await s.add_predicted_entity()
+	_settled_ack(s, p)
+	var engine := p.client_prediction._engine()
+	assert_bool(engine._stream_reconstructed).override_failure_message(
+		"the warmup's whole frames are the gain edge, so the stream must be "
+		+ "armed before this law rewires",
+	).is_true()
+
+	engine._rewire()
+
+	assert_bool(engine._stream_reconstructed).override_failure_message(
+		"a rewire re-keys transitions and keeps the binding, so the stream's "
+		+ "reconstruction survives it",
+	).is_true()
+	await s.teardown()
+
+
+# A frame that reaches no verdict must be distinguishable from one that found
+# agreement. Both report a zero divergence, so the counters are the only thing
+# that separates a peer that matched from a comparison that never ran.
+func test_a_skipped_comparison_is_counted_apart_from_an_agreeing_one() -> void:
+	var s := PredictionScenario.new()
+	await s.setup(self)
+	var p := await s.add_predicted_entity()
+	var ack := _settled_ack(s, p)
+	var engine := p.client_prediction._engine()
+
+	engine._stream_reconstructed = false
+	var ran_before := p.client_prediction.comparisons_ran
+	var skipped_before := p.client_prediction.comparisons_skipped
+	engine._on_state_frame(_frame(s, ack, _divergent_payload(p), false))
+
+	assert_int(p.client_prediction.comparisons_skipped) \
+			.override_failure_message(
+				"an unarmed stream reaches no verdict, so the frame must be "
+				+ "counted as skipped rather than passing as agreement",
+			).is_equal(skipped_before + 1)
+	assert_int(p.client_prediction.comparisons_ran).is_equal(ran_before)
+	assert_dict(p.client_prediction.last_field_divergence) \
+			.override_failure_message(
+				"a comparison that did not run must not leave a previous "
+				+ "frame's magnitudes standing as if they were this one's",
+			).is_empty()
+
+	# The same frame against an armed stream is the contrast: a real verdict.
+	engine._stream_reconstructed = true
+	engine._on_state_frame(_frame(s, ack, _divergent_payload(p), true))
+	assert_int(p.client_prediction.comparisons_ran).override_failure_message(
+		"an armed stream must reach a verdict and be counted as having run",
+	).is_equal(ran_before + 1)
+	await s.teardown()

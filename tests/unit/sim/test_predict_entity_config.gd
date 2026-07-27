@@ -436,3 +436,64 @@ func test_produced_exact_and_joint_claims_are_refused_loudly() -> void:
 	)
 	assert_int(joint.island_config[&"reconcile"]) \
 			.is_equal(PredictionHandle.Reconcile.INDEPENDENT)
+
+
+# --- the declaration a prediction engine cannot observe ---
+
+
+func _causal_set(reconcile_only: bool, epsilon: float) -> NetwSyncSet:
+	var set := NetwSyncSet.new()
+	var field := NetwSyncSet.Field.new(&"heading", null)
+	field.property_class = NetwSyncSet.PropertyClass.CAUSAL
+	field.explicit_reconcile_only = reconcile_only
+	field.epsilon_override = epsilon
+	set.fields.append(field)
+	return set
+
+
+func _engine() -> NetwLagCompensationInterface._PredictionEngine:
+	var engine := NetwLagCompensationInterface._PredictionEngine.new()
+	engine._handle = _handle()
+	# The report is keyed to the config it judges, and that key reads the
+	# entity, so the engine needs one even for a declaration-only check.
+	var root: Node2D = auto_free(Node2D.new())
+	add_child(root)
+	engine._entity = NetwEntity.ensure(root)
+	return engine
+
+
+# A reconcile-only field cannot trigger a correction, and one with no declared
+# scale does not reach the convergence meter either, while the next transition
+# still reads it. Nothing in the engine can see it move, so it drifts until some
+# other field crosses on its behalf and the divergence is charged to the wrong
+# place. That is a declaration that cannot mean what it says.
+func test_an_unobservable_causal_property_is_reported() -> void:
+	var engine := _engine()
+
+	await assert_error(
+		func() -> void:
+			engine._validate_property_classes(_causal_set(true, -1.0)),
+	).is_push_error(
+		"PredictionComponent: causal state properties [heading] are "
+		+ "reconcile_only() and declare no epsilon(), so nothing observes them. "
+		+ "A reconcile-only field cannot trigger a correction, and without a "
+		+ "declared scale it does not reach the convergence meter either, while "
+		+ "the next transition still reads it. A field like that drifts until "
+		+ "some other field crosses on its behalf, which charges the divergence "
+		+ "to the wrong place. Give each an epsilon() at its own world scale, or "
+		+ "drop reconcile_only() so it can answer for itself.",
+	)
+
+
+# Either half of the pair answers it: a scale puts the field in the meter, and
+# dropping the exclusion lets it answer for itself.
+func test_a_scale_or_a_trigger_makes_a_causal_property_observable() -> void:
+	var scaled := _engine()
+	scaled._validate_property_classes(_causal_set(true, 0.05))
+	var triggering := _engine()
+	triggering._validate_property_classes(_causal_set(false, -1.0))
+
+	assert_bool(true).override_failure_message(
+		"a causal field with a scale, or one that can trigger, is observable "
+		+ "and must not be reported",
+	).is_true()

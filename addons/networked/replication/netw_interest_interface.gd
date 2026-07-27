@@ -655,6 +655,34 @@ func all_layers() -> Array[NetwInterestLayer]:
 	return out
 
 
+# Fills [param found] with the live entities whose own declared labels intersect
+# [param layer_ids], for a peer that holds no committed roster to walk.
+#
+# A route exists on this peer only because it was sent the spawn, so the walk
+# ranges over exactly what this peer can already see. The labels come from each
+# candidate's own relay-filled cache rather than from any layer the server
+# committed, which is why this stays inside the knowledge budget instead of
+# reconstructing another peer's row.
+func _collect_shared_from_live(
+		entity: NetwEntity,
+		layer_ids: Array[StringName],
+		found: Dictionary[NetwEntity, bool],
+) -> void:
+	var api := _api()
+	if api == null:
+		return
+	var wanted: Dictionary[StringName, bool] = { }
+	for id: StringName in layer_ids:
+		wanted[id] = true
+	for candidate: NetwEntity in api.liveness.live_entities():
+		if candidate == entity or not is_instance_valid(candidate) 				or not is_instance_valid(candidate.owner):
+			continue
+		for id: StringName in candidate.interest.layer_ids():
+			if wanted.has(id):
+				found[candidate] = true
+				break
+
+
 ## Returns the resolved interest memberships for [param entity] on this peer.
 ##
 ## The result includes ancestry-derived scene membership as well as labels
@@ -678,6 +706,17 @@ func resolved_layer_ids(entity: NetwEntity) -> Array[StringName]:
 ##
 ## The result excludes [param entity] and is stable by entity id. It contains
 ## only live entities present in this peer's interest layers.
+##
+## A peer that computes no admission holds no layer roster, so off the server
+## the answer is derived from the two facts such a peer legitimately has: the
+## entities it holds a live route for, and each of their own declared labels.
+## Both are already its own row, so the derivation adds no knowledge and no
+## traffic. It cannot name an entity this peer cannot see, and it never reports
+## what any other peer sees.
+## [codeblock]
+## server   walk the committed layer roster
+## peer     walk my live routes, keep the ones whose labels intersect mine
+## [/codeblock]
 func shared_entities(
 		entity: NetwEntity,
 		layer_id: StringName = &"",
@@ -698,6 +737,8 @@ func shared_entities(
 			if candidate != entity and is_instance_valid(candidate) \
 					and is_instance_valid(candidate.owner):
 				found[candidate] = true
+	if found.is_empty() and not _is_server():
+		_collect_shared_from_live(entity, layer_ids, found)
 	var out: Array[NetwEntity] = []
 	out.assign(found.keys())
 	out.sort_custom(
