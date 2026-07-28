@@ -8,9 +8,6 @@
 
 config_version=5
 
-"ï»¿config_version"=5
-"Ã¯Â»Â¿config_version"=5
-
 [application]
 
 config/name="networked"
