@@ -213,6 +213,13 @@ class Field extends RefCounted:
 	## [method NetwScriptModel.PropertyConfig.converge].
 	var converge_stiffness: float = 0.0
 
+	## The sibling field a recovery advances this value along, from the transition
+	## it acknowledged to the present, or empty when the acknowledged value is
+	## written as it stands. Set by
+	## [method NetwScriptModel.PropertyConfig.carry_along].
+	var carry_channel: StringName = &""
+
+
 	## When true the field is restored only by a teleport-tier recovery, never by
 	## an ordinary one. Set by
 	## [method NetwScriptModel.PropertyConfig.teleport_only].
@@ -410,6 +417,7 @@ static func from_property_configs(
 		var field := Field.new(property, quantizer, config.lane == Lane.RETAINED)
 		field.property_class = config.property_class
 		field.converge_stiffness = config.converge_stiffness
+		field.carry_channel = config.carry_channel
 		field.explicit_teleport_only = config.explicit_teleport_only
 		field.explicit_reconcile_only = config.explicit_reconcile_only
 		field.epsilon_override = config.epsilon_override

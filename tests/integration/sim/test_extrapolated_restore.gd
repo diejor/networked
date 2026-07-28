@@ -3,7 +3,8 @@
 ## A [constant PredictionComponent.CorrectionMode.SNAP] restore normally lands the
 ## authoritative state verbatim at its own tick, so a dynamic body snaps back to a
 ## stale position. [constant PredictionComponent.RestoreMode.EXTRAPOLATED] projects
-## each field that declares a [method NetwInterpolate.project_by] velocity forward
+## each field that declares a [method NetwScriptModel.PropertyConfig.carry_forward]
+## channel forward
 ## to the present tick through [NetwProject], so the body lands near where it is.
 ## The projection metadata is read off the state set specs, so a field with no
 ## replicated velocity restores verbatim.

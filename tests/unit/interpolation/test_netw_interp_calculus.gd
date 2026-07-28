@@ -293,22 +293,38 @@ func test_p7_chase_absorbs_a_recovery_without_a_jump() -> void:
 	).is_equal_approx(1.0, 0.02)
 
 
-# Each recovery resets its channel's offset rather than accumulating into it,
-# so a correction train cannot wind the display away from the body.
-func test_p7_chase_offsets_reset_rather_than_accumulate() -> void:
+# P7 A correction TRAIN is absorbed as smoothly as a single correction.
+#
+# One recovery has nothing outstanding to lose, so any absorber looks right on
+# it. A train is where the two candidate rules separate. Absorbing onto the
+# offset still gliding keeps the display continuous, while replacing it hands
+# the screen whatever had not decayed yet, once per correction. That residual is
+# most of the write when corrections arrive every few frames, which is a step
+# per correction rather than the one glide the absorption promises.
+func test_p7_chase_absorbs_a_correction_train_without_stepping() -> void:
 	var h := _settled_chase()
+	var body := 0.0
+	var last := float(h.displayed.back())
+	var worst_step := 0.0
+	# A correction every third frame, the rate sustained contact produces.
+	for f in 60:
+		if f % 3 == 0:
+			body += 0.1
+			h.set_body(body)
+			h.absorb_recovery({ &"value": 0.1 })
+		h.step_chase(0.6 + float(f) / h.fps)
+		var shown := float(h.displayed.back())
+		worst_step = maxf(worst_step, absf(shown - last))
+		last = shown
 
-	h.set_body(1.0)
-	h.absorb_recovery({ &"value": 1.0 })
-	h.set_body(2.0)
-	h.absorb_recovery({ &"value": 1.0 })
-	h.step_chase(0.6)
-
-	# An accumulated offset of -2 would hold the display near zero. The reset
-	# offset of -1 leaves it near the first corrected pose.
-	assert_float(float(h.displayed.back())).override_failure_message(
-		"a second recovery must reset the offset, not stack onto the first",
-	).is_greater(0.6)
+	# The body advances 0.1 per correction. A display that steps by about that
+	# much is showing the correction rather than absorbing it.
+	assert_float(worst_step).override_failure_message(
+		(
+				"the display stepped %.4f in one frame against a 0.1 correction, "
+				+ "so the train is reaching the screen instead of being glided off"
+		) % worst_step,
+	).is_less(0.05)
 
 
 # A teleported recovery clears every offset: a genuine desync should be seen

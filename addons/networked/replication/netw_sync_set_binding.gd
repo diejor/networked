@@ -51,6 +51,14 @@ var _masked_inflight: Dictionary = { }
 # row the receiver reconstructed and diff-against-it is sufficient afterward.
 var _masked_dirty: Dictionary = { }
 
+# The volatile row poll_masked() last read off the node, shared by every
+# recipient of one pump. Immutable once polled: poll_masked() builds a fresh
+# Dictionary each time and nothing downstream writes into a staged row, which is
+# what makes handing one instance to every peer's in-flight ring safe.
+var _masked_row: Dictionary = { }
+var _masked_row_fields: Array = []
+var _masked_row_ok: bool = false
+
 # Receiver side of the masked volatile lane: the last row this binding decoded,
 # merged target for a masked frame's partial subset. Kept independent of
 # write_gate so a reconciling client (write_gate false) merges against its own
@@ -345,6 +353,13 @@ func converge_stiffness_of(property: StringName) -> float:
 	return field.converge_stiffness if field else 0.0
 
 
+## Returns the sibling channel a recovery advances [param property] along, or an
+## empty [StringName] when it is restored at the acknowledged value.
+func carry_channel_of(property: StringName) -> StringName:
+	var field := field_of(property)
+	return field.carry_channel if field else &""
+
+
 ## Returns whether [param property] is restored only by a teleport-tier
 ## recovery.
 func teleport_only_of(property: StringName) -> bool:
@@ -558,15 +573,58 @@ func clear_peer(peer: int) -> void:
 ## Without it the receiver would strand the interim value it was handed and no
 ## later frame would correct it.
 func masked_delta(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
+	poll_masked()
+	return masked_delta_for(ordinal, peer, tick, ack)
+
+
+## Reads the masked lane's volatile row off the node once, for every recipient of
+## one pump to share.
+##
+## The row a masked send carries is the same for every peer. Only the confirmed
+## baseline it is diffed against differs, so reading the node per recipient costs
+## one full gather per peer and returns the same values every time. This is the
+## masked lane's half of the rule [method poll_retained] already follows.
+## [codeblock]
+## binding.poll_masked()                       # one read of the node
+## for peer in recipients:
+##     binding.masked_delta_for(ord, peer, t, ack)   # no node access
+## [/codeblock]
+## A node that has freed, or a field the node does not carry, leaves
+## [method has_masked_row] false so no half row ever crosses the wire.
+func poll_masked() -> void:
+	_masked_row_ok = false
 	var n := node()
 	if not is_instance_valid(n):
-		return { }
-	var fields := _volatile_fields()
+		return
+	_masked_row_fields = _volatile_fields()
 	var row: Dictionary = { }
-	for f in fields:
+	for f in _masked_row_fields:
 		if not (f.key in n):
-			return { }
+			return
 		row[f.key] = n.get(f.key)
+	_masked_row = row
+	_masked_row_ok = true
+
+
+## Returns whether the last [method poll_masked] read a complete volatile row, so
+## a pump can skip its recipient loop whole instead of rediscovering the same
+## verdict per peer.
+func has_masked_row() -> bool:
+	return _masked_row_ok
+
+
+## Returns [param peer]'s masked frame against the row [method poll_masked] last
+## read, in [method masked_delta]'s [code]{bytes, row, full}[/code] shape, or an
+## empty [Dictionary] when that poll found no readable row.
+##
+## Touches no node, so the cost of a recipient is its baseline diff alone. The
+## returned [code]row[/code] is the shared polled row, so every recipient's
+## [method commit_masked_pending] stages one instance rather than a copy per peer.
+func masked_delta_for(ordinal: int, peer: int, tick: int, ack: int) -> Dictionary:
+	if not _masked_row_ok:
+		return { }
+	var fields := _masked_row_fields
+	var row := _masked_row
 	var base: Variant = _masked_confirmed.get(peer)
 	var dirty: Dictionary = _masked_dirty.get_or_add(peer, { })
 	var mask := 0

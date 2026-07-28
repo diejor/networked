@@ -336,34 +336,36 @@ func _pump_derived(
 		if binding.set.masked:
 			# A masked set's mask differs by recipient (each peer's own confirmed
 			# baseline), so the frame cannot be shared like the plain volatile row
-			# below; it is computed and sent per recipient.
+			# below; it is computed and sent per recipient. The row those masks
+			# are diffed against does not differ, so the node is read once for the
+			# whole loop, the way the retained lane below polls once.
 			if not binding.volatile_external:
-				for peer_id in recipients:
-					var masked := binding.masked_delta(
-						ordinal,
-						peer_id,
-						frame_tick,
-						binding.reconcile_ack,
-					)
-					if masked.is_empty():
-						break
-					var masked_bytes: PackedByteArray = masked["bytes"]
-					if masked_bytes.is_empty():
-						continue
-					repl.send_to(
-						peer_id,
-						route,
-						NetwFrameEnvelope.Channel.SYNC,
-						masked_bytes,
-						false,
-						0,
-						"",
-						true,
-					)
-					_stage_pending_masked(peer_id, binding, masked["row"])
-					_masked_frames_out += 1
-					if masked["full"]:
-						_masked_frames_full += 1
+				binding.poll_masked()
+				if binding.has_masked_row():
+					for peer_id in recipients:
+						var masked := binding.masked_delta_for(
+							ordinal,
+							peer_id,
+							frame_tick,
+							binding.reconcile_ack,
+						)
+						var masked_bytes: PackedByteArray = masked["bytes"]
+						if masked_bytes.is_empty():
+							continue
+						repl.send_to(
+							peer_id,
+							route,
+							NetwFrameEnvelope.Channel.SYNC,
+							masked_bytes,
+							false,
+							0,
+							"",
+							true,
+						)
+						_stage_pending_masked(peer_id, binding, masked["row"])
+						_masked_frames_out += 1
+						if masked["full"]:
+							_masked_frames_full += 1
 			# A confirmed baseline (or in-flight row) held against a peer no longer
 			# a recipient must not survive to its next admission, so absence heals
 			# the full masked row on gain, matching the retained lane's rule below.
@@ -875,8 +877,9 @@ static func volatile_flags(set: NetwSyncSet) -> int:
 ## it. Reorder is absorbed because a stale frame is dropped at
 ## [method accept_unreliable] and never reaches this merge. The one hole a naive
 ## diff leaves, a value that changes away from the baseline and back before its
-## send is acked, is closed on the sender by [method NetwSyncSetBinding.masked_delta]
-## keeping the field sticky until the ack.
+## send is acked, is closed on the sender by
+## [method NetwSyncSetBinding.masked_delta_for] keeping the field sticky until
+## the ack.
 static func apply_volatile_frame(
 		node: Node,
 		set: NetwSyncSet,

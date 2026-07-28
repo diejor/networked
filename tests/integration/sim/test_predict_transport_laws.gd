@@ -27,6 +27,11 @@ func _engine(corridor_clear: bool = true) -> Engine_:
 		&"position": &"velocity",
 		&"heading": &"angular_velocity",
 	}
+	# What carries a field forward and what the pose error is measured over are
+	# two questions, so a rig that reaches past the wiring answers both. They
+	# coincide here because a declared derivative channel is the only forward
+	# model there is.
+	engine._pose_fields = { &"position": true, &"heading": true }
 	engine._state_family_of = {
 		&"position": Engine_.STATE_FAMILY_POSE,
 		&"heading": Engine_.STATE_FAMILY_POSE,

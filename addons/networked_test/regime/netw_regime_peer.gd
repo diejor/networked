@@ -31,12 +31,15 @@
 ## --regime-throttle=0:5,6:20     NETW_REGIME_THROTTLE   (fps:seconds,...)
 ## --regime-dir=C:/caps/host      NETW_REGIME_DIR
 ## --regime-quiesce=1.0           NETW_REGIME_QUIESCE
+## --regime-expect=k>=v,k<=v      NETW_REGIME_EXPECT
 ## [/codeblock]
 ## The summary's [code]condition[/code] block records what actually held
 ## (wall seconds, measured physics and poll rates, throttle phases, gesture
 ## travel), so an arm asserts its regime was reached before trusting any
 ## number from the run. A run that ends on the watchdog says so in
-## [code]exit[/code] instead of passing as a short capture.
+## [code]exit[/code] instead of passing as a short capture, and one that misses
+## [member expect] exits [constant EXIT_CONDITION] rather than publishing a
+## full-length capture of a regime it never entered.
 class_name NetwRegimePeer
 extends Node
 
@@ -48,6 +51,7 @@ const EXIT_WATCHDOG := 2
 const EXIT_CONNECT := 3
 const EXIT_READY := 4
 const EXIT_GESTURE := 5
+const EXIT_CONDITION := 6
 
 # Seconds granted beyond the run itself for connect, spawn, and quiesce
 # before the watchdog declares the child wedged.
@@ -90,6 +94,24 @@ var throttle_spec := ""
 var artifact_dir := ""
 var quiesce := 1.0
 
+## Comparisons the condition block must satisfy for the run to exit
+## [constant @GlobalScope.OK], written [code]key:min:value[/code] or
+## [code]key:max:value[/code] and separated by commas. Empty accepts any run.
+##
+## A gesture that ran without reaching its regime is the failure this exists
+## for. It produces a full-length capture whose every number is valid and
+## whose regime is absent, so nothing downstream can tell it from a good run
+## and it is read as evidence about a regime it never entered.
+## [codeblock]
+## --regime-expect=wall_contact_fraction:min:0.15
+## --regime-expect=wall_contact_fraction:min:0.15,car_contact_fraction:max:0.0
+## [/codeblock]
+## The comparator is spelled [code]min[/code] and [code]max[/code] rather than
+## [code]>=[/code] and [code]<=[/code] because a launcher may reach the engine
+## through a shell wrapper, where an angle bracket in an argument is a
+## redirection operator and the process dies before it parses anything.
+var expect := ""
+
 var _completed := false
 var _throttle: NetwRegimeThrottle
 var _cadence_samples: Array[Dictionary] = []
@@ -119,6 +141,7 @@ func configure_from_args() -> void:
 	throttle_spec = _setting("regime-throttle", "NETW_REGIME_THROTTLE", throttle_spec)
 	artifact_dir = _setting("regime-dir", "NETW_REGIME_DIR", artifact_dir)
 	quiesce = float(_setting("regime-quiesce", "NETW_REGIME_QUIESCE", str(quiesce)))
+	expect = _setting("regime-expect", "NETW_REGIME_EXPECT", expect)
 
 
 ## Runs the whole peer lifecycle and exits the process when it is done. The
@@ -156,7 +179,42 @@ func run() -> void:
 	_snapshot_entities()
 	if quiesce > 0.0:
 		await get_tree().create_timer(quiesce).timeout
+	var unmet := _unmet_expectations()
+	if not unmet.is_empty():
+		push_error("regime %s: regime not reached, %s" % [role, unmet])
+		_finish(EXIT_CONDITION, "condition_unmet")
+		return
 	_finish(OK, "complete")
+
+
+# The expectations the condition block failed, empty when the run may be
+# trusted. Reported as text rather than a bool so a failing run says which
+# number missed and by how much, in the process that measured it.
+func _unmet_expectations() -> PackedStringArray:
+	var unmet := PackedStringArray()
+	if expect.strip_edges().is_empty():
+		return unmet
+	var condition := _condition_report()
+	for clause in expect.split(",", false):
+		var parts := clause.strip_edges().split(":", false)
+		if parts.size() != 3 or not (parts[1] in ["min", "max"]):
+			unmet.append("%s is not key:min:value or key:max:value" % clause)
+			continue
+		var key := parts[0].strip_edges()
+		if not condition.has(key):
+			unmet.append("%s is absent from the condition block" % key)
+			continue
+		var at_least := parts[1] == "min"
+		var actual := float(condition[key])
+		var wanted := parts[2].strip_edges().to_float()
+		if (actual < wanted) if at_least else (actual > wanted):
+			unmet.append("%s is %.4f, wanted %s %.4f" % [
+				key,
+				actual,
+				parts[1],
+				wanted,
+			])
+	return unmet
 
 
 func _finish(code: int, exit_kind: String) -> void:

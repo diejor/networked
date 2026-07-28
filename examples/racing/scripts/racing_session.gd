@@ -60,24 +60,55 @@ func _on_participant_joined(participant: NetwParticipant) -> void:
 # admission finds no scene. Admission re-runs when the scene arrives, keeping
 # join order and scene order decoupled.
 func _on_scene_spawned(scene: MultiplayerScene) -> void:
-	# Every car on the track shares one approximate island, so contact against
-	# another car classifies as a boundary breach instead of an undeclared
-	# contact. Promotion to simulated fidelity stays opt-in.
-	#
-	# This is the only island declaration racing makes, and it has to be. A car
-	# that declared its own would opt out of this rule entirely rather than
-	# refine it, taking the promotion below with it.
-	var island := scene.prediction_island() \
-			.approximate() \
-			.from_interest(&"race")
-	if simulate_nearest_opponent \
-			or not OS.get_environment(SIMULATE_NEAREST_VAR).is_empty():
-		island.simulate_nearest(1)
+	scene.player_entered.connect(_on_car_entered.bind(scene))
+	scene.player_left.connect(_on_car_left.bind(scene))
+	_declare_islands(scene)
 	if not api.is_server():
 		return
 	for participant: NetwParticipant in api.participants:
 		if participant.current_scene == null:
 			scene.admit(participant)
+
+
+# Names every other car on the track as a participant in this car's island, and
+# claims that the island reproduces exactly.
+#
+# The roster is written rather than produced, and that is the whole point. Two
+# peers each resolve their own interest scope, so a roster produced from interest
+# is not a fact both of them can claim, and an island that cannot claim it is
+# compared by tolerance forever. Naming the cars is the game asserting what the
+# engine is not entitled to assume, which is what
+# [method PredictionHandle.IslandConfig.exact] means.
+#
+# Contact is unaffected by the claim. Touching another car still opens an
+# out-of-domain window, because a car this peer only displays is a stale stand-in
+# its solver cannot reproduce.
+func _declare_islands(scene: MultiplayerScene) -> void:
+	var cars := scene.get_players()
+	for car: NetwEntity in cars:
+		var island := car.prediction.island().exact()
+		for other: NetwEntity in cars:
+			if other != car:
+				island.add(other)
+		if _simulates_nearest():
+			island.simulate_nearest(1)
+
+
+# A join changes an antecedent every car's fingerprint carries, so every roster
+# is rebuilt rather than only the newcomer's.
+func _on_car_entered(_car: NetwEntity, scene: MultiplayerScene) -> void:
+	_declare_islands(scene)
+
+
+func _on_car_left(car: NetwEntity, scene: MultiplayerScene) -> void:
+	for other: NetwEntity in scene.get_players():
+		if other != car:
+			other.prediction.island().remove(car)
+
+
+func _simulates_nearest() -> bool:
+	return simulate_nearest_opponent \
+			or not OS.get_environment(SIMULATE_NEAREST_VAR).is_empty()
 
 
 # The browser steps aside once the local participant is racing and returns when

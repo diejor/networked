@@ -9,12 +9,19 @@ extends Node3D
 ## state set lives on this root through accessor properties routing to the child
 ## sphere, so a single atomic snapshot carries the dynamic-body pose. Because the
 ## sphere's solver cannot be stepped per input, a recovery lands the
-## authoritative pose on the solver in one write, projected to the present tick
-## through each pose field's [method NetwInterpolate.project_by] derivative, and
-## pauses around wall contacts. The velocity fields are teleport-only restores,
-## so an in-domain sub-teleport recovery keeps momentum. An out-of-domain
-## recovery restores the whole closure because its contact antecedents were not
+## authoritative pose on the solver in one write, advanced to the present tick
+## through each pose field's
+## [method NetwScriptModel.PropertyConfig.carry_along] channel, and pauses
+## around wall contacts. The velocity fields are teleport-only restores, so an
+## in-domain sub-teleport recovery keeps momentum. An out-of-domain recovery
+## restores the whole closure because its contact antecedents were not
 ## reproducible.
+##
+## The two velocity fields declare no carry channel, so the wiring report names
+## them: they can trigger a recovery that no sub-teleport restore may write, and
+## the promoted closure that does write them lands the acknowledged value.
+## [member NetwLagCompensationInterface.PredictionHandle.field_recovery] counts
+## what that costs.
 ##
 ## Display is separated from simulation. On a remote peer the interpolated
 ## channels write dedicated display_position and display_heading targets, never
@@ -39,6 +46,20 @@ const LEGACY_CAPTURE_VAR := "NETW_RACING_LEGACY_MODEL"
 
 # Capture-only switch that arms the interpolation pump's per-frame trace.
 const INTERP_TRACE_VAR := "NETW_RACING_INTERP_TRACE"
+
+# Diagnostic-only switch that takes the recovery ladder out of the loop, so a
+# divergence has to explain itself with nothing writing to the body.
+#
+# It answers one question: whether sustained contact against static geometry
+# forks the two simulations on its own, or only does so once corrections are
+# feeding back into it. Under
+# [constant PredictionHandle.RecoveryPolicy.OBSERVE] a divergence is still
+# reported and still attributed, and nothing is ever restored, so the owner
+# drifts from authority for the whole run. That drift is the price of the
+# measurement and is not itself a finding: read the RATE the divergence grows
+# at while resting on a wall against the rate while rolling, never the level.
+# TODO: delete this once the resting-contact question is answered either way.
+const OBSERVE_VAR := "NETW_RACING_OBSERVE"
 
 # Nodes
 
@@ -146,9 +167,26 @@ func _init() -> void:
 	# The interpolated pose is redirected to display_position so the smoothed value
 	# never writes back onto the simulated body, and it projects along the
 	# replicated linear velocity so a remote car covers a gap without stalling.
+	# The position grid is sized against the divergence this car's own solver
+	# produces, not against how finely a float can be described. Canonical form
+	# is the quantized code, so two peers agree bit-for-bit only when they land
+	# in the same bucket, and a grid finer than the divergence makes agreement
+	# unreachable by construction however correct the codec is. Measured
+	# contact-free over 1617 acknowledged transitions, the two peers fork by
+	# about 74 um per axis, so this step is roughly fifty times the fork it has
+	# to span. It stays far under anything that reads the value: 7.8 mm is about
+	# 5% of how far the car travels in one frame, and the epsilon that triggers
+	# a correction is 45 times larger.
+	#
+	# The velocity grids below are deliberately NOT coarsened to match. They
+	# disagree on 2.5% and 1.0% of transitions, which is near the noise floor,
+	# and their step is also the smallest divergence they can report, so
+	# widening them would make every velocity disagreement louder to buy back
+	# almost nothing.
 	Netw.configure_property(self, &"sphere_position").state().masked().causal() \
-			.quantize(NetwQuantizeBits.new().bits(24).limits(-2048.0, 2048.0)) \
+			.quantize(NetwQuantizeBits.new().bits(19).limits(-2048.0, 2048.0)) \
 			.on_spawn().epsilon(0.35) \
+			.carry_along(&"sphere_linear_velocity") \
 			.interpolate(
 				NetwInterpolate.new().lerp().smooth(DISPLAY_SMOOTH) \
 						.project_by(&"sphere_linear_velocity").to(&"display_position"),
@@ -176,6 +214,7 @@ func _init() -> void:
 			.reconcile_only().epsilon(0.05) \
 			.quantize(NetwQuantizeAngle.new().bits(16).centered()) \
 			.on_spawn() \
+			.carry_along(&"angular_speed") \
 			.interpolate(
 				NetwInterpolate.new().angle().smooth(DISPLAY_SMOOTH) \
 						.project_by(&"angular_speed").to(&"display_heading"),
@@ -253,6 +292,10 @@ func _ready() -> void:
 		# The legacy capture reproduces the pre-L1 per-tick schedule.
 		if not OS.get_environment(LEGACY_CAPTURE_VAR).is_empty():
 			entity.prediction.schedule().tick()
+		if not OS.get_environment(OBSERVE_VAR).is_empty():
+			entity.prediction.recovery().policy(
+				PredictionHandle.RecoveryPolicy.OBSERVE,
+			)
 		_start_net_log()
 	display_position = sphere.position
 	display_heading = vehicle_model.rotation.y

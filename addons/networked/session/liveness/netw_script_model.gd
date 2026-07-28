@@ -228,6 +228,22 @@ static func get_node_property_interpolator(
 	return get_property_interpolator(node.get_script() as Script, property)
 
 
+## Returns the [method PropertyConfig.carry_step] rule declared for
+## [param property] on [param node], or an invalid [Callable] when none is.
+##
+## Only the node overlay is consulted. A rule is bound to one body, so a
+## script-keyed declaration could never be the right answer for this node.
+static func get_node_property_carry(
+		node: Node,
+		property: StringName,
+) -> Callable:
+	var overlay := _overlay_for(node, false)
+	if not overlay:
+		return Callable()
+	var opt := overlay.configs.get(property) as PropertyConfig
+	return opt.carry_rule if opt else Callable()
+
+
 ## Drops the overlay entry for [param node] on despawn.
 static func clear_node_overlay(node: Node) -> void:
 	if is_instance_valid(node):
@@ -1064,6 +1080,17 @@ class PropertyConfig:
 	## [method converge].
 	var converge_stiffness: float = 0.0
 
+	## The replicated channel a recovery advances this value along, or empty when
+	## it is restored at the acknowledged value. Set by [method carry_along].
+	var carry_channel: StringName = &""
+
+	## The step a recovery runs over each recorded transition to advance this
+	## value, or an invalid [Callable] when none is declared. Set by
+	## [method carry_step], which writes it on the declaring node's own config
+	## rather than the script-shared one, because it is bound to that body.
+	var carry_rule: Callable = Callable()
+
+
 	## True once [method teleport_only] restricts the field to teleport-tier
 	## recoveries.
 	var explicit_teleport_only: bool = false
@@ -1210,9 +1237,90 @@ class PropertyConfig:
 		return self
 
 
+	## Advances this value along [param channel], a sibling replicated field
+	## holding its rate, when a recovery restores it.
+	##
+	## A restore carries authority's value for the transition it acknowledged,
+	## which is already
+	## [member NetwLagCompensationInterface.PredictionHandle.ack_age_ticks] old by
+	## the time it lands, so a field still moving is written behind where it is.
+	## The channel is what closes that gap, at one constant rate, which is exact
+	## only while that rate holds still across the window. A field that declares
+	## nothing is written at the acknowledged value.
+	## [codeblock]
+	## # the body integrates position from velocity, so a restore advances along it
+	## Netw.configure_property(self, &"position").state().carry_along(&"velocity")
+	## [/codeblock]
+	## [param channel] must name another [method state] property of the same
+	## entity, and declaring the pair is also what sorts the two: this field joins
+	## the pose
+	## [member NetwLagCompensationInterface.PredictionHandle.teleport_threshold]
+	## is measured over, and [param channel] joins the momentum family. A value
+	## whose rate turns, decays, or jumps inside the window wants
+	## [method carry_step] instead.
+	## [br][br]This is a reconciliation declaration, independent of
+	## [method NetwInterpolate.project_by], which decides how a remote display
+	## extrapolates past its newest sample.
+	func carry_along(channel: StringName) -> PropertyConfig:
+		carry_channel = channel
+		return self
+
+
+	## Advances this value by running [param step] once over each transition the
+	## owner recorded since the acknowledgement.
+	##
+	## Where [method carry_along] extrapolates one rate, this re-runs the part of
+	## the simulation that moves this one field, so a rate that turns, decays or
+	## jumps inside the window is followed rather than averaged. It is that field's
+	## share of the step, never the whole step: nothing else is re-simulated and
+	## the physics server is never stepped, which is what keeps it available to a
+	## body whose solver cannot be re-run.
+	## [codeblock]
+	## func _init() -> void:
+	##     Netw.configure_property(self, &"spin").state().carry_step(_carry_spin)
+	##
+	## func _carry_spin(value: Vector3, ctx: PredictionHandle.CarryContext) -> Vector3:
+	##     return value + _drive_axis(ctx.state) * ctx.state[&"speed"] * ctx.delta
+	## [/codeblock]
+	## [param step] may read only its [PredictionHandle.CarryContext] and must
+	## write nothing. The engine holds it to that rather than trusting it: a step
+	## is replayed against transitions the owner already recorded and retired once
+	## it stops reproducing them, and a refused carry writes the acknowledged value
+	## exactly as an undeclared field does.
+	## [member NetwLagCompensationInterface.PredictionHandle.field_recovery] counts
+	## both.
+	## [br][br]The rule is stored per node rather than per script, because a
+	## [Callable] is bound to one body while a property declaration is shared by
+	## every instance of the script that declares it. [param step] therefore has to
+	## be a method or lambda of a [Node], which is the body it will advance.
+	func carry_step(step: Callable) -> PropertyConfig:
+		var owner := step.get_object() as Node
+		if not step.is_valid() or not owner:
+			push_error(
+				(
+						"PropertyConfig.carry_step: '%s' needs a Callable bound to "
+						+ "the Node it advances, so the rule belongs to one body "
+						+ "rather than to every instance of its script."
+				) % [context_name],
+			)
+			return self
+		NetwScriptModel.configure_node_property(
+			owner,
+			context_name,
+		).carry_rule = step
+		return self
+
+
 	## Restricts the field to teleport-tier recoveries, so an ordinary one leaves
 	## it alone. Right for a value whose mid-flight rewrite is more disruptive
 	## than the drift it would correct.
+	##
+	## A field marked this way and left free to trigger demands recoveries that
+	## are forbidden to write it, so the only one that repairs it is the promoted
+	## full closure. Pair it with [method carry_along] or [method carry_step] so
+	## that promoted restore
+	## lands at the present, or with [method reconcile_only] so its drift stops
+	## demanding recoveries that answer by writing other fields.
 	## [codeblock]
 	## Netw.configure_property(self, &"angular_velocity").state().teleport_only()
 	## [/codeblock]

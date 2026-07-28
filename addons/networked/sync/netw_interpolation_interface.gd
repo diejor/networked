@@ -1252,10 +1252,17 @@ func _on_chase_recovered(
 			continue
 		if not deltas.has(state.source_prop):
 			continue
-		state.display_offset = _clamp_delta(
-			_scale_delta(deltas[state.source_prop], -1.0),
-			limit,
-		)
+		# Absorbed onto whatever the last recovery has not finished gliding off,
+		# never in place of it. The offset is what holds the visual still while
+		# the body moves, so replacing it hands the screen the part of the
+		# previous absorption that had not decayed yet. One correction cannot
+		# show that, because there is nothing outstanding to lose. A stream of
+		# them shows nearly all of it: at a correction every few frames the
+		# residual is most of the write, and it arrives as a step every time.
+		var absorbed: Variant = _scale_delta(deltas[state.source_prop], -1.0)
+		if state.display_offset != null and absorbed != null:
+			absorbed = _add_delta(state.display_offset, absorbed)
+		state.display_offset = _clamp_delta(absorbed, limit)
 		state.role_offset_pending = false
 
 

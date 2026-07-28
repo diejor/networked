@@ -814,3 +814,161 @@ func test_a_recovery_stages_a_field_that_had_no_divergence() -> void:
 		+ "every recovery-conservation law here need re-reading.",
 	).is_true()
 	assert_float(plan[&"restore"][&"rate"]).is_equal_approx(7.0, 0.0001)
+
+
+# The consequence of the law above, made readable at the entity.
+#
+# A field withheld below the teleport tier and left free to trigger demands
+# recoveries that are forbidden to write it, and every one of them is answered
+# by writing some other field instead. Each comparison looks ordinary and the
+# per-comparison divergence cannot show it, so the evidence is the run: the
+# field that raised the corrections and the field that received the repairs come
+# apart, and the ledger is where that separation is legible.
+func test_the_ledger_separates_the_field_that_triggers_from_the_one_repaired() -> void:
+	var s := PredictionScenario.new()
+	s.body_type = LagCompWithheldBody
+	await s.setup(self)
+	var subject := await s.add_predicted_entity(
+		[&"position", &"velocity", &"boost"],
+	)
+	var anchor := await s.add_predicted_entity(
+		[&"position", &"velocity", &"boost"],
+	)
+	subject.client_prediction.correction_mode = CorrectionMode.SNAP
+	subject.client_prediction.teleport_threshold = 1000.0
+	# Partiality is an in-domain refinement, so the island declaration is what
+	# lets the withheld mark be honoured at all. Undeclared, the first recovery
+	# would restore the whole closure and there would be no separation to read.
+	subject.client_prediction.island().add(anchor.client_entity)
+
+	s.hold_input(subject, RIGHT)
+	s.hold_input(anchor, RIGHT)
+	s.run(12)
+	subject.server_root.boost = 5.0
+	s.run(20)
+
+	var account := subject.client_prediction.field_recovery
+	assert_bool(account.has(&"boost")).override_failure_message(
+		"every compared field earns a row, so the field that never gets repaired "
+		+ "is readable rather than absent",
+	).is_true()
+	var boost: PredictionHandle.FieldRecovery = account[&"boost"]
+	var position: PredictionHandle.FieldRecovery = account[&"position"]
+	var reading := "boost %d/%d/%d, position %d/%d/%d" % [
+		boost.triggered, boost.repaired, boost.contracted,
+		position.triggered, position.repaired, position.contracted,
+	]
+	assert_int(boost.triggered).override_failure_message(
+		"the withheld field crossed its tolerance and no other field had, so it "
+		+ "is what the recoveries were answering. %s" % reading,
+	).is_greater(0)
+	assert_int(boost.triggered).override_failure_message(
+		"the withheld field must demand more recoveries than it receives, which "
+		+ "is the whole reading. %s" % reading,
+	).is_greater(boost.repaired)
+	assert_int(position.repaired).override_failure_message(
+		"the recoveries the withheld field demanded were spent writing the pose "
+		+ "instead, so the repairs must be visible on a field that was not the "
+		+ "one refusing to close. %s" % reading,
+	).is_greater(0)
+	await s.teardown()
+
+# --- the folded carry ---
+
+
+# Builds an engine holding a recorded run of three transitions that each moved
+# the pose by STEP, which is what a faithful rule has to reproduce.
+func _carry_engine(rule: Callable) -> Engine_:
+	var engine := Engine_.new()
+	engine._handle = PredictionHandle.new()
+	engine._handle._schedule = PredictionHandle.Schedule.FRAME
+	engine._handle.teleport_threshold = 100.0
+	engine._handle.divergence_epsilon = 0.01
+	engine._tick_delta = 1.0
+	engine._causal_fields = { &"position": true }
+	engine._carry_rules = { &"position": rule }
+	engine._timeline = NetwTimeline.new(64)
+	engine._entry_history = NetwTimeline.new(64)
+	for i in range(1, 5):
+		engine._entry_history.record_state(
+			i,
+			{ &"position": Vector2((i - 1) * 2.0, 0.0) },
+		)
+	for i in range(1, 4):
+		engine._timeline.record_input(i, { &"motion": Vector2.RIGHT })
+		engine._authored_tape.append({
+			"index": i,
+			"label": i,
+			"fresh": true,
+		})
+	return engine
+
+
+# The faithful rule: exactly the step the recorded run took.
+func _carry_true(value: Vector2, ctx: PredictionHandle.CarryContext) -> Vector2:
+	return value + (ctx.input.get(&"motion", Vector2.ZERO) as Vector2) * 2.0 			* ctx.delta
+
+
+# A rule reading something the transition never saw, which is what a step must
+# never do and what the tape is able to catch.
+func _carry_live_world(
+		value: Vector2,
+		ctx: PredictionHandle.CarryContext,
+) -> Vector2:
+	return value + (ctx.input.get(&"motion", Vector2.ZERO) as Vector2) * 99.0 			* ctx.delta
+
+
+# A rule states part of the transition function a second time, so a recovery
+# runs it only across the transitions the owner already recorded. Restating the
+# step exactly must therefore land the acknowledged value where the owner
+# actually is, three transitions later.
+func test_a_faithful_carry_step_advances_the_write() -> void:
+	var engine := _carry_engine(_carry_true)
+	var carried := engine._carry_payload({ &"position": Vector2.ZERO }, 0)
+	var account: PredictionHandle.FieldRecovery = 			engine._handle.field_recovery[&"position"]
+
+	assert_vector(carried[&"position"]).override_failure_message(
+		"three recorded transitions each moved the pose by 2, so a step that "
+		+ "restates them must carry the acknowledged value all three",
+	).is_equal(Vector2(6.0, 0.0))
+	assert_int(account.carried).is_equal(1)
+	assert_int(account.infidelity).is_equal(0)
+	assert_int(account.declined).is_equal(0)
+
+
+# The check that makes a rule safe to accept at all. A step that reads anything
+# but its context cannot reproduce what the owner recorded, and the engine has
+# to see that from the tape alone, refuse the carry, and leave the acknowledged
+# value: a bad step is never worse than declaring none.
+func test_a_carry_step_that_disagrees_with_the_tape_is_refused() -> void:
+	var engine := _carry_engine(_carry_live_world)
+	var payload := { &"position": Vector2.ZERO }
+	var carried := engine._carry_payload(payload, 0)
+	var account: PredictionHandle.FieldRecovery = 			engine._handle.field_recovery[&"position"]
+
+	assert_vector(carried[&"position"]).override_failure_message(
+		"a refused carry must leave the acknowledged value exactly as an "
+		+ "undeclared field does",
+	).is_equal(Vector2.ZERO)
+	assert_int(account.infidelity).override_failure_message(
+		"the step disagrees with every recorded transition, so the tape must "
+		+ "convict it",
+	).is_greater(0)
+	assert_int(account.carried).is_equal(0)
+	assert_int(account.declined).is_greater(0)
+
+
+# Retirement is what bounds the cost of a bad rule: it is called until the
+# evidence against it is conclusive and never again, so a game pays a bounded
+# number of refusals rather than one per recovery forever.
+func test_a_disagreeing_carry_step_is_retired() -> void:
+	var engine := _carry_engine(_carry_live_world)
+	for _attempt in Engine_.CARRY_INFIDELITY_LIMIT + 2:
+		engine._carry_payload({ &"position": Vector2.ZERO }, 0)
+	var account: PredictionHandle.FieldRecovery = 			engine._handle.field_recovery[&"position"]
+
+	assert_int(account.infidelity).override_failure_message(
+		"a retired step must stop being judged, so the count stops at the limit "
+		+ "rather than climbing with every later recovery",
+	).is_equal(Engine_.CARRY_INFIDELITY_LIMIT)
+	assert_int(account.carried).is_equal(0)

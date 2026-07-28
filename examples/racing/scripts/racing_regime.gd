@@ -13,6 +13,7 @@ extends RefCounted
 ## symptom    accelerate and release cycles, then rotating in place
 ## slalom     three steer legs, the original scripted turn
 ## wall       full throttle into the outer wall, no steering
+## wall_grind sustained wall contact with steer held into it
 ## wall_hard  repeated square wall hits with reverse backoffs
 ## contact    closed-loop aim at the other car
 ## hold       no input for the whole horizon
@@ -27,6 +28,12 @@ const LEGACY_MODE_VAR := "NETW_RACING_CAPTURE_MODE"
 
 # Seconds one cornering leg holds its steer direction before reversing.
 const LAPS_LEG_SECONDS := 3.0
+# Seconds a wall grind drives straight before it expects to have arrived.
+const WALL_GRIND_APPROACH_SECONDS := 8.0
+# Physics frames out of contact before a grind reverses its steer to come back.
+# Solver contact flickers frame to frame even while a car is pinned, so a
+# reversal on the first empty frame would chatter instead of hold.
+const WALL_GRIND_REACQUIRE_FRAMES := 10
 # The symptom gesture's cycle, matching the reported repro: accelerate one to
 # two seconds, release, wait for the episode to close, repeat.
 const SYMPTOM_DRIVE_SECONDS := 1.5
@@ -63,6 +70,7 @@ static func attach(session: Node, api: NetwMultiplayer) -> NetwRegimePeer:
 		"symptom": adapter._drive_symptom,
 		"slalom": adapter._drive_slalom,
 		"wall": adapter._drive_wall,
+		"wall_grind": adapter._drive_wall_grind,
 		"wall_hard": adapter._drive_wall_hard,
 		"contact": adapter._drive_at_other_car,
 		"hold": adapter._hold,
@@ -309,6 +317,57 @@ func _drive_wall(seconds: float) -> void:
 		return
 	car.inputs.state[car.inputs.accelerate] = true
 	await _session.get_tree().create_timer(seconds).timeout
+	_clear_inputs(car)
+
+
+# Sustained wall contact with steer held into the wall, which is what an
+# angular-velocity question needs and what a head-on rest cannot supply. Full
+# throttle alone settles the car square against the wall with no angular
+# content: it steers on none of its contact ticks, against a third to a half of
+# them for a human driving the same repro.
+#
+# Closed loop on the contact probe rather than timed steer legs, for the reason
+# _drive_at_other_car is closed loop. An open-loop version measured 5% wall
+# contact against the head-on arm's 88%, and five times its path length: at
+# full throttle a steer leg turns the car off the wall and drives it away,
+# clipping the wall on part of each arc. So the steer direction is held while
+# contact holds, and reverses only once contact is actually lost, which pins
+# the car against the wall while steering the whole time.
+func _drive_wall_grind(seconds: float) -> void:
+	var car := _car()
+	if car == null:
+		return
+	var probe := car.sphere as VehicleContactProbe
+	if probe == null:
+		push_error("regime: wall_grind needs the contact probe to close its loop")
+		return
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	var approach := Time.get_ticks_msec() \
+			+ int(WALL_GRIND_APPROACH_SECONDS * 1000.0)
+	car.inputs.state[car.inputs.accelerate] = true
+
+	# Arrive square, the way the head-on arm reliably does, before steering at
+	# all. Steering during the approach curves the car away from the wall it
+	# has not reached yet.
+	while (Time.get_ticks_msec() < approach
+			and Time.get_ticks_msec() < deadline
+			and is_instance_valid(car)
+			and probe.wall_contacts == 0):
+		await _session.get_tree().process_frame
+
+	var steer_right := true
+	var lost := 0
+	while Time.get_ticks_msec() < deadline and is_instance_valid(car):
+		if probe.wall_contacts > 0:
+			lost = 0
+		else:
+			lost += 1
+			if lost >= WALL_GRIND_REACQUIRE_FRAMES:
+				steer_right = not steer_right
+				lost = 0
+		car.inputs.state[car.inputs.steer_right] = steer_right
+		car.inputs.state[car.inputs.steer_left] = not steer_right
+		await _session.get_tree().process_frame
 	_clear_inputs(car)
 
 

@@ -1702,7 +1702,7 @@ class PredictionHandle:
 	enum RestoreMode {
 		## Restore the authoritative state verbatim at its own tick.
 		EXACT,
-		## Project each derivative-declaring field forward to the present tick by its
+		## Project each carry-declaring field forward to the present tick by its
 		## replicated velocity before restoring, so a dynamic body lands near where
 		## it is instead of snapping back to a stale tick.
 		EXTRAPOLATED,
@@ -2283,6 +2283,108 @@ class PredictionHandle:
 			_handle.breach_response = response
 			return self
 
+	## One state field's running account of the recoveries it asked for against
+	## the ones that answered it, a row of
+	## [member PredictionHandle.field_recovery].
+	##
+	## The three counts are kept apart because a field can score any pair of them
+	## independently, and which pair it scores is the whole diagnosis. A field
+	## that triggers and is never repaired is asking for recoveries that go to
+	## other fields. One repaired without contracting is being written with a
+	## value that does not help.
+	## [codeblock]
+	## triggered  ──> repaired ──> contracted    the field is served
+	## triggered  ──> repaired ──> .             written, and the write is no help
+	## triggered  ──> .        ──> .             asking, and answered elsewhere
+	## .          ──> repaired ──> .             written on someone else's behalf
+	## [/codeblock]
+	## One recorded transition, handed to a
+	## [method NetwScriptModel.PropertyConfig.carry_step] rule as it runs.
+	##
+	## A rule advances an acknowledged value across the transitions the owner has
+	## driven since, so what it is given is one of those transitions rather than
+	## the present. Everything here is the recorded past, which is the whole
+	## reason a rule may not read the live world instead.
+	## [codeblock]
+	## func _carry(value: Vector3, ctx: PredictionHandle.CarryContext) -> Vector3:
+	##     var axis := _drive_axis(ctx.state[&"heading"])
+	##     return value + axis * ctx.state[&"speed"] * ctx.delta
+	## [/codeblock]
+	class CarryContext:
+		extends RefCounted
+
+		## The declared state the owner recorded before this transition drove, the
+		## same values [method NetwScriptModel.PropertyConfig.state] names.
+		var state: Dictionary = { }
+
+		## The command this transition ran, as
+		## [method NetwScriptModel.PropertyConfig.input] declares it.
+		var input: Dictionary = { }
+
+		## This transition's width in simulated seconds.
+		var delta: float = 0.0
+
+		## The input tick this transition was labelled with.
+		var label: int = -1
+
+	## One state field's running account of the recoveries it asked for against
+	## the ones that answered it, a row of
+	## [member PredictionHandle.field_recovery].
+	##
+	## The counts are kept apart because a field can score any combination of them
+	## independently, and which combination it scores is the whole diagnosis. A
+	## field that triggers and is never repaired is asking for recoveries that go
+	## to other fields. One repaired without contracting is being written with a
+	## value that does not help.
+	## [codeblock]
+	## triggered  ──> repaired ──> contracted    the field is served
+	## triggered  ──> repaired ──> .             written, and the write is no help
+	## triggered  ──> .        ──> .             asking, and answered elsewhere
+	## .          ──> repaired ──> .             written on someone else's behalf
+	## [/codeblock]
+	class FieldRecovery:
+		extends RefCounted
+
+		## Comparisons that corrected while this field was past its own
+		## [method NetwScriptModel.PropertyConfig.epsilon], so a recovery was
+		## materially answering it.
+		var triggered: int = 0
+
+		## Recoveries that wrote this field, whether or not it asked for one.
+		var repaired: int = 0
+
+		## Writes to this field that a later comparison found smaller.
+		##
+		## A recovery lands on the body now while the comparisons just behind it
+		## were driven at the acknowledgement, so a write is only judged once a
+		## comparison reaches a transition driven past it. Scoring the very next
+		## comparison would read back the error the write was answering, which is
+		## the same lag that makes a correction train look like a divergence
+		## refusing to close.
+		var contracted: int = 0
+
+		## Recoveries whose write this field's declared
+		## [method NetwScriptModel.PropertyConfig.carry_step] rule advanced to
+		## the present.
+		var carried: int = 0
+
+		## Carries the engine refused, each of which wrote the acknowledged value
+		## instead, which is what an undeclared field always writes.
+		##
+		## A rule is refused when the recorded transitions it would fold over are
+		## missing or incomplete, when it returns the wrong type or a non-finite
+		## value, when it moves the value further than a teleport would, or once it
+		## has been retired.
+		var declined: int = 0
+
+		## Times the rule failed to reproduce a transition the owner had already
+		## recorded, which is the one check that can tell a rule reading the live
+		## world, or one that is simply wrong, from a rule that agrees.
+		##
+		## Enough of these retires the rule, after which it is never called again
+		## and every recovery writes the acknowledged value.
+		var infidelity: int = 0
+
 	## Lifecycle state of one actionable divergence episode.
 	enum EpisodeState {
 		## The episode is accepting comparisons and operator evidence.
@@ -2391,9 +2493,10 @@ class PredictionHandle:
 	##
 	## A large error means a genuine desync (a wall bounce, a teleport) rather than
 	## a contractive field drifting, and past it the predicted body holds nothing
-	## worth keeping. The error is measured over the derivative-declaring fields,
-	## so an entity that declares no derivative channel has no pose to measure and
-	## every one of its recoveries restores the whole closure.
+	## worth keeping. The error is measured over the fields that declared a
+	## [method NetwScriptModel.PropertyConfig.carry_along] channel, so an entity
+	## that declared none has no pose to measure and every one of its recoveries
+	## restores the whole closure.
 	var teleport_threshold: float = 2.0
 
 	## Ticks that a [method notify_contact] pauses non-teleport corrections for. A
@@ -2542,6 +2645,32 @@ class PredictionHandle:
 	## without ever triggering or being restored. Empty until the first
 	## comparison.
 	var last_field_divergence: Dictionary[StringName, float] = { }
+
+	## Per state field, how often it demanded a recovery and how often one
+	## repaired it, accumulated since spawn.
+	##
+	## A field may be admitted to the trigger set without being reachable by any
+	## operator in the ladder. [method NetwScriptModel.PropertyConfig.teleport_only]
+	## withholds a field from every sub-teleport restore while leaving it free to
+	## trigger, so it can raise corrections that are forbidden to write it and are
+	## answered by repairing some other field instead. Each comparison looks
+	## ordinary on its own and [member last_field_divergence] cannot show it,
+	## because the evidence is the whole run rather than any one tick. This is the
+	## count the wiring report names when it warns about that pairing.
+	## [codeblock]
+	## var row := entity.prediction.field_recovery[&"sphere_angular_velocity"]
+	## print(row.triggered, row.repaired, row.contracted)   # 1393  50  0
+	##
+	## # triggers nearly every recovery, is withheld from nearly every one, and
+	## # the few that wrote it did not shrink it: no operator repairs this field
+	## [/codeblock]
+	## In domain a correction is decided by fingerprint rather than tolerance, so
+	## [member PredictionHandle.FieldRecovery.triggered] names the fields that
+	## were also past their declared tolerance rather than the ones that cast the
+	## deciding vote. A field declared
+	## [method NetwScriptModel.PropertyConfig.reconcile_only] never counts a
+	## trigger, since it is excluded from the decision by declaration.
+	var field_recovery: Dictionary[StringName, FieldRecovery] = { }
 
 	## Config keys the scene's [PredictionComponent] declared with non-default
 	## values, named by the configure-verb key that would restate each one.
@@ -2755,6 +2884,15 @@ class PredictionHandle:
 	## is not. Which label a transition earns is decided by
 	## [method island], so an entity that declares no island keeps the
 	## tolerance compare it always had.
+	## [br][br]It is the trigger only where it arrives in time to be one. The
+	## verdict rides the acknowledgement lane while the comparison runs when the
+	## authoritative state arrives, so a transition compared before its
+	## acknowledgement is judged by tolerance and this counter reports a
+	## divergence nothing acted on. A set that ships whole rows can be judged on
+	## arrival. A [method NetwScriptModel.PropertyConfig.masked] set cannot,
+	## because a masked frame carries only the fields that changed and the
+	## authority row it belongs to cannot be fingerprinted from it. Read this
+	## counter as what the peers disagreed about, never as what was corrected.
 	var fp_mismatch_count: int = 0
 
 	## The first transition [member fp_mismatch_count] counted, or [code]-1[/code]
@@ -2983,6 +3121,7 @@ class PredictionHandle:
 	## Returns the fluent environment-sensor declaration.
 	func sensors() -> SensorsConfig:
 		return SensorsConfig.new(self)
+
 
 
 	## Returns the fluent realized-witness declaration.
@@ -4332,6 +4471,22 @@ class _PredictionEngine extends RefCounted:
 	# restore projects forward. Built once per rewire from the state set specs,
 	# empty when no field declares a project_channel present in the set.
 	var _restore_projection: Dictionary[StringName, StringName] = { }
+	# The fields the recovery reads as the body's POSE: the ones it can advance
+	# to the present, so the teleport tier and transport both measure over values
+	# they are able to land at now rather than at the acknowledgement.
+	#
+	# Held apart from _restore_projection on purpose. That map answers "what
+	# carries this field forward" and this set answers "which fields is the pose
+	# error made of", and the two only coincide while the sole forward model is a
+	# declared derivative channel. A field that gains a forward model does not
+	# thereby become part of the pose the teleport tier measures, and the reverse
+	# is equally false, so a caller has to say which question it is asking.
+	#
+	# Not the same set as the STATE_FAMILY_POSE marks in _state_family_of, which
+	# are stamped before the HOLD check below and so also cover a field that
+	# declares a channel it must never extrapolate along. _non_pose_eligibility
+	# reads those marks and is deliberately the wider question.
+	var _pose_fields: Dictionary[StringName, bool] = { }
 	# Per-field fractions a recovery steps toward the rebase rather than writing
 	# it outright, read off each property's own declaration at wire time.
 	var _converge_rules: Dictionary[StringName, float] = { }
@@ -4341,9 +4496,40 @@ class _PredictionEngine extends RefCounted:
 	# Fields whose own divergence never triggers a correction, read off each
 	# property's reconcile_only() mark at wire time.
 	var _trigger_excludes: Dictionary[StringName, bool] = { }
+	# One open contraction question per field, held as two flat columns rather
+	# than a row object so arming one allocates nothing: the error a recovery
+	# wrote against, and the drive frontier it wrote at.
+	#
+	# The basis is what makes the answer mean anything. A recovery lands on the
+	# body now while the next comparison judges a transition driven at the
+	# acknowledgement, so at any acknowledgement age above zero the comparisons
+	# immediately following a write were all driven before it existed and report
+	# the error it already answered. Holding the question until a comparison
+	# judges a transition driven past the write is what separates "this write did
+	# not help" from "nothing has judged this write yet". A second write to the
+	# same field replaces the question rather than queueing it.
+	var _ledger_pending_error: Dictionary[StringName, float] = { }
+	var _ledger_pending_basis: Dictionary[StringName, int] = { }
 	# Per-field divergence thresholds overriding the entity default, read off
 	# each property's epsilon() mark at wire time.
 	var _epsilon_overrides: Dictionary[StringName, float] = { }
+	# Field key -> the step a restore runs over each recorded transition, read off
+	# the declaring node's own overlay at wire time. Disjoint from
+	# _restore_projection: a field declares a channel or a step, never both.
+	var _carry_rules: Dictionary[StringName, Callable] = { }
+	# Recorded post-states a recovery write moved, so a fidelity judgement never
+	# asks a rule to reproduce one. Keyed by the recording index, bounded with the
+	# tape it indexes into.
+	var _carry_dirty_records: Dictionary[int, bool] = { }
+	# Fields whose rule stopped reproducing the owner's own recorded transitions
+	# often enough to be taken out of the loop. A retired rule is never called
+	# again for the life of the wiring, so a bad rule costs a bounded number of
+	# bad writes rather than every write.
+	var _carry_retired: Dictionary[StringName, bool] = { }
+	# One reusable context per fold is tempting and wrong: a rule that stores the
+	# context would silently read a later transition's values out of it. A fresh
+	# one per call costs an allocation and cannot be misread.
+	const CARRY_INFIDELITY_LIMIT := 8
 	# State field -> family index: pose, momentum, or controller and latches.
 	var _state_family_of: Dictionary[StringName, int] = { }
 	# State fields the next transition may read, which is the scope of every
@@ -4498,7 +4684,10 @@ class _PredictionEngine extends RefCounted:
 	# sensors, so a re-run transition reads the world its original drive read.
 	var _sensor_samples: Dictionary = { }
 	# Produced membership and fidelity are committed only at transition boundaries.
+	# The seeded latch tells a first declaration from a later change, because only
+	# a change is a fact the two peers adopted on different transitions.
 	var _island_members: Array[NetwEntity] = []
+	var _island_roster_seeded: bool = false
 	var _simulated_members: Dictionary[NetwEntity, bool] = { }
 	var _realized_contact_entities: Dictionary[NetwEntity, bool] = { }
 
@@ -5018,7 +5207,7 @@ class _PredictionEngine extends RefCounted:
 	##
 	## Under
 	## [constant NetwLagCompensationInterface.PredictionHandle.RestoreMode.EXTRAPOLATED]
-	## the derivative-declaring properties carry forward to now, so a solver body
+	## the carry-declaring properties advance to now, so a solver body
 	## lands near where it is rather than at the stale acknowledgement. The span
 	## is capped by [param max_restore_ticks] because a backlogged acknowledgement
 	## would otherwise launch the body along a long straight line off a curved
@@ -5707,7 +5896,7 @@ class _PredictionEngine extends RefCounted:
 			predicted,
 			authority,
 			current,
-			_restore_projection,
+			_pose_fields,
 			_angle_fields,
 		)
 		var basis_clean := _witness_row_clean(
@@ -7245,11 +7434,16 @@ class _PredictionEngine extends RefCounted:
 		input_binding.volatile_external = false
 		_timeline = null
 		_restore_projection = { }
+		_pose_fields = { }
 		_state_family_of = { }
 		_causal_fields = { }
 		_angle_fields = { }
 		_converge_rules = { }
 		_cooldown_until_tick = -1
+		# A rewire re-keys the transitions a pending write was staged against, so
+		# no comparison after it can still judge that write.
+		_ledger_pending_error.clear()
+		_ledger_pending_basis.clear()
 		# A rewire re-keys the transitions the evidence was gathered over, so a
 		# streak cannot mean anything across it.
 		_reset_recovery_trackers()
@@ -7410,14 +7604,23 @@ class _PredictionEngine extends RefCounted:
 		return iface.register_timeline(_entity) if iface else null
 
 
-	# Reads each state field's NetwInterpolate spec and records the field-to-velocity
-	# pairs an EXTRAPOLATED snap restore projects, plus which fields are ANGLE
-	# channels. A field qualifies for projection when its spec names a
-	# project_channel that is also a field in this set, so the velocity is
-	# replicated at the same tick. Built once per rewire, so the reconcile path only
-	# reads the maps.
+	# Reads the per-field recovery marks once per rewire, so the reconcile path
+	# only reads the maps.
+	#
+	# The forward model comes from each property's own carry_along() or
+	# carry_step() mark rather
+	# than from its NetwInterpolate spec. The two decide different things: one is
+	# how a recovery advances an acknowledged value to the present, the other is
+	# how a remote display extrapolates past its newest sample. Reading the
+	# display spec for both meant a forecast-tail choice silently moved the
+	# teleport tier's boundary. ANGLE is still read from the spec, because it
+	# describes the value's own topology and every comparison needs it.
 	func _build_restore_projection(binding: NetwSyncSetBinding) -> void:
 		_restore_projection = { }
+		_pose_fields = { }
+		_carry_rules = { }
+		_carry_retired = { }
+		_carry_dirty_records = { }
 		_state_family_of = { }
 		_causal_fields = { }
 		_angle_fields = { }
@@ -7436,19 +7639,17 @@ class _PredictionEngine extends RefCounted:
 				_causal_fields[field.key] = true
 		for field in binding.set.fields:
 			var spec := NetwScriptModel.get_node_property_interpolator(node, field.key)
-			if not spec:
-				continue
-			if spec.mode == NetwInterpolate.Mode.ANGLE:
+			if spec and spec.mode == NetwInterpolate.Mode.ANGLE:
 				_angle_fields[field.key] = true
-			if spec.project_channel == &"":
-				continue
-			if not field_keys.has(spec.project_channel):
+			# A channel this set does not carry cannot be read at the same tick as
+			# the field it advances, so the pair is not one the engine can honour.
+			var channel := binding.carry_channel_of(field.key)
+			if channel == &"" or not field_keys.has(channel):
 				continue
 			_state_family_of[field.key] = STATE_FAMILY_POSE
-			_state_family_of[spec.project_channel] = STATE_FAMILY_MOMENTUM
-			if spec.forecast_tail == NetwInterpolate.Tail.HOLD:
-				continue
-			_restore_projection[field.key] = spec.project_channel
+			_state_family_of[channel] = STATE_FAMILY_MOMENTUM
+			_restore_projection[field.key] = channel
+			_pose_fields[field.key] = true
 		# The per-field recovery facts live on the property marks, so this is
 		# where they enter the engine: one read per rewire, one source per fact.
 		for field in binding.set.fields:
@@ -7462,32 +7663,302 @@ class _PredictionEngine extends RefCounted:
 			var threshold := binding.epsilon_override_of(field.key)
 			if threshold >= 0.0:
 				_epsilon_overrides[field.key] = threshold
+			# A step is declared per node, so it is read off this body's own
+			# overlay rather than the declarations its script shares.
+			var step := NetwScriptModel.get_node_property_carry(node, field.key)
+			if not step.is_valid():
+				continue
+			if _restore_projection.has(field.key):
+				push_error(
+					(
+							"PredictionComponent: '%s' declares both carry_along() "
+							+ "and carry_step(). One field, one forward model: "
+							+ "keep the step for a rate that varies across the "
+							+ "acknowledgement window, the channel for one that "
+							+ "holds still. The channel is being used."
+					) % [field.key],
+				)
+				continue
+			_carry_rules[field.key] = step
+		# Give every compared field a row up front. A field that never triggered
+		# and was never repaired is the reading worth having, and it would
+		# otherwise be an absent key indistinguishable from a field that is not
+		# declared at all. Counts already accumulated survive the rewire.
+		for field: StringName in _causal_fields:
+			_ledger_row(field)
 
 
-	# A copy of [param payload] with every derivative-declaring field advanced by
-	# [param age] seconds through its replicated velocity. Fields with no pair, no
-	# velocity in the payload, or an unprojectable type restore verbatim.
+	# A copy of [param payload] with every rule-declaring field folded forward
+	# across the transitions the owner drove after [param basis].
+	#
+	# A rule is a second, partial statement of the transition function, so it is
+	# never trusted, only checked. Three things can be checked and all three are:
+	# that it did not write the body it describes, that it reproduces transitions
+	# the owner already recorded, and that what it returns is the same type, is
+	# finite, and is nearer than a teleport. Anything else refuses the carry and
+	# leaves the acknowledged value, which is what an undeclared field writes, so
+	# a broken rule can never be worse than declaring none.
+	func _carry_payload(payload: Dictionary, basis: int) -> Dictionary:
+		if _carry_rules.is_empty():
+			return payload
+		# Judged here rather than at wire time because the tier is a runtime
+		# property a game may declare after the entity is wired, so a check taken
+		# once on the way in would answer for a schedule nobody had chosen yet.
+		if _handle._schedule != PredictionHandle.Schedule.FRAME:
+			for field: StringName in _carry_rules:
+				_ledger_row(field).declined += 1
+				_retire_carry(
+					field,
+					"needs schedule().frame(): the tick tier re-anchors its own "
+					+ "state record to authority on every correction, so too "
+					+ "little of it is the owner's own to replay a rule against",
+				)
+			return payload
+		var entries := _carry_entries(basis)
+		var out := payload
+		var copied := false
+		for field: StringName in _carry_rules:
+			if not payload.has(field):
+				continue
+			var row := _ledger_row(field)
+			if _carry_retired.has(field) or entries.is_empty():
+				row.declined += 1
+				continue
+			var rule: Callable = _carry_rules[field]
+			if not _judge_carry_fidelity(field, rule, entries):
+				row.declined += 1
+				continue
+			# The purity check brackets the fold rather than each call: what it
+			# has to catch is a rule that writes the body, and one write anywhere
+			# in the fold moves the fingerprint. An engine with no bound state set
+			# has no declared state for a rule to disturb, so there is nothing to
+			# fingerprint and nothing the check would protect.
+			var guarded := _state_binding != null
+			var before := _state_fingerprint(_capture()) if guarded else 0
+			var carried: Variant = _fold_carry(field, rule, payload[field], entries)
+			if guarded and _state_fingerprint(_capture()) != before:
+				_retire_carry(
+					field,
+					"wrote to the body it is supposed to describe",
+				)
+				row.declined += 1
+				continue
+			if carried == null:
+				row.declined += 1
+				continue
+			if not copied:
+				out = payload.duplicate()
+				copied = true
+			out[field] = carried
+			row.carried += 1
+		return out
+
+
+	# The transitions a fold walks, newest last, in the numbering its tier records
+	# state under.
+	#
+	# The two tiers keep the same history in different books. FRAME drives once
+	# per physics frame and records per tape entry, TICK once per tick and records
+	# per tick, and both record the state a transition ran FROM under that
+	# transition's own index.
+	func _carry_entries(basis: int) -> Array[Dictionary]:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
+			return _scope_entries(basis)
+		var out: Array[Dictionary] = []
+		for tick in range(basis + 1, _latest_input_tick + 1):
+			out.append({
+				&"index": tick,
+				&"label": tick,
+				&"input": _timeline.input_at(tick),
+			})
+		return out
+
+
+	# The declared state one transition ran from, out of its tier's own book.
+	func _carry_state_at(index: int) -> Dictionary:
+		if _handle._schedule == PredictionHandle.Schedule.FRAME:
+			return _entry_history.state_at(index)
+		return _timeline.state_at(index)
+
+
+	# Folds one rule across [param entries], or null when any step is unusable.
+	func _fold_carry(
+			field: StringName,
+			rule: Callable,
+			start: Variant,
+			entries: Array[Dictionary],
+	) -> Variant:
+		var value: Variant = start
+		for entry: Dictionary in entries:
+			var index := int(entry.get(&"index", -1))
+			var state := _carry_state_at(index)
+			if state.is_empty():
+				return null
+			var stepped: Variant = _call_carry(
+				rule,
+				value,
+				state,
+				entry.get(&"input", { }),
+				int(entry.get(&"label", -1)),
+			)
+			if stepped == null or typeof(stepped) != typeof(start):
+				return null
+			value = stepped
+		# A carry that lands further from the acknowledged value than a teleport
+		# would move the body is not advancing it, whatever it computed.
+		if PredictionHandle._error(
+			value,
+			start,
+			_angle_fields.has(field),
+		) >= _handle.teleport_threshold:
+			return null
+		return value
+
+
+	# One rule invocation, refusing a non-finite result rather than writing it.
+	func _call_carry(
+			rule: Callable,
+			value: Variant,
+			state: Dictionary,
+			input: Variant,
+			label: int,
+	) -> Variant:
+		var ctx := PredictionHandle.CarryContext.new()
+		ctx.state = state
+		ctx.input = input if input is Dictionary else { }
+		ctx.delta = _tick_delta
+		ctx.label = label
+		var result: Variant = rule.call(value, ctx)
+		match typeof(result):
+			TYPE_FLOAT:
+				return result if is_finite(result as float) else null
+			TYPE_VECTOR2:
+				return result if (result as Vector2).is_finite() else null
+			TYPE_VECTOR3:
+				return result if (result as Vector3).is_finite() else null
+		return result
+
+
+	# Replays the rule over one transition the owner already recorded and asks
+	# whether it reaches the state that transition actually reached.
+	#
+	# This is the only check that can see a rule reading the live world instead of
+	# the transition's, or one whose arithmetic is simply wrong, because both
+	# reproduce the recorded past incorrectly while looking entirely reasonable at
+	# the moment of the write. One transition per recovery is enough: a rule that
+	# disagrees does so on most of them, and the retirement counter integrates.
+	func _judge_carry_fidelity(
+			field: StringName,
+			rule: Callable,
+			entries: Array[Dictionary],
+	) -> bool:
+		# Oldest first, because the pairs nearest the present are the ones a
+		# recovery has most recently landed in.
+		for i in entries.size():
+			var index := int(entries[i].get(&"index", -1))
+			# Both ends have to be the owner's own drive. A recorded state stops
+			# being one when a recovery write lands before the next transition is
+			# authored, and on the tick tier also when the acknowledged slot is
+			# re-anchored to authority's payload. A rule states what a DRIVE does,
+			# so judging it across either would convict it of the engine's own
+			# correction or of disagreeing with a peer it never restated.
+			if _carry_dirty_records.has(index) \
+					or _carry_dirty_records.has(index + 1):
+				continue
+			var from := _carry_state_at(index)
+			var reached := _carry_state_at(index + 1)
+			if from.is_empty() or reached.is_empty() \
+					or not from.has(field) or not reached.has(field):
+				continue
+			var stepped: Variant = _call_carry(
+				rule,
+				from[field],
+				from,
+				entries[i].get(&"input", { }),
+				int(entries[i].get(&"label", -1)),
+			)
+			if stepped == null or typeof(stepped) != typeof(reached[field]):
+				_note_carry_infidelity(field)
+				return false
+			# Judged at the field's own declared tolerance, in the field's own
+			# units. A rule only has to be as good as the error the recovery is
+			# allowed to leave behind.
+			var tolerance := float(
+				_epsilon_overrides.get(field, _handle.divergence_epsilon),
+			)
+			if PredictionHandle._error(
+				stepped,
+				reached[field],
+				_angle_fields.has(field),
+			) > tolerance:
+				_note_carry_infidelity(field)
+				return false
+			return true
+		return false
+
+
+	# Marks one recorded state as something other than a drive result, bounded
+	# with the tape it indexes into.
+	func _mark_carry_dirty(index: int) -> void:
+		_carry_dirty_records[index] = true
+		while _carry_dirty_records.size() > TAPE_HISTORY_LIMIT:
+			var oldest := _carry_dirty_records.keys()
+			oldest.sort()
+			_carry_dirty_records.erase(oldest[0])
+
+
+	func _note_carry_infidelity(field: StringName) -> void:
+		var row := _ledger_row(field)
+		row.infidelity += 1
+		if row.infidelity >= CARRY_INFIDELITY_LIMIT:
+			_retire_carry(
+				field,
+				"did not reproduce %d transitions the owner had already recorded"
+						% [row.infidelity],
+			)
+
+
+	# Takes a rule out of the loop for good, and says so once.
+	func _retire_carry(field: StringName, reason: String) -> void:
+		if _carry_retired.has(field):
+			return
+		_carry_retired[field] = true
+		push_warning(
+			(
+					"PredictionComponent: the carry_step() rule for '%s' %s, so "
+					+ "it is retired and every recovery now writes the "
+					+ "acknowledged value. A rule is a function of the recorded "
+					+ "CarryContext alone: reading the live world or writing "
+					+ "anything makes it disagree with the history it is replayed "
+					+ "against."
+			) % [field, reason],
+		)
+
+
+	# A copy of [param payload] with every carry-declaring field advanced by
+	# [param age] seconds through its declared channel. Fields with no channel, no
+	# channel value in the payload, or an unprojectable type restore verbatim.
 	func _extrapolated_payload(payload: Dictionary, age: float) -> Dictionary:
 		return project_payload(payload, _restore_projection, age)
 
 
 	# How far the predicted pose sits from where the authoritative payload says it
-	# should be, measured over the derivative-declaring fields, which are the ones
-	# a pose is expressed in.
+	# should be, measured over the carry-declaring fields, which are the ones a
+	# pose is expressed in.
 	#
-	# An entity that declares no derivative channel reports INF rather than zero.
+	# An entity that declares no carry channel reports INF rather than zero.
 	# There is no pose to measure, so the recovery is not entitled to conclude it
 	# is below the teleport threshold, and INF is what makes it restore the whole
 	# closure instead of withholding fields on the strength of a measurement that
 	# never happened.
 	func _pose_error_against(payload: Dictionary) -> float:
-		if _restore_projection.is_empty():
+		if _pose_fields.is_empty():
 			return INF
 		var span := clampi(_handle.ack_age_ticks, 0, _handle.max_restore_ticks)
 		var target := _extrapolated_payload(payload, float(span) * _tick_delta)
 		var current := _capture()
 		var error := 0.0
-		for field: StringName in _restore_projection:
+		for field: StringName in _pose_fields:
 			if current.has(field) and target.has(field):
 				error = maxf(
 					error,
@@ -7544,6 +8015,7 @@ class _PredictionEngine extends RefCounted:
 		var uncompared: Array[String] = []
 		var transport_without_epsilon: Array[String] = []
 		var unobserved: Array[String] = []
+		var unrepairable: Array[String] = []
 		for field: NetwSyncSet.Field in set.fields:
 			match field.property_class:
 				NetwSyncSet.PropertyClass.CAUSAL:
@@ -7554,6 +8026,18 @@ class _PredictionEngine extends RefCounted:
 					if field.explicit_reconcile_only \
 							and field.epsilon_override < 0.0:
 						unobserved.append(String(field.key))
+					# The mirror of the case above, and the one that costs more.
+					# Free to trigger, withheld from every recovery that could
+					# answer, and with no way to advance the one restore that
+					# reaches it past the tick it was acknowledged at.
+					if field.explicit_teleport_only \
+							and not field.explicit_reconcile_only \
+							and field.carry_channel == &"" \
+							and not NetwScriptModel.get_node_property_carry(
+								_entity.owner,
+								field.key,
+							).is_valid():
+						unrepairable.append(String(field.key))
 				NetwSyncSet.PropertyClass.COSMETIC:
 					if field.epsilon_override >= 0.0:
 						uncompared.append(String(field.key))
@@ -7611,6 +8095,28 @@ class _PredictionEngine extends RefCounted:
 						+ "reconcile_only() so it can answer for itself."
 				) % [", ".join(unobserved)],
 			)
+		# Not on the Netw.dbg channel. That one is opt-in and silent until a game
+		# arms logging, which is right for a diagnostic someone went looking for
+		# and wrong for this: the whole cost of the pairing is that nobody knows
+		# to look. A warning rather than an error because the declaration is
+		# legal, and a game that means it can read the counts and keep it.
+		if not unrepairable.is_empty():
+			push_warning(
+				(
+						"PredictionComponent: causal state properties [%s] are "
+						+ "teleport_only() and can still trigger, so they demand "
+						+ "recoveries that no sub-teleport restore may write, and "
+						+ "each one is answered by writing other fields instead. "
+						+ "The promoted full closure is the only operator that "
+						+ "reaches them, and with neither carry_along() nor carry_step() "
+						+ "it writes the "
+						+ "acknowledged value, which a moving field has already "
+						+ "left. Declare one of those if the field can be "
+						+ "advanced, or reconcile_only() so its drift stops asking "
+						+ "for recoveries that answer elsewhere. "
+						+ "PredictionHandle.field_recovery counts which happened."
+				) % [", ".join(unrepairable)],
+			)
 		_report_authority_model_mismatches()
 
 
@@ -7660,11 +8166,17 @@ class _PredictionEngine extends RefCounted:
 	func _property_class_report_hash(set: NetwSyncSet) -> int:
 		var parts := PackedStringArray()
 		for field: NetwSyncSet.Field in set.fields:
-			parts.append("%s:%d:%d:%.4f" % [
+			# The recovery marks are part of the config this report judges, so a
+			# config that changes only in them still earns a fresh report.
+			parts.append("%s:%d:%d:%.4f:%d:%d:%s:%d" % [
 				field.key,
 				field.property_class,
 				1 if field.quantizer else 0,
 				field.epsilon_override,
+				1 if field.explicit_teleport_only else 0,
+				1 if field.explicit_reconcile_only else 0,
+				field.carry_channel,
+				1 if _carry_rules.has(field.key) else 0,
 			])
 		parts.append("masked:%d" % (1 if set.masked else 0))
 		var node := _entity.owner if _entity else null
@@ -7774,7 +8286,7 @@ class _PredictionEngine extends RefCounted:
 		members.sort_custom(_entity_id_less)
 		if not apply_promotion:
 			_clear_island_promotions()
-			_island_members = members
+			_commit_island_members(members)
 			return
 		var desired := _desired_simulated_members(members)
 		var committed: Dictionary[NetwEntity, bool] = { }
@@ -7788,7 +8300,44 @@ class _PredictionEngine extends RefCounted:
 				committed[member] = true
 		_enforce_nearest_budget(committed)
 		_apply_island_promotions(committed)
+		_commit_island_members(members)
+
+
+	# Adopts a committed roster, reopening the out-of-domain window when it
+	# changed.
+	#
+	# Membership is an antecedent. It is folded into the topology fingerprint, and
+	# two peers cannot adopt a join or a leave on the same transition, so the
+	# transitions spanning a change are not ones either peer can claim to
+	# reproduce. This is the same reason an epoch bump reopens the window, and it
+	# is the difference between a join reading as a contact-shaped disturbance and
+	# a join charging every divergence to
+	# [constant NetwPredictJournal.Attribution.TOPOLOGY].
+	#
+	# The first roster a session commits is a declaration rather than a change, so
+	# it opens nothing.
+	func _commit_island_members(members: Array[NetwEntity]) -> void:
+		if _island_roster_seeded and not _same_roster(members, _island_members):
+			_out_of_domain_until = window_after(
+				_latest_input_tick,
+				_handle.collision_cooldown_ticks,
+				_out_of_domain_until,
+			)
+		_island_roster_seeded = true
 		_island_members = members
+
+
+	# Both rosters are sorted by entity id, so identity is an element-wise walk.
+	static func _same_roster(
+			a: Array[NetwEntity],
+			b: Array[NetwEntity],
+	) -> bool:
+		if a.size() != b.size():
+			return false
+		for i in a.size():
+			if a[i] != b[i]:
+				return false
+		return true
 
 
 	# Returns whether a locally present participant may enter this island.
@@ -7972,7 +8521,7 @@ class _PredictionEngine extends RefCounted:
 		return a_id < b_id
 
 
-	# True only when every body this entity could have touched is one this peer
+	# True only when every body this entity actually touched is one this peer
 	# simulates the way authority does.
 	#
 	# Equivalence is read off the axes rather than measured off geometry: a peer
@@ -7981,17 +8530,29 @@ class _PredictionEngine extends RefCounted:
 	# resolved. That is a declaration mismatch, not a tolerance question, so no
 	# amount of geometric agreement would change the answer.
 	#
-	# An undeclared island answers false rather than true. A contact against a
-	# body nobody declared is exactly where a peer is least entitled to
-	# exactness, so an absent declaration has to read as unknown and never as
-	# equivalent. The warning names the gap; until someone closes it the label
-	# refuses to claim an exactness it cannot support.
+	# What the question is asked ABOUT depends on whether the game observes its
+	# contacts. A declared [method witness] names the bodies actually touched, so
+	# the answer is about those. Without one nothing was observed, so the
+	# question widens to every body this entity COULD have touched, which is the
+	# whole declared island. Widening is the conservative direction and it is
+	# what an absent observation earns.
+	#
+	# That distinction is what lets static world geometry answer honestly. Every
+	# peer solves against the same track, so touching it is reproducible, which
+	# is the rule [enum BreachResponse] states and
+	# [method _contact_breaches_boundary] already applies. Static geometry names
+	# no entity, so an observed contact set that is empty IS the static case and
+	# equivalence holds. Read without a witness the same emptiness means nothing
+	# was watched, which is why it must not take that branch.
+	#
+	# An undeclared island still answers false. A contact against a body nobody
+	# named is where a peer is least entitled to exactness.
 	func _contact_is_equivalent() -> bool:
 		var participants := _island_participants()
 		if participants.is_empty():
 			return false
 		var contacts: Array[NetwEntity] = participants
-		if not _realized_contact_entities.is_empty():
+		if not _handle.witness_config.is_empty():
 			contacts = []
 			contacts.assign(_realized_contact_entities.keys())
 		for participant in contacts:
@@ -8375,38 +8936,58 @@ class _PredictionEngine extends RefCounted:
 			corrected = verdict[&"corrected"]
 			settled = domain == NetwPredictJournal.Domain.OUT_OF_DOMAIN \
 					or exact_verdict != ExactVerdict.UNJUDGED
-			if settled:
-				meter = measure(
-					_handle.last_field_divergence,
-					_meter_tolerances(domain),
-				)
-				# The exact predicate is authoritative in domain. Preserve its
-				# binary verdict if a conservative quantizer bound overlaps one
-				# adjacent canonical value.
-				if corrected and meter == 0:
-					meter = 1
-				elif not corrected:
-					meter = 0
+			meter = measure(
+				_handle.last_field_divergence,
+				_meter_tolerances(domain),
+			)
+			# The exact predicate is authoritative in domain. Preserve its
+			# binary verdict if a conservative quantizer bound overlaps one
+			# adjacent canonical value.
+			if corrected and meter == 0:
+				meter = 1
+			elif not corrected:
+				meter = 0
+		# Read before this comparison stages anything, so a write is judged by the
+		# comparison after it rather than the one that asked for it.
+		if _stream_reconstructed:
+			_ledger_note_comparison(corrected, ack)
 		var attribution := _attribution_for(ack)
+		# Supervision follows the verdict that a recovery is owed, never the one
+		# that decided it. A fingerprint and a tolerance answer different
+		# questions about the same divergence, and only the first needs the
+		# acknowledgement lane, so gating the episode on a settled comparison
+		# leaves every tolerance-decided recovery outside the contract that
+		# bounds it: no episode, no operator ladder, no escalation evidence, no
+		# budget, and no report on
+		# [signal PredictionHandle.divergence_detected]. An out-of-domain
+		# entity never saw that, because its comparisons settle by definition.
+		# An in-domain one whose verdict arrives behind its state saw nothing
+		# else.
+		if corrected:
+			if _episode.is_empty() or int(_episode.get(&"state", -1)) \
+					!= PredictionHandle.EpisodeState.OPEN:
+				_open_episode(ack, attribution)
+			else:
+				_record_episode_divergence(ack)
+			_handle.divergence_detected.emit(ack, attribution)
+		# The aligned error stays behind the settled gate. It is the journal's
+		# record of a comparison that reached a verdict, and an unsettled one
+		# reached none.
 		if settled:
 			_journal.mark_aligned_error(ack, divergence)
-			if corrected:
-				if _episode.is_empty() or int(_episode.get(&"state", -1)) \
-						!= PredictionHandle.EpisodeState.OPEN:
-					_open_episode(ack, attribution)
-				else:
-					_record_episode_divergence(ack)
-				_handle.divergence_detected.emit(ack, attribution)
-			_record_episode_comparison(ack, meter, not corrected)
-			if corrected and _episode_budget_exhausted():
-				_enter_fallback(ack)
-				_handle.state_evaluated.emit(
-					recv_tick,
-					ack,
-					divergence,
-					false,
-				)
-				return
+		# An agreeing comparison has to reach the episode too, or one opened
+		# from an unsettled divergence could never assemble the agreement run
+		# that retires it.
+		_record_episode_comparison(ack, meter, not corrected)
+		if corrected and _episode_budget_exhausted():
+			_enter_fallback(ack)
+			_handle.state_evaluated.emit(
+				recv_tick,
+				ack,
+				divergence,
+				false,
+			)
+			return
 		if corrected and (_transport_pending() or _dissipate_pending()):
 			_handle.state_evaluated.emit(
 				recv_tick,
@@ -8488,9 +9069,15 @@ class _PredictionEngine extends RefCounted:
 					_handle.max_restore_ticks,
 					_tick_delta,
 				)
+				# A declared rule advances its field here rather than inside
+				# recover(), which is a pure kernel function with no access to the
+				# transitions a fold has to walk. What reaches recover() is the
+				# already-advanced payload, so the channel projection below and a
+				# rule never touch the same field.
+				var carried_payload := _carry_payload(payload, ack)
 				# The recorded payload remains raw. Only the body write is staged.
 				plan = recover(
-					payload,
+					carried_payload,
 					_handle.resolved_recovery_policy(),
 					_correction,
 					_handle.snap_restore,
@@ -8532,6 +9119,10 @@ class _PredictionEngine extends RefCounted:
 			# correction every tick until the ack advances past the stale entry.
 			if _handle._schedule == PredictionHandle.Schedule.TICK:
 				_timeline.record_state(ack + 1, payload)
+				# This slot now holds authority's answer rather than the
+				# transition the owner drove, so no rule may be judged across it.
+				if not _carry_rules.is_empty():
+					_mark_carry_dirty(ack + 1)
 			# REPLAY re-runs unacked inputs over the restored state (kinematic). SNAP
 			# stops at the restore (dynamic): the predicted body resumes forward from
 			# truth next tick and the display chase absorbs the snap, since a solver
@@ -8814,12 +9405,88 @@ class _PredictionEngine extends RefCounted:
 			deltas[field] = delta
 		if deltas.is_empty():
 			return
+		_ledger_note_writes(deltas)
 		_handle.recovered.emit(
 			transition,
 			deltas,
 			_last_correction_teleported,
 			attribution,
 		)
+
+
+	# The ledger row for one field, created on first mention so a field that never
+	# reaches either counter still reads as a row of zeros rather than absent.
+	func _ledger_row(field: StringName) -> PredictionHandle.FieldRecovery:
+		# has-then-index rather than get() with a default, which would construct
+		# the default on every call including the hits, inside the comparison path.
+		if not _handle.field_recovery.has(field):
+			_handle.field_recovery[field] = PredictionHandle.FieldRecovery.new()
+		return _handle.field_recovery[field]
+
+
+	# The transition index a drive has most recently reached, which is what a
+	# recovery landing now is written past.
+	func _ledger_drive_frontier() -> int:
+		return _last_driven_entry_index \
+				if _handle._schedule == PredictionHandle.Schedule.FRAME \
+				else _latest_input_tick
+
+
+	# Charges this comparison to every field that was past its own tolerance, and
+	# settles any earlier write this comparison is entitled to judge.
+	#
+	# Both halves read the same refreshed divergence, so they run together and
+	# before anything this comparison stages. Judging a write against the very
+	# comparison that provoked it would score the error it was answering.
+	func _ledger_note_comparison(corrected: bool, ack: int) -> void:
+		# The common comparison agrees and has no write outstanding, and this runs
+		# on every one of them, so it costs nothing before it has work.
+		if not _ledger_pending_basis.is_empty():
+			_ledger_settle_writes(ack)
+		if not corrected:
+			return
+		for field: StringName in _handle.last_field_divergence:
+			if _trigger_excludes.has(field) or not _causal_fields.has(field):
+				continue
+			var error := float(_handle.last_field_divergence[field])
+			var epsilon := float(
+				_epsilon_overrides.get(field, _handle.divergence_epsilon),
+			)
+			if error <= epsilon:
+				continue
+			var row := _ledger_row(field)
+			row.triggered += 1
+
+
+	# Settles every outstanding write this comparison has reached past.
+	func _ledger_settle_writes(ack: int) -> void:
+		var settled: Array[StringName] = []
+		for field: StringName in _ledger_pending_basis:
+			if ack <= _ledger_pending_basis[field]:
+				continue
+			settled.append(field)
+			if float(_handle.last_field_divergence.get(field, INF)) \
+					< _ledger_pending_error[field]:
+				var row := _ledger_row(field)
+				row.contracted += 1
+		for field: StringName in settled:
+			_ledger_pending_basis.erase(field)
+			_ledger_pending_error.erase(field)
+
+
+	# Charges one recovery's realized per-field writes, and arms each for the
+	# contraction verdict a later comparison delivers.
+	func _ledger_note_writes(deltas: Dictionary) -> void:
+		for field: StringName in deltas:
+			if not _causal_fields.has(field):
+				continue
+			var row := _ledger_row(field)
+			row.repaired += 1
+			if _handle.last_field_divergence.has(field):
+				_ledger_pending_error[field] = float(
+					_handle.last_field_divergence[field],
+				)
+				_ledger_pending_basis[field] = _ledger_drive_frontier()
 
 
 	func _delta_negligible(delta: Variant) -> bool:
@@ -9848,6 +10515,10 @@ class _PredictionEngine extends RefCounted:
 			evidence_free: bool = false,
 	) -> void:
 		_state_binding.apply_payload(payload)
+		# The next recording carries this write as well as the drive before it, so
+		# it is not a transition any rule states and cannot judge one.
+		if not _carry_rules.is_empty():
+			_mark_carry_dirty(_ledger_drive_frontier() + 1)
 		if operator == NetwPredictJournal.Operator.NONE:
 			return
 		var episode_owner := provenance_owner if provenance_owner else self

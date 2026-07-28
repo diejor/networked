@@ -497,3 +497,83 @@ func test_a_scale_or_a_trigger_makes_a_causal_property_observable() -> void:
 		"a causal field with a scale, or one that can trigger, is observable "
 		+ "and must not be reported",
 	).is_true()
+
+
+# --- what a declared island says about a contact ---
+
+
+# An engine wired to nothing but the three facts the contact question reads: who
+# was declared, whether the game observes contacts at all, and which entities the
+# last solve actually touched.
+func _contact_engine(
+		members: Array[NetwEntity],
+		observes: bool,
+		touched: Array[NetwEntity],
+) -> NetwLagCompensationInterface._PredictionEngine:
+	var engine := NetwLagCompensationInterface._PredictionEngine.new()
+	engine._handle = _handle()
+	engine._island_members = members
+	if observes:
+		engine._handle.witness_config = { &"contacts": func() -> Dictionary:
+			return { } }
+	for entity: NetwEntity in touched:
+		engine._realized_contact_entities[entity] = true
+	return engine
+
+
+func _remote_member() -> NetwEntity:
+	var member := NetwEntity.new()
+	member.prediction.sim_mode = PredictionHandle.SimMode.DISPLAY
+	return member
+
+
+# The decisive law. Static world geometry is the half of the world every peer
+# solves against identically, so scraping a wall is reproducible and must not
+# open an out-of-domain window. A realized contact that named no entity IS that
+# case, and reading it as "touched everything declared" charges a wall to the
+# remote cars that happen to share the island.
+func test_a_contact_with_static_geometry_stays_equivalent() -> void:
+	var engine := _contact_engine([_remote_member()], true, [])
+
+	assert_bool(engine._contact_is_equivalent()).override_failure_message(
+		"a wall is shared world geometry, so touching it must not be charged "
+		+ "to the island members nobody touched",
+	).is_true()
+
+
+# The case the rule exists for is unchanged: a car this peer only displays is a
+# frozen proxy, so contact against it is not the contact authority resolved.
+func test_a_contact_with_a_displayed_member_is_not_equivalent() -> void:
+	var member := _remote_member()
+	var engine := _contact_engine([member], true, [member])
+
+	assert_bool(engine._contact_is_equivalent()).is_false()
+
+
+# A member this peer steps the way authority does is a contact both peers can
+# reproduce.
+func test_a_contact_with_a_simulated_member_is_equivalent() -> void:
+	var member := NetwEntity.new()
+	member.prediction.sim_mode = PredictionHandle.SimMode.SPECULATIVE
+	var engine := _contact_engine([member], true, [member])
+
+	assert_bool(engine._contact_is_equivalent()).is_true()
+
+
+# The guard that keeps the static case honest. Without a declared witness there
+# is no observation at all, so an empty contact set means "nothing was watched"
+# rather than "the wall was touched", and unknown must never read as equivalent.
+func test_an_unobserved_contact_is_never_equivalent() -> void:
+	var engine := _contact_engine([_remote_member()], false, [])
+
+	assert_bool(engine._contact_is_equivalent()).override_failure_message(
+		"a game that declares no witness observes nothing, and an unobserved "
+		+ "contact cannot claim to be a static one",
+	).is_false()
+
+
+# An undeclared island answers unknown for the same reason it always did.
+func test_an_undeclared_island_is_never_equivalent() -> void:
+	var engine := _contact_engine([], true, [])
+
+	assert_bool(engine._contact_is_equivalent()).is_false()

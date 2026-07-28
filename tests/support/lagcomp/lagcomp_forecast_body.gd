@@ -3,7 +3,7 @@
 ##
 ## It extends [LagCompSimBody] with a replicated [member velocity] state field and
 ## declares [code]position[/code] with a
-## [method NetwInterpolate.project_by] velocity spec, so an
+## [method NetwScriptModel.PropertyConfig.carry_forward] velocity channel, so an
 ## [constant PredictionComponent.RestoreMode.EXTRAPOLATED] correction carries the
 ## body forward by its replicated velocity instead of snapping to the stale
 ## authoritative tick. The velocity is the closed-form position derivative, so the
@@ -16,14 +16,13 @@ extends LagCompSimBody
 var velocity: Vector2 = Vector2.ZERO
 
 
-# Adds velocity to the state set and the project_by spec onto position. The base
-# _init still marks position and the input fields through super().
+# Adds velocity to the state set and names it as position's recovery channel. The
+# base _init still marks position and the input fields through super().
 func _init() -> void:
 	super()
 	Netw.configure_property(self, &"velocity").state()
-	Netw.configure_property(self, &"position").interpolate(
-		NetwInterpolate.new().lerp().project_by(&"velocity")
-	)
+	Netw.configure_property(self, &"position").carry_along(&"velocity") \
+			.interpolate(NetwInterpolate.new().lerp().project_by(&"velocity"))
 
 
 # Runs the base closed-form step, then records the per-tick position derivative as
